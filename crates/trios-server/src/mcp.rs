@@ -121,6 +121,56 @@ fn build_tool_definitions() -> Vec<Tool> {
             output_schema: None,
             title: None,
         },
+        Tool {
+            name: "gb_list_branches".into(),
+            description: Some("List GitButler virtual branches".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into()],
+                Some(
+                    vec![(
+                            "repo_path".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        )]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
+        },
+        Tool {
+            name: "gb_push_stack".into(),
+            description: Some("Push a GitButler stack/branch".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into(), "branch_name".into()],
+                Some(
+                    vec![
+                        (
+                            "repo_path".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                        (
+                            "branch_name".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
+        },
     ]
 }
 
