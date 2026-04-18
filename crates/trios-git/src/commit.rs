@@ -1,11 +1,15 @@
 use anyhow::{Context, Result};
-use git2::{Repository, Signature};
+use git2::Repository;
 use std::path::Path;
 use trios_core::types::CommitResult;
 
 pub fn create_commit(repo_path: &Path, message: &str) -> Result<CommitResult> {
     let repo = Repository::open(repo_path)?;
     let mut index = repo.index()?;
+
+    // Count staged entries before writing tree (this is the actual number of files in the commit)
+    let files_committed = index.iter().count();
+
     let oid = index.write_tree()?;
     let tree = repo.find_tree(oid)?;
 
@@ -27,9 +31,6 @@ pub fn create_commit(repo_path: &Path, message: &str) -> Result<CommitResult> {
         &tree,
         &parents,
     )?;
-
-    // Count staged files
-    let files_committed = index.len();
 
     Ok(CommitResult {
         oid: commit_oid.to_string(),

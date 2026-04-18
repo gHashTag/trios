@@ -1,5 +1,4 @@
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
 use std::path::Path;
 use trios_core::types::GbBranch;
 

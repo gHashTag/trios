@@ -1,15 +1,32 @@
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use trios_git::Git2Orchestrator;
 use trios_core::GitOrchestrator;
 
+use crate::security::validate_repo_path;
+
+/// Returns the list of allowed repository root directories.
+/// Configured via `TRIOS_ALLOWED_ROOTS` env var (colon-separated paths).
+/// If empty, all absolute paths are allowed.
+fn allowed_roots() -> Vec<PathBuf> {
+    std::env::var("TRIOS_ALLOWED_ROOTS")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
 pub async fn dispatch(name: &str, input: Value) -> Result<Value> {
-    let repo_path = input
+    let raw_repo_path = input
         .get("repo_path")
         .and_then(|v| v.as_str())
         .context("repo_path is required")?;
-    let repo = Path::new(repo_path);
+
+    let repo_path = validate_repo_path(raw_repo_path, &allowed_roots())
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let repo = repo_path.as_path();
     let git = Git2Orchestrator;
 
     match name {
@@ -46,6 +63,15 @@ pub async fn dispatch(name: &str, input: Value) -> Result<Value> {
                 .get("message")
                 .and_then(|v| v.as_str())
                 .context("message required")?;
+
+            // Validate message length
+            if message.len() > 4096 {
+                bail!("commit message too long (max 4096 characters)");
+            }
+            if message.is_empty() {
+                bail!("commit message cannot be empty");
+            }
+
             let result = git.commit(repo, message).await?;
             Ok(serde_json::to_value(result)?)
         }
@@ -54,6 +80,15 @@ pub async fn dispatch(name: &str, input: Value) -> Result<Value> {
                 .get("name")
                 .and_then(|v| v.as_str())
                 .context("name required")?;
+
+            // Basic branch name validation
+            if branch_name.is_empty() {
+                bail!("branch name cannot be empty");
+            }
+            if branch_name.contains(' ') || branch_name.contains("..") || branch_name.contains('~') || branch_name.contains('^') || branch_name.contains(':') {
+                bail!("branch name contains invalid characters");
+            }
+
             git.create_branch(repo, branch_name).await?;
             Ok(serde_json::json!({"created": branch_name}))
         }

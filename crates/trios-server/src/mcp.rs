@@ -1,126 +1,184 @@
-use axum::Json;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use rust_mcp_schema::{
+    CallToolRequestParams, CallToolResult, ContentBlock, ListToolsResult, TextContent,
+    Tool, ToolInputSchema,
+};
+use serde_json::{json, Value};
+use std::sync::LazyLock;
+use tracing::info;
+
 use crate::tools;
 
-#[derive(Debug, Deserialize)]
-pub struct ToolCallRequest {
-    pub name: String,
-    pub input: Value,
-}
+static TOOL_DEFINITIONS: LazyLock<Vec<Tool>> = LazyLock::new(build_tool_definitions);
 
-#[derive(Debug, Serialize)]
-pub struct ToolCallResponse {
-    pub success: bool,
-    pub result: Option<Value>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ToolDef {
-    pub name: String,
-    pub description: String,
-    pub input_schema: Value,
-}
-
-pub async fn list_tools() -> Json<Vec<ToolDef>> {
-    Json(vec![
-        ToolDef {
+fn build_tool_definitions() -> Vec<Tool> {
+    vec![
+        Tool {
             name: "git_status".into(),
-            description: "List all changed files in a repository (staged + unstaged + untracked)".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string", "description": "Absolute path to the git repository"}
-                },
-                "required": ["repo_path"]
-            }),
+            description: Some("List all changed files in a repository".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into()],
+                Some(
+                    vec![(
+                        "repo_path".into(),
+                        json!({"type": "string"}).as_object().unwrap().clone(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
         },
-        ToolDef {
+        Tool {
             name: "git_stage_files".into(),
-            description: "Stage specific files for commit".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string"},
-                    "paths": {"type": "array", "items": {"type": "string"}, "description": "Paths relative to repo root"}
-                },
-                "required": ["repo_path", "paths"]
-            }),
+            description: Some("Stage specific files for commit".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into(), "paths".into()],
+                Some(
+                    vec![
+                        (
+                            "repo_path".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                        (
+                            "paths".into(),
+                            json!({"type": "array", "items": {"type": "string"}})
+                                .as_object()
+                                .unwrap()
+                                .clone(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
         },
-        ToolDef {
-            name: "git_unstage_files".into(),
-            description: "Unstage specific files".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string"},
-                    "paths": {"type": "array", "items": {"type": "string"}}
-                },
-                "required": ["repo_path", "paths"]
-            }),
-        },
-        ToolDef {
+        Tool {
             name: "git_commit".into(),
-            description: "Commit all staged files with a message".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string"},
-                    "message": {"type": "string", "description": "Conventional commit message"}
-                },
-                "required": ["repo_path", "message"]
-            }),
+            description: Some("Commit all staged files".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into(), "message".into()],
+                Some(
+                    vec![
+                        (
+                            "repo_path".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                        (
+                            "message".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
         },
-        ToolDef {
+        Tool {
             name: "git_create_branch".into(),
-            description: "Create a new local branch from HEAD".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string"},
-                    "name": {"type": "string"}
-                },
-                "required": ["repo_path", "name"]
-            }),
+            description: Some("Create a new branch".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into(), "name".into()],
+                Some(
+                    vec![
+                        (
+                            "repo_path".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                        (
+                            "name".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
         },
-        ToolDef {
-            name: "gb_list_branches".into(),
-            description: "List GitButler virtual branches (requires gitbutler-cli)".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string"}
-                },
-                "required": ["repo_path"]
-            }),
-        },
-        ToolDef {
-            name: "gb_push_stack".into(),
-            description: "Push a GitButler virtual branch/stack (requires gitbutler-cli)".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "repo_path": {"type": "string"},
-                    "branch_name": {"type": "string"}
-                },
-                "required": ["repo_path", "branch_name"]
-            }),
-        },
-    ])
+    ]
 }
 
-pub async fn call_tool(Json(req): Json<ToolCallRequest>) -> Json<ToolCallResponse> {
-    match tools::dispatch(&req.name, req.input).await {
-        Ok(result) => Json(ToolCallResponse {
-            success: true,
-            result: Some(result),
-            error: None,
-        }),
-        Err(e) => Json(ToolCallResponse {
-            success: false,
-            result: None,
-            error: Some(e.to_string()),
-        }),
+#[derive(Clone)]
+pub struct McpService;
+
+impl McpService {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn list_tools(&self) -> ListToolsResult {
+        ListToolsResult {
+            tools: TOOL_DEFINITIONS.clone(),
+            meta: None,
+            next_cursor: None,
+        }
+    }
+
+    pub async fn call_tool(&self, params: CallToolRequestParams) -> CallToolResult {
+        info!("Calling tool: {}", params.name);
+
+        let arguments_value: Value = params
+            .arguments
+            .map(|map| Value::Object(map.into_iter().collect()))
+            .unwrap_or(Value::Null);
+
+        match tools::dispatch(&params.name, arguments_value).await {
+            Ok(value) => {
+                let text = if value.is_object() || value.is_array() {
+                    serde_json::to_string_pretty(&value).unwrap_or_default()
+                } else if value.is_string() {
+                    value.as_str().unwrap().to_string()
+                } else {
+                    serde_json::to_string(&value).unwrap_or_default()
+                };
+
+                CallToolResult {
+                    content: vec![ContentBlock::TextContent(TextContent::new(
+                        text,
+                        None,
+                        None,
+                    ))],
+                    is_error: Some(false),
+                    meta: None,
+                    structured_content: None,
+                }
+            }
+            Err(e) => CallToolResult {
+                content: vec![ContentBlock::TextContent(TextContent::new(
+                    format!("Error: {}", e),
+                    None,
+                    None,
+                ))],
+                is_error: Some(true),
+                meta: None,
+                structured_content: None,
+            },
+        }
     }
 }

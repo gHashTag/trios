@@ -2,6 +2,8 @@ mod commit;
 mod stage;
 mod status;
 mod branch;
+mod absorb_simple;
+mod absorb_smart;
 
 pub use commit::*;
 pub use stage::*;
