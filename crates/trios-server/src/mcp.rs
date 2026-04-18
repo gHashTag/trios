@@ -10,198 +10,170 @@ use crate::tools;
 
 static TOOL_DEFINITIONS: LazyLock<Vec<Tool>> = LazyLock::new(build_tool_definitions);
 
+fn prop_type(type_str: &str) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert("type".into(), Value::String(type_str.into()));
+    m
+}
+
+fn prop_array_items() -> serde_json::Map<String, Value> {
+    json!({"type": "array", "items": {"type": "string"}})
+        .as_object()
+        .unwrap()
+        .clone()
+}
+
 fn build_tool_definitions() -> Vec<Tool> {
+    fn make_tool(
+        name: &str,
+        description: &str,
+        required: Vec<&str>,
+        properties: Vec<(&str, serde_json::Map<String, Value>)>,
+    ) -> Tool {
+        Tool {
+            name: name.into(),
+            description: Some(description.into()),
+            input_schema: ToolInputSchema::new(
+                required.into_iter().map(String::from).collect(),
+                Some(
+                    properties
+                        .into_iter()
+                        .map(|(k, v)| (k.into(), v))
+                        .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
+        }
+    }
+
     vec![
-        Tool {
-            name: "git_status".into(),
-            description: Some("List all changed files in a repository".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into()],
-                Some(
-                    vec![(
-                        "repo_path".into(),
-                        json!({"type": "string"}).as_object().unwrap().clone(),
-                    )]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
-        Tool {
-            name: "git_stage_files".into(),
-            description: Some("Stage specific files for commit".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into(), "paths".into()],
-                Some(
-                    vec![
-                        (
-                            "repo_path".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                        (
-                            "paths".into(),
-                            json!({"type": "array", "items": {"type": "string"}})
-                                .as_object()
-                                .unwrap()
-                                .clone(),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
-        Tool {
-            name: "git_unstage_files".into(),
-            description: Some("Unstage specific files from commit".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into(), "paths".into()],
-                Some(
-                    vec![
-                        (
-                            "repo_path".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                        (
-                            "paths".into(),
-                            json!({"type": "array", "items": {"type": "string"}})
-                                .as_object()
-                                .unwrap()
-                                .clone(),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
-        Tool {
-            name: "git_commit".into(),
-            description: Some("Commit all staged files".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into(), "message".into()],
-                Some(
-                    vec![
-                        (
-                            "repo_path".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                        (
-                            "message".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
-        Tool {
-            name: "git_create_branch".into(),
-            description: Some("Create a new branch".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into(), "name".into()],
-                Some(
-                    vec![
-                        (
-                            "repo_path".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                        (
-                            "name".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
-        Tool {
-            name: "gb_list_branches".into(),
-            description: Some("List GitButler virtual branches".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into()],
-                Some(
-                    vec![(
-                            "repo_path".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        )]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
-        Tool {
-            name: "gb_push_stack".into(),
-            description: Some("Push a GitButler stack/branch".into()),
-            input_schema: ToolInputSchema::new(
-                vec!["repo_path".into(), "branch_name".into()],
-                Some(
-                    vec![
-                        (
-                            "repo_path".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                        (
-                            "branch_name".into(),
-                            json!({"type": "string"}).as_object().unwrap().clone(),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-                None,
-            ),
-            annotations: None,
-            meta: None,
-            icons: vec![],
-            execution: None,
-            output_schema: None,
-            title: None,
-        },
+        // === Git Basic (5) ===
+        make_tool(
+            "git_status",
+            "List all changed files in a repository",
+            vec!["repo_path"],
+            vec![("repo_path", prop_type("string"))],
+        ),
+        make_tool(
+            "git_stage_files",
+            "Stage specific files for commit",
+            vec!["repo_path", "paths"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("paths", prop_array_items()),
+            ],
+        ),
+        make_tool(
+            "git_unstage_files",
+            "Unstage specific files",
+            vec!["repo_path", "paths"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("paths", prop_array_items()),
+            ],
+        ),
+        make_tool(
+            "git_commit",
+            "Commit all staged files",
+            vec!["repo_path", "message"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("message", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "git_create_branch",
+            "Create a new branch from HEAD",
+            vec!["repo_path", "name"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("name", prop_type("string")),
+            ],
+        ),
+        // === Git Extended (4) ===
+        make_tool(
+            "git_log",
+            "Get commit history",
+            vec!["repo_path"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("limit", json!({"type": "integer", "default": 10}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "git_diff",
+            "Show unstaged changes (optionally filtered by file)",
+            vec!["repo_path"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("file", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "git_stash",
+            "Stash current working directory changes",
+            vec!["repo_path"],
+            vec![("repo_path", prop_type("string"))],
+        ),
+        make_tool(
+            "git_checkout",
+            "Switch to an existing branch",
+            vec!["repo_path", "branch"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("branch", prop_type("string")),
+            ],
+        ),
+        // === GitButler (3) ===
+        make_tool(
+            "gb_list_branches",
+            "List GitButler virtual branches",
+            vec!["repo_path"],
+            vec![("repo_path", prop_type("string"))],
+        ),
+        make_tool(
+            "gb_push_stack",
+            "Push a GitButler stack/branch",
+            vec!["repo_path", "branch_name"],
+            vec![
+                ("repo_path", prop_type("string")),
+                ("branch_name", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "gb_workspace_status",
+            "Get full workspace status (git changes + GB branches)",
+            vec!["repo_path"],
+            vec![("repo_path", prop_type("string"))],
+        ),
+        // === Filesystem (3) ===
+        make_tool(
+            "fs_read_file",
+            "Read file contents (must be within allowed roots)",
+            vec!["path"],
+            vec![("path", prop_type("string"))],
+        ),
+        make_tool(
+            "fs_write_file",
+            "Write content to a file (must be within allowed roots)",
+            vec!["path", "content"],
+            vec![
+                ("path", prop_type("string")),
+                ("content", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "fs_list_dir",
+            "List directory contents (must be within allowed roots)",
+            vec!["path"],
+            vec![("path", prop_type("string"))],
+        ),
     ]
 }
 

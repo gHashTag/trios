@@ -28,4 +28,13 @@ pub trait GitOrchestrator: Send + Sync {
 
     /// Push branch to remote
     async fn push(&self, repo_path: &Path, remote: &str, branch: &str) -> Result<()>;
+
+    /// Get commit log
+    async fn log(&self, repo_path: &Path, limit: usize) -> Result<Vec<LogEntry>>;
+
+    /// Get diff of unstaged or staged changes
+    async fn diff(&self, repo_path: &Path, file: Option<&str>) -> Result<DiffResult>;
+
+    /// Stash current changes
+    async fn stash(&self, repo_path: &Path) -> Result<()>;
 }

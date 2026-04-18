@@ -41,3 +41,17 @@ pub struct GbBranch {
     pub active: bool,
     pub files_count: usize,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub oid: String,
+    pub message: String,
+    pub author: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffResult {
+    pub files: Vec<String>,
+    pub patch: String,
+}

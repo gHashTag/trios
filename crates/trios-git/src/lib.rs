@@ -2,6 +2,9 @@ mod commit;
 mod stage;
 mod status;
 mod branch;
+mod log;
+mod diff;
+mod stash;
 mod absorb_simple;
 mod absorb_smart;
 
@@ -9,11 +12,14 @@ pub use commit::*;
 pub use stage::*;
 pub use status::*;
 pub use branch::*;
+pub use log::*;
+pub use diff::*;
+pub use stash::*;
 
 use async_trait::async_trait;
 use anyhow::Result;
 use std::path::Path;
-use trios_core::{GitOrchestrator, FileChange, CommitResult, BranchInfo};
+use trios_core::{GitOrchestrator, FileChange, CommitResult, BranchInfo, LogEntry, DiffResult};
 
 #[derive(Debug, Clone, Default)]
 pub struct Git2Orchestrator;
@@ -69,5 +75,21 @@ impl GitOrchestrator for Git2Orchestrator {
     async fn push(&self, _repo_path: &Path, _remote: &str, _branch: &str) -> Result<()> {
         // TODO: implement via git2 with credential helper
         anyhow::bail!("push not yet implemented — use gitbutler-cli gb_push_stack")
+    }
+
+    async fn log(&self, repo_path: &Path, limit: usize) -> Result<Vec<LogEntry>> {
+        let path = repo_path.to_owned();
+        tokio::task::spawn_blocking(move || log::get_log(&path, limit)).await?
+    }
+
+    async fn diff(&self, repo_path: &Path, file: Option<&str>) -> Result<DiffResult> {
+        let path = repo_path.to_owned();
+        let file = file.map(String::from);
+        tokio::task::spawn_blocking(move || diff::get_diff(&path, file.as_deref())).await?
+    }
+
+    async fn stash(&self, repo_path: &Path) -> Result<()> {
+        let path = repo_path.to_owned();
+        tokio::task::spawn_blocking(move || stash::stash_changes(&path)).await?
     }
 }
