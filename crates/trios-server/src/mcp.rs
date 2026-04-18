@@ -66,6 +66,37 @@ fn build_tool_definitions() -> Vec<Tool> {
             title: None,
         },
         Tool {
+            name: "git_unstage_files".into(),
+            description: Some("Unstage specific files from commit".into()),
+            input_schema: ToolInputSchema::new(
+                vec!["repo_path".into(), "paths".into()],
+                Some(
+                    vec![
+                        (
+                            "repo_path".into(),
+                            json!({"type": "string"}).as_object().unwrap().clone(),
+                        ),
+                        (
+                            "paths".into(),
+                            json!({"type": "array", "items": {"type": "string"}})
+                                .as_object()
+                                .unwrap()
+                                .clone(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                None,
+            ),
+            annotations: None,
+            meta: None,
+            icons: vec![],
+            execution: None,
+            output_schema: None,
+            title: None,
+        },
+        Tool {
             name: "git_commit".into(),
             description: Some("Commit all staged files".into()),
             input_schema: ToolInputSchema::new(
