@@ -4,15 +4,6 @@
 //! - `Some(Ok(...))` — tool handled
 //! - `Some(Err(...))` — tool error
 //! - `None` — pass to next module
-//!
-//! ## Modules
-//!
-//! - `fs` — filesystem operations (no repo path validation needed)
-//! - `git` — git basic operations
-//! - `git_extended` — git extended operations
-//! - `gitbutler` — GitButler operations
-//! - `golden_float` — GoldenFloat operations
-//! - `trios-kg` — Knowledge Graph operations
 
 pub mod fs;
 pub mod git;
@@ -25,6 +16,7 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use trios_git::Git2Orchestrator;
+use crate::security::validate_repo_path;
 
 /// Returns the list of allowed repository root directories.
 fn allowed_roots() -> Vec<PathBuf> {
@@ -40,6 +32,9 @@ fn allowed_roots() -> Vec<PathBuf> {
 pub async fn dispatch(name: &str, input: Value) -> Result<Value> {
     // Filesystem tools first (no repo_path validation needed)
     if let Some(r) = fs::dispatch(name, &input).await { return r; }
+
+    // Knowledge Graph tools (no repo_path needed)
+    if let Some(r) = trios_kg::dispatch(name, &input).await { return r; }
 
     // Validate repo_path for git tools
     let raw_repo_path = input
@@ -63,9 +58,6 @@ pub async fn dispatch(name: &str, input: Value) -> Result<Value> {
 
     // Golden Float tools
     if let Some(r) = golden_float::dispatch(name, &input).await { return r; }
-
-    // Knowledge Graph tools
-    if let Some(r) = trios_kg::dispatch(name, &input).await { return r; }
 
     bail!("unknown tool: {name}")
 }
