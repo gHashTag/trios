@@ -223,6 +223,24 @@ pub fn phi_lr_schedule(step: usize, base_lr: f64, warmup_steps: usize) -> f64 {
     }
 }
 
+/// Issue #54: Unified LR schedule selector
+///
+/// Delegates to trios-phi-schedule for Issue #54 calibration.
+/// Returns LR as f64 for compatibility with optimizer.
+///
+/// # Arguments
+///
+/// * `step` - Current training step
+/// * `max_steps` - Maximum training steps
+///
+/// # Returns
+///
+/// Learning rate as f64
+#[inline]
+pub fn lr_schedule_54_f64(schedule_type: trios_phi_schedule::LrScheduleType, step: usize, max_steps: usize) -> f64 {
+    trios_phi_schedule::lr_schedule_54(schedule_type, step, max_steps) as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
