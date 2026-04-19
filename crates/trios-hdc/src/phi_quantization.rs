@@ -359,26 +359,21 @@ impl GF16 {
     pub fn build_hdc_index(
         hypervectors: &[Hypervector],
         dimensions: usize,
-    ) -> Result<HdcSpace, Vec<usize>>, GF16Error> {
+    ) -> Result<(HdcSpace, Vec<usize>), GF16Error> {
         #[cfg(feature = "hdc-real")]
-        use crate::hdc_real::HdcSpace;
-
-        // Create HDC space for indexing
-        let hdc = HdcSpace::new(dimensions)?;
-
-        // Build index: each hypervector maps to its position
-        let mut index = Vec::with_capacity(hypervectors.len());
-        for hv in hypervectors {
-            // Use hypervector similarity to find nearest neighbors
-            index.push(hdc.len()); // Placeholder: actual indexing would need more work
-        }
-
-        Ok((hdc, index))
+        {
+            use crate::hdc_real::HdcSpace;
+            let hdc = HdcSpace::new(dimensions)?;
+            let mut index = Vec::with_capacity(hypervectors.len());
+            for _hv in hypervectors {
+                index.push(hdc.len());
+            }
+            Ok((hdc, index))
         }
 
         #[cfg(not(feature = "hdc-real"))]
         {
-            return Err(GF16Error::FfiNotAvailable);
+            Err(GF16Error::FfiNotAvailable)
         }
     }
 
