@@ -24,16 +24,14 @@
 
 All vendors use Zig 0.16 `build.zig` API: `b.createModule()` / `b.addLibrary()` / `b.addTest()`.
 
-### 2.3 New Zig Repos
+### 2.3 Planned New Zig Repos (P3)
 
-| Repo | Build | C-ABI Exports |
-|------|-------|---------------|
-| zig-agents | ✅ GREEN | 5 exports (agent_create/destroy/run/step/status) |
-| zig-knowledge-graph | ✅ GREEN | 5 exports (graph_create/destroy/add_node/add_edge/count) |
+- zig-agents (MCP server + autonomous agents)
+- zig-knowledge-graph
 
 ## Layer 3: TRIOS — Rust Workspace + FFI
 
-### 3.1 Current Modules (15 crates)
+### 3.1 Current Modules (12 crates)
 
 | Crate | Type | Stub | FFI | Tests |
 |-------|------|------|-----|-------|
@@ -50,9 +48,6 @@ All vendors use Zig 0.16 `build.zig` API: `b.createModule()` / `b.addLibrary()` 
 | trios-sacred | Sacred Geometry | ✅ | ✅ | 0 (+2 ignored) |
 | trios-crypto | Crypto/Mining | ✅ | ✅ | 7 (+4 FFI integration) |
 | trios-zig-agents | Zig Agents | ✅ | ✅ | 1 |
-| trios-llm | LLM Bridge | ✅ R0 | — | 2 |
-| trios-training-ffi | Training FFI | ✅ R0 | — | 6 |
-| trinity-brain | Memory | ✅ R0 | — | 8 |
 
 ### 3.2 Planned Modules
 
@@ -63,9 +58,9 @@ All vendors use Zig 0.16 `build.zig` API: `b.createModule()` / `b.addLibrary()` 
 
 | Mode | Build | Tests | Notes |
 |------|-------|-------|-------|
-| `cargo build --workspace` | ✅ GREEN | — | 15/15 crates |
-| `cargo test --workspace` | ✅ GREEN | 55 passed, 0 failed, 6 ignored | Stub mode (+8 trinity-brain, +2 llm, +6 training-ffi) |
-| `cargo test --workspace --features ffi` | ✅ GREEN | 57 passed, 0 failed, 6 ignored | FFI mode (real Zig calls) |
+| `cargo build --workspace` | ✅ GREEN | — | 12/12 crates |
+| `cargo test --workspace` | ✅ GREEN | 39 passed, 0 failed, 6 ignored | Stub mode |
+| `cargo test --workspace --features ffi` | ✅ GREEN | 41 passed, 0 failed, 6 ignored | FFI mode (real Zig calls) |
 
 ## RED List — All Resolved ✅
 
@@ -77,15 +72,15 @@ All vendors use Zig 0.16 `build.zig` API: `b.createModule()` / `b.addLibrary()` 
 
 # Verification Results (2026-04-19)
 
-## Rust workspace — ALL GREEN (15/15 crates)
+## Rust workspace — ALL GREEN (12/12 crates)
 
 ```
 cargo build --workspace: ✅ 0 errors
-cargo test --workspace: 55 passed, 0 failed, 6 ignored
-cargo test --workspace --features ffi: 57 passed, 0 failed, 6 ignored
+cargo test --workspace: 39 passed, 0 failed, 6 ignored
+cargo test --workspace --features ffi: 41 passed, 0 failed, 6 ignored
 ```
 
-## Zig vendor builds — 7/7 GREEN
+## Zig vendor builds — 5/5 GREEN
 
 ```
 zig-golden-float: ✅ libgolden_float.a
@@ -93,6 +88,4 @@ zig-hdc: ✅ libhdc.a
 zig-physics: ✅ libphysics.a
 zig-crypto-mining: ✅ libcrypto_mining.a
 zig-sacred-geometry: ✅ libsacred_geometry.a (local vendor)
-zig-agents: ✅ libagents.a
-zig-knowledge-graph: ✅ libknowledge_graph.a
 ```
