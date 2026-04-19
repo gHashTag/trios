@@ -35,9 +35,11 @@ pub struct DepinProof {
 
 extern "C" {
     /// Compute SHA-256 hash of data.
+    #[allow(dead_code)]
     pub fn crypto_sha256(data: *const u8, len: size_t, out_hash: *mut Sha256Hash) -> c_int;
 
     /// Mine a block header with given difficulty target.
+    #[allow(dead_code)]
     pub fn crypto_mine_sha256d(
         header: *const u8,
         target: *const Sha256Hash,
@@ -47,6 +49,7 @@ extern "C" {
     ) -> c_int;
 
     /// Generate a DePIN proof-of-work for given challenge.
+    #[allow(dead_code)]
     pub fn crypto_depin_prove(
         challenge: u64,
         worker_id: *const u8,
@@ -55,5 +58,6 @@ extern "C" {
     ) -> c_int;
 
     /// Verify a DePIN proof-of-work.
+    #[allow(dead_code)]
     pub fn crypto_depin_verify(proof: *const DepinProof) -> bool;
 }

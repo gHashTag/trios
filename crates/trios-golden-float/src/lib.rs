@@ -46,21 +46,25 @@ impl GF16 {
     }
 
     /// Add two GF16 values.
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, other: Self) -> Self {
         unsafe { GF16(ffi::gf16_add(self.0, other.0)) }
     }
 
     /// Subtract `other` from `self`.
+    #[allow(clippy::should_implement_trait)]
     pub fn sub(self, other: Self) -> Self {
         unsafe { GF16(ffi::gf16_sub(self.0, other.0)) }
     }
 
     /// Multiply two GF16 values.
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, other: Self) -> Self {
         unsafe { GF16(ffi::gf16_mul(self.0, other.0)) }
     }
 
     /// Divide `self` by `other`.
+    #[allow(clippy::should_implement_trait)]
     pub fn div(self, other: Self) -> Self {
         unsafe { GF16(ffi::gf16_div(self.0, other.0)) }
     }
