@@ -1,5 +1,32 @@
 # WORKLOG.md — Session Notes
 
+## 2026-04-19 18:50: RULE VIOLATION — trios-claraParameter crate misplaced
+
+**Violation:** `crates/trios-claraParameter/` found in trios workspace.
+
+**Rule:** "НЕ трогать trinity-claraParameter из trios-агента" — Parameter Golf is separate repo `trinity-claraParameter`, NOT a trios crate.
+
+**Discovery:**
+- Date: 2026-04-19 18:45
+- Location: `crates/trios-claraParameter/Cargo.toml` (378 bytes), `src/lib.rs` (260 lines)
+- Added by: unknown (need git blame to identify)
+- Content: Parameter Golf ensemble, compression, submission logic
+
+**Why This Is Wrong:**
+- trios workspace = Rust CLI tools + FFI wrappers
+- trinity-claraParameter = Parameter Golf experiments (separate repo)
+- Mixing creates dependency hell and violates architecture separation
+
+**Resolution:**
+- Delete `crates/trios-claraParameter/` from trios workspace
+- Remove from root `Cargo.toml` workspace members
+- Code should exist in separate repo `gHashTag/trinity-claraParameter`
+- If code lost → document in TECH_DEBT.md
+
+**Status:** IN PROGRESS (removal commits follow)
+
+---
+
 ## 2026-04-19 18:45: Branch Audit — trios-claraParameter location violation
 
 **Issue:** `crates/trios-claraParameter/` found in trios workspace.
