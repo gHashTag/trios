@@ -11,9 +11,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("============================");
     println!();
 
-    // Create training configuration
+    // Create training configuration (smoke test: 34 steps)
     let config = TrainConfig {
-        max_steps: 100,
+        max_steps: 34,
         batch_size: 4,
         seq_len: 128,
         learning_rate: 0.001,

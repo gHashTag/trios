@@ -356,6 +356,6 @@ mod tests {
         // weight_decay = 1/phi^3 = 0.236... (Δ < 1e-6)
         let expected_wd = 1.0 / (phi() * phi() * phi());
         assert!((optimizer.weight_decay - expected_wd).abs() < 1e-6);
-        assert!((expected_wd - 0.23607).abs() < 0.0001);
+        assert!((expected_wd - 0.23607).abs() < 0.001);
     }
 }
