@@ -1,316 +1,129 @@
-//! trios-training-ffi — Zig training kernels bridge
+//! # trios-training-ffi
 //!
-//! R0: Stub implementation (CPU simulation)
-//! R1: FFI to zig-training kernels (planned)
-//! R2: GPU acceleration (planned)
+//! Rust FFI bindings for zig-training HSLM kernels.
+//!
+//! Provides interfaces to:
+//! - HSLM (Hierarchical Softmax-Latent Model) inference
+//! - Forward pass kernels
+//! - Training loop orchestration
+//!
+//! ## Features
+//!
+//! - **ffi** (default: disabled): Links against zig-training vendor/ library
+//!
+//! ## Example
+//!
+//! ```ignore
+//! use trios_training_ffi::{hslm_inference, forward_kernel};
+//!
+//! let logits = hslm_inference(&input, Some(&hidden_state), 1024)?;
+//! let grads = forward_kernel(&logits, &hidden_state);
+//! ```
 
-use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use libc::{c_char, c_float, c_int, size_t};
 
-/// Training error types
-#[derive(Debug, Clone, PartialEq)]
-pub enum TrainingError {
-    ModelNotFound,
-    InvalidData,
-    TrainingFailed(String),
-    CheckpointNotFound,
-    FfiNotInitialized,
-}
-
-impl std::fmt::Display for TrainingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TrainingError::ModelNotFound => write!(f, "Model not found"),
-            TrainingError::InvalidData => write!(f, "Invalid training data"),
-            TrainingError::TrainingFailed(msg) => write!(f, "Training failed: {}", msg),
-            TrainingError::CheckpointNotFound => write!(f, "Checkpoint not found"),
-            TrainingError::FfiNotInitialized => write!(f, "FFI not initialized"),
-        }
-    }
-}
-
-impl std::error::Error for TrainingError {}
-
-/// Training configuration
-#[derive(Debug, Clone)]
-pub struct TrainingConfig {
-    pub learning_rate: f32,
-    pub epochs: u32,
-    pub batch_size: u32,
-    pub checkpoint_interval: u32,
-}
-
-impl Default for TrainingConfig {
-    fn default() -> Self {
-        Self {
-            learning_rate: 0.001,
-            epochs: 100,
-            batch_size: 32,
-            checkpoint_interval: 10,
-        }
-    }
-}
-
-/// Training metrics
-#[derive(Debug, Clone)]
-pub struct TrainingMetrics {
-    pub epoch: u32,
-    pub loss: f32,
-    pub accuracy: f32,
-    pub learning_rate: f32,
-}
-
-/// Training session handle
+/// HSLM configuration parameters.
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct TrainingHandle(u64);
-
-impl TrainingHandle {
-    pub fn new(id: u64) -> Self {
-        Self(id)
-    }
-
-    pub fn id(&self) -> u64 {
-        self.0
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.0 != 0
-    }
+pub struct HslmConfig {
+    /// Embedding dimension.
+    pub embedding_dim: usize,
+    /// Hidden dimension.
+    pub hidden_dim: usize,
+    /// Number of attention heads.
+    pub num_heads: usize,
+    /// Temperature for sampling (0.0 = deterministic).
+    pub temperature: c_float,
+    /// Top-k sampling parameter.
+    pub top_k: usize,
 }
 
-/// Training state (R0 stub)
-struct TrainingSession {
-    id: u64,
-    config: TrainingConfig,
-    current_epoch: u32,
-    is_running: bool,
+/// Forward pass kernel configuration.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ForwardKernelConfig {
+    /// Input dimension.
+    pub input_dim: usize,
+    /// Output dimension.
+    pub output_dim: usize,
+    /// Activation function (0=relu, 1=gelu, 2=swish).
+    pub activation: c_int,
 }
 
-impl TrainingSession {
-    fn new(config: TrainingConfig) -> Self {
-        static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-        Self {
-            id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-            config,
-            current_epoch: 0,
-            is_running: false,
-        }
-    }
+#[cfg(feature = "ffi")]
+extern "C" {
+    /// Perform HSLM inference on input vectors.
+    ///
+    /// Returns logits [batch_size x vocab_size].
+    /// If hidden_state is provided, uses cached attention state.
+    pub fn hslm_inference(
+        input: *const c_float,
+        input_len: size_t,
+        hidden_state: *const c_float,
+        batch_size: size_t,
+        vocab_size: size_t,
+        out_logits: *mut c_float,
+    ) -> c_int;
 
-    fn step(&mut self) -> TrainingMetrics {
-        self.current_epoch += 1;
+    /// Compute forward pass through a kernel.
+    ///
+    /// Returns gradients [batch_size x output_dim].
+    pub fn forward_kernel(
+        logits: *const c_float,
+        hidden: *const c_float,
+        config: *const ForwardKernelConfig,
+        out_gradients: *mut c_float,
+    ) -> c_int;
 
-        // Simulate training progress
-        let progress = self.current_epoch as f32 / self.config.epochs as f32;
-        let loss = 1.0 - progress * 0.8;
-        let accuracy = progress * 0.9;
+    /// Run one training step (forward + backward).
+    ///
+    /// Returns loss value.
+    pub fn training_step(
+        input: *const c_float,
+        target: *const c_float,
+        config: *const HslmConfig,
+        out_loss: *mut c_float,
+    ) -> c_int;
 
-        TrainingMetrics {
-            epoch: self.current_epoch,
-            loss,
-            accuracy,
-            learning_rate: self.config.learning_rate,
-        }
-    }
+    /// Free allocated memory from Zig HSLM module.
+    pub fn hslm_free_memory(ptr: *mut c_void);
 }
 
-/// Global training state (R0 stub)
-struct TrainingState {
-    sessions: HashMap<u64, TrainingSession>,
-    checkpoints: HashMap<String, Vec<u8>>,
+#[cfg(not(feature = "ffi"))]
+pub fn hslm_inference(
+    _input: &[f32],
+    _hidden_state: Option<&[f32]>,
+    _batch_size: usize,
+    _vocab_size: usize,
+) -> Result<Vec<f32>, String> {
+    Err("Zig training FFI not available. Enable with --features ffi and ensure zig-training vendor is present.".to_string())
 }
 
-impl TrainingState {
-    fn new() -> Self {
-        Self {
-            sessions: HashMap::new(),
-            checkpoints: HashMap::new(),
-        }
-    }
+#[cfg(not(feature = "ffi"))]
+pub fn forward_kernel(
+    _logits: &[f32],
+    _hidden: &[f32],
+    _config: &ForwardKernelConfig,
+) -> Result<Vec<f32>, String> {
+    Err("Zig training FFI not available. Enable with --features ffi and ensure zig-training vendor is present.".to_string())
 }
 
-use std::sync::Mutex;
-
-static STATE: LazyLock<Mutex<TrainingState>> = LazyLock::new(|| {
-    Mutex::new(TrainingState::new())
-});
-
-/// Start a new training session
-pub fn training_start(config: TrainingConfig) -> Result<TrainingHandle, TrainingError> {
-    let session = TrainingSession::new(config);
-    let handle = TrainingHandle::new(session.id);
-
-    let mut state = STATE.lock().map_err(|_| TrainingError::FfiNotInitialized)?;
-    state.sessions.insert(session.id, session);
-
-    Ok(handle)
-}
-
-/// Step training for one epoch
-pub fn training_step(handle: TrainingHandle) -> Result<TrainingMetrics, TrainingError> {
-    let mut state = STATE.lock().map_err(|_| TrainingError::FfiNotInitialized)?;
-
-    let session = state
-        .sessions
-        .get_mut(&handle.id())
-        .ok_or(TrainingError::ModelNotFound)?;
-
-    if session.current_epoch >= session.config.epochs {
-        return Err(TrainingError::TrainingFailed("Training complete".to_string()));
-    }
-
-    Ok(session.step())
-}
-
-/// Save checkpoint
-pub fn training_checkpoint(
-    handle: TrainingHandle,
-    name: &str,
-) -> Result<(), TrainingError> {
-    let state = STATE.lock().map_err(|_| TrainingError::FfiNotInitialized)?;
-
-    if !state.sessions.contains_key(&handle.id()) {
-        return Err(TrainingError::ModelNotFound);
-    }
-
-    // Simulate checkpoint data
-    let data = format!("checkpoint_{}_{}", handle.id(), name);
-    state.checkpoints.insert(name.to_string(), data.into_bytes());
-
-    Ok(())
-}
-
-/// Load checkpoint
-pub fn training_load_checkpoint(name: &str) -> Result<Vec<u8>, TrainingError> {
-    let state = STATE.lock().map_err(|_| TrainingError::FfiNotInitialized)?;
-
-    state
-        .checkpoints
-        .get(name)
-        .cloned()
-        .ok_or(TrainingError::CheckpointNotFound)
-}
-
-/// Stop training session
-pub fn training_stop(handle: TrainingHandle) -> Result<(), TrainingError> {
-    let mut state = STATE.lock().map_err(|_| TrainingError::FfiNotInitialized)?;
-
-    state
-        .sessions
-        .remove(&handle.id())
-        .ok_or(TrainingError::ModelNotFound)?;
-
-    Ok(())
-}
-
-/// Get training status
-pub fn training_status(handle: TrainingHandle) -> Result<TrainingStatus, TrainingError> {
-    let state = STATE.lock().map_err(|_| TrainingError::FfiNotInitialized)?;
-
-    let session = state
-        .sessions
-        .get(&handle.id())
-        .ok_or(TrainingError::ModelNotFound)?;
-
-    Ok(TrainingStatus {
-        epoch: session.current_epoch,
-        total_epochs: session.config.epochs,
-        is_running: session.is_running,
-    })
-}
-
-/// Training status info
-#[derive(Debug, Clone)]
-pub struct TrainingStatus {
-    pub epoch: u32,
-    pub total_epochs: u32,
-    pub is_running: bool,
-}
-
-/// Initialize FFI layer (R0: no-op)
-pub fn ffi_init() -> Result<(), TrainingError> {
-    // R0: no actual FFI to initialize
-    Ok(())
-}
-
-/// Check if FFI layer is available
-pub fn ffi_available() -> bool {
-    false // R0: no FFI yet
+#[cfg(not(feature = "ffi"))]
+pub fn training_step(
+    _input: &[f32],
+    _target: &[f32],
+    _config: &HslmConfig,
+) -> Result<f32, String> {
+    Err("Zig training FFI not available. Enable with --features ffi and ensure zig-training vendor is present.".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn clear_state() {
-        let mut state = STATE.lock().unwrap();
-            *state = TrainingState::new();
-    }
-
     #[test]
-    fn test_training_start() {
-        clear_state();
-
-        let config = TrainingConfig::default();
-        let handle = training_start(config).unwrap();
-
-        assert!(handle.is_valid());
-    }
-
-    #[test]
-    fn test_training_step() {
-        clear_state();
-
-        let config = TrainingConfig {
-            epochs: 10,
-            ..Default::default()
-        };
-        let handle = training_start(config).unwrap();
-
-        let metrics = training_step(handle).unwrap();
-        assert_eq!(metrics.epoch, 1);
-        assert!(metrics.loss < 1.0);
-        assert!(metrics.accuracy > 0.0);
-    }
-
-    #[test]
-    fn test_checkpoint() {
-        clear_state();
-
-        let handle = training_start(TrainingConfig::default()).unwrap();
-
-        training_checkpoint(handle, "ckpt1").unwrap();
-        let data = training_load_checkpoint("ckpt1").unwrap();
-
-        assert!(data.len() > 0);
-    }
-
-    #[test]
-    fn test_stop() {
-        clear_state();
-
-        let handle = training_start(TrainingConfig::default()).unwrap();
-        training_stop(handle).unwrap();
-
-        let result = training_step(handle);
-        assert_eq!(result, Err(TrainingError::ModelNotFound));
-    }
-
-    #[test]
-    fn test_status() {
-        clear_state();
-
-        let config = TrainingConfig { epochs: 100, ..Default::default() };
-        let handle = training_start(config).unwrap();
-
-        let status = training_status(handle).unwrap();
-        assert_eq!(status.epoch, 0);
-        assert_eq!(status.total_epochs, 100);
-    }
-
-    #[test]
-    fn test_ffi_stubs() {
-        assert!(ffi_init().is_ok());
-        assert!(!ffi_available());
+    fn stub_returns_error_in_stub_mode() {
+        let result = hslm_inference(&[], None, 1, 10);
+        assert!(result.is_err());
     }
 }

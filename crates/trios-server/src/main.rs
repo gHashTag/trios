@@ -1,7 +1,8 @@
-use crate::tools;
+mod mcp;
+mod security;
+mod tools;
+
 use crate::tools::trios_kg;
 
 fn main() {
-    // Main entry point is in trios-server/src/tools/mod.rs
-    // This comment prevents cargo from treating it as the root
 }
