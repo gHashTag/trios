@@ -1,14 +1,15 @@
 # TRIOS ECOSYSTEM — Architecture
 
-**Date:** 2026-04-19  
-**Branch:** `feat/trios-migration-finalize`  
+**Date:** 2026-04-19
+**Branch:** `main` (trios)
 **Status:** DRAFT — Planning Document
+**SSOT:** BUILD_STATUS.md (detailed), this file (high-level)
 
 ---
 
-## 1. Существующие Zig репозитории (LIVE)
+## 1. Existing Zig Repositories (LIVE)
 
-| # | Модуль / Репо | Zig ver | Build | Статус | SSOT link README | Submodule |
+| # | Module / Repo | Zig ver | Build | Status | SSOT link README | Submodule |
 |---|---|---|---|---|---|---|
 | 1 | Golden Float / GF16 | `zig-golden-float` | 0.16 ✅ | ✅ | ✅ | [docs](https://github.com/gHashTag/zig-golden-float) |
 | 2 | Physics / Quantum | `zig-physics` | 0.16 ✅ | ✅ | ✅ | [docs](https://github.com/gHashTag/zig-physics) |
@@ -16,201 +17,195 @@
 | 4 | Sacred Geometry | `zig-sacred-geometry` | ⚠️ NO VENDOR | Submodule not initialized | — |
 | 5 | Crypto-mining | `zig-crypto-mining` | 0.16 ✅ | ✅ | ✅ | — | — |
 
-**Примечание:** Sacred geometry (φ-attention) уже реализован в `zig-physics/src/gravity/sacred_geometry/`, отдельный Zig репозиторий не требуется.
+**Note:** Sacred geometry (φ-attention) is already implemented in `zig-physics/src/gravity/sacred_geometry/`, separate Zig repository not required. Status: **deferred, awaiting explicit signal on merge vs resurrect** (choice A1 in audit).
 
 ---
 
-## 2. Кандидаты на внедрение — HIGH priority
+## 2. Candidates for Integration — HIGH priority
 
 ### 2.1 `trinity-fpga` — FPGA Synthesis
 
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | [t27](https://github.com/gHashTag/trinity-fpga) — VIBEE T27 synthesis для FPGA |
-| Интеграция | PENDING | Интеграция с TRIOS server MCP tools |
-| Зависимости | DRAFT | VIBEE Core, Triton FFGAs (external) |
-| Сложность | HIGH | Требует глубокое знание FPGA synthesis |
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | [t27](https://github.com/gHashTag/trinity-fpga) — VIBEE T27 synthesis for FPGA |
+| Integration | PENDING | Integration with TRIOS server MCP tools |
+| Dependencies | DRAFT | VIBEE Core, Triton FPGAs (external) |
+| Complexity | HIGH | Requires deep FPGA synthesis knowledge |
 
-**Этапы внедрения:**
-1. Изучить VIBEE spec и существующую тринитую инфраструктуру
-2. Создать слой интеграции в trios-server для управления FPGA
-3. Разработать pipeline: CLI request → FPGA compilation → verification → deployment
-
----
-
-### 2.2 `trinity-brain` — Neural Interface
-
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | [t27](https://github.com/gHashTag/trinity-brain) — Brain simulation interface |
-| Интеграция | PENDING | Интеграция с trios-agents (AI agents) |
-| Зависимости | DRAFT | VIBEE Core, Neural network libraries (external) |
-| Сложность | MEDIUM | Мосты к существующим AI системам |
-
-**Этапы внедрения:**
-1. Изучить архитектуру trios-agents
-2. Реализовать bidirectional communication agents ↔ FPGA/brain
-3. Создать протоколы для hardware neural inference
+**Integration steps:**
+1. Study VIBEE spec and existing trinity infrastructure
+2. Create integration layer in trios-server for FPGA control
+3. Develop pipeline: CLI request → FPGA compilation → verification → deployment
 
 ---
 
-## 3. Кандидаты на внедрение — MEDIUM priority
+## 3. Candidates for Integration — MEDIUM priority
 
 ### 3.1 `trinity-bio` — Biological Computation
 
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | [t27](https://github.com/gHashTag/trinity-bio) — Bio-computation primitives |
-| Интеграция | PENDING | Интеграция с zig-physics (quantum simulations) |
-| Зависимости | DRAFT | VIBEE Core, zig-physics |
-| Сложность | LOW | Специализированный домен, низкий приоритет |
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | [t27](https://github.com/gHashTag/trinity-bio) — Bio-computation primitives |
+| Integration | PENDING | Integration with zig-physics (quantum simulations) |
+| Dependencies | DRAFT | VIBEE Core, zig-physics |
+| Complexity | LOW | Specialized domain, low priority |
 
-**Этапы внедрения:**
-1. Создать stub для bio-operations в trios-physics
-2. Разработать протоколы для classical-quantum hybrid computing
-
----
-
-### 3.2 `trinity-websocket` — WebSocket Layer
-
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | — WebSocket транспорт для TRIOS |
-| Интеграция | PENDING | Интеграция в trios-server |
-| Зависимости | DRAFT | trios-server |
-| Сложность | LOW | Низкая сложность, чистая инфраструктура |
-
-**Этапы внедрения:**
-1. Создать `crates/trios-ws` crate
-2. Реализовать WebSocket handlers для MCP
-3. Тестирование производительности и безопасности
+**Integration steps:**
+1. Create stub for bio-operations in trios-physics
+2. Develop protocols for classical-quantum hybrid computing
 
 ---
 
-### 3.3 `trinity-rpc` — RPC Layer
+### 3.2 `trinity-brain` — Neural Interface
 
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | — RPC протокол для trios |
-| Интеграция | PENDING | Интеграция в trios-server |
-| Зависимости | DRAFT | trios-server |
-| Сложность | MEDIUM | Стандартный RPC, требуются интеграционные тесты |
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | [t27](https://github.com/gHashTag/trinity-brain) — Brain simulation interface |
+| Integration | PENDING | Integration with trios-agents (AI agents) |
+| Dependencies | DRAFT | VIBEE Core, Neural network libraries (external) |
+| Complexity | MEDIUM | Bridges to existing AI systems |
 
-**Этапы внедрения:**
-1. Выбрать RPC фреймворк (json-rpc, tarpc)
-2. Реализовать bidirectional RPC над MCP
-3. Создать middleware для авторизации и rate limiting
+**Integration steps:**
+1. Study trios-agents architecture
+2. Implement bidirectional communication agents ↔ brain
+3. Create protocols for hardware neural inference
 
 ---
 
-## 4. Кандидаты на внедрение — LOW priority
+### 3.3 `trinity-websocket` — WebSocket Layer
 
-### 4.1 `trinity-rpc` — I/O Layer
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | — WebSocket transport for TRIOS |
+| Integration | PENDING | Integration into trios-server |
+| Dependencies | DRAFT | trios-server |
+| Complexity | LOW | Low complexity, pure infrastructure |
 
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | — Асинхронный I/O для TRIOS |
-| Интеграция | PENDING | Интеграция с trios-server |
-| Зависимости | DRAFT | trios-server, async runtime |
-| Сложность | LOW | Может отложить до завершения RPC/WebSocket |
+**Integration steps:**
+1. Create `crates/trios-ws` crate
+2. Implement WebSocket handlers for MCP
+3. Test performance and security
 
-**Этапы внедрения:**
-1. Изучить async I/O паттерны в trios-core
-2. Реализовать файловые MCP операции (async read/write)
-3. Тестирование производительности
+---
+
+### 3.4 `trinity-rpc` — RPC Layer
+
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | — RPC protocol for trios |
+| Integration | PENDING | Integration into trios-server |
+| Dependencies | DRAFT | trios-server |
+| Complexity | MEDIUM | Standard RPC, requires integration tests |
+
+**Integration steps:**
+1. Select RPC framework (json-rpc, tarpc)
+2. Implement bidirectional RPC over MCP
+3. Create middleware for authorization and rate limiting
+
+---
+
+## 4. Candidates for Integration — LOW priority
+
+### 4.1 `trinity-io` — I/O Layer
+
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | — Async I/O for TRIOS |
+| Integration | PENDING | Integration with trios-server |
+| Dependencies | DRAFT | trios-server, async runtime |
+| Complexity | LOW | Can defer until RPC/WebSocket complete |
+
+**Integration steps:**
+1. Study async I/O patterns in trios-core
+2. Implement file MCP operations (async read/write)
+3. Test performance
 
 ---
 
 ### 4.2 `trinity-tests` — Testing Framework
 
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | — Unit и интеграционные тесты для TRIOS |
-| Интеграция | PENDING | Интеграция в CI/CD |
-| Зависимости | DRAFT | — |
-| Сложность | LOW | Инфраструктурная задача |
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | — Unit and integration tests for TRIOS |
+| Integration | PENDING | Integration into CI/CD |
+| Dependencies | DRAFT | — |
+| Complexity | LOW | Infrastructure task |
 
-**Этапы внедрения:**
-1. Создать `crates/trios-test` crate
-2. Добавить property-based тесты для всех модулей
-3. Интеграция с GitHub Actions
-
----
-
-### 4.3 `trinity-firebird` — Firebird Database
-
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | — SQL базы данных для TRIOS |
-| Интеграция | PENDING | Интеграция через MCP (trios-server) |
-| Зависимости | DRAFT | trios-server, Firebird driver |
-| Сложность | LOW | Зависит от выбранной БД |
-
-**Этапы внедрения:**
-1. Выбрать SQL фреймворк (sqlx, libpq)
-2. Создать MCP адаптер для базы данных
-3. Реализовать миграции и backup
+**Integration steps:**
+1. Create `crates/trios-test` crate
+2. Add property-based tests for all modules
+3. Integration with GitHub Actions
 
 ---
 
-## 5. Кандидаты на вынос — НИЖНИЙ приоритет
+## 5. DO NOT Extract (Core System, Hard Coupled)
 
-### 5.1 `trinity-mcp` — Model Context Protocol
-
-| Параметр | Статус | Описание |
-|----------|----------|-------------|
-| Источник | DRAFT | — MCP (Model Context Protocol) для TRIOS |
-| Интеграция | — | Встроено в trios-server |
-| Зависимости | DRAFT | — |
-| Сложность | LOW | Уже реализован, не требует внедрения |
-
----
-
-## 6. Технический долг — Technical Debt
-
-| Область | Статус | Действие |
-|----------|----------|-------------|
-| FFI stubs | 404 | Все Zig FFI crate используют stub mode вместо реальных функций | Не критично, но снижает производительность |
-| Sacred geometry в zig-physics | Внедрённая архитектура, требует рефакторинга | Текущая реализация работает |
-| zig-sacred submodule 404 | Репозиторий не найден, sacred geometry уже в zig-physics | Не требует срочного решения |
+| Module | Reason |
+|---|---|
+| `tri/` | Core of CLI, tri-stack doesn't work without it |
+| `phi-engine/` | Tightly coupled with tri runtime |
+| `hslm/` | Already part of trinity-training |
+| `cli/` | Internals of trinity-cli |
+| `trinity-firebird` | LLM inference, core of entire system — critical component, DO NOT extract |
 
 ---
 
-## 7. Стратегия внедрения
+## 6. Candidates for Extraction — LOWEST priority
 
-### 7.1 Phased Approach
+### 6.1 `trinity-mcp` — Model Context Protocol
 
-1. **Фаза 1 — Стабилизация FFI (CURRENT)**
-   - Все 4 working Zig vendors green ✅
-   - FFI feature flag добавлен и работает
-   - Временные stub mode acceptable для ранних этапов
-
-2. **Фаза 2 — Основной стек (NEXT)**
-   - Выбор одного HIGH priority кандидата для MVP
-   - Рекомендация: `trinity-fpga` или `trinity-brain`
-   - Причины: 
-     - FPGA synthesis — максимальный контроль над железом
-     - Neural inference — критически важен для AGI applications
-   - Создать выделенный воркспейс проекта для кандидата
-
-3. **Фаза 3 — Расширение (FUTURE)**
-   - Добавить MEDIUM приоритет кандидатов по одному
-   - Создать интегрированную архитектуру (websocket, rpc, tests)
+| Parameter | Status | Description |
+|-----------|--------|-------------|
+| Source | DRAFT | — MCP (Model Context Protocol) for TRIOS |
+| Integration | — | Built into trios-server |
+| Dependencies | DRAFT | — |
+| Complexity | LOW | Already implemented, no integration needed |
 
 ---
 
-## 8. Приоритет действий сегодня
+## 7. Technical Debt
 
-| # | Действие | Приоритет | Статус |
-|---|---|----------|----------|
-| 1 | Документация архитектуры | HIGH | ✅ СОХРАНЕНО |
-| 2 | Разрешить zig-sacred geometry | LOW | ✅ ДОКУМЕНТИРОВАНО (в zig-physics) |
-| 3 | Continue Zig 0.16 work | MEDIUM | ✅ НЕ ТРЕБУЕТСЯ |
-
----
-
-**Примечание:** Документ ARCHITECTURE.md создан как основа для планирования и не должен содержать оперативные задачи. Для реализации конкретных кандидатов следует создавать отдельные файлы (например, `.trinity/ARCHITECTURE-FPGA.md` для trinity-fpga).
+| Area | Status | Action |
+|------|--------|--------|
+| TRIOS FFI link | ❌ 5 FAIL | Zig vendor ✅ (4/5) but TRIOS FFI link ❌ (0/13 test green) |
+| Sacred geometry in zig-physics | ✅ IMPLEMENTED | Current implementation works, status A1 (merge, not resurrect) |
+| zig-sacred submodule 404 | ⏸️ DEFERRED | Sacred geometry already in zig-physics, decision A1 made |
 
 ---
 
-**Дата обновления:** 2026-04-19
+## 8. Integration Strategy
+
+### 8.1 Phased Approach
+
+1. **Phase 1 — FFI Stabilization (IN PROGRESS)**
+   - Zig vendor builds: 4/5 ✅ (sacred 404)
+   - TRIOS FFI stub mode: 13/13 ✅
+   - TRIOS FFI link mode: 0/13 ❌ (5 FAIL)
+   - Status: NOT complete, requires resolution of 5 FAIL
+
+2. **Phase 2 — Core Stack (NEXT)**
+   - Select one HIGH priority candidate for MVP
+   - Recommendation: `trinity-fpga` (only HIGH priority)
+   - Reason: FPGA synthesis — maximum hardware control
+
+3. **Phase 3 — Expansion (FUTURE)**
+   - Add MEDIUM priority candidates one by one
+   - Create integrated architecture (websocket, rpc, io, tests)
+
+---
+
+## 9. Action Priority Today
+
+| # | Action | Priority | Status |
+|---|--------|----------|--------|
+| 1 | Resolve 5 TRIOS FFI FAIL | CRITICAL | ❌ IN PROGRESS |
+| 2 | Architecture documentation | HIGH | ✅ SAVED |
+| 3 | zig-sacred geometry resolution | LOW | ✅ A1 (merge in zig-physics) |
+
+---
+
+**Note:** ARCHITECTURE.md is created as planning foundation and should not contain operational tasks. For specific candidate implementation, create separate files (e.g., `.trinity/ARCHITECTURE-FPGA.md` for trinity-fpga).
+
+---
+
+**Last updated:** 2026-04-19 18:30
