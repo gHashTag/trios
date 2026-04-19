@@ -1,4 +1,4 @@
-//! IGLA-GF16 Training Pipeline
+//! IGLA-GF16 Training Pipeline for Parameter Golf
 
 pub mod model;
 pub mod phi_schedule;
@@ -7,14 +7,6 @@ pub mod ca_mask;
 pub mod data;
 pub mod train;
 pub mod eval;
-
-pub use model::IGLAGF16Model;
-pub use phi_schedule::phi_lr;
-pub use trinity_init::TrinityInitConfig;
-pub use ca_mask::CAMask;
-pub use data::FineWebBatch;
-pub use train::train_igla_gf16;
-pub use eval::evaluate_submission;
 
 #[derive(Debug, Clone)]
 pub struct TrainingConfig {
