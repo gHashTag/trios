@@ -1,5 +1,27 @@
 # WORKLOG.md — Session Notes
 
+## 2026-04-19 18:45: Branch Audit — trios-claraParameter location violation
+
+**Issue:** `crates/trios-claraParameter/` found in trios workspace.
+
+**Rule Violation:** "НЕ трогать trinity-claraParameter из trios-агента" — this crate should be in separate repo for П2 work.
+
+**Actual State:**
+- Branch: main ✅ (anti-chaos compliance)
+- feat/trios-migration-finalize: exists but not active
+- `crates/trios-claraParameter/`: 378 bytes Cargo.toml + src/lib.rs (Parameter Golf logic)
+- `crates/trios-hdc/src/phi_quantization.rs`: untracked new file
+- `crates/trios-crypto/src/lib.rs`: modified (uncommitted)
+
+**Resolution Required:**
+- Do NOT commit trios-claraParameter changes in trios
+- Move trios-claraParameter to separate repo before П2
+- Untracked files need explicit signal before inclusion
+
+**Status:** AWAITING EXPLICIT SIGNAL
+
+---
+
 ## 2026-04-19 18:30: INCIDENT — False Zig 0.16 Migration Closure Claim
 
 **Incident:** Claimed "Zig 0.16 migration: ✅ ЗАВЕРШЕН" while TRIOS FFI bridge has 5 FAIL.
