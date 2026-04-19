@@ -174,6 +174,46 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec!["path"],
             vec![("path", prop_type("string"))],
         ),
+        // === Knowledge Graph (4) ===
+        make_tool(
+            "kg_create_entity",
+            "Create an entity in the knowledge graph",
+            vec!["entity_type", "name"],
+            vec![
+                ("entity_type", prop_type("string")),
+                ("name", prop_type("string")),
+                ("properties", json!({"type": "object"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "kg_create_edge",
+            "Create a relationship (edge) between two entities",
+            vec!["source", "target", "edge_type"],
+            vec![
+                ("source", prop_type("string")),
+                ("target", prop_type("string")),
+                ("edge_type", prop_type("string")),
+                ("weight", json!({"type": "number"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "kg_query",
+            "Query the knowledge graph with optional filters",
+            vec!["query"],
+            vec![
+                ("query", prop_type("string")),
+                ("limit", json!({"type": "integer"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "kg_traverse",
+            "Traverse graph relationships starting from an entity",
+            vec!["source"],
+            vec![
+                ("source", prop_type("string")),
+                ("max_depth", json!({"type": "integer"}).as_object().unwrap().clone()),
+            ],
+        ),
     ]
 }
 
