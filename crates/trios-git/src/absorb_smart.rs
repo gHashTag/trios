@@ -1,7 +1,5 @@
 /// Smart absorb operations using hunk-level grouping.
 /// TODO: Implement hunk-based file grouping for intelligent commit splitting.
-
-use anyhow::Result;
 use std::path::Path;
 
 /// Group changed files by semantic similarity (hunk-level analysis).

@@ -4,7 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::security::validate_repo_path;
 

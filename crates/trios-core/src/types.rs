@@ -139,7 +139,7 @@ impl PrecisionFormat {
 
     /// Returns the memory size in bytes for a given parameter count.
     pub fn memory_bytes(&self, param_count: usize) -> usize {
-        (param_count * self.bit_width() as usize + 7) / 8
+        (param_count * self.bit_width() as usize).div_ceil(8)
     }
 }
 

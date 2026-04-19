@@ -10,15 +10,7 @@ impl Ternary {
     /// Add two ternary values with clamping.
     ///
     /// Result is clamped to {-1, 0, +1}.
-    /// Addition table:
-    /// ```
-    /// (+1) + (+1) = +1 (clamp)
-    /// (+1) + ( 0) = +1
-    /// (+1) + (-1) =  0
-    /// ( 0) + ( 0) =  0
-    /// ( 0) + (-1) = -1
-    /// (-1) + (-1) = -1 (clamp)
-    /// ```
+    /// Addition table: 1+1=1, 1+0=1, 1+(-1)=0, 0+0=0, 0+(-1)=-1, (-1)+(-1)=-1
     #[inline]
     pub fn add(self, other: Self) -> Self {
         let sum = self as i8 + other as i8;
@@ -50,15 +42,7 @@ impl Ternary {
 
     /// Multiply two ternary values.
     ///
-    /// Multiplication table:
-    /// ```
-    /// (+1) * (+1) = +1
-    /// (+1) * ( 0) =  0
-    /// (+1) * (-1) = -1
-    /// ( 0) * ( 0) =  0
-    /// ( 0) * (-1) =  0
-    /// (-1) * (-1) = +1
-    /// ```
+    /// Multiplication table: 1*1=1, 1*0=0, 1*(-1)=-1, 0*0=0, 0*(-1)=0, (-1)*(-1)=1
     #[inline]
     pub fn mul(self, other: Self) -> Self {
         let product = (self as i8) * (other as i8);
@@ -182,7 +166,7 @@ pub fn l1_distance(a: &[Ternary], b: &[Ternary]) -> i32 {
 ///
 /// # Example
 /// ```
-/// use trios_tri::{Ternary, count_nonzero};
+/// use trios_tri::{Ternary, vec_count_nonzero as count_nonzero};
 ///
 /// let v = vec![Ternary::PosOne, Ternary::Zero, Ternary::NegOne, Ternary::Zero];
 /// assert_eq!(count_nonzero(&v), 2);
@@ -195,7 +179,7 @@ pub fn count_nonzero(vec: &[Ternary]) -> usize {
 ///
 /// # Example
 /// ```
-/// use trios_tri::{Ternary, count_zero};
+/// use trios_tri::{Ternary, vec_count_zero as count_zero};
 ///
 /// let v = vec![Ternary::PosOne, Ternary::Zero, Ternary::NegOne, Ternary::Zero];
 /// assert_eq!(count_zero(&v), 2);

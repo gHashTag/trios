@@ -2,6 +2,8 @@
 //!
 //! FFI bindings to Zig-based HybridBigInt implementation.
 
+use trios_tri::Ternary;
+
 use std::ffi::c_void;
 
 pub type Hybrid = *mut c_void;
@@ -17,6 +19,6 @@ pub unsafe extern "C" fn hybrid_destroy(h: Hybrid) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn hybrid_add(a: Hybrid, b: Hybrid, out: Hybrid) -> i32 {
+pub unsafe extern "C" fn hybrid_add(_a: Hybrid, _b: Hybrid, _out: Hybrid) -> i32 {
     0
 }

@@ -91,7 +91,7 @@ impl TernaryMatrix {
     ///
     /// # Example
     /// ```
-    /// use trios_tri::TernaryMatrix;
+    /// use trios_tri::{TernaryMatrix, Ternary};
     ///
     /// let zeros = TernaryMatrix::zeros(3, 4);
     /// assert_eq!(zeros.get(0, 0), Ternary::Zero);
@@ -122,7 +122,7 @@ impl TernaryMatrix {
     /// assert_eq!(id.get(2, 2), Ternary::PosOne);
     /// ```
     pub fn identity(n: usize) -> Self {
-        assert_eq!(n, n, "identity matrix must be square"); // always true, kept for clarity
+        assert!(n > 0, "identity matrix size must be positive");
 
         let mut data = vec![Ternary::Zero; n * n];
         for i in 0..n {
@@ -283,7 +283,7 @@ impl TernaryMatrix {
             for j in 0..cols {
                 let mut sum: i32 = 0;
                 for k in 0..inner {
-                    sum += (self.get(i, k) as i8) * (other.get(k, j) as i8);
+                    sum += (self.get(i, k) as i8) as i32 * (other.get(k, j) as i8) as i32;
                 }
 
                 // Clamp sum to ternary range

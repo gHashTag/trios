@@ -256,7 +256,7 @@ pub mod hybrid {
         let variance = weights.iter().map(|&w| (w - mean).powi(2)).sum::<f32>() / weights.len() as f32;
         let std = variance.sqrt();
 
-        let phi = 1.618033988749895_f32;  // φ
+        let phi = 1.618_034_f32;  // φ (approximate for f32)
         std.powf(-0.5) / phi
     }
 
@@ -286,11 +286,11 @@ pub mod hybrid {
     /// Calculate compression ratio vs f32 (32 bits per parameter)
     ///
     /// # Arguments
-    /// * `num_params` - Number of parameters
+    /// * `_num_params` - Number of parameters (unused, kept for API compatibility)
     ///
     /// # Returns
     /// Compression ratio (32.0 / 16.0 = 2.0x)
-    pub fn compression_ratio(num_params: usize) -> f32 {
+    pub fn compression_ratio(_num_params: usize) -> f32 {
         32.0 / 16.0  // 2.0x compression for GF16
     }
 

@@ -15,9 +15,7 @@ use super::Ternary;
 ///
 /// # Theory
 /// The STE approximates the gradient of the non-differentiable ternarization:
-/// ```
-/// ∂L/∂w ≈ ∂L/∂q  (where q is the ternarized weight)
-/// ```
+/// `dL/dw ≈ dL/dq` (where q is the ternarized weight)
 ///
 /// # Example
 /// ```
@@ -125,10 +123,7 @@ impl Default for TernarySTE {
 /// the dynamic range preservation of ternarized weights.
 ///
 /// # Theory
-/// The scale factor transforms the weight space:
-/// ```
-/// w_ternary = ternarize(w * scale)
-/// ```
+/// The scale factor transforms the weight space: `w_ternary = ternarize(w * scale)`.
 /// A well-learned scale ensures that significant weights
 /// are mapped to ±1 while noise is mapped to 0.
 ///
@@ -184,6 +179,9 @@ impl LearnableScale {
 
     /// Update the scale using gradient descent.
     ///
+    /// Uses standard gradient descent: `value -= gradient * learning_rate`.
+    /// A positive gradient decreases the scale; a negative gradient increases it.
+    ///
     /// # Arguments
     /// * `gradient` - Gradient with respect to the scale
     /// * `learning_rate` - Learning rate for the update
@@ -193,7 +191,7 @@ impl LearnableScale {
     /// use trios_tri::qat::LearnableScale;
     ///
     /// let mut scale = LearnableScale::new(1.0);
-    /// scale.update(-0.1, 0.01); // Decrease scale
+    /// scale.update(0.1, 0.01); // Decrease scale with positive gradient
     /// assert!(scale.value() < 1.0);
     /// ```
     pub fn update(&mut self, gradient: f32, learning_rate: f32) {
@@ -396,19 +394,21 @@ mod tests {
         assert_eq!(scale.apply(2.0), 2.0);
         assert_eq!(scale.invert(2.0), 2.0);
 
-        scale.update(-0.1, 0.01);
+        // Positive gradient decreases value (gradient descent: value -= grad * lr)
+        scale.update(0.1, 0.01);
         assert!(scale.value() < 1.0);
 
-        scale.update(1.0, 1.0);
-        assert!(scale.value() < 1.0); // Should still be < 1 after negative then positive update
+        // Another positive gradient makes it even smaller
+        scale.update(1.0, 0.01);
+        assert!(scale.value() < 1.0);
     }
 
     #[test]
     fn test_learnable_scale_clamping() {
         let mut scale = LearnableScale::new(1.0);
 
-        // Try to push below minimum
-        scale.update(100.0, 10.0); // Large negative gradient
+        // Try to push below minimum with large positive gradient
+        scale.update(100.0, 10.0);
         assert!(scale.value() >= scale.min_scale);
     }
 
@@ -455,7 +455,8 @@ mod tests {
     fn test_qat_update_scale() {
         let mut config = QatConfig::default();
 
-        config.update_scale(-0.1, 0.01);
+        // Positive gradient decreases scale (gradient descent)
+        config.update_scale(0.1, 0.01);
         assert!(config.scale.value() < 1.0);
     }
 
@@ -463,7 +464,8 @@ mod tests {
     fn test_qat_update_threshold() {
         let mut config = QatConfig::default();
 
-        config.update_threshold(-0.1, 0.1);
+        // Positive gradient decreases threshold
+        config.update_threshold(0.1, 0.1);
         assert!(config.ste.threshold() < 0.5);
 
         // Try to go too low (should clamp)
