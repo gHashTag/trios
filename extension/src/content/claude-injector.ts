@@ -13,7 +13,7 @@ function findProseMirrorTextarea(): HTMLTextAreaElement | null {
   return null;
 }
 
-function injectText(text: string): boolean {
+function injectTextClaude(text: string): boolean {
   const textarea = findProseMirrorTextarea();
   if (!textarea) {
     console.error('[Trinity-Claude] ProseMirror textarea not found');
@@ -58,9 +58,9 @@ function autoSubmit(): boolean {
   return false;
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'inject_text') {
-    const success = injectText(message.text);
+    const success = injectTextClaude(message.text);
 
     if (message.autoSubmit && success) {
       setTimeout(() => {

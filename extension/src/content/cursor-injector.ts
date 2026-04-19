@@ -7,14 +7,14 @@ const CURSOR_TEXTAREA_SELECTOR = 'textarea[aria-label*="Editor"]';
 function findCursorEditor(): HTMLElement | null {
   const editor = document.querySelector(CURSOR_EDITOR_CLASS);
   if (editor) {
-    return editor;
+    return editor as HTMLElement;
   }
 
   const textarea = document.querySelector(CURSOR_TEXTAREA_SELECTOR);
   return textarea as HTMLElement;
 }
 
-function injectText(text: string): boolean {
+function injectTextCursor(text: string): boolean {
   const editor = findCursorEditor();
   if (!editor) {
     console.error('[Trinity-Cursor] Cursor editor not found');
@@ -45,9 +45,9 @@ function injectViaClipboard(text: string): boolean {
   return false;
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'inject_text') {
-    const success = injectText(message.text);
+    const success = injectTextCursor(message.text);
     sendResponse({ success });
   }
 
