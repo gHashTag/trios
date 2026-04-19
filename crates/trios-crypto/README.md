@@ -1,19 +1,28 @@
 # trios-crypto
 
-Rust FFI bindings for [zig-crypto-mining](https://github.com/gHashTag/zig-crypto-mining) — Bitcoin mining, SHA-256d, DePIN proof-of-work.
+## Status: STUB MODE (TECH_DEBT)
 
-## Setup
+zig-crypto-mining submodule not connected. FFI feature disabled by default.
 
-```bash
-cd crates/trios-crypto
-git submodule update --init vendor/zig-crypto-mining
-```
+**Tech debt tracked**: BLOCK_A — crypto vendor pending
+
+## Features
+
+- **stub** (default): Stub implementations return `FfiNotAvailable` error
+- **ffi** (disabled): Real Zig bindings — requires `git submodule add` zig-crypto-mining
 
 ## Usage
 
 ```rust
-use trios_crypto::{sha256, double_sha256};
+use trios_crypto::{sha256, Sha256Hash};
 
-let hash = sha256(b"hello world").unwrap();
-let double = double_sha256(b"hello world").unwrap();
+// Returns Err(FfiNotAvailable) in stub mode
+let hash: Result<Sha256Hash, String> = sha256(b"hello world");
 ```
+
+## Resolution
+
+To enable real FFI:
+1. Add zig-crypto-mining as git submodule at `vendor/zig-crypto-mining`
+2. Run `zig build -Doptimize=ReleaseFast` in vendor dir
+3. Enable with `--features ffi`
