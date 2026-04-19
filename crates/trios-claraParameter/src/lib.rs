@@ -7,7 +7,7 @@
 //!
 //! ## Trinity Cognitive Stack Integration
 //!
-//! ```
+//! ```text
 //! Foundation (zig-golden-float, zig-physics, zig-sacred-geometry)
 //!     └─ GF16 quantization ──┐
 //!                  │
@@ -166,8 +166,8 @@ impl FinalSubmission {
 
     /// Calculate overall compression ratio.
     pub fn overall_compression_ratio(&self) -> f64 {
-        let total_original: f64 = self.models.iter().map(|m| m.original_mb).sum();
-        let total_compressed: f64 = self.models.iter().map(|m| m.compressed_mb).sum();
+        let total_original: f64 = self.compression.iter().map(|c| c.original_mb).sum();
+        let total_compressed: f64 = self.compression.iter().map(|c| c.compressed_mb).sum();
 
         if total_original > 0.0 {
             total_compressed / total_original
@@ -187,58 +187,27 @@ impl FinalSubmission {
 
     /// Generate submission JSON for Parameter Golf.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        // Convert all complex types to JSON-compatible strings
-        fn value_to_string(v: &serde_json::Value) -> String {
-            match v {
-                serde_json::Value::String(s) => s.clone(),
-                serde_json::Value::Number(n) => n.to_string(),
-                serde_json::Value::Bool(b) => b.to_string(),
-                serde_json::Value::Null => "null".into(),
-                serde_json::Value::Array(a) => serde_json::to_string(a).unwrap_or_default(),
-                serde_json::Value::Object(o) => {
-                    let mut map = String::new();
-                    for (key, val) in o {
-                        if !map.is_empty() {
-                            map.push_str(", ");
-                        }
-                        map.push_str(key);
-                        map.push('\": ');
-                        map.push_str(&value_to_string(val));
-                        map.push('"');
-                    }
-                    if !map.is_empty() {
-                        map.push('}');
-                    }
-                    let mut result = String::from("{");
-                    result.push_str(&map);
-                    result.push('}');
-                    result
-                },
-                _ => format!("{:?}", v),
-            }
-        }
-
         let submission = serde_json::json!({
             "submission_id": &self.submission_id,
             "ensemble": {
-                "models": value_to_string(&self.models),
-                "strategy": value_to_string(&self.ensemble.strategy),
-                "compression_level": self.compression_level.to_string(),
+                "models": &self.ensemble.models,
+                "strategy": &self.ensemble.strategy,
+                "compression_level": self.ensemble.compression_level,
             },
-            "models": self.models.iter().map(|m| value_to_string(m)).collect::<Vec<_>>(),
-            "compression": self.compression.iter().map(|c| value_to_string(c)).collect::<Vec<_>>(),
-            "total_params": self.total_params().to_string(),
-            "final_size_mb": self.final_size_mb.to_string(),
-            "predicted_bpb": self.predicted_bpb.to_string(),
+            "models": &self.models,
+            "compression": &self.compression,
+            "total_params": self.total_params(),
+            "final_size_mb": self.final_size_mb,
+            "predicted_bpb": self.predicted_bpb,
             "trinity_stack": {
-                "foundation": vec!["zig-golden-float", "zig-physics", "zig-sacred-geometry"].into_iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-                "cognition": vec!["zig-hdc", "zig-agents"].into_iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-                "orchestration": vec!["trios", "trinity-claraParameter"].into_iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+                "foundation": ["zig-golden-float", "zig-physics", "zig-sacred-geometry"],
+                "cognition": ["zig-hdc", "zig-agents"],
+                "orchestration": ["trios", "trinity-claraParameter"],
             },
-            "metadata": value_to_string(&self.metadata),
+            "metadata": &self.metadata,
         });
 
-        Ok(submission)
+        serde_json::to_string_pretty(&submission)
     }
 }
 
@@ -252,6 +221,7 @@ mod tests {
             ModelConfig {
                 name: "baseline".into(),
                 model_type: "int6".into(),
+                checkpoint: "checkpoints/baseline.pt".into(),
                 params: 15000000,
                 size_mb: 11.08,
                 val_bpb: 1.2244,
@@ -260,6 +230,7 @@ mod tests {
             ModelConfig {
                 name: "gf16".into(),
                 model_type: "gf16".into(),
+                checkpoint: "checkpoints/gf16.pt".into(),
                 params: 14000000,
                 size_mb: 10.5,
                 val_bpb: 1.11,

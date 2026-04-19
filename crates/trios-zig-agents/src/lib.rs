@@ -29,17 +29,15 @@ mod ffi;
 #[derive(Debug)]
 pub struct FfiNotAvailable;
 
+#[cfg(not(feature = "ffi"))]
 impl std::fmt::Display for FfiNotAvailable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("zig-agents FFI not available. Enable with --features ffi or add zig-agents vendor submodule.")
     }
 }
 
-impl std::error::Error for FfiNotAvailable {
-    fn description(&self) -> &str {
-        "zig-agents functions require zig-agents vendor submodule"
-    }
-}
+#[cfg(not(feature = "ffi"))]
+impl std::error::Error for FfiNotAvailable {}
 
 #[allow(unused_imports)]
 use libc::{c_char, c_int, size_t};
@@ -228,7 +226,7 @@ pub fn version() -> String {
             "unknown".into()
         } else {
             let c_str = std::ffi::CStr::from_ptr(ptr);
-            c_str.to_string_lossy().unwrap_or_else(|_| "unknown".into())
+            c_str.to_string_lossy().into_owned()
         }
     }
 }
@@ -260,8 +258,8 @@ pub fn health_check() -> Result<String, anyhow::Error> {
         if ptr.is_null() {
             Ok("no instances".into())
         } else {
-            let c_str = std::ffi::CStr::from_ptr(ptr);
-            Ok(c_str.to_string_lossy().unwrap_or_else(|_| "unknown".into()))
+            let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
+            Ok(c_str.to_string_lossy().into_owned())
         }
     } else {
         Err(anyhow::anyhow!("health check failed with code {}", rc))
@@ -300,77 +298,50 @@ pub fn deploy_to_fly(region: FlyRegion, org: Option<&str>) -> Result<(), anyhow:
 #[cfg(feature = "ffi")]
 /// Get current instance status
 pub fn instance_status() -> Result<Option<InstanceStatus>, anyhow::Error> {
-    let rc = unsafe { ffi::trinity_instance_status() };
-    if rc == 0 {
-        let ptr = unsafe { ffi::trinity_instance_status() };
-        if ptr.is_null() {
-            Ok(None)
-        } else {
-            let c_str = std::ffi::CStr::from_ptr(ptr);
-            let json_str = c_str.to_string_lossy().unwrap_or_else(|_| "unknown".into());
-            serde_json::from_str::<serde_json::Value>(&json_str)
-                .map_err(|e| anyhow::anyhow!("failed to parse instance status: {}", e))
-                .and_then(|v| {
-                    // Extract fields from JSON
-                    let id = v.get("id").and_then(|s| s.as_str()).unwrap_or("").to_string();
-                    let region = v.get("region").and_then(|s| s.as_str()).unwrap_or("").to_string();
-                    let state_str = v.get("state").and_then(|s| s.as_str()).unwrap_or("").to_string();
-                    let health_str = v.get("health").and_then(|s| s.as_str()).unwrap_or("").to_string();
-                    let uptime_ns = v.get("uptime_ns").and_then(|s| s.as_i64()).unwrap_or(0);
-                    let last_check = v.get("last_health_check").and_then(|s| s.as_i64()).unwrap_or(0);
-                    let restarts = v.get("restart_count").and_then(|s| s.as_u32()).unwrap_or(0);
-                    let connections = v.get("connections").and_then(|s| s.as_u32()).unwrap_or(0);
-                    let memory = v.get("memory_mb").and_then(|s| s.as_f64()).unwrap_or(0.0);
-                    let cpu = v.get("cpu_percent").and_then(|s| s.as_f64()).unwrap_or(0.0);
-
-                    let region = match region.as_str() {
-                        "ams" => FlyRegion::Amsterdam,
-                        "cdg" => FlyRegion::Paris,
-                        "fra" => FlyRegion::Frankfurt,
-                        "lax" => FlyRegion::LosAngeles,
-                        "ord" => FlyRegion::Chicago,
-                        "iad" => FlyRegion::Virginia,
-                        "sin" => FlyRegion::Singapore,
-                        "nrt" => FlyRegion::Tokyo,
-                        "hkg" => FlyRegion::HongKong,
-                        "syd" => FlyRegion::Sydney,
-                        _ => FlyRegion::Amsterdam, // default
-                    };
-
-                    let state = match state_str.as_str() {
-                        "starting" => InstanceState::Starting,
-                        "running" => InstanceState::Running,
-                        "stopping" => InstanceState::Stopping,
-                        "stopped" => InstanceState::Stopped,
-                        "crashed" => InstanceState::Crashed,
-                        "restarting" => InstanceState::Restarting,
-                        _ => InstanceState::Stopped,
-                    };
-
-                    let health = match health_str.as_str() {
-                        "healthy" => InstanceHealth::Healthy,
-                        "degraded" => InstanceHealth::Degraded,
-                        "down" => InstanceHealth::Down,
-                        _ => InstanceHealth::Unknown,
-                    };
-
-                    Ok(InstanceStatus {
-                        id,
-                        region,
-                        state,
-                        health,
-                        uptime_ns,
-                        last_health_check: last_check,
-                        restart_count: restarts,
-                        connections,
-                        memory_mb: memory,
-                        cpu_percent: cpu,
-                    })
-                })
-        }
-    } else {
-        Err(anyhow::anyhow!("instance status failed with code {}", rc))
+    let ptr = unsafe { ffi::trinity_instance_status() };
+    if ptr.is_null() {
+        return Ok(None);
     }
+    let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
+    let json_str = c_str.to_string_lossy().into_owned();
+    let v: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| anyhow::anyhow!("failed to parse instance status: {}", e))?;
+
+    let id = v.get("id").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    let region_str = v.get("region").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    let state_str = v.get("state").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    let health_str = v.get("health").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    let uptime_ns = v.get("uptime_ns").and_then(|s| s.as_i64()).unwrap_or(0);
+    let last_check = v.get("last_health_check").and_then(|s| s.as_i64()).unwrap_or(0);
+    let restarts = v.get("restart_count").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
+    let connections = v.get("connections").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
+    let memory = v.get("memory_mb").and_then(|s| s.as_f64()).unwrap_or(0.0);
+    let cpu = v.get("cpu_percent").and_then(|s| s.as_f64()).unwrap_or(0.0);
+
+    let region = match region_str.as_str() {
+        "ams" => FlyRegion::Amsterdam, "cdg" => FlyRegion::Paris,
+        "fra" => FlyRegion::Frankfurt, "lax" => FlyRegion::LosAngeles,
+        "ord" => FlyRegion::Chicago, "iad" => FlyRegion::Virginia,
+        "sin" => FlyRegion::Singapore, "nrt" => FlyRegion::Tokyo,
+        "hkg" => FlyRegion::HongKong, "syd" => FlyRegion::Sydney,
+        _ => FlyRegion::Amsterdam,
+    };
+    let state = match state_str.as_str() {
+        "starting" => InstanceState::Starting, "running" => InstanceState::Running,
+        "stopping" => InstanceState::Stopping, "stopped" => InstanceState::Stopped,
+        "crashed" => InstanceState::Crashed, "restarting" => InstanceState::Restarting,
+        _ => InstanceState::Stopped,
+    };
+    let health = match health_str.as_str() {
+        "healthy" => InstanceHealth::Healthy, "degraded" => InstanceHealth::Degraded,
+        "down" => InstanceHealth::Down, _ => InstanceHealth::Unknown,
+    };
+
+    Ok(Some(InstanceStatus {
+        id, region, state, health, uptime_ns,
+        last_health_check: last_check, restart_count: restarts,
+        connections, memory_mb: memory, cpu_percent: cpu,
+    }))
 }
 
 #[cfg(feature = "ffi")]
@@ -434,9 +405,10 @@ pub fn stop_instance() -> Result<(), FfiNotAvailable> {
 mod tests {
     use super::*;
 
+    #[cfg(not(feature = "ffi"))]
     #[test]
     fn test_stub_returns_error() {
-        let result = version();
+        let result: Result<String, FfiNotAvailable> = version();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "zig-agents FFI not available. Enable with --features ffi or add zig-agents vendor submodule.");
     }
