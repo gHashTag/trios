@@ -40,28 +40,28 @@ impl std::error::Error for FfiNotAvailable {}
 
 #[cfg(feature = "ffi")]
 pub fn sha256(data: &[u8]) -> Result<Sha256Hash, String> {
-    let mut hash = [0u8; 32];
-    let rc = unsafe { ffi::crypto_sha256(data.as_ptr(), data.len(), hash.as_mut_ptr()) };
+    let mut hash: Sha256Hash = [0u8; 32];
+    let rc = unsafe { ffi::crypto_sha256(data.as_ptr(), data.len(), &mut hash as *mut Sha256Hash) };
     if rc != 0 {
         Err(format!("sha256 failed with code {}", rc))
     } else {
-        Ok(Sha256Hash { data: hash })
+        Ok(hash)
     }
 }
 
 #[cfg(feature = "ffi")]
 pub fn double_sha256(data: &[u8]) -> Result<Sha256Hash, String> {
-    let mut hash1 = [0u8; 32];
-    let mut hash2 = [0u8; 32];
-    let rc1 = unsafe { ffi::crypto_sha256(data.as_ptr(), data.len(), hash1.as_mut_ptr()) };
+    let mut hash1: Sha256Hash = [0u8; 32];
+    let mut hash2: Sha256Hash = [0u8; 32];
+    let rc1 = unsafe { ffi::crypto_sha256(data.as_ptr(), data.len(), &mut hash1 as *mut Sha256Hash) };
     if rc1 != 0 {
         return Err(format!("first sha256 failed with code {}", rc1));
     }
-    let rc2 = unsafe { ffi::crypto_sha256(hash1.as_ptr(), 32, hash2.as_mut_ptr()) };
+    let rc2 = unsafe { ffi::crypto_sha256(hash1.as_ptr(), 32, &mut hash2 as *mut Sha256Hash) };
     if rc2 != 0 {
         Err(format!("second sha256 failed with code {}", rc2))
     } else {
-        Ok(Sha256Hash { data: hash2 })
+        Ok(hash2)
     }
 }
 
@@ -81,10 +81,10 @@ pub fn mine_sha256d(
     let rc = unsafe {
         ffi::crypto_mine_sha256d(
             header.as_ptr(),
-            target.as_ptr(),
+            target as *const Sha256Hash,
             start_nonce,
             max_nonce,
-            result.as_mut_ptr(),
+            &mut result as *mut MiningResult,
         )
     };
     if rc != 0 {
@@ -107,7 +107,7 @@ pub fn depin_prove(challenge: u64, worker_id: &[u8]) -> Result<DepinProof, Strin
             challenge,
             worker_id.as_ptr(),
             worker_id.len(),
-            proof.as_mut_ptr(),
+            &mut proof as *mut DepinProof,
         )
     };
     if rc != 0 {
@@ -154,18 +154,21 @@ pub fn depin_prove(_challenge: u64, _worker_id: &[u8]) -> Result<DepinProof, Str
 mod tests {
     use super::*;
 
+    #[cfg(not(feature = "ffi"))]
     #[test]
     fn sha256_returns_error_in_stub_mode() {
         let result = sha256(b"hello world");
         assert!(result.is_err());
     }
 
+    #[cfg(not(feature = "ffi"))]
     #[test]
     fn double_sha256_returns_error_in_stub_mode() {
         let result = double_sha256(b"test data");
         assert!(result.is_err());
     }
 
+    #[cfg(not(feature = "ffi"))]
     #[test]
     fn mine_sha256d_returns_error_in_stub_mode() {
         let header = [0u8; 80];
@@ -174,6 +177,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[cfg(not(feature = "ffi"))]
     #[test]
     fn depin_prove_returns_error_in_stub_mode() {
         let result = depin_prove(12345, b"worker-1");

@@ -4,6 +4,7 @@
 
 use trios_crypto::{sha256, double_sha256, Sha256Hash};
 
+#[cfg(feature = "ffi")]
 #[test]
 fn sha256_hash_returns_32_bytes() {
     let data = b"test data for hashing";
@@ -13,6 +14,7 @@ fn sha256_hash_returns_32_bytes() {
     assert_eq!(hash.len(), 32);
 }
 
+#[cfg(feature = "ffi")]
 #[test]
 fn double_sha256_consistency_check() {
     let data = b"double hash test";
@@ -22,6 +24,7 @@ fn double_sha256_consistency_check() {
     assert_eq!(hash.len(), 32);
 }
 
+#[cfg(feature = "ffi")]
 #[test]
 fn sha256_empty_input() {
     let data = b"";
@@ -31,6 +34,7 @@ fn sha256_empty_input() {
     assert_eq!(hash.len(), 32);
 }
 
+#[cfg(feature = "ffi")]
 #[test]
 fn double_sha256_empty_input() {
     let data = b"";

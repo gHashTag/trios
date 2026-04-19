@@ -4,6 +4,7 @@
 
 use trios_crypto::{double_sha256, sha256, FfiNotAvailable};
 
+#[cfg(feature = "ffi")]
 #[test]
 fn e2e_basic_sha256_hash() {
     let data = b"trinity test data";
@@ -14,6 +15,7 @@ fn e2e_basic_sha256_hash() {
     assert_eq!(hash.len(), 32, "hash should be 32 bytes");
 }
 
+#[cfg(feature = "ffi")]
 #[test]
 fn e2e_double_sha256_hash() {
     let data = b"trinity double test";
@@ -24,6 +26,7 @@ fn e2e_double_sha256_hash() {
     assert_eq!(hash.len(), 32, "hash should be 32 bytes");
 }
 
+#[cfg(feature = "ffi")]
 #[test]
 fn e2e_error_propagation() {
     let data = b"test";
@@ -32,6 +35,7 @@ fn e2e_error_propagation() {
     assert!(result.is_ok(), "sha256 should succeed");
 }
 
+#[cfg(feature = "ffi")]
 #[test]
 fn e2e_empty_input_handling() {
     let data = b"";
@@ -42,6 +46,7 @@ fn e2e_empty_input_handling() {
     assert_eq!(hash.len(), 32, "hash should be 32 bytes");
 }
 
+#[cfg(not(feature = "ffi"))]
 #[test]
 fn e2e_stub_mode_errors() {
     let data = b"test";

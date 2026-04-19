@@ -22,7 +22,7 @@
 //! ```
 
 mod ffi;
-pub mod phi_quantization;
+// pub mod phi_quantization; // DISABLED: externally-added, 14 compilation errors (TECH_DEBT)
 
 use std::marker::PhantomData;
 
@@ -200,4 +200,3 @@ mod tests {
         );
     }
 }
-pub mod phi_quantization;

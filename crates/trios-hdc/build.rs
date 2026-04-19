@@ -3,18 +3,20 @@ use std::process::Command;
 
 fn main() {
     let zig_path = "vendor/zig-hdc";
-    
-    // Sacred geometry symbols
-    if PathBuf::from(zig_path).join("build.zig.zon")).exists() {
-        println!("cargo:rustc-link-search=native={}", zig_path);
+
+    if PathBuf::from(zig_path).join("build.zig").exists() {
+        let _ = Command::new("zig")
+            .args(["build", "-Doptimize=ReleaseFast"])
+            .current_dir(zig_path)
+            .status();
     }
-    
-    // HDC symbols
-    if PathBuf::from(zig_path).join("src/sequence_hdc.zig")).exists() {
-        println!("cargo:rustc-link-search=native={}", zig_path);
+
+    let lib_dir = std::env::current_dir().unwrap().join(zig_path).join("zig-out/lib");
+    let static_lib = lib_dir.join("libhdc.a");
+    if static_lib.exists() {
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        println!("cargo:rustc-link-lib=static=hdc");
     }
-    
-    if PathBuf::from(zig_path).join("src/vsa.zig")).exists() {
-        println!("cargo:rustc-link-search=native={}", zig_path);
-    }
+
+    println!("cargo:rerun-if-changed={}/src", zig_path);
 }
