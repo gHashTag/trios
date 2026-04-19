@@ -204,6 +204,33 @@ Hardware constraints are now documented in `.trinity/specs/hardware-constraints-
 
 ---
 
+## Definition of Done (L0: Immutable)
+
+**ALL** completed tasks MUST include these steps before merging:
+
+```bash
+# 1. Stage changes
+git add <crate-path>/ <affected-files>
+
+# 2. Commit with Issue reference
+git commit -m "feat(<crate>): <description>
+
+refs #22
+- <key changes bullet points>"
+
+# 3. Push to remote
+git push origin main
+```
+
+**Verification:**
+- [ ] All crates modified are staged and committed
+- [ ] Commit message contains `refs #22`
+- [ ] `git status` shows clean (no uncommitted changes)
+- [ ] `cargo clippy -- -D warnings` passes (L3)
+- [ ] `cargo test` passes (L4)
+
+---
+
 ## Next Actions
 
 Please review and provide explicit signal on:
