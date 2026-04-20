@@ -111,11 +111,11 @@ async fn handle_operator_message(text: &str, state: &AppState) -> Value {
 
     match req.method.as_str() {
         "operator/ping" => json!({"pong": true, "ts": epoch_secs()}),
-        "operator/extension/state" => extension_state(&state).await,
-        "operator/extension/send_chat" => send_chat(&state, req.params).await,
+        "operator/extension/state" => extension_state(state).await,
+        "operator/extension/send_chat" => send_chat(state, req.params).await,
         "operator/extension/click" => click_element(req.params).await,
         "operator/extension/screenshot" => json!({"error": "screenshot requires browser context"}),
-        "operator/agent/list" => agent_list(&state).await,
+        "operator/agent/list" => agent_list(state).await,
         "operator/health" => json!({
             "status": "ok",
             "server": "trios-server",
