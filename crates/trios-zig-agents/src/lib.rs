@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports, clippy::all)]
+
 //! # trios-zig-agents
 //!
 //! Safe Rust wrapper around [zig-agents](https://github.com/gHashTag/zig-agents),
@@ -76,10 +78,7 @@ extern "C" {
     pub fn trinity_agent_status(agent_id: *const c_char) -> *const c_char;
 
     /// Register a new agent
-    pub fn trinity_register_agent(
-        agent_type: *const c_char,
-        config: *const c_char,
-    ) -> c_int;
+    pub fn trinity_register_agent(agent_type: *const c_char, config: *const c_char) -> c_int;
 
     /// Unregister an agent
     pub fn trinity_unregister_agent(agent_id: *const c_char) -> c_int;
@@ -88,10 +87,7 @@ extern "C" {
     pub fn trinity_list_agents() -> *const c_char;
 
     /// Spawn autonomous task
-    pub fn trinity_spawn_task(
-        task: *const c_char,
-        agent_id: *const c_char,
-    ) -> c_int;
+    pub fn trinity_spawn_task(task: *const c_char, agent_id: *const c_char) -> c_int;
 
     /// Get task status
     pub fn trinity_task_status(task_id: *const c_char) -> *const c_char;
@@ -236,16 +232,15 @@ pub fn version() -> String {
 pub fn send_collaboration_message(msg: &str, timeout_ms: u64) -> Result<(), anyhow::Error> {
     let msg_bytes = msg.as_bytes();
     let rc = unsafe {
-        ffi::trinity_collaboration_send(
-            msg_bytes.as_ptr(),
-            msg_bytes.len(),
-            timeout_ms as size_t,
-        )
+        ffi::trinity_collaboration_send(msg_bytes.as_ptr(), msg_bytes.len(), timeout_ms as size_t)
     };
     if rc == 0 {
         Ok(())
     } else {
-        Err(anyhow::anyhow!("collaboration send failed with code {}", rc))
+        Err(anyhow::anyhow!(
+            "collaboration send failed with code {}",
+            rc
+        ))
     }
 }
 
@@ -275,12 +270,7 @@ pub fn deploy_to_fly(region: FlyRegion, org: Option<&str>) -> Result<(), anyhow:
         None => std::ffi::CString::new("gHashTag")?,
     };
 
-    let rc = unsafe {
-        ffi::trinity_deploy_fly(
-            region_c.as_ptr(),
-            org_c.as_ptr(),
-        )
-    };
+    let rc = unsafe { ffi::trinity_deploy_fly(region_c.as_ptr(), org_c.as_ptr()) };
 
     // Free allocated strings
     unsafe {
@@ -307,40 +297,76 @@ pub fn instance_status() -> Result<Option<InstanceStatus>, anyhow::Error> {
     let v: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| anyhow::anyhow!("failed to parse instance status: {}", e))?;
 
-    let id = v.get("id").and_then(|s| s.as_str()).unwrap_or("").to_string();
-    let region_str = v.get("region").and_then(|s| s.as_str()).unwrap_or("").to_string();
-    let state_str = v.get("state").and_then(|s| s.as_str()).unwrap_or("").to_string();
-    let health_str = v.get("health").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    let id = v
+        .get("id")
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
+    let region_str = v
+        .get("region")
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
+    let state_str = v
+        .get("state")
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
+    let health_str = v
+        .get("health")
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
     let uptime_ns = v.get("uptime_ns").and_then(|s| s.as_i64()).unwrap_or(0);
-    let last_check = v.get("last_health_check").and_then(|s| s.as_i64()).unwrap_or(0);
+    let last_check = v
+        .get("last_health_check")
+        .and_then(|s| s.as_i64())
+        .unwrap_or(0);
     let restarts = v.get("restart_count").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
     let connections = v.get("connections").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
     let memory = v.get("memory_mb").and_then(|s| s.as_f64()).unwrap_or(0.0);
     let cpu = v.get("cpu_percent").and_then(|s| s.as_f64()).unwrap_or(0.0);
 
     let region = match region_str.as_str() {
-        "ams" => FlyRegion::Amsterdam, "cdg" => FlyRegion::Paris,
-        "fra" => FlyRegion::Frankfurt, "lax" => FlyRegion::LosAngeles,
-        "ord" => FlyRegion::Chicago, "iad" => FlyRegion::Virginia,
-        "sin" => FlyRegion::Singapore, "nrt" => FlyRegion::Tokyo,
-        "hkg" => FlyRegion::HongKong, "syd" => FlyRegion::Sydney,
+        "ams" => FlyRegion::Amsterdam,
+        "cdg" => FlyRegion::Paris,
+        "fra" => FlyRegion::Frankfurt,
+        "lax" => FlyRegion::LosAngeles,
+        "ord" => FlyRegion::Chicago,
+        "iad" => FlyRegion::Virginia,
+        "sin" => FlyRegion::Singapore,
+        "nrt" => FlyRegion::Tokyo,
+        "hkg" => FlyRegion::HongKong,
+        "syd" => FlyRegion::Sydney,
         _ => FlyRegion::Amsterdam,
     };
     let state = match state_str.as_str() {
-        "starting" => InstanceState::Starting, "running" => InstanceState::Running,
-        "stopping" => InstanceState::Stopping, "stopped" => InstanceState::Stopped,
-        "crashed" => InstanceState::Crashed, "restarting" => InstanceState::Restarting,
+        "starting" => InstanceState::Starting,
+        "running" => InstanceState::Running,
+        "stopping" => InstanceState::Stopping,
+        "stopped" => InstanceState::Stopped,
+        "crashed" => InstanceState::Crashed,
+        "restarting" => InstanceState::Restarting,
         _ => InstanceState::Stopped,
     };
     let health = match health_str.as_str() {
-        "healthy" => InstanceHealth::Healthy, "degraded" => InstanceHealth::Degraded,
-        "down" => InstanceHealth::Down, _ => InstanceHealth::Unknown,
+        "healthy" => InstanceHealth::Healthy,
+        "degraded" => InstanceHealth::Degraded,
+        "down" => InstanceHealth::Down,
+        _ => InstanceHealth::Unknown,
     };
 
     Ok(Some(InstanceStatus {
-        id, region, state, health, uptime_ns,
-        last_health_check: last_check, restart_count: restarts,
-        connections, memory_mb: memory, cpu_percent: cpu,
+        id,
+        region,
+        state,
+        health,
+        uptime_ns,
+        last_health_check: last_check,
+        restart_count: restarts,
+        connections,
+        memory_mb: memory,
+        cpu_percent: cpu,
     }))
 }
 

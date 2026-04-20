@@ -3,10 +3,10 @@
 //! End-to-end tests verify the crate works correctly in various scenarios.
 
 #[cfg(feature = "ffi")]
-use trios_crypto::{double_sha256, sha256, FfiNotAvailable};
+use trios_crypto::{double_sha256, sha256};
 
 #[cfg(not(feature = "ffi"))]
-use trios_crypto::sha256;
+use trios_crypto::{sha256, FfiNotAvailable};
 
 #[cfg(feature = "ffi")]
 #[test]

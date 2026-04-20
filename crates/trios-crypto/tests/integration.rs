@@ -3,7 +3,7 @@
 //! Tests internal module interactions and validates type consistency.
 
 #[cfg(feature = "ffi")]
-use trios_crypto::{double_sha256, sha256, Sha256Hash};
+use trios_crypto::{double_sha256, sha256};
 
 #[cfg(feature = "ffi")]
 #[test]

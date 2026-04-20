@@ -106,9 +106,11 @@ pub fn training_step(_input: &[f32], _target: &[f32], _config: &HslmConfig) -> R
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "ffi"))]
     use super::*;
 
     #[test]
+    #[cfg(not(feature = "ffi"))]
     fn stub_returns_error_in_stub_mode() {
         let result = hslm_inference(&[], None, 1, 10);
         assert!(result.is_err());

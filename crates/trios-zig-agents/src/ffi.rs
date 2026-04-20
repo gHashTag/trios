@@ -35,10 +35,7 @@ extern "C" {
     pub fn trinity_agent_status(agent_id: *const c_char) -> *const c_char;
 
     /// Register a new agent
-    pub fn trinity_register_agent(
-        agent_type: *const c_char,
-        config: *const c_char,
-    ) -> c_int;
+    pub fn trinity_register_agent(agent_type: *const c_char, config: *const c_char) -> c_int;
 
     /// Unregister an agent
     pub fn trinity_unregister_agent(agent_id: *const c_char) -> c_int;
@@ -47,10 +44,7 @@ extern "C" {
     pub fn trinity_list_agents() -> *const c_char;
 
     /// Spawn autonomous task
-    pub fn trinity_spawn_task(
-        task: *const c_char,
-        agent_id: *const c_char,
-    ) -> c_int;
+    pub fn trinity_spawn_task(task: *const c_char, agent_id: *const c_char) -> c_int;
 
     /// Get task status
     pub fn trinity_task_status(task_id: *const c_char) -> *const c_char;
