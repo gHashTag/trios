@@ -9,6 +9,7 @@ use trios_core::git::GitOrchestrator;
 use trios_git::Git2Orchestrator;
 
 /// Returns the list of allowed repository root directories.
+#[allow(dead_code)]
 fn allowed_roots() -> Vec<PathBuf> {
     std::env::var("TRIOS_ALLOWED_ROOTS")
         .unwrap_or_default()

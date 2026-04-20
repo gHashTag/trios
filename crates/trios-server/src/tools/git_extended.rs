@@ -2,7 +2,7 @@
 //!
 //! Provides extended git operations: log, diff, stash, checkout.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use trios_core::git::GitOrchestrator;
 use trios_git::Git2Orchestrator;

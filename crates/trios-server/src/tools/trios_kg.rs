@@ -2,8 +2,8 @@
 //!
 //! Exposes Knowledge Graph operations through Model Context Protocol.
 
-use anyhow::{bail, Context, Result};
-use serde_json::{json, Map, Value};
+use anyhow::{Context, Result};
+use serde_json::{json, Value};
 
 /// Dispatch knowledge graph tools.
 pub async fn dispatch(name: &str, input: &Value) -> Option<Result<Value>> {
@@ -34,10 +34,10 @@ pub async fn kg_create_entity(input: &Value) -> Result<Value> {
             Value::Object(props) => Some(props.clone()),
             _ => None,
         })
-        .unwrap_or_else(|| Map::new());
+        .unwrap_or_default();
 
     // R0: Generate mock ID
-    let id = format!("entity-{:x}", md5_compute(&name.to_string()));
+    let id = format!("entity-{:x}", md5_compute(name));
 
     Ok(json!({
         "id": id,
