@@ -587,3 +587,382 @@ pub struct BuildResult {
     pub bitstream: Option<PathBuf>,
     pub smoke: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_new_defaults() {
+        let cfg = BuildConfig::new("/tmp/test", KnownBoard::QmtechA100t);
+        assert_eq!(cfg.top, "zerodsp_top");
+        assert_eq!(cfg.output, "build/fpga");
+        assert!(!cfg.smoke);
+        assert!(!cfg.synth_only);
+        assert!(!cfg.minimal);
+        assert!(cfg.docker.is_none());
+        assert!(!cfg.use_hir);
+        assert!(cfg.nextpnr_path.is_none());
+        assert!(cfg.chipdb_path.is_none());
+        assert!(cfg.xdc_path.is_none());
+    }
+
+    #[test]
+    fn config_paths_qmtech() {
+        let cfg = BuildConfig::new("/project", KnownBoard::QmtechA100t);
+        assert_eq!(cfg.specs_dir(), PathBuf::from("/project/specs/fpga"));
+        assert_eq!(cfg.build_dir(), PathBuf::from("/project/build/fpga"));
+        assert_eq!(
+            cfg.gen_dir(),
+            PathBuf::from("/project/build/fpga/generated")
+        );
+        assert_eq!(cfg.synth_dir(), PathBuf::from("/project/build/fpga/synth"));
+        assert_eq!(
+            cfg.bitstream_path(),
+            PathBuf::from("/project/build/fpga/zerodsp_top.bit")
+        );
+    }
+
+    #[test]
+    fn config_custom_top() {
+        let mut cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        cfg.top = "my_top".into();
+        assert_eq!(
+            cfg.bitstream_path(),
+            PathBuf::from("./build/fpga/my_top.bit")
+        );
+    }
+
+    #[test]
+    fn config_custom_output() {
+        let mut cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        cfg.output = "out/fpga".into();
+        assert_eq!(cfg.build_dir(), PathBuf::from("./out/fpga"));
+    }
+
+    #[test]
+    fn pipeline_new_assigns_correct_profile() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        assert_eq!(pipeline.profile().board, KnownBoard::QmtechA100t);
+        assert_eq!(pipeline.profile().fpga_part, "xc7a100tcsg324");
+    }
+
+    #[test]
+    fn pipeline_profile_arty() {
+        let cfg = BuildConfig::new(".", KnownBoard::ArtyA7_35t);
+        let pipeline = BuildPipeline::new(cfg);
+        assert_eq!(pipeline.profile().fpga_part, "xc7a35tcsg324");
+        assert!(!pipeline.profile().has_mac_debug);
+    }
+
+    #[test]
+    fn pipeline_config_access() {
+        let cfg = BuildConfig::new("/repo", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        assert_eq!(pipeline.config().repo_root, PathBuf::from("/repo"));
+    }
+
+    #[test]
+    fn generate_full_top_qmtech_has_mac() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("zerodsp_top");
+        assert!(
+            source.contains("ZeroDSP_MAC"),
+            "QMTECH top should instantiate MAC"
+        );
+        assert!(source.contains("mac_done"));
+        assert!(source.contains("mac_result"));
+        assert!(source.contains("mac_ready"));
+    }
+
+    #[test]
+    fn generate_full_top_arty_no_mac() {
+        let cfg = BuildConfig::new(".", KnownBoard::ArtyA7_100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("zerodsp_top");
+        assert!(
+            !source.contains("ZeroDSP_MAC"),
+            "Arty top should NOT instantiate MAC"
+        );
+        assert!(!source.contains("mac_done"));
+    }
+
+    #[test]
+    fn generate_full_top_has_heartbeat() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("zerodsp_top");
+        assert!(source.contains("heartbeat_ctr"));
+        assert!(source.contains("posedge"));
+    }
+
+    #[test]
+    fn generate_full_top_has_uart_loopback() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("zerodsp_top");
+        assert!(
+            source.contains("uart_tx    = uart_rx"),
+            "should contain uart loopback, got:\n{}",
+            source
+        );
+    }
+
+    #[test]
+    fn generate_full_top_has_spi_idle() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("zerodsp_top");
+        assert!(
+            source.contains("spi_cs     = 1'b1"),
+            "should contain spi_cs idle, got:\n{}",
+            source
+        );
+    }
+
+    #[test]
+    fn generate_full_top_instantiates_submodules() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("zerodsp_top");
+        assert!(source.contains("ZeroDSP_UART"));
+        assert!(source.contains("SPI_Master"));
+        assert!(source.contains("FPGA_Bridge"));
+        assert!(source.contains("ZeroDSP_TopLevel"));
+    }
+
+    #[test]
+    fn generate_full_top_custom_name() {
+        let cfg = BuildConfig::new(".", KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let source = pipeline.generate_full_top("my_custom_top");
+        assert!(source.contains("module my_custom_top"));
+    }
+
+    #[test]
+    fn build_result_smoke() {
+        let result = BuildResult {
+            generated_modules: 10,
+            bitstream: None,
+            smoke: true,
+        };
+        assert!(result.smoke);
+        assert!(result.bitstream.is_none());
+        assert_eq!(result.generated_modules, 10);
+    }
+
+    #[test]
+    fn build_result_full() {
+        let result = BuildResult {
+            generated_modules: 33,
+            bitstream: Some(PathBuf::from("build/fpga/zerodsp_top.bit")),
+            smoke: false,
+        };
+        assert!(!result.smoke);
+        assert!(result.bitstream.is_some());
+    }
+
+    #[test]
+    fn generate_top_wrapper_minimal_creates_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generated");
+        fs::create_dir_all(&gen_dir).unwrap();
+
+        let mut cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        cfg.minimal = true;
+        cfg.top = "test_top".into();
+        let pipeline = BuildPipeline::new(cfg);
+        pipeline.generate_top_wrapper(&gen_dir).unwrap();
+
+        let wrapper = gen_dir.join("test_top.v");
+        assert!(wrapper.exists(), "wrapper file should be created");
+        let content = fs::read_to_string(&wrapper).unwrap();
+        assert!(content.contains("module test_top"));
+        assert!(content.contains("heartbeat_ctr"));
+        assert!(content.contains("uart_tx = uart_rx"));
+    }
+
+    #[test]
+    fn generate_top_wrapper_full_creates_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generated");
+        fs::create_dir_all(&gen_dir).unwrap();
+
+        let cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        pipeline.generate_top_wrapper(&gen_dir).unwrap();
+
+        let wrapper = gen_dir.join("zerodsp_top.v");
+        assert!(wrapper.exists());
+        let content = fs::read_to_string(&wrapper).unwrap();
+        assert!(content.contains("ZeroDSP_MAC"));
+        assert!(content.contains("SPI_Master"));
+    }
+
+    #[test]
+    fn ensure_prjxray_mapping_creates_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+
+        let db = dir.path().join("prjxray-db");
+        pipeline
+            .ensure_prjxray_mapping(&db, "xc7a100tcsg324-1")
+            .unwrap();
+
+        assert!(db.join("mapping").exists());
+        assert!(db.join("mapping/parts.yaml").exists());
+        assert!(db.join("mapping/devices.yaml").exists());
+
+        let parts = fs::read_to_string(db.join("mapping/parts.yaml")).unwrap();
+        assert!(parts.contains("xc7a100tcsg324-1"));
+    }
+
+    #[test]
+    fn ensure_prjxray_mapping_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+
+        let db = dir.path().join("prjxray-db");
+        pipeline
+            .ensure_prjxray_mapping(&db, "xc7a100tcsg324-1")
+            .unwrap();
+        let content_before = fs::read_to_string(db.join("mapping/parts.yaml")).unwrap();
+        pipeline
+            .ensure_prjxray_mapping(&db, "xc7a100tcsg324-1")
+            .unwrap();
+        let content_after = fs::read_to_string(db.join("mapping/parts.yaml")).unwrap();
+        assert_eq!(
+            content_before, content_after,
+            "should not overwrite existing mapping"
+        );
+    }
+
+    #[test]
+    fn generate_part_yaml_minimal_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let synth = dir.path().join("synth");
+        let db = dir.path().join("db/xc7a100tcsg324-1");
+        fs::create_dir_all(&synth).unwrap();
+        fs::create_dir_all(&db).unwrap();
+
+        let part_json = serde_json::json!({
+            "idcode": 0x3631093,
+            "global_clock_regions": {}
+        });
+        fs::write(
+            db.join("part.json"),
+            serde_json::to_string(&part_json).unwrap(),
+        )
+        .unwrap();
+
+        let cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        pipeline
+            .generate_part_yaml(&synth, &dir.path().join("db"), "xc7a100tcsg324-1")
+            .unwrap();
+
+        let yaml = fs::read_to_string(synth.join("part.yaml")).unwrap();
+        assert!(yaml.contains("idcode: 0x03631093"));
+        assert!(yaml.contains("configuration_ranges"));
+    }
+
+    #[test]
+    fn generate_part_yaml_with_regions() {
+        let dir = tempfile::tempdir().unwrap();
+        let synth = dir.path().join("synth");
+        let db = dir.path().join("db/xc7a100tcsg324-1");
+        fs::create_dir_all(&synth).unwrap();
+        fs::create_dir_all(&db).unwrap();
+
+        let part_json = serde_json::json!({
+            "idcode": 12345,
+            "global_clock_regions": {
+                "top": {
+                    "rows": {
+                        "row0": {
+                            "configuration_buses": {
+                                "CLB_IO_CLK": {
+                                    "configuration_columns": {
+                                        "col0": { "frame_count": 42 }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        fs::write(
+            db.join("part.json"),
+            serde_json::to_string(&part_json).unwrap(),
+        )
+        .unwrap();
+
+        let cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        pipeline
+            .generate_part_yaml(&synth, &dir.path().join("db"), "xc7a100tcsg324-1")
+            .unwrap();
+
+        let yaml = fs::read_to_string(synth.join("part.yaml")).unwrap();
+        assert!(yaml.contains("CLB_IO_CLK"));
+        assert!(yaml.contains("minor: 42"));
+    }
+
+    #[test]
+    fn prepare_xdc_minimal_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let synth = dir.path().join("synth");
+        fs::create_dir_all(&synth).unwrap();
+
+        let mut cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        cfg.minimal = true;
+        let pipeline = BuildPipeline::new(cfg);
+        let xdc = pipeline.prepare_xdc(&synth).unwrap();
+
+        assert!(xdc.exists());
+        let content = fs::read_to_string(&xdc).unwrap();
+        assert!(content.contains("E3"));
+        assert!(content.contains("clk"));
+    }
+
+    #[test]
+    fn prepare_xdc_missing_file_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let synth = dir.path().join("synth");
+        fs::create_dir_all(&synth).unwrap();
+
+        let cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        let pipeline = BuildPipeline::new(cfg);
+        let result = pipeline.prepare_xdc(&synth);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("XDC not found"));
+    }
+
+    #[test]
+    fn prepare_xdc_custom_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let synth = dir.path().join("synth");
+        fs::create_dir_all(&synth).unwrap();
+
+        let custom_xdc = dir.path().join("custom.xdc");
+        fs::write(
+            &custom_xdc,
+            "# custom\nset_property -dict { PACKAGE_PIN A1 IOSTANDARD LVCMOS33 } [get_ports foo]\n",
+        )
+        .unwrap();
+
+        let mut cfg = BuildConfig::new(dir.path(), KnownBoard::QmtechA100t);
+        cfg.xdc_path = Some(custom_xdc);
+        let pipeline = BuildPipeline::new(cfg);
+        let xdc = pipeline.prepare_xdc(&synth).unwrap();
+
+        let content = fs::read_to_string(&xdc).unwrap();
+        assert!(content.contains("A1"));
+        assert!(!content.contains("# custom"));
+    }
+}

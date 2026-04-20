@@ -152,3 +152,120 @@ pub struct FlashResult {
     pub bit_size: u64,
     pub mode: FlashMode,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn config_default_cable_is_ft2232() {
+        let cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        assert_eq!(cfg.detect_cable(), "ft2232");
+    }
+
+    #[test]
+    fn config_explicit_cable() {
+        let mut cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        cfg.cable = Some("ft232RL".into());
+        assert_eq!(cfg.detect_cable(), "ft232RL");
+    }
+
+    #[test]
+    fn config_xvc_auto_detects_cable() {
+        let mut cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        cfg.xvc_addr = Some("192.168.1.100:2542".into());
+        assert_eq!(cfg.detect_cable(), "xvc-client");
+    }
+
+    #[test]
+    fn config_default_freq() {
+        let cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        assert_eq!(cfg.freq, 6_000_000);
+    }
+
+    #[test]
+    fn config_default_not_flash_mode() {
+        let cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        assert!(!cfg.flash);
+    }
+
+    #[test]
+    fn config_default_not_verify() {
+        let cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        assert!(!cfg.verify);
+    }
+
+    #[test]
+    fn config_default_not_reset() {
+        let cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        assert!(!cfg.reset);
+    }
+
+    #[test]
+    fn detect_bitstream_explicit_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let bit = dir.path().join("test.bit");
+        std::fs::File::create(&bit)
+            .unwrap()
+            .write_all(b"BIT")
+            .unwrap();
+
+        let mut cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        cfg.bitstream = Some(bit.clone());
+        let result = cfg.detect_bitstream().unwrap();
+        assert_eq!(result, bit);
+    }
+
+    #[test]
+    fn detect_bitstream_explicit_missing_fails() {
+        let mut cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        cfg.bitstream = Some(PathBuf::from("/nonexistent/path.bit"));
+        let result = cfg.detect_bitstream();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Bitstream not found"));
+    }
+
+    #[test]
+    fn detect_bitstream_no_candidates_fails() {
+        let cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        let result = cfg.detect_bitstream();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No bitstream found"));
+    }
+
+    #[test]
+    fn flash_mode_equality() {
+        assert_eq!(FlashMode::SramLoad, FlashMode::SramLoad);
+        assert_eq!(FlashMode::SpiFlash, FlashMode::SpiFlash);
+        assert_ne!(FlashMode::SramLoad, FlashMode::SpiFlash);
+    }
+
+    #[test]
+    fn config_board_preserved() {
+        let cfg = FlashConfig::new(KnownBoard::ArtyA7_100t);
+        assert_eq!(cfg.board, KnownBoard::ArtyA7_100t);
+    }
+
+    #[test]
+    fn config_all_fields_mutable() {
+        let mut cfg = FlashConfig::new(KnownBoard::QmtechA100t);
+        cfg.freq = 12_000_000;
+        cfg.flash = true;
+        cfg.verify = true;
+        cfg.reset = true;
+        cfg.cable = Some("digilent_hs2".into());
+        cfg.xvc_addr = Some("10.0.0.1:2542".into());
+        assert_eq!(cfg.freq, 12_000_000);
+        assert!(cfg.flash);
+        assert!(cfg.verify);
+        assert!(cfg.reset);
+        assert_eq!(cfg.detect_cable(), "digilent_hs2");
+    }
+}

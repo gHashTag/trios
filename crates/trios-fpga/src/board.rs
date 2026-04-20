@@ -162,6 +162,63 @@ mod tests {
     }
 
     #[test]
+    fn qmtech_known_board_accessors() {
+        let b = KnownBoard::QmtechA100t;
+        assert_eq!(b.fpga_part(), "xc7a100tcsg324");
+        assert_eq!(b.openfpgaloader_board(), "qmtech_xc7a100t");
+        assert_eq!(b.clock_mhz(), 12);
+        assert_eq!(b.chipdb_name(), "xc7a100tcsg324-1");
+        assert!(b.default_xdc().contains("qmtech"));
+    }
+
+    #[test]
+    fn arty_100t_profile() {
+        let p = BoardProfile::arty_a7_100t();
+        assert_eq!(p.fpga_part, "xc7a100tcsg324");
+        assert_eq!(p.clock_hz, 100_000_000);
+        assert_eq!(p.led_count, 4);
+        assert!(p.has_spi);
+        assert!(!p.has_mac_debug);
+    }
+
+    #[test]
+    fn arty_35t_profile() {
+        let p = BoardProfile::arty_a7_35t();
+        assert_eq!(p.fpga_part, "xc7a35tcsg324");
+        assert_eq!(p.clock_hz, 100_000_000);
+        assert_eq!(p.led_count, 4);
+        assert!(!p.has_mac_debug);
+    }
+
+    #[test]
+    fn from_known_roundtrip() {
+        assert_eq!(
+            BoardProfile::from_known(KnownBoard::QmtechA100t).board,
+            KnownBoard::QmtechA100t
+        );
+        assert_eq!(
+            BoardProfile::from_known(KnownBoard::ArtyA7_100t).board,
+            KnownBoard::ArtyA7_100t
+        );
+        assert_eq!(
+            BoardProfile::from_known(KnownBoard::ArtyA7_35t).board,
+            KnownBoard::ArtyA7_35t
+        );
+    }
+
+    #[test]
+    fn heartbeat_divider_qmtech() {
+        let p = BoardProfile::qmtech_a100t();
+        assert_eq!(p.heartbeat_divider(), 12_000_000);
+    }
+
+    #[test]
+    fn heartbeat_divider_arty() {
+        let p = BoardProfile::arty_a7_100t();
+        assert_eq!(p.heartbeat_divider(), 100_000_000);
+    }
+
+    #[test]
     fn heartbeat_counter_width_qmtech() {
         let p = BoardProfile::qmtech_a100t();
         let w = p.heartbeat_counter_width();
@@ -173,15 +230,128 @@ mod tests {
     }
 
     #[test]
+    fn heartbeat_counter_width_arty() {
+        let p = BoardProfile::arty_a7_100t();
+        let w = p.heartbeat_counter_width();
+        assert!(
+            w >= 27,
+            "counter width {} should be >= 27 for ~1Hz at 100MHz",
+            w
+        );
+    }
+
+    #[test]
+    fn board_display() {
+        assert_eq!(KnownBoard::QmtechA100t.to_string(), "qmtech-a100t");
+        assert_eq!(KnownBoard::ArtyA7_100t.to_string(), "arty-a7-100t");
+        assert_eq!(KnownBoard::ArtyA7_35t.to_string(), "arty-a7-35t");
+    }
+
+    #[test]
     fn board_from_str_roundtrip() {
-        let b: KnownBoard = "qmtech-a100t".parse().unwrap();
-        assert_eq!(b, KnownBoard::QmtechA100t);
-        assert_eq!(b.to_string(), "qmtech-a100t");
+        assert_eq!(
+            "qmtech-a100t".parse::<KnownBoard>().unwrap(),
+            KnownBoard::QmtechA100t
+        );
+        assert_eq!(
+            "arty-a7-100t".parse::<KnownBoard>().unwrap(),
+            KnownBoard::ArtyA7_100t
+        );
+        assert_eq!(
+            "arty-a7-35t".parse::<KnownBoard>().unwrap(),
+            KnownBoard::ArtyA7_35t
+        );
     }
 
     #[test]
     fn arty_a7_alias() {
-        let b: KnownBoard = "arty-a7".parse().unwrap();
-        assert_eq!(b, KnownBoard::ArtyA7_35t);
+        assert_eq!(
+            "arty-a7".parse::<KnownBoard>().unwrap(),
+            KnownBoard::ArtyA7_35t
+        );
+    }
+
+    #[test]
+    fn board_from_str_unknown_fails() {
+        let result = "unknown-board".parse::<KnownBoard>();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown board"));
+    }
+
+    #[test]
+    fn board_from_str_empty_fails() {
+        let result = "".parse::<KnownBoard>();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn board_serialize_deserialize() {
+        let board = KnownBoard::QmtechA100t;
+        let json = serde_json::to_string(&board).unwrap();
+        let back: KnownBoard = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, board);
+    }
+
+    #[test]
+    fn board_equality() {
+        assert_eq!(KnownBoard::QmtechA100t, KnownBoard::QmtechA100t);
+        assert_ne!(KnownBoard::QmtechA100t, KnownBoard::ArtyA7_100t);
+    }
+
+    #[test]
+    fn all_boards_have_consistent_xdc() {
+        for board in [
+            KnownBoard::QmtechA100t,
+            KnownBoard::ArtyA7_100t,
+            KnownBoard::ArtyA7_35t,
+        ] {
+            assert!(!board.default_xdc().is_empty(), "{:?} has no XDC", board);
+            assert!(
+                board.default_xdc().ends_with(".xdc"),
+                "{:?} XDC not .xdc",
+                board
+            );
+        }
+    }
+
+    #[test]
+    fn all_boards_have_chipdb() {
+        for board in [
+            KnownBoard::QmtechA100t,
+            KnownBoard::ArtyA7_100t,
+            KnownBoard::ArtyA7_35t,
+        ] {
+            let chipdb = board.chipdb_name();
+            assert!(
+                chipdb.starts_with("xc7a"),
+                "chipdb {} should start with xc7a",
+                chipdb
+            );
+        }
+    }
+
+    #[test]
+    fn profile_uart_baud_standard() {
+        for board in [
+            KnownBoard::QmtechA100t,
+            KnownBoard::ArtyA7_100t,
+            KnownBoard::ArtyA7_35t,
+        ] {
+            let p = BoardProfile::from_known(board);
+            assert_eq!(p.uart_baud, 115200, "{:?} baud should be 115200", board);
+        }
+    }
+
+    #[test]
+    fn profile_package_csg324() {
+        for board in [
+            KnownBoard::QmtechA100t,
+            KnownBoard::ArtyA7_100t,
+            KnownBoard::ArtyA7_35t,
+        ] {
+            let p = BoardProfile::from_known(board);
+            assert_eq!(p.package, "csg324");
+            assert_eq!(p.speedgrade, 1);
+        }
     }
 }
