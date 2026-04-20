@@ -2,7 +2,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "MCP_REQUEST") {
-    const ws = new WebSocket("ws://localhost:3333");
+    const ws = new WebSocket("ws://localhost:9005/ws");
     ws.onopen = () => {
       ws.send(JSON.stringify(message.payload));
     };
