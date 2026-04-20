@@ -5,7 +5,7 @@
 //! R2: Persistence / HSLM hook (planned)
 
 use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 /// Brain error types
 #[derive(Debug, Clone, PartialEq)]
@@ -59,9 +59,7 @@ impl BrainStorage {
 }
 
 /// Global brain instance (thread-safe for R0)
-static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| {
-    Mutex::new(BrainStorage::new())
-});
+static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| Mutex::new(BrainStorage::new()));
 
 /// Store a value in brain memory
 ///
@@ -84,8 +82,7 @@ pub fn brain_remember(key: &str, value: &[u8]) -> Result<(), BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let mut brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let mut brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
     brain.remember(key, value);
     Ok(())
@@ -114,11 +111,9 @@ pub fn brain_recall(key: &str) -> Result<Vec<u8>, BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
-    brain.recall(key)
-        .ok_or(BrainError::KeyNotFound)
+    brain.recall(key).ok_or(BrainError::KeyNotFound)
 }
 
 /// Forget a value from brain memory
@@ -135,17 +130,14 @@ pub fn brain_forget(key: &str) -> Result<bool, BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let mut brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let mut brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
     Ok(brain.forget(key))
 }
 
 /// Get total number of stored memories
 pub fn brain_count() -> usize {
-    BRAIN.lock()
-        .map(|brain| brain.count())
-        .unwrap_or(0)
+    BRAIN.lock().map(|brain| brain.count()).unwrap_or(0)
 }
 
 /// Clear all memories (for testing only)
@@ -158,10 +150,28 @@ pub fn brain_clear() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
-    /// Setup: clear brain before each test
-    fn setup() {
-        brain_clear();
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TestGuard;
+
+    impl TestGuard {
+        fn new() -> Self {
+            TEST_LOCK.lock().unwrap();
+            brain_clear();
+            TestGuard
+        }
+    }
+
+    impl Drop for TestGuard {
+        fn drop(&mut self) {
+            brain_clear();
+        }
+    }
+
+    fn setup() -> TestGuard {
+        TestGuard::new()
     }
 
     #[test]
