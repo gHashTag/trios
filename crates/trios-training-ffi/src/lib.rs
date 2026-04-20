@@ -20,7 +20,9 @@
 //! let grads = forward_kernel(&logits, &hidden_state);
 //! ```
 
-use libc::{c_char, c_float, c_int, size_t};
+#[cfg(feature = "ffi")]
+use libc::c_void;
+use libc::{c_float, c_int};
 
 /// HSLM configuration parameters.
 #[repr(C)]
@@ -52,22 +54,15 @@ pub struct ForwardKernelConfig {
 
 #[cfg(feature = "ffi")]
 extern "C" {
-    /// Perform HSLM inference on input vectors.
-    ///
-    /// Returns logits [batch_size x vocab_size].
-    /// If hidden_state is provided, uses cached attention state.
     pub fn hslm_inference(
         input: *const c_float,
-        input_len: size_t,
+        input_len: usize,
         hidden_state: *const c_float,
-        batch_size: size_t,
-        vocab_size: size_t,
+        batch_size: usize,
+        vocab_size: usize,
         out_logits: *mut c_float,
     ) -> c_int;
 
-    /// Compute forward pass through a kernel.
-    ///
-    /// Returns gradients [batch_size x output_dim].
     pub fn forward_kernel(
         logits: *const c_float,
         hidden: *const c_float,
@@ -75,9 +70,6 @@ extern "C" {
         out_gradients: *mut c_float,
     ) -> c_int;
 
-    /// Run one training step (forward + backward).
-    ///
-    /// Returns loss value.
     pub fn training_step(
         input: *const c_float,
         target: *const c_float,
@@ -85,7 +77,6 @@ extern "C" {
         out_loss: *mut c_float,
     ) -> c_int;
 
-    /// Free allocated memory from Zig HSLM module.
     pub fn hslm_free_memory(ptr: *mut c_void);
 }
 
@@ -109,11 +100,7 @@ pub fn forward_kernel(
 }
 
 #[cfg(not(feature = "ffi"))]
-pub fn training_step(
-    _input: &[f32],
-    _target: &[f32],
-    _config: &HslmConfig,
-) -> Result<f32, String> {
+pub fn training_step(_input: &[f32], _target: &[f32], _config: &HslmConfig) -> Result<f32, String> {
     Err("Zig training FFI not available. Enable with --features ffi and ensure zig-training vendor is present.".to_string())
 }
 
