@@ -1,0 +1,29 @@
+name: Leaderboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  aggregate:
+    name: Aggregate Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run igla-trainer
+        run: cargo run -p igla-trainer --release > leaderboard.json
+
+      - name: Post leaderboard
+        run: |
+          echo "## Parameter Golf Leaderboard" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat leaderboard.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
