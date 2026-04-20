@@ -14,7 +14,7 @@ pub mod trios_kg;
 
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use trios_git::Git2Orchestrator;
 use crate::security::validate_repo_path;
 
@@ -26,6 +26,11 @@ fn allowed_roots() -> Vec<PathBuf> {
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .collect()
+}
+
+/// Returns the number of registered tools.
+pub fn count() -> usize {
+    19
 }
 
 /// Main tool dispatcher — chain-of-responsibility pattern.

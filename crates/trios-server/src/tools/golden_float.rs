@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use serde_json::Value;
-use trios_golden_float::{compress_weights, decompress_weights, GF16};
+use trios_golden_float::{compress_weights, GF16};
 
 /// Dispatch golden float tools.
 pub async fn dispatch(name: &str, input: &Value) -> Option<Result<Value>> {
@@ -78,7 +78,7 @@ async fn gf16_compress_weights(input: &Value) -> Result<Value> {
 /// Return the golden ratio φ constant.
 async fn phi_constant() -> Result<Value> {
     // φ = (1 + √5) / 2 ≈ 1.6180339887498948482
-    const PHI: f64 = 1.6180339887498948482;
+    const PHI: f64 = 1.618_033_988_749_895;
     Ok(serde_json::json!({
         "phi": PHI,
         "phi_approx": 1.618034,
