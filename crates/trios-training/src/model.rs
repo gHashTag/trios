@@ -1,9 +1,9 @@
 //! IGLA-GF16 Model
 
 pub struct IGLAGF16Model {
-    vocab_size: usize,
-    d_model: usize,
-    n_layers: usize,
+    pub vocab_size: usize,
+    pub d_model: usize,
+    pub n_layers: usize,
 }
 
 impl IGLAGF16Model {

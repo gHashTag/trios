@@ -1,5 +1,7 @@
+#[cfg(has_zig_lib)]
 use libc::{c_int, size_t};
 
+#[cfg(has_zig_lib)]
 pub type HdcSpace = c_int;
 
 #[cfg(has_zig_lib)]
@@ -31,14 +33,4 @@ extern "C" {
         max_val: f64,
         out: *mut u32,
     ) -> c_int;
-    #[allow(dead_code)]
-    pub fn hdc_space_dimensions(space: *mut HdcSpace) -> size_t;
-}
-
-#[cfg(not(has_zig_lib))]
-pub fn hdc_stub_unavailable<T>(fn_name: &str) -> T {
-    panic!(
-        "zig-hdc FFI not available: {}. Build zig-hdc vendor first.",
-        fn_name
-    )
 }

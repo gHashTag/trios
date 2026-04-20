@@ -70,8 +70,8 @@ fn extract_port(line: &str) -> Option<String> {
     let start = line.find("[get_ports")?;
     let rest = &line[start + "[get_ports".len()..];
     let port = rest
-        .trim_start_matches(|c| c == ' ' || c == '{')
-        .split(|c: char| c == '}' || c == ']')
+        .trim_start_matches([' ', '{'])
+        .split(['}', ']'])
         .next()?;
     Some(port.trim().to_string())
 }

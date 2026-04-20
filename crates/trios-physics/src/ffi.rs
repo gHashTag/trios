@@ -1,3 +1,4 @@
+#[cfg(has_zig_lib)]
 use libc::{c_int, size_t};
 
 #[repr(C)]

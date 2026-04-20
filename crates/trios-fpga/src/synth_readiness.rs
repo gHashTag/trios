@@ -187,10 +187,8 @@ fn check_typecheck(source: &str) -> (bool, Vec<String>) {
 
     for line in source.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("fn ") && trimmed.ends_with('{') {
-            if !trimmed.contains('(') {
-                errors.push(format!("fn missing parens: {}", trimmed));
-            }
+        if trimmed.starts_with("fn ") && trimmed.ends_with('{') && !trimmed.contains('(') {
+            errors.push(format!("fn missing parens: {}", trimmed));
         }
     }
 

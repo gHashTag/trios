@@ -223,11 +223,11 @@ impl BuildPipeline {
         };
 
         let mac_section = if self.profile.has_mac_debug {
-            format!(
+            String::from(
                 "
     wire mac_ready;
     ZeroDSP_MAC u_mac (.clk(sys_clk), .rst_n(sys_rst_n), .en(1'b1), .ready(mac_ready));
-"
+",
             )
         } else {
             String::new()

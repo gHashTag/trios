@@ -141,7 +141,7 @@ pub fn quantize_matrix(data: &[f32], rows: usize, cols: usize, scale: f32) -> Ve
     out
 }
 #[cfg(not(has_zig_lib))]
-pub fn quantize_matrix(data: &[f32], rows: usize, cols: usize, _scale: f32) -> Vec<u16> {
+pub fn quantize_matrix(_data: &[f32], rows: usize, cols: usize, _scale: f32) -> Vec<u16> {
     vec![0; rows * cols]
 }
 
