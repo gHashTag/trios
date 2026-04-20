@@ -37,6 +37,18 @@ Every significant task writes a line to `.trinity/experience/`.
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] TASK: description | result" >> .trinity/experience/trios_$(date +%Y%m%d).trinity
 ```
 
+### L8: PUSH FIRST LAW
+Every file change = immediate commit + push. There is no such thing as "done locally".
+
+Checklist before saying "done":
+```
+git status — 0 untracked/modified files
+git log --oneline -3 — commit is visible
+github.com/gHashTag/trios — file visible in browser
+```
+
+If a file is not in the repo — the task is NOT complete.
+
 ## Architecture
 
 ```
