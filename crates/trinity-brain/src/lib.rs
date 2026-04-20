@@ -158,7 +158,7 @@ mod tests {
 
     impl TestGuard {
         fn new() -> Self {
-            TEST_LOCK.lock().unwrap();
+            let _guard = TEST_LOCK.lock().unwrap();
             brain_clear();
             TestGuard
         }
