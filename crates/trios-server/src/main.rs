@@ -5,11 +5,8 @@ mod security;
 mod tools;
 mod ws_handler;
 
-use axum::{
-    extract::ws::WebSocketUpgrade,
-    routing::{get, post},
-    Router,
-};
+use axum::Router;
+use axum::routing::get;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tracing::info;
@@ -31,16 +28,10 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(9005);
 
     let app = Router::new()
-        // MCP WebSocket endpoints (Issue #118)
         .route("/ws", get(ws_handler::ws_handler))
-        .route("/mcp", get(ws_handler::ws_handler))  // Alias for extension compatibility
+        .route("/operator", get(operator::operator_ws_handler))
         .route("/health", get(health))
         .route("/", get(health))
-        // Operator API (Issue #157) - ECHO bridge for Comet
-        .route("/operator/ping", get(operator::ping))
-        .route("/operator/extension/state", get(operator::get_extension_state))
-        .route("/operator/extension/send_chat", post(operator::send_chat))
-        .route("/operator/extension/click", post(operator::click))
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(security::auth_middleware))
@@ -50,8 +41,8 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("trios-server listening on ws://0.0.0.0:{}/ws", port);
-    info!("MCP tools: {} registered", count = tools::count());
-    info!("Operator API: /operator/* (token required)");
+    info!("Operator bridge: ws://0.0.0.0:{}/operator?token=...", port);
+    info!("MCP tools: {count} registered", count = tools::count());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

@@ -8,15 +8,18 @@
 //! ## Trinity Stack Law Compliance
 //! All code is Rust → Wasm, no JavaScript outside dist/ directory.
 
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use web_sys::{console, Document, Element, HtmlElement, HtmlInputElement, Window, WebSocket, CloseEvent, Event, KeyboardEvent, MessageEvent};
-use web_sys::wasm_bindgen::JsValue;
 use js_sys::Array;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value, to_string, to_string_pretty};
+use serde_json::{json, to_string, to_string_pretty, Value};
 use std::cell::RefCell;
 use std::rc::Rc;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::wasm_bindgen::JsValue;
+use web_sys::{
+    console, CloseEvent, Document, Element, Event, HtmlElement, HtmlInputElement, KeyboardEvent,
+    MessageEvent, WebSocket, Window,
+};
 
 // ============================================================================
 // TRIOS Brand Constants
@@ -61,7 +64,7 @@ pub struct McpTool {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
-    role: String,  // "you", "agent", "system", "error"
+    role: String, // "you", "agent", "system", "error"
     content: String,
 }
 
@@ -83,12 +86,14 @@ thread_local! {
 
 fn get_state() -> AppState {
     STATE.with_borrow(|state| {
-        state.as_ref().unwrap_or_else(|| {
-            let new_state = AppState::new();
-            STATE.set(Some(new_state.clone()));
-            new_state
-        })
-        .clone()
+        state
+            .as_ref()
+            .unwrap_or_else(|| {
+                let new_state = AppState::new();
+                STATE.set(Some(new_state.clone()));
+                new_state
+            })
+            .clone()
     })
 }
 
@@ -224,18 +229,25 @@ fn handle_mcp_response(text: &str) {
             if msg_type == "MCP_RESPONSE" {
                 if let Some(data) = value.get("data") {
                     // Handle agents list
-                    if let Some(agents) = data.get("agents").or_else(|| data.get("tools")).and_then(|v| v.as_array()) {
+                    if let Some(agents) = data
+                        .get("agents")
+                        .or_else(|| data.get("tools"))
+                        .and_then(|v| v.as_array())
+                    {
                         let mut agent_list = Vec::new();
                         for agent in agents.iter().filter_map(|v| v.as_object()) {
-                            let id = agent.get("id")
+                            let id = agent
+                                .get("id")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("unknown")
                                 .to_string();
-                            let name = agent.get("name")
+                            let name = agent
+                                .get("name")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("Unknown Agent")
                                 .to_string();
-                            let status = agent.get("status")
+                            let status = agent
+                                .get("status")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("unknown")
                                 .to_string();
@@ -253,11 +265,13 @@ fn handle_mcp_response(text: &str) {
                     if let Some(tools) = data.get("tools").and_then(|v| v.as_array()) {
                         let mut tool_list = Vec::new();
                         for tool in tools.iter().filter_map(|v| v.as_object()) {
-                            let name = tool.get("name")
+                            let name = tool
+                                .get("name")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("Unknown Tool")
                                 .to_string();
-                            let description = tool.get("description")
+                            let description = tool
+                                .get("description")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("")
                                 .to_string();
@@ -276,7 +290,8 @@ fn handle_mcp_response(text: &str) {
                         let content = if let Some(s) = response.as_str() {
                             s.to_string()
                         } else {
-                            to_string_pretty(&response).unwrap_or_else(|_| "Unknown response".to_string())
+                            to_string_pretty(&response)
+                                .unwrap_or_else(|_| "Unknown response".to_string())
                         };
 
                         with_state(|s| {
@@ -318,7 +333,8 @@ pub fn render_app() -> JsValue {
 
     let logo = create_element(&document, "img");
     logo.set_class_name("logo");
-    logo.set_attribute("src", "icons/icon-128.png").unwrap_throw();
+    logo.set_attribute("src", "icons/icon-128.png")
+        .unwrap_throw();
     header.append_child(&logo).unwrap_throw();
 
     let title = create_element(&document, "h1");
@@ -331,7 +347,11 @@ pub fn render_app() -> JsValue {
     let nav = create_element(&document, "nav");
     nav.set_class_name("tabs");
 
-    let tabs = [("chat", "💬 Chat"), ("agents", "🤖 Agents"), ("tools", "🔧 MCP Tools")];
+    let tabs = [
+        ("chat", "💬 Chat"),
+        ("agents", "🤖 Agents"),
+        ("tools", "🔧 MCP Tools"),
+    ];
 
     for (i, (tab_id, tab_name)) in tabs.iter().enumerate() {
         let btn = create_element(&document, "button");
@@ -349,7 +369,9 @@ pub fn render_app() -> JsValue {
         let closure = Closure::<dyn Fn(_)>::new(move |_| {
             switch_tab(&tab_id_clone);
         });
-        btn_clone.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap_throw();
+        btn_clone
+            .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+            .unwrap_throw();
         closure.forget();
     }
 
@@ -784,7 +806,10 @@ pub fn run() -> Result<(), JsValue> {
     connect_websocket();
 
     // Add welcome message
-    add_chat_message("agent", "Welcome to TRIOS Sidebar! Connecting to trios-server...");
+    add_chat_message(
+        "agent",
+        "Welcome to TRIOS Sidebar! Connecting to trios-server...",
+    );
 
     console::log_1(&"[TRIOS] Extension ready".into());
 
@@ -804,16 +829,17 @@ pub fn greet(name: &str) -> String {
 pub fn init_background() -> Result<(), JsValue> {
     console::log_1(&"[TRIOS] Background script initialized".into());
 
-    let win = web_sys::window()
-        .ok_or_else(|| JsValue::from_str("Window not available"))?;
+    let win = web_sys::window().ok_or_else(|| JsValue::from_str("Window not available"))?;
 
     // Set side panel behavior
     if let Ok(chrome) = js_sys::Reflect::get(&win, &"chrome".into()) {
         if let Ok(side_panel) = js_sys::Reflect::get(&chrome, &"sidePanel".into()) {
-            if let Ok(set_behavior) = js_sys::Reflect::get(&side_panel, &"setPanelBehavior".into()) {
+            if let Ok(set_behavior) = js_sys::Reflect::get(&side_panel, &"setPanelBehavior".into())
+            {
                 if let Some(func) = set_behavior.dyn_ref::<js_sys::Function>() {
                     let config = js_sys::Object::new();
-                    js_sys::Reflect::set(&config, &"openPanelOnActionClick".into(), &true.into()).ok();
+                    js_sys::Reflect::set(&config, &"openPanelOnActionClick".into(), &true.into())
+                        .ok();
                     let _ = func.call1(&side_panel, &config);
                 }
             }
@@ -824,9 +850,12 @@ pub fn init_background() -> Result<(), JsValue> {
             if let Ok(on_message) = js_sys::Reflect::get(&runtime, &"onMessage".into()) {
                 if let Ok(add_listener) = js_sys::Reflect::get(&on_message, &"addListener".into()) {
                     if let Some(func) = add_listener.dyn_ref::<js_sys::Function>() {
-                        let listener = Closure::wrap(Box::new(|message: JsValue, _sender: JsValue, send_response: JsValue| {
-                            handle_mcp_request(message, send_response);
-                        }) as Box<dyn Fn(JsValue, JsValue, JsValue)>);
+                        let listener = Closure::wrap(Box::new(
+                            |message: JsValue, _sender: JsValue, send_response: JsValue| {
+                                handle_mcp_request(message, send_response);
+                            },
+                        )
+                            as Box<dyn Fn(JsValue, JsValue, JsValue)>);
 
                         let _ = func.call1(&on_message, listener.as_ref().unchecked_ref());
                         listener.forget();
@@ -877,11 +906,21 @@ fn handle_mcp_request(message: JsValue, send_response: JsValue) {
                                 // Parse and send response
                                 if let Some(func) = send_response1.dyn_ref::<js_sys::Function>() {
                                     let resp = js_sys::Object::new();
-                                    js_sys::Reflect::set(&resp, &"type".into(), &"MCP_RESPONSE".into()).ok();
+                                    js_sys::Reflect::set(
+                                        &resp,
+                                        &"type".into(),
+                                        &"MCP_RESPONSE".into(),
+                                    )
+                                    .ok();
                                     if let Ok(parsed) = js_sys::JSON::parse(&text) {
                                         js_sys::Reflect::set(&resp, &"data".into(), &parsed).ok();
                                     } else {
-                                        js_sys::Reflect::set(&resp, &"data".into(), &JsValue::from_str(&text)).ok();
+                                        js_sys::Reflect::set(
+                                            &resp,
+                                            &"data".into(),
+                                            &JsValue::from_str(&text),
+                                        )
+                                        .ok();
                                     }
                                     let _ = func.call1(&JsValue::NULL, &resp);
                                 }
@@ -895,8 +934,14 @@ fn handle_mcp_request(message: JsValue, send_response: JsValue) {
                             console::error_1(&"[TRIOS] Background WebSocket error".into());
                             if let Some(func) = send_response2.dyn_ref::<js_sys::Function>() {
                                 let err = js_sys::Object::new();
-                                js_sys::Reflect::set(&err, &"type".into(), &"MCP_ERROR".into()).ok();
-                                js_sys::Reflect::set(&err, &"error".into(), &"WebSocket connection failed".into()).ok();
+                                js_sys::Reflect::set(&err, &"type".into(), &"MCP_ERROR".into())
+                                    .ok();
+                                js_sys::Reflect::set(
+                                    &err,
+                                    &"error".into(),
+                                    &"WebSocket connection failed".into(),
+                                )
+                                .ok();
                                 let _ = func.call1(&JsValue::NULL, &err);
                             }
                         }) as Box<dyn Fn()>);
@@ -905,11 +950,18 @@ fn handle_mcp_request(message: JsValue, send_response: JsValue) {
                         onerror.forget();
                     }
                     Err(e) => {
-                        console::error_1(&format!("[TRIOS] Background WebSocket creation error: {:?}", e).into());
+                        console::error_1(
+                            &format!("[TRIOS] Background WebSocket creation error: {:?}", e).into(),
+                        );
                         if let Some(func) = send_response3.dyn_ref::<js_sys::Function>() {
                             let err = js_sys::Object::new();
                             js_sys::Reflect::set(&err, &"type".into(), &"MCP_ERROR".into()).ok();
-                            js_sys::Reflect::set(&err, &"error".into(), &"WebSocket creation failed".into()).ok();
+                            js_sys::Reflect::set(
+                                &err,
+                                &"error".into(),
+                                &"WebSocket creation failed".into(),
+                            )
+                            .ok();
                             let _ = func.call1(&JsValue::NULL, &err);
                         }
                     }
@@ -955,5 +1007,41 @@ mod tests {
         let json = to_string(&msg).unwrap();
         assert!(json.contains("you"));
         assert!(json.contains("Hello"));
+    }
+
+    #[test]
+    fn mcp_url_uses_port_9005() {
+        assert!(mcp::MCP_WS_URL.contains("9005"));
+    }
+
+    #[test]
+    fn mcp_client_starts_disconnected() {
+        let client = mcp::McpClient::new();
+        assert!(!client.is_connected());
+    }
+
+    #[test]
+    fn mcp_request_serializes() {
+        let req = mcp::McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: 1,
+            method: "agents/list".to_string(),
+            params: None,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("agents/list"));
+        assert!(json.contains("2.0"));
+    }
+
+    #[test]
+    fn style_uses_total_black() {
+        let style = dom::get_style();
+        assert!(style.contains("#000000"));
+    }
+
+    #[test]
+    fn style_uses_gold_accent() {
+        let style = dom::get_style();
+        assert!(style.contains("#D4AF37"));
     }
 }
