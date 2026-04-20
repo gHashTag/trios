@@ -1,4 +1,6 @@
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "MCP_REQUEST") {
