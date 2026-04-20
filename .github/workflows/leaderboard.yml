@@ -1,29 +1,93 @@
-name: Leaderboard
+name: Leaderboard Aggregator
 
 on:
   push:
-    branches: [main]
+    branches: ['seed-*']
   workflow_dispatch:
 
+concurrency:
+  group: leaderboard
+  cancel-in-progress: true
+
 jobs:
-  aggregate:
-    name: Aggregate Benchmarks
+  leaderboard:
+    name: Update Leaderboard
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Fetch all branches
+        run: git fetch --all --no-tags
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Run igla-trainer
-        run: cargo run -p igla-trainer --release > leaderboard.json
-
-      - name: Post leaderboard
+      - name: Find all seed-* branches
+        id: branches
         run: |
-          echo "## Parameter Golf Leaderboard" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat leaderboard.json >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          branches=$(git branch -r | grep 'origin/seed-' \
+            | sed 's|origin/||' | tr '\n' ' ')
+          echo "branches=$branches" >> $GITHUB_OUTPUT
+          echo "Found branches: $branches"
+
+      - name: Aggregate metrics from all seed branches
+        id: aggregate
+        run: |
+          leaderboard="[]"
+          date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          for branch in ${{ steps.branches.outputs.branches }}; do
+            echo "Checking branch: $branch"
+
+            # Check out the branch
+            git checkout "$branch" 2>/dev/null || continue
+
+            # Find metrics file
+            if [ -f "metrics/latest.json" ]; then
+              metric_file="metrics/latest.json"
+            elif ls metrics/*.json 1>/dev/null 2>&1; then
+              metric_file=$(ls -v metrics/*.json | tail -1)
+            else
+              echo "  No metrics found, skipping"
+              continue
+            fi
+
+            echo "  Reading: $metric_file"
+
+            # Extract entry with proper schema
+            if [ -f "$metric_file" ]; then
+              entry=$(cat "$metric_file" | jq -c 'if type == "array" then .[-1] elif .results != null then .results[-1] else . end | {step: .step // 0, bpb: .bpb // 999.0, grad_norm: .grad_norm // 0.0, size_mb: .size_mb // 0.0, ts: .ts // "'$date'", seed: .seed // 0, branch: "'$branch'"}' 2>/dev/null)
+
+              if [ -n "$entry" ] && [ "$entry" != "null" ]; then
+                leaderboard=$(echo "$leaderboard" | jq --argjson entry "$entry" '. + [$entry]')
+              fi
+            fi
+          done
+
+          # Sort by bpb and add rank
+          echo "$leaderboard" | jq 'sort_by(.bpb) | map(.rank = range(1; length+1))' > leaderboard.json
+
+          # Create markdown table
+          echo "$leaderboard" | jq -r 'sort_by(.bpb) | to_entries[] | "\(.key + 1 | tostring) | \(.value.branch | .[0:20]) | \(.value.seed | tostring) | \(.value.step | tostring) | \(.value.bpb | tostring) | \(.value.size_mb | tostring) | \(.value.ts)"' | awk 'BEGIN { print "| Rank | Branch | Seed | Step | BPB | Size | TS |" } BEGIN { print "|------|--------|------|------|-----|------|----|" } { print }' > LEADERBOARD.md
+
+          echo "leaderboard_updated=true" >> $GITHUB_OUTPUT
+          echo "Total entries: $(echo "$leaderboard" | jq 'length')"
+
+      - name: Switch back to main branch
+        run: |
+          git checkout main
+          git pull origin main
+
+      - name: Commit leaderboard to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ -f leaderboard.json ]; then
+            git add leaderboard.json LEADERBOARD.md
+            git commit -m "leaderboard: $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "No changes to commit"
+            git push origin main || echo "Nothing to push"
+          fi
