@@ -224,3 +224,98 @@ impl Doctor {
         text.lines().take(n).collect::<Vec<_>>().join("\n")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn doctor_new_stores_root() {
+        let d = Doctor::new("/tmp");
+        assert!(d.workspace_root.ends_with("tmp"));
+    }
+
+    #[test]
+    fn check_status_equality() {
+        assert_eq!(CheckStatus::Green, CheckStatus::Green);
+        assert_ne!(CheckStatus::Green, CheckStatus::Red);
+        assert_ne!(CheckStatus::Yellow, CheckStatus::Red);
+    }
+
+    #[test]
+    fn workspace_check_construction() {
+        let check = WorkspaceCheck {
+            name: "test".into(),
+            status: CheckStatus::Green,
+            message: "ok".into(),
+            failed_crates: vec![],
+        };
+        assert_eq!(check.name, "test");
+        assert_eq!(check.status, CheckStatus::Green);
+        assert!(check.failed_crates.is_empty());
+    }
+
+    #[test]
+    fn workspace_diagnosis_serde_roundtrip() {
+        let diag = WorkspaceDiagnosis {
+            workspace: "/fake".into(),
+            crate_count: 5,
+            checks: vec![WorkspaceCheck {
+                name: "check".into(),
+                status: CheckStatus::Green,
+                message: "ok".into(),
+                failed_crates: vec!["foo".into()],
+            }],
+        };
+        let json = serde_json::to_string(&diag).unwrap();
+        let back: WorkspaceDiagnosis = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.workspace, "/fake");
+        assert_eq!(back.crate_count, 5);
+        assert_eq!(back.checks.len(), 1);
+        assert_eq!(back.checks[0].failed_crates, vec!["foo".to_string()]);
+    }
+
+    #[test]
+    fn count_crates_with_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let crates_dir = tmp.path().join("crates");
+        fs::create_dir_all(crates_dir).unwrap();
+        let d = Doctor::new(tmp.path());
+        assert_eq!(d.count_crates(), 0);
+    }
+
+    #[test]
+    fn count_crates_finds_cargo_toml() {
+        let tmp = tempfile::tempdir().unwrap();
+        let crate_dir = tmp.path().join("crates").join("fake-crate");
+        fs::create_dir_all(&crate_dir).unwrap();
+        fs::write(crate_dir.join("Cargo.toml"), "").unwrap();
+        let d = Doctor::new(tmp.path());
+        assert_eq!(d.count_crates(), 1);
+    }
+
+    #[test]
+    fn extract_failed_crates_parses_error_line() {
+        let d = Doctor::new(".");
+        let output = "error: could not compile crates/foo/src/lib.rs";
+        let crates = d.extract_failed_crates(output);
+        assert!(crates.contains(&"foo".to_string()));
+    }
+
+    #[test]
+    fn extract_test_summary_counts_suites() {
+        let d = Doctor::new(".");
+        let output = "test result: ok. 3 passed; 0 failed; 0 ignored\nrunning 2 tests\ntest result: ok. 2 passed; 0 failed; 0 ignored\n";
+        let summary = d.extract_test_summary(output);
+        assert_eq!(summary, "2 test suites passed");
+    }
+
+    #[test]
+    fn first_lines_truncates() {
+        let d = Doctor::new(".");
+        let text = "line1\nline2\nline3\nline4\nline5";
+        let result = d.first_lines(text, 2);
+        assert_eq!(result, "line1\nline2");
+    }
+}
