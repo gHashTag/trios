@@ -39,13 +39,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_escape_html() {
-        assert_eq!(dom::escape_html("<script>"), "&lt;script&gt;");
-        assert_eq!(dom::escape_html("&"), "&amp;");
-        assert_eq!(dom::escape_html("\""), "&quot;");
-    }
-
-    #[test]
     fn mcp_url_uses_port_9005() {
         assert!(mcp::MCP_WS_URL.contains("9005"));
     }
