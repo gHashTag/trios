@@ -29,11 +29,19 @@ jobs:
         run: |
           count=$(find . -name '*.sh' -not -path './.git/*' | wc -l)
           if [ "$count" -gt 0 ]; then
-            echo "❌ L1 VIOLATION: .sh files found!"
+            echo "L1 VIOLATION: .sh files found!"
             find . -name '*.sh' -not -path './.git/*'
             exit 1
           fi
-          echo "✅ L1: no .sh files"
+          echo "L1 OK: no .sh files"
+
+      - name: Check extension artifacts exist (L8 law)
+        run: |
+          test -f extension/manifest.json || (echo "extension/manifest.json missing!" && exit 1)
+          test -f extension/sidepanel.html || (echo "extension/sidepanel.html missing!" && exit 1)
+          test -f extension/background.js || (echo "extension/background.js missing!" && exit 1)
+          test -f extension/style.css || (echo "extension/style.css missing!" && exit 1)
+          echo "L8 OK: extension artifacts present"
 
       - name: cargo clippy (L3 law — zero warnings)
         run: cargo clippy --all-targets --all-features -- -D warnings
