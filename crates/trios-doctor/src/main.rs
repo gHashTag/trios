@@ -1,4 +1,4 @@
-use trios_doctor::Doctor;
+use trios_doctor::{CheckStatus, Doctor};
 
 fn main() -> anyhow::Result<()> {
     let workspace = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
@@ -8,68 +8,42 @@ fn main() -> anyhow::Result<()> {
         .unwrap_or(std::path::Path::new("."))
         .to_path_buf();
 
-    println!("=== trios-doctor: workspace diagnostics ===\n");
-    println!("Workspace: {}\n", root.display());
+    eprintln!("=== trios-doctor: workspace diagnostics ===\n");
+    eprintln!("Workspace: {}", root.display());
 
     let doctor = Doctor::new(&root);
-    let diagnoses = doctor.run_all();
+    let crate_count = doctor.count_crates();
+    eprintln!("Crates:    {}\n", crate_count);
 
-    let mut green = 0;
-    let mut yellow = 0;
-    let mut red = 0;
+    let diag = doctor.run_all();
 
-    for d in &diagnoses {
-        let mut crate_status = "GREEN";
-        for c in &d.checks {
-            match c.status {
-                trios_doctor::CheckStatus::Red => {
-                    crate_status = "RED";
-                    red += 1;
-                }
-                trios_doctor::CheckStatus::Yellow => {
-                    if crate_status != "RED" {
-                        crate_status = "YELLOW";
-                    }
-                    yellow += 1;
-                }
-                trios_doctor::CheckStatus::Green => {
-                    green += 1;
-                }
+    let mut any_red = false;
+    for check in &diag.checks {
+        let (icon, label) = match check.status {
+            CheckStatus::Green => ("OK", "GREEN"),
+            CheckStatus::Yellow => ("WARN", "YELLOW"),
+            CheckStatus::Red => {
+                any_red = true;
+                ("FAIL", "RED")
             }
-        }
-
-        let icon = match crate_status {
-            "GREEN" => "✅",
-            "YELLOW" => "⚠️",
-            _ => "❌",
         };
-        println!("{} {} [{}]", icon, d.crate_name, crate_status);
-
-        for c in &d.checks {
-            if c.status != trios_doctor::CheckStatus::Green {
-                println!(
-                    "    {} {}: {}",
-                    match c.status {
-                        trios_doctor::CheckStatus::Red => "🔴",
-                        trios_doctor::CheckStatus::Yellow => "🟡",
-                        trios_doctor::CheckStatus::Green => "🟢",
-                    },
-                    c.name,
-                    c.message.lines().next().unwrap_or("")
-                );
+        eprintln!("[{}] {} {}", icon, label, check.name);
+        if check.status != CheckStatus::Green {
+            for line in check.message.lines().take(5) {
+                eprintln!("    {}", line);
             }
+            if !check.failed_crates.is_empty() {
+                eprintln!("    Affected: {}", check.failed_crates.join(", "));
+            }
+        } else {
+            eprintln!("    {}", check.message);
         }
+        eprintln!();
     }
 
-    println!(
-        "\n=== Summary: {} checks: {} green, {} yellow, {} red ===",
-        green + yellow + red,
-        green,
-        yellow,
-        red
-    );
+    eprintln!("=== {} crates diagnosed ===", crate_count);
 
-    if red > 0 {
+    if any_red {
         std::process::exit(1);
     }
 

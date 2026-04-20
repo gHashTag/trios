@@ -106,7 +106,7 @@ impl Precision {
     pub const fn bit_width(&self) -> u32 {
         match self {
             Self::GF16 => 16,
-            Self::Ternary => 2,  // 2 bits sufficient for {-1, 0, +1}
+            Self::Ternary => 2, // 2 bits sufficient for {-1, 0, +1}
             Self::FP32 => 32,
         }
     }
@@ -173,9 +173,9 @@ impl PrecisionRouter {
     /// Get the hardware cost (DSP) for a single MAC operation in this precision.
     pub const fn mac_dsp_cost(precision: Precision) -> u32 {
         match precision {
-            Precision::GF16 => 16,    // From BENCH-006
-            Precision::Ternary => 0,  // No DSP needed
-            Precision::FP32 => 1,     // Minimal DSP usage
+            Precision::GF16 => 16,   // From BENCH-006
+            Precision::Ternary => 0, // No DSP needed
+            Precision::FP32 => 1,    // Minimal DSP usage
         }
     }
 }
@@ -199,8 +199,14 @@ mod tests {
     #[test]
     fn test_attention_is_gf16() {
         let router = PrecisionRouter::new();
-        assert_eq!(router.get_precision(LayerType::AttentionQKV), Precision::GF16);
-        assert_eq!(router.get_precision(LayerType::AttentionOutput), Precision::GF16);
+        assert_eq!(
+            router.get_precision(LayerType::AttentionQKV),
+            Precision::GF16
+        );
+        assert_eq!(
+            router.get_precision(LayerType::AttentionOutput),
+            Precision::GF16
+        );
     }
 
     #[test]
@@ -243,9 +249,18 @@ mod tests {
 
     #[test]
     fn test_conversion_needed() {
-        assert!(PrecisionRouter::needs_conversion(Precision::GF16, Precision::Ternary));
-        assert!(PrecisionRouter::needs_conversion(Precision::Ternary, Precision::GF16));
-        assert!(!PrecisionRouter::needs_conversion(Precision::GF16, Precision::GF16));
+        assert!(PrecisionRouter::needs_conversion(
+            Precision::GF16,
+            Precision::Ternary
+        ));
+        assert!(PrecisionRouter::needs_conversion(
+            Precision::Ternary,
+            Precision::GF16
+        ));
+        assert!(!PrecisionRouter::needs_conversion(
+            Precision::GF16,
+            Precision::GF16
+        ));
     }
 
     #[test]

@@ -6,17 +6,18 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Diagnosis {
-    pub crate_name: String,
-    pub checks: Vec<CheckResult>,
+pub struct WorkspaceDiagnosis {
+    pub workspace: String,
+    pub crate_count: usize,
+    pub checks: Vec<WorkspaceCheck>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CheckResult {
+pub struct WorkspaceCheck {
     pub name: String,
     pub status: CheckStatus,
     pub message: String,
-    pub fix: Option<String>,
+    pub failed_crates: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -37,27 +38,22 @@ impl Doctor {
         }
     }
 
-    pub fn run_all(&self) -> Vec<Diagnosis> {
-        let crates = self.discover_crates();
-        let mut diagnoses = Vec::new();
+    pub fn count_crates(&self) -> usize {
+        self.discover_crates().len()
+    }
 
-        for crate_path in &crates {
-            let crate_name = crate_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let checks = vec![
-                self.check_compiles(crate_path, &crate_name),
-                self.check_tests(crate_path, &crate_name),
-                self.check_clippy(crate_path, &crate_name),
-                self.check_has_lib_or_bin(crate_path, &crate_name),
-            ];
+    pub fn run_all(&self) -> WorkspaceDiagnosis {
+        let checks = vec![
+            self.workspace_check(),
+            self.workspace_test(),
+            self.workspace_clippy(),
+        ];
 
-            diagnoses.push(Diagnosis { crate_name, checks });
+        WorkspaceDiagnosis {
+            workspace: self.workspace_root.display().to_string(),
+            crate_count: self.count_crates(),
+            checks,
         }
-
-        diagnoses
     }
 
     fn discover_crates(&self) -> Vec<PathBuf> {
@@ -77,130 +73,154 @@ impl Doctor {
         result
     }
 
-    fn check_compiles(&self, _crate_path: &Path, name: &str) -> CheckResult {
+    fn workspace_check(&self) -> WorkspaceCheck {
         let output = Command::new("cargo")
-            .args(["check", "-p", name])
+            .args(["check", "--workspace"])
             .current_dir(&self.workspace_root)
             .output();
 
         match output {
-            Ok(out) if out.status.success() => CheckResult {
-                name: "compiles".into(),
+            Ok(out) if out.status.success() => WorkspaceCheck {
+                name: "cargo check --workspace".into(),
                 status: CheckStatus::Green,
-                message: "OK".into(),
-                fix: None,
+                message: "All crates compile".into(),
+                failed_crates: vec![],
             },
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                CheckResult {
-                    name: "compiles".into(),
+                let failed = self.extract_failed_crates(&stderr);
+                WorkspaceCheck {
+                    name: "cargo check --workspace".into(),
                     status: CheckStatus::Red,
-                    message: stderr.chars().take(500).collect(),
-                    fix: Some("Run `cargo check -p <crate>` and fix errors".into()),
+                    message: self.first_lines(&stderr, 10),
+                    failed_crates: failed,
                 }
             }
-            Err(e) => CheckResult {
-                name: "compiles".into(),
+            Err(e) => WorkspaceCheck {
+                name: "cargo check --workspace".into(),
                 status: CheckStatus::Red,
-                message: format!("Failed to run cargo: {}", e),
-                fix: None,
+                message: format!("cargo failed: {}", e),
+                failed_crates: vec![],
             },
         }
     }
 
-    fn check_tests(&self, _crate_path: &Path, name: &str) -> CheckResult {
+    fn workspace_test(&self) -> WorkspaceCheck {
         let output = Command::new("cargo")
-            .args(["test", "-p", name, "--", "--test-threads=1"])
+            .args(["test", "--workspace"])
             .current_dir(&self.workspace_root)
             .output();
 
         match output {
             Ok(out) if out.status.success() => {
                 let stdout = String::from_utf8_lossy(&out.stdout);
-                let passed = stdout
-                    .lines()
-                    .find(|l| l.contains("test result:"))
-                    .unwrap_or("")
-                    .to_string();
-                CheckResult {
-                    name: "tests".into(),
+                let summary = self.extract_test_summary(&stdout);
+                WorkspaceCheck {
+                    name: "cargo test --workspace".into(),
                     status: CheckStatus::Green,
-                    message: passed,
-                    fix: None,
+                    message: summary,
+                    failed_crates: vec![],
                 }
             }
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                CheckResult {
-                    name: "tests".into(),
+                let failed = self.extract_failed_crates(&stderr);
+                WorkspaceCheck {
+                    name: "cargo test --workspace".into(),
                     status: CheckStatus::Red,
-                    message: stderr.chars().take(500).collect(),
-                    fix: Some("Run `cargo test -p <crate>` and fix failures".into()),
+                    message: self.first_lines(&stderr, 10),
+                    failed_crates: failed,
                 }
             }
-            Err(e) => CheckResult {
-                name: "tests".into(),
+            Err(e) => WorkspaceCheck {
+                name: "cargo test --workspace".into(),
                 status: CheckStatus::Red,
-                message: format!("Failed to run tests: {}", e),
-                fix: None,
+                message: format!("cargo test failed: {}", e),
+                failed_crates: vec![],
             },
         }
     }
 
-    fn check_clippy(&self, _crate_path: &Path, name: &str) -> CheckResult {
+    fn workspace_clippy(&self) -> WorkspaceCheck {
         let output = Command::new("cargo")
-            .args(["clippy", "-p", name, "--", "-D", "warnings"])
+            .args(["clippy", "--workspace", "--", "-D", "warnings"])
             .current_dir(&self.workspace_root)
             .output();
 
         match output {
-            Ok(out) if out.status.success() => CheckResult {
-                name: "clippy".into(),
+            Ok(out) if out.status.success() => WorkspaceCheck {
+                name: "cargo clippy --workspace".into(),
                 status: CheckStatus::Green,
-                message: "No warnings".into(),
-                fix: None,
+                message: "0 warnings".into(),
+                failed_crates: vec![],
             },
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                CheckResult {
-                    name: "clippy".into(),
+                let failed = self.extract_failed_crates(&stderr);
+                WorkspaceCheck {
+                    name: "cargo clippy --workspace".into(),
                     status: CheckStatus::Yellow,
-                    message: stderr.chars().take(500).collect(),
-                    fix: Some("Run `cargo clippy -p <crate> -- -D warnings` and fix".into()),
+                    message: self.first_lines(&stderr, 15),
+                    failed_crates: failed,
                 }
             }
-            Err(e) => CheckResult {
-                name: "clippy".into(),
+            Err(e) => WorkspaceCheck {
+                name: "cargo clippy --workspace".into(),
                 status: CheckStatus::Red,
-                message: format!("Failed to run clippy: {}", e),
-                fix: None,
+                message: format!("clippy failed: {}", e),
+                failed_crates: vec![],
             },
         }
     }
 
-    fn check_has_lib_or_bin(&self, crate_path: &Path, _name: &str) -> CheckResult {
-        let has_lib = crate_path.join("src/lib.rs").exists();
-        let has_main = crate_path.join("src/main.rs").exists();
-
-        if has_lib || has_main {
-            CheckResult {
-                name: "entry_point".into(),
-                status: CheckStatus::Green,
-                message: if has_lib {
-                    "lib.rs present"
-                } else {
-                    "main.rs present"
+    fn extract_failed_crates(&self, output: &str) -> Vec<String> {
+        let mut crates = Vec::new();
+        for line in output.lines() {
+            if line.contains("error") && line.contains("crates/") {
+                for part in line.split_whitespace() {
+                    if part.starts_with("crates/") {
+                        if let Some(name) = part.split('/').nth(1) {
+                            if !crates.contains(&name.to_string()) {
+                                crates.push(name.to_string());
+                            }
+                        }
+                    }
                 }
-                .into(),
-                fix: None,
-            }
-        } else {
-            CheckResult {
-                name: "entry_point".into(),
-                status: CheckStatus::Red,
-                message: "No src/lib.rs or src/main.rs found".into(),
-                fix: Some("Create src/lib.rs or src/main.rs".into()),
             }
         }
+        crates
+    }
+
+    fn extract_test_summary(&self, output: &str) -> String {
+        let mut total = 0u32;
+        let mut passed = 0u32;
+        let mut failed = 0u32;
+        for line in output.lines() {
+            if line.starts_with("test result:") {
+                for part in line.split(';') {
+                    let part = part.trim();
+                    if let Some(n) = part.strip_prefix("passed ") {
+                        passed += n.parse::<u32>().unwrap_or(0);
+                    } else if let Some(n) = part.strip_prefix("failed ") {
+                        failed += n.parse::<u32>().unwrap_or(0);
+                    }
+                }
+                if let Some(rest) = line.strip_prefix("test result: ") {
+                    if let Some(n) = rest.split('.').next() {
+                        total += n.trim().parse::<u32>().unwrap_or(0);
+                    }
+                }
+            }
+        }
+        if total > 0 {
+            format!("{} tests: {} passed, {} failed", total, passed, failed)
+        } else {
+            let count = output.matches("test result:").count();
+            format!("{} test suites passed", count)
+        }
+    }
+
+    fn first_lines(&self, text: &str, n: usize) -> String {
+        text.lines().take(n).collect::<Vec<_>>().join("\n")
     }
 }
