@@ -119,7 +119,7 @@ pub fn gelu_backward(x: &[f32], dx: &[f32], dgelu_output: &mut [f32]) {
 
         // Derivative of GELU approximation
         // dGELU/dx = 0.5 * (1 + tanh) + 0.5 * x * (1 - tanh^2) * sqrt(2/pi) * (1 + 3 * beta * x^2)
-        let sech_sq = 1.0 - tanh_val * tanh_val;  // sech^2 = 1 - tanh^2
+        let sech_sq = 1.0 - tanh_val * tanh_val; // sech^2 = 1 - tanh^2
         let cdf = 0.5 * (1.0 + tanh_val);
         let pdf_term = 0.5 * xi * sech_sq * SQRT_2_OVER_PI * (1.0 + 3.0 * BETA * x3);
 
@@ -143,10 +143,13 @@ pub fn layer_norm_backward(x: &[f32], dx: &[f32], dln_output: &mut [f32], eps: f
     let sum: f32 = x.iter().sum();
     let mean = sum / n as f32;
 
-    let var_sum: f32 = x.iter().map(|&xi| {
-        let diff = xi - mean;
-        diff * diff
-    }).sum();
+    let var_sum: f32 = x
+        .iter()
+        .map(|&xi| {
+            let diff = xi - mean;
+            diff * diff
+        })
+        .sum();
     let var = var_sum / n as f32;
     let std = (var + eps).sqrt();
 
@@ -270,7 +273,7 @@ mod tests {
     fn test_cross_entropy_loss_perfect() {
         // Perfect prediction: logit for target is much larger
         let predictions = vec![
-            0.0, 0.0, 100.0,  // Target is class 2
+            0.0, 0.0, 100.0, // Target is class 2
         ];
         let targets = vec![2];
 
@@ -293,8 +296,8 @@ mod tests {
     #[test]
     fn test_cross_entropy_loss_batch() {
         let predictions = vec![
-            0.0, 0.0, 100.0,  // Sample 0: target 2 (perfect)
-            100.0, 0.0, 0.0,  // Sample 1: target 0 (perfect)
+            0.0, 0.0, 100.0, // Sample 0: target 2 (perfect)
+            100.0, 0.0, 0.0, // Sample 1: target 0 (perfect)
         ];
         let targets = vec![2, 0];
 
@@ -306,9 +309,9 @@ mod tests {
     #[test]
     fn test_softmax_cross_entropy_backward() {
         let predictions = vec![
-            0.1, 0.2, 0.7,  // Probabilities sum to 1
+            0.1, 0.2, 0.7, // Probabilities sum to 1
         ];
-        let targets = vec![2];  // Target is class 2
+        let targets = vec![2]; // Target is class 2
         let mut doutput = vec![0.0f32; 3];
 
         softmax_cross_entropy_backward(&predictions, &targets, &mut doutput);
@@ -322,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_clip_gradients_no_clip() {
-        let mut gradients = vec![1.0, 2.0, 2.0];  // L2 = sqrt(1+4+4) = 3
+        let mut gradients = vec![1.0, 2.0, 2.0]; // L2 = sqrt(1+4+4) = 3
         let max_norm = 5.0;
 
         let l2 = clip_gradients(&mut gradients, max_norm);
@@ -334,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_clip_gradients_clip() {
-        let mut gradients = vec![3.0, 4.0, 0.0];  // L2 = 5
+        let mut gradients = vec![3.0, 4.0, 0.0]; // L2 = 5
         let max_norm = 2.5;
 
         let l2 = clip_gradients(&mut gradients, max_norm);
@@ -358,11 +361,17 @@ mod tests {
         assert!((dgelu_output[0] - 0.5).abs() < 0.2);
 
         // GELU derivative at x=1 should be positive (slope of GELU at positive x)
-        assert!(dgelu_output[1] > 0.0, "GELU derivative at positive x should be positive");
+        assert!(
+            dgelu_output[1] > 0.0,
+            "GELU derivative at positive x should be positive"
+        );
 
         // GELU derivative at x=-1 can be negative (slope of GELU near 0 from negative side)
         // The exact value depends on the approximation, but it should be finite
-        assert!(dgelu_output[2].is_finite(), "GELU derivative should be finite");
+        assert!(
+            dgelu_output[2].is_finite(),
+            "GELU derivative should be finite"
+        );
 
         // All outputs should be finite
         assert!(dgelu_output[0].is_finite());
@@ -386,8 +395,14 @@ mod tests {
         let dx_varied = vec![1.0, 2.0, 1.0, 2.0];
         layer_norm_backward(&x, &dx_varied, &mut dln_output, 1e-5);
 
-        let max_abs = dln_output.iter().map(|&v| v.abs()).fold(0.0_f32, |a, b| a.max(b));
-        assert!(max_abs > 0.0, "Layer norm gradient with varied input should have non-zero values");
+        let max_abs = dln_output
+            .iter()
+            .map(|&v| v.abs())
+            .fold(0.0_f32, |a, b| a.max(b));
+        assert!(
+            max_abs > 0.0,
+            "Layer norm gradient with varied input should have non-zero values"
+        );
     }
 
     #[test]

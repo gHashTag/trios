@@ -47,9 +47,9 @@ impl AdamWCpu {
     /// A new AdamW optimizer instance
     pub fn new(param_count: usize, lr: f64) -> Self {
         // Phi-based constants
-        let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;  // φ ≈ 1.618
-        let beta1 = 1.0 / phi;                   // φ^(-1) ≈ 0.618
-        let weight_decay = 1.0 / (phi * phi * phi);  // α_φ ≈ 0.11803
+        let phi = (1.0 + 5.0_f64.sqrt()) / 2.0; // φ ≈ 1.618
+        let beta1 = 1.0 / phi; // φ^(-1) ≈ 0.618
+        let weight_decay = 1.0 / (phi * phi * phi); // α_φ ≈ 0.11803
 
         Self {
             lr,
@@ -66,7 +66,7 @@ impl AdamWCpu {
     /// Create a new AdamW optimizer with default learning rate (α_φ)
     pub fn with_phi_defaults(param_count: usize) -> Self {
         let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
-        let lr = 1.0 / (phi * phi * phi);  // α_φ ≈ 0.11803
+        let lr = 1.0 / (phi * phi * phi); // α_φ ≈ 0.11803
         Self::new(param_count, lr)
     }
 
@@ -124,14 +124,16 @@ impl AdamWCpu {
             self.m[i] = self.beta1 * self.m[i] + (1.0 - self.beta1) * gradients[i] as f64;
 
             // Update biased second raw moment estimate
-            self.v[i] = self.beta2 * self.v[i] + (1.0 - self.beta2) * (gradients[i] * gradients[i]) as f64;
+            self.v[i] =
+                self.beta2 * self.v[i] + (1.0 - self.beta2) * (gradients[i] * gradients[i]) as f64;
 
             // Compute bias-corrected estimates
             let m_hat = self.m[i] / bias_correction1;
             let v_hat = self.v[i] / bias_correction2;
 
             // Update parameter
-            params[i] -= step_size as f32 * (m_hat as f32 / ((v_hat.sqrt() as f32) + self.eps as f32));
+            params[i] -=
+                step_size as f32 * (m_hat as f32 / ((v_hat.sqrt() as f32) + self.eps as f32));
         }
     }
 

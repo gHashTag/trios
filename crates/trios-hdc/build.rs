@@ -11,9 +11,13 @@ fn main() {
             .status();
     }
 
-    let lib_dir = std::env::current_dir().unwrap().join(zig_path).join("zig-out/lib");
+    let lib_dir = std::env::current_dir()
+        .unwrap()
+        .join(zig_path)
+        .join("zig-out/lib");
     let static_lib = lib_dir.join("libhdc.a");
     if static_lib.exists() {
+        println!("cargo:rustc-cfg=has_zig_lib");
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
         println!("cargo:rustc-link-lib=static=hdc");
     }

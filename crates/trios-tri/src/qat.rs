@@ -41,8 +41,7 @@ impl TernarySTE {
         Self { threshold }
     }
 
-    /// Create a TernarySTE with default threshold (0.5).
-    pub fn default() -> Self {
+    pub fn with_default_threshold() -> Self {
         Self { threshold: 0.5 }
     }
 
@@ -113,7 +112,7 @@ impl TernarySTE {
 
 impl Default for TernarySTE {
     fn default() -> Self {
-        Self::default()
+        Self { threshold: 0.5 }
     }
 }
 
@@ -265,8 +264,7 @@ impl QatConfig {
         }
     }
 
-    /// Create with default values (threshold=0.5, scale=1.0).
-    pub fn default() -> Self {
+    pub fn with_defaults() -> Self {
         Self {
             ste: TernarySTE::default(),
             scale: LearnableScale::new(1.0),
@@ -342,7 +340,10 @@ impl QatConfig {
 
 impl Default for QatConfig {
     fn default() -> Self {
-        Self::default()
+        Self {
+            ste: TernarySTE::default(),
+            scale: LearnableScale::new(1.0),
+        }
     }
 }
 

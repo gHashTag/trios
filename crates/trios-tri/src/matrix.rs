@@ -5,7 +5,7 @@
 //! Provides 2D matrix operations for ternary quantized weights,
 //! optimized for the FFN gate/up/down layers in the hybrid pipeline.
 
-use super::{Ternary, quantize, compute_scale};
+use super::{compute_scale, quantize, Ternary};
 
 /// A dense ternary matrix in row-major order.
 ///
@@ -78,11 +78,7 @@ impl TernaryMatrix {
             "data length must equal rows * cols"
         );
 
-        Self {
-            data,
-            rows,
-            cols,
-        }
+        Self { data, rows, cols }
     }
 
     /// Create a zero matrix.
@@ -170,8 +166,18 @@ impl TernaryMatrix {
     /// Panics if `row >= self.rows()` or `col >= self.cols()`
     #[inline]
     pub fn get(&self, row: usize, col: usize) -> Ternary {
-        assert!(row < self.rows, "row {} out of bounds (rows = {})", row, self.rows);
-        assert!(col < self.cols, "col {} out of bounds (cols = {})", col, self.cols);
+        assert!(
+            row < self.rows,
+            "row {} out of bounds (rows = {})",
+            row,
+            self.rows
+        );
+        assert!(
+            col < self.cols,
+            "col {} out of bounds (cols = {})",
+            col,
+            self.cols
+        );
         self.data[row * self.cols + col]
     }
 
@@ -186,8 +192,18 @@ impl TernaryMatrix {
     /// Panics if `row >= self.rows()` or `col >= self.cols()`
     #[inline]
     pub fn set(&mut self, row: usize, col: usize, value: Ternary) {
-        assert!(row < self.rows, "row {} out of bounds (rows = {})", row, self.rows);
-        assert!(col < self.cols, "col {} out of bounds (cols = {})", col, self.cols);
+        assert!(
+            row < self.rows,
+            "row {} out of bounds (rows = {})",
+            row,
+            self.rows
+        );
+        assert!(
+            col < self.cols,
+            "col {} out of bounds (cols = {})",
+            col,
+            self.cols
+        );
         self.data[row * self.cols + col] = value;
     }
 
@@ -264,13 +280,9 @@ impl TernaryMatrix {
     /// ```
     pub fn matmul(&self, other: &Self) -> Self {
         assert_eq!(
-            self.cols,
-            other.rows,
+            self.cols, other.rows,
             "inner dimensions must match for matmul: {}x{} * {}x{}",
-            self.rows,
-            self.cols,
-            other.rows,
-            other.cols
+            self.rows, self.cols, other.rows, other.cols
         );
 
         let rows = self.rows;
@@ -312,13 +324,11 @@ impl TernaryMatrix {
     /// Panics if matrices have different dimensions.
     pub fn add(&self, other: &Self) -> Self {
         assert_eq!(
-            self.rows,
-            other.rows,
+            self.rows, other.rows,
             "matrices must have same number of rows"
         );
         assert_eq!(
-            self.cols,
-            other.cols,
+            self.cols, other.cols,
             "matrices must have same number of columns"
         );
 
@@ -326,7 +336,7 @@ impl TernaryMatrix {
             .data
             .iter()
             .zip(other.data.iter())
-            .map(|(&a, &b)| a.add(b))
+            .map(|(&a, &b)| a.clamp_add(b))
             .collect();
 
         Self {
@@ -342,13 +352,11 @@ impl TernaryMatrix {
     /// Panics if matrices have different dimensions.
     pub fn sub(&self, other: &Self) -> Self {
         assert_eq!(
-            self.rows,
-            other.rows,
+            self.rows, other.rows,
             "matrices must have same number of rows"
         );
         assert_eq!(
-            self.cols,
-            other.cols,
+            self.cols, other.cols,
             "matrices must have same number of columns"
         );
 
@@ -356,7 +364,7 @@ impl TernaryMatrix {
             .data
             .iter()
             .zip(other.data.iter())
-            .map(|(&a, &b)| a.sub(b))
+            .map(|(&a, &b)| a.clamp_sub(b))
             .collect();
 
         Self {
@@ -372,13 +380,11 @@ impl TernaryMatrix {
     /// Panics if matrices have different dimensions.
     pub fn mul(&self, other: &Self) -> Self {
         assert_eq!(
-            self.rows,
-            other.rows,
+            self.rows, other.rows,
             "matrices must have same number of rows"
         );
         assert_eq!(
-            self.cols,
-            other.cols,
+            self.cols, other.cols,
             "matrices must have same number of columns"
         );
 
@@ -386,7 +392,7 @@ impl TernaryMatrix {
             .data
             .iter()
             .zip(other.data.iter())
-            .map(|(&a, &b)| a.mul(b))
+            .map(|(&a, &b)| a * b)
             .collect();
 
         Self {
@@ -479,8 +485,14 @@ mod tests {
     #[test]
     fn test_transpose() {
         let m = TernaryMatrix::from_ternary(
-            vec![Ternary::PosOne, Ternary::NegOne, Ternary::Zero, Ternary::PosOne],
-            2, 2
+            vec![
+                Ternary::PosOne,
+                Ternary::NegOne,
+                Ternary::Zero,
+                Ternary::PosOne,
+            ],
+            2,
+            2,
         );
         let t = m.transpose();
         assert_eq!(t.rows(), 2);

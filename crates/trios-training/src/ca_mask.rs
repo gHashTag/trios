@@ -1,7 +1,7 @@
 //! CA φ-Mask
 
 pub struct CAMask {
-    sparsity: f32,
+    pub sparsity: f32,
 }
 
 impl CAMask {

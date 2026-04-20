@@ -1,4 +1,6 @@
-// trios-ca-mask: Fibonacci attention mask for efficient sparse attention (Φ5.4)
+#![allow(clippy::erasing_op)]
+
+// trios-ca-mask: Fibonacci attention mask for efficient sparse attention (Phi5.4)
 // Creates causal mask with Fibonacci pattern for sparse attention
 
 /// Creates a Fibonacci-patterned causal attention mask.
@@ -103,7 +105,10 @@ mod tests {
         assert!(!mask[0 * seq_len + 7], "offset 7 should be false");
         assert!(mask[0 * seq_len + 8], "offset 8 should be true");
         // Offset 9 exceeds max_offset
-        assert!(!mask[0 * seq_len + 9], "offset 9 should be false (exceeds max_offset)");
+        assert!(
+            !mask[0 * seq_len + 9],
+            "offset 9 should be false (exceeds max_offset)"
+        );
     }
 
     #[test]

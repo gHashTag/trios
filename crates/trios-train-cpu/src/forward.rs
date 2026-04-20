@@ -17,9 +17,9 @@ impl Default for LayerDims {
     fn default() -> Self {
         // IGLA-GF16 Fibonacci architecture
         Self {
-            d_model: 144,   // Fibonacci number
-            n_heads: 8,     // 2^3
-            d_ffn: 233,     // Next Fibonacci number after 144
+            d_model: 144, // Fibonacci number
+            n_heads: 8,   // 2^3
+            d_ffn: 233,   // Next Fibonacci number after 144
         }
     }
 }
@@ -124,7 +124,7 @@ pub fn vec_scale(x: &[f32], y: &mut [f32], scale: f32) {
 ///
 /// * `x` - Input vector (modified in-place)
 pub fn gelu(x: &mut [f32]) {
-    const SQRT_2_OVER_PI: f32 = 0.797_884_6_f32;  // √(2/π)
+    const SQRT_2_OVER_PI: f32 = 0.797_884_6_f32; // √(2/π)
     const BETA: f32 = 0.044715f32;
 
     for xi in x.iter_mut() {
@@ -149,10 +149,13 @@ pub fn layer_norm(x: &mut [f32], eps: f32) {
     let mean = sum / n as f32;
 
     // Compute variance
-    let var_sum: f32 = x.iter().map(|&xi| {
-        let diff = xi - mean;
-        diff * diff
-    }).sum();
+    let var_sum: f32 = x
+        .iter()
+        .map(|&xi| {
+            let diff = xi - mean;
+            diff * diff
+        })
+        .sum();
     let var = var_sum / n as f32;
     let std = (var + eps).sqrt();
 
@@ -234,15 +237,8 @@ mod tests {
     #[test]
     fn test_matmul_rectangular() {
         // A: 2x3, B: 3x4, C: 2x4
-        let a = vec![
-            1.0, 2.0, 3.0,
-            4.0, 5.0, 6.0,
-        ];
-        let b = vec![
-            1.0, 0.0, 1.0, 0.0,
-            0.0, 1.0, 0.0, 1.0,
-            1.0, 1.0, 1.0, 1.0,
-        ];
+        let a = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let b = vec![1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0];
         let mut c = vec![0.0f32; 8];
 
         matmul(&a, &b, &mut c, 2, 3, 4);

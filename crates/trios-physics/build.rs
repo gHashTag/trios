@@ -16,20 +16,33 @@ fn main() {
 
     match status {
         Ok(s) if s.success() => {
-            let lib_dir = std::env::current_dir().unwrap().join(zig_path).join("zig-out/lib");
+            let lib_dir = std::env::current_dir()
+                .unwrap()
+                .join(zig_path)
+                .join("zig-out/lib");
             let static_lib = lib_dir.join("libphysics.a");
             if static_lib.exists() {
+                println!("cargo:rustc-cfg=has_zig_lib");
                 println!("cargo:rustc-link-search=native={}", lib_dir.display());
                 println!("cargo:rustc-link-lib=static=physics");
             } else {
-                println!("cargo:warning=zig build succeeded but static library not found at {:?}", static_lib);
+                println!(
+                    "cargo:warning=zig build succeeded but static library not found at {:?}",
+                    static_lib
+                );
             }
         }
         Ok(s) => {
-            println!("cargo:warning=zig build failed for zig-physics (exit {:?})", s.code());
+            println!(
+                "cargo:warning=zig build failed for zig-physics (exit {:?})",
+                s.code()
+            );
         }
         Err(e) => {
-            println!("cargo:warning=failed to run zig build for zig-physics: {}", e);
+            println!(
+                "cargo:warning=failed to run zig build for zig-physics: {}",
+                e
+            );
         }
     }
 

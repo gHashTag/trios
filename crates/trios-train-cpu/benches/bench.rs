@@ -1,7 +1,9 @@
+#![allow(clippy::all)]
+
 //! Criterion benchmarks for trios-train-cpu
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use trios_train_cpu::{matmul, gelu, layer_norm, softmax, LayerDims};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use trios_train_cpu::{gelu, layer_norm, matmul, softmax, LayerDims};
 
 fn bench_matmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("matmul");
@@ -37,12 +39,19 @@ fn bench_matmul_igla_dimensions(c: &mut Criterion) {
 
     let a = vec![1.0f32; m * k];
     let b_mat = vec![1.0f32; k * n];
-    let mut c = vec![0.0f32; m * n];
+    let mut c_vec = vec![0.0f32; m * n];
 
     c.bench_function("matmul_igla_forward", |b| {
         b.iter(|| {
-            matmul(black_box(&a), black_box(&b_mat), black_box(&mut c), m, k, n);
-            black_box(&c);
+            matmul(
+                black_box(&a),
+                black_box(&b_mat),
+                black_box(&mut c_vec),
+                m,
+                k,
+                n,
+            );
+            black_box(&c_vec);
         });
     });
 }
@@ -52,7 +61,7 @@ fn bench_gelu(c: &mut Criterion) {
 
     for size in [128, 512, 2048, 8192].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-            let mut x = vec![1.0f32; size];
+            let x = vec![1.0f32; size];
 
             b.iter(|| {
                 let mut x_copy = x.clone();
@@ -70,7 +79,7 @@ fn bench_layer_norm(c: &mut Criterion) {
 
     for size in [128, 512, 2048, 8192].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-            let mut x = vec![1.0f32; size];
+            let x = vec![1.0f32; size];
 
             b.iter(|| {
                 let mut x_copy = x.clone();
@@ -91,7 +100,7 @@ fn bench_softmax(c: &mut Criterion) {
             BenchmarkId::from_parameter(vocab_size),
             vocab_size,
             |b, &vocab_size| {
-                let mut x = vec![1.0f32; vocab_size];
+                let x = vec![1.0f32; vocab_size];
 
                 b.iter(|| {
                     let mut x_copy = x.clone();

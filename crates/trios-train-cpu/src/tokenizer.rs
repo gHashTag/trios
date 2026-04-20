@@ -141,11 +141,7 @@ impl BPETokenizer {
     pub fn decode(&self, tokens: &[u32]) -> String {
         tokens
             .iter()
-            .filter_map(|&id| {
-                self.inverse_vocab
-                    .get(id as usize)
-                    .map(|s| s.as_str())
-            })
+            .filter_map(|&id| self.inverse_vocab.get(id as usize).map(|s| s.as_str()))
             .collect()
     }
 
