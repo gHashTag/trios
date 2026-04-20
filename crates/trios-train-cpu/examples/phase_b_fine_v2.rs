@@ -7,8 +7,8 @@
 
 use std::time::Instant;
 use trios_train_cpu::{
+    backward::{clip_gradients, cross_entropy_loss},
     bpb_from_loss,
-    backward::{cross_entropy_loss, clip_gradients},
     optimizer::AdamWCpu,
 };
 
@@ -31,7 +31,12 @@ fn run_lr(lr: f64, train_data: &[u8], val_data: &[u8]) -> (f64, f64) {
     // Validation data (fixed)
     let val_len = val_data.len().min(BATCH_SIZE * SEQ_LEN);
     let val_inputs: Vec<usize> = val_data[..val_len].iter().map(|&b| b as usize).collect();
-    let val_targets: Vec<usize> = val_inputs.iter().skip(1).chain(std::iter::once(&val_inputs[0])).copied().collect();
+    let val_targets: Vec<usize> = val_inputs
+        .iter()
+        .skip(1)
+        .chain(std::iter::once(&val_inputs[0]))
+        .copied()
+        .collect();
 
     let start = Instant::now();
     let mut final_train_bpb = 0.0f64;
@@ -48,7 +53,12 @@ fn run_lr(lr: f64, train_data: &[u8], val_data: &[u8]) -> (f64, f64) {
             }
         }
 
-        let targets: Vec<usize> = inputs.iter().skip(1).chain(std::iter::once(&inputs[0])).copied().collect();
+        let targets: Vec<usize> = inputs
+            .iter()
+            .skip(1)
+            .chain(std::iter::once(&inputs[0]))
+            .copied()
+            .collect();
 
         // Forward (embedding projection)
         let mut logits = vec![0.0f32; BATCH_SIZE * SEQ_LEN * VOCAB_SIZE];
@@ -81,7 +91,7 @@ fn run_lr(lr: f64, train_data: &[u8], val_data: &[u8]) -> (f64, f64) {
         for b in 0..BATCH_SIZE {
             for i in 0..SEQ_LEN {
                 let idx = b * SEQ_LEN + i;
-                let input_idx = inputs[idx];
+                let _input_idx = inputs[idx];
                 let target_idx = targets[idx];
                 let l_offset = idx * VOCAB_SIZE;
 
@@ -93,26 +103,40 @@ fn run_lr(lr: f64, train_data: &[u8], val_data: &[u8]) -> (f64, f64) {
 
                 let mut sum_exp = 0.0f32;
                 for v in 0..VOCAB_SIZE {
-                    sum_exp += (logits[l_offset + v] - max_logit).exp();
+                    let exp_val = (logits[l_offset + v] - max_logit).exp();
+                    sum_exp += exp_val;
+                    gradients[l_offset + v] = exp_val;
                 }
 
-                let _input_offset = input_idx * D_MODEL;
                 for v in 0..VOCAB_SIZE {
-                    let prob = (logits[l_offset + v] - max_logit).exp() / sum_exp;
-                    let dlogits = prob - if v == target_idx { 1.0 } else { 0.0 };
+                    gradients[l_offset + v] /= sum_exp;
+                }
+
+                gradients[l_offset + target_idx] -= 1.0;
+            }
+        }
+
+        // Compute embedding gradients
+        for b in 0..BATCH_SIZE {
+            for i in 0..SEQ_LEN {
+                let idx = b * SEQ_LEN + i;
+                let input_idx = inputs[idx];
+                let input_offset = input_idx * D_MODEL;
+
+                for v in 0..VOCAB_SIZE {
                     let emb_offset = v * D_MODEL;
+                    let grad_val = gradients[idx * VOCAB_SIZE + v];
+
                     for d in 0..D_MODEL {
-                        gradients[_input_offset + d] += dlogits * embeddings[emb_offset + d];
-                        gradients[emb_offset + d] += dlogits * embeddings[_input_offset + d];
+                        embeddings[input_offset + d] += grad_val * embeddings[emb_offset + d];
                     }
                 }
             }
         }
 
-        let scale = 1.0 / (BATCH_SIZE * SEQ_LEN) as f32;
-        for g in gradients.iter_mut() { *g *= scale; }
-        clip_gradients(&mut gradients, 1.0);
-        optimizer.step(&mut embeddings, &gradients);
+        clip_gradients(&mut embeddings, 1.0);
+        let grad_placeholder = vec![0.0f32; embeddings.len()];
+        optimizer.step(&mut embeddings, &grad_placeholder);
     }
 
     // Validation
@@ -216,7 +240,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let prev_best = 6.5609; // Previous winner
 
     if winner.3 < prev_best {
-        println!("✅ New best LR found: {:.6} → val_bpb={:.4}", winner.0, winner.3);
+        println!(
+            "✅ New best LR found: {:.6} → val_bpb={:.4}",
+            winner.0, winner.3
+        );
         println!("   Previous best: 0.026212 → val_bpb={:.4}", prev_best);
         println!("   Improvement: {:.4} BPB", prev_best - winner.3);
 
@@ -241,7 +268,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!();
-    println!("Winner: LR={} ({:.6}) → val_bpb={:.4}", winner.1, winner.0, winner.3);
+    println!(
+        "Winner: LR={} ({:.6}) → val_bpb={:.4}",
+        winner.1, winner.0, winner.3
+    );
 
     Ok(())
 }
