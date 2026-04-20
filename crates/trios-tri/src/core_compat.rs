@@ -5,7 +5,7 @@
 //! Provides conversion functions and helpers to work with
 //! `trios-core` types like `PrecisionFormat`, `HardwareCost`, and `LayerType`.
 
-use trios_core::{PrecisionFormat, HardwareCost, LayerType};
+use trios_core::{HardwareCost, LayerType, PrecisionFormat};
 
 /// Check if a precision format is ternary.
 ///
@@ -70,7 +70,10 @@ pub fn hardware_cost() -> HardwareCost {
 /// assert!(!supports_ternary(LayerType::Embedding)); // HIGH sensitivity
 /// ```
 pub fn supports_ternary(layer_type: LayerType) -> bool {
-    matches!(layer_type, LayerType::Dense | LayerType::Conv2D | LayerType::Activation)
+    matches!(
+        layer_type,
+        LayerType::Dense | LayerType::Conv2D | LayerType::Activation
+    )
 }
 
 /// Get the default precision format for a layer type.
@@ -170,7 +173,10 @@ pub fn ternary_compression_vs_gf16(_param_count: usize) -> f32 {
 pub fn is_ternary_suitable(sensitivity: trios_core::Sensitivity) -> bool {
     // Ternary is suitable for LOW sensitivity without QAT
     // and MEDIUM sensitivity with QAT
-    matches!(sensitivity, trios_core::Sensitivity::LOW | trios_core::Sensitivity::MEDIUM)
+    matches!(
+        sensitivity,
+        trios_core::Sensitivity::LOW | trios_core::Sensitivity::MEDIUM
+    )
 }
 
 /// Get a description of the ternary format for documentation.
@@ -186,7 +192,7 @@ pub fn format_description() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trios_core::{PrecisionFormat, LayerType, Sensitivity, HardwareCost};
+    use trios_core::{LayerType, PrecisionFormat, Sensitivity};
 
     #[test]
     fn test_is_ternary_format() {
@@ -216,19 +222,37 @@ mod tests {
 
     #[test]
     fn test_default_precision() {
-        assert_eq!(default_precision(LayerType::Dense), PrecisionFormat::Ternary158);
-        assert_eq!(default_precision(LayerType::Conv2D), PrecisionFormat::Ternary158);
-        assert_eq!(default_precision(LayerType::Activation), PrecisionFormat::Ternary158);
-        assert_eq!(default_precision(LayerType::Embedding), PrecisionFormat::GF16);
-        assert_eq!(default_precision(LayerType::Attention), PrecisionFormat::GF16);
-        assert_eq!(default_precision(LayerType::OutputHead), PrecisionFormat::GF16);
+        assert_eq!(
+            default_precision(LayerType::Dense),
+            PrecisionFormat::Ternary158
+        );
+        assert_eq!(
+            default_precision(LayerType::Conv2D),
+            PrecisionFormat::Ternary158
+        );
+        assert_eq!(
+            default_precision(LayerType::Activation),
+            PrecisionFormat::Ternary158
+        );
+        assert_eq!(
+            default_precision(LayerType::Embedding),
+            PrecisionFormat::GF16
+        );
+        assert_eq!(
+            default_precision(LayerType::Attention),
+            PrecisionFormat::GF16
+        );
+        assert_eq!(
+            default_precision(LayerType::OutputHead),
+            PrecisionFormat::GF16
+        );
     }
 
     #[test]
     fn test_ternary_memory_bytes() {
         let bytes = ternary_memory_bytes(1000);
         // 1000 * 1.58 / 8 ≈ 197.5, ceil = 198
-        assert!(bytes >= 197 && bytes <= 199);
+        assert!((197..=199).contains(&bytes));
     }
 
     #[test]

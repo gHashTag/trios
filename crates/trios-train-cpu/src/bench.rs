@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::backward::{clip_gradients, cross_entropy_loss};
-use crate::forward::{LayerDims, matmul};
-use crate::optimizer::{AdamWCpu, phi_lr_schedule};
+use crate::forward::{matmul, LayerDims};
+use crate::optimizer::{phi_lr_schedule, AdamWCpu};
 use crate::tokenizer::BPETokenizer;
 
 /// Training configuration for CPU inference
@@ -49,9 +49,9 @@ impl Default for TrainConfig {
             batch_size: 4,
             seq_len: 128,
             learning_rate: 0.001,
-            warmup_steps: 21,  // Fib #7
-            grad_clip: 0.618,  // phi^-1
-            log_every: 34,     // Fib #8
+            warmup_steps: 21, // Fib #7
+            grad_clip: 0.618, // phi^-1
+            log_every: 34,    // Fib #8
             checkpoint_path: "igla-gf16-cpu.bin".to_string(),
             dims: LayerDims::default(),
         }
@@ -151,12 +151,12 @@ pub fn train_cpu_loop(config: &TrainConfig, vocab_size: usize) -> TrainMetrics {
 
     // Initialize a minimal model for testing
     let dims = config.dims;
-    let model_size = vocab_size * dims.d_model;  // Simplified size
+    let model_size = vocab_size * dims.d_model; // Simplified size
 
     // Initialize parameters
     let mut params = vec![0.0f32; model_size];
     for p in params.iter_mut() {
-        *p = (rand::random::<f32>() - 0.5) * 0.1;  // Small random init
+        *p = (rand::random::<f32>() - 0.5) * 0.1; // Small random init
     }
 
     // Initialize optimizer
@@ -218,8 +218,8 @@ pub fn train_cpu_loop(config: &TrainConfig, vocab_size: usize) -> TrainMetrics {
 
         // Log metrics
         if step % config.log_every == 0 || step == config.max_steps - 1 {
-            let metrics = TrainMetrics::new(step, loss as f64, ms_per_step, lr)
-                .with_eta(eta_minutes);
+            let metrics =
+                TrainMetrics::new(step, loss as f64, ms_per_step, lr).with_eta(eta_minutes);
             print_metrics(&metrics);
             final_metrics = metrics;
         }
@@ -278,12 +278,12 @@ pub fn estimate_model_size(
     // GF16 layers: 2 bytes/param
     // Ternary FFN: 0.2 bytes/param (1.58 bits)
 
-    let embedding_params = vocab_size * d_model * 2;  // Embedding + position (GF16)
-    let attention_params = n_layers * 4 * d_model * d_model;  // 4 attention matrices (GF16)
-    let ffn_params = n_layers * 3 * d_model * d_ffn;  // 3 FFN matrices (Ternary)
+    let embedding_params = vocab_size * d_model * 2; // Embedding + position (GF16)
+    let attention_params = n_layers * 4 * d_model * d_model; // 4 attention matrices (GF16)
+    let ffn_params = n_layers * 3 * d_model * d_ffn; // 3 FFN matrices (Ternary)
 
     let gf16_bytes = (embedding_params + attention_params) * 2;
-    let ternary_bytes = ffn_params / 5;  // 1.58 bits ≈ 0.2 bytes
+    let ternary_bytes = ffn_params / 5; // 1.58 bits ≈ 0.2 bytes
 
     gf16_bytes + ternary_bytes
 }
@@ -476,12 +476,8 @@ where
             // Save checkpoint and measure size
             let checkpoint_path = PathBuf::from(&config.checkpoint_path);
             // Simulate checkpoint: just write params
-            let checkpoint_bytes: Vec<u8> = params
-                .iter()
-                .flat_map(|&p| p.to_le_bytes())
-                .collect();
-            fs::write(&checkpoint_path, &checkpoint_bytes)
-                .expect("Failed to write checkpoint");
+            let checkpoint_bytes: Vec<u8> = params.iter().flat_map(|&p| p.to_le_bytes()).collect();
+            fs::write(&checkpoint_path, &checkpoint_bytes).expect("Failed to write checkpoint");
             run.metrics.checkpoint_size_bytes = checkpoint_bytes.len();
         }
     }
@@ -497,7 +493,7 @@ mod tests {
     fn test_bpb_from_loss() {
         // Issue #32 acceptance criterion: bpb_from_loss(1.0) ≈ 1.4427 (Δ < 1e-4)
         let bpb = bpb_from_loss(1.0);
-        assert!((bpb - 1.4427).abs() < 1e-4);
+        assert!((bpb - std::f64::consts::LOG2_E).abs() < 1e-4);
 
         // Another test
         let bpb2 = bpb_from_loss(2.0);
@@ -551,7 +547,7 @@ mod tests {
     #[test]
     fn test_train_cpu_loop_fast() {
         let mut config = TrainConfig::default();
-        config.max_steps = 10;  // Fast test (runs steps 0-9)
+        config.max_steps = 10; // Fast test (runs steps 0-9)
         config.log_every = 5;
 
         let metrics = train_cpu_loop(&config, 1000);

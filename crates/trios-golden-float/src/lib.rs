@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_phi_constant() {
-        const PHI: f64 = 1.6180339887498948482;
+        const PHI: f64 = 1.618033988749894;
         assert!((PHI - 1.618033988749895).abs() < 1e-9);
     }
 

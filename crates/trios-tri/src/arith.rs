@@ -234,8 +234,6 @@ mod tests {
 
     #[test]
     fn test_ops_traits() {
-        use std::ops::{Add, Mul, Neg, Sub};
-
         let a = Ternary::PosOne;
         let b = Ternary::NegOne;
 

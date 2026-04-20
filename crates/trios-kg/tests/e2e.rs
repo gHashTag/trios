@@ -2,7 +2,7 @@
 //!
 //! Tests knowledge graph client operations with mock HTTP responses.
 
-use trios_kg::{Edge, Entity, KgClient, QueryParams, SearchResult};
+use trios_kg::{Edge, Entity, KgClient};
 
 #[test]
 fn kg_client_construction() {
