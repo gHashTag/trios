@@ -2,7 +2,7 @@
 //!
 //! Tests internal module interactions and type consistency.
 
-use trios_kg::{Edge, Entity, KgClient, KgError, QueryParams, SearchResult};
+use trios_kg::{Edge, Entity, KgClient};
 
 #[test]
 fn kg_client_config() {
