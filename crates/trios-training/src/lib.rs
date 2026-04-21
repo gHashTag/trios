@@ -5,6 +5,7 @@ pub mod ca_mask;
 pub mod data;
 pub mod eval;
 pub mod model;
+pub mod muon;
 pub mod phi_schedule;
 pub mod spectral_init;
 pub mod train;
