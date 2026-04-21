@@ -4,7 +4,7 @@
 //!   tri dash sync
 //!   tri dash refresh
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 pub enum DashCmd {
     Sync,

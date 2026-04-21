@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     gh::GhClient,
     lock::LockGuard,
-    table::{parse_table, update_table, TableRow},
+    table::{parse_table, update_table},
 };
 
 /// Report experiment result to issue #143

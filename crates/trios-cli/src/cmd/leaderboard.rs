@@ -4,9 +4,9 @@
 //!   tri leaderboard
 //!   tri leaderboard --agent FOXTROT
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use crate::db::{Entry, Leaderboard};
+use crate::db::Leaderboard;
 
 /// Show leaderboard
 pub fn leaderboard_show(agent_filter: Option<&str>) -> Result<()> {

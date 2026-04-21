@@ -6,8 +6,7 @@
 use anyhow::{Context, Result};
 
 use git2::{
-    Repository, Signature, Time, Oid,
-    Status,
+    Repository, Signature, Oid,
 };
 
 /// Create atomic git commit with staged changes

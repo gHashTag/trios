@@ -43,7 +43,7 @@ pub fn quantum_step(
 ) -> Result<(), String> {
     let expected_len = 2 * (1 << n_qubits);
     if state.len() != expected_len || hamiltonian.len() != expected_len * expected_len {
-        return Err(format!("dimension mismatch"));
+        return Err("dimension mismatch".to_string());
     }
     let rc = unsafe {
         ffi::physics_quantum_step(n_qubits, state.as_mut_ptr(), hamiltonian.as_ptr(), dt)
@@ -51,7 +51,7 @@ pub fn quantum_step(
     if rc == 0 {
         Ok(())
     } else {
-        Err(format!("quantum_step failed with code {rc}"))
+        Err(format!("quantum_step failed with code {}", rc))
     }
 }
 #[cfg(not(has_zig_lib))]
