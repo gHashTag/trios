@@ -1,0 +1,62 @@
+name: Context Guard
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect context shrinkage
+        run: |
+          set -euo pipefail
+          echo "Checking for context shrinkage (L21 violation)..."
+          VIOLATION=0
+          for f in $(git diff --name-only origin/main...HEAD | grep -E 'CONTEXT\.md|TASK\.md|LAWS\.md|CLAUDE\.md|AGENTS\.md'); do
+            if [ ! -f "$f" ]; then
+              echo "::warning file=$f::File was deleted. Check if this is intentional."
+              continue
+            fi
+            added=$(git diff origin/main...HEAD --numstat "$f" 2>/dev/null | awk '{print $1}' || echo "0")
+            removed=$(git diff origin/main...HEAD --numstat "$f" 2>/dev/null | awk '{print $2}' || echo "0")
+            added=${added:-0}
+            removed=${removed:-0}
+            echo "  $f: +$added -$removed"
+            if [ "$removed" -gt "$((added + 50))" ]; then
+              echo "::error file=$f::Context shrinkage detected: -$removed +$added lines. Constitutional violation L21. Add rationale with L16 tag to proceed."
+              VIOLATION=1
+            fi
+          done
+          if [ "$VIOLATION" -eq 1 ]; then
+            echo ""
+            echo "FAIL: Context shrinkage detected. See L21 and L16 in CLAUDE.md."
+            echo "To override: add 'L16 rationale: <reason>' to your commit message."
+            exit 1
+          fi
+          echo "PASS: No context shrinkage detected."
+
+      - name: Check schema-response parity (L22)
+        run: |
+          set -euo pipefail
+          echo "Checking for outputSchema without response.data (L22 violation)..."
+          VIOLATION=0
+          # Check BrowserOS tools
+          for f in $(find . -path '*/tools/git/*.ts' -o -path '*/tools/*.ts' 2>/dev/null | grep -v node_modules); do
+            if grep -q 'output:' "$f" && grep -q 'z\.object\|outputSchema' "$f"; then
+              if ! grep -q 'response\.data(' "$f"; then
+                echo "::error file=$f::Tool has output schema but no response.data() call. L22 violation."
+                VIOLATION=1
+              fi
+            fi
+          done
+          if [ "$VIOLATION" -eq 1 ]; then
+            echo ""
+            echo "FAIL: Schema-response parity violation. See L22 in CLAUDE.md."
+            exit 1
+          fi
+          echo "PASS: All tools with output schemas call response.data()."
