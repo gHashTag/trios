@@ -12,10 +12,13 @@ use trios_cli::{
         dash::{dash_refresh, dash_sync},
         gates::{gate_check, GateStatus},
         issue::{issue_close, issue_new},
+        lang::run as lang_run,
         leaderboard::leaderboard_show,
         report::report,
         roster::roster_update,
+        railway::{run as railway_run, RailwayCommand},
         run::run,
+        status::run as status_run,
         sweep::sweep,
         submit::submit,
     },
@@ -100,6 +103,23 @@ enum Cmd {
     Commit {
         msg: String,
     },
+
+    /// Railway deployment
+    Railway {
+        #[command(subcommand)]
+        sub: RailwayCommand,
+    },
+
+    /// Language mode (ru/en)
+    Lang {
+        lang: String,
+    },
+
+    /// Show loop status
+    Status {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -167,6 +187,15 @@ fn main() -> Result<()> {
         }
         Cmd::Commit { msg } => {
             commit(&msg)?;
+        }
+        Cmd::Railway { sub } => {
+            railway_run(sub)?;
+        }
+        Cmd::Lang { lang } => {
+            lang_run(trios_cli::cmd::lang::LangCmd { lang })?;
+        }
+        Cmd::Status { json } => {
+            status_run(trios_cli::cmd::status::StatusCmd { json })?;
         }
     }
     Ok(())
