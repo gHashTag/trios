@@ -42,6 +42,7 @@ pub mod protocol;
 pub mod server;
 pub mod router;
 pub mod github;
+pub mod relay;
 
 pub use protocol::{
     AgentId, AgentIdOrBroadcast, AgentState, AgentStatus, AgentEvent,
