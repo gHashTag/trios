@@ -51,8 +51,17 @@ fn main() -> Result<()> {
                 lr
             );
         }
+
+        if step % 500 == 0 {
+            if let Err(e) = audit.dump_metric("metric.json") {
+                tracing::warn!("metric dump failed at step {}: {}", step, e);
+            } else {
+                tracing::info!("metric.json written at step {}", step);
+            }
+        }
     }
 
+    audit.dump_metric("metric.json")?;
     let json = audit.to_json();
     println!("{}", json);
 
