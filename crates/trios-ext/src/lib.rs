@@ -7,11 +7,12 @@ pub mod mcp;
 pub mod app;
 
 use app::App;
+use dioxus_web::Config;
 
 #[wasm_bindgen(start)]
 pub fn run() {
     // Launch Dioxus app for web target
-    dioxus_web::launch::launch(App);
+    dioxus_web::launch(App, &Config::default());
 }
 
 #[cfg(test)]
