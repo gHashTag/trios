@@ -2,7 +2,7 @@
 //!
 //! Minimal working trainer for Phase A/B hyperparameter sweeps
 
-use crate::backward::{cross_entropy_loss, clip_gradients};
+use crate::backward::{cross_entropy_loss};
 use crate::real_igla_model::RealIglaModel;
 use crate::optimizer::AdamWCpu;
 use serde::{Deserialize, Serialize};
