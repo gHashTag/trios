@@ -20,7 +20,7 @@ pub fn parse_table(markdown: &str) -> Result<Vec<TableRow>> {
         .skip(1) // header
         .skip_while(|l| l.contains("---"))
         .take_while(|l| l.starts_with("|"))
-        .filter_map(|l| parse_row(l))
+        .filter_map(parse_row)
         .collect();
     
     Ok(rows)

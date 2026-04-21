@@ -4,7 +4,7 @@
 //!   tri leaderboard
 //!   tri leaderboard --agent FOXTROT
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::db::Leaderboard;
 

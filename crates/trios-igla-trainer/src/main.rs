@@ -1,14 +1,62 @@
 use anyhow::Result;
+use clap::Parser;
 use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
+
+#[derive(Parser)]
+#[command(name = "igla-trainer")]
+struct Args {
+    #[arg(long, default_value = "igla-gf16")]
+    model_id: String,
+
+    #[arg(long, default_value_t = 1000)]
+    steps: u64,
+
+    #[arg(long, default_value_t = 4)]
+    batch_size: usize,
+
+    #[arg(long, default_value_t = 128)]
+    seq_len: usize,
+
+    #[arg(long, default_value = "flat3e4")]
+    schedule: String,
+
+    #[arg(long, default_value_t = 42)]
+    seed: u64,
+
+    #[arg(long)]
+    exp_id: Option<String>,
+
+    #[arg(long, default_value = "gHashTag/trios")]
+    repo: String,
+
+    #[arg(long, default_value = "main")]
+    branch: String,
+}
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let config = TrainConfig::default();
-    let schedule = match config.schedule {
-        trios_igla_trainer::config::ScheduleType::Flat3e4 => Schedule::Flat3e4,
-        trios_igla_trainer::config::ScheduleType::Cosine => Schedule::Cosine,
-        trios_igla_trainer::config::ScheduleType::PhiWarmup => Schedule::PhiWarmup,
+    let args = Args::parse();
+
+    let schedule = match args.schedule.as_str() {
+        "cosine" => Schedule::Cosine,
+        "phi" => Schedule::PhiWarmup,
+        _ => Schedule::Flat3e4,
+    };
+
+    let config = TrainConfig {
+        model_id: args.model_id.clone(),
+        steps: args.steps,
+        batch_size: args.batch_size,
+        seq_len: args.seq_len,
+        schedule: match args.schedule.as_str() {
+            "cosine" => trios_igla_trainer::config::ScheduleType::Cosine,
+            "phi" => trios_igla_trainer::config::ScheduleType::PhiWarmup,
+            _ => trios_igla_trainer::config::ScheduleType::Flat3e4,
+        },
+        seed: args.seed,
+        repo: args.repo,
+        branch: args.branch,
     };
 
     let git_sha = std::process::Command::new("git")
@@ -64,6 +112,36 @@ fn main() -> Result<()> {
     audit.dump_metric("metric.json")?;
     let json = audit.to_json();
     println!("{}", json);
+
+    // L7: Write experience log
+    write_experience_log(&args.exp_id, &args.model_id, args.seed, &json)?;
+
+    Ok(())
+}
+
+fn write_experience_log(exp_id: &Option<String>, model_id: &str, seed: u64, result_json: &str) -> Result<()> {
+    use std::fs;
+    use std::io::Write;
+
+    let exp_name = exp_id.as_deref().unwrap_or("training");
+    let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+
+    let entry = format!(
+        "[{}] TASK: {} | model={} | seed={} | result={}\n",
+        timestamp, exp_name, model_id, seed, result_json
+    );
+
+    let dir = ".trinity/experience";
+    fs::create_dir_all(dir)?;
+
+    let filename = format!("{}/trios_{}.trinity", dir, chrono::Utc::now().format("%Y%m%d"));
+    fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&filename)?
+        .write_all(entry.as_bytes())?;
+
+    tracing::info!("Experience logged to {}", filename);
 
     Ok(())
 }

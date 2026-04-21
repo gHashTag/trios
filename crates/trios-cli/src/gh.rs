@@ -9,6 +9,7 @@ pub struct AgentIssue {
 }
 
 /// GitHub CLI wrapper
+#[derive(Default)]
 pub struct GhClient;
 
 impl GhClient {

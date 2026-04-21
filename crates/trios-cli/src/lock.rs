@@ -1,34 +1,43 @@
-//! File locking for issue #143 race condition prevention
-//!
-//! Uses `.trinity/tri.lock` to prevent concurrent updates
-//! to the #143 table from multiple agents.
-
 use anyhow::{Context, Result};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
 use libc::kill;
 
-const LOCK_FILE: &str = ".trinity/tri.lock";
-const LOCK_TIMEOUT_MS: u128 = 30000; // 30 seconds
+const LOCK_TIMEOUT_MS: u128 = 30000;
 
-/// Acquire file lock for #143 updates
+pub fn lock_file_path() -> PathBuf {
+    let mut path = std::env::current_dir().unwrap_or_else(|_| ".".into());
+    loop {
+        let candidate = path.join(".trinity");
+        if candidate.exists() {
+            return candidate.join("tri.lock");
+        }
+        if !path.pop() {
+            break;
+        }
+    }
+    PathBuf::from(".trinity/tri.lock")
+}
+
 pub struct LockGuard {
     _file: File,
+    lock_path: PathBuf,
 }
 
 impl LockGuard {
-    /// Acquire lock with timeout
-    ///
-    /// Creates lock file with PID. Waits up to LOCK_TIMEOUT_MS
-    /// if lock is held by another process.
     pub fn acquire() -> Result<Self> {
         let start = std::time::Instant::now();
+        let lock_path = lock_file_path();
+
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
 
         loop {
-            match Self::try_acquire() {
+            match Self::try_acquire(&lock_path) {
                 Ok(guard) => return Ok(guard),
                 Err(e) => {
                     if start.elapsed().as_millis() > LOCK_TIMEOUT_MS {
@@ -39,11 +48,9 @@ impl LockGuard {
                         );
                     }
 
-                    // Check if lock is stale (PID no longer running)
-                    if let Ok(stale) = Self::is_lock_stale() {
+                    if let Ok(stale) = Self::is_lock_stale(&lock_path) {
                         if stale {
-                            println!("Lock is stale, removing...");
-                            fs::remove_file(LOCK_FILE).ok();
+                            fs::remove_file(&lock_path).ok();
                             continue;
                         }
                     }
@@ -54,56 +61,52 @@ impl LockGuard {
         }
     }
 
-    /// Try to acquire lock without waiting
-    fn try_acquire() -> Result<Self> {
-        let path = Path::new(LOCK_FILE);
-
+    fn try_acquire(lock_path: &Path) -> Result<Self> {
         let mut file = OpenOptions::new()
             .write(true)
-            .create_new(true) // Fails if exists
-            .open(&path)
+            .create_new(true)
+            .open(lock_path)
             .context("Failed to create lock file")?;
 
-        // Write our PID
         let pid = std::process::id();
         writeln!(file, "{}", pid)?;
 
-        Ok(LockGuard { _file: file })
+        Ok(LockGuard {
+            _file: file,
+            lock_path: lock_path.to_path_buf(),
+        })
     }
 
-    /// Check if lock file is stale (PID not running)
-    fn is_lock_stale() -> Result<bool> {
-        let content = fs::read_to_string(LOCK_FILE)?;
-        let pid: u32 = content.trim().parse()
+    fn is_lock_stale(lock_path: &Path) -> Result<bool> {
+        let content = fs::read_to_string(lock_path)?;
+        let pid: u32 = content
+            .trim()
+            .parse()
             .context("Failed to parse lock PID")?;
 
-        // Try to send signal 0 to check if process exists
-        // This doesn't kill the process, just checks
         #[cfg(unix)]
         {
             if unsafe { kill(pid as i32, 0) } == 0 {
-                return Ok(false); // Process exists
+                return Ok(false);
             }
-            return Ok(true); // Process doesn't exist
+            Ok(true)
         }
 
         #[cfg(not(unix))]
         {
-            // On non-unix, assume stale if lock is old
-            let metadata = fs::metadata(LOCK_FILE)?;
-            let age = metadata.modified()?
+            let metadata = fs::metadata(lock_path)?;
+            let age = metadata
+                .modified()?
                 .elapsed()
                 .context("Failed to get lock age")?;
-
-            Ok(age.as_secs() > 3600) // 1 hour stale threshold
+            Ok(age.as_secs() > 3600)
         }
     }
 }
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        // Release lock by removing file
-        fs::remove_file(LOCK_FILE).ok();
+        fs::remove_file(&self.lock_path).ok();
     }
 }
 
@@ -114,11 +117,10 @@ mod tests {
     #[test]
     fn test_lock_guard() {
         let guard1 = LockGuard::acquire().unwrap();
-        let lock_file = Path::new(LOCK_FILE);
-        assert!(lock_file.exists());
+        let lp = lock_file_path();
+        assert!(lp.exists());
 
-        // Second acquire should wait (we won't actually test timeout)
         drop(guard1);
-        assert!(!lock_file.exists());
+        assert!(!lp.exists());
     }
 }
