@@ -151,16 +151,10 @@ pub fn brain_clear() {
 mod tests {
     use super::*;
 
-    /// Setup: clear brain before each test
-    fn setup() {
-        brain_clear();
-    }
-
     #[test]
     fn test_remember_and_recall() {
-        setup();
-
-        let key = "test_key";
+        let key = "test_recall_7d2e";
+        brain_forget(key).ok();
         let value = b"hello world";
 
         brain_remember(key, value).unwrap();
@@ -171,9 +165,8 @@ mod tests {
 
     #[test]
     fn test_overwrite() {
-        setup();
-
-        let key = "overwrite_key";
+        let key = "test_overwrite_3b1f";
+        brain_forget(key).ok();
 
         brain_remember(key, b"original").unwrap();
         brain_remember(key, b"updated").unwrap();
@@ -184,16 +177,12 @@ mod tests {
 
     #[test]
     fn test_missing_key() {
-        setup();
-
-        let result = brain_recall("nonexistent_key");
+        let result = brain_recall("nonexistent_key_9a4c");
         assert_eq!(result, Err(BrainError::KeyNotFound));
     }
 
     #[test]
     fn test_invalid_key() {
-        setup();
-
         let empty_result = brain_remember("", b"value");
         assert_eq!(empty_result, Err(BrainError::InvalidKey));
 
@@ -203,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_forget() {
-        let key = "test_forget_unique_key_5f8a";
+        let key = "test_forget_5f8a";
         brain_forget(key).ok();
         brain_remember(key, b"value").unwrap();
 
@@ -216,38 +205,42 @@ mod tests {
 
     #[test]
     fn test_forget_nonexistent() {
-        setup();
-
-        let removed = brain_forget("nonexistent").unwrap();
+        let removed = brain_forget("nonexistent_2e7d").unwrap();
         assert!(!removed);
     }
 
     #[test]
     fn test_count() {
-        setup();
+        let k1 = "test_count_a1b2";
+        let k2 = "test_count_c3d4";
+        brain_forget(k1).ok();
+        brain_forget(k2).ok();
 
-        assert_eq!(brain_count(), 0);
+        let before = brain_count();
 
-        brain_remember("key1", b"value1").unwrap();
-        brain_remember("key2", b"value2").unwrap();
+        brain_remember(k1, b"value1").unwrap();
+        brain_remember(k2, b"value2").unwrap();
 
-        assert_eq!(brain_count(), 2);
+        assert_eq!(brain_count(), before + 2);
 
-        brain_forget("key1").unwrap();
+        brain_forget(k1).unwrap();
 
-        assert_eq!(brain_count(), 1);
+        assert_eq!(brain_count(), before + 1);
+
+        brain_forget(k2).ok();
     }
 
     #[test]
     fn test_binary_data() {
-        setup();
-
+        let key = "test_binary_8f3a";
+        brain_forget(key).ok();
         let binary_data: Vec<u8> = (0..256).map(|i| i as u8).collect();
 
-        brain_remember("binary", &binary_data).unwrap();
-        let recalled = brain_recall("binary").unwrap();
+        brain_remember(key, &binary_data).unwrap();
+        let recalled = brain_recall(key).unwrap();
 
         assert_eq!(recalled, binary_data);
         assert_eq!(recalled.len(), 256);
+        brain_forget(key).ok();
     }
 }
