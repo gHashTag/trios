@@ -120,35 +120,36 @@ impl CometBridge {
     fn connect_ws(&self, ws: &WebSocket) -> Result<(), JsValue> {
         log::info!("Connecting to WebSocket: {}", TRIOS_WS_URL);
 
-        // Store closures in a Vec to prevent garbage collection
-        let mut closures: Vec<Box<dyn Fn()>> = Vec::new();
-
-        let onopen_closure: Box<dyn Fn()> = Box::new({
+        // Closure for onopen event
+        let onopen_closure: Closure::<dyn Fn()> = Closure::new({
             log::info!("WebSocket connected");
             let _ = dom::set_status("Connected to trios-server via Comet");
             self.notify_chrome("bridge:connected", json!({ "status": "connected" }));
         });
 
-        let onerror_closure: Box<dyn Fn()> = Box::new({
+        // Closure for onerror event
+        let onerror_closure: Closure::<dyn Fn()> = Closure::new({
             log::error!("WebSocket error");
             let _ = dom::set_status("WebSocket error — reconnecting...");
             self.notify_chrome("bridge:error", json!({ "error": "connection_failed" }));
         });
 
-        let onclose_closure: Box<dyn Fn()> = Box::new({
+        // Closure for onclose event
+        let onclose_closure: Closure::<dyn Fn()> = Closure::new({
             log::warn!("WebSocket closed");
             let _ = dom::set_status("Disconnected from trios-server");
             self.notify_chrome("bridge:disconnected", json!({ "status": "disconnected" }));
             self.ws = None;
         });
 
-        let onmessage_closure: Box<dyn Fn(MessageEvent)> = Box::new({
-            let bridge_clone = std::rc::Rc::new(*self);
+        // Closure for onmessage event - needs to handle MessageEvent
+        let onmessage_closure: Closure::<dyn Fn(MessageEvent)> = Closure::new({
+            let bridge_ref = std::rc::Rc::new(*self);
             move |ev: MessageEvent| {
                 if let Ok(txt) = ev.data().dyn_into::<js_sys::JsString>() {
                     let text: String = txt.into();
                     match Envelope::from_json(&text) {
-                        Ok(envelope) => bridge_clone.process_envelope(envelope),
+                        Ok(envelope) => bridge_ref.process_envelope(envelope),
                         Err(e) => {
                             log::error!("Failed to parse envelope: {:?}", e);
                             log::error!("Raw message: {}", text);
@@ -162,15 +163,6 @@ impl CometBridge {
         ws.set_onerror(Some(onerror_closure.as_ref().unchecked_ref()));
         ws.set_onclose(Some(onclose_closure.as_ref().unchecked_ref()));
         ws.set_onmessage(Some(onmessage_closure.as_ref().unchecked_ref()));
-
-        // Keep closures alive
-        closures.push(onopen_closure);
-        closures.push(onerror_closure);
-        closures.push(onclose_closure);
-        closures.push(onmessage_closure);
-
-        // Store WebSocket reference
-        self.ws = Some(ws);
 
         Ok(())
     }
@@ -216,7 +208,7 @@ impl CometBridge {
         let on_connect = js_sys::Reflect::get(&runtime, &JsValue::from_str("onConnect"))?;
 
         let bridge_rc = std::rc::Rc::new(*self);
-        let closure: Box<dyn Fn(JsValue)> = Box::new(move |port: JsValue| {
+        let onconnect_closure: Closure<dyn Fn(JsValue)> = Closure::new(move |port: JsValue| {
             log::info!("Chrome runtime port connected");
             bridge_rc.handle_chrome_port_connected(port);
         });
@@ -224,10 +216,9 @@ impl CometBridge {
         let add_listener = js_sys::Reflect::get(&on_connect, &JsValue::from_str("addListener"))?;
 
         let args = Array::new();
-        args.push(closure.as_ref());
+        args.push(onconnect_closure.as_ref());
         let _ = js_sys::Function::from(add_listener).apply(&on_connect, &args);
 
-        // Note: we don't forget the closure to keep the listener alive
         Ok(())
     }
 
@@ -241,7 +232,7 @@ impl CometBridge {
 
         if let Some(on_msg) = on_message {
             let bridge_rc = std::rc::Rc::new(*self);
-            let closure: Box<dyn Fn(JsValue, JsValue)> = Box::new(move |_sender, message| {
+            let onmessage_closure: Closure<dyn Fn(JsValue, JsValue)> = Closure::new(move |_sender, message| {
                 bridge_rc.handle_chrome_message(message);
             });
 
@@ -249,7 +240,7 @@ impl CometBridge {
 
             if let Some(add) = add_listener {
                 let args = Array::new();
-                args.push(closure.as_ref());
+                args.push(onmessage_closure.as_ref());
                 let _ = js_sys::Function::from(add).apply(&on_msg, &args);
             }
         }
