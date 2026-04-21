@@ -32,11 +32,7 @@ impl LockGuard {
                 Ok(guard) => return Ok(guard),
                 Err(e) => {
                     if start.elapsed().as_millis() > LOCK_TIMEOUT_MS {
-                        anyhow::bail!(
-                            "Failed to acquire lock after {}ms: {}",
-                            LOCK_TIMEOUT_MS,
-                            e
-                        );
+                        anyhow::bail!("Failed to acquire lock after {}ms: {}", LOCK_TIMEOUT_MS, e);
                     }
 
                     // Check if lock is stale (PID no longer running)
@@ -61,7 +57,7 @@ impl LockGuard {
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true) // Fails if exists
-            .open(&path)
+            .open(path)
             .context("Failed to create lock file")?;
 
         // Write our PID
@@ -74,8 +70,7 @@ impl LockGuard {
     /// Check if lock file is stale (PID not running)
     fn is_lock_stale() -> Result<bool> {
         let content = fs::read_to_string(LOCK_FILE)?;
-        let pid: u32 = content.trim().parse()
-            .context("Failed to parse lock PID")?;
+        let pid: u32 = content.trim().parse().context("Failed to parse lock PID")?;
 
         // Try to send signal 0 to check if process exists
         // This doesn't kill the process, just checks
@@ -84,14 +79,15 @@ impl LockGuard {
             if unsafe { kill(pid as i32, 0) } == 0 {
                 return Ok(false); // Process exists
             }
-            return Ok(true); // Process doesn't exist
+            Ok(true)
         }
 
         #[cfg(not(unix))]
         {
             // On non-unix, assume stale if lock is old
             let metadata = fs::metadata(LOCK_FILE)?;
-            let age = metadata.modified()?
+            let age = metadata
+                .modified()?
                 .elapsed()
                 .context("Failed to get lock age")?;
 

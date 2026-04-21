@@ -3,7 +3,7 @@
 //! Local persistent storage for experiment results.
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params, Row};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -35,8 +35,7 @@ impl Leaderboard {
             std::fs::create_dir_all(parent)?;
         }
 
-        let db = Connection::open(&path)
-            .context("Failed to open leaderboard DB")?;
+        let db = Connection::open(&path).context("Failed to open leaderboard DB")?;
 
         // Create table if not exists
         db.execute(
@@ -56,11 +55,17 @@ impl Leaderboard {
         .context("Failed to create leaderboard table")?;
 
         // Create indexes for common queries
-        db.execute("CREATE INDEX IF NOT EXISTS idx_val_bpb ON leaderboard(val_bpb)", [])
-            .context("Failed to create val_bpb index")?;
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_val_bpb ON leaderboard(val_bpb)",
+            [],
+        )
+        .context("Failed to create val_bpb index")?;
 
-        db.execute("CREATE INDEX IF NOT EXISTS idx_agent ON leaderboard(agent)", [])
-            .context("Failed to create agent index")?;
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agent ON leaderboard(agent)",
+            [],
+        )
+        .context("Failed to create agent index")?;
 
         Ok(Self { db })
     }
@@ -173,27 +178,30 @@ impl Leaderboard {
 
     /// Delete entry
     pub fn delete(&self, exp_id: &str) -> Result<()> {
-        self.db.execute("DELETE FROM leaderboard WHERE exp_id = ?1", params![exp_id])?;
+        self.db
+            .execute("DELETE FROM leaderboard WHERE exp_id = ?1", params![exp_id])?;
         Ok(())
     }
 
     /// Get stats
     pub fn stats(&self) -> Result<Stats> {
-        let count: i64 = self.db.query_row("SELECT COUNT(*) FROM leaderboard", [], |r| r.get(0))?;
+        let count: i64 = self
+            .db
+            .query_row("SELECT COUNT(*) FROM leaderboard", [], |r| r.get(0))?;
 
-        let min_bpb: f64 = self.db.query_row(
-            "SELECT MIN(val_bpb) FROM leaderboard",
-            [],
-            |r| r.get(0),
-        )?;
+        let min_bpb: f64 = self
+            .db
+            .query_row("SELECT MIN(val_bpb) FROM leaderboard", [], |r| r.get(0))?;
 
-        let avg_bpb: f64 = self.db.query_row(
-            "SELECT AVG(val_bpb) FROM leaderboard",
-            [],
-            |r| r.get(0),
-        )?;
+        let avg_bpb: f64 = self
+            .db
+            .query_row("SELECT AVG(val_bpb) FROM leaderboard", [], |r| r.get(0))?;
 
-        Ok(Stats { count, min_bpb, avg_bpb })
+        Ok(Stats {
+            count,
+            min_bpb,
+            avg_bpb,
+        })
     }
 }
 

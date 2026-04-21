@@ -20,9 +20,9 @@ pub fn parse_table(markdown: &str) -> Result<Vec<TableRow>> {
         .skip(1) // header
         .skip_while(|l| l.contains("---"))
         .take_while(|l| l.starts_with("|"))
-        .filter_map(|l| parse_row(l))
+        .filter_map(parse_row)
         .collect();
-    
+
     Ok(rows)
 }
 
@@ -33,7 +33,7 @@ fn parse_row(line: &str) -> Option<TableRow> {
         .split('|')
         .map(|s| s.trim())
         .collect();
-    
+
     if cells.len() < 5 {
         return None;
     }
@@ -51,10 +51,10 @@ fn parse_row(line: &str) -> Option<TableRow> {
 pub fn update_table(markdown: &str, agent: &str, status: &str, bpb: Option<f64>) -> Result<String> {
     let lines: Vec<&str> = markdown.lines().collect();
     let mut output = String::new();
-    
+
     let mut in_table = false;
     let mut header_found = false;
-    
+
     for line in &lines {
         if line.contains("Task") && !header_found {
             in_table = true;
@@ -63,13 +63,13 @@ pub fn update_table(markdown: &str, agent: &str, status: &str, bpb: Option<f64>)
             output.push('\n');
             continue;
         }
-        
+
         if line.contains("---") {
             output.push_str(line);
             output.push('\n');
             continue;
         }
-        
+
         if in_table && line.starts_with("|") {
             if let Some(row) = parse_row(line) {
                 if row.agent == agent {
@@ -82,11 +82,11 @@ pub fn update_table(markdown: &str, agent: &str, status: &str, bpb: Option<f64>)
         } else if in_table && !line.starts_with("|") {
             in_table = false;
         }
-        
+
         output.push_str(line);
         output.push('\n');
     }
-    
+
     Ok(output)
 }
 
@@ -96,7 +96,8 @@ fn render_row(task: &str, agent: &str, status: &str, bpb: Option<f64>, ref_issue
         task,
         agent,
         status,
-        bpb.map(|b| b.to_string()).unwrap_or_else(|| "—".to_string()),
+        bpb.map(|b| b.to_string())
+            .unwrap_or_else(|| "—".to_string()),
         ref_issue
     )
 }

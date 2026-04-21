@@ -12,7 +12,7 @@ use crate::config::Config;
 pub fn agent_dispatch(nato: &str, task: &str) -> Result<()> {
     println!("🤖 Dispatching to {}: {}", nato, task);
 
-    let config = Config::load();
+    let _config = Config::load();
 
     // Verify agent exists in roster
     let valid_nato = ["ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO"];
@@ -22,14 +22,12 @@ pub fn agent_dispatch(nato: &str, task: &str) -> Result<()> {
 
     // Create task queue file
     let task_dir = ".trinity/tasks";
-    std::fs::create_dir_all(task_dir)
-        .context("Failed to create task directory")?;
+    std::fs::create_dir_all(task_dir).context("Failed to create task directory")?;
 
     let task_file = format!("{}/{}.txt", task_dir, nato.to_lowercase());
     let task_line = format!("{}\n", task);
 
-    std::fs::write(&task_file, task_line)
-        .context("Failed to write task file")?;
+    std::fs::write(&task_file, task_line).context("Failed to write task file")?;
 
     println!("✓ Task queued for {}", nato);
 
@@ -43,7 +41,13 @@ pub fn agent_list(nato: Option<&str>) -> Result<()> {
     let agents = if let Some(n) = nato {
         vec![n.to_string()]
     } else {
-        vec!["alfa".to_string(), "bravo".to_string(), "charlie".to_string(), "delta".to_string(), "echo".to_string()]
+        vec![
+            "alfa".to_string(),
+            "bravo".to_string(),
+            "charlie".to_string(),
+            "delta".to_string(),
+            "echo".to_string(),
+        ]
     };
 
     for agent in agents {

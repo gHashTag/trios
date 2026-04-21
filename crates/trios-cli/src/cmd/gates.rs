@@ -8,11 +8,12 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 
 /// Quality gate thresholds
+#[allow(dead_code)]
 const GATES: &[(&str, f64)] = &[
-    ("bpab_target", 6.0),   // Target BPB for BigramHash(729)
-    ("bpab_max", 8.0),      // Maximum acceptable BPB
+    ("bpab_target", 6.0),        // Target BPB for BigramHash(729)
+    ("bpab_max", 8.0),           // Maximum acceptable BPB
     ("params_max", 1_000_000.0), // Max 1M params
-    ("time_max", 3600.0),   // Max 1 hour training time
+    ("time_max", 3600.0),        // Max 1 hour training time
 ];
 
 /// Check specific gate
@@ -42,7 +43,10 @@ fn check_bpab(value: Option<f64>) -> Result<GateStatus> {
         GateStatus::Fail
     };
 
-    println!("🚦 BPB gate: {} (target={}, max={}) → {:?}", v, target, max, status);
+    println!(
+        "🚦 BPB gate: {} (target={}, max={}) → {:?}",
+        v, target, max, status
+    );
 
     Ok(status)
 }
@@ -82,7 +86,7 @@ fn check_time(value: Option<f64>) -> Result<GateStatus> {
 fn check_all() -> Result<GateStatus> {
     println!("🚦 Checking all gates...");
 
-    let mut results: HashMap<&'static str, GateStatus> = HashMap::new();
+    let _results: HashMap<&'static str, GateStatus> = HashMap::new();
 
     // For now, just check without values (would need to fetch from results)
     println!("  bpab: unknown (target=6.0, max=8.0)");
