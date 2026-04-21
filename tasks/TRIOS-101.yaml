@@ -1,0 +1,31 @@
+id: TRIOS-101
+title: "API key env config for BrowserOS server"
+assignee_pool: [claude-code]
+priority: P0
+estimated_loc: 20
+estimated_minutes: 10
+
+scope:
+  touch_only:
+    - apps/server/.env.development
+    - apps/server/.env.example
+    - apps/server/src/api/types.ts
+  do_not_touch:
+    - crates/**
+    - extension/**
+    - build.rs
+
+depends_on: []
+blocks: [TRIOS-201]
+
+acceptance_criteria:
+  - "grep OPENAI_API_KEY apps/server/.env.example"
+  - "grep ANTHROPIC_API_KEY apps/server/.env.example"
+  - "curl -s -X POST http://127.0.0.1:9105/chat -H 'Content-Type: application/json' -d '{\"conversationId\":\"00000000-0000-0000-0000-000000000001\",\"message\":\"test\",\"model\":\"gpt-4o\",\"provider\":\"openai\"}' | grep -v 'requires apiKey'"
+
+invariants_must_hold_after:
+  - "All INVARIANTS.md checks pass"
+
+deliverable:
+  branch: feat/TRIOS-101-api-key-config
+  pr_title: "feat(server): API key env configuration"

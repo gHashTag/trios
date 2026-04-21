@@ -1,0 +1,30 @@
+id: TRIOS-102
+title: "launchd plist for trios supervisor"
+assignee_pool: [claude-code]
+priority: P1
+estimated_loc: 80
+estimated_minutes: 30
+
+scope:
+  touch_only:
+    - scripts/ai.trios.up.plist
+    - scripts/trios-daemon.sh
+  do_not_touch:
+    - crates/**
+    - extension/**
+
+depends_on: []
+blocks: []
+
+acceptance_criteria:
+  - "test -f scripts/ai.trios.up.plist"
+  - "grep KeepAlive scripts/ai.trios.up.plist"
+  - "grep trios-up scripts/ai.trios.up.plist"
+  - "bash -n scripts/trios-daemon.sh"
+
+invariants_must_hold_after:
+  - "All INVARIANTS.md checks pass"
+
+deliverable:
+  branch: feat/TRIOS-102-launchd-plist
+  pr_title: "feat(infra): launchd plist for trios supervisor"

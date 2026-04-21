@@ -1,0 +1,30 @@
+id: TRIOS-105
+title: "fix blocking compile errors in trios-llm and trios-training-ffi"
+assignee_pool: [claude-code]
+priority: P0
+estimated_loc: 50
+estimated_minutes: 20
+
+scope:
+  touch_only:
+    - crates/trios-llm/Cargo.toml
+    - crates/trios-train-cpu/src/bench.rs
+    - crates/trios-training-ffi/Cargo.toml
+  do_not_touch:
+    - crates/trios-ext/**
+    - extension/**
+
+depends_on: []
+blocks: [TRIOS-103]
+
+acceptance_criteria:
+  - "cargo build -p trios-llm"
+  - "cargo build -p trios-training-ffi"
+  - "cargo build --workspace"
+
+invariants_must_hold_after:
+  - "All INVARIANTS.md checks pass"
+
+deliverable:
+  branch: fix/TRIOS-105-blocking-errors
+  pr_title: "fix: blocking compile errors in trios-llm and trios-training-ffi"
