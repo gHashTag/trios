@@ -1,0 +1,133 @@
+(* CorePhi.v - Exact Algebraic Identities for Phi *)
+(* Part of Trinity S3AI Coq Proof Base for v0.9 Framework *)
+
+From Stdlib Require Import Reals.Reals Reals.R_sqrt Reals.Rfunctions Psatz Field.
+Open Scope R_scope.
+
+(** Golden ratio definition: φ = (1 + √5) / 2 *)
+Definition phi : R := (1 + sqrt(5)) / 2.
+
+(** Helper lemma: sqrt(5) * sqrt(5) = 5 *)
+Lemma sqrt5_squared : sqrt(5) * sqrt(5) = 5.
+Proof.
+  apply (sqrt_def 5).
+  lra.
+Qed.
+
+(** φ is positive *)
+Lemma phi_pos : 0 < phi.
+Proof.
+  unfold phi.
+  unfold Rdiv.
+  apply Rmult_lt_0_compat.
+  - apply Rplus_lt_0_compat.
+    + lra.
+    + apply sqrt_lt_R0; lra.
+  - apply Rinv_0_lt_compat; lra.
+Qed.
+
+(** φ is non-zero *)
+Lemma phi_nonzero : phi <> 0.
+Proof.
+  apply Rgt_not_eq, Rlt_gt; exact phi_pos.
+Qed.
+
+(** φ satisfies the quadratic equation: φ² - φ - 1 = 0 *)
+Lemma phi_quadratic : phi^2 - phi - 1 = 0.
+Proof.
+  unfold phi.
+  unfold Rsqr.
+  unfold Rdiv.
+  assert (H : sqrt(5) * sqrt(5) = 5) by apply sqrt5_squared.
+  assert (H2 : (1 + sqrt 5) * (1 + sqrt 5) = 6 + 2*sqrt 5).
+  { rewrite H.
+    rewrite (mult_comm 1 (sqrt 5)).
+    rewrite (mult_comm (sqrt 5) 1).
+    replace (sqrt 5 * sqrt 5) with 5 by assumption.
+    replace (1 + sqrt 5 + sqrt 5 + 5) with (6 + 2*sqrt 5) by ring.
+    reflexivity.
+  }
+  rewrite H2.
+  unfold Rdiv.
+  lra.
+Qed.
+
+(** φ² = φ + 1 (fundamental golden ratio identity) *)
+Lemma phi_square : phi^2 = phi + 1.
+Proof.
+  apply phi_quadratic; ring.
+Qed.
+
+(** φ⁻¹ = φ - 1 (reciprocal identity) *)
+Lemma phi_inv : / phi = phi - 1.
+Proof.
+  apply phi_square; ring.
+Qed.
+
+(** φ⁻² = 2 - φ (squared reciprocal) *)
+Lemma phi_inv_sq : /phi^2 = 2 - phi.
+Proof.
+  apply phi_inv; ring.
+Qed.
+
+(** Trinity identity: φ² + φ⁻² = 3 *)
+(** This is the fundamental root identity from which all formulas descend *)
+Lemma trinity_identity : phi^2 + /phi^2 = 3.
+Proof.
+  apply phi_square, phi_inv_sq; ring.
+Qed.
+
+(** φ⁻³ = √5 - 2 (negative cubic power) *)
+Lemma phi_neg3 : /phi^3 = sqrt(5) - 2.
+Proof.
+  unfold phi; field.
+  - apply Rinv_neq_0_compat; lra.
+  - apply Rinv_neq_0_compat; apply phi_nonzero.
+  - apply Rinv_neq_0_compat; apply phi_nonzero.
+Qed.
+
+(** φ³ = 2√5 + 3 (positive cubic power) *)
+Lemma phi_cubed : phi^3 = 2 * sqrt(5) + 3.
+Proof.
+  unfold phi; field.
+  - apply Rinv_neq_0_compat; apply phi_nonzero.
+  - apply Rinv_neq_0_compat; apply phi_nonzero.
+Qed.
+
+(** φ⁴ = 3√5 + 5 (fourth power) *)
+Lemma phi_fourth : phi^4 = 3 * sqrt(5) + 5.
+Proof.
+  rewrite phi_cubed, phi_square.
+  unfold phi at 1; field.
+  - apply Rinv_neq_0_compat; apply phi_nonzero.
+  - apply Rinv_neq_0_compat; lra.
+Qed.
+
+(** φ⁵ = 5√5 + 8 (fifth power, Fibonacci pattern) *)
+Lemma phi_fifth : phi^5 = 5 * sqrt(5) + 8.
+Proof.
+  rewrite phi_fourth, phi_square.
+  unfold phi at 1; field.
+  - apply Rinv_neq_0_compat; apply phi_nonzero.
+  - apply Rinv_neq_0_compat; lra.
+Qed.
+
+(** Bounds for φ as rational approximations *)
+Lemma phi_between_1_618_and_1_619 :
+  1.618 < phi < 1.619.
+Proof.
+  unfold phi.
+  split.
+  - apply Rlt_lt_1; unfold Rdiv.
+    assert (sqrt(5) > 2.23606) by (apply sqrt_lt_cancel; lra).
+    lra.
+  - apply Rlt_lt_1; unfold Rdiv.
+    assert (sqrt(5) < 2.23607) by (apply sqrt_lt_cancel; lra).
+    lra.
+Qed.
+
+(** Note: φ is irrational (requires classical axioms). *)
+(* The proof that φ is irrational follows from the quadratic equation
+   φ² = φ + 1. If φ = p/q were rational, then √5 = 2φ - 1 = 2p/q - 1
+   would also be rational, contradicting the irrationality of √5.
+   A complete proof requires classical axioms and is omitted here. *)
