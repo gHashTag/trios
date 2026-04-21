@@ -1,5 +1,6 @@
 //! IGLA-GF16 Training Pipeline for Parameter Golf
 
+pub mod bigram_hash;
 pub mod ca_mask;
 pub mod data;
 pub mod eval;
