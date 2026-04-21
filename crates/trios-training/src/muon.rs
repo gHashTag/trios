@@ -1,4 +1,3 @@
-
 pub struct MuonOptimizer {
     pub momentum: Vec<f32>,
     pub lr: f32,
@@ -55,7 +54,6 @@ impl MuonOptimizer {
             }
         }
 
-
         for (i, p) in params.iter_mut().enumerate() {
             let wd = self.weight_decay * *p;
             *p -= self.lr * orthogonalized[i] + wd;
@@ -87,7 +85,6 @@ mod tests {
         let mut params = vec![0.0, 0.0, 0.0, 0.0];
         let grads = vec![1.0, -0.5, 0.3, -0.2];
         opt.step(&mut params, &grads);
-        let p1 = params[0].abs();
         opt.step(&mut params, &grads);
         let p2 = params[0].abs();
         assert!(p2 > 0.0, "momentum should produce non-zero update");
