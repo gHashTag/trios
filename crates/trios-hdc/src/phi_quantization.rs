@@ -398,12 +398,13 @@ impl GF16 {
             bytes.push(gf16.bits.to_le_bytes());
         }
 
-        // TODO: Apply zstd-22 compression
-        // For now, just return bytes uncompressed
+        // Apply zstd-22 compression
         let original_size = bytes.len() as f64;
-        let ratio = 1.0; // Placeholder: no compression applied
+        let compressed = zstd::bulk::compress(&bytes, compression_level as i32)
+            .map_err(|e| GF16Error::CompressionError(e.to_string()))?;
+        let ratio = original_size / compressed.len() as f64;
 
-        Ok((bytes, ratio))
+        Ok((compressed, ratio))
     }
 
 /// Calculate GF16 model size in MB.
@@ -453,7 +454,10 @@ mod tests {
         // GF16 16-bit, int6 6-bit
         // Ratio = 16 / 6 = 2.67x worse if used naively
         // But with log-normal encoding and zstd-22, we expect ~1.2x better
-        // This is a placeholder test
+        let gf16 = vec![GF16::from_f32(1.0), GF16::from_f32(1.618), GF16::from_f32(2.718)];
+        let (compressed, ratio) = compress_zstd22(&gf16, 22).unwrap();
+        assert!(ratio >= 1.0, "Compression ratio should be >= 1.0, got {}", ratio);
+        assert!(!compressed.is_empty(), "Compressed output should not be empty");
     }
 
     #[test]

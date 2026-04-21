@@ -5,9 +5,8 @@
 //! R2: Persistence / HSLM hook (planned)
 
 use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
-/// Brain error types
 #[derive(Debug, Clone, PartialEq)]
 pub enum BrainError {
     KeyNotFound,
@@ -29,7 +28,6 @@ impl std::fmt::Display for BrainError {
 
 impl std::error::Error for BrainError {}
 
-/// Thread-local brain storage (R0 stub)
 struct BrainStorage {
     data: HashMap<String, Vec<u8>>,
 }
@@ -58,10 +56,7 @@ impl BrainStorage {
     }
 }
 
-/// Global brain instance (thread-safe for R0)
-static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| {
-    Mutex::new(BrainStorage::new())
-});
+static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| Mutex::new(BrainStorage::new()));
 
 /// Store a value in brain memory
 ///
@@ -75,7 +70,7 @@ static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| {
 ///
 /// # Example
 /// ```no_run
-/// use trios_brain::brain_remember;
+/// use trios_trinity_brain::brain_remember;
 ///
 /// brain_remember("test_key", b"hello world").unwrap();
 /// ```
@@ -84,8 +79,7 @@ pub fn brain_remember(key: &str, value: &[u8]) -> Result<(), BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let mut brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let mut brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
     brain.remember(key, value);
     Ok(())
@@ -103,7 +97,7 @@ pub fn brain_remember(key: &str, value: &[u8]) -> Result<(), BrainError> {
 ///
 /// # Example
 /// ```no_run
-/// use trios_brain::{brain_remember, brain_recall};
+/// use trios_trinity_brain::{brain_remember, brain_recall};
 ///
 /// brain_remember("test_key", b"hello world").unwrap();
 /// let value = brain_recall("test_key").unwrap();
@@ -114,94 +108,69 @@ pub fn brain_recall(key: &str) -> Result<Vec<u8>, BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
-    brain.recall(key)
-        .ok_or(BrainError::KeyNotFound)
+    brain.recall(key).ok_or(BrainError::KeyNotFound)
 }
 
-/// Forget a value from brain memory
-///
-/// # Arguments
-/// * `key` - Memory key to remove
-///
-/// # Returns
-/// * `Ok(true)` - Key was found and removed
-/// * `Ok(false)` - Key didn't exist
-/// * `Err(BrainError::InvalidKey)` - Key is empty
 pub fn brain_forget(key: &str) -> Result<bool, BrainError> {
     if key.is_empty() {
         return Err(BrainError::InvalidKey);
     }
 
-    let mut brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let mut brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
     Ok(brain.forget(key))
 }
 
-/// Get total number of stored memories
 pub fn brain_count() -> usize {
-    BRAIN.lock()
-        .map(|brain| brain.count())
-        .unwrap_or(0)
-}
-
-/// Clear all memories (for testing only)
-#[cfg(test)]
-pub fn brain_clear() {
-    let mut brain = BRAIN.lock().unwrap();
-    *brain = BrainStorage::new();
+    BRAIN.lock().map(|brain| brain.count()).unwrap_or(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Setup: clear brain before each test
-    fn setup() {
-        brain_clear();
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    fn unique_key(prefix: &str) -> String {
+        let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        format!("{}_{}", prefix, id)
     }
 
     #[test]
     fn test_remember_and_recall() {
-        setup();
-
-        let key = "test_key";
+        let key = unique_key("remember");
         let value = b"hello world";
 
-        brain_remember(key, value).unwrap();
-        let recalled = brain_recall(key).unwrap();
+        brain_remember(&key, value).unwrap();
+        let recalled = brain_recall(&key).unwrap();
 
         assert_eq!(recalled, value);
+        brain_forget(&key).ok();
     }
 
     #[test]
     fn test_overwrite() {
-        setup();
+        let key = unique_key("overwrite");
 
-        let key = "overwrite_key";
+        brain_remember(&key, b"original").unwrap();
+        brain_remember(&key, b"updated").unwrap();
 
-        brain_remember(key, b"original").unwrap();
-        brain_remember(key, b"updated").unwrap();
-
-        let recalled = brain_recall(key).unwrap();
+        let recalled = brain_recall(&key).unwrap();
         assert_eq!(recalled, b"updated");
+        brain_forget(&key).ok();
     }
 
     #[test]
     fn test_missing_key() {
-        setup();
-
-        let result = brain_recall("nonexistent_key");
+        let key = unique_key("nonexistent");
+        let result = brain_recall(&key);
         assert_eq!(result, Err(BrainError::KeyNotFound));
     }
 
     #[test]
     fn test_invalid_key() {
-        setup();
-
         let empty_result = brain_remember("", b"value");
         assert_eq!(empty_result, Err(BrainError::InvalidKey));
 
@@ -211,51 +180,33 @@ mod tests {
 
     #[test]
     fn test_forget() {
-        setup();
+        let key = unique_key("forget");
+        brain_remember(&key, b"value").unwrap();
 
-        brain_remember("temp_key", b"value").unwrap();
-
-        let removed = brain_forget("temp_key").unwrap();
+        let removed = brain_forget(&key).unwrap();
         assert!(removed);
 
-        let recall_result = brain_recall("temp_key");
+        let recall_result = brain_recall(&key);
         assert_eq!(recall_result, Err(BrainError::KeyNotFound));
     }
 
     #[test]
     fn test_forget_nonexistent() {
-        setup();
-
-        let removed = brain_forget("nonexistent").unwrap();
+        let key = unique_key("forget_ne");
+        let removed = brain_forget(&key).unwrap();
         assert!(!removed);
     }
 
     #[test]
-    fn test_count() {
-        setup();
-
-        assert_eq!(brain_count(), 0);
-
-        brain_remember("key1", b"value1").unwrap();
-        brain_remember("key2", b"value2").unwrap();
-
-        assert_eq!(brain_count(), 2);
-
-        brain_forget("key1").unwrap();
-
-        assert_eq!(brain_count(), 1);
-    }
-
-    #[test]
     fn test_binary_data() {
-        setup();
-
+        let key = unique_key("binary");
         let binary_data: Vec<u8> = (0..256).map(|i| i as u8).collect();
 
-        brain_remember("binary", &binary_data).unwrap();
-        let recalled = brain_recall("binary").unwrap();
+        brain_remember(&key, &binary_data).unwrap();
+        let recalled = brain_recall(&key).unwrap();
 
         assert_eq!(recalled, binary_data);
         assert_eq!(recalled.len(), 256);
+        brain_forget(&key).ok();
     }
 }

@@ -67,10 +67,10 @@ pub fn run(exp_id: &str, seeds: u32) -> Result<RunResult> {
 
 fn find_trainer() -> Result<PathBuf> {
     let paths = [
-        "target/debug/igla-trainer",
-        "target/release/igla-trainer",
-        "crates/igla-trainer/target/debug/igla-trainer",
-        "crates/igla-trainer/target/release/igla-trainer",
+        "target/debug/trios-igla-trainer",
+        "target/release/trios-igla-trainer",
+        "crates/trios-igla-trainer/target/debug/trios-igla-trainer",
+        "crates/trios-igla-trainer/target/release/trios-igla-trainer",
     ];
 
     for path in paths {
@@ -79,7 +79,7 @@ fn find_trainer() -> Result<PathBuf> {
         }
     }
 
-    anyhow::bail!("Trainer binary not found. Run: cargo build --release -p igla-trainer")
+    anyhow::bail!("Trainer binary not found. Run: cargo build --release -p trios-igla-trainer")
 }
 
 fn parse_bpb(stdout: &str) -> Result<(f64, f64)> {
