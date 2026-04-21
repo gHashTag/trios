@@ -5,7 +5,7 @@
 //! R2: Persistence / HSLM hook (planned)
 
 use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 /// Brain error types
 #[derive(Debug, Clone, PartialEq)]
@@ -59,9 +59,7 @@ impl BrainStorage {
 }
 
 /// Global brain instance (thread-safe for R0)
-static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| {
-    Mutex::new(BrainStorage::new())
-});
+static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| Mutex::new(BrainStorage::new()));
 
 /// Store a value in brain memory
 ///
@@ -84,8 +82,7 @@ pub fn brain_remember(key: &str, value: &[u8]) -> Result<(), BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let mut brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let mut brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
     brain.remember(key, value);
     Ok(())
@@ -114,11 +111,9 @@ pub fn brain_recall(key: &str) -> Result<Vec<u8>, BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
-    brain.recall(key)
-        .ok_or(BrainError::KeyNotFound)
+    brain.recall(key).ok_or(BrainError::KeyNotFound)
 }
 
 /// Forget a value from brain memory
@@ -135,17 +130,14 @@ pub fn brain_forget(key: &str) -> Result<bool, BrainError> {
         return Err(BrainError::InvalidKey);
     }
 
-    let mut brain = BRAIN.lock()
-        .map_err(|_| BrainError::StorageError)?;
+    let mut brain = BRAIN.lock().map_err(|_| BrainError::StorageError)?;
 
     Ok(brain.forget(key))
 }
 
 /// Get total number of stored memories
 pub fn brain_count() -> usize {
-    BRAIN.lock()
-        .map(|brain| brain.count())
-        .unwrap_or(0)
+    BRAIN.lock().map(|brain| brain.count()).unwrap_or(0)
 }
 
 /// Clear all memories (for testing only)
@@ -211,14 +203,14 @@ mod tests {
 
     #[test]
     fn test_forget() {
-        setup();
+        let key = "test_forget_unique_key_5f8a";
+        brain_forget(key).ok();
+        brain_remember(key, b"value").unwrap();
 
-        brain_remember("temp_key", b"value").unwrap();
-
-        let removed = brain_forget("temp_key").unwrap();
+        let removed = brain_forget(key).unwrap();
         assert!(removed);
 
-        let recall_result = brain_recall("temp_key");
+        let recall_result = brain_recall(key);
         assert_eq!(recall_result, Err(BrainError::KeyNotFound));
     }
 
