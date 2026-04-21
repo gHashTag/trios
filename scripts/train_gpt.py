@@ -435,14 +435,16 @@ def save_artifact(model: nn.Module, cfg: Config, path: str = "submit_model.pt"):
 
 # ─── Training Loop ────────────────────────────────────────────────────────────
 
-def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False, save_art: bool = False):
+def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False, save_art: bool = False, force_cpu: bool = False):
     import random
     import numpy as np
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    if torch.cuda.is_available():
+    if force_cpu:
+        device = torch.device("cpu")
+    elif torch.cuda.is_available():
         device = torch.device("cuda")
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = torch.device("mps")
@@ -564,6 +566,7 @@ def main():
     parser.add_argument("--dropout", type=float, default=None)
     parser.add_argument("--activation", choices=["relusq", "swiglu"], default=None, help="Activation function")
     parser.add_argument("--cpu-test", action="store_true", help="Quick CPU validation: batch=4, seq=256, iter=100")
+    parser.add_argument("--cpu", action="store_true", help="Force CPU device")
     parser.add_argument("--save-artifact", action="store_true", help="Save FP16 submission artifact after training")
     parser.add_argument("--preset", choices=["tiny", "small", "medium", "submit"], default=None,
                         help="Model presets: tiny=2L/935K, small=6L/2.7M, medium=10L/4.5M, submit=14L/6.3M")
@@ -612,7 +615,7 @@ def main():
     if args.activation:
         cfg.activation = args.activation
 
-    train(cfg, args.data, args.seed, use_muon=args.muon, save_art=args.save_artifact)
+    train(cfg, args.data, args.seed, use_muon=args.muon, save_art=args.save_artifact, force_cpu=args.cpu)
 
 
 if __name__ == "__main__":

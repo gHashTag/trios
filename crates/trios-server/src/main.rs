@@ -21,6 +21,8 @@ struct McpRequest {
     method: String,
     #[serde(default)]
     params: Option<Value>,
+    #[serde(default)]
+    id: Option<Value>,
 }
 
 #[tokio::main]
@@ -73,15 +75,45 @@ async fn health() -> &'static str {
     "ok"
 }
 
+fn mcp_ok(req: &McpRequest, result: Value) -> Json<Value> {
+    Json(json!({
+        "jsonrpc": "2.0",
+        "result": result,
+        "id": req.id
+    }))
+}
+
+fn mcp_err(req: &McpRequest, code: i32, message: &str) -> Json<Value> {
+    Json(json!({
+        "jsonrpc": "2.0",
+        "error": { "code": code, "message": message },
+        "id": req.id
+    }))
+}
+
 async fn mcp_http_handler(Json(req): Json<McpRequest>) -> Json<Value> {
     match req.method.as_str() {
+        "initialize" => {
+            mcp_ok(&req, json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": { "listChanged": false }
+                },
+                "serverInfo": {
+                    "name": "trios-server",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
+            }))
+        }
+        "notifications/initialized" => {
+            mcp_ok(&req, Value::Null)
+        }
+        "ping" => {
+            mcp_ok(&req, json!({}))
+        }
         "tools/list" => {
             let result = mcp::McpService.list_tools();
-            Json(json!({
-                "jsonrpc": "2.0",
-                "result": result,
-                "id": 1
-            }))
+            mcp_ok(&req, serde_json::to_value(result).unwrap_or_default())
         }
         "tools/call" => {
             let tool_name = req.params
@@ -94,22 +126,16 @@ async fn mcp_http_handler(Json(req): Json<McpRequest>) -> Json<Value> {
                 .and_then(|p| p.get("arguments").cloned())
                 .unwrap_or(json!({}));
             match tools::dispatch(tool_name, tool_input).await {
-                Ok(value) => Json(json!({
-                    "jsonrpc": "2.0",
-                    "result": { "content": [{ "type": "text", "text": serde_json::to_string(&value).unwrap_or_default() }], "isError": false },
-                    "id": 1
+                Ok(value) => mcp_ok(&req, json!({
+                    "content": [{ "type": "text", "text": serde_json::to_string(&value).unwrap_or_default() }],
+                    "isError": false
                 })),
-                Err(e) => Json(json!({
-                    "jsonrpc": "2.0",
-                    "result": { "content": [{ "type": "text", "text": format!("Error: {}", e) }], "isError": true },
-                    "id": 1
+                Err(e) => mcp_ok(&req, json!({
+                    "content": [{ "type": "text", "text": format!("Error: {}", e) }],
+                    "isError": true
                 })),
             }
         }
-        _ => Json(json!({
-            "jsonrpc": "2.0",
-            "error": { "code": -32601, "message": format!("Method not found: {}", req.method) },
-            "id": 1
-        })),
+        _ => mcp_err(&req, -32601, &format!("Method not found: {}", req.method)),
     }
 }
