@@ -189,18 +189,18 @@ impl Leaderboard {
             .db
             .query_row("SELECT COUNT(*) FROM leaderboard", [], |r| r.get(0))?;
 
-        let min_bpb: f64 = self
-            .db
-            .query_row("SELECT MIN(val_bpb) FROM leaderboard", [], |r| r.get(0))?;
+        let min_bpb: Option<f64> =
+            self.db
+                .query_row("SELECT MIN(val_bpb) FROM leaderboard", [], |r| r.get(0))?;
 
-        let avg_bpb: f64 = self
-            .db
-            .query_row("SELECT AVG(val_bpb) FROM leaderboard", [], |r| r.get(0))?;
+        let avg_bpb: Option<f64> =
+            self.db
+                .query_row("SELECT AVG(val_bpb) FROM leaderboard", [], |r| r.get(0))?;
 
         Ok(Stats {
             count,
-            min_bpb,
-            avg_bpb,
+            min_bpb: min_bpb.unwrap_or(0.0),
+            avg_bpb: avg_bpb.unwrap_or(0.0),
         })
     }
 }
