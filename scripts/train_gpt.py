@@ -5,11 +5,14 @@ train_gpt.py — Parameter Golf Submission (Closes #110)
 Byte-level transformer with:
   - RoPE (Rotary Position Embeddings)
   - QK-Norm + RMSNorm
-  - ReLU^2 activation
+  - ReLU^2 or SwiGLU activation
   - Tied embeddings
   - Muon optimizer (Newton-Schulz orthogonalization)
   - EMA weight averaging
   - Sliding-window BPB evaluation
+  - Gradient accumulation via micro-batches
+  - FineWeb-Edu download support
+  - FP16 artifact export for submission
 
 Architecture: Trinity 3^k dimensions
   vocab: 256 (byte-level)
@@ -21,8 +24,10 @@ Architecture: Trinity 3^k dimensions
 """
 
 import argparse
+import json
 import math
 import os
+import struct
 import time
 from typing import Optional
 
@@ -53,14 +58,22 @@ class Config:
     rope_theta: float = 10000.0
     grad_clip: float = 1.0
     dropout: float = 0.0
+    activation: str = "relusq"
 
     @property
     def ff_dim(self):
+        if self.activation == "swiglu":
+            return int(self.d_model * self.ff_mult * 2 / 3)
         return self.d_model * self.ff_mult
 
     def param_count(self):
         em = self.vocab_size * self.d_model
-        per_layer = 4 * self.d_model * self.d_model + 2 * self.d_model * self.ff_dim + 4 * self.d_model
+        ff_weight_count = 3 if self.activation == "swiglu" else 2
+        per_layer = (
+            4 * self.d_model * self.d_model
+            + ff_weight_count * self.d_model * self.ff_dim
+            + 4 * self.d_model
+        )
         return em + self.n_layers * per_layer + self.d_model
 
     def model_size_mb_fp16(self):
@@ -137,10 +150,15 @@ class CausalSelfAttention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
+        self.activation = cfg.activation
         self.w1 = nn.Linear(cfg.d_model, cfg.ff_dim, bias=False)
         self.w2 = nn.Linear(cfg.ff_dim, cfg.d_model, bias=False)
+        if self.activation == "swiglu":
+            self.w3 = nn.Linear(cfg.d_model, cfg.ff_dim, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.activation == "swiglu":
+            return self.w2(F.silu(self.w1(x)) * self.w3(x))
         return self.w2(F.relu(self.w1(x)).square())
 
 
@@ -285,13 +303,58 @@ def load_bytes(path: str, seq_len: int):
     return train_data, val_data
 
 
+def download_fineweb_sample(output_dir: str = "data/fineweb", max_bytes: int = 10_000_000) -> Optional[str]:
+    """Download ~10MB of FineWeb-Edu using the datasets library. Returns bin path or None."""
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        print("datasets library not installed. pip install datasets")
+        return None
+
+    os.makedirs(output_dir, exist_ok=True)
+    bin_path = os.path.join(output_dir, "train.bin")
+    if os.path.exists(bin_path):
+        return bin_path
+
+    print(f"Downloading FineWeb-Edu sample (~{max_bytes / 1e6:.0f}MB)...")
+    try:
+        ds = load_dataset(
+            "HuggingFaceFW/fineweb-edu",
+            name="sample-10BT",
+            split="train",
+            streaming=True,
+        )
+        buf = bytearray()
+        for row in ds:
+            text = row.get("text", "")
+            buf.extend(text.encode("utf-8"))
+            if len(buf) >= max_bytes:
+                break
+        if buf:
+            import numpy as np
+            arr = np.frombuffer(bytes(buf[:max_bytes]), dtype=np.uint8).copy()
+            arr.tofile(bin_path)
+            print(f"Saved {len(arr):,} bytes to {bin_path}")
+            return bin_path
+    except Exception as e:
+        print(f"FineWeb download failed: {e}")
+    return None
+
+
 def load_fineweb(data_dir: str = "data/fineweb", max_bytes: int = 200_000_000):
+    import numpy as np
+
     os.makedirs(data_dir, exist_ok=True)
     bin_path = os.path.join(data_dir, "train.bin")
+
     if not os.path.exists(bin_path):
-        print("FineWeb not cached. Using local data.")
-        return None, None
-    import numpy as np
+        alt = download_fineweb_sample(data_dir)
+        if alt:
+            bin_path = alt
+        else:
+            print("FineWeb not available. Using local data.")
+            return None, None
+
     data = np.fromfile(bin_path, dtype=np.uint8)
     if len(data) > max_bytes:
         data = data[:max_bytes]
@@ -345,9 +408,34 @@ def get_lr(step: int, cfg: Config) -> float:
     return cfg.min_lr + 0.5 * (cfg.lr - cfg.min_lr) * (1 + math.cos(math.pi * progress))
 
 
+# ─── Save Artifact ───────────────────────────────────────────────────────────
+
+def save_artifact(model: nn.Module, cfg: Config, path: str = "submit_model.pt"):
+    """Save model in Parameter Golf submission format: FP16 state_dict + config."""
+    sd = {k: v.cpu().half() for k, v in model.state_dict().items()}
+    artifact = {
+        "config": {
+            "vocab_size": cfg.vocab_size,
+            "d_model": cfg.d_model,
+            "n_heads": cfg.n_heads,
+            "head_dim": cfg.head_dim,
+            "n_layers": cfg.n_layers,
+            "ff_dim": cfg.ff_dim,
+            "seq_len": cfg.seq_len,
+            "activation": cfg.activation,
+            "rope_theta": cfg.rope_theta,
+        },
+        "state_dict": sd,
+    }
+    torch.save(artifact, path)
+    size_mb = os.path.getsize(path) / (1024 * 1024)
+    print(f"Artifact saved: {path} ({size_mb:.2f} MB, FP16)")
+    return path
+
+
 # ─── Training Loop ────────────────────────────────────────────────────────────
 
-def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
+def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False, save_art: bool = False):
     import random
     import numpy as np
     random.seed(seed)
@@ -356,6 +444,7 @@ def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    print(f"Activation: {cfg.activation}")
     print(f"Params: {cfg.param_count():,}")
     print(f"Size (FP16): {cfg.model_size_mb_fp16():.2f} MB")
 
@@ -368,9 +457,16 @@ def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
     model = GPTModel(cfg).to(device)
     ema = EMA(model, cfg.ema_decay)
 
-    grad_accum = cfg.batch_size // cfg.micro_batch_size if cfg.micro_batch_size > 0 else 1
-    eff_batch = cfg.micro_batch_size if cfg.micro_batch_size > 0 else cfg.batch_size
-    print(f"Grad accumulation: {grad_accum} steps (effective batch={eff_batch * grad_accum})")
+    if cfg.micro_batch_size > 0:
+        if cfg.batch_size % cfg.micro_batch_size != 0:
+            cfg.micro_batch_size = cfg.batch_size
+            print(f"WARNING: micro_batch_size must divide batch_size. Using micro_batch={cfg.batch_size}")
+        grad_accum = cfg.batch_size // cfg.micro_batch_size
+        eff_batch = cfg.micro_batch_size
+    else:
+        grad_accum = 1
+        eff_batch = cfg.batch_size
+    print(f"Grad accumulation: {grad_accum} steps (micro={eff_batch}, effective batch={eff_batch * grad_accum})")
 
     if use_muon:
         muon_params = []
@@ -439,6 +535,10 @@ def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
     print(f"val_bpb: {best_bpb:.4f}")
     print(f"train_bpb: {loss_accum / math.log(2):.4f}")
     print(f"params: {cfg.param_count()}")
+
+    if save_art:
+        save_artifact(model, cfg, "submit_model.pt")
+
     return best_bpb
 
 
@@ -448,7 +548,7 @@ def main():
     parser = argparse.ArgumentParser(description="Parameter Golf Training")
     parser.add_argument("--data", type=str, default="data/tinyshakespeare.txt", help="Path to training data")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--iterations", type=int, default=5000)
+    parser.add_argument("--iterations", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--seq-len", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
@@ -457,6 +557,9 @@ def main():
     parser.add_argument("--d-model", type=int, default=None)
     parser.add_argument("--micro-batch", type=int, default=None, help="Micro batch size for gradient accumulation")
     parser.add_argument("--dropout", type=float, default=None)
+    parser.add_argument("--activation", choices=["relusq", "swiglu"], default=None, help="Activation function")
+    parser.add_argument("--cpu-test", action="store_true", help="Quick CPU validation: batch=4, seq=256, iter=100")
+    parser.add_argument("--save-artifact", action="store_true", help="Save FP16 submission artifact after training")
     parser.add_argument("--preset", choices=["tiny", "small", "medium", "submit"], default=None,
                         help="Model presets: tiny=2L/935K, small=6L/2.7M, medium=10L/4.5M, submit=14L/6.3M")
     args = parser.parse_args()
@@ -476,7 +579,17 @@ def main():
         cfg.iterations, cfg.batch_size = 10000, 64
         cfg.seq_len = 2048
 
-    cfg.iterations = args.iterations
+    if args.cpu_test:
+        cfg.batch_size = 4
+        cfg.seq_len = 256
+        cfg.iterations = 100
+        cfg.micro_batch_size = 0
+        if args.iterations is None:
+            args.iterations = 100
+        print("--cpu-test: batch=4, seq=256, iter=100")
+
+    if args.iterations:
+        cfg.iterations = args.iterations
     if args.batch_size:
         cfg.batch_size = args.batch_size
     if args.seq_len:
@@ -491,8 +604,10 @@ def main():
         cfg.micro_batch_size = args.micro_batch
     if args.dropout:
         cfg.dropout = args.dropout
+    if args.activation:
+        cfg.activation = args.activation
 
-    train(cfg, args.data, args.seed, use_muon=args.muon)
+    train(cfg, args.data, args.seed, use_muon=args.muon, save_art=args.save_artifact)
 
 
 if __name__ == "__main__":
