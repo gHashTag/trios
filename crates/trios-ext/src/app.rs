@@ -1,10 +1,9 @@
 //! Dioxus App for Trios Chrome Extension
 
 use dioxus::prelude::*;
-use std::rc::Rc;
 
 // MCP WebSocket Client
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct McpState {
     pub connected: bool,
     pub agents: Vec<String>,
@@ -38,7 +37,6 @@ pub fn App() -> Element {
     });
 
     rsx! {
-        style { {include_str!("../src/style.css")} }
         div { class: "trios-container",
             Header {}
             MainPanel { mcp: mcp.read().clone() }
@@ -55,7 +53,7 @@ fn Header() -> Element {
     }
 }
 
-#[derive(Props, Clone)]
+#[derive(Props, Clone, PartialEq)]
 struct MainPanelProps {
     mcp: McpState,
 }
@@ -65,23 +63,6 @@ fn MainPanel(props: MainPanelProps) -> Element {
         ("agent", "Welcome to Trios! Connected to trios-server".to_string()),
     ]);
     let input = use_signal(|| String::new());
-
-    let send_message = move |_: Event<FormData>| {
-        let msg = input.read().clone();
-        if msg.is_empty() {
-            return;
-        }
-
-        // Add user message
-        messages.with_mut(|m| m.push(("user", msg.clone())));
-
-        // Simulate agent response
-        let response = format!("Echo: {}", msg);
-        messages.with_mut(|m| m.push(("agent", response)));
-
-        // Clear input
-        input.set(String::new());
-    };
 
     rsx! {
         div { class: "chat-container",
@@ -101,12 +82,26 @@ fn MainPanel(props: MainPanelProps) -> Element {
                         input.set(e.value());
                     },
                     onkeypress: move |e: Event<KeyboardData>| {
-                        if e.key() == "Enter" {
-                            send_message(e);
+                        if e.key() == Key::Enter {
+                            let msg = input.read().clone();
+                            if !msg.is_empty() {
+                                messages.with_mut(|m| m.push(("user", msg.clone())));
+                                let response = format!("Echo: {}", msg);
+                                messages.with_mut(|m| m.push(("agent", response)));
+                                input.set(String::new());
+                            }
                         }
                     }
                 }
-                button { onclick: send_message, "Send" }
+                button { onclick: move |_| {
+                    let msg = input.read().clone();
+                    if !msg.is_empty() {
+                        messages.with_mut(|m| m.push(("user", msg.clone())));
+                        let response = format!("Echo: {}", msg);
+                        messages.with_mut(|m| m.push(("agent", response)));
+                        input.set(String::new());
+                    }
+                }, "Send" }
             }
         }
     }

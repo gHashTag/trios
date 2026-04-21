@@ -10,8 +10,8 @@ use app::App;
 
 #[wasm_bindgen(start)]
 pub fn run() {
-    // Launch Dioxus app
-    dioxus_web::launch(App);
+    // Launch Dioxus app for web target
+    dioxus_web::launch::launch(App);
 }
 
 #[cfg(test)]
