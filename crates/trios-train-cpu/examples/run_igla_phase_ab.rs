@@ -37,13 +37,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_steps: 5000,
             batch_size: 4,
             seq_len: 128,
+            ..PhaseAConfig::default()
         };
 
         println!("  Running: {}", desc);
         let result = config.run(42);
         println!(
-            "  → Final loss: {:.4}, Time: {:.1}s\n",
-            result.final_loss, result.duration_seconds
+            "  → Final bpb: {:.4}, Best: {:.4}, Time: {:.1}s\n",
+            result.final_bpb, result.best_bpb, result.duration_seconds
         );
 
         all_results.lock().unwrap().push(result);
@@ -68,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let result = config.run(42);
         println!(
             "  → Final loss: {:.4}, Time: {:.1}s\n",
-            result.final_loss, result.duration_seconds
+            result.final_bpb, result.duration_seconds
         );
 
         all_results.lock().unwrap().push(result);
@@ -99,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let result = config.run(42);
         println!(
             "  → Final loss: {:.4}, Time: {:.1}s\n",
-            result.final_loss, result.duration_seconds
+            result.final_bpb, result.duration_seconds
         );
 
         all_results.lock().unwrap().push(result);

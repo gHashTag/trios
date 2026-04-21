@@ -1,11 +1,7 @@
-//! Real IGLA Phase A/B Trainer
-//!
-//! Minimal working trainer for Phase A/B hyperparameter sweeps
-
-use crate::backward::cross_entropy_loss;
-use crate::optimizer::AdamWCpu;
 use crate::real_igla_model::RealIglaModel;
+use crate::phi_ortho_init::phi_ortho_init;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhaseAConfig {
@@ -14,64 +10,96 @@ pub struct PhaseAConfig {
     pub max_steps: usize,
     pub batch_size: usize,
     pub seq_len: usize,
+    pub vocab_size: usize,
+    pub d_model: usize,
+    pub n_layers: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExperimentResult {
     pub phase: String,
     pub config: PhaseAConfig,
-    pub final_loss: f64,
+    pub final_bpb: f64,
+    pub best_bpb: f64,
     pub steps: usize,
     pub duration_seconds: f64,
+    pub param_count: usize,
 }
 
 impl Default for PhaseAConfig {
     fn default() -> Self {
         Self {
-            lr: 0.001,
-            warmup_steps: 500,
-            max_steps: 5000,
+            lr: 3e-4,
+            warmup_steps: 100,
+            max_steps: 1000,
             batch_size: 4,
-            seq_len: 128,
+            seq_len: 64,
+            vocab_size: 256,
+            d_model: 64,
+            n_layers: 1,
         }
     }
 }
 
-impl PhaseAConfig {
-    /// Run Phase A training
-    pub fn run(&self, _seed: u64) -> ExperimentResult {
-        use std::time::Instant;
+fn load_tiny_shakespeare() -> Vec<usize> {
+    let paths = [
+        "data/tiny_shakespeare.txt",
+        "crates/trios-train-cpu/data/tiny_shakespeare.txt",
+        "data/input.txt",
+    ];
 
-        let model = RealIglaModel::new(32000, 144, 1); // 1 layer for Phase A
+    for path in &paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            return content.bytes().map(|b| b as usize).collect::<Vec<_>>();
+        }
+    }
+
+    (0..10000).map(|i| i % 256).collect()
+}
+
+impl PhaseAConfig {
+    pub fn run(&self, _seed: u64) -> ExperimentResult {
+        let mut model = RealIglaModel::new(self.vocab_size, self.d_model, self.n_layers);
+
+        phi_ortho_init(&mut model.embed, self.d_model, self.vocab_size);
+
+        let data = load_tiny_shakespeare();
         let start = Instant::now();
 
         println!(
-            "Phase A Training: LR={}, warmup={}, steps={}",
-            self.lr, self.warmup_steps, self.max_steps
+            "Phase A: LR={:.6}, warmup={}, steps={}, d_model={}, layers={}",
+            self.lr, self.warmup_steps, self.max_steps, self.d_model, self.n_layers
         );
-        println!(
-            "Model: vocab={}, d_model={}, layers={}",
-            model.vocab_size, model.d_model, model.n_layers
-        );
+        println!("Data: {} tokens, params: {}", data.len(), model.param_count());
 
-        // Minimal training simulation (replace with real training)
-        let _optimizer = AdamWCpu::new(model.vocab_size * model.d_model, self.lr);
-        let mut best_loss = f64::MAX;
+        let mut best_bpb = f64::MAX;
+        let mut final_bpb = 0.0f64;
+        let warmup_lr = self.lr * 0.1;
 
         for step in 0..self.max_steps {
-            // Simulated forward + backward (replace with real)
-            let logits = model.forward(&[], None);
-            // Flatten logits: Vec<Vec<f32>> -> Vec<f32>
-            let flat_logits: Vec<f32> = logits.into_iter().flatten().collect();
-            let targets = vec![0usize; flat_logits.len()];
-            let loss = cross_entropy_loss(&flat_logits, &targets);
+            let idx = (step * self.seq_len) % (data.len().saturating_sub(self.seq_len + 1));
+            let tokens: Vec<usize> = data[idx..idx + self.seq_len + 1].to_vec();
 
-            if (loss as f64) < best_loss {
-                best_loss = loss as f64;
+            let lr = if step < self.warmup_steps {
+                warmup_lr + (self.lr - warmup_lr) * (step as f64 / self.warmup_steps.max(1) as f64)
+            } else {
+                self.lr * (1.0 - (step as f64 - self.warmup_steps as f64) / (self.max_steps as f64 - self.warmup_steps as f64)).max(0.01)
+            };
+
+            let loss = model.train_step(&tokens, lr as f32);
+            let bpb = loss as f64 / std::f64::consts::LN_2;
+
+            if bpb < best_bpb {
+                best_bpb = bpb;
             }
+            final_bpb = bpb;
 
-            if step % 500 == 0 {
-                println!("Step {}: loss={:.4}", step, loss);
+            if step % 100 == 0 || step == self.max_steps - 1 {
+                let (_, eval_bpb) = model.loss_bpb(&tokens);
+                println!(
+                    "  step {:>5}: loss={:.4} bpb={:.4} best={:.4} lr={:.6}",
+                    step, loss, eval_bpb, best_bpb, lr
+                );
             }
         }
 
@@ -80,13 +108,16 @@ impl PhaseAConfig {
         ExperimentResult {
             phase: "A".to_string(),
             config: self.clone(),
-            final_loss: best_loss,
+            final_bpb,
+            best_bpb,
             steps: self.max_steps,
             duration_seconds: elapsed,
+            param_count: model.param_count(),
         }
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PhaseBConfig {
     pub base_lr: f64,
     pub mix_ratio: f32,
@@ -98,45 +129,42 @@ pub struct PhaseBConfig {
 impl Default for PhaseBConfig {
     fn default() -> Self {
         Self {
-            base_lr: 0.0162,
-            mix_ratio: 0.5,
-            max_steps: 3000,
-            batch_size: 32,
-            seq_len: 81,
+            base_lr: 1.62e-4,
+            mix_ratio: 0.618,
+            max_steps: 500,
+            batch_size: 8,
+            seq_len: 128,
         }
     }
 }
 
 impl PhaseBConfig {
-    /// Run Phase B fine-tuning
     pub fn run(&self, _seed: u64) -> ExperimentResult {
-        use std::time::Instant;
+        let mut model = RealIglaModel::new(256, 128, 2);
+        phi_ortho_init(&mut model.embed, 128, 256);
 
-        let model = RealIglaModel::new(32000, 144, 6); // 6 layers for Phase B
+        let data = load_tiny_shakespeare();
         let start = Instant::now();
 
-        println!(
-            "Phase B Fine-tuning: LR={:.4}, mix={:.3}",
-            self.base_lr, self.mix_ratio
-        );
+        println!("Phase B: LR={:.6}, steps={}", self.base_lr, self.max_steps);
 
-        // Simulated fine-tuning
-        let _optimizer = AdamWCpu::new(model.vocab_size * model.d_model, self.base_lr);
-        let mut best_loss = f64::MAX;
+        let mut best_bpb = f64::MAX;
+        let mut final_bpb = 0.0f64;
 
         for step in 0..self.max_steps {
-            let logits = model.forward(&[], None);
-            // Flatten logits: Vec<Vec<f32>> -> Vec<f32>
-            let flat_logits: Vec<f32> = logits.into_iter().flatten().collect();
-            let targets = vec![0usize; flat_logits.len()];
-            let loss = cross_entropy_loss(&flat_logits, &targets);
+            let idx = (step * self.seq_len) % (data.len().saturating_sub(self.seq_len + 1));
+            let tokens: Vec<usize> = data[idx..idx + self.seq_len + 1].to_vec();
 
-            if (loss as f64) < best_loss {
-                best_loss = loss as f64;
+            let loss = model.train_step(&tokens, self.base_lr as f32);
+            let bpb = loss as f64 / std::f64::consts::LN_2;
+
+            if bpb < best_bpb {
+                best_bpb = bpb;
             }
+            final_bpb = bpb;
 
-            if step % 300 == 0 {
-                println!("Step {}: loss={:.4}", step, loss);
+            if step % 50 == 0 || step == self.max_steps - 1 {
+                println!("  step {:>5}: loss={:.4} bpb={:.4}", step, loss, bpb);
             }
         }
 
@@ -150,10 +178,15 @@ impl PhaseBConfig {
                 max_steps: self.max_steps,
                 batch_size: self.batch_size,
                 seq_len: self.seq_len,
+                vocab_size: 256,
+                d_model: 128,
+                n_layers: 2,
             },
-            final_loss: best_loss,
+            final_bpb,
+            best_bpb,
             steps: self.max_steps,
             duration_seconds: elapsed,
+            param_count: model.param_count(),
         }
     }
 }
