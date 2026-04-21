@@ -109,6 +109,16 @@ Stub implementations of external dependencies (CDP, network, FS) MUST throw
 descriptive errors naming: the unavailable capability, the required setup step,
 and the relevant env var or flag. `"X is not a function"` is a constitutional bug.
 
+### L24: Agent traffic through MCP bridge
+All traffic between agents MUST pass through `trios-server` MCP bridge.
+Direct A2A calls bypassing broadcast are forbidden. Every dispatch, response,
+and tool-call MUST flow through the relay for SSE observability.
+
+### L25: Chrome Extension is the observability channel
+Chrome Extension (Trinity Agent Bridge) is the single visual channel for
+human observability. Any new tool MUST appear in sidepanel Tools tab
+automatically via `tools/list`. No hidden tool surfaces.
+
 ## Architecture
 
 ```
