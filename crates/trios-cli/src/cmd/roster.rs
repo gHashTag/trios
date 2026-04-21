@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 
 use crate::{
     config::Config,
-    gh::{AgentIssue, GhClient},
+    gh::GhClient,
 };
 
 /// Update agent roster status

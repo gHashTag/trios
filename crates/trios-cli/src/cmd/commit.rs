@@ -6,8 +6,7 @@
 use anyhow::{Context, Result};
 
 use git2::{
-    Repository, Signature, Time, Oid,
-    Status,
+    Repository, Signature, Oid,
 };
 
 /// Create atomic git commit with staged changes
@@ -18,7 +17,7 @@ pub fn commit(msg: &str) -> Result<Oid> {
         .context("Failed to open git repo")?;
 
     // Check if there are staged changes
-    let mut statuses = repo.statuses(None)
+    let statuses = repo.statuses(None)
         .context("Failed to get git status")?;
 
     if statuses.is_empty() {

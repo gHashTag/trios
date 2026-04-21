@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::db::{Entry, Leaderboard};
+use crate::db::Leaderboard;
 
 /// Show leaderboard
 pub fn leaderboard_show(agent_filter: Option<&str>) -> Result<()> {

@@ -61,7 +61,7 @@ impl LockGuard {
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true) // Fails if exists
-            .open(&path)
+            .open(path)
             .context("Failed to create lock file")?;
 
         // Write our PID
@@ -84,7 +84,7 @@ impl LockGuard {
             if unsafe { kill(pid as i32, 0) } == 0 {
                 return Ok(false); // Process exists
             }
-            return Ok(true); // Process doesn't exist
+            Ok(true) // Process doesn't exist
         }
 
         #[cfg(not(unix))]

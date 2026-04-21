@@ -6,7 +6,6 @@
 
 use anyhow::{Context, Result};
 use std::process::Command;
-use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 

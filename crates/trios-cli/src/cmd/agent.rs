@@ -12,7 +12,7 @@ use crate::config::Config;
 pub fn agent_dispatch(nato: &str, task: &str) -> Result<()> {
     println!("🤖 Dispatching to {}: {}", nato, task);
 
-    let config = Config::load();
+    let _config = Config::load();
 
     // Verify agent exists in roster
     let valid_nato = ["ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO"];

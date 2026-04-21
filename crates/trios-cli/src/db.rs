@@ -3,7 +3,7 @@
 //! Local persistent storage for experiment results.
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params, Row};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

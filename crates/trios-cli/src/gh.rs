@@ -11,6 +11,12 @@ pub struct AgentIssue {
 /// GitHub CLI wrapper
 pub struct GhClient;
 
+impl Default for GhClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GhClient {
     /// Create new client (no-op for gh CLI wrapper)
     pub fn new() -> Self {
