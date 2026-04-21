@@ -4,6 +4,7 @@ pub mod bigram_hash;
 pub mod ca_mask;
 pub mod data;
 pub mod eval;
+pub mod igla_stack_training;
 pub mod layer_sharing;
 pub mod model;
 pub mod muon;
