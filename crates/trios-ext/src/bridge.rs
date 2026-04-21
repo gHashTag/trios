@@ -23,7 +23,7 @@ pub fn comet_connect() -> Result<(), JsValue> {
     let port = Function::from(connect).apply(&runtime, &args)?;
 
     let on_msg_closure = Closure::<dyn Fn(JsValue)>::new(|msg: JsValue| {
-        if let Some(data) = js_sys::Reflect::get(&msg, &JsValue::from_str("data")).ok() {
+        if let Ok(data) = js_sys::Reflect::get(&msg, &JsValue::from_str("data")) {
             if let Ok(text) = data.dyn_into::<js_sys::JsString>() {
                 let s: String = text.into();
                 crate::dom::append_message("agent", &format!("[Comet] {}", s));
@@ -100,7 +100,5 @@ pub fn comet_send(message: &str) -> Result<(), JsValue> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn comet_module_compiles() {
-        assert!(true);
-    }
+    fn comet_module_compiles() {}
 }

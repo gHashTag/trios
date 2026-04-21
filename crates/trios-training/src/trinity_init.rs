@@ -27,7 +27,7 @@ pub fn phi_ortho_init(rows: usize, cols: usize) -> Vec<f32> {
         .collect()
 }
 
-pub fn ortho_init_qkv(d_model: usize, n_heads: usize) -> Vec<f32> {
+pub fn ortho_init_qkv(d_model: usize, _n_heads: usize) -> Vec<f32> {
     phi_ortho_init(3 * d_model, d_model)
 }
 
@@ -79,8 +79,7 @@ pub fn swa_decay_sweep(decay_values: &[f32], param_count: usize) -> Vec<SWASweep
             for step in 0..100 {
                 let shifted: Vec<f32> = params
                     .iter()
-                    .enumerate()
-                    .map(|(i, &p)| p + (step as f32 * 0.01).sin() * 0.1)
+                    .map(|&p| p + (step as f32 * 0.01).sin() * 0.1)
                     .collect();
                 state.update(&shifted);
             }
