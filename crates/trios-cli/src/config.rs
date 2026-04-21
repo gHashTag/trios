@@ -1,154 +1,53 @@
-//! Configuration management for tri CLI
-//!
-//! Reads from `.trinity/tri.toml` with agent settings, paths, and preferences.
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Configuration loaded from `.trinity/tri.toml`
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    /// Current NATO agent code (ALFA, BRAVO, CHARLIE, DELTA, ECHO)
-    #[serde(default = "default_nato")]
-    pub agent_nato: String,
-
-    /// Default experiment base path
-    #[serde(default)]
-    pub exp_base_path: Option<String>,
-
-    /// GitHub repo owner
-    #[serde(default = "default_owner")]
-    pub repo_owner: String,
-
-    /// GitHub repo name
-    #[serde(default = "default_repo")]
-    pub repo_name: String,
-
-    /// Default training steps
-    #[serde(default = "default_steps")]
-    pub training_steps: usize,
-
-    /// Default batch size
-    #[serde(default = "default_batch")]
-    pub batch_size: usize,
-
-    /// Default seed
-    #[serde(default = "default_seed")]
-    pub seed: u64,
-
-    /// CPU-only mode (L10)
-    #[serde(default)]
-    pub cpu_only: bool,
-}
-
-fn default_nato() -> String {
-    "ALFA".to_string()
-}
-
-fn default_owner() -> String {
-    "gHashTag".to_string()
-}
-
-fn default_repo() -> String {
-    "trios".to_string()
-}
-
-fn default_steps() -> usize {
-    300
-}
-
-fn default_batch() -> usize {
-    32
-}
-
-fn default_seed() -> u64 {
-    42
-}
-
-impl Config {
-    /// Load config from `.trinity/tri.toml`
-    pub fn load() -> Result<Self> {
-        let path = Self::path();
-
-        if !path.exists() {
-            let default = Config::default();
-            default.save()?;
-            return Ok(default);
-        }
-
-        let content = std::fs::read_to_string(&path)
-            .context("Failed to read tri.toml")?;
-
-        toml::from_str(&content).context("Failed to parse tri.toml")
-    }
-
-    /// Save config to `.trinity/tri.toml`
-    pub fn save(&self) -> Result<()> {
-        let path = Self::path();
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
-
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create config directory")?;
-        }
-
-        std::fs::write(&path, content)
-            .context("Failed to write tri.toml")?;
-
-        Ok(())
-    }
-
-    /// Get config file path
-    fn path() -> PathBuf {
-        PathBuf::from(".trinity/tri.toml")
-    }
-
-    /// Get current agent full name from NATO code
-    pub fn agent_name(&self) -> &'static str {
-        match self.agent_nato.as_str() {
-            "ALFA" => "FOXTROT",
-            "BRAVO" => "INDIGO",
-            "CHARLIE" => "JULIETT",
-            "DELTA" => "KILO",
-            "ECHO" => "LIMA",
-            _ => "UNKNOWN",
-        }
-    }
+    pub default_seeds: u32,
+    pub trainer_path: Option<String>,
+    pub db_path: PathBuf,
+    pub lock_path: PathBuf,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            agent_nato: default_nato(),
-            exp_base_path: None,
-            repo_owner: default_owner(),
-            repo_name: default_repo(),
-            training_steps: default_steps(),
-            batch_size: default_batch(),
-            seed: default_seed(),
-            cpu_only: false,
+            default_seeds: 1,
+            trainer_path: None,
+            db_path: PathBuf::from(".trinity/leaderboard.db"),
+            lock_path: PathBuf::from(".trinity/tri.lock"),
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Config {
+    pub fn load() -> Result<Self> {
+        let path = PathBuf::from(".trinity/tri.toml");
+        
+        if !path.exists() {
+            return Ok(Config::default());
+        }
 
-    #[test]
-    fn test_config_default() {
-        let cfg = Config::default();
-        assert_eq!(cfg.agent_nato, "ALFA");
-        assert_eq!(cfg.repo_owner, "gHashTag");
-        assert_eq!(cfg.repo_name, "trios");
+        let contents = std::fs::read_to_string(&path)?;
+        let mut config: Config = toml::from_str(&contents)?;
+        
+        // Resolve relative paths
+        if !config.db_path.is_absolute() {
+            config.db_path = PathBuf::from(".trinity").join(&config.db_path);
+        }
+        if !config.lock_path.is_absolute() {
+            config.lock_path = PathBuf::from(".trinity").join(&config.lock_path);
+        }
+
+        Ok(config)
     }
 
-    #[test]
-    fn test_agent_names() {
-        let mut cfg = Config::default();
-        cfg.agent_nato = "BRAVO".to_string();
-        assert_eq!(cfg.agent_name(), "INDIGO");
+    pub fn save(&self) -> Result<()> {
+        let path = PathBuf::from(".trinity/tri.toml");
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        let toml = toml::to_string_pretty(self)?;
+        std::fs::write(path, toml)?;
+        Ok(())
     }
 }
