@@ -33,6 +33,13 @@ pub fn run() {
         log::error!("Failed to build UI: {:?}", e);
     }
 
+    if let Err(e) = crate::mcp::mcp_connect() {
+        log::warn!(
+            "MCP connection failed (trios-server may not be running): {:?}",
+            e
+        );
+    }
+
     // Load initial data
     let _ = crate::mcp::mcp_list_agents();
     let _ = crate::mcp::mcp_list_tools();
