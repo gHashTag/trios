@@ -75,7 +75,7 @@ class RotaryEmbedding(nn.Module):
     def forward(self, seq_len: int, device: torch.device):
         t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
         freqs = torch.outer(t, self.inv_freq)
-        return torch.cat([freqs, freqs], dim=-1)
+        return freqs
 
 
 def apply_rotary_emb(x: torch.Tensor, freqs: torch.Tensor) -> torch.Tensor:
