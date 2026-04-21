@@ -18,6 +18,8 @@ fn allowed_roots() -> Vec<PathBuf> {
         .collect()
 }
 
+pub const fn tool_count() -> usize { 3 }
+
 /// Dispatch filesystem tools.
 pub async fn dispatch(name: &str, input: &Value) -> Option<Result<Value>> {
     match name {

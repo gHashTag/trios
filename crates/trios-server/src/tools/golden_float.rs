@@ -6,6 +6,8 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 use trios_golden_float::{compress_weights, GF16};
 
+pub const fn tool_count() -> usize { 4 }
+
 /// Dispatch golden float tools.
 pub async fn dispatch(name: &str, input: &Value) -> Option<Result<Value>> {
     match name {

@@ -30,7 +30,8 @@ fn allowed_roots() -> Vec<PathBuf> {
 
 /// Returns the number of registered tools.
 pub fn count() -> usize {
-    19
+    fs::tool_count() + trios_kg::tool_count() + git::tool_count()
+        + git_extended::tool_count() + gitbutler::tool_count() + golden_float::tool_count()
 }
 
 /// Main tool dispatcher — chain-of-responsibility pattern.

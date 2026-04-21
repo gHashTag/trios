@@ -21,7 +21,8 @@ pub async fn read(_state: &AppState, params: Option<Value>) -> Value {
 
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("md") {
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext == Some("md") || ext == Some("trinity") {
             if let Ok(content) = fs::read_to_string(&path) {
                 entries.push(content);
             }

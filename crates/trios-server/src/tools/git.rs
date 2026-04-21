@@ -19,6 +19,8 @@ fn allowed_roots() -> Vec<PathBuf> {
         .collect()
 }
 
+pub const fn tool_count() -> usize { 5 }
+
 /// Dispatch git basic tools.
 pub async fn dispatch(name: &str, input: &Value, repo: &Path, git: &Git2Orchestrator) -> Option<Result<Value>> {
     match name {

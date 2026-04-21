@@ -6,11 +6,21 @@ mod tools;
 mod ws_handler;
 
 use axum::Router;
-use axum::routing::get;
+use axum::response::Json;
+use axum::routing::{get, post};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tracing::info;
 use ws_handler::AppState;
+
+#[derive(Deserialize)]
+struct McpRequest {
+    method: String,
+    #[serde(default)]
+    params: Option<Value>,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/ws", get(ws_handler::ws_handler))
         .route("/operator", get(operator::operator_ws_handler))
+        .route("/mcp", post(mcp_http_handler))
         .route("/health", get(health))
         .route("/", get(health))
         .layer(
@@ -41,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("trios-server listening on ws://0.0.0.0:{}/ws", port);
+    info!("MCP HTTP: http://0.0.0.0:{}/mcp", port);
     info!("Operator bridge: ws://0.0.0.0:{}/operator?token=...", port);
     info!("MCP tools: {count} registered", count = tools::count());
 
@@ -52,4 +64,45 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health() -> &'static str {
     "ok"
+}
+
+async fn mcp_http_handler(Json(req): Json<McpRequest>) -> Json<Value> {
+    match req.method.as_str() {
+        "tools/list" => {
+            let result = mcp::McpService.list_tools();
+            Json(json!({
+                "jsonrpc": "2.0",
+                "result": result,
+                "id": 1
+            }))
+        }
+        "tools/call" => {
+            let tool_name = req.params
+                .as_ref()
+                .and_then(|p| p.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let tool_input = req.params
+                .as_ref()
+                .and_then(|p| p.get("arguments").cloned())
+                .unwrap_or(json!({}));
+            match tools::dispatch(tool_name, tool_input).await {
+                Ok(value) => Json(json!({
+                    "jsonrpc": "2.0",
+                    "result": { "content": [{ "type": "text", "text": serde_json::to_string(&value).unwrap_or_default() }], "isError": false },
+                    "id": 1
+                })),
+                Err(e) => Json(json!({
+                    "jsonrpc": "2.0",
+                    "result": { "content": [{ "type": "text", "text": format!("Error: {}", e) }], "isError": true },
+                    "id": 1
+                })),
+            }
+        }
+        _ => Json(json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32601, "message": format!("Method not found: {}", req.method) },
+            "id": 1
+        })),
+    }
 }

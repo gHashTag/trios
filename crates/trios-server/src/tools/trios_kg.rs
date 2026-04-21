@@ -5,6 +5,8 @@
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
+pub const fn tool_count() -> usize { 4 }
+
 /// Dispatch knowledge graph tools.
 pub async fn dispatch(name: &str, input: &Value) -> Option<Result<Value>> {
     match name {

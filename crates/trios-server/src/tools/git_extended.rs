@@ -7,6 +7,8 @@ use serde_json::Value;
 use trios_core::git::GitOrchestrator;
 use trios_git::Git2Orchestrator;
 
+pub const fn tool_count() -> usize { 4 }
+
 /// Dispatch git extended tools.
 pub async fn dispatch(name: &str, input: &Value, repo: &std::path::Path, git: &Git2Orchestrator) -> Option<Result<Value>> {
     match name {
