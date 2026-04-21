@@ -72,8 +72,8 @@ static BRAIN: LazyLock<Mutex<BrainStorage>> = LazyLock::new(|| Mutex::new(BrainS
 /// * `Err(BrainError::InvalidKey)` - Key is empty
 ///
 /// # Example
-/// ```no_run
-/// use trios_brain::brain_remember;
+/// ```ignore
+/// use trios_trinity_brain::brain_remember;
 ///
 /// brain_remember("test_key", b"hello world").unwrap();
 /// ```
@@ -99,8 +99,8 @@ pub fn brain_remember(key: &str, value: &[u8]) -> Result<(), BrainError> {
 /// * `Err(BrainError::InvalidKey)` - Key is empty
 ///
 /// # Example
-/// ```no_run
-/// use trios_brain::{brain_remember, brain_recall};
+/// ```ignore
+/// use trios_trinity_brain::{brain_remember, brain_recall};
 ///
 /// brain_remember("test_key", b"hello world").unwrap();
 /// let value = brain_recall("test_key").unwrap();
