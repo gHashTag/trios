@@ -6,6 +6,13 @@ pub mod bridge;
 pub mod dom;
 pub mod mcp;
 
+// Re-export bridge functions for JavaScript access
+pub use bridge::comet::{
+    comet_bridge_init, comet_bridge_connect, comet_bridge_disconnect,
+    comet_send_chat, comet_is_connected,
+    CometBridge,
+};
+
 // Note: Dioxus launch requires different setup for Chrome Extensions
 // Using direct DOM manipulation for now (L6 compliant)
 use wasm_bindgen::prelude::*;
@@ -16,16 +23,14 @@ pub fn run() {
     console_error_panic_hook::set_once();
     log::info!("Trios extension initialized");
 
+    // Initialize Comet bridge for trios-server connection
+    if let Err(e) = crate::comet_bridge_init() {
+        log::error!("Failed to initialize Comet bridge: {:?}", e);
+    }
+
     // For MVP, use simple DOM setup
     if let Err(e) = crate::dom::build_ui() {
         log::error!("Failed to build UI: {:?}", e);
-    }
-
-    if let Err(e) = crate::mcp::mcp_connect() {
-        log::warn!(
-            "MCP connection failed (trios-server may not be running): {:?}",
-            e
-        );
     }
 
     // Load initial data
