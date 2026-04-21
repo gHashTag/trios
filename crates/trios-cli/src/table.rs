@@ -183,4 +183,28 @@ mod tests {
         let rows = parse_table(md, "Agent").unwrap();
         assert!(rows.is_empty());
     }
+
+    #[test]
+    fn test_update_adds_new_agent() {
+        let md = "| Agent | BPB | Status |\n|---|---|---|\n| FOXTROT | 5.87 | baseline |";
+        let updated = update_table(md, "HOTEL", "running", None).unwrap();
+        assert!(updated.contains("HOTEL"));
+    }
+
+    #[test]
+    fn test_update_preserves_other_rows() {
+        let md = "| Agent | BPB | Status |\n|---|---|---|\n| FOXTROT | 5.87 | baseline |\n| HOTEL | 5.87 | baseline |";
+        let updated = update_table(md, "FOXTROT", "complete", Some(1.13)).unwrap();
+        assert!(updated.contains("HOTEL"));
+        assert!(updated.contains("1.1300"));
+    }
+
+    #[test]
+    fn test_report_flow_e2e() {
+        let issue_body = "## IGLA Baseline\n\n| Agent | Experiment | BPB | Status |\n|---|---|---|---|\n| FOXTROT | IGLA-STACK-501 | 5.8711 | baseline |\n| HOTEL | IGLA-MUON-502 | 5.8736 | baseline |\n| ALFA | IGLA-GF16-503 | 5.9615 | baseline |\n";
+        let updated = update_table(issue_body, "FOXTROT", "complete", Some(1.13)).unwrap();
+        assert!(updated.contains("1.1300"), "BPB should be updated");
+        assert!(updated.contains("HOTEL"), "Other agents preserved");
+        assert!(updated.contains("ALFA"), "Other agents preserved");
+    }
 }

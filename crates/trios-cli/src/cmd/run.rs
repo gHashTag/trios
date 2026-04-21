@@ -21,14 +21,12 @@ pub struct RunResult {
 
 /// Run an experiment and parse BPB from stdout
 pub fn run(exp_id: &str, seeds: u32) -> Result<RunResult> {
-    println!("🚀 Running experiment: {exp_id} (seeds: {seeds})");
+    println!("Running experiment: {exp_id} (seeds: {seeds})");
 
     let start = Instant::now();
 
-    // Find the trainer binary
     let trainer_path = find_trainer()?;
 
-    // Run the trainer
     let output = Command::new(&trainer_path)
         .arg("--exp-id")
         .arg(exp_id)
@@ -45,10 +43,15 @@ pub fn run(exp_id: &str, seeds: u32) -> Result<RunResult> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let (val_bpb, train_bpb) = parse_bpb(&stdout)?;
-    let params = parse_params(&stdout);
+    run_from_output(exp_id, &stdout, time_sec)
+}
 
-    println!("✅ val_bpb: {val_bpb:.4}, train_bpb: {train_bpb:.4}, time: {time_sec:.1}s");
+/// Parse trainer output into a RunResult (testable without spawning processes)
+pub fn run_from_output(exp_id: &str, stdout: &str, time_sec: f64) -> Result<RunResult> {
+    let (val_bpb, train_bpb) = parse_bpb(stdout)?;
+    let params = parse_params(stdout);
+
+    println!("val_bpb: {val_bpb:.4}, train_bpb: {train_bpb:.4}, time: {time_sec:.1}s");
 
     let result = RunResult {
         exp_id: exp_id.to_string(),
@@ -58,7 +61,6 @@ pub fn run(exp_id: &str, seeds: u32) -> Result<RunResult> {
         params,
     };
 
-    // Auto-push to table #143
     report_result(&result)?;
 
     Ok(result)
@@ -171,5 +173,47 @@ mod tests {
     fn test_parse_params_missing() {
         let stdout = "no params here\n";
         assert_eq!(parse_params(stdout), 0);
+    }
+
+    #[test]
+    fn test_run_from_output_success() {
+        let stdout = "step 100 train_bpb: 5.5\nstep 100 val_bpb: 5.8\nparameters: 100000\n";
+        let result = run_from_output("IGLA-TEST-001", stdout, 42.0).unwrap();
+        assert_eq!(result.exp_id, "IGLA-TEST-001");
+        assert!((result.val_bpb - 5.8).abs() < 0.001);
+        assert!((result.train_bpb - 5.5).abs() < 0.001);
+        assert!((result.time_sec - 42.0).abs() < 0.001);
+        assert_eq!(result.params, 100000);
+    }
+
+    #[test]
+    fn test_run_from_output_igla_format() {
+        let stdout =
+            "=== IGLA Trainer ===\ntrain BPB: 1.13\nvalidation BPB: 1.20\nparams: 729000\n";
+        let result = run_from_output("IGLA-STACK-501", stdout, 120.5).unwrap();
+        assert!((result.val_bpb - 1.20).abs() < 0.001);
+        assert!((result.train_bpb - 1.13).abs() < 0.001);
+        assert_eq!(result.params, 729000);
+    }
+
+    #[test]
+    fn test_run_from_output_no_bpb_fails() {
+        let stdout = "training started...\nno bpb data\n";
+        assert!(run_from_output("IGLA-BAD", stdout, 10.0).is_err());
+    }
+
+    #[test]
+    fn test_run_result_serialization() {
+        let result = RunResult {
+            exp_id: "IGLA-TEST-999".to_string(),
+            val_bpb: 5.8711,
+            train_bpb: 5.1234,
+            time_sec: 155.7,
+            params: 729000,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let parsed: RunResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.exp_id, "IGLA-TEST-999");
+        assert!((parsed.val_bpb - 5.8711).abs() < 0.0001);
     }
 }
