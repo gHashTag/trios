@@ -83,10 +83,9 @@ async fn check_ws_upgrade(host: &str, port: u16, path: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[tokio::test]
     async fn test_check_tcp_fails_when_server_not_running() {
-        // This would need a mock server setup
+        let result = super::check_tcp("127.0.0.1", 1).await;
+        assert!(result.is_err());
     }
 }
