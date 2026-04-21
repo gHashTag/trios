@@ -1,14 +1,14 @@
 use anyhow::Result;
-use igla_trainer::{AuditLog, Schedule, TrainConfig};
+use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let config = TrainConfig::default();
     let schedule = match config.schedule {
-        igla_trainer::config::ScheduleType::Flat3e4 => Schedule::Flat3e4,
-        igla_trainer::config::ScheduleType::Cosine => Schedule::Cosine,
-        igla_trainer::config::ScheduleType::PhiWarmup => Schedule::PhiWarmup,
+        trios_igla_trainer::config::ScheduleType::Flat3e4 => Schedule::Flat3e4,
+        trios_igla_trainer::config::ScheduleType::Cosine => Schedule::Cosine,
+        trios_igla_trainer::config::ScheduleType::PhiWarmup => Schedule::PhiWarmup,
     };
 
     let git_sha = std::process::Command::new("git")
@@ -51,8 +51,17 @@ fn main() -> Result<()> {
                 lr
             );
         }
+
+        if step % 500 == 0 {
+            if let Err(e) = audit.dump_metric("metric.json") {
+                tracing::warn!("metric dump failed at step {}: {}", step, e);
+            } else {
+                tracing::info!("metric.json written at step {}", step);
+            }
+        }
     }
 
+    audit.dump_metric("metric.json")?;
     let json = audit.to_json();
     println!("{}", json);
 

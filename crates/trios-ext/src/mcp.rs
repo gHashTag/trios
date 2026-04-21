@@ -169,3 +169,13 @@ pub fn mcp_list_agents() -> Result<(), JsValue> {
 pub fn mcp_list_tools() -> Result<(), JsValue> {
     CLIENT.with(|c| c.borrow_mut().list_tools())
 }
+
+#[wasm_bindgen]
+pub fn mcp_ping() -> Result<(), JsValue> {
+    CLIENT.with(|c| c.borrow_mut().send("ping", None))
+}
+
+#[wasm_bindgen]
+pub fn mcp_is_connected() -> bool {
+    CLIENT.with(|c| c.borrow().is_connected())
+}
