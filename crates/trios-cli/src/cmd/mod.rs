@@ -4,6 +4,7 @@ pub mod dash;
 pub mod gates;
 pub mod issue;
 pub mod leaderboard;
+pub mod railway;
 pub mod report;
 pub mod roster;
 pub mod run;
