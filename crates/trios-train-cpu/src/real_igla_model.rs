@@ -25,7 +25,6 @@ fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
     x.iter().map(|v| (v - mean) / std).collect()
 }
 
-#[allow(dead_code)]
 fn layer_norm_backward(dout: &[f32], x: &[f32], eps: f32) -> Vec<f32> {
     let n = x.len() as f32;
     let mean = x.iter().sum::<f32>() / n;
@@ -69,7 +68,6 @@ struct AttentionHead {
     wo: Vec<f32>,
 }
 
-#[allow(dead_code)]
 struct AttnCache {
     qs: Vec<Vec<f32>>,
     ks: Vec<Vec<f32>>,
@@ -79,7 +77,6 @@ struct AttnCache {
     normed: Vec<Vec<f32>>,
 }
 
-#[allow(dead_code)]
 impl AttentionHead {
     fn new(d_model: usize, d_k: usize, seed: &mut u64) -> Self {
         Self {
@@ -130,7 +127,6 @@ impl AttentionHead {
         (out, cache)
     }
 
-    #[allow(clippy::type_complexity)]
     fn backward(
         &self,
         dout: &[Vec<f32>],
@@ -161,36 +157,36 @@ impl AttentionHead {
         let mut d_wv = vec![0.0f32; d_model * self.d_k];
         let mut d_input = vec![vec![0.0f32; d_model]; seq];
 
-        for (i_idx, cache_scores_i) in cache.scores.iter().enumerate() {
-            let n_scores = cache_scores_i.len();
+        for i in 0..seq {
+            let n_scores = cache.scores[i].len();
             let mut d_scores = vec![0.0f32; n_scores];
 
-            for (j_idx, vs_j) in cache.vs.iter().enumerate() {
-                for (c, &v) in vs_j.iter().enumerate() {
-                    d_scores[j_idx] += d_ctx[i_idx][c] * v;
+            for j in 0..n_scores {
+                for (c, &v) in cache.vs[j].iter().enumerate() {
+                    d_scores[j] += d_ctx[i][c] * v;
                 }
             }
 
-            for (j_idx, &s) in cache_scores_i.iter().enumerate() {
-                let softmax_grad = s * (d_scores[j_idx] - d_scores.iter().zip(cache_scores_i.iter()).map(|(ds, sc)| ds * sc).sum::<f32>());
+            for (j, &s) in cache.scores[i].iter().enumerate() {
+                let softmax_grad = s * (d_scores[j] - d_scores.iter().zip(cache.scores[i].iter()).map(|(ds, sc)| ds * sc).sum::<f32>());
                 let d_attn = softmax_grad / scale;
 
-                for (c, &q) in cache.qs[i_idx].iter().enumerate() {
-                    for (r, &norm_val) in cache.normed[i_idx].iter().enumerate() {
+                for (c, &q) in cache.qs[i].iter().enumerate() {
+                    for (r, &norm_val) in cache.normed[i].iter().enumerate() {
                         d_wk[r * self.d_k + c] += d_attn * q * norm_val;
                     }
                 }
 
-                for (c, &k) in cache.ks[j_idx].iter().enumerate() {
-                    for (r, &norm_val) in cache.normed[i_idx].iter().enumerate() {
+                for (c, &k) in cache.ks[j].iter().enumerate() {
+                    for (r, &norm_val) in cache.normed[i].iter().enumerate() {
                         d_wq[r * self.d_k + c] += d_attn * k * norm_val;
                     }
-                    d_input[j_idx][c % d_model] += d_attn * k;
+                    d_input[j][c % d_model] += d_attn * k;
                 }
 
-                for (c, _) in cache.vs[j_idx].iter().enumerate() {
-                    d_wv[c % d_model * self.d_k + c / d_model] += cache_scores_i[j_idx] * d_ctx[i_idx][c];
-                    d_input[j_idx][c % d_model] += cache_scores_i[j_idx] * d_ctx[i_idx][c];
+                for (c, _) in cache.vs[j].iter().enumerate() {
+                    d_wv[c % d_model * self.d_k + c / d_model] += cache.scores[i][j] * d_ctx[i][c];
+                    d_input[j][c % d_model] += cache.scores[i][j] * d_ctx[i][c];
                 }
             }
         }
@@ -199,14 +195,13 @@ impl AttentionHead {
     }
 }
 
-pub struct TransformerLayer {
+struct TransformerLayer {
     heads: Vec<AttentionHead>,
     d_model: usize,
     w1: Vec<f32>,
     w2: Vec<f32>,
 }
 
-#[allow(dead_code)]
 struct LayerCache {
     attn_caches: Vec<AttnCache>,
     normed1: Vec<Vec<f32>>,
@@ -215,7 +210,6 @@ struct LayerCache {
     h1: Vec<Vec<f32>>,
 }
 
-#[allow(dead_code)]
 impl TransformerLayer {
     fn new(d_model: usize, n_heads: usize, seed: &mut u64) -> Self {
         let d_k = d_model / n_heads;
@@ -264,7 +258,7 @@ impl TransformerLayer {
             result.push(res);
         }
 
-        let cache = LayerCache { attn_caches, normed1, after_attn, normed2, h1: h1_all };
+        let cache = LayerCache { attn_caches, normed1: normed1, after_attn, normed2, h1: h1_all };
         (result, cache)
     }
 
@@ -306,9 +300,9 @@ impl TransformerLayer {
         }
 
         let mut d_normed1 = vec![vec![0.0f32; d_model]; seq];
-        for (_hi, head) in self.heads.iter().enumerate() {
-            let (d_input, _d_wq, _d_wk, _d_wv, _d_wo) = head.backward(&d_after_attn, &cache.attn_caches[_hi]);
-            for (n, inp) in d_normed1.iter_mut().zip(d_input.iter()) {
+        for (hi, head) in self.heads.iter().enumerate() {
+            let (d_input, d_wq, d_wk, d_wv, d_wo) = head.backward(&d_after_attn, &cache.attn_caches[hi]);
+            for (i, (n, inp)) in d_normed1.iter_mut().zip(d_input.iter()).enumerate() {
                 for (j, v) in n.iter_mut().zip(inp.iter()) {
                     *j += v;
                 }
@@ -456,51 +450,56 @@ impl RealIglaModel {
         let mut d_logits = vec![vec![0.0f32; self.vocab_size]; seq_len];
         let mut total_loss = 0.0f32;
 
-        for (i, logit_row) in logits.iter().enumerate() {
-            let mut probs = logit_row.clone();
+        for i in 0..seq_len {
+            let mut probs = logits[i].clone();
             softmax(&mut probs);
             let target = targets[i].min(self.vocab_size - 1);
             total_loss -= probs[target].max(1e-10).ln();
 
-            d_logits[i].copy_from_slice(&probs);
+            for j in 0..self.vocab_size {
+                d_logits[i][j] = probs[j];
+            }
             d_logits[i][target] -= 1.0;
         }
 
         let loss = total_loss / seq_len as f32;
 
         let mut d_lm_head = vec![0.0f32; self.vocab_size * d_model];
-        let d_xs: Vec<Vec<f32>> = fwd_cache.layer_caches.last().map_or_else(
+        let mut d_xs: Vec<Vec<f32>> = fwd_cache.layer_caches.last().map_or_else(
             || fwd_cache.embed_out.clone(),
             |lc| {
-                lc.after_attn.iter()
+                let last_out: Vec<Vec<f32>> = lc.after_attn.iter()
                     .zip(lc.normed2.iter())
                     .map(|(a, _)| a.clone())
-                    .collect()
+                    .collect();
+                last_out
             },
         );
 
+        // Backprop through lm_head
         let mut d_transformer_out = vec![vec![0.0f32; d_model]; seq_len];
-        for (di, dlog) in d_logits.iter().enumerate() {
-            for (j, &dlj) in dlog.iter().enumerate() {
-                for (k, dxs_ik) in d_xs[di].iter().enumerate() {
-                    d_lm_head[j * d_model + k] += dlj * dxs_ik;
+        for i in 0..seq_len {
+            for j in 0..self.vocab_size {
+                for k in 0..d_model {
+                    d_lm_head[j * d_model + k] += d_transformer_out[i].get(k).copied().unwrap_or(0.0) + d_logits[i][j] * d_xs[i].get(k).copied().unwrap_or(0.0);
                 }
-                for (k, &lm_w) in self.lm_head[j * d_model..(j + 1) * d_model].iter().enumerate() {
-                    d_transformer_out[di][k] += lm_w * dlj;
+                for k in 0..d_model {
+                    d_transformer_out[i][k] += self.lm_head[j * d_model + k] * d_logits[i][j];
                 }
             }
         }
 
+        // Apply gradient to lm_head
         let grad_scale = lr / seq_len as f32;
-        for (i, lm) in self.lm_head.iter_mut().enumerate() {
-            let _ = i;
-            *lm -= grad_scale * d_lm_head[i];
+        for i in 0..d_lm_head.len() {
+            self.lm_head[i] -= grad_scale * d_lm_head[i];
         }
 
+        // Apply gradient to embeddings (simplified: just update input token embeddings)
         for (i, &token_id) in input.iter().enumerate() {
             let id = token_id.min(self.vocab_size - 1);
-            for (k, grad_val) in d_transformer_out[i].iter().enumerate() {
-                let grad = grad_val / seq_len as f32;
+            for k in 0..d_model {
+                let grad = d_transformer_out[i][k] / seq_len as f32;
                 self.embed[id * d_model + k] -= lr * grad;
             }
         }
