@@ -1,82 +1,95 @@
-use anyhow::Result;
+//! table.rs — ASCII table rendering for tri report / tri dash
+//! No external deps: pure Rust formatting
+//! Used to render RINGS dashboard, experiment results, agent roster
 
-/// Markdown table parser and renderer for #143
-#[derive(Debug)]
+/// A simple ASCII table with header row and data rows.
 pub struct Table {
-    pub rows: Vec<Row>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Row {
-    pub task: String,
-    pub agent: String,
-    pub status: String,
-    pub bpb: Option<f64>,
-    pub ref_issue: String,
+    headers: Vec<String>,
+    rows: Vec<Vec<String>>,
 }
 
 impl Table {
-    pub fn parse(markdown: &str) -> Result<Self> {
-        let rows = markdown
-            .lines()
-            .skip_while(|l| !l.contains("Task"))
-            .skip(1) // header
-            .skip_while(|l| l.contains("---"))
-            .take_while(|l| l.starts_with("|"))
-            .filter_map(|l| Self::parse_row(l))
-            .collect();
-        
-        Ok(Table { rows })
-    }
-
-    fn parse_row(line: &str) -> Option<Row> {
-        let cells: Vec<&str> = line
-            .trim_start_matches('|')
-            .trim_end_matches('|')
-            .split('|')
-            .map(|s| s.trim())
-            .collect();
-        
-        if cells.len() < 5 {
-            return None;
+    pub fn new(headers: Vec<&str>) -> Self {
+        Self {
+            headers: headers.iter().map(|s| s.to_string()).collect(),
+            rows: Vec::new(),
         }
-
-        Some(Row {
-            task: cells[0].to_string(),
-            agent: cells[1].to_string(),
-            status: cells[2].to_string(),
-            bpb: cells[3].parse().ok(),
-            ref_issue: cells.get(4).unwrap_or(&"").to_string(),
-        })
     }
 
-    pub fn update_row(&mut self, agent: &str, status: &str, bpb: Option<f64>) -> bool {
-        for row in &mut self.rows {
-            if row.agent == agent {
-                row.status = status.to_string();
-                row.bpb = bpb;
-                return true;
+    pub fn add_row(&mut self, row: Vec<&str>) {
+        self.rows.push(row.iter().map(|s| s.to_string()).collect());
+    }
+
+    /// Render table to String with column auto-sizing
+    pub fn render(&self) -> String {
+        let ncols = self.headers.len();
+        let mut widths = vec![0usize; ncols];
+
+        for (i, h) in self.headers.iter().enumerate() {
+            widths[i] = widths[i].max(h.len());
+        }
+        for row in &self.rows {
+            for (i, cell) in row.iter().enumerate() {
+                if i < ncols {
+                    widths[i] = widths[i].max(cell.len());
+                }
             }
         }
-        false
+
+        let sep = Self::sep_line(&widths);
+        let mut out = String::new();
+        out.push_str(&sep);
+        out.push_str(&Self::fmt_row(&self.headers, &widths));
+        out.push_str(&sep);
+        for row in &self.rows {
+            out.push_str(&Self::fmt_row(row, &widths));
+        }
+        out.push_str(&sep);
+        out
     }
 
-    pub fn render(&self) -> String {
-        let mut out = String::new();
-        out.push_str("| Task                                    | Agent   | Status       | BPB    | Ref        |\n");
-        out.push_str("|-----------------------------------------|---------|--------------|--------|------------|\n");
-        
-        for row in &self.rows {
-            out.push_str(&format!(
-                "| {:39} | {:7} | {:12} | {:6} | {:10} |\n",
-                row.task,
-                row.agent,
-                row.status,
-                row.bpb.map(|b| b.to_string()).unwrap_or_else(|| "—".to_string()),
-                row.ref_issue
-            ));
-        }
-        
-        out
+    fn sep_line(widths: &[usize]) -> String {
+        let inner: Vec<String> = widths.iter().map(|w| "-".repeat(w + 2)).collect();
+        format!("+{}+\n", inner.join("+"))
+    }
+
+    fn fmt_row(cells: &[String], widths: &[usize]) -> String {
+        let parts: Vec<String> = cells
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!(" {:<width$} ", c, width = widths.get(i).copied().unwrap_or(0)))
+            .collect();
+        format!("|{}|\n", parts.join("|"))
+    }
+}
+
+/// Render a BPB progress line: e.g. "IGLA 1.82 ──►── 1.15 target"
+pub fn bpb_progress(label: &str, current: f64, target: f64) -> String {
+    let pct = ((current - target) / (1.2244 - target)).clamp(0.0, 1.0);
+    let filled = (pct * 20.0) as usize;
+    let bar: String = (0..20)
+        .map(|i| if i < filled { '█' } else { '░' })
+        .collect();
+    format!("{label}: [{bar}] {current:.4} → {target:.4}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table_renders_header() {
+        let mut t = Table::new(vec!["Agent", "BPB", "Status"]);
+        t.add_row(vec!["GOLF", "1.15", "🟡 IN PROGRESS"]);
+        let out = t.render();
+        assert!(out.contains("Agent"));
+        assert!(out.contains("GOLF"));
+    }
+
+    #[test]
+    fn bpb_progress_smoke() {
+        let line = bpb_progress("IGLA", 1.82, 1.10);
+        assert!(line.contains("IGLA"));
+        assert!(line.contains("1.1000"));
     }
 }

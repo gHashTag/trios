@@ -1,64 +1,51 @@
-use anyhow::Result;
-use std::process::Command;
+//! gh.rs — GitHub CLI integration for tri commands
+//! All GitHub operations go through `gh` binary (no browser, no API tokens in code)
 
-/// GitHub CLI wrapper
-pub struct GhClient;
+use anyhow::{Context, Result};
+use std::process::{Command, Output};
 
-impl GhClient {
-    pub fn issue_body(num: u32) -> Result<String> {
-        let output = Command::new("gh")
-            .args(["issue", "view", &num.to_string(), "--json", "body", "-q", ".body"])
-            .output()?;
-        
-        if !output.status.success() {
-            anyhow::bail!("gh issue view failed: {}", String::from_utf8_lossy(&output.stderr));
-        }
-        
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+/// Run a `gh` subcommand and return stdout as String.
+/// Respects L8: all mutations must be followed by push.
+pub fn gh(args: &[&str]) -> Result<String> {
+    let out: Output = Command::new("gh")
+        .args(args)
+        .output()
+        .with_context(|| format!("gh {}", args.join(" ")))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        anyhow::bail!("gh {} failed: {}", args.join(" "), stderr);
     }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
 
-    pub fn issue_edit(num: u32, body: &str) -> Result<()> {
-        let temp = std::env::temp_dir().join("tri-issue-body.md");
-        std::fs::write(&temp, body)?;
-        
-        let status = Command::new("gh")
-            .args(["issue", "edit", &num.to_string(), "--body-file", temp.to_str().unwrap()])
-            .status()?;
-        
-        if !status.success() {
-            anyhow::bail!("gh issue edit failed");
-        }
-        
-        Ok(())
-    }
+/// Post a comment to an issue (gh issue comment <N> --body <body>)
+pub fn issue_comment(issue: u32, repo: &str, body: &str) -> Result<String> {
+    gh(&["issue", "comment", &issue.to_string(), "--repo", repo, "--body", body])
+}
 
-    pub fn issue_create(title: &str, body: &str, labels: &[&str]) -> Result<u32> {
-        let label_arg = labels.join(",");
-        let output = Command::new("gh")
-            .args(["issue", "create", "-R", "gHashTag/trios"])
-            .args(["-t", title])
-            .args(["-b", body])
-            .args(["-l", &label_arg])
-            .output()?;
-        
-        if !output.status.success() {
-            anyhow::bail!("gh issue create failed");
-        }
-        
-        // Parse URL to get issue number
-        let url = String::from_utf8_lossy(&output.stdout);
-        url.split("/issues/")
-            .nth(1)
-            .and_then(|s| s.split_whitespace().next())
-            .and_then(|s| s.parse::<u32>().ok())
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse issue number"))
-    }
+/// View issue body (gh issue view <N> --repo <repo> --json body -q .body)
+pub fn issue_view(issue: u32, repo: &str) -> Result<String> {
+    gh(&["issue", "view", &issue.to_string(), "--repo", repo, "--json", "body,title,state"])
+}
 
-    pub fn comment(issue: u32, body: &str) -> Result<()> {
-        Command::new("gh")
-            .args(["issue", "comment", &issue.to_string(), "-b", body])
-            .status()?;
-        
-        Ok(())
+/// Create a PR (gh pr create)
+pub fn pr_create(title: &str, body: &str, head: &str, base: &str, repo: &str) -> Result<String> {
+    gh(&["pr", "create", "--repo", repo, "--title", title, "--body", body, "--head", head, "--base", base])
+}
+
+/// List open issues with JSON output
+pub fn issues_list(repo: &str, label: &str) -> Result<String> {
+    gh(&["issue", "list", "--repo", repo, "--label", label, "--json", "number,title,assignees,labels,state"])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gh_binary_exists() {
+        // Just verify gh is on PATH — no network call
+        let out = Command::new("gh").arg("--version").output();
+        assert!(out.is_ok(), "gh binary must be available on PATH");
     }
 }
