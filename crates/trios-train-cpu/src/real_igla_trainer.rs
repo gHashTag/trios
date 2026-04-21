@@ -57,11 +57,13 @@ impl PhaseAConfig {
         for step in 0..self.max_steps {
             // Simulated forward + backward (replace with real)
             let logits = model.forward(&[], None);
-            let targets = vec![0; logits.len()];
-            let loss = cross_entropy_loss(&logits, &targets);
+            // Flatten logits: Vec<Vec<f32>> -> Vec<f32>
+            let flat_logits: Vec<f32> = logits.into_iter().flatten().collect();
+            let targets = vec![0usize; flat_logits.len()];
+            let loss = cross_entropy_loss(&flat_logits, &targets);
 
-            if loss < best_loss {
-                best_loss = loss;
+            if (loss as f64) < best_loss {
+                best_loss = loss as f64;
             }
 
             if step % 500 == 0 {
@@ -118,11 +120,13 @@ impl PhaseBConfig {
 
         for step in 0..self.max_steps {
             let logits = model.forward(&[], None);
-            let targets = vec![0; logits.len()];
-            let loss = cross_entropy_loss(&logits, &targets);
+            // Flatten logits: Vec<Vec<f32>> -> Vec<f32>
+            let flat_logits: Vec<f32> = logits.into_iter().flatten().collect();
+            let targets = vec![0usize; flat_logits.len()];
+            let loss = cross_entropy_loss(&flat_logits, &targets);
 
-            if loss < best_loss {
-                best_loss = loss;
+            if (loss as f64) < best_loss {
+                best_loss = loss as f64;
             }
 
             if step % 300 == 0 {
