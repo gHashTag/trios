@@ -93,39 +93,26 @@ fn run_lr(lr: f64, train_data: &[u8], val_data: &[u8]) -> (f64, f64) {
 
                 let mut sum_exp = 0.0f32;
                 for v in 0..VOCAB_SIZE {
-                    let exp_val = (logits[l_offset + v] - max_logit).exp();
-                    sum_exp += exp_val;
-                    gradients[l_offset + v] = exp_val;
+                    sum_exp += (logits[l_offset + v] - max_logit).exp();
                 }
 
+                let _input_offset = input_idx * D_MODEL;
                 for v in 0..VOCAB_SIZE {
-                    gradients[l_offset + v] /= sum_exp;
-                }
-
-                gradients[l_offset + target_idx] -= 1.0;
-            }
-        }
-
-        // Compute embedding gradients
-        for b in 0..BATCH_SIZE {
-            for i in 0..SEQ_LEN {
-                let idx = b * SEQ_LEN + i;
-                let input_idx = inputs[idx];
-                let input_offset = input_idx * D_MODEL;
-
-                for v in 0..VOCAB_SIZE {
+                    let prob = (logits[l_offset + v] - max_logit).exp() / sum_exp;
+                    let dlogits = prob - if v == target_idx { 1.0 } else { 0.0 };
                     let emb_offset = v * D_MODEL;
-                    let grad_val = gradients[idx * VOCAB_SIZE + v];
-
                     for d in 0..D_MODEL {
-                        embeddings[input_offset + d] += grad_val * embeddings[emb_offset + d];
+                        gradients[_input_offset + d] += dlogits * embeddings[emb_offset + d];
+                        gradients[emb_offset + d] += dlogits * embeddings[_input_offset + d];
                     }
                 }
             }
         }
 
-        clip_gradients(&mut embeddings, 1.0);
-        optimizer.step(&mut embeddings);
+        let scale = 1.0 / (BATCH_SIZE * SEQ_LEN) as f32;
+        for g in gradients.iter_mut() { *g *= scale; }
+        clip_gradients(&mut gradients, 1.0);
+        optimizer.step(&mut embeddings, &gradients);
     }
 
     // Validation
