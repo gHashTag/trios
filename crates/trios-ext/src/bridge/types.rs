@@ -40,7 +40,11 @@ impl Envelope {
     }
 
     /// Create a chat message envelope.
-    pub fn chat_message(agent_id: impl Into<String>, content: impl Into<String>, role: impl Into<String>) -> Self {
+    pub fn chat_message(
+        agent_id: impl Into<String>,
+        content: impl Into<String>,
+        role: impl Into<String>,
+    ) -> Self {
         Self::new(
             "chat:message",
             Payload::ChatMessage {
@@ -53,24 +57,33 @@ impl Envelope {
 
     /// Create an agent connected envelope.
     pub fn agent_connected(agent_id: impl Into<String>) -> Self {
-        Self::new("agent:connected", Payload::AgentConnected {
-            agent_id: agent_id.into(),
-        })
+        Self::new(
+            "agent:connected",
+            Payload::AgentConnected {
+                agent_id: agent_id.into(),
+            },
+        )
     }
 
     /// Create an agent disconnected envelope.
     pub fn agent_disconnected(agent_id: impl Into<String>) -> Self {
-        Self::new("agent:disconnected", Payload::AgentDisconnected {
-            agent_id: agent_id.into(),
-        })
+        Self::new(
+            "agent:disconnected",
+            Payload::AgentDisconnected {
+                agent_id: agent_id.into(),
+            },
+        )
     }
 
     /// Create an MCP tool call envelope.
     pub fn mcp_tool_call(tool: impl Into<String>, params: serde_json::Value) -> Self {
-        Self::new("mcp:tool_call", Payload::McpToolCall {
-            tool: tool.into(),
-            params,
-        })
+        Self::new(
+            "mcp:tool_call",
+            Payload::McpToolCall {
+                tool: tool.into(),
+                params,
+            },
+        )
     }
 
     /// Serialize envelope to JSON string.
@@ -105,14 +118,10 @@ pub enum Payload {
     },
 
     /// Agent connected to the system.
-    AgentConnected {
-        agent_id: String,
-    },
+    AgentConnected { agent_id: String },
 
     /// Agent disconnected from the system.
-    AgentDisconnected {
-        agent_id: String,
-    },
+    AgentDisconnected { agent_id: String },
 
     /// MCP tool invocation request/response.
     McpToolCall {
@@ -136,8 +145,18 @@ impl Payload {
 
 /// Get current Unix timestamp in milliseconds.
 fn timestamp_ms() -> u64 {
-    use js_sys::Date;
-    Date::now() as u64
+    #[cfg(target_arch = "wasm32")]
+    {
+        use js_sys::Date;
+        Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
 }
 
 #[cfg(test)]
@@ -172,7 +191,11 @@ mod tests {
         assert_eq!(envelope.event_type, "chat:message");
 
         match envelope.payload {
-            Payload::ChatMessage { agent_id, content, role } => {
+            Payload::ChatMessage {
+                agent_id,
+                content,
+                role,
+            } => {
                 assert_eq!(agent_id, "BRAVO-02");
                 assert_eq!(content, "Hello");
                 assert_eq!(role, "assistant");
@@ -183,10 +206,45 @@ mod tests {
 
     #[test]
     fn payload_event_type() {
-        assert_eq!(Payload::AgentHeartbeat { agent_id: "test".into(), status: "ok".into(), timestamp: 0 }.event_type(), "agent:heartbeat");
-        assert_eq!(Payload::ChatMessage { agent_id: "test".into(), content: "hi".into(), role: "user".into() }.event_type(), "chat:message");
-        assert_eq!(Payload::AgentConnected { agent_id: "test".into() }.event_type(), "agent:connected");
-        assert_eq!(Payload::AgentDisconnected { agent_id: "test".into() }.event_type(), "agent:disconnected");
-        assert_eq!(Payload::McpToolCall { tool: "test_tool".into(), params: serde_json::json!({}) }.event_type(), "mcp:tool_call");
+        assert_eq!(
+            Payload::AgentHeartbeat {
+                agent_id: "test".into(),
+                status: "ok".into(),
+                timestamp: 0
+            }
+            .event_type(),
+            "agent:heartbeat"
+        );
+        assert_eq!(
+            Payload::ChatMessage {
+                agent_id: "test".into(),
+                content: "hi".into(),
+                role: "user".into()
+            }
+            .event_type(),
+            "chat:message"
+        );
+        assert_eq!(
+            Payload::AgentConnected {
+                agent_id: "test".into()
+            }
+            .event_type(),
+            "agent:connected"
+        );
+        assert_eq!(
+            Payload::AgentDisconnected {
+                agent_id: "test".into()
+            }
+            .event_type(),
+            "agent:disconnected"
+        );
+        assert_eq!(
+            Payload::McpToolCall {
+                tool: "test_tool".into(),
+                params: serde_json::json!({})
+            }
+            .event_type(),
+            "mcp:tool_call"
+        );
     }
 }
