@@ -42,14 +42,17 @@ class Config:
     ff_mult: int = 4
     seq_len: int = 1024
     batch_size: int = 32
+    micro_batch_size: int = 0
     lr: float = 0.003
+    min_lr: float = 0.0003
     weight_decay: float = 0.01
     iterations: int = 5000
     warmup_steps: int = 250
     eval_every: int = 500
-    ema_decay: float =  0.995
+    ema_decay: float = 0.995
     rope_theta: float = 10000.0
     grad_clip: float = 1.0
+    dropout: float = 0.0
 
     @property
     def ff_dim(self):
@@ -124,12 +127,7 @@ class CausalSelfAttention(nn.Module):
         freqs = self.rotary(T, x.device)
         q = apply_rotary_emb(q, freqs)
         k = apply_rotary_emb(k, freqs)
-        scale = self.head_dim ** -0.5
-        attn = torch.matmul(q, k.transpose(-2, -1)) * scale
-        mask = torch.triu(torch.ones(T, T, device=x.device, dtype=torch.bool), diagonal=1)
-        attn = attn.masked_fill(mask.unsqueeze(0).unsqueeze(0), float('-inf'))
-        attn = F.softmax(attn.float(), dim=-1).type_as(q)
-        out = torch.matmul(attn, v)
+        out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         out = out.transpose(1, 2).contiguous().view(B, T, -1)
         return self.wo(out)
 
@@ -155,10 +153,11 @@ class TransformerBlock(nn.Module):
         self.attn = CausalSelfAttention(cfg)
         self.ff_norm = RMSNorm(cfg.d_model)
         self.ff = FeedForward(cfg)
+        self.dropout = nn.Dropout(cfg.dropout) if cfg.dropout > 0 else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.attn_norm(x))
-        x = x + self.ff(self.ff_norm(x))
+        x = x + self.dropout(self.attn(self.attn_norm(x)))
+        x = x + self.dropout(self.ff(self.ff_norm(x)))
         return x
 
 
@@ -308,7 +307,7 @@ def get_lr(step: int, cfg: Config) -> float:
     if step < cfg.warmup_steps:
         return cfg.lr * step / cfg.warmup_steps
     progress = (step - cfg.warmup_steps) / max(cfg.iterations - cfg.warmup_steps, 1)
-    return cfg.lr * 0.5 * (1 + math.cos(math.pi * progress))
+    return cfg.min_lr + 0.5 * (cfg.lr - cfg.min_lr) * (1 + math.cos(math.pi * progress))
 
 
 # ─── Training Loop ────────────────────────────────────────────────────────────
@@ -329,6 +328,10 @@ def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
     model = GPTModel(cfg).to(device)
     ema = EMA(model, cfg.ema_decay)
 
+    grad_accum = cfg.batch_size // cfg.micro_batch_size if cfg.micro_batch_size > 0 else 1
+    eff_batch = cfg.micro_batch_size if cfg.micro_batch_size > 0 else cfg.batch_size
+    print(f"Grad accumulation: {grad_accum} steps (effective batch={eff_batch * grad_accum})")
+
     if use_muon:
         optimizer = Muon(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
         print("Optimizer: Muon")
@@ -345,19 +348,23 @@ def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
             for pg in optimizer.param_groups:
                 pg["lr"] = lr
 
-        batch = get_batch(train_data, cfg.batch_size, cfg.seq_len, device)
-        loss = model.compute_loss(batch)
-        optimizer.zero_grad()
-        loss.backward()
+        loss_accum = 0.0
+        for micro in range(grad_accum):
+            batch = get_batch(train_data, eff_batch, cfg.seq_len, device)
+            loss = model.compute_loss(batch) / grad_accum
+            loss.backward()
+            loss_accum += loss.item()
+
         if cfg.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
         optimizer.step()
+        optimizer.zero_grad()
         ema.update(model)
 
         if step % max(1, cfg.iterations // 20) == 0:
             elapsed = time.time() - t0
             sps = step / elapsed
-            print(f"step {step:5d}/{cfg.iterations} loss={loss.item():.4f} lr={lr:.6f} sps={sps:.1f}")
+            print(f"step {step:5d}/{cfg.iterations} loss={loss_accum:.4f} lr={lr:.6f} sps={sps:.1f}")
 
         if step % cfg.eval_every == 0 or step == cfg.iterations:
             ema.apply(model)
@@ -372,7 +379,7 @@ def train(cfg: Config, data_path: str, seed: int = 42, use_muon: bool = False):
     elapsed = time.time() - t0
     print(f"\nTraining complete: {elapsed:.1f}s")
     print(f"val_bpb: {best_bpb:.4f}")
-    print(f"train_bpb: {loss.item() / math.log(2):.4f}")
+    print(f"train_bpb: {loss_accum / math.log(2):.4f}")
     print(f"params: {cfg.param_count()}")
     return best_bpb
 
@@ -390,6 +397,8 @@ def main():
     parser.add_argument("--muon", action="store_true", help="Use Muon optimizer")
     parser.add_argument("--layers", type=int, default=None)
     parser.add_argument("--d-model", type=int, default=None)
+    parser.add_argument("--micro-batch", type=int, default=None, help="Micro batch size for gradient accumulation")
+    parser.add_argument("--dropout", type=float, default=None)
     parser.add_argument("--preset", choices=["tiny", "small", "medium", "submit"], default=None,
                         help="Model presets: tiny=2L/935K, small=6L/2.7M, medium=10L/4.5M, submit=14L/6.3M")
     args = parser.parse_args()
@@ -420,6 +429,10 @@ def main():
         cfg.n_layers = args.layers
     if args.d_model:
         cfg.d_model = args.d_model
+    if args.micro_batch:
+        cfg.micro_batch_size = args.micro_batch
+    if args.dropout:
+        cfg.dropout = args.dropout
 
     train(cfg, args.data, args.seed, use_muon=args.muon)
 
