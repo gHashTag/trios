@@ -400,6 +400,7 @@ impl RealIglaModel {
         xs.iter().map(|x| matvec(&self.lm_head, self.vocab_size, d_model, x)).collect()
     }
 
+    #[allow(dead_code)]
     fn forward_cached(&self, input_ids: &[usize]) -> (Vec<Vec<f32>>, ForwardCache) {
         let d_model = self.d_model;
         let embed_out: Vec<Vec<f32>> = input_ids.iter().map(|&id| {
