@@ -390,9 +390,25 @@ def main():
     parser.add_argument("--muon", action="store_true", help="Use Muon optimizer")
     parser.add_argument("--layers", type=int, default=None)
     parser.add_argument("--d-model", type=int, default=None)
+    parser.add_argument("--preset", choices=["tiny", "small", "medium", "submit"], default=None,
+                        help="Model presets: tiny=2L/935K, small=6L/2.7M, medium=10L/4.5M, submit=14L/6.3M")
     args = parser.parse_args()
 
     cfg = Config()
+    if args.preset == "tiny":
+        cfg.n_layers, cfg.d_model = 2, 192
+        cfg.iterations, cfg.batch_size = 2000, 32
+    elif args.preset == "small":
+        cfg.n_layers, cfg.d_model = 6, 192
+        cfg.iterations, cfg.batch_size = 5000, 32
+    elif args.preset == "medium":
+        cfg.n_layers, cfg.d_model = 10, 192
+        cfg.iterations, cfg.batch_size = 5000, 64
+    elif args.preset == "submit":
+        cfg.n_layers, cfg.d_model = 14, 192
+        cfg.iterations, cfg.batch_size = 10000, 64
+        cfg.seq_len = 2048
+
     cfg.iterations = args.iterations
     if args.batch_size:
         cfg.batch_size = args.batch_size
