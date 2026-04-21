@@ -15,45 +15,25 @@ use crate::{
 
 /// Report experiment result to issue #143
 pub fn report(agent: &str, status: &str, bpb: Option<f64>) -> Result<()> {
-    println!("📊 Reporting {}={} --bpb={:?}", agent, status, bpb);
+    println!("Reporting {}={} --bpb={:?}", agent, status, bpb);
 
     let _config = Config::load();
 
-    // Acquire lock for #143 table update
-    let _lock = LockGuard::acquire()
-        .context("Failed to acquire lock for issue #143")?;
+    let _lock = LockGuard::acquire().context("Failed to acquire lock for issue #143")?;
 
-    // Get current issue #143 body
     let issue_num = 143;
-    let body = GhClient::issue_body(issue_num)
-        .context("Failed to fetch issue #143")?;
+    let body = GhClient::issue_body(issue_num).context("Failed to fetch issue #143")?;
 
-    // Parse existing table
-    let rows = parse_table(&body)
-        .context("Failed to parse #143 table")?;
+    let rows = parse_table(&body, "Agent").context("Failed to parse #143 IGLA table")?;
 
-    // Check if agent already has a row
-    let existing_row = rows.iter().find(|r| r.agent == agent);
+    let _existing = rows.iter().find(|r| r.contains(agent));
 
-    // Get task name from existing row or create default
-    let _task = existing_row
-        .map(|r| r.task.clone())
-        .unwrap_or_else(|| format!("IGLA-{} Task", agent));
+    let updated_body =
+        update_table(&body, agent, status, bpb).context("Failed to update #143 table")?;
 
-    // Get ref from existing row or create default
-    let _ref_issue = existing_row
-        .map(|r| r.ref_issue.clone())
-        .unwrap_or_else(|| "#143".to_string());
+    GhClient::issue_edit(issue_num, &updated_body).context("Failed to update issue #143")?;
 
-    // Update table
-    let updated_body = update_table(&body, agent, status, bpb)
-        .context("Failed to update #143 table")?;
-
-    // Write back to issue
-    GhClient::issue_edit(issue_num, &updated_body)
-        .context("Failed to update issue #143")?;
-
-    println!("✓ Reported {}={} to #143", agent, status);
+    println!("Reported {}={} to #143", agent, status);
 
     Ok(())
 }
@@ -61,7 +41,7 @@ pub fn report(agent: &str, status: &str, bpb: Option<f64>) -> Result<()> {
 /// Batch report multiple results
 pub fn report_batch(results: Vec<(String, String, Option<f64>)>) -> Result<()> {
     let count = results.len();
-    println!("📊 Batch reporting {} results", count);
+    println!("Batch reporting {} results", count);
 
     let _lock = LockGuard::acquire()?;
 
@@ -74,7 +54,7 @@ pub fn report_batch(results: Vec<(String, String, Option<f64>)>) -> Result<()> {
 
     GhClient::issue_edit(issue_num, &body)?;
 
-    println!("✓ Batch reported {} results to #143", count);
+    println!("Batch reported {} results to #143", count);
 
     Ok(())
 }

@@ -2,102 +2,185 @@
 
 use anyhow::Result;
 
-/// Table row for IGLA tracking
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TableRow {
-    pub task: String,
-    pub agent: String,
-    pub status: String,
-    pub bpb: Option<f64>,
-    pub ref_issue: String,
+    pub cells: Vec<String>,
 }
 
-/// Parse markdown table from issue body
-pub fn parse_table(markdown: &str) -> Result<Vec<TableRow>> {
-    let rows = markdown
-        .lines()
-        .skip_while(|l| !l.contains("Task"))
-        .skip(1) // header
-        .skip_while(|l| l.contains("---"))
-        .take_while(|l| l.starts_with("|"))
-        .filter_map(parse_row)
-        .collect();
+impl TableRow {
+    pub fn agent(&self) -> Option<&str> {
+        self.cells
+            .iter()
+            .find(|c| {
+                let c = c.trim();
+                [
+                    "FOXTROT", "HOTEL", "ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "GOLF",
+                    "INDIA", "JULIETT", "KILO", "LIMA", "MIKE", "NOVEMBER", "OSCAR",
+                ]
+                .iter()
+                .any(|nato| c.contains(nato))
+            })
+            .map(String::as_str)
+    }
+
+    pub fn contains(&self, keyword: &str) -> bool {
+        self.cells.iter().any(|c| c.contains(keyword))
+    }
+
+    pub fn find_bpb_cell_index(&self) -> Option<usize> {
+        for (i, cell) in self.cells.iter().enumerate() {
+            let trimmed = cell.trim();
+            if trimmed.parse::<f64>().is_ok()
+                && trimmed.parse::<f64>().unwrap() > 0.0
+                && trimmed.parse::<f64>().unwrap() < 20.0
+            {
+                return Some(i);
+            }
+        }
+        None
+    }
+}
+
+pub fn parse_table(markdown: &str, header_hint: &str) -> Result<Vec<TableRow>> {
+    let mut found_header = false;
+    let mut past_separator = false;
+    let mut rows = Vec::new();
+
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if !found_header {
+            if trimmed.starts_with('|') && trimmed.contains(header_hint) {
+                found_header = true;
+            }
+            continue;
+        }
+        if !past_separator {
+            if trimmed.starts_with('|') && trimmed.contains('-') {
+                past_separator = true;
+            }
+            continue;
+        }
+        if !trimmed.starts_with('|') {
+            break;
+        }
+        if trimmed.contains('-') && !trimmed.contains(|c: char| c.is_alphanumeric()) {
+            continue;
+        }
+        if let Some(row) = parse_row(line) {
+            rows.push(row);
+        }
+    }
 
     Ok(rows)
 }
 
 fn parse_row(line: &str) -> Option<TableRow> {
-    let cells: Vec<&str> = line
+    let cells: Vec<String> = line
         .trim_start_matches('|')
         .trim_end_matches('|')
         .split('|')
-        .map(|s| s.trim())
+        .map(|s| s.trim().to_string())
         .collect();
 
-    if cells.len() < 5 {
+    if cells.len() < 2 {
         return None;
     }
 
-    Some(TableRow {
-        task: cells[0].to_string(),
-        agent: cells[1].to_string(),
-        status: cells[2].to_string(),
-        bpb: cells[3].parse().ok(),
-        ref_issue: cells.get(4).unwrap_or(&"").to_string(),
-    })
+    Some(TableRow { cells })
 }
 
-/// Update table and render back to markdown
+fn render_row_from_cells(cells: &[String]) -> String {
+    let rendered: Vec<String> = cells.iter().map(|c| format!(" {} ", c)).collect();
+    format!("|{}|", rendered.join("|"))
+}
+
 pub fn update_table(markdown: &str, agent: &str, status: &str, bpb: Option<f64>) -> Result<String> {
-    let lines: Vec<&str> = markdown.lines().collect();
-    let mut output = String::new();
+    let mut lines: Vec<String> = markdown.lines().map(String::from).collect();
+    let mut modified = false;
 
-    let mut in_table = false;
-    let mut header_found = false;
-
-    for line in &lines {
-        if line.contains("Task") && !header_found {
-            in_table = true;
-            header_found = true;
-            output.push_str(line);
-            output.push('\n');
+    for line in lines.iter_mut() {
+        if !line.trim().starts_with('|') || line.contains("---") {
             continue;
         }
 
-        if line.contains("---") {
-            output.push_str(line);
-            output.push('\n');
-            continue;
-        }
+        if let Some(mut row) = parse_row(line) {
+            if let Some(cell) = row
+                .cells
+                .iter()
+                .find(|c| c.trim() == agent || c.contains(agent))
+            {
+                if cell.trim() == agent || cell.trim().starts_with("**") && cell.contains(agent) {
+                    if let Some(bpb_idx) = row.find_bpb_cell_index() {
+                        if let Some(bpb_val) = bpb {
+                            row.cells[bpb_idx] = format!("{:.4}", bpb_val);
+                        }
+                    }
 
-        if in_table && line.starts_with("|") {
-            if let Some(row) = parse_row(line) {
-                if row.agent == agent {
-                    // Update this row
-                    output.push_str(&render_row(&row.task, agent, status, bpb, &row.ref_issue));
-                    output.push('\n');
-                    continue;
+                    for cell in row.cells.iter_mut() {
+                        let trimmed = cell.trim().to_string();
+                        if ["running", "pending", "in-progress", "active"]
+                            .contains(&trimmed.as_str())
+                        {
+                            *cell = format!(" {}", status);
+                            break;
+                        }
+                        if ["complete", "done", "baseline", "finished"].contains(&trimmed.as_str())
+                        {
+                            *cell = format!(" {}", status);
+                            break;
+                        }
+                    }
+
+                    *line = render_row_from_cells(&row.cells);
+                    modified = true;
                 }
             }
-        } else if in_table && !line.starts_with("|") {
-            in_table = false;
         }
-
-        output.push_str(line);
-        output.push('\n');
     }
 
-    Ok(output)
+    if !modified {
+        if let Some(pos) = lines
+            .iter()
+            .position(|l| l.contains("---") && l.trim().starts_with('|'))
+        {
+            if lines[..pos].iter().any(|l| l.trim().starts_with('|')) {
+                let new_row = if let Some(bpb_val) = bpb {
+                    format!("| {} | {:.4} | {} |", agent, bpb_val, status)
+                } else {
+                    format!("| {} | {} |", agent, status)
+                };
+                lines.insert(pos + 1, new_row);
+            }
+        }
+    }
+
+    Ok(lines.join("\n"))
 }
 
-fn render_row(task: &str, agent: &str, status: &str, bpb: Option<f64>, ref_issue: &str) -> String {
-    format!(
-        "| {:39} | {:7} | {:12} | {:6} | {:10} |",
-        task,
-        agent,
-        status,
-        bpb.map(|b| b.to_string())
-            .unwrap_or_else(|| "—".to_string()),
-        ref_issue
-    )
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_igla_table() {
+        let md = "| Agent | Experiment | BPB | Status |\n|---|---|---|---|\n| FOXTROT | IGLA-STACK-501 | 5.8711 | baseline |\n| HOTEL | IGLA-MUON-502 | 5.8736 | baseline |";
+        let rows = parse_table(md, "Agent").unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].contains("FOXTROT"));
+        assert!(rows[1].contains("HOTEL"));
+    }
+
+    #[test]
+    fn test_update_agent_bpb() {
+        let md = "| Agent | Experiment | BPB | Status |\n|---|---|---|---|\n| FOXTROT | IGLA-STACK-501 | 5.8711 | baseline |";
+        let updated = update_table(md, "FOXTROT", "complete", Some(1.13)).unwrap();
+        assert!(updated.contains("1.1300"));
+    }
+
+    #[test]
+    fn test_parse_empty_table() {
+        let md = "| Agent | BPB |\n|---|---|";
+        let rows = parse_table(md, "Agent").unwrap();
+        assert!(rows.is_empty());
+    }
 }
