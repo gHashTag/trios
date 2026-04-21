@@ -19,7 +19,7 @@ pub fn issue_new(template: &str, args: &[String]) -> Result<u32> {
 
     let (title, body, labels) = match template {
         "experiment" => {
-            let agent = args.get(0).context("Missing agent name")?;
+            let agent = args.first().context("Missing agent name")?;
             let description = args.get(1).context("Missing description")?;
 
             (
@@ -32,7 +32,7 @@ pub fn issue_new(template: &str, args: &[String]) -> Result<u32> {
             )
         }
         "bug" => {
-            let title = args.get(0).context("Missing bug title")?;
+            let title = args.first().context("Missing bug title")?;
             (
                 format!("BUG: {}", title),
                 format!(
@@ -43,7 +43,7 @@ pub fn issue_new(template: &str, args: &[String]) -> Result<u32> {
             )
         }
         "feature" => {
-            let title = args.get(0).context("Missing feature title")?;
+            let title = args.first().context("Missing feature title")?;
             (
                 format!("FEATURE: {}", title),
                 format!(
