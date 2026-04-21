@@ -4,10 +4,8 @@
 //!   tri sweep lr 0.01 0.0162 0.0262
 //!   tri sweep hidden 128 144 192
 
-use anyhow::{Context, Result};
-use std::collections::HashMap;
-
 use crate::cmd::run::{run, RunResult};
+use anyhow::{Context, Result};
 
 /// Run parameter sweep
 pub fn sweep(param: &str, values: Vec<String>) -> Result<SweepResults> {

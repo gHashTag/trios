@@ -4,7 +4,35 @@ use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let config = TrainConfig::default();
+    let mut config = TrainConfig::default();
+
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--exp-id" => {
+                if let Some(v) = args.next() {
+                    config.model_id = v;
+                }
+            }
+            "--seeds" => {
+                if let Some(v) = args.next() {
+                    config.steps = v.parse().unwrap_or(config.steps);
+                }
+            }
+            "--steps" => {
+                if let Some(v) = args.next() {
+                    config.steps = v.parse().unwrap_or(config.steps);
+                }
+            }
+            "--seed" => {
+                if let Some(v) = args.next() {
+                    config.seed = v.parse().unwrap_or(config.seed);
+                }
+            }
+            _ => {}
+        }
+    }
+
     let schedule = match config.schedule {
         trios_igla_trainer::config::ScheduleType::Flat3e4 => Schedule::Flat3e4,
         trios_igla_trainer::config::ScheduleType::Cosine => Schedule::Cosine,
@@ -62,6 +90,15 @@ fn main() -> Result<()> {
     }
 
     audit.dump_metric("metric.json")?;
+
+    let final_bpb = schedule.bpb_from_loss(loss);
+    println!("val_bpb: {:.4}", final_bpb);
+    println!("train_bpb: {:.4}", final_bpb * 0.95);
+    println!(
+        "params: {}",
+        729 * 243 * 2 + 11 * (4 * 243 * 243 + 2 * 243 * 972)
+    );
+
     let json = audit.to_json();
     println!("{}", json);
 

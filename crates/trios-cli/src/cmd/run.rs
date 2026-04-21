@@ -5,9 +5,8 @@
 //!   tri run phase_b_fine --seeds 3
 
 use anyhow::{Context, Result};
-use std::process::Command;
-use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Instant;
 
 /// Result of running an experiment
@@ -111,9 +110,7 @@ fn parse_params(stdout: &str) -> u64 {
         .lines()
         .find_map(|line| {
             if line.contains("params") || line.contains("parameters") {
-                line.split(':')
-                    .nth(1)
-                    .and_then(|s| s.trim().parse().ok())
+                line.split(':').nth(1).and_then(|s| s.trim().parse().ok())
             } else {
                 None
             }
@@ -122,7 +119,10 @@ fn parse_params(stdout: &str) -> u64 {
 }
 
 fn report_result(result: &RunResult) -> Result<()> {
-    println!("📊 Reporting to #143: {} → BPB {:.4}", result.exp_id, result.val_bpb);
-    // TODO: Implement auto-sync via gh CLI
-    Ok(())
+    println!(
+        "📊 Reporting to #143: {} → BPB {:.4}",
+        result.exp_id, result.val_bpb
+    );
+    let agent = std::env::var("TRI_AGENT").unwrap_or_else(|_| "GOLF".into());
+    super::report::report(&agent, "complete", Some(result.val_bpb))
 }

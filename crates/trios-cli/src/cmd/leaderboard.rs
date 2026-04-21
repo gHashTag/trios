@@ -13,11 +13,9 @@ pub fn leaderboard_show(agent_filter: Option<&str>) -> Result<()> {
     println!("🏆 Leaderboard");
     println!();
 
-    let ldb = Leaderboard::open()
-        .context("Failed to open leaderboard")?;
+    let ldb = Leaderboard::open()?;
 
-    let stats = ldb.stats()
-        .context("Failed to get stats")?;
+    let stats = ldb.stats()?;
 
     println!("Total entries: {}", stats.count);
     println!("Best val_bpb: {:.4}", stats.min_bpb);
@@ -57,6 +55,5 @@ pub fn leaderboard_export() -> Result<String> {
     let ldb = Leaderboard::open()?;
     let entries = ldb.top(1000)?;
 
-    serde_json::to_string_pretty(&entries)
-        .context("Failed to serialize leaderboard")
+    serde_json::to_string_pretty(&entries).map_err(Into::into)
 }
