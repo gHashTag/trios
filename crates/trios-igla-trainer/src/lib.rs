@@ -118,4 +118,30 @@ mod tests {
         assert_eq!(parsed["model_id"], "m");
         assert_eq!(parsed["git_sha"], "sha");
     }
+
+    #[test]
+    fn dump_metric_writes_file() {
+        let mut log = AuditLog::new("dump-test", 7, 500, "deadbeef");
+        log.record(100, 1.2, 1.73, 3e-4);
+        log.record(500, 0.8, 1.15, 3e-4);
+        let path = "/tmp/trios_test_metric.json";
+        log.dump_metric(path).unwrap();
+        let content = std::fs::read_to_string(path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["model_id"], "dump-test");
+        assert_eq!(parsed["completed_step"], 500);
+        assert!((parsed["latest_bpb"].as_f64().unwrap() - 1.15f64).abs() < 1e-3);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn dump_metric_empty_results() {
+        let log = AuditLog::new("empty", 0, 0, "sha");
+        let path = "/tmp/trios_test_metric_empty.json";
+        log.dump_metric(path).unwrap();
+        let content = std::fs::read_to_string(path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["completed_step"], 0);
+        std::fs::remove_file(path).ok();
+    }
 }
