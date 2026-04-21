@@ -51,6 +51,17 @@ jobs:
           test -f extension/sidepanel.html || (echo "extension/sidepanel.html missing!" && exit 1)
           echo "L8 OK: extension artifacts present"
 
+      - name: Check no inline scripts in HTML (CSP law)
+        run: |
+          if grep -Pn '<script(?![^>]*src=)[^>]*>' extension/*.html 2>/dev/null; then
+            echo "CSP VIOLATION: inline <script> without src= in HTML"
+            exit 1
+          fi
+          echo "CSP OK: no inline scripts"
+
+      - name: xtask ci-check (L9 + CSP + artifacts)
+        run: cargo run -p xtask -- ci-check
+
       - name: cargo clippy (L3 law — zero warnings)
         run: cargo clippy --all-targets --all-features -- -D warnings
 
