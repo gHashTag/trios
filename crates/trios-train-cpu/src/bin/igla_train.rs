@@ -61,7 +61,7 @@ impl EmbeddingModel {
         if tokens.len() < 2 { return 0.0; }
         let mut total = 0.0f32;
         for i in 0..tokens.len() - 1 {
-            let mut logits = self.forward(tokens[i]);
+            let logits = self.forward(tokens[i]);
             let target = tokens[i + 1].min(self.vocab - 1);
             let max_l = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
             let sum_exp: f32 = logits.iter().map(|l| (*l - max_l).exp()).sum();
@@ -83,10 +83,8 @@ impl EmbeddingModel {
             let mut logits = self.forward(inp);
             softmax(&mut logits);
 
-            let d = self.dim;
-
-            for vi in 0..v {
-                let grad = logits[vi] - if vi == tgt { 1.0 } else { 0.0 };
+            for (vi, logit) in logits.iter().enumerate().take(v) {
+                let grad = *logit - if vi == tgt { 1.0 } else { 0.0 };
                 let emb_off = inp * d;
                 let head_off = vi * d;
 
@@ -154,7 +152,7 @@ fn main() {
     let data_len = tokens.len();
 
     for step in 1..=steps {
-        let offset = ((step as usize * 97 + seed as usize) % (data_len.saturating_sub(SEQ + 1))).max(0);
+        let offset = (step * 97 + seed as usize) % (data_len.saturating_sub(SEQ + 1));
         let seq = &tokens[offset..offset + SEQ + 1];
         model.train_step(seq, lr);
 
