@@ -28,9 +28,10 @@ pub struct AppState {
     pub mcp: McpService,
     pub agents: Arc<Mutex<Vec<AgentState>>>,
     pub tasks: Arc<Mutex<Vec<TaskEntry>>>,
-    pub a2a: Arc<RwLock<A2ARouter>>,
     /// Broadcast channel for event streaming to all connected clients
     pub event_tx: broadcast::Sender<BusEvent>,
+    /// A2A router for agent-to-agent communication
+    pub a2a: Arc<RwLock<A2ARouter>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,8 +56,8 @@ impl AppState {
             mcp: McpService::new(),
             agents: Arc::new(Mutex::new(Vec::new())),
             tasks: Arc::new(Mutex::new(Vec::new())),
-            a2a: Arc::new(RwLock::new(A2ARouter::new())),
             event_tx: tx,
+            a2a: Arc::new(RwLock::new(A2ARouter::new())),
         }
     }
 
@@ -161,6 +162,8 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         "a2a/send"            => mcp_endpoints::a2a::send(state, req.params).await,
         "a2a/broadcast"       => mcp_endpoints::a2a::broadcast(state, req.params).await,
         "a2a/assign_task"     => mcp_endpoints::a2a::assign_task(state, req.params).await,
+        "a2a/task_status"     => mcp_endpoints::a2a::task_status(state, req.params).await,
+        "a2a/update_task"     => mcp_endpoints::a2a::update_task(state, req.params).await,
         _ => json!({"error": format!("unknown method: {}", req.method)}),
     };
 
@@ -305,9 +308,9 @@ mod tests {
             let p = json!({"id": format!("agent-{}", i), "name": format!("Agent {}", i)});
             mcp_endpoints::a2a::register(&state, Some(p)).await;
         }
-        let params = json!({"from": "system", "content": {"msg": "hello all"}});
+        let params = json!({"from": "system", "payload": {"msg": "hello all"}});
         let result = mcp_endpoints::a2a::broadcast(&state, Some(params)).await;
         assert_eq!(result["ok"], true);
-        assert_eq!(result["delivered_to"], 2);
+        assert_eq!(result["recipients"], 2);
     }
 }

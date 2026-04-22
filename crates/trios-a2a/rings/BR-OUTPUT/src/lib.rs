@@ -3,13 +3,13 @@
 //! Assembles all rings into a unified A2A service.
 //! Provides the `A2ARouter` that dispatches MCP tool calls to the registry.
 
-use trios_a2a_sr00::AgentCard;
 use trios_a2a_sr01::TaskState;
-use trios_a2a_sr02::{A2ARegistry, SharedRegistry, shared_registry};
+use trios_a2a_sr02::{SharedRegistry, shared_registry};
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// A2A Router — dispatches MCP tool calls to the registry.
+#[derive(Clone)]
 pub struct A2ARouter {
     registry: SharedRegistry,
 }
@@ -75,6 +75,7 @@ impl A2ARouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use trios_a2a_sr00::AgentCard;
     use serde_json::json;
 
     #[test]
