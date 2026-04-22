@@ -19,12 +19,22 @@ pub async fn register(state: &AppState, params: Option<Value>) -> Value {
         return json!({"error": "id and name are required"});
     }
 
-    // Register via the registry directly
+    // Parse capabilities from params
+    let capabilities: Vec<String> = params
+        .get("capabilities")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
+        .unwrap_or_default();
+
     let router = state.a2a.read().await;
     let shared = router.registry();
     let mut reg = shared.lock().unwrap();
     let mut card = trios_a2a::AgentCard::new(id, name);
     card.description = description.to_string();
+    card.capabilities = capabilities
+        .iter()
+        .map(|c| trios_a2a::Capability { name: c.clone(), description: None })
+        .collect();
     reg.register_agent(card);
     json!({"ok": true, "id": id})
 }
