@@ -1,15 +1,8 @@
-// Bootstrap for Trinity Agent Bridge sidepanel
-// Fetches WASM as ArrayBuffer, passes via object syntax to avoid
-// both instantiateStreaming CSP issues and wasm-bindgen URL object bug
-import init from "./trios_ext.js";
-
+// Sidepanel bootstrap (no-modules)
+// trios_ext.js is loaded via <script> tag and defines global wasm_bindgen
 (async () => {
   try {
-    const url = new URL("./trios_ext_bg.wasm", import.meta.url);
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`fetch wasm: ${resp.status}`);
-    const bytes = await resp.arrayBuffer();
-    await init({ module_or_path: bytes });
+    await wasm_bindgen();
     console.log("[trios-sidepanel] WASM initialized");
   } catch (err) {
     console.error("[trios-sidepanel] WASM init failed:", err);

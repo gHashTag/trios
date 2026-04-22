@@ -1,10 +1,9 @@
-// Trinity Agent Bridge — Bare Service Worker (NO WASM)
+// Trinity Agent Bridge — Background Service Worker (NO WASM)
 // All MCP/UI logic lives in the sidepanel via WASM.
-// This file handles only Chrome lifecycle events.
+// Content scripts are declared in manifest.json (no-modules).
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[trios-bg] Extension installed/updated");
-  // Enable sidePanel open on action click
   if (chrome.sidePanel?.setPanelBehavior) {
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   }

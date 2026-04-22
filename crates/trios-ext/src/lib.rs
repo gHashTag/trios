@@ -1,16 +1,9 @@
-pub mod dom;
-pub mod mcp;
-use wasm_bindgen::prelude::*;
+//! trios-ext — Chrome Extension (Ring Isolation architecture)
+//!
+//! This is the workspace root package. Actual code lives in rings/.
+//! This file re-exports the BR-EXT entry point for backward compatibility.
 
-#[wasm_bindgen(start)]
-pub fn run() {
-    console_error_panic_hook::set_once();
-    log::info!("Trios extension WASM initialized (sidepanel context)");
-    if let Err(e) = crate::dom::build_ui() {
-        log::error!("Failed to build UI: {:?}", e);
-    }
-    if let Err(e) = crate::mcp::mcp_connect() {
-        log::warn!("MCP connect deferred: {:?}", e);
-    }
-    let _ = crate::mcp::mcp_list_tools();
-}
+pub use trios_ext_00::*;
+pub use trios_ext_01::*;
+pub use trios_ext_02::*;
+pub use trios_ext_03::*;

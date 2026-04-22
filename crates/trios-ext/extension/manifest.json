@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Trinity Agent Bridge",
   "version": "0.3.0",
-  "description": "Trinity Agent Bridge \u2014 WASM sidepanel + MCP HTTP client",
+  "description": "Trinity Agent Bridge — WASM sidepanel + MCP HTTP client",
   "permissions": [
     "sidePanel",
     "activeTab",
@@ -10,11 +10,11 @@
   ],
   "host_permissions": [
     "http://127.0.0.1:9105/*",
-    "http://localhost:9105/*"
+    "http://localhost:9105/*",
+    "https://api.z.ai/*"
   ],
   "background": {
-    "service_worker": "dist/bg-sw.js",
-    "type": "module"
+    "service_worker": "dist/bg-sw.js"
   },
   "action": {
     "default_title": "Trinity Agent Bridge",
@@ -32,7 +32,25 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/issues/*", "https://github.com/*/pull/*"],
+      "js": ["dist/trios_ext.js", "dist/github-bootstrap.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["dist/trios_ext.js", "dist/claude-bootstrap.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://127.0.0.1:9105 http://127.0.0.1:9002 http://127.0.0.1:9200;"
-  }
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://127.0.0.1:9105 http://127.0.0.1:9002 http://127.0.0.1:9200 https://api.z.ai;"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/trios_ext_bg.wasm"],
+      "matches": ["https://github.com/*", "https://claude.ai/*"]
+    }
+  ]
 }
