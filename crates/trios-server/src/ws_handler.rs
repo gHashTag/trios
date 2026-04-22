@@ -146,6 +146,19 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
     info!("WS request: method={}", req.method);
 
     let result = match req.method.as_str() {
+        // MCP protocol handshake
+        "initialize" => json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "tools": { "listChanged": false }
+            },
+            "serverInfo": {
+                "name": "trios-server",
+                "version": env!("CARGO_PKG_VERSION")
+            }
+        }),
+        "notifications/initialized" => json!({}),
+        "ping" => json!({"status": "ok"}),
         // Legacy agent/task methods
         "agents/list"         => mcp_endpoints::agents::list(state).await,
         "agents/chat"         => mcp_endpoints::agents::chat(state, req.params).await,
@@ -178,12 +191,53 @@ async fn tools_list(state: &AppState) -> Value {
 async fn tools_call(state: &AppState, params: Option<Value>) -> Value {
     let params_val = params.unwrap_or(json!({}));
     let tool_name = params_val.get("name").and_then(|v| v.as_str()).unwrap_or("");
-    let arguments = params_val.get("arguments").cloned();
+    let arguments = params_val.get("arguments").cloned().unwrap_or(json!({}));
 
+    // Route A2A tool calls to the A2A endpoints
+    let a2a_result = match tool_name {
+        "a2a_register" => {
+            let p = Some(arguments);
+            Some(mcp_endpoints::a2a::register(state, p).await)
+        }
+        "a2a_list_agents" => {
+            Some(mcp_endpoints::a2a::list_agents(state).await)
+        }
+        "a2a_send" => {
+            let p = Some(arguments);
+            Some(mcp_endpoints::a2a::send(state, p).await)
+        }
+        "a2a_broadcast" => {
+            let p = Some(arguments);
+            Some(mcp_endpoints::a2a::broadcast(state, p).await)
+        }
+        "a2a_assign_task" => {
+            let p = Some(arguments);
+            Some(mcp_endpoints::a2a::assign_task(state, p).await)
+        }
+        "a2a_task_status" => {
+            let p = Some(arguments);
+            Some(mcp_endpoints::a2a::task_status(state, p).await)
+        }
+        "a2a_update_task" => {
+            let p = Some(arguments);
+            Some(mcp_endpoints::a2a::update_task(state, p).await)
+        }
+        _ => None,
+    };
+
+    if let Some(result) = a2a_result {
+        // Wrap in MCP CallToolResult format
+        return json!({
+            "content": [{"type": "text", "text": serde_json::to_string(&result).unwrap_or_default()}]
+        });
+    }
+
+    // Non-A2A tools: dispatch via McpService
+    let arguments_obj = params_val.get("arguments").cloned();
     use rust_mcp_schema::CallToolRequestParams;
     let call_params = CallToolRequestParams {
         name: tool_name.to_string(),
-        arguments: arguments.and_then(|a| {
+        arguments: arguments_obj.and_then(|a| {
             if a.is_object() {
                 Some(a.as_object().cloned().unwrap_or_default())
             } else {
