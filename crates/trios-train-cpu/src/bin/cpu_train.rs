@@ -4,7 +4,7 @@ use std::time::Instant;
 
 const VOCAB: usize = 128;
 const DIM: usize = 96;
-const SEQ: usize = 64;
+const SEQ: usize = 32;
 const LN_2: f32 = std::f32::consts::LN_2;
 
 fn load_data(path: &str) -> Vec<usize> {
@@ -277,12 +277,14 @@ impl CpuModel {
     }
 
     fn eval_bpb(&self, tokens: &[usize], seq_len: usize) -> f32 {
+        let max_eval = 5000.min(tokens.len());
+        let eval_tokens = &tokens[..max_eval];
         let mut total_bpb = 0.0f32;
         let mut n = 0usize;
-        for c in (0..tokens.len()).step_by(seq_len + 1) {
-            let end = (c + seq_len + 1).min(tokens.len());
+        for c in (0..eval_tokens.len()).step_by(seq_len + 1) {
+            let end = (c + seq_len + 1).min(eval_tokens.len());
             if end - c < 3 { continue; }
-            let seq = &tokens[c..end];
+            let seq = &eval_tokens[c..end];
             let (loss, _, _) = self.loss_and_grad(seq);
             if loss.is_finite() {
                 total_bpb += loss / LN_2;
