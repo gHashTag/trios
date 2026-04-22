@@ -37,22 +37,23 @@ jobs:
 
       - name: Check no handwritten JS in extension/ (L9 law)
         run: |
-          count=$(find extension -name '*.js' -not -path '*/dist/*' -not -path './.git/*' | wc -l)
+          count=$(find crates/trios-ext/extension -name '*.js' -not -path '*/dist/*' -not -path './.git/*' | wc -l)
           if [ "$count" -gt 0 ]; then
             echo "L9 VIOLATION: handwritten JS files found in extension/ (outside dist/)!"
-            find extension -name '*.js' -not -path '*/dist/*'
+            find crates/trios-ext/extension -name '*.js' -not -path '*/dist/*'
             exit 1
           fi
           echo "L9 OK: no handwritten JS in extension/"
 
       - name: Check extension artifacts exist (L8 law)
         run: |
-          test -f crates/trios-ext/extension/manifest.json || (echo "extension/manifest.json missing!" && exit 1)
-          test -f crates/trios-ext/extension/sidepanel.html || (echo "extension/sidepanel.html missing!" && exit 1)
+          test -f crates/trios-ext/extension/manifest.json || (echo "crates/trios-ext/extension/manifest.json missing!" && exit 1)
+          test -f crates/trios-ext/extension/sidepanel.html || (echo "crates/trios-ext/extension/sidepanel.html missing!" && exit 1)
           echo "L8 OK: extension artifacts present"
 
       - name: cargo clippy (L3 law — zero warnings)
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
+        working-directory: .
 
       - name: cargo test (L4 law)
         run: cargo test --all
