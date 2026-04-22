@@ -127,8 +127,8 @@ fn train_trinity_3k_fineweb(
                 epoch_bpb += bpb;
                 epoch_steps += 1;
 
-                // Real gradient update
-                model.sgd_step(&tokens, learning_rate);
+                // Real gradient update with AdamW optimizer
+                model.adamw_step(&tokens, learning_rate);
 
                 total_steps += 1;
 

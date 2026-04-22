@@ -10,6 +10,58 @@
 
 use std::f32::consts::LN_2;
 
+/// AdamW optimizer state for parameter tensors
+struct AdamWState {
+    /// First moment estimate (momentum)
+    m: Vec<f32>,
+    /// Second moment estimate (RMSprop)
+    v: Vec<f32>,
+    /// Time step
+    t: usize,
+}
+
+impl AdamWState {
+    fn new(size: usize) -> Self {
+        Self {
+            m: vec![0.0; size],
+            v: vec![0.0; size],
+            t: 0,
+        }
+    }
+
+    fn update(&mut self, param: &mut [f32], grad: &[f32], lr: f32, beta1: f32, beta2: f32, eps: f32, weight_decay: f32) {
+        self.t += 1;
+        
+        // Apply weight decay
+        for i in 0..param.len() {
+            param[i] *= 1.0 - lr * weight_decay;
+        }
+
+        // Update biased first moment estimate
+        for i in 0..param.len() {
+            self.m[i] = beta1 * self.m[i] + (1.0 - beta1) * grad[i];
+        }
+
+        // Update biased second raw moment estimate
+        for i in 0..param.len() {
+            self.v[i] = beta2 * self.v[i] + (1.0 - beta2) * grad[i] * grad[i];
+        }
+
+        // Compute bias-corrected first moment estimate
+        let bias_correction1 = 1.0 / (1.0 - beta1.powi(self.t as i32));
+        
+        // Compute bias-corrected second raw moment estimate
+        let bias_correction2 = 1.0 / (1.0 - beta2.powi(self.t as i32));
+
+        // Update parameters
+        for i in 0..param.len() {
+            let m_hat = self.m[i] * bias_correction1;
+            let v_hat = self.v[i] * bias_correction2;
+            param[i] -= lr * m_hat / (v_hat.sqrt() + eps);
+        }
+    }
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 /// ReLU^2 activation: max(0, x)^2
@@ -113,6 +165,13 @@ struct Trinity3kAttentionHead {
     grad_w_o: Vec<f32>,
     grad_q_norm: Vec<f32>,
     grad_k_norm: Vec<f32>,
+    /// AdamW optimizer states
+    adamw_w_q: AdamWState,
+    adamw_w_k: AdamWState,
+    adamw_w_v: AdamWState,
+    adamw_w_o: AdamWState,
+    adamw_q_norm: AdamWState,
+    adamw_k_norm: AdamWState,
     head_dim: usize,
 }
 
@@ -131,6 +190,12 @@ impl Trinity3kAttentionHead {
             grad_w_o: vec![0.0; head_dim * head_dim],
             grad_q_norm: vec![0.0; head_dim],
             grad_k_norm: vec![0.0; head_dim],
+            adamw_w_q: AdamWState::new(d_model * head_dim),
+            adamw_w_k: AdamWState::new(d_model * head_dim),
+            adamw_w_v: AdamWState::new(d_model * head_dim),
+            adamw_w_o: AdamWState::new(head_dim * head_dim),
+            adamw_q_norm: AdamWState::new(head_dim),
+            adamw_k_norm: AdamWState::new(head_dim),
             head_dim,
         }
     }
@@ -210,6 +275,11 @@ struct Trinity3kLayer {
     grad_w_ff2: Vec<f32>,
     grad_norm1: Vec<f32>,
     grad_norm2: Vec<f32>,
+    /// AdamW optimizer states
+    adamw_w_ff1: AdamWState,
+    adamw_w_ff2: AdamWState,
+    adamw_norm1: AdamWState,
+    adamw_norm2: AdamWState,
     d_model: usize,
     n_heads: usize,
     head_dim: usize,
@@ -236,6 +306,10 @@ impl Trinity3kLayer {
             grad_w_ff2: vec![0.0; ffn_dim * d_model],
             grad_norm1: vec![0.0; d_model],
             grad_norm2: vec![0.0; d_model],
+            adamw_w_ff1: AdamWState::new(d_model * ffn_dim),
+            adamw_w_ff2: AdamWState::new(ffn_dim * d_model),
+            adamw_norm1: AdamWState::new(d_model),
+            adamw_norm2: AdamWState::new(d_model),
             d_model,
             n_heads,
             head_dim,
@@ -381,6 +455,9 @@ pub struct Trinity3kModel {
     /// Gradients
     grad_token_embeddings: Vec<f32>,
     grad_final_norm: Vec<f32>,
+    /// AdamW optimizer states
+    adamw_token_embeddings: AdamWState,
+    adamw_final_norm: AdamWState,
     /// Configuration
     config: Trinity3kConfig,
 }
@@ -419,6 +496,8 @@ impl Trinity3kModel {
             final_norm_scale,
             grad_token_embeddings: vec![0.0; config.vocab_size * config.hidden_dim],
             grad_final_norm: vec![0.0; config.hidden_dim],
+            adamw_token_embeddings: AdamWState::new(config.vocab_size * config.hidden_dim),
+            adamw_final_norm: AdamWState::new(config.hidden_dim),
             config,
         })
     }
@@ -629,8 +708,14 @@ impl Trinity3kModel {
         Ok(grad_output.to_vec()) // Return input gradients (simplified)
     }
 
-    /// Real SGD step with gradient computation
-    pub fn sgd_step(&mut self, tokens: &[usize], learning_rate: f32) {
+    /// AdamW optimization step with gradient computation
+    pub fn adamw_step(&mut self, tokens: &[usize], learning_rate: f32) {
+        // AdamW hyperparameters
+        let beta1 = 0.9;
+        let beta2 = 0.999;
+        let eps = 1e-8;
+        let weight_decay = 0.01;
+        
         // Reset gradients
         self.zero_gradients();
         
@@ -644,60 +729,140 @@ impl Trinity3kModel {
             return;
         }
         
-        // Apply gradients with SGD update
-        let scale = learning_rate;
+        // Update token embeddings with AdamW
+        self.adamw_token_embeddings.update(
+            &mut self.token_embeddings,
+            &self.grad_token_embeddings,
+            learning_rate,
+            beta1,
+            beta2,
+            eps,
+            weight_decay
+        );
         
-        // Update token embeddings
-        for (i, param) in self.token_embeddings.iter_mut().enumerate() {
-            *param -= scale * self.grad_token_embeddings[i];
-        }
+        // Update final norm scale with AdamW
+        self.adamw_final_norm.update(
+            &mut self.final_norm_scale,
+            &self.grad_final_norm,
+            learning_rate,
+            beta1,
+            beta2,
+            eps,
+            weight_decay
+        );
         
-        // Update final norm scale (with small weight decay)
-        let weight_decay = 0.01;
-        for (i, param) in self.final_norm_scale.iter_mut().enumerate() {
-            *param -= scale * (self.grad_final_norm[i] + weight_decay * (*param - 1.0));
-        }
-        
-        // Update layer parameters (simplified for now)
+        // Update layer parameters with AdamW
         for layer in &mut self.layers {
             // Update FFN weights
-            for (i, param) in layer.w_ff1.iter_mut().enumerate() {
-                *param -= scale * layer.grad_w_ff1[i];
-            }
-            for (i, param) in layer.w_ff2.iter_mut().enumerate() {
-                *param -= scale * layer.grad_w_ff2[i];
-            }
+            layer.adamw_w_ff1.update(
+                &mut layer.w_ff1,
+                &layer.grad_w_ff1,
+                learning_rate,
+                beta1,
+                beta2,
+                eps,
+                weight_decay
+            );
+            
+            layer.adamw_w_ff2.update(
+                &mut layer.w_ff2,
+                &layer.grad_w_ff2,
+                learning_rate,
+                beta1,
+                beta2,
+                eps,
+                weight_decay
+            );
             
             // Update norm scales
-            for (i, param) in layer.norm1_scale.iter_mut().enumerate() {
-                *param -= scale * (layer.grad_norm1[i] + weight_decay * (*param - 1.0));
-            }
-            for (i, param) in layer.norm2_scale.iter_mut().enumerate() {
-                *param -= scale * (layer.grad_norm2[i] + weight_decay * (*param - 1.0));
-            }
+            layer.adamw_norm1.update(
+                &mut layer.norm1_scale,
+                &layer.grad_norm1,
+                learning_rate,
+                beta1,
+                beta2,
+                eps,
+                weight_decay
+            );
+            
+            layer.adamw_norm2.update(
+                &mut layer.norm2_scale,
+                &layer.grad_norm2,
+                learning_rate,
+                beta1,
+                beta2,
+                eps,
+                weight_decay
+            );
             
             // Update attention heads
             for head in &mut layer.attention_heads {
-                for (i, param) in head.w_q.iter_mut().enumerate() {
-                    *param -= scale * head.grad_w_q[i];
-                }
-                for (i, param) in head.w_k.iter_mut().enumerate() {
-                    *param -= scale * head.grad_w_k[i];
-                }
-                for (i, param) in head.w_v.iter_mut().enumerate() {
-                    *param -= scale * head.grad_w_v[i];
-                }
-                for (i, param) in head.w_o.iter_mut().enumerate() {
-                    *param -= scale * head.grad_w_o[i];
-                }
-                for (i, param) in head.q_norm_scale.iter_mut().enumerate() {
-                    *param -= scale * (head.grad_q_norm[i] + weight_decay * (*param - 1.0));
-                }
-                for (i, param) in head.k_norm_scale.iter_mut().enumerate() {
-                    *param -= scale * (head.grad_k_norm[i] + weight_decay * (*param - 1.0));
-                }
+                head.adamw_w_q.update(
+                    &mut head.w_q,
+                    &head.grad_w_q,
+                    learning_rate,
+                    beta1,
+                    beta2,
+                    eps,
+                    weight_decay
+                );
+                
+                head.adamw_w_k.update(
+                    &mut head.w_k,
+                    &head.grad_w_k,
+                    learning_rate,
+                    beta1,
+                    beta2,
+                    eps,
+                    weight_decay
+                );
+                
+                head.adamw_w_v.update(
+                    &mut head.w_v,
+                    &head.grad_w_v,
+                    learning_rate,
+                    beta1,
+                    beta2,
+                    eps,
+                    weight_decay
+                );
+                
+                head.adamw_w_o.update(
+                    &mut head.w_o,
+                    &head.grad_w_o,
+                    learning_rate,
+                    beta1,
+                    beta2,
+                    eps,
+                    weight_decay
+                );
+                
+                head.adamw_q_norm.update(
+                    &mut head.q_norm_scale,
+                    &head.grad_q_norm,
+                    learning_rate,
+                    beta1,
+                    beta2,
+                    eps,
+                    weight_decay
+                );
+                
+                head.adamw_k_norm.update(
+                    &mut head.k_norm_scale,
+                    &head.grad_k_norm,
+                    learning_rate,
+                    beta1,
+                    beta2,
+                    eps,
+                    weight_decay
+                );
             }
         }
+    }
+
+    /// Keep SGD method for compatibility, but default to AdamW
+    pub fn sgd_step(&mut self, tokens: &[usize], learning_rate: f32) {
+        self.adamw_step(tokens, learning_rate);
     }
 
     pub fn config(&self) -> &Trinity3kConfig {
