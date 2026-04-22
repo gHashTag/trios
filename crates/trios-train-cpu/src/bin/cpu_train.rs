@@ -2,9 +2,6 @@ use std::fs;
 use std::io::Write;
 use std::time::Instant;
 
-const VOCAB: usize = 128;
-const DIM: usize = 96;
-const SEQ: usize = 32;
 const LN_2: f32 = std::f32::consts::LN_2;
 
 fn load_data(path: &str) -> Vec<usize> {
@@ -12,7 +9,7 @@ fn load_data(path: &str) -> Vec<usize> {
         eprintln!("Failed to load {}: {}. Using fallback.", path, e);
         b"Hello world this is a tiny training dataset for IGLA".to_vec()
     });
-    raw.into_iter().map(|b| (b as usize) % VOCAB).collect()
+    raw.into_iter().map(|b| b as usize).collect()
 }
 
 fn softmax(v: &mut [f32]) {
@@ -297,33 +294,29 @@ impl CpuModel {
 }
 
 fn main() {
-    let seed = std::env::args()
-        .find(|a| a.starts_with("--seed="))
-        .map(|a| a[7..].parse::<u64>().unwrap_or(42))
-        .unwrap_or(42);
-    let steps = std::env::args()
-        .find(|a| a.starts_with("--steps="))
-        .map(|a| a[8..].parse::<usize>().unwrap_or(3000))
-        .unwrap_or(3000);
-    let lr = std::env::args()
-        .find(|a| a.starts_with("--lr="))
-        .map(|a| a[5..].parse::<f32>().unwrap_or(0.003))
-        .unwrap_or(0.003);
+    let seed = arg_or("seed", "42").parse::<u64>().unwrap_or(42);
+    let steps = arg_or("steps", "3000").parse::<usize>().unwrap_or(3000);
+    let lr = arg_or("lr", "0.003").parse::<f32>().unwrap_or(0.003);
+    let vocab: usize = arg_or("vocab", "128").parse().unwrap_or(128);
+    let dim: usize = arg_or("dim", "96").parse().unwrap_or(96);
+    let seq: usize = arg_or("seq", "32").parse().unwrap_or(32);
+
+    let raw_tokens = load_data("data/tinyshakespeare.txt");
+    let tokens: Vec<usize> = raw_tokens.iter().map(|&t| t % vocab).collect();
 
     println!("=== trios CPU Training (Analytical Backprop) ===");
-    println!("vocab={} dim={} seq={} steps={} seed={} lr={}", VOCAB, DIM, SEQ, steps, seed, lr);
+    println!("vocab={} dim={} seq={} steps={} seed={} lr={}", vocab, dim, seq, steps, seed, lr);
 
-    let tokens = load_data("data/tinyshakespeare.txt");
     let train_end = (tokens.len() as f64 * 0.9) as usize;
     let train_tokens = &tokens[..train_end];
     let val_tokens = &tokens[train_end..];
     println!("Dataset: {} train / {} val tokens", train_tokens.len(), val_tokens.len());
 
-    let mut model = CpuModel::new(VOCAB, DIM, seed);
-    let mut opt_embed = AdamW::new(VOCAB * DIM, lr);
-    let mut opt_head = AdamW::new(VOCAB * DIM, lr);
+    let mut model = CpuModel::new(vocab, dim, seed);
+    let mut opt_embed = AdamW::new(vocab * dim, lr);
+    let mut opt_head = AdamW::new(vocab * dim, lr);
 
-    let init_bpb = model.eval_bpb(val_tokens, SEQ);
+    let init_bpb = model.eval_bpb(val_tokens, seq);
     println!("Initial val BPB: {:.4}", init_bpb);
     println!();
     println!("{:>6} | {:>10} | {:>10} | {:>10} | {:>8}", "step", "train_loss", "val_bpb", "best_bpb", "ms");
@@ -337,14 +330,14 @@ fn main() {
     for step in 1..=steps {
         let offset = {
             rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-            (rng_state as usize) % (data_len.saturating_sub(SEQ + 1))
+            (rng_state as usize) % (data_len.saturating_sub(seq + 1))
         };
-        let seq = &train_tokens[offset..offset + SEQ + 1];
-        let train_loss = model.train_step(seq, &mut opt_embed, &mut opt_head, lr);
+        let batch = &train_tokens[offset..offset + seq + 1];
+        let train_loss = model.train_step(batch, &mut opt_embed, &mut opt_head, lr);
 
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();
-            let val_bpb = model.eval_bpb(val_tokens, SEQ);
+            let val_bpb = model.eval_bpb(val_tokens, seq);
             if val_bpb < best_bpb && val_bpb.is_finite() {
                 best_bpb = val_bpb;
             }
@@ -361,12 +354,12 @@ fn main() {
 
     let _ = fs::create_dir_all(".trinity/results");
     let result_json = serde_json::json!({
-        "experiment": "cpu-backprop-v1",
+        "experiment": "cpu-backprop-scalable",
         "model": "embed+bigram+smear+lm_head",
         "seed": seed,
-        "vocab_size": VOCAB,
-        "dim": DIM,
-        "seq_len": SEQ,
+        "vocab_size": vocab,
+        "dim": dim,
+        "seq_len": seq,
         "steps": steps,
         "lr": lr,
         "initial_bpb": init_bpb,
@@ -379,4 +372,12 @@ fn main() {
     fs::File::create(&rpath).unwrap()
         .write_all(serde_json::to_string_pretty(&result_json).unwrap().as_bytes()).unwrap();
     println!("Results: {}", rpath);
+}
+
+fn arg_or(name: &str, default: &str) -> String {
+    let prefix = format!("--{}=", name);
+    std::env::args()
+        .find(|a| a.starts_with(&prefix))
+        .map(|a| a[prefix.len()..].to_string())
+        .unwrap_or_else(|| default.to_string())
 }
