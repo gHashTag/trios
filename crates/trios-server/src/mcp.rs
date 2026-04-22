@@ -214,6 +214,67 @@ fn build_tool_definitions() -> Vec<Tool> {
                 ("max_depth", json!({"type": "integer"}).as_object().unwrap().clone()),
             ],
         ),
+        // === A2A Protocol (7) ===
+        make_tool(
+            "a2a_register",
+            "Register a new A2A agent with capabilities",
+            vec!["id", "name"],
+            vec![
+                ("id", prop_type("string")),
+                ("name", prop_type("string")),
+                ("description", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "a2a_list_agents",
+            "List all registered A2A agents",
+            vec![],
+            vec![],
+        ),
+        make_tool(
+            "a2a_send",
+            "Send a direct message from one agent to another",
+            vec!["from", "to"],
+            vec![
+                ("from", prop_type("string")),
+                ("to", prop_type("string")),
+                ("payload", json!({"type": "object"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "a2a_broadcast",
+            "Broadcast a message to all registered agents",
+            vec!["from"],
+            vec![
+                ("from", prop_type("string")),
+                ("payload", json!({"type": "object"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "a2a_assign_task",
+            "Assign a task to an A2A agent",
+            vec!["title", "created_by", "assign_to"],
+            vec![
+                ("title", prop_type("string")),
+                ("created_by", prop_type("string")),
+                ("assign_to", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "a2a_task_status",
+            "Get the current status of an A2A task",
+            vec!["task_id"],
+            vec![("task_id", prop_type("string"))],
+        ),
+        make_tool(
+            "a2a_update_task",
+            "Update the state of an A2A task",
+            vec!["task_id", "state"],
+            vec![
+                ("task_id", prop_type("string")),
+                ("state", prop_type("string")),
+            ],
+        ),
     ]
 }
 
