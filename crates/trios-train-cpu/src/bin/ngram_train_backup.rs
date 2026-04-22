@@ -73,7 +73,8 @@ struct NgramModel {
     ln_g: Vec<f32>,
     #[allow(dead_code)]
     ln_b: Vec<f32>,
-    residual_alpha: f32,
+    output_ln_g: Vec<f32>,
+    output_ln_b: Vec<f32>,
     vocab: usize,
     dim: usize,
     hidden: usize,
@@ -98,12 +99,13 @@ impl NgramModel {
             lm_head: (0..vocab * hidden).map(|_| rng() * lim_o).collect(),
             ln_g: vec![1.0; dim],
             ln_b: vec![0.0; dim],
-            residual_alpha: 0.3,
+            output_ln_g: vec![1.0; hidden],
+            output_ln_b: vec![0.0; hidden],
             vocab, dim, hidden, activation,
         }
     }
 
-    fn get_hidden(&self, t2: usize, t1: usize, t0: usize, residual: bool) -> Vec<f32> {
+    fn get_hidden(&self, t2: usize, t1: usize, t0: usize, layernorm: bool) -> Vec<f32> {
         let v = self.vocab;
         let d = self.dim;
         let h = self.hidden;
@@ -127,33 +129,20 @@ impl NgramModel {
             *hn = if self.activation == "gelu" { gelu(*hn) } else { (*hn).max(0.0) };
         }
         
-        // Apply residual connection if enabled
-        if residual {
-            let mut output = vec![0.0f32; h];
-            for i in 0..h {
-                // Project combined to hidden dimension and apply residual
-                let combined_component = if h >= d {
-                    // If hidden >= dim, use combined directly
-                    combined[i % d] * (1.0 - self.residual_alpha)
-                } else {
-                    // If hidden < dim, combine multiple elements
-                    let mut sum = combined.iter().take(d).sum::<f32>() * (1.0 / d as f32);
-                    sum * (1.0 - self.residual_alpha)
-                };
-                output[i] = combined_component + hidden[i] * self.residual_alpha;
-            }
-            output
+        // Apply output LayerNorm if enabled
+        if layernorm {
+            layer_norm(&hidden, 1e-5)
         } else {
             hidden
         }
     }
 
-    fn loss_on_seq(&self, tokens: &[usize], residual: bool) -> f32 {
+    fn loss_on_seq(&self, tokens: &[usize], layernorm: bool) -> f32 {
         if tokens.len() < 4 { return 0.0; }
         let v = self.vocab;
         let mut total = 0.0f32;
         for i in 2..tokens.len() - 1 {
-            let h = self.get_hidden(tokens[i - 2], tokens[i - 1], tokens[i], residual);
+            let h = self.get_hidden(tokens[i - 2], tokens[i - 1], tokens[i], layernorm);
             let target = tokens[i + 1].min(v - 1);
             let mut logits = vec![0.0f32; v];
             for (vi, logit) in logits.iter_mut().enumerate() {
@@ -167,7 +156,7 @@ impl NgramModel {
     }
 
     fn train_step(&mut self, tokens: &[usize], lr: f32,
-        opts: &mut Optimizers, residual: bool) {
+        opts: &mut Optimizers, layernorm: bool) {
         if tokens.len() < 4 { return; }
         let v = self.vocab;
         let d = self.dim;
@@ -185,7 +174,7 @@ impl NgramModel {
             let t0 = tokens[i].min(v - 1);
             let tgt = tokens[i + 1].min(v - 1);
 
-            let hidden = self.get_hidden(t2, t1, t0, residual);
+            let hidden = self.get_hidden(t2, t1, t0, layernorm);
 
             let mut logits = vec![0.0f32; v];
             for (vi, logit) in logits.iter_mut().enumerate() {
@@ -243,13 +232,13 @@ impl NgramModel {
     }
 }
 
-fn evaluate(model: &NgramModel, tokens: &[usize], seq_len: usize, residual: bool) -> (f32, f32) {
+fn evaluate(model: &NgramModel, tokens: &[usize], seq_len: usize, layernorm: bool) -> (f32, f32) {
     let mut total = 0.0f32;
     let mut n = 0usize;
     for c in (0..tokens.len()).step_by(seq_len + 1) {
         let end = (c + seq_len + 1).min(tokens.len());
         if end - c < 5 { continue; }
-        let loss = model.loss_on_seq(&tokens[c..end], residual);
+        let loss = model.loss_on_seq(&tokens[c..end], layernorm);
         if loss.is_finite() { total += loss / LN_2; n += 1; }
     }
     if n == 0 { return (f32::MAX, f32::MAX); }
@@ -274,12 +263,12 @@ fn main() {
         .map(|a| a[9..].parse::<usize>().unwrap_or(128)).unwrap_or(128);
     let activation = std::env::args().find(|a| a.starts_with("--activation="))
         .map(|a| a[12..].to_string()).unwrap_or_else(|| "relu".to_string());
-    let residual = std::env::args().any(|a| a == "--residual");
+    let layernorm = std::env::args().any(|a| a == "--layernorm");
 
     let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
-    let res_suffix = if residual { " + Residual" } else { "" };
-    println!("=== 4-Gram Context Model + {} Hidden{} ===", activation_name, res_suffix);
-    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} residual={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation, residual);
+    let ln_suffix = if layernorm { " + LN" } else { "" };
+    println!("=== 4-Gram Context Model + {} Hidden{} ===", activation_name, ln_suffix);
+    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} layernorm={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation, layernorm);
 
     let tokens = load_data("data/tinyshakespeare.txt");
     println!("Dataset: {} tokens", tokens.len());
@@ -296,7 +285,7 @@ fn main() {
         p: AdamW::new(hidden * DIM), h: AdamW::new(VOCAB * hidden),
     };
 
-    let (init_loss, init_bpb) = evaluate(&model, val, SEQ, residual);
+    let (init_loss, init_bpb) = evaluate(&model, val, SEQ, layernorm);
     println!("Initial val: loss={:.4} bpb={:.4}", init_loss, init_bpb);
     println!();
     println!("{:>6} | {:>10} | {:>10} | {:>10} | {:>8}", "step", "val_loss", "val_bpb", "best_bpb", "ms");
@@ -310,11 +299,11 @@ fn main() {
     for step in 1..=steps {
         let lr = cosine_lr(step, steps, base_lr, steps / 10);
         let off = (step * 97 + seed as usize) % (dl.saturating_sub(SEQ + 1));
-        model.train_step(&train[off..off + SEQ + 1], lr, &mut opts, residual);
+        model.train_step(&train[off..off + SEQ + 1], lr, &mut opts, layernorm);
 
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();
-            let (vl, vb) = evaluate(&model, val, SEQ, residual);
+            let (vl, vb) = evaluate(&model, val, SEQ, layernorm);
             if vb < best_bpb && vb.is_finite() { best_bpb = vb; }
             println!("{:>6} | {:>10.4} | {:>10.4} | {:>10.4} | {:>6}ms", step, vl, vb, best_bpb, ms);
             results.push((step, vl, vb));
@@ -326,18 +315,16 @@ fn main() {
     println!("Time: {:.1}s | BPB: {:.4} → {:.4} | Delta: {:.4}", total.as_secs_f64(), init_bpb, best_bpb, best_bpb - init_bpb);
 
     let _ = fs::create_dir_all(".trinity/results");
-    let exp_name = format!("4gram-{}{}", 
-        activation,
-        if residual { "-res" } else { "" });
+    let exp_name = format!("4gram-{}-hidden{}", activation, if layernorm { "-ln" } else { "" });
     let model_desc = format!("3-context + embed + {} hidden{} + LM head", 
         if activation == "gelu" { "GELU" } else { "ReLU" },
-        if residual { " + Residual" } else { "" });
+        if layernorm { " + LayerNorm" } else { "" });
     
     let rj = serde_json::json!({
         "experiment": exp_name,
         "model": model_desc,
         "seed": seed, "steps": steps, "base_lr": base_lr,
-        "hidden_size": hidden, "activation": activation, "residual": residual,
+        "hidden_size": hidden, "activation": activation, "layernorm": layernorm,
         "train_tokens": train.len(), "val_tokens": val.len(),
         "initial_val_bpb": init_bpb, "final_val_bpb": best_bpb,
         "delta_bpb": best_bpb - init_bpb,
@@ -345,7 +332,7 @@ fn main() {
         "results": results.iter().map(|(s, l, b)| serde_json::json!({"step":*s,"loss":*l,"bpb":*b})).collect::<Vec<_>>(),
     });
     let rp = format!(".trinity/results/4gram_{}_seed{}.json", 
-        if residual { "res" } else { activation.as_str() }, seed);
+        if layernorm { "ln" } else { activation.as_str() }, seed);
     fs::File::create(&rp).unwrap().write_all(serde_json::to_string_pretty(&rj).unwrap().as_bytes()).unwrap();
     println!("Results: {}", rp);
 
