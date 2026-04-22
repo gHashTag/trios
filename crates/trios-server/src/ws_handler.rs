@@ -70,8 +70,8 @@ struct WsRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct WsResponse {
-    result: Value,
+pub struct WsResponse {
+    pub result: Value,
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, axum::extract::State(state): axum::extract::State<AppState>) -> impl IntoResponse {
@@ -133,7 +133,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     }
 }
 
-async fn handle_message(text: &str, state: &AppState) -> WsResponse {
+pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
     let req: WsRequest = match serde_json::from_str(text) {
         Ok(r) => r,
         Err(e) => {
