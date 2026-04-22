@@ -101,13 +101,14 @@ pub use qat::{TernarySTE, LearnableScale, QatConfig};
 /// let f32 = t.to_f32();
 /// assert_eq!(f32, 1.0);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[repr(i8)]
 pub enum Ternary {
     /// Negative weight (-1)
     NegOne = -1,
 
     /// Zero weight (0) — enables pruning
+    #[default]
     Zero = 0,
 
     /// Positive weight (+1)
