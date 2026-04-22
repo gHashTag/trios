@@ -9,7 +9,7 @@ const LN_2: f32 = std::f32::consts::LN_2;
 
 fn gelu(x: f32) -> f32 {
     let x3 = x * x * x;
-    let tanh_arg = 0.7978845608028654 * (x + 0.044715 * x3); // sqrt(2/pi) ≈ 0.7978845608028654
+    let tanh_arg = 0.7978846 * (x + 0.044715 * x3); // sqrt(2/pi) ≈ 0.7978846
     let tanh_val = tanh_arg.tanh();
     0.5 * x * (1.0 + tanh_val)
 }
