@@ -56,7 +56,9 @@ jobs:
         working-directory: .
 
       - name: cargo test (L4 law)
-        run: cargo test --all
+        run: |
+          # Skip trios-ext due to nested workspace issue (see no-js.yml for trios-ext checks)
+          cargo test --all --exclude trios-ext
 
       - name: cargo build release
         run: cargo build --release -p trios-server
