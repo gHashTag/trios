@@ -1,41 +1,50 @@
 [package]
 name = "trios-ext"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-description = "Trios Chrome Extension — Rust/WASM (no handwritten JS)"
+version = "0.1.0"
+edition = "2021"
+authors = ["Dmitrii Vasilev"]
+license = "MIT"
+repository = "https://github.com/gHashTag/trios"
+description = "TRIOS Chrome Extension — Rust/WASM (Ring Isolation architecture)"
+publish = false
 
-[lib]
-crate-type = ["cdylib", "rlib"]
+[workspace]
+members = [
+    "rings/EXT-00",
+    "rings/EXT-01",
+    "rings/EXT-02",
+    "rings/EXT-03",
+    "rings/BR-EXT",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Dmitrii Vasilev"]
+license = "MIT"
+repository = "https://github.com/gHashTag/trios"
 
 [dependencies]
-wasm-bindgen = "0.2.92"
-web-sys = { version = "0.3.69", features = [
-    "Window", "Document", "Element", "HtmlElement", "HtmlInputElement",
-    "HtmlCollection", "NodeList", "DomTokenList",
-    "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent",
-    "Event", "EventTarget", "KeyboardEvent",
-    "console",
-] }
-js-sys = "0.3"
-serde = { workspace = true }
-serde_json = { workspace = true }
+trios-ext-00 = { path = "rings/EXT-00" }
+trios-ext-01 = { path = "rings/EXT-01" }
+trios-ext-02 = { path = "rings/EXT-02" }
+trios-ext-03 = { path = "rings/EXT-03" }
 
-# Logging and panic handling
+[workspace.dependencies]
+wasm-bindgen = "0.2.118"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-wasm-bindgen = "0.6"
 log = "0.4"
 wasm-logger = "0.2"
 console_error_panic_hook = "0.1"
-
-# MCP WebSocket client
-gloo-net = { version = "0.5", features = ["websocket"] }
-wasm-bindgen-futures = "0.4"
-
-[dev-dependencies]
-wasm-bindgen-test = "0.3"
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 4
+web-sys = { version = "0.3.69", features = [
+    "Window", "Document", "Element", "HtmlElement", "HtmlInputElement",
+    "HtmlTextAreaElement", "HtmlButtonElement", "Location",
+    "HtmlCollection", "NodeList", "DomTokenList",
+    "Request", "RequestInit", "RequestMode", "Response", "Headers",
+    "Event", "EventTarget", "KeyboardEvent",
+    "console",
+] }
