@@ -21,6 +21,7 @@ use trios_cli::{
         status::run as status_run,
         sweep::sweep,
         submit::submit,
+        train::train_cpu,
     },
 };
 
@@ -120,6 +121,20 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+
+    /// Train CPU n-gram model
+    Train {
+        #[arg(long, default_value_t = 12000)]
+        steps: usize,
+        #[arg(long, default_value_t = 128)]
+        hidden: usize,
+        #[arg(long, default_value_t = 0.004)]
+        lr: f64,
+        #[arg(long, default_value = "42,43,44")]
+        seeds: String,
+        #[arg(long, default_value_t = true)]
+        parallel: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -196,6 +211,14 @@ fn main() -> Result<()> {
         }
         Cmd::Status { json } => {
             status_run(trios_cli::cmd::status::StatusCmd { json })?;
+        }
+        Cmd::Train { steps, hidden, lr, seeds, parallel } => {
+            let seed_list: Vec<u64> = seeds.split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            let results = train_cpu(seed_list, steps, hidden, lr, parallel)?;
+            let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
+            println!("\n📊 Average BPB: {:.3} ({})", avg, results.len());
         }
     }
     Ok(())

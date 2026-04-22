@@ -122,7 +122,6 @@ impl NgramModel {
     fn loss_on_seq(&self, tokens: &[usize]) -> f32 {
         if tokens.len() < 4 { return 0.0; }
         let v = self.vocab;
-        let d = self.dim;
         let mut total = 0.0f32;
         for i in 2..tokens.len() - 1 {
             let h = self.get_hidden(tokens[i - 2], tokens[i - 1], tokens[i]);

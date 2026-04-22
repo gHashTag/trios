@@ -12,3 +12,4 @@ pub mod run;
 pub mod status;
 pub mod submit;
 pub mod sweep;
+pub mod train;
