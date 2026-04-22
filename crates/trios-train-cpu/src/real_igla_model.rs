@@ -693,6 +693,7 @@ impl RealIglaModel {
         let targets = &tokens[1..];
         let d_model = self.d_model;
         let d_ff = d_model * 4;
+        let scale = 1.0 / seq_len as f32;
 
         let embed_out: Vec<Vec<f32>> = input.iter().map(|&id| {
             let id = id.min(self.vocab_size - 1);
@@ -745,7 +746,6 @@ impl RealIglaModel {
             d_logits[i][target] -= 1.0;
         }
         let loss = total_loss / seq_len as f32;
-        let scale = 1.0 / seq_len as f32;
 
         let mut d_lm_head = vec![0.0f32; self.vocab_size * d_model];
         let mut d_out = vec![vec![0.0f32; d_model]; seq_len];
@@ -758,15 +758,11 @@ impl RealIglaModel {
                 }
             }
         }
+        for g in d_lm_head.iter_mut() { *g *= scale; }
 
-        let mut grad_flat: Vec<f32> = vec![0.0f32; optimizer.m.len()];
-        let mut off = 0;
-        let vn = self.vocab_size * d_model;
-        grad_flat[off..off + vn].copy_from_slice(&d_lm_head);
-        grad_flat[off..off + vn].iter_mut().for_each(|v| *v *= scale);
-        off += vn;
-        grad_flat[off..off + vn].fill(0.0f32);
-        off += vn;
+        let mut d_embed = vec![0.0f32; self.vocab_size * d_model];
+
+        let mut layer_grads: Vec<(Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>)> = Vec::new();
 
         for li in (0..self.layers.len()).rev() {
             let layer = &self.layers[li];
@@ -800,11 +796,7 @@ impl RealIglaModel {
                 }
             }
 
-            let mut d_wq_all = vec![0.0f32; 0];
-            let mut d_wk_all = vec![0.0f32; 0];
-            let mut d_wv_all = vec![0.0f32; 0];
-            let mut d_wo_all = vec![0.0f32; 0];
-
+            let mut head_grads: Vec<(Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>)> = Vec::new();
             let mut d_normed1 = vec![vec![0.0f32; d_model]; seq_len];
             for (hi, head) in layer.heads.iter().enumerate() {
                 let ac = &io.attn_caches[hi];
@@ -826,9 +818,9 @@ impl RealIglaModel {
 
                     let d_ctx = matvec_transpose(&head.wo, d_model, d_k, &d_after_attn[i]);
 
-                    for (r, d_out_r) in d_after_attn[i].iter().enumerate().take(d_model) {
+                    for r in 0..d_model {
                         for c in 0..d_k {
-                            d_wo[c * d_model + r] += ac.ctx[i][c] * d_out_r;
+                            d_wo[c * d_model + r] += ac.ctx[i][c] * d_after_attn[i][r];
                         }
                     }
 
@@ -869,12 +861,17 @@ impl RealIglaModel {
                     }
                 }
 
-                d_wq_all = d_wq;
-                d_wk_all = d_wk;
-                d_wv_all = d_wv;
-                d_wo_all = d_wo;
+                for g in d_wq.iter_mut() { *g *= scale; }
+                for g in d_wk.iter_mut() { *g *= scale; }
+                for g in d_wv.iter_mut() { *g *= scale; }
+                for g in d_wo.iter_mut() { *g *= scale; }
+
+                head_grads.push((d_wq, d_wk, d_wv, d_wo));
                 let _ = hi;
             }
+
+            for g in d_w1.iter_mut() { *g *= scale; }
+            for g in d_w2.iter_mut() { *g *= scale; }
 
             let mut d_xs = vec![vec![0.0f32; d_model]; seq_len];
             for i in 0..seq_len {
@@ -884,28 +881,34 @@ impl RealIglaModel {
                 }
             }
 
-            for g in d_wq_all.iter_mut() { *g *= scale; }
-            for g in d_wk_all.iter_mut() { *g *= scale; }
-            for g in d_wv_all.iter_mut() { *g *= scale; }
-            for g in d_wo_all.iter_mut() { *g *= scale; }
-            for g in d_w1.iter_mut() { *g *= scale; }
-            for g in d_w2.iter_mut() { *g *= scale; }
-
-            grad_flat[off..off + d_wq_all.len()].copy_from_slice(&d_wq_all); off += d_wq_all.len();
-            grad_flat[off..off + d_wk_all.len()].copy_from_slice(&d_wk_all); off += d_wk_all.len();
-            grad_flat[off..off + d_wv_all.len()].copy_from_slice(&d_wv_all); off += d_wv_all.len();
-            grad_flat[off..off + d_wo_all.len()].copy_from_slice(&d_wo_all); off += d_wo_all.len();
-            grad_flat[off..off + d_w1.len()].copy_from_slice(&d_w1); off += d_w1.len();
-            grad_flat[off..off + d_w2.len()].copy_from_slice(&d_w2); off += d_w2.len();
+            for (hg, _) in head_grads.iter().enumerate() {
+                let (dq, dk, dv, ddo) = &head_grads[hg];
+                layer_grads.push((dq.clone(), dk.clone(), dv.clone(), ddo.clone(), d_w1.clone(), d_w2.clone()));
+            }
 
             d_out = d_xs;
         }
 
         for i in 0..seq_len {
+            let id = input[i].min(self.vocab_size - 1);
             for k in 0..d_model {
-                grad_flat[off + input[i].min(self.vocab_size - 1) * d_model + k] += scale * d_out[i][k];
+                d_embed[id * d_model + k] += scale * d_out[i][k];
             }
         }
+
+        let mut grad_flat: Vec<f32> = Vec::new();
+        grad_flat.extend_from_slice(&d_embed);
+        grad_flat.extend_from_slice(&d_lm_head);
+        for lg in &layer_grads {
+            grad_flat.extend_from_slice(&lg.0);
+            grad_flat.extend_from_slice(&lg.1);
+            grad_flat.extend_from_slice(&lg.2);
+            grad_flat.extend_from_slice(&lg.3);
+            grad_flat.extend_from_slice(&lg.4);
+            grad_flat.extend_from_slice(&lg.5);
+        }
+
+        assert_eq!(grad_flat.len(), optimizer.m.len(), "grad len {} != param len {}", grad_flat.len(), optimizer.m.len());
 
         let mut params = self.all_params();
         optimizer.step(&mut params, &grad_flat);

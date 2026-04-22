@@ -28,10 +28,10 @@ pub struct AdamWCpu {
     step: usize,
 
     /// First moment estimate (same size as parameters, stored as f64 for precision)
-    m: Vec<f64>,
+    pub m: Vec<f64>,
 
     /// Second moment estimate (same size as parameters, stored as f64 for precision)
-    v: Vec<f64>,
+    pub v: Vec<f64>,
 }
 
 impl AdamWCpu {
