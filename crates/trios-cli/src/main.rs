@@ -132,6 +132,8 @@ enum Cmd {
         lr: f64,
         #[arg(long, default_value = "42,43,44")]
         seeds: String,
+        #[arg(long, default_value = "relu")]
+        activation: String,
         #[arg(long, default_value_t = true)]
         parallel: bool,
     },
@@ -212,11 +214,11 @@ fn main() -> Result<()> {
         Cmd::Status { json } => {
             status_run(trios_cli::cmd::status::StatusCmd { json })?;
         }
-        Cmd::Train { steps, hidden, lr, seeds, parallel } => {
+        Cmd::Train { steps, hidden, lr, seeds, activation, parallel } => {
             let seed_list: Vec<u64> = seeds.split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
-            let results = train_cpu(seed_list, steps, hidden, lr, parallel)?;
+            let results = train_cpu(seed_list, steps, hidden, lr, activation, parallel)?;
             let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
             println!("\n📊 Average BPB: {:.3} ({})", avg, results.len());
         }

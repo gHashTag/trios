@@ -13,16 +13,16 @@ pub struct TrainResult {
     pub time_sec: f64,
 }
 
-pub fn train_cpu(seeds: Vec<u64>, steps: usize, hidden: usize, lr: f64, parallel: bool) -> Result<Vec<TrainResult>> {
+pub fn train_cpu(seeds: Vec<u64>, steps: usize, hidden: usize, lr: f64, activation: String, parallel: bool) -> Result<Vec<TrainResult>> {
     let binary = find_ngram_train()?;
 
     println!("=== tri train: CPU N-Gram ===");
-    println!("seeds={:?} steps={} hidden={} lr={} parallel={}", seeds, steps, hidden, lr, parallel);
+    println!("seeds={:?} steps={} hidden={} lr={} activation={} parallel={}", seeds, steps, hidden, lr, activation, parallel);
 
     if parallel && seeds.len() > 1 {
-        run_parallel(&binary, &seeds, steps, hidden, lr)
+        run_parallel(&binary, &seeds, steps, hidden, lr, &activation)
     } else {
-        run_sequential(&binary, &seeds, steps, hidden, lr)
+        run_sequential(&binary, &seeds, steps, hidden, lr, &activation)
     }
 }
 
@@ -39,20 +39,21 @@ fn find_ngram_train() -> Result<PathBuf> {
     anyhow::bail!("ngram_train binary not found. Run: cargo build --release -p trios-train-cpu --bin ngram_train");
 }
 
-fn run_sequential(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64) -> Result<Vec<TrainResult>> {
+fn run_sequential(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str) -> Result<Vec<TrainResult>> {
     let mut results = Vec::new();
     for &seed in seeds {
-        let r = run_single(binary, seed, steps, hidden, lr)?;
+        let r = run_single(binary, seed, steps, hidden, lr, activation)?;
         results.push(r);
     }
     Ok(results)
 }
 
-fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64) -> Result<Vec<TrainResult>> {
+fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str) -> Result<Vec<TrainResult>> {
     let mut handles = Vec::new();
 
     for &seed in seeds {
         let binary = binary.to_path_buf();
+        let activation = activation.to_string(); // Clone for thread safety
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
             let output = Command::new(&binary)
@@ -60,6 +61,7 @@ fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f
                 .arg(format!("--steps={}", steps))
                 .arg(format!("--hidden={}", hidden))
                 .arg(format!("--lr={}", lr))
+                .arg(format!("--activation={}", activation))
                 .output()
                 .context("Failed to execute ngram_train")?;
 
@@ -102,13 +104,14 @@ fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f
     Ok(results)
 }
 
-fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64) -> Result<TrainResult> {
+fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, activation: &str) -> Result<TrainResult> {
     let start = Instant::now();
     let output = Command::new(binary)
         .arg(format!("--seed={}", seed))
         .arg(format!("--steps={}", steps))
         .arg(format!("--hidden={}", hidden))
         .arg(format!("--lr={}", lr))
+        .arg(format!("--activation={}", activation))
         .output()
         .context("Failed to execute ngram_train")?;
 
