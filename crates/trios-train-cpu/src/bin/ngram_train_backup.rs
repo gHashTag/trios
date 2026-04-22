@@ -73,7 +73,9 @@ struct NgramModel {
     ln_g: Vec<f32>,
     #[allow(dead_code)]
     ln_b: Vec<f32>,
+    #[allow(dead_code)]
     output_ln_g: Vec<f32>,
+    #[allow(dead_code)]
     output_ln_b: Vec<f32>,
     vocab: usize,
     dim: usize,

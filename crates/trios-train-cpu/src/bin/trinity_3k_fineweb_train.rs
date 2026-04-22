@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 
-use trios_train_cpu::trinity_3k_model::{Trinity3kModel, Trinity3kConfig};
+use trios_train_cpu::trinity_3k_model::{Trinity3kModel, Trinity3kConfig, AdamWConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Trinity 3k FineWeb Training for Parameter Golf #110");
@@ -86,15 +86,22 @@ fn train_trinity_3k_fineweb(
     val_data: &[u16],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let batch_size = 32;
-    let seq_len = 64;
-    let learning_rate = 0.01;
-    let n_epochs = 3; // Fewer epochs for real data
-    let vocab_size = 729; // Trinity 3k vocab size
+    let seq_len = 16; // short seq for numerical gradient speed
+    let n_epochs = 2;
+    let vocab_size = 729;
+
+    let adamw_cfg = AdamWConfig {
+        lr: 1e-3,
+        beta1: 0.9,
+        beta2: 0.999,
+        eps: 1e-8,
+        weight_decay: 0.01,
+    };
 
     println!("📊 Training parameters:");
     println!("  • Batch size: {}", batch_size);
     println!("  • Sequence length: {}", seq_len);
-    println!("  • Learning rate: {}", learning_rate);
+    println!("  • AdamW LR: {}", adamw_cfg.lr);
     println!("  • Epochs: {}", n_epochs);
 
     let mut total_steps = 0;
@@ -127,8 +134,7 @@ fn train_trinity_3k_fineweb(
                 epoch_bpb += bpb;
                 epoch_steps += 1;
 
-                // Real gradient update with AdamW optimizer
-                model.adamw_step(&tokens, learning_rate);
+                model.train_step(&tokens, &adamw_cfg);
 
                 total_steps += 1;
 

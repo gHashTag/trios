@@ -137,7 +137,7 @@ impl NgramModel {
                     combined[i % d] * (1.0 - self.residual_alpha)
                 } else {
                     // If hidden < dim, combine multiple elements
-                    let mut sum = combined.iter().take(d).sum::<f32>() * (1.0 / d as f32);
+                    let sum = combined.iter().take(d).sum::<f32>() * (1.0 / d as f32);
                     sum * (1.0 - self.residual_alpha)
                 };
                 output[i] = combined_component + hidden[i] * self.residual_alpha;
