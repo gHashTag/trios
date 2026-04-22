@@ -243,9 +243,11 @@ fn main() {
         .map(|a| a[8..].parse::<usize>().unwrap_or(10000)).unwrap_or(10000);
     let base_lr = std::env::args().find(|a| a.starts_with("--lr="))
         .map(|a| a[5..].parse::<f32>().unwrap_or(0.003)).unwrap_or(0.003);
+    let hidden = std::env::args().find(|a| a.starts_with("--hidden="))
+        .map(|a| a[9..].parse::<usize>().unwrap_or(128)).unwrap_or(128);
 
     println!("=== 4-Gram Context Model + ReLU Hidden ===");
-    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={}", VOCAB, DIM, DIM, SEQ, steps, seed, base_lr);
+    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr);
 
     let tokens = load_data("data/tinyshakespeare.txt");
     println!("Dataset: {} tokens", tokens.len());
@@ -255,11 +257,11 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, DIM, DIM, seed);
+    let mut model = NgramModel::new(VOCAB, DIM, hidden, seed);
     let ps = VOCAB * DIM;
     let mut opts = Optimizers {
         e: AdamW::new(ps), c1: AdamW::new(ps), c2: AdamW::new(ps),
-        p: AdamW::new(DIM * DIM), h: AdamW::new(ps),
+        p: AdamW::new(hidden * DIM), h: AdamW::new(ps),
     };
 
     let (init_loss, init_bpb) = evaluate(&model, val, SEQ);
