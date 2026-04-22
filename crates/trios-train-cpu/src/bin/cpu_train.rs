@@ -103,6 +103,86 @@ impl SmearGate {
     }
 }
 
+struct FFNLayer {
+    w1: Vec<f32>,
+    b1: Vec<f32>,
+    w2: Vec<f32>,
+    b2: Vec<f32>,
+    d_model: usize,
+    d_ff: usize,
+}
+
+impl FFNLayer {
+    fn new(d_model: usize, d_ff: usize, seed: &mut u64) -> Self {
+        let std = (2.0 / (d_model + d_ff) as f32).sqrt();
+        Self {
+            w1: (0..d_ff * d_model).map(|_| rng_next(seed) * std).collect(),
+            b1: vec![0.0; d_ff],
+            w2: (0..d_model * d_ff).map(|_| rng_next(seed) * std).collect(),
+            b2: vec![0.0; d_model],
+            d_model,
+            d_ff,
+        }
+    }
+
+    #[allow(clippy::needless_range_loop)]
+    fn forward(&self, x: &[f32]) -> Vec<f32> {
+        let hidden: Vec<f32> = (0..self.d_ff).map(|r| {
+            let row = &self.w1[r * self.d_model..(r + 1) * self.d_model];
+            let sum: f32 = row.iter().zip(x.iter()).map(|(&w, &xi)| w * xi).sum();
+            (sum + self.b1[r]).max(0.0)
+        }).collect();
+        (0..self.d_model).map(|r| {
+            let row = &self.w2[r * self.d_ff..(r + 1) * self.d_ff];
+            let sum: f32 = row.iter().zip(hidden.iter()).map(|(&w, &h)| w * h).sum();
+            sum + self.b2[r]
+        }).collect()
+    }
+
+    #[allow(clippy::needless_range_loop)]
+    fn backward(&self, x: &[f32], grad_out: &[f32]) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+        let d = self.d_model;
+        let ff = self.d_ff;
+        let mut hidden = vec![0.0f32; ff];
+        for r in 0..ff {
+            let row = &self.w1[r * d..(r + 1) * d];
+            hidden[r] = row.iter().zip(x.iter()).map(|(&w, &xi)| w * xi).sum();
+        }
+        let activated: Vec<f32> = hidden.iter().map(|&h| h.max(0.0)).collect();
+        let relu_mask: Vec<f32> = hidden.iter().map(|&h| if h > 0.0 { 1.0 } else { 0.0 }).collect();
+
+        let mut d_w2 = vec![0.0f32; d * ff];
+        let mut d_b2 = vec![0.0f32; d];
+        let mut d_hidden = vec![0.0f32; ff];
+
+        for r in 0..d {
+            for k in 0..ff {
+                d_w2[r * ff + k] += grad_out[r] * activated[k];
+                d_hidden[k] += grad_out[r] * self.w2[r * ff + k];
+            }
+            d_b2[r] += grad_out[r];
+        }
+
+        for k in 0..ff {
+            d_hidden[k] *= relu_mask[k];
+        }
+
+        let mut d_w1 = vec![0.0f32; ff * d];
+        let mut d_b1 = vec![0.0f32; ff];
+        let mut d_input = vec![0.0f32; d];
+
+        for k in 0..ff {
+            for j in 0..d {
+                d_w1[k * d + j] += d_hidden[k] * x[j];
+                d_input[j] += d_hidden[k] * self.w1[k * d + j];
+            }
+            d_b1[k] += d_hidden[k];
+        }
+
+        (d_w1, d_b1, d_w2, d_b2)
+    }
+}
+
 struct AdamW {
     m: Vec<f32>,
     v: Vec<f32>,
@@ -138,6 +218,7 @@ struct CpuModel {
     lm_head: Vec<f32>,
     bigram: BigramHash,
     smear: SmearGate,
+    ffn: Option<FFNLayer>,
     bigram_scale: f32,
     vocab: usize,
     dim: usize,
@@ -150,7 +231,12 @@ impl CpuModel {
         let lm_head: Vec<f32> = (0..vocab * dim).map(|_| rng_next(&mut s) * 0.02).collect();
         let bigram = BigramHash::new(vocab, dim, &mut s);
         let smear = SmearGate::new(dim);
-        Self { embed, lm_head, bigram, smear, bigram_scale: 0.1, vocab, dim }
+        let ffn = if std::env::args().any(|a| a == "--ffn") {
+            Some(FFNLayer::new(dim, dim * 4, &mut s))
+        } else {
+            None
+        };
+        Self { embed, lm_head, bigram, smear, ffn, bigram_scale: 0.1, vocab, dim }
     }
 
     #[allow(dead_code)]
@@ -196,11 +282,26 @@ impl CpuModel {
             .collect();
         let xs_smeared = self.smear.forward(&xs);
 
+        let xs_final: Vec<Vec<f32>> = if let Some(ref ffn) = self.ffn {
+            let normed: Vec<Vec<f32>> = xs_smeared.iter().map(|x| {
+                let mean = x.iter().sum::<f32>() / d as f32;
+                let var = x.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / d as f32;
+                let std = (var + 1e-5).sqrt();
+                x.iter().map(|v| (v - mean) / std).collect()
+            }).collect();
+            let ffn_out: Vec<Vec<f32>> = normed.iter().map(|x| ffn.forward(x)).collect();
+            (0..n).map(|i| {
+                xs_smeared[i].iter().zip(ffn_out[i].iter()).map(|(&a, &b)| a + b).collect()
+            }).collect()
+        } else {
+            xs_smeared
+        };
+
         let mut total_loss = 0.0f32;
         let mut d_logits = vec![vec![0.0f32; v]; n - 1];
 
         for i in 0..n - 1 {
-            let x = &xs_smeared[i];
+            let x = &xs_final[i];
             let target = tokens[i + 1] % v;
             let mut logits = vec![0.0f32; v];
             for (vi, l) in logits.iter_mut().enumerate() {
@@ -237,8 +338,6 @@ impl CpuModel {
 
         let (loss, d_logits, d_hidden) = self.loss_and_grad(tokens);
 
-        let mut d_lm_head = vec![0.0f32; v * d];
-
         let tok_emb: Vec<Vec<f32>> = tokens.iter()
             .map(|&id| self.embed[(id % v) * d..((id % v) + 1) * d].to_vec())
             .collect();
@@ -248,10 +347,54 @@ impl CpuModel {
             .collect();
         let xs_smeared = self.smear.forward(&xs);
 
-        for i in 0..n - 1 {
-            for (vi, dl) in d_logits[i].iter().enumerate() {
-                for j in 0..d {
-                    d_lm_head[vi * d + j] += dl * xs_smeared[i][j];
+        type FFNGrad = (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>);
+        #[allow(clippy::type_complexity)]
+        let (d_lm_head, ffn_grads): (_, Option<Vec<FFNGrad>>) = if let Some(ref ffn) = self.ffn {
+            let normed: Vec<Vec<f32>> = xs_smeared.iter().map(|x| {
+                let mean = x.iter().sum::<f32>() / d as f32;
+                let var = x.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / d as f32;
+                let std = (var + 1e-5).sqrt();
+                x.iter().map(|v| (v - mean) / std).collect()
+            }).collect();
+
+            let ffn_out: Vec<Vec<f32>> = normed.iter().map(|x| ffn.forward(x)).collect();
+            let xs_final: Vec<Vec<f32>> = (0..n).map(|i| {
+                xs_smeared[i].iter().zip(ffn_out[i].iter()).map(|(&a, &b)| a + b).collect()
+            }).collect();
+
+            let mut dh = vec![0.0f32; v * d];
+            for i in 0..n - 1 {
+                for (vi, dl) in d_logits[i].iter().enumerate() {
+                    for j in 0..d {
+                        dh[vi * d + j] += dl * xs_final[i][j];
+                    }
+                }
+            }
+
+            let grads: Vec<(Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>)> = (0..n)
+                .map(|i| ffn.backward(&normed[i], &d_hidden[i.min(n - 2)]))
+                .collect();
+
+            (dh, Some(grads))
+        } else {
+            let mut dh = vec![0.0f32; v * d];
+            for i in 0..n - 1 {
+                for (vi, dl) in d_logits[i].iter().enumerate() {
+                    for j in 0..d {
+                        dh[vi * d + j] += dl * xs_smeared[i][j];
+                    }
+                }
+            }
+            (dh, None)
+        };
+
+        if let Some(grads) = ffn_grads {
+            if let Some(ref mut ffn_mut) = self.ffn {
+                for (dw1, db1, dw2, db2) in grads {
+                    for (k, &g) in dw1.iter().enumerate() { ffn_mut.w1[k] -= lr * g; }
+                    for (k, &g) in db1.iter().enumerate() { ffn_mut.b1[k] -= lr * g; }
+                    for (k, &g) in dw2.iter().enumerate() { ffn_mut.w2[k] -= lr * g; }
+                    for (k, &g) in db2.iter().enumerate() { ffn_mut.b2[k] -= lr * g; }
                 }
             }
         }
