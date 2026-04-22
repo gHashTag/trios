@@ -86,7 +86,7 @@ impl NgramModel {
             ctx1: (0..vocab * dim).map(|_| rng() * lim).collect(),
             ctx2: (0..vocab * dim).map(|_| rng() * lim).collect(),
             proj: (0..hidden * dim).map(|_| rng() * lim_h).collect(),
-            lm_head: (0..vocab * dim).map(|_| rng() * lim_o).collect(),
+            lm_head: (0..vocab * hidden).map(|_| rng() * lim_o).collect(),
             ln_g: vec![1.0; dim],
             ln_b: vec![0.0; dim],
             vocab, dim, hidden,
@@ -129,10 +129,8 @@ impl NgramModel {
             let target = tokens[i + 1].min(v - 1);
             let mut logits = vec![0.0f32; v];
             for (vi, logit) in logits.iter_mut().enumerate() {
-                let w = &self.lm_head[vi * d..(vi + 1) * d];
-                for (hi, hn) in h.iter().enumerate().take(self.hidden) {
-                    if hi < d { *logit += w[hi] * hn; }
-                }
+                let w = &self.lm_head[vi * self.hidden..(vi + 1) * self.hidden];
+                for (hi, hn) in h.iter().enumerate() { *logit += w[hi] * hn; }
             }
             softmax(&mut logits);
             total -= logits[target].max(1e-10).ln();
@@ -151,7 +149,7 @@ impl NgramModel {
         let mut g_ctx1 = vec![0.0f32; v * d];
         let mut g_ctx2 = vec![0.0f32; v * d];
         let mut g_proj = vec![0.0f32; h * d];
-        let mut g_head = vec![0.0f32; v * d];
+        let mut g_head = vec![0.0f32; v * h];
 
         for i in 2..tokens.len() - 1 {
             let t2 = tokens[i - 2].min(v - 1);
@@ -163,19 +161,17 @@ impl NgramModel {
 
             let mut logits = vec![0.0f32; v];
             for (vi, logit) in logits.iter_mut().enumerate() {
-                let w = &self.lm_head[vi * d..(vi + 1) * d];
-                for (hi, hn) in hidden.iter().enumerate().take(h) {
-                    if hi < d { *logit += w[hi] * hn; }
-                }
+                let w = &self.lm_head[vi * h..(vi + 1) * h];
+                for (hi, hn) in hidden.iter().enumerate() { *logit += w[hi] * hn; }
             }
             softmax(&mut logits);
 
             let mut d_hidden = vec![0.0f32; h];
             for (vi, prob) in logits.iter().enumerate() {
                 let grad = prob - if vi == tgt { 1.0 } else { 0.0 };
-                let w = &self.lm_head[vi * d..(vi + 1) * d];
-                for hi in 0..h.min(d) {
-                    g_head[vi * d + hi] += grad * hidden[hi];
+                let w = &self.lm_head[vi * h..(vi + 1) * h];
+                for hi in 0..h {
+                    g_head[vi * h + hi] += grad * hidden[hi];
                     d_hidden[hi] += grad * w[hi];
                 }
             }
@@ -195,7 +191,7 @@ impl NgramModel {
                 }
             }
             for j in 0..d {
-                g_embed[t0 * d + j] += d_hidden.iter().take(h.min(d)).enumerate()
+                g_embed[t0 * d + j] += d_hidden.iter().enumerate()
                     .map(|(hi, dh)| self.proj[hi * d + j] * if hidden[hi] > 0.0 { 1.0 } else { 0.0 } * dh)
                     .sum::<f32>();
                 g_ctx1[t1 * d + j] += 0.7 * g_embed[t0 * d + j];
@@ -261,7 +257,7 @@ fn main() {
     let ps = VOCAB * DIM;
     let mut opts = Optimizers {
         e: AdamW::new(ps), c1: AdamW::new(ps), c2: AdamW::new(ps),
-        p: AdamW::new(hidden * DIM), h: AdamW::new(ps),
+        p: AdamW::new(hidden * DIM), h: AdamW::new(VOCAB * hidden),
     };
 
     let (init_loss, init_bpb) = evaluate(&model, val, SEQ);
