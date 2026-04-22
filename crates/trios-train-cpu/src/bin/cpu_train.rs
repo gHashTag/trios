@@ -336,8 +336,9 @@ impl CpuModel {
         let v = self.vocab;
         let n = tokens.len();
 
-        let (loss, d_logits, d_hidden) = self.loss_and_grad(tokens);
+        let (loss, d_logits, _d_hidden) = self.loss_and_grad(tokens);
 
+        // Recompute forward activations
         let tok_emb: Vec<Vec<f32>> = tokens.iter()
             .map(|&id| self.embed[(id % v) * d..((id % v) + 1) * d].to_vec())
             .collect();
@@ -347,62 +348,113 @@ impl CpuModel {
             .collect();
         let xs_smeared = self.smear.forward(&xs);
 
-        type FFNGrad = (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>);
-        #[allow(clippy::type_complexity)]
-        let (d_lm_head, ffn_grads): (_, Option<Vec<FFNGrad>>) = if let Some(ref ffn) = self.ffn {
+        // d_from_logits[i][j] = sum over vocab of d_logits[i][v] * lm_head[v][j]
+        // This is the gradient flowing back from the loss through the LM head
+        let mut d_from_logits = vec![vec![0.0f32; d]; n];
+        for (i, dl_row) in d_logits.iter().enumerate() {
+            for (vi, &dl) in dl_row.iter().enumerate() {
+                for (j, df) in d_from_logits[i].iter_mut().enumerate() {
+                    *df += dl * self.lm_head[vi * d + j];
+                }
+            }
+        }
+
+        // Compute d_lm_head and d_xs_final (gradient at model input)
+        let (d_lm_head, d_to_embed) = if let Some(ref ffn) = self.ffn {
+            // Forward: xs_final = smeared + ffn(layernorm(smeared))
             let normed: Vec<Vec<f32>> = xs_smeared.iter().map(|x| {
                 let mean = x.iter().sum::<f32>() / d as f32;
                 let var = x.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / d as f32;
                 let std = (var + 1e-5).sqrt();
                 x.iter().map(|v| (v - mean) / std).collect()
             }).collect();
-
             let ffn_out: Vec<Vec<f32>> = normed.iter().map(|x| ffn.forward(x)).collect();
             let xs_final: Vec<Vec<f32>> = (0..n).map(|i| {
                 xs_smeared[i].iter().zip(ffn_out[i].iter()).map(|(&a, &b)| a + b).collect()
             }).collect();
 
-            let mut dh = vec![0.0f32; v * d];
+            // d_lm_head
+            let mut dlh = vec![0.0f32; v * d];
             for i in 0..n - 1 {
-                for (vi, dl) in d_logits[i].iter().enumerate() {
+                for (vi, &dl) in d_logits[i].iter().enumerate() {
                     for j in 0..d {
-                        dh[vi * d + j] += dl * xs_final[i][j];
+                        dlh[vi * d + j] += dl * xs_final[i][j];
                     }
                 }
             }
 
-            let grads: Vec<(Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>)> = (0..n)
-                .map(|i| ffn.backward(&normed[i], &d_hidden[i.min(n - 2)]))
-                .collect();
+            // Phase 1: Compute FFN gradients and d_to_embed (borrow ffn immutably)
+            let mut d_to_emb = vec![vec![0.0f32; d]; n];
+            type FFNParamGrad = (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>);
+            let mut ffn_param_grads: Vec<FFNParamGrad> = Vec::with_capacity(n);
+            let mut d_normed_all: Vec<Vec<f32>> = Vec::with_capacity(n);
 
-            (dh, Some(grads))
-        } else {
-            let mut dh = vec![0.0f32; v * d];
-            for i in 0..n - 1 {
-                for (vi, dl) in d_logits[i].iter().enumerate() {
-                    for j in 0..d {
-                        dh[vi * d + j] += dl * xs_smeared[i][j];
+            for (i, normed_row) in normed.iter().enumerate() {
+                let gi = i.min(n - 2);
+                let (dw1, db1, dw2, db2) = ffn.backward(normed_row, &d_from_logits[gi]);
+                ffn_param_grads.push((dw1, db1, dw2, db2));
+
+                let mut d_normed = vec![0.0f32; d];
+                for k in 0..ffn.d_ff {
+                    let mut pre = ffn.b1[k];
+                    for (j, &nj) in normed_row.iter().enumerate() { pre += ffn.w1[k * d + j] * nj; }
+                    let gate = if pre > 0.0 { 1.0f32 } else { 0.0 };
+                    for (j, df) in d_from_logits[gi].iter().enumerate() {
+                        d_normed[j] += df * ffn.w2[k * d + j] * gate;
                     }
                 }
+                d_normed_all.push(d_normed);
             }
-            (dh, None)
-        };
 
-        if let Some(grads) = ffn_grads {
+            // LayerNorm backward: d_normed → d_smeared
+            for i in 0..n {
+                let x = &xs_smeared[i];
+                let mean = x.iter().sum::<f32>() / d as f32;
+                let var = x.iter().map(|vv| (vv - mean).powi(2)).sum::<f32>() / d as f32;
+                let std = (var + 1e-5).sqrt();
+                let nn = d as f32;
+                let d_normed = &d_normed_all[i];
+                let dx_sum: f32 = d_normed.iter().sum();
+                let dx_xm_sum: f32 = d_normed.iter().zip(x.iter()).map(|(&g, &xi)| g * (xi - mean)).sum();
+                let inv_n_std = 1.0 / (nn * std);
+                let inv_var_eps = 1.0 / (var + 1e-5);
+                let gi = i.min(n - 2);
+                for j in 0..d {
+                    let xm = x[j] - mean;
+                    let d_smeared_from_ffn = inv_n_std * (nn * d_normed[j] - dx_sum - xm * inv_var_eps * dx_xm_sum);
+                    d_to_emb[i][j] = d_from_logits[gi][j] + d_smeared_from_ffn;
+                }
+            }
+
+            // Phase 2: Apply FFN parameter updates (mutably borrow self.ffn)
             if let Some(ref mut ffn_mut) = self.ffn {
-                for (dw1, db1, dw2, db2) in grads {
+                for (dw1, db1, dw2, db2) in ffn_param_grads {
                     for (k, &g) in dw1.iter().enumerate() { ffn_mut.w1[k] -= lr * g; }
                     for (k, &g) in db1.iter().enumerate() { ffn_mut.b1[k] -= lr * g; }
                     for (k, &g) in dw2.iter().enumerate() { ffn_mut.w2[k] -= lr * g; }
                     for (k, &g) in db2.iter().enumerate() { ffn_mut.b2[k] -= lr * g; }
                 }
             }
-        }
 
+            (dlh, d_to_emb)
+        } else {
+            let mut dlh = vec![0.0f32; v * d];
+            for i in 0..n - 1 {
+                for (vi, &dl) in d_logits[i].iter().enumerate() {
+                    for j in 0..d {
+                        dlh[vi * d + j] += dl * xs_smeared[i][j];
+                    }
+                }
+            }
+            (dlh, d_from_logits)
+        };
+
+        // Update embeddings
         let mut d_embed = vec![0.0f32; v * d];
-        for i in 0..n {
-            let id = tokens[i] % v;
-            for (j, dh) in d_hidden[i.min(n - 2)].iter().enumerate().take(d) {
+        for (i, &tid) in tokens.iter().enumerate() {
+            let id = tid % v;
+            let gi = i.min(n - 2);
+            for (j, &dh) in d_to_embed[gi].iter().enumerate().take(d) {
                 d_embed[id * d + j] += dh;
             }
         }
@@ -410,8 +462,8 @@ impl CpuModel {
         opt_head.step(&mut self.lm_head, &d_lm_head);
         opt_embed.step(&mut self.embed, &d_embed);
 
-        self.bigram.grad_step(tokens, &d_hidden, lr);
-        self.smear.grad_step(&d_hidden, lr);
+        self.bigram.grad_step(tokens, &d_to_embed, lr);
+        self.smear.grad_step(&d_to_embed, lr);
 
         loss
     }
