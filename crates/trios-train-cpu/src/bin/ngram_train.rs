@@ -7,6 +7,13 @@ const DIM: usize = 64;
 const SEQ: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
 
+fn gelu(x: f32) -> f32 {
+    let x3 = x * x * x;
+    let tanh_arg = 0.7978845608028654 * (x + 0.044715 * x3); // sqrt(2/pi) ≈ 0.7978845608028654
+    let tanh_val = tanh_arg.tanh();
+    0.5 * x * (1.0 + tanh_val)
+}
+
 fn load_data(path: &str) -> Vec<usize> {
     let raw = fs::read(path).unwrap_or_else(|e| {
         eprintln!("Failed to load {}: {}. Using fallback.", path, e);
@@ -69,10 +76,11 @@ struct NgramModel {
     vocab: usize,
     dim: usize,
     hidden: usize,
+    activation: String,
 }
 
 impl NgramModel {
-    fn new(vocab: usize, dim: usize, hidden: usize, seed: u64) -> Self {
+    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64) -> Self {
         let mut s = seed;
         let mut rng = || {
             s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -89,7 +97,7 @@ impl NgramModel {
             lm_head: (0..vocab * hidden).map(|_| rng() * lim_o).collect(),
             ln_g: vec![1.0; dim],
             ln_b: vec![0.0; dim],
-            vocab, dim, hidden,
+            vocab, dim, hidden, activation,
         }
     }
 
@@ -114,7 +122,7 @@ impl NgramModel {
         for (hi, hn) in hidden.iter_mut().enumerate().take(h) {
             let w = &self.proj[hi * d..(hi + 1) * d];
             for (j, l) in ln.iter().enumerate() { *hn += w[j] * l; }
-            *hn = (*hn).max(0.0);
+            *hn = if self.activation == "gelu" { gelu(*hn) } else { (*hn).max(0.0) };
         }
         hidden
     }
@@ -240,9 +248,12 @@ fn main() {
         .map(|a| a[5..].parse::<f32>().unwrap_or(0.003)).unwrap_or(0.003);
     let hidden = std::env::args().find(|a| a.starts_with("--hidden="))
         .map(|a| a[9..].parse::<usize>().unwrap_or(128)).unwrap_or(128);
+    let activation = std::env::args().find(|a| a.starts_with("--activation="))
+        .map(|a| a[12..].to_string()).unwrap_or_else(|| "relu".to_string());
 
-    println!("=== 4-Gram Context Model + ReLU Hidden ===");
-    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr);
+    let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
+    println!("=== 4-Gram Context Model + {} Hidden ===", activation_name);
+    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation);
 
     let tokens = load_data("data/tinyshakespeare.txt");
     println!("Dataset: {} tokens", tokens.len());
@@ -252,7 +263,7 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, DIM, hidden, seed);
+    let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed);
     let ps = VOCAB * DIM;
     let mut opts = Optimizers {
         e: AdamW::new(ps), c1: AdamW::new(ps), c2: AdamW::new(ps),
