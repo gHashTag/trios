@@ -1,4 +1,6 @@
 //! IGLA-GF16 Training Pipeline for Parameter Golf
+mod trinity_3k_transformer;
+
 
 pub mod bigram_hash;
 pub mod ca_mask;
