@@ -523,12 +523,21 @@ fn main() {
     let mut rng_state = seed;
 
     for step in 1..=steps {
+        let progress = step as f32 / steps as f32;
+        let warmup = 0.05;
+        let current_lr = if progress < warmup {
+            lr * progress / warmup
+        } else {
+            let decay_progress = (progress - warmup) / (1.0 - warmup);
+            lr * 0.5 * (1.0 + (std::f32::consts::PI * decay_progress).cos())
+        };
+
         let offset = {
             rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             (rng_state as usize) % (data_len.saturating_sub(seq + 1))
         };
         let batch = &train_tokens[offset..offset + seq + 1];
-        let train_loss = model.train_step(batch, &mut opt_embed, &mut opt_head, lr);
+        let train_loss = model.train_step(batch, &mut opt_embed, &mut opt_head, current_lr);
 
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();
