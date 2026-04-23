@@ -138,37 +138,27 @@ fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, ac
 }
 
 fn parse_best_bpb(stdout: &str) -> Result<f64> {
-    let mut best = None;
     for line in stdout.lines() {
-        if line.contains("best_bpb") || line.contains("BPB:") {
-            for part in line.split('|') {
-                let trimmed = part.trim();
-                if trimmed.contains("best_bpb") {
-                    if let Some(val_str) = trimmed.split('|').next_back().or_else(|| trimmed.split(':').next_back()) {
-                        if let Ok(v) = val_str.trim().parse::<f64>() {
-                            best = Some(v);
-                        }
-                    }
-                }
-            }
-        }
-        if line.contains("Delta:") {
-            if let Some(pos) = line.find("BPB:") {
-                let after = &line[pos + 4..];
-                let end_pos = after.find('→').unwrap_or(after.len());
-                if let Ok(v) = after[..end_pos].trim().parse::<f64>() {
+        // Parse from backup binary format: "Time: X.Xs | BPB: X.XXXX → Y.YYYY | Delta: Z.ZZZZ"
+        // We want Y.YYYY (the final BPB, not the delta)
+        if line.contains("Done ===") || line.contains("Delta:") {
+            if let Some(arrow_pos) = line.find("→") {
+                let after_arrow = &line[arrow_pos + "→".len()..];
+                let val_str = after_arrow.split('|').next().unwrap_or(after_arrow).trim();
+                if let Ok(v) = val_str.parse::<f64>() {
                     return Ok(v);
                 }
             }
-            if let Some(pos) = line.find("→") {
-                let after = &line[pos + "→".len()..];
-                let val_str = after.split('|').next().unwrap_or(after).trim();
-                let num: String = val_str.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
-                if let Ok(v) = num.parse::<f64>() {
+        }
+        // Parse from progressive table format: "step | val_bpb | best_bpb | ms"
+        if line.contains("val_bpb") && !line.contains("step") {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 3 {
+                if let Ok(v) = parts[2].trim().parse::<f64>() {
                     return Ok(v);
                 }
             }
         }
     }
-    best.context("Could not parse BPB from training output")
+    anyhow::bail!("Could not parse BPB from training output")
 }
