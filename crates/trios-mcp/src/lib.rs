@@ -35,7 +35,6 @@ pub use trios_mcp_sr01::{
 use anyhow::{Context, Result};
 use serde_json::json;
 use tracing::{debug, info, warn};
-use trios_mcp_sr01::WebSocketStream;
 
 /// MCP Client — main interface for browser-tools-server interaction
 pub struct McpClient {
