@@ -49,49 +49,67 @@ fn App() -> Element {
     let mut connected: Signal<bool> = use_signal(|| false);
     let mut input_text: Signal<String> = use_signal(String::new);
 
+    // Store the connected ApiClient so send_chat can reuse it
+    let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
+
     // Inject theme CSS once
     use_hook(inject_theme);
+
+    // Clone signals for the on_error callback (must be 'static, mut for Signal::set)
+    let mut connected_err = connected;
+    let mut status_err = status;
 
     // Connect to server on mount
     use_hook(move || {
         let mut client = api::ApiClient::new();
 
-        let result = client.connect_with_callback(move |text| {
-            log::info!("[trios-ui] WS received: {} bytes", text.len());
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
-                match method {
-                    "agents/chat" | "chat" => {
-                        if let Some(r) = val.get("result") {
-                            let response = r
-                                .get("response")
-                                .and_then(|v| v.as_str())
-                                .or_else(|| r.get("content").and_then(|v| v.as_str()))
-                                .unwrap_or("{no content}");
-                            messages.write().push(ChatMsg {
-                                role: "agent".to_string(),
-                                content: response.to_string(),
-                            });
+        let result = client.connect_with_callback(
+            // on_message callback — FnMut for Signal writes
+            move |text| {
+                log::info!("[trios-ui] WS received: {} bytes", text.len());
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                    match method {
+                        "agents/chat" | "chat" => {
+                            if let Some(r) = val.get("result") {
+                                let response = r
+                                    .get("response")
+                                    .and_then(|v| v.as_str())
+                                    .or_else(|| r.get("content").and_then(|v| v.as_str()))
+                                    .unwrap_or("{no content}");
+                                messages.write().push(ChatMsg {
+                                    role: "agent".to_string(),
+                                    content: response.to_string(),
+                                });
+                            }
                         }
-                    }
-                    "agents/list" => {
-                        if let Some(r) = val.get("result") {
-                            *agents.write() = serde_json::to_string_pretty(r).unwrap_or_default();
+                        "agents/list" => {
+                            if let Some(r) = val.get("result") {
+                                *agents.write() =
+                                    serde_json::to_string_pretty(r).unwrap_or_default();
+                            }
                         }
-                    }
-                    "tools/list" => {
-                        if let Some(r) = val.get("result") {
-                            *tools.write() = serde_json::to_string_pretty(r).unwrap_or_default();
+                        "tools/list" => {
+                            if let Some(r) = val.get("result") {
+                                *tools.write() =
+                                    serde_json::to_string_pretty(r).unwrap_or_default();
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
-            }
-        });
+            },
+            // on_error callback — fires on WebSocket error/close
+            move || {
+                connected_err.set(false);
+                status_err.set("Disconnected".to_string());
+            },
+        );
 
         if result.is_ok() {
             status.set("Connected".to_string());
             connected.set(true);
+            ws_client.set(Some(client));
         } else {
             status.set("Connection failed".to_string());
         }
@@ -178,8 +196,15 @@ fn App() -> Element {
                                     content: text.clone(),
                                 });
                                 input_text.set(String::new());
-                                let client = api::ApiClient::new();
-                                let _ = client.send_chat(&text);
+                                // Use the stored connected client
+                                let guard = ws_client.read();
+                                if let Some(client) = guard.as_ref() {
+                                    if let Err(e) = client.send_chat(&text) {
+                                        log::error!("[trios-ui] send_chat failed: {:?}", e);
+                                    }
+                                } else {
+                                    log::warn!("[trios-ui] No WebSocket client — message dropped");
+                                }
                             }
                         }
                     }

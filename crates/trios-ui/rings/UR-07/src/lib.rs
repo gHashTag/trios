@@ -39,37 +39,15 @@ impl ApiClient {
         Self { ws: None }
     }
 
-    pub fn connect(&mut self) -> Result<(), JsValue> {
-        let ws = WebSocket::new(SERVER_WS_URL)?;
-
-        let onopen = Closure::<dyn Fn()>::new(|| {
-            log::info!("[trios-ui] Connected to trios-server");
-        });
-
-        let onerror = Closure::<dyn Fn()>::new(|| {
-            log::error!("[trios-ui] WebSocket error");
-        });
-
-        let onclose = Closure::<dyn Fn()>::new(|| {
-            log::info!("[trios-ui] Disconnected from trios-server");
-        });
-
-        ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
-        ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
-        ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-
-        onopen.forget();
-        onerror.forget();
-        onclose.forget();
-
-        self.ws = Some(ws);
-        Ok(())
-    }
-
-    /// Connect with a message callback (FnMut to allow mutating Dioxus Signals).
-    pub fn connect_with_callback<F>(&mut self, on_message: F) -> Result<(), JsValue>
+    /// Connect with message and error callbacks (FnMut for Dioxus Signal compatibility).
+    pub fn connect_with_callback<M, E>(
+        &mut self,
+        on_message: M,
+        mut on_error: E,
+    ) -> Result<(), JsValue>
     where
-        F: FnMut(String) + 'static,
+        M: FnMut(String) + 'static,
+        E: FnMut() + 'static,
     {
         let ws = WebSocket::new(SERVER_WS_URL)?;
 
@@ -77,8 +55,13 @@ impl ApiClient {
             log::info!("[trios-ui] Connected to trios-server");
         });
 
-        let onerror = Closure::<dyn Fn()>::new(|| {
+        let onerror = Closure::<dyn FnMut()>::wrap(Box::new(move || {
             log::error!("[trios-ui] WebSocket error");
+            on_error();
+        }));
+
+        let onclose = Closure::<dyn Fn()>::new(|| {
+            log::info!("[trios-ui] Disconnected from trios-server");
         });
 
         let mut on_message = on_message;
@@ -93,10 +76,12 @@ impl ApiClient {
 
         ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
         ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+        ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
         ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
 
         onopen.forget();
         onerror.forget();
+        onclose.forget();
         onmessage.forget();
 
         self.ws = Some(ws);
