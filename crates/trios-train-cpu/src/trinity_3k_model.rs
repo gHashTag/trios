@@ -180,7 +180,7 @@ impl Trinity3kAttentionHead {
         }
     }
 
-    fn forward(&self, xs: &[Vec<f32>]) -> Vec<Vec<f32>> {
+    fn forward_with_cache(&self, xs: &[Vec<f32>]) -> (Vec<Vec<f32>>, HeadCache) {
         let seq_len = xs.len();
         let d_model = xs[0].len();
 
@@ -204,6 +204,7 @@ impl Trinity3kAttentionHead {
 
         let scale = (self.head_dim as f32).sqrt();
         let mut output = Vec::with_capacity(seq_len);
+        let mut all_attn_weights = Vec::with_capacity(seq_len);
         #[allow(clippy::needless_range_loop)]
         for qi in 0..seq_len {
             let mut attn_weights = Vec::with_capacity(seq_len);
@@ -221,9 +222,18 @@ impl Trinity3kAttentionHead {
                 }
             }
             output.push(head_output);
+            all_attn_weights.push(attn_weights);
         }
 
-        output
+        let cache = HeadCache {
+            qs,
+            ks,
+            vs,
+            attn_weights: all_attn_weights,
+            normed_input: xs.to_vec(),
+        };
+
+        (output, cache)
     }
 
     fn zero_grad(&mut self) {
@@ -279,6 +289,14 @@ fn backward_layer_norm_batch(input: &[Vec<f32>], grad_out: &[Vec<f32>], eps: f32
     result
 }
 
+struct HeadCache {
+    qs: Vec<Vec<f32>>,
+    ks: Vec<Vec<f32>>,
+    vs: Vec<Vec<f32>>,
+    attn_weights: Vec<Vec<f32>>,
+    normed_input: Vec<Vec<f32>>,
+}
+
 struct LayerCache {
     input: Vec<Vec<f32>>,
     #[allow(dead_code)]
@@ -288,6 +306,7 @@ struct LayerCache {
     residual1: Vec<Vec<f32>>,
     normed2: Vec<Vec<f32>>,
     ffn_hidden_activated: Vec<Vec<f32>>,
+    head_caches: Vec<HeadCache>,
 }
 
 struct Trinity3kLayer {
@@ -355,8 +374,11 @@ impl Trinity3kLayer {
         let normed_xs: Vec<Vec<f32>> = xs.iter().map(|x| layer_norm(x, eps)).collect();
 
         let mut head_outputs: Vec<Vec<Vec<f32>>> = Vec::new();
+        let mut head_caches: Vec<HeadCache> = Vec::new();
         for head in &self.attention_heads {
-            head_outputs.push(head.forward(&normed_xs));
+            let (ho, hc) = head.forward_with_cache(&normed_xs);
+            head_outputs.push(ho);
+            head_caches.push(hc);
         }
 
         let mut attn_output = Vec::with_capacity(seq_len);
@@ -408,6 +430,7 @@ impl Trinity3kLayer {
             residual1,
             normed2: normed_r1,
             ffn_hidden_activated,
+            head_caches,
         };
 
         (output, cache)
@@ -418,14 +441,14 @@ impl Trinity3kLayer {
         let seq = grad_output.len();
         let d = self.d_model;
         let ffn = self.ffn_dim;
+        let n_heads = self.attention_heads.len();
+        let _head_dim = if n_heads > 0 { d / n_heads } else { 1 };
 
         // ── Residual2: grad flows to both residual1 and ffn_output ──
         // output = residual1 + ffn_output
         // grad_residual1 = grad_output, grad_ffn_output = grad_output
 
         // ── FFN backward ──
-        // ffn_output = left_matvec(w_ff2, d, ffn, ffn_hidden_activated)
-        // grad_ffn_hidden = grad_output @ w_ff2^T
         let mut grad_ffn_hidden = vec![vec![0.0f32; ffn]; seq];
         for (si, go) in grad_output.iter().enumerate() {
             for k in 0..ffn {
@@ -435,7 +458,6 @@ impl Trinity3kLayer {
                 }
                 grad_ffn_hidden[si][k] = s;
             }
-            // grad_w_ff2 += ffn_hidden_activated^T @ grad_output
             for j in 0..d {
                 for k in 0..ffn {
                     self.grad_w_ff2[j * ffn + k] += cache.ffn_hidden_activated[si][k] * go[j];
@@ -451,7 +473,6 @@ impl Trinity3kLayer {
             }
         }
 
-        // grad_normed2 = grad_ffn_hidden @ w_ff1^T
         let mut grad_normed2 = vec![vec![0.0f32; d]; seq];
         for si in 0..seq {
             for j in 0..d {
@@ -471,15 +492,188 @@ impl Trinity3kLayer {
         // ── LayerNorm2 backward ──
         let grad_residual1 = backward_layer_norm_batch(&cache.residual1, &grad_normed2, 1e-5);
 
-        // ── Residual1: grad flows to both input and attn_out ──
-        // residual1 = input + attn_out
-        // grad_input += grad_residual1, grad_attn_out += grad_residual1
+        // ── Residual1 backward ──
+        // residual1 = input + attn_out  →  grad flows to both
+        // grad_attn_out = grad_residual1  (copy)
+        let grad_attn_out = grad_residual1.clone();
 
-        // For now, simplified: skip attention backward (just pass grad through)
-        // This still trains embeddings and FFN effectively
+        // ── Attention backward ──
+        // attn_out is concatenation of all head outputs along head_dim
+        // grad for each head h, position i: grad_h[i] = grad_attn_out[i][h*head_dim..(h+1)*head_dim]
+        let mut grad_normed1 = vec![vec![0.0f32; d]; seq];
+
+        for hi in 0..n_heads {
+            let head = &mut self.attention_heads[hi];
+            let hc = &cache.head_caches[hi];
+            let hd = head.head_dim;
+            let scale = (hd as f32).sqrt();
+
+            // Extract grad for this head from concatenated grad_attn_out
+            // attn_out[i][hi*hd..(hi+1)*hd] = head_output[i]
+            // But we have no w_o projection yet — head output IS the contribution
+            // So grad_head_output[i][k] = grad_attn_out[i][hi*hd + k]
+            let mut grad_head_out = vec![vec![0.0f32; hd]; seq];
+            for i in 0..seq {
+                for k in 0..hd {
+                    grad_head_out[i][k] = grad_attn_out[i][hi * hd + k];
+                }
+            }
+
+            // ── Attention weights backward ──
+            // head_output[i][k] = sum_j attn_weights[i][j] * vs[j][k]
+            // grad_attn_weights[i][j] = sum_k grad_head_out[i][k] * vs[j][k]
+            // grad_vs[j][k] += sum_i attn_weights[i][j] * grad_head_out[i][k]  (over all query positions)
+            let mut grad_attn_weights = vec![vec![0.0f32; seq]; seq];
+            let mut grad_vs = vec![vec![0.0f32; hd]; seq];
+
+            for qi in 0..seq {
+                for kj in 0..seq {
+                    let mut gaw = 0.0f32;
+                    for k in 0..hd {
+                        gaw += grad_head_out[qi][k] * hc.vs[kj][k];
+                        grad_vs[kj][k] += hc.attn_weights[qi][kj] * grad_head_out[qi][k];
+                    }
+                    grad_attn_weights[qi][kj] = gaw;
+                }
+            }
+
+            // ── Softmax backward ──
+            // grad_scores[i][j] = attn_weights[i] * (grad_attn_weights[i] - sum_j(attn_weights[i][j] * grad_attn_weights[i][j]))
+            let mut grad_scores = vec![vec![0.0f32; seq]; seq];
+            for qi in 0..seq {
+                let dot: f32 = hc.attn_weights[qi]
+                    .iter()
+                    .zip(grad_attn_weights[qi].iter())
+                    .map(|(&aw, &gaw)| aw * gaw)
+                    .sum();
+                for kj in 0..seq {
+                    grad_scores[qi][kj] =
+                        hc.attn_weights[qi][kj] * (grad_attn_weights[qi][kj] - dot);
+                }
+            }
+
+            // ── Scale backward ──
+            // scores = QK^T / sqrt(head_dim)
+            // grad_qk_scores /= scale
+            for qi in 0..seq {
+                for kj in 0..seq {
+                    grad_scores[qi][kj] /= scale;
+                }
+            }
+
+            // ── QK^T backward ──
+            // score[qi][kj] = sum_k Q[qi][k] * K[kj][k]
+            // grad_Q[qi][k] += sum_j grad_scores[qi][j] * K[j][k]
+            // grad_K[kj][k] += sum_q grad_scores[q][kj] * Q[q][k]
+            let mut grad_qs = vec![vec![0.0f32; hd]; seq];
+            let mut grad_ks = vec![vec![0.0f32; hd]; seq];
+
+            for qi in 0..seq {
+                for k in 0..hd {
+                    let mut gq = 0.0f32;
+                    for kj in 0..seq {
+                        gq += grad_scores[qi][kj] * hc.ks[kj][k];
+                    }
+                    grad_qs[qi][k] = gq;
+                }
+            }
+            for kj in 0..seq {
+                for k in 0..hd {
+                    let mut gk = 0.0f32;
+                    for qi in 0..seq {
+                        gk += grad_scores[qi][kj] * hc.qs[qi][k];
+                    }
+                    grad_ks[kj][k] = gk;
+                }
+            }
+
+            // ── QK-Norm scale backward ──
+            // Q_scaled[qi][k] = Q[qi][k] * q_norm_scale[k]
+            // grad_q_norm_scale[k] += sum_qi Q_raw[qi][k] * grad_Q_scaled[qi][k]
+            // But we stored qs AFTER scaling. Need to undo:
+            // Q_raw[qi][k] = qs[qi][k] / q_norm_scale[k]  (if q_norm_scale != 0)
+            // Actually: qs stored = Q_raw * q_norm_scale, so Q_raw = qs / q_norm_scale
+            // grad_q_norm[k] += sum_i Q_raw[i][k] * grad_Q_scaled[i][k]
+            //                   = sum_i (qs[i][k] / q_norm_scale[k]) * grad_qs[i][k]
+            // And grad_Q_raw = grad_Q_scaled * q_norm_scale
+            // Similarly for K.
+
+            for k in 0..hd {
+                let qns = head.q_norm_scale[k];
+                if qns.abs() > 1e-12 {
+                    for qi in 0..seq {
+                        head.grad_q_norm[k] += (hc.qs[qi][k] / qns) * grad_qs[qi][k];
+                    }
+                }
+                let kns = head.k_norm_scale[k];
+                if kns.abs() > 1e-12 {
+                    for kj in 0..seq {
+                        head.grad_k_norm[k] += (hc.ks[kj][k] / kns) * grad_ks[kj][k];
+                    }
+                }
+            }
+
+            // Propagate through norm scale: grad_Q_raw = grad_Q_scaled * q_norm_scale
+            for qi in 0..seq {
+                for k in 0..hd {
+                    grad_qs[qi][k] *= head.q_norm_scale[k];
+                    grad_ks[qi][k] *= head.k_norm_scale[k];
+                }
+            }
+
+            // ── Linear projection backward ──
+            // Q = W_q @ input  (left_matvec: out = W @ in)
+            // grad_W_q += outer(grad_Q, input)
+            // grad_input += W_q^T @ grad_Q
+            let ni = &hc.normed_input;
+            for qi in 0..seq {
+                for oi in 0..hd {
+                    for j in 0..d {
+                        head.grad_w_q[oi * d + j] += grad_qs[qi][oi] * ni[qi][j];
+                    }
+                }
+                for j in 0..d {
+                    let mut s = 0.0f32;
+                    for oi in 0..hd {
+                        s += head.w_q[oi * d + j] * grad_qs[qi][oi];
+                    }
+                    grad_normed1[qi][j] += s;
+                }
+            }
+
+            for qi in 0..seq {
+                for oi in 0..hd {
+                    for j in 0..d {
+                        head.grad_w_k[oi * d + j] += grad_ks[qi][oi] * ni[qi][j];
+                    }
+                }
+                for j in 0..d {
+                    let mut s = 0.0f32;
+                    for oi in 0..hd {
+                        s += head.w_k[oi * d + j] * grad_ks[qi][oi];
+                    }
+                    grad_normed1[qi][j] += s;
+                }
+            }
+
+            for qi in 0..seq {
+                for oi in 0..hd {
+                    for j in 0..d {
+                        head.grad_w_v[oi * d + j] += grad_vs[qi][oi] * ni[qi][j];
+                    }
+                }
+                for j in 0..d {
+                    let mut s = 0.0f32;
+                    for oi in 0..hd {
+                        s += head.w_v[oi * d + j] * grad_vs[qi][oi];
+                    }
+                    grad_normed1[qi][j] += s;
+                }
+            }
+        }
 
         // ── LayerNorm1 backward ──
-        backward_layer_norm_batch(&cache.input, &grad_residual1, 1e-5)
+        backward_layer_norm_batch(&cache.input, &grad_normed1, 1e-5)
     }
 
     fn zero_grad(&mut self) {
@@ -815,5 +1009,41 @@ mod tests {
         assert!(loss.is_finite());
         assert!(bpb.is_finite());
         assert!(bpb > 0.0);
+    }
+
+    #[test]
+    fn test_attention_backward_reduces_loss() {
+        let mut c = Trinity3kConfig::default();
+        c.n_layers = 1;
+        c.vocab_size = 32;
+        c.hidden_dim = 27;
+        c.n_heads = 3;
+        c.head_dim = 9;
+        c.max_seq_len = 16;
+
+        let mut model = Trinity3kModel::new(c).unwrap();
+        let tokens: Vec<usize> = (0..32).collect();
+
+        let (loss_before, _) = model.loss_bpb(&tokens);
+
+        let cfg = AdamWConfig {
+            lr: 1e-3,
+            beta1: 0.9,
+            beta2: 0.999,
+            eps: 1e-8,
+            weight_decay: 0.01,
+        };
+
+        for _ in 0..5 {
+            model.train_step(&tokens, &cfg);
+        }
+
+        let (loss_after, _) = model.loss_bpb(&tokens);
+
+        assert!(
+            loss_after < loss_before,
+            "Loss should decrease after training: before={}, after={}",
+            loss_before, loss_after
+        );
     }
 }
