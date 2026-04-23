@@ -1,31 +1,56 @@
 {
   "manifest_version": 3,
-  "name": "Trios Chrome Extension",
-  "version": "0.1.0",
-  "description": "Trinity Stack Law Compliant — Rust + WASM Chrome Extension with MCP bridge to trios-server",
+  "name": "Trinity Agent Bridge",
+  "version": "0.3.0",
+  "description": "Trinity Agent Bridge — WASM sidepanel + MCP HTTP client",
   "permissions": [
-    "sidePanel"
+    "sidePanel",
+    "activeTab",
+    "storage"
   ],
   "host_permissions": [
-    "ws://localhost:9005/*"
+    "http://127.0.0.1:9105/*",
+    "http://localhost:9105/*",
+    "https://api.z.ai/*"
   ],
   "background": {
-    "service_worker": "dist/trios_ext_bg.js",
-    "type": "module"
+    "service_worker": "dist/bg-sw.js"
+  },
+  "action": {
+    "default_title": "Trinity Agent Bridge",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "action": {
-    "default_title": "Open Trios Sidepanel"
-  },
-  "icons": {
-    "16": "assets/icons/icon-16.png",
-    "32": "assets/icons/icon-32.png",
-    "48": "assets/icons/icon-48.png",
-    "128": "assets/icons/icon-128.png"
-  },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/issues/*", "https://github.com/*/pull/*"],
+      "js": ["dist/trios_ext.js", "dist/github-bootstrap.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["dist/trios_ext.js", "dist/claude-bootstrap.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' ws://localhost:9005"
-  }
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://127.0.0.1:9105 http://127.0.0.1:9002 http://127.0.0.1:9200 https://api.z.ai;"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/trios_ext_bg.wasm"],
+      "matches": ["https://github.com/*", "https://claude.ai/*"]
+    }
+  ]
 }

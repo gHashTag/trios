@@ -1,8 +1,18 @@
-name: laws-guard
-on: [push, pull_request]
+name: Laws Guard
+
+on:
+  push:
+    branches: [main, dev, feat/*, fix/*, bee/*]
+  pull_request:
+    branches: [main, dev]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  validate-laws:
+  constitutional-check:
+    name: Constitutional Enforcement
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,15 +25,22 @@ jobs:
 
       - name: "No .sh files (L1)"
         run: |
-          COUNT=$(find . -name "*.sh" | grep -v node_modules | grep -v ".git" | wc -l)
-          test "$COUNT" -eq 0 || (echo "L1 VIOLATION: $COUNT shell scripts found" && find . -name "*.sh" | grep -v node_modules | grep -v ".git" && exit 1)
+          COUNT=$(find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*" | wc -l)
+          if [ "$COUNT" -gt 0 ]; then
+            echo "L1 VIOLATION: $COUNT shell scripts found"
+            find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*"
+            exit 1
+          fi
+          echo "L1: No .sh files"
 
       - name: "PR must close an issue (L2)"
         if: github.event_name == 'pull_request'
         run: |
-          echo "${{ github.event.pull_request.body }}" | \
-          grep -iE "(Closes|Fixes|Resolves) #[0-9]+" || \
-          (echo "L2 VIOLATION: No 'Closes #N' in PR body" && exit 1)
+          if ! echo "${{ github.event.pull_request.body }}" | grep -iE "(Closes|Fixes|Resolves) #[0-9]+"; then
+            echo "L2 VIOLATION: No 'Closes #N' in PR body"
+            exit 1
+          fi
+          echo "L2: PR closes an issue"
 
       - name: "No /extension root directory"
         run: "test ! -d ./extension || (echo 'VIOLATION: /extension root exists, use crates/trios-ext/extension/' && exit 1)"
