@@ -3,7 +3,6 @@ use std::io::Write;
 use std::time::Instant;
 
 const VOCAB: usize = 128;
-const DIM: usize = 64;
 const SEQ: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
 
@@ -279,6 +278,8 @@ fn main() {
         .map(|a| a[5..].parse::<f32>().unwrap_or(0.003)).unwrap_or(0.003);
     let hidden = std::env::args().find(|a| a.starts_with("--hidden="))
         .map(|a| a[9..].parse::<usize>().unwrap_or(128)).unwrap_or(128);
+    let dim = std::env::args().find(|a| a.starts_with("--dim="))
+        .map(|a| a[6..].parse::<usize>().unwrap_or(64)).unwrap_or(64);
     let activation = std::env::args().find(|a| a.starts_with("--activation="))
         .map(|a| a[13..].to_string()).unwrap_or_else(|| "relu".to_string());
     let residual = std::env::args().any(|a| a == "--residual");
@@ -292,7 +293,7 @@ fn main() {
     let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
     let res_suffix = if residual { " + Residual" } else { "" };
     println!("=== 4-Gram Context Model + {} Hidden{} ===", activation_name, res_suffix);
-    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} residual={} wd={} warmup={} dropout={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation, residual, wd, warmup, dropout);
+    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} residual={} wd={} warmup={} dropout={}", VOCAB, dim, hidden, SEQ, steps, seed, base_lr, activation, residual, wd, warmup, dropout);
 
     let tokens = load_data("data/tinyshakespeare.txt");
     println!("Dataset: {} tokens", tokens.len());
@@ -302,11 +303,11 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed, dropout);
-    let ps = VOCAB * DIM;
+    let mut model = NgramModel::new(VOCAB, dim, hidden, activation.clone(), seed, dropout);
+    let ps = VOCAB * dim;
     let mut opts = Optimizers {
         e: AdamW::new(ps, wd), c1: AdamW::new(ps, wd), c2: AdamW::new(ps, wd),
-        p: AdamW::new(hidden * DIM, wd), h: AdamW::new(VOCAB * hidden, wd),
+        p: AdamW::new(hidden * dim, wd), h: AdamW::new(VOCAB * hidden, wd),
     };
 
     let (init_loss, init_bpb) = evaluate(&model, val, SEQ, residual);
