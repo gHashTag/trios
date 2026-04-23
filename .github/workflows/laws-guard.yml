@@ -7,26 +7,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: LAWS.md must exist
-        run: test -f LAWS.md || (echo "CONSTITUTIONAL BREACH: LAWS.md missing" && exit 1)
+      - name: "LAWS.md must exist"
+        run: "test -f LAWS.md || (echo 'CONSTITUTIONAL BREACH: LAWS.md missing' && exit 1)"
 
-      - name: LAWS.md must have supremacy clause
-        run: grep -q "SUPREMACY" LAWS.md || (echo "BREACH: SUPREMACY clause missing" && exit 1)
+      - name: "LAWS.md must have supremacy clause"
+        run: "grep -q 'SUPREMACY' LAWS.md || (echo 'BREACH: SUPREMACY clause missing' && exit 1)"
 
-      - name: No .sh files (L1)
+      - name: "No .sh files (L1)"
         run: |
           COUNT=$(find . -name "*.sh" | grep -v node_modules | grep -v ".git" | wc -l)
           test "$COUNT" -eq 0 || (echo "L1 VIOLATION: $COUNT shell scripts found" && find . -name "*.sh" | grep -v node_modules | grep -v ".git" && exit 1)
 
-      - name: PR must close an issue (L2)
+      - name: "PR must close an issue (L2)"
         if: github.event_name == 'pull_request'
         run: |
           echo "${{ github.event.pull_request.body }}" | \
           grep -iE "(Closes|Fixes|Resolves) #[0-9]+" || \
           (echo "L2 VIOLATION: No 'Closes #N' in PR body" && exit 1)
 
-      - name: No /extension root directory
-        run: test ! -d ./extension || (echo "VIOLATION: /extension root exists, use crates/trios-ext/extension/" && exit 1)
+      - name: "No /extension root directory"
+        run: "test ! -d ./extension || (echo 'VIOLATION: /extension root exists, use crates/trios-ext/extension/' && exit 1)"
 
-      - name: agent-dispatch prompt must exist
-        run: test -f .trinity/prompts/agent-dispatch.md || (echo "VIOLATION: agent-dispatch.md missing" && exit 1)
+      - name: "agent-dispatch prompt must exist"
+        run: "test -f .trinity/prompts/agent-dispatch.md || (echo 'VIOLATION: agent-dispatch.md missing' && exit 1)"
