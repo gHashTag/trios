@@ -79,6 +79,7 @@ struct WsRequest {
 
 #[derive(Debug, Serialize)]
 pub struct WsResponse {
+    pub method: String,
     pub result: Value,
 }
 
@@ -98,6 +99,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         let response = handle_message(&text, &state).await;
                         let response_json = serde_json::to_string(&response).unwrap_or_else(|e| {
                             serde_json::to_string(&WsResponse {
+                                method: "error".to_string(),
                                 result: json!({"error": format!("serialize error: {}", e)}),
                             }).unwrap_or_default()
                         });
@@ -142,14 +144,16 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         Ok(r) => r,
         Err(e) => {
             return WsResponse {
+                method: "error".to_string(),
                 result: json!({"error": format!("invalid request: {}", e)}),
             }
         }
     };
 
-    info!("WS request: method={}", req.method);
+    let method = req.method.clone();
+    info!("WS request: method={}", method);
 
-    let result = match req.method.as_str() {
+    let result = match method.as_str() {
         // MCP protocol handshake
         "initialize" => json!({
             "protocolVersion": "2024-11-05",
@@ -184,7 +188,7 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         _ => json!({"error": format!("unknown method: {}", req.method)}),
     };
 
-    WsResponse { result }
+    WsResponse { method, result }
 }
 
 async fn tools_list(state: &AppState) -> Value {
