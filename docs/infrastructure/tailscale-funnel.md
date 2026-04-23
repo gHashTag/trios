@@ -19,7 +19,30 @@ https://playras-macbook-pro-1.tail01804b.ts.net/
 # Terminal 1 — server
 cargo run -p trios-server
 
-# Terminal 2 — funnel (MUST use App Store Tailscale CLI, NOT brew)
+# Terminal 2 — funnel (NEW: use tri-tunnel)
+cargo run -p tri-tunnel -- start
+```
+
+### tri-tunnel CLI
+
+```bash
+# Show funnel status
+cargo run -p tri-tunnel -- status
+
+# Start funnel on port 9005 (default)
+cargo run -p tri-tunnel -- start
+
+# Start on custom port
+cargo run -p tri-tunnel -- start --port 3000
+
+# Stop funnel
+cargo run -p tri-tunnel -- stop
+```
+
+### Direct Tailscale CLI (legacy)
+
+```bash
+# ONLY if tri-tunnel fails
 /Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --bg 9005
 ```
 
@@ -30,13 +53,7 @@ cargo run -p trios-server
 | **App Store** (correct) | `/Applications/Tailscale.app/Contents/MacOS/Tailscale` | `IPNExtension` PID ~5646 |
 | brew (broken) | `/opt/homebrew/bin/tailscale` | `/var/run/tailscaled.socket` (missing) |
 
-**Always use App Store CLI** — brew CLI cannot connect to the App Store daemon (`IPNExtension`).
-
-Add alias to `~/.zshrc`:
-
-```bash
-alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
-```
+**tri-tunnel automatically uses App Store CLI** — no manual configuration needed.
 
 ## Test
 
@@ -59,7 +76,7 @@ curl -X POST https://playras-macbook-pro-1.tail01804b.ts.net/api/chat \
 ## Disable Funnel
 
 ```bash
-/Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --https=443 off
+cargo run -p tri-tunnel -- stop
 ```
 
 ## Tailnet IP (internal)
