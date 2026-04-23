@@ -18,6 +18,8 @@ pub mod residual_mix;
 pub mod sliding_eval;
 pub mod trinity_3k_model;
 
+// GoldenFloat16 implementation
+pub mod gf16;
 
 // Real IGLA Phase A/B training
 pub mod real_igla_model;

@@ -225,7 +225,7 @@ pub mod hybrid {
         num_params * 2
     }
     pub fn compression_ratio(_num_params: usize) -> f32 {
-        32.0 / 16.0
+        32.0_f32 / 16.0_f32
     }
 
     #[cfg(test)]
