@@ -1,78 +1,32 @@
-# SEAL — trios-ext Reference Implementation v1
+# 🔒 SEAL — trios-ext v1
 
-> **STATUS: 🔒 SEALED**
-> Sealed by: TRINITY-SEAL agent + human approval
-> Date: 2026-04-23
-> Commit: 1768c3d663a663d25d29cd23ec3293f0a8b8085d
+**Sealed:** 2026-04-23
+**Status:** REFERENCE IMPLEMENTATION — DO NOT MODIFY
 
----
-
-## What is sealed
-
-`crates/trios-ext` is the **first reference implementation** of the Trinity Ring Architecture.
-It is the canonical example of how a Gold Ring crate is structured.
-
-## Ring structure (frozen)
+## Reference Chain
 
 ```
-crates/trios-ext/
-├── src/                    ← 🥈 SILVER: Rust/WASM business logic
-│   ├── lib.rs              ← WASM entry point (#[wasm_bindgen(start)])
-│   ├── dom.rs              ← EX-01: DOM bridge, UI build
-│   ├── mcp.rs              ← EX-02: MCP HTTP client
-│   ├── bg.rs               ← EX-00: Background service worker logic
-│   └── bridge/             ← SILVER sub-ring: types, comet transport
-├── extension/              ← 🥉 BRONZE: Chrome Extension shell
-│   ├── dist/               ← BR-EXT: compiled WASM artifacts (BUILD OUTPUT)
-│   │   ├── trios_ext_br.js       ← wasm-bindgen JS glue
-│   │   ├── trios_ext_br_bg.wasm  ← compiled WASM
-│   │   ├── bg-sw.js              ← MV3 service worker
-│   │   ├── bootstrap.js          ← sidepanel bootstrap
-│   │   ├── github-bootstrap.js   ← GitHub injector
-│   │   └── claude-bootstrap.js   ← Claude injector
-│   ├── manifest.json       ← MV3 manifest
-│   ├── sidepanel.html      ← side panel HTML shell
-│   └── background.html     ← legacy MV2 (kept for reference)
-├── xtask/                  ← 🥉 BRONZE: build helpers
-├── Cargo.toml
-├── SEAL.md                 ← THIS FILE
-└── RING.md
+manifest.json → sw.js → dist/trios_ext.js → trios_ext_bg.wasm
+manifest.json → sidepanel.html → dist/trios_ext.js
+sidepanel.html → styles/brand.css
 ```
 
-## Laws governing this crate
+## Sealed Files (SHA256)
 
-- **L9**: All `dist/` references must point to existing files only
-- **L10**: This seal cannot be broken without explicit human approval
-- **L11**: No phantom imports — verify before referencing
-- **R1–R5**: Ring isolation invariants
+| File | SHA256 |
+|------|--------|
+| `src/lib.rs` | `5504eda0aef390314fa9edab1db579db461675f0868684e891fb55739f15d46e` |
+| `src/bg.rs` | `ead978d065933b6bfa9360eb75ad5e40c84f2223eedfcd9ef5e3adbcbac4fb6d` |
+| `src/dom.rs` | `4918b61b03934a47decd260126970d1498178174e84ede7ff650ffb0afebbe10` |
+| `src/mcp.rs` | `b98b86fb4f26b3312a4f4bb47b782d8297682569f176f8c11b12204bf03b45ba` |
+| `src/bridge/mod.rs` | `79d1edf5f7a15144ebffd41aeef754b4e96b92182fbeb8ae8df34e083c6494b4` |
+| `src/bridge/comet.rs` | `f94f1e1fdde25466899549738514af1df621febb55c51e4c163116feeb491d38` |
+| `src/bridge/types.rs` | `703536227b3290aa563f504eeab9c7d2c3793a7cb9e3894a715cebffbe1cb7fa` |
+| `src/bridge/tests.rs` | `93e212c9fd7561db6c7a5acefb3e69e531048f36ce759ad433940540a3f10f24` |
 
-## What agents MAY do
+## Rules
 
-- ✅ Read source files for reference
-- ✅ Rebuild `dist/` artifacts via `wasm-pack build`
-- ✅ Update Bronze ring HTML/manifest IF dist/ artifacts change
-
-## What agents MAY NOT do
-
-- ❌ Modify `src/*.rs` (Silver rings) without human approval
-- ❌ Add new dependencies to `Cargo.toml` without human approval  
-- ❌ Change the ring structure (add/remove/rename rings)
-- ❌ Reference files in `dist/` without verifying they exist first
-- ❌ Break the sealed reference chain:
-  `manifest.json → sidepanel.html → dist/trios_ext_br.js → dist/trios_ext_br_bg.wasm ✅`
-
-## Verified reference chain (v1)
-
-```
-manifest.json
-├── side_panel → sidepanel.html
-│   └── <script type="module"> → dist/trios_ext_br.js → dist/trios_ext_br_bg.wasm ✅
-├── background.service_worker → dist/bg-sw.js ✅
-├── content_scripts[github] → dist/trios_ext_br.js + dist/github-bootstrap.js ✅
-├── content_scripts[claude] → dist/trios_ext_br.js + dist/claude-bootstrap.js ✅
-└── web_accessible_resources → dist/trios_ext_br_bg.wasm ✅
-```
-
----
-
-*SEAL v1 — 2026-04-23 — trios Trinity Ring Architecture*
+- **READ-ONLY** for AI agents — no modifications to `src/` without human approval
+- `extension/` (BR-EXT shell) may be updated only to fix reference chain
+- Any SHA256 mismatch = seal broken = CI fails
+- To unseal: update this file with new hashes + get @gHashTag approval

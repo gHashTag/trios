@@ -1,13 +1,22 @@
 [package]
-name = "trios-ui-ur07"
+name = "trios-ui-ring-ur07"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "UR-07 — Settings"
+repository.workspace = true
+description = "UR-07 — WebSocket API client for trios-ui sidebar"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-dioxus = { workspace = true }
-trios-ui-ur00 = { path = "../UR-00" }
-trios-ui-ur01 = { path = "../UR-01" }
-trios-ui-ur02 = { path = "../UR-02" }
+wasm-bindgen = "0.2.92"
+web-sys = { version = "0.3.69", features = [
+    "WebSocket", "MessageEvent", "CloseEvent",
+    "console",
+] }
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"

@@ -1,165 +1,165 @@
-//! UR-07 — Settings
+//! UR-07 — WebSocket API Client
 //!
-//! Settings panel: theme toggle, API key configuration,
-//! MCP server URL, and sidebar preferences.
-//! Reads/writes the `SettingsAtom` from UR-00.
+//! Connects to trios-server via WebSocket on port 9005.
+//! Provides send/receive capabilities for the sidebar UI.
 
-use dioxus::prelude::*;
-use trios_ui_ur00::{use_settings_atom, Theme};
-use trios_ui_ur01::{toggle_theme, use_palette, radius, spacing, typography};
-use trios_ui_ur02::{Button, ButtonVariant, Input};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{MessageEvent, WebSocket};
 
-// ─── SettingsPanel ───────────────────────────────────────────
+pub const SERVER_WS_URL: &str = "ws://localhost:9005/ws";
 
-/// Full settings panel.
-pub fn SettingsPanel() -> Element {
-    let palette = use_palette();
-    let settings = use_settings_atom();
-    let theme_label = match settings.read().theme {
-        Theme::Dark => "🌙 Dark",
-        Theme::Light => "☀️ Light",
-    };
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
 
-    rsx! {
-        div {
-            style: "
-                display: flex;
-                flex-direction: column;
-                gap: {spacing::LG};
-                padding: {spacing::MD};
-                background: {palette.background};
-                height: 100%;
-                overflow-y: auto;
-            ",
-            // Header
-            div {
-                style: "
-                    font-family: {typography::FONT_FAMILY};
-                    font-size: {typography::SIZE_LG};
-                    font-weight: {typography::WEIGHT_BOLD};
-                    color: {palette.text};
-                ",
-                "⚙ Settings"
-            }
-            // Theme section
-            { SettingsSection {
-                title: "Appearance".to_string(),
-                children: rsx! {
-                    div {
-                        style: "display: flex; align-items: center; justify-content: space-between;",
-                        span {
-                            style: "
-                                font-family: {typography::FONT_FAMILY};
-                                font-size: {typography::SIZE_MD};
-                                color: {palette.text};
-                            ",
-                            "Theme: {theme_label}"
-                        }
-                        Button {
-                            children: "Toggle Theme".to_string(),
-                            variant: ButtonVariant::Secondary,
-                            onclick: move |_| { toggle_theme(); },
-                        }
-                    }
-                },
-            } }
-            // API Key section
-            { ApiKeySection {} }
-            // MCP URL section
-            { McpUrlSection {} }
-        }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentInfo {
+    pub id: String,
+    pub status: String,
+}
+
+/// WebSocket client for trios-server.
+pub struct ApiClient {
+    ws: Option<WebSocket>,
+}
+
+impl Default for ApiClient {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-// ─── SettingsSection ─────────────────────────────────────────
+impl ApiClient {
+    pub fn new() -> Self {
+        Self { ws: None }
+    }
 
-/// A settings section with title and content.
-#[derive(Props, Clone, PartialEq)]
-pub struct SettingsSectionProps {
-    /// Section title.
-    pub title: String,
-    /// Section content.
-    pub children: Element,
-}
+    /// Connect with message and error callbacks (FnMut for Dioxus Signal compatibility).
+    pub fn connect_with_callback<M, E>(
+        &mut self,
+        on_message: M,
+        mut on_error: E,
+    ) -> Result<(), JsValue>
+    where
+        M: FnMut(String) + 'static,
+        E: FnMut() + 'static,
+    {
+        let ws = WebSocket::new(SERVER_WS_URL)?;
 
-/// Render a settings section.
-pub fn SettingsSection(props: SettingsSectionProps) -> Element {
-    let palette = use_palette();
+        let onopen = Closure::<dyn Fn()>::new(|| {
+            log::info!("[trios-ui] Connected to trios-server");
+        });
 
-    rsx! {
-        div {
-            style: "
-                display: flex;
-                flex-direction: column;
-                gap: {spacing::SM};
-                background: {palette.surface};
-                border: 1px solid {palette.border};
-                border-radius: {radius::LG};
-                padding: {spacing::MD};
-            ",
-            div {
-                style: "
-                    font-family: {typography::FONT_FAMILY};
-                    font-size: {typography::SIZE_SM};
-                    font-weight: {typography::WEIGHT_BOLD};
-                    color: {palette.text_muted};
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                ",
-                {props.title.clone()}
-            }
-            {props.children}
-        }
+        let onerror = Closure::<dyn FnMut()>::wrap(Box::new(move || {
+            log::error!("[trios-ui] WebSocket error");
+            on_error();
+        }));
+
+        let onclose = Closure::<dyn Fn()>::new(|| {
+            log::info!("[trios-ui] Disconnected from trios-server");
+        });
+
+        let mut on_message = on_message;
+        let onmessage = Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(
+            move |ev: MessageEvent| {
+                if let Ok(txt) = ev.data().dyn_into::<js_sys::JsString>() {
+                    let text: String = txt.into();
+                    on_message(text);
+                }
+            },
+        ));
+
+        ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+        ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+        ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+        ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+
+        onopen.forget();
+        onerror.forget();
+        onclose.forget();
+        onmessage.forget();
+
+        self.ws = Some(ws);
+        Ok(())
+    }
+
+    pub fn send_chat(&self, message: &str) -> Result<(), JsValue> {
+        let ws = self
+            .ws
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("not connected"))?;
+
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "agents/chat",
+            "params": { "message": message }
+        });
+
+        let json = serde_json::to_string(&payload)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        ws.send_with_str(&json)?;
+        Ok(())
+    }
+
+    pub fn list_agents(&self) -> Result<(), JsValue> {
+        let ws = self
+            .ws
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("not connected"))?;
+
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "agents/list"
+        });
+
+        let json = serde_json::to_string(&payload)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        ws.send_with_str(&json)?;
+        Ok(())
+    }
+
+    pub fn list_tools(&self) -> Result<(), JsValue> {
+        let ws = self
+            .ws
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("not connected"))?;
+
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/list"
+        });
+
+        let json = serde_json::to_string(&payload)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        ws.send_with_str(&json)?;
+        Ok(())
+    }
+
+    pub fn is_connected(&self) -> bool {
+        matches!(&self.ws, Some(ws) if ws.ready_state() == WebSocket::OPEN)
     }
 }
 
-// ─── ApiKeySection ───────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// API key input section.
-fn ApiKeySection() -> Element {
-    let mut settings = use_settings_atom();
-    let api_key = settings.read().api_key.clone();
-    let masked = if api_key.is_empty() {
-        String::new()
-    } else {
-        format!("{}••••••••", &api_key[..api_key.len().min(4)])
-    };
-
-    rsx! {
-        SettingsSection {
-            title: "API Key".to_string(),
-            Input {
-                placeholder: "Enter z.ai API key...".to_string(),
-                value: masked,
-                label: "z.ai Direct Chat Key".to_string(),
-                mono: true,
-                oninput: move |val: String| {
-                    settings.write().api_key = val;
-                },
-            }
-        }
+    #[test]
+    fn server_url_uses_port_9005() {
+        assert!(SERVER_WS_URL.contains("9005"));
     }
-}
 
-// ─── McpUrlSection ───────────────────────────────────────────
-
-/// MCP server URL configuration.
-fn McpUrlSection() -> Element {
-    let mut settings = use_settings_atom();
-    let mcp_url = settings.read().mcp_url.clone();
-
-    rsx! {
-        SettingsSection {
-            title: "MCP Server".to_string(),
-            Input {
-                placeholder: "http://localhost:9005".to_string(),
-                value: mcp_url,
-                label: "Server URL".to_string(),
-                mono: true,
-                oninput: move |val: String| {
-                    settings.write().mcp_url = val;
-                },
-            }
-        }
+    #[test]
+    fn client_starts_disconnected() {
+        let client = ApiClient::new();
+        assert!(!client.is_connected());
     }
 }

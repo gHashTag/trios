@@ -1,216 +1,227 @@
-//! UR-00 — State atoms (Jotai-style Dioxus Signals)
+//! UR-00 — WASM Entry Point for trios-ui
 //!
-//! Provides global reactive atoms for the entire TRIOS UI.
-//! Each atom is a `Signal<T>` created via `Signal::new()` and
-//! accessed through convenience hooks (`use_agents_atom()`, etc.).
-//!
-//! ## Atoms
-//!
-//! | Atom | Type | Purpose |
-//! |------|------|---------|
-//! | `AgentsAtom` | `Vec<Agent>` | Agent list & status |
-//! | `ChatAtom` | `ChatState` | Messages, input, current chat |
-//! | `McpAtom` | `McpState` | MCP tools & connection status |
-//! | `SettingsAtom` | `Settings` | Theme, API key, preferences |
+//! Dioxus sidebar app that runs inside Chrome Extension sidepanel.
+//! Connects to trios-server via WebSocket and provides chat, agents, and tools UI.
 
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
+use trios_ui_ring_ur07 as api;
+use trios_ui_ring_ur08 as theme;
 
-// ─── Agent types ──────────────────────────────────────────────
-
-/// Agent data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Agent {
-    /// Agent ID.
-    pub id: String,
-    /// Agent display name.
-    pub name: String,
-    /// Agent description.
-    pub description: String,
-    /// Agent type (reasoner, coder, etc.).
-    pub agent_type: String,
-    /// Current status.
-    pub status: AgentStatus,
+/// WASM entry point — called when the module loads in the browser
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn run() {
+    console_error_panic_hook::set_once();
+    wasm_logger::init(wasm_logger::Config::default());
+    log::info!("[trios-ui] Launching Dioxus sidebar");
+    launch(App);
 }
 
-/// Agent status enum.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum AgentStatus {
-    /// Agent is idle and available.
-    Idle,
-    /// Agent is working on a task.
-    Busy,
-    /// Agent encountered an error.
-    Error(String),
-    /// Agent is offline.
-    Offline,
+/// Message type for chat display
+#[derive(Clone, PartialEq, Debug)]
+struct ChatMsg {
+    role: String,
+    content: String,
 }
 
-impl Default for AgentStatus {
-    fn default() -> Self {
-        Self::Offline
-    }
-}
-
-// ─── Chat types ──────────────────────────────────────────────
-
-/// Chat state atom.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ChatState {
-    /// Chat messages.
-    pub messages: Vec<ChatMessage>,
-    /// Current input text.
-    pub input: String,
-    /// Whether we're waiting for a response.
-    pub is_loading: bool,
-    /// Active agent ID for the chat.
-    pub active_agent_id: Option<String>,
-}
-
-impl Default for ChatState {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            input: String::new(),
-            is_loading: false,
-            active_agent_id: None,
+/// Inject theme CSS into the document head
+fn inject_theme() {
+    if let Some(window) = web_sys::window() {
+        if let Some(doc) = window.document() {
+            if let Some(head) = doc.query_selector("head").ok().flatten() {
+                if let Ok(style) = doc.create_element("style") {
+                    style.set_text_content(Some(theme::STYLESHEET));
+                    let _ = head.append_child(&style);
+                    log::info!("[trios-ui] Theme CSS injected");
+                }
+            }
         }
     }
 }
 
-/// A single chat message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ChatMessage {
-    /// Unique message ID.
-    pub id: String,
-    /// Sender role.
-    pub role: MessageRole,
-    /// Message content.
-    pub content: String,
-    /// ISO 8601 timestamp.
-    pub timestamp: String,
-}
+/// Root App component
+fn App() -> Element {
+    // Individual signals for state management
+    let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new);
+    let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
+    let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
+    let mut tools: Signal<String> = use_signal(|| "Loading tools...".to_string());
+    let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
+    let mut connected: Signal<bool> = use_signal(|| false);
+    let mut input_text: Signal<String> = use_signal(String::new);
 
-/// Message sender role.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum MessageRole {
-    /// User message.
-    User,
-    /// Agent/assistant message.
-    Assistant,
-    /// System message.
-    System,
-}
+    // Store the connected ApiClient so send_chat can reuse it
+    let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
 
-// ─── MCP types ──────────────────────────────────────────────
+    // Inject theme CSS once
+    use_hook(inject_theme);
 
-/// MCP state atom.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct McpState {
-    /// Available MCP tools.
-    pub tools: Vec<McpTool>,
-    /// Connection status.
-    pub connected: bool,
-    /// Server URL.
-    pub server_url: String,
-}
+    // Clone signals for the on_error callback (must be 'static, mut for Signal::set)
+    let mut connected_err = connected;
+    let mut status_err = status;
 
-impl Default for McpState {
-    fn default() -> Self {
-        Self {
-            tools: Vec::new(),
-            connected: false,
-            server_url: "http://localhost:9005".to_string(),
+    // Connect to server on mount
+    use_hook(move || {
+        let mut client = api::ApiClient::new();
+
+        let result = client.connect_with_callback(
+            // on_message callback — FnMut for Signal writes
+            move |text| {
+                log::info!("[trios-ui] WS received: {} bytes", text.len());
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                    match method {
+                        "agents/chat" | "chat" => {
+                            if let Some(r) = val.get("result") {
+                                let response = r
+                                    .get("response")
+                                    .and_then(|v| v.as_str())
+                                    .or_else(|| r.get("content").and_then(|v| v.as_str()))
+                                    .unwrap_or("{no content}");
+                                messages.write().push(ChatMsg {
+                                    role: "agent".to_string(),
+                                    content: response.to_string(),
+                                });
+                            }
+                        }
+                        "agents/list" => {
+                            if let Some(r) = val.get("result") {
+                                *agents.write() =
+                                    serde_json::to_string_pretty(r).unwrap_or_default();
+                            }
+                        }
+                        "tools/list" => {
+                            if let Some(r) = val.get("result") {
+                                *tools.write() =
+                                    serde_json::to_string_pretty(r).unwrap_or_default();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            },
+            // on_error callback — fires on WebSocket error/close
+            move || {
+                connected_err.set(false);
+                status_err.set("Disconnected".to_string());
+            },
+        );
+
+        if result.is_ok() {
+            status.set("Connected".to_string());
+            connected.set(true);
+            ws_client.set(Some(client));
+        } else {
+            status.set("Connection failed".to_string());
+        }
+    });
+
+    // Read state for rendering
+    let active = active_tab.read().clone();
+    let is_connected = *connected.read();
+    let status_text = status.read().clone();
+    let input_val = input_text.read().clone();
+
+    let status_cls = if is_connected {
+        "status connected"
+    } else {
+        "status error"
+    };
+
+    let chat_cls = if active == "chat" {
+        "tab-content active"
+    } else {
+        "tab-content"
+    };
+    let agents_cls = if active == "agents" {
+        "tab-content active"
+    } else {
+        "tab-content"
+    };
+    let tools_cls = if active == "tools" {
+        "tab-content active"
+    } else {
+        "tab-content"
+    };
+
+    let chat_tab_cls = if active == "chat" { "tab active" } else { "tab" };
+    let agents_tab_cls = if active == "agents" { "tab active" } else { "tab" };
+    let tools_tab_cls = if active == "tools" { "tab active" } else { "tab" };
+
+    rsx! {
+        div { id: "main",
+            header { class: "header",
+                span { style: "font-size:24px;color:#D4AF37;font-weight:bold;", "Φ" }
+                h1 { "Trinity" }
+                span { class: "{status_cls}", "{status_text}" }
+            }
+
+            nav { class: "tabs",
+                button {
+                    class: "{chat_tab_cls}",
+                    onclick: move |_| active_tab.set("chat".to_string()),
+                    "Chat"
+                }
+                button {
+                    class: "{agents_tab_cls}",
+                    onclick: move |_| active_tab.set("agents".to_string()),
+                    "Agents"
+                }
+                button {
+                    class: "{tools_tab_cls}",
+                    onclick: move |_| active_tab.set("tools".to_string()),
+                    "Tools"
+                }
+            }
+
+            section { class: "{chat_cls}", id: "tab-chat",
+                div { id: "messages",
+                    for msg in messages.read().iter() {
+                        div { class: "message {msg.role}", "{msg.content}" }
+                    }
+                }
+                input {
+                    id: "chat-input",
+                    r#type: "text",
+                    value: "{input_val}",
+                    placeholder: "Send a message...",
+                    oninput: move |ev| {
+                        input_text.set(ev.value());
+                    },
+                    onkeydown: move |ev: KeyboardEvent| {
+                        if ev.key() == Key::Enter {
+                            let text = input_text.read().trim().to_string();
+                            if !text.is_empty() {
+                                messages.write().push(ChatMsg {
+                                    role: "you".to_string(),
+                                    content: text.clone(),
+                                });
+                                input_text.set(String::new());
+                                // Use the stored connected client
+                                let guard = ws_client.read();
+                                if let Some(client) = guard.as_ref() {
+                                    if let Err(e) = client.send_chat(&text) {
+                                        log::error!("[trios-ui] send_chat failed: {:?}", e);
+                                    }
+                                } else {
+                                    log::warn!("[trios-ui] No WebSocket client — message dropped");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            section { class: "{agents_cls}", id: "tab-agents",
+                div { id: "agent-list",
+                    "{agents}"
+                }
+            }
+
+            section { class: "{tools_cls}", id: "tab-tools",
+                div { id: "tool-list",
+                    "{tools}"
+                }
+            }
         }
     }
-}
-
-/// MCP tool descriptor.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct McpTool {
-    /// Tool name.
-    pub name: String,
-    /// Tool description.
-    pub description: String,
-    /// JSON schema for tool parameters.
-    pub parameters: Option<String>,
-}
-
-// ─── Settings types ──────────────────────────────────────────
-
-/// Settings atom.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Settings {
-    /// Active theme.
-    pub theme: Theme,
-    /// API key for z.ai direct chat.
-    pub api_key: String,
-    /// MCP server URL override.
-    pub mcp_url: String,
-    /// Sidebar collapsed state.
-    pub sidebar_collapsed: bool,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            theme: Theme::Dark,
-            api_key: String::new(),
-            mcp_url: "http://localhost:9005".to_string(),
-            sidebar_collapsed: false,
-        }
-    }
-}
-
-/// Theme variant.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Theme {
-    /// Dark theme (default).
-    Dark,
-    /// Light theme.
-    Light,
-}
-
-// ─── Global Signal atoms (Jotai-style) ──────────────────────
-
-/// Global agents atom. Use `use_agents_atom()` to access.
-static AGENTS_ATOM: GlobalSignal<Vec<Agent>> = Signal::new(Vec::new());
-
-/// Global chat state atom. Use `use_chat_atom()` to access.
-static CHAT_ATOM: GlobalSignal<ChatState> = Signal::new(ChatState::default());
-
-/// Global MCP state atom. Use `use_mcp_atom()` to access.
-static MCP_ATOM: GlobalSignal<McpState> = Signal::new(McpState::default());
-
-/// Global settings atom. Use `use_settings_atom()` to access.
-static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::new(Settings::default());
-
-// ─── Atom accessors (Jotai-style hooks) ─────────────────────
-
-/// Access the global agents atom.
-///
-/// # Example
-/// ```rust,ignore
-/// fn MyComponent() -> Element {
-///     let agents = use_agents_atom();
-///     rsx! { {agents.len()} agents loaded }
-/// }
-/// ```
-pub fn use_agents_atom() -> Signal<Vec<Agent>> {
-    AGENTS_ATOM
-}
-
-/// Access the global chat state atom.
-pub fn use_chat_atom() -> Signal<ChatState> {
-    CHAT_ATOM
-}
-
-/// Access the global MCP state atom.
-pub fn use_mcp_atom() -> Signal<McpState> {
-    MCP_ATOM
-}
-
-/// Access the global settings atom.
-pub fn use_settings_atom() -> Signal<Settings> {
-    SETTINGS_ATOM
 }

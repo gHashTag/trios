@@ -1,23 +1,7 @@
-//! BR-APP — WASM Entry Point
+//! BR-APP — Bronze Output Ring for trios-ui
 //!
-//! Wires all UI rings together. This is the single WASM binary
-//! that gets compiled for the browser.
-//!
-//! ## Usage
-//!
-//! ```rust,ignore
-//! // From trios-ext:
-//! trios_ui::mount_app();
-//! ```
+//! This ring re-exports the UR-00 WASM entry point.
+//! Build with: `cargo build -p trios-ui-br-app --target wasm32-unknown-unknown --release`
+//! Then run: `wasm-bindgen --target web target/wasm32-unknown-unknown/release/trios_ui_br_app.wasm --out-dir dist/`
 
-use wasm_bindgen::prelude::*;
-
-/// WASM entry point. Called by the browser when the WASM module loads.
-#[wasm_bindgen(start)]
-pub fn run() {
-    console_error_panic_hook::set_once();
-    wasm_logger::init(wasm_logger::Config::default());
-    log::info!("Trinity UI WASM initializing...");
-    trios_ui_ur08::mount_app();
-    log::info!("Trinity UI WASM initialized successfully");
-}
+pub use trios_ui_ring_ur00::*;

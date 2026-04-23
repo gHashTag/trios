@@ -1,147 +1,171 @@
-//! UR-08 — App Shell + Router
+//! UR-08 — Trinity Brand Theme
 //!
-//! Top-level application shell with sidebar navigation and
-//! tab-based routing. Wires all atoms via the `AtomProvider`.
-//! This is the main entry point for the Dioxus app.
+//! CSS constants and theme values following Trinity Brand Kit.
+//! Total Black palette with gold accent.
 
-use dioxus::prelude::*;
-use trios_ui_ur00::use_settings_atom;
-use trios_ui_ur01::{use_palette, spacing, typography};
-use trios_ui_ur03::{NavItem, Sidebar};
-
-// ─── Route state ─────────────────────────────────────────────
-
-/// Available app routes.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Route {
-    /// Chat panel.
-    Chat,
-    /// Agent list.
-    Agents,
-    /// MCP tools panel.
-    Mcp,
-    /// Settings panel.
-    Settings,
+/// Trinity brand colors — Total Black Palette
+pub mod colors {
+    pub const BLACK: &str = "#000000";
+    pub const DARK: &str = "#161616";
+    pub const GRAY: &str = "#2a2a2a";
+    pub const ACCENT: &str = "#D4AF37";
+    pub const PINK: &str = "#F5D3F2";
+    pub const PURPLE: &str = "#5D3FF2";
+    pub const TEXT: &str = "#ffffff";
+    pub const TEXT_MUTED: &str = "#888888";
+    pub const ERROR: &str = "#FF6B6B";
+    pub const SUCCESS: &str = "#4CAF50";
 }
 
-impl Route {
-    /// Get the navigation label.
-    pub fn label(&self) -> &'static str {
-        match self {
-            Route::Chat => "Chat",
-            Route::Agents => "Agents",
-            Route::Mcp => "MCP",
-            Route::Settings => "Settings",
-        }
-    }
-
-    /// Get the navigation icon.
-    pub fn icon(&self) -> &'static str {
-        match self {
-            Route::Chat => "💬",
-            Route::Agents => "🤖",
-            Route::Mcp => "🔌",
-            Route::Settings => "⚙️",
-        }
-    }
-
-    /// All routes in sidebar order.
-    pub fn all() -> Vec<Route> {
-        vec![Route::Chat, Route::Agents, Route::Mcp, Route::Settings]
-    }
+/// Full CSS stylesheet for the Trinity sidebar
+pub const STYLESHEET: &str = r#"
+:root {
+    --trinity-black: #000000;
+    --trinity-dark: #161616;
+    --trinity-gray: #2a2a2a;
+    --trinity-accent: #D4AF37;
+    --trinity-pink: #F5D3F2;
+    --trinity-purple: #5D3FF2;
+    --trinity-text: #ffffff;
+    --trinity-text-muted: #888888;
+    --trinity-error: #FF6B6B;
+    --trinity-success: #4CAF50;
 }
 
-// ─── App Shell ───────────────────────────────────────────────
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-/// Main application shell component.
-/// Renders sidebar + content area based on active route.
-pub fn AppShell() -> Element {
-    let palette = use_palette();
-    let mut active_route = use_signal(|| Route::Chat);
-    let settings = use_settings_atom();
-
-    let nav_items: Vec<NavItem> = Route::all()
-        .iter()
-        .map(|r| NavItem {
-            label: r.label().to_string(),
-            icon: r.icon().to_string(),
-            active: *active_route.read() == *r,
-        })
-        .collect();
-
-    let current = *active_route.read();
-
-    rsx! {
-        div {
-            style: "
-                display: flex;
-                height: 100vh;
-                width: 100vw;
-                background: {palette.background};
-                color: {palette.text};
-                font-family: {typography::FONT_FAMILY};
-                overflow: hidden;
-            ",
-            // Sidebar
-            Sidebar {
-                items: nav_items,
-                on_select: move |idx: usize| {
-                    let routes = Route::all();
-                    if idx < routes.len() {
-                        active_route.set(routes[idx]);
-                    }
-                },
-            }
-            // Main content area
-            div {
-                style: "
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                ",
-                // Header
-                div {
-                    style: "
-                        padding: {spacing::MD} {spacing::LG};
-                        border-bottom: 1px solid {palette.border};
-                        font-family: {typography::FONT_FAMILY};
-                        font-size: {typography::SIZE_XL};
-                        font-weight: {typography::WEIGHT_BOLD};
-                        color: {palette.text};
-                    ",
-                    "Trinity {current.label()}"
-                }
-                // Content
-                div {
-                    style: "flex: 1; overflow: hidden;",
-                    { render_route(current) }
-                }
-            }
-        }
-    }
+body {
+    background-color: var(--trinity-black);
+    color: var(--trinity-text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
 }
 
-/// Render the content for a given route.
-fn render_route(route: Route) -> Element {
-    match route {
-        Route::Chat => rsx! { trios_ui_ur04::ChatPanel {} },
-        Route::Agents => rsx! { trios_ui_ur05::AgentList {} },
-        Route::Mcp => rsx! { trios_ui_ur06::McpPanel {} },
-        Route::Settings => rsx! { trios_ui_ur07::SettingsPanel {} },
-    }
+#main {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
-// ─── mount_app ───────────────────────────────────────────────
-
-/// Mount the full TRIOS application.
-///
-/// This is the primary entry point called by the root `trios-ui` crate
-/// and by `trios-ext` via `trios_ui::mount_app()`.
-pub fn mount_app() {
-    let cfg = dioxus::Config::new();
-    let dom = VirtualDom::new(AppShell);
-    // In a real WASM build, this would use dioxus::web::launch_cfg
-    // For now, we just ensure the VirtualDom is created successfully.
-    log::info!("Trinity UI mounted (Dioxus VirtualDom created)");
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--trinity-dark);
+    border-bottom: 1px solid var(--trinity-accent);
 }
+
+.header h1 {
+    font-size: 16px;
+    color: var(--trinity-accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.header .status {
+    font-size: 11px;
+    color: var(--trinity-text-muted);
+    margin-left: auto;
+}
+
+.header .status.connected {
+    color: var(--trinity-success);
+}
+
+.header .status.error {
+    color: var(--trinity-error);
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    background: var(--trinity-dark);
+    border-bottom: 1px solid var(--trinity-gray);
+}
+
+.tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--trinity-text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: color 0.2s, border-bottom 0.2s;
+}
+
+.tab:hover { color: #999; }
+.tab.active { color: var(--trinity-accent); border-bottom: 2px solid var(--trinity-accent); }
+
+/* Tab Content */
+.tab-content { display: none; flex: 1; padding: 16px; overflow-y: auto; }
+.tab-content.active { display: flex; flex-direction: column; }
+
+/* Chat */
+#messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.message {
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.message.you {
+    background: var(--trinity-gray);
+    color: var(--trinity-text);
+    align-self: flex-end;
+    border: 1px solid #333;
+}
+
+.message.agent {
+    background: #0D1117;
+    color: var(--trinity-accent);
+    align-self: flex-start;
+    border: 1px solid #1A3A5C;
+}
+
+.message.error {
+    background: #2A0A0A;
+    color: var(--trinity-error);
+}
+
+#chat-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--trinity-gray);
+    border-radius: 6px;
+    background: var(--trinity-dark);
+    color: var(--trinity-text);
+    font-size: 13px;
+    margin-top: 12px;
+}
+
+#chat-input:focus {
+    outline: none;
+    border-color: var(--trinity-accent);
+}
+
+#chat-input::placeholder { color: #555; }
+
+/* Agent/Tool lists */
+#agent-list, #tool-list {
+    font-size: 13px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+"#;
