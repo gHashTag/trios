@@ -1,12 +1,14 @@
 // Trios Background Service Worker
-// Configures sidepanel behavior for the extension.
+// Opens the sidepanel when the extension icon is clicked.
 
-// Open sidepanel when the extension icon is clicked
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((e) => console.error('[trios] setPanelBehavior failed:', e));
 
-// Optional: log when sidepanel action is triggered
 chrome.action.onClicked.addListener((tab) => {
-  console.log('[trios] Extension icon clicked — opening sidepanel for tab', tab.id);
+  chrome.sidePanel.open({ tabId: tab.id }).catch((e) =>
+    console.error('[trios] sidePanel.open failed:', e)
+  );
 });
 
 console.log('[trios] Background service worker loaded');
