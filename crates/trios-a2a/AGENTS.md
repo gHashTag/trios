@@ -1,20 +1,41 @@
-# Agent Instructions — trios-a2a
+# AGENTS.md — trios-a2a
 
-## Context
-trios-a2a is the REFERENCE IMPLEMENTATION of ring architecture.
-Do NOT modify without explicit instruction. Read it to understand the pattern.
+> AAIF-compliant (Linux Foundation Agentic AI Foundation)
+> MCP-compatible agent instructions
 
-## Ring structure (8 SR-rings + BR-OUTPUT)
-SR-00: Identity, SR-01: Registry, SR-02: Protocol, SR-03: Transport,
-SR-04: Dispatch, SR-05: Tasks, SR-06: Messages, SR-07: Events, BR-OUTPUT
+## Identity
 
-## Forbidden
-- Do not rename rings
-- Do not change public API without updating all dependents
-- Do not add .sh files
+- Crate: trios-a2a
+- Metal: Gold
+- Protocol: Google A2A v0.2.1
+- Repo: gHashTag/trios
 
-## Verification
-```bash
-cargo test -p trios-a2a
-cargo clippy -p trios-a2a -- -D warnings
-```
+## What this crate does
+
+Agent-to-Agent protocol: typed identity (SR-00), message envelope + tasks (SR-01),
+MCP-compatible registry (SR-02), thread-safe router (BR-OUTPUT).
+
+## Ring map
+
+| Ring | Package | Role | Sealed |
+|------|---------|------|--------|
+| SR-00 | trios-a2a-sr00 | AgentId, AgentCard, Capability | No |
+| SR-01 | trios-a2a-sr01 | A2AMessage, Task, TaskState | No |
+| SR-02 | trios-a2a-sr02 | A2ARegistry, MCP tool defs | No |
+| BR-OUTPUT | trios-a2a-br-output | A2ARouter (assembly) | No |
+
+## Rules (ABSOLUTE)
+
+- Read `LAWS.md` before ANY action
+- L-ARCH-001: Logic lives in `rings/` — `src/lib.rs` is RE-EXPORT ONLY
+- R1–R5: Ring Isolation — no cross-imports except via Cargo.toml
+- L6: Pure Rust only
+- L24: No WebSocket — HTTP only
+- Each ring has its own AGENTS.md — read it before touching that ring
+
+## You MAY NOT
+
+- ❌ Add business logic to `src/lib.rs`
+- ❌ Add files outside `rings/` (except src/lib.rs facade)
+- ❌ Cross-import Silver rings directly without Cargo.toml declaration
+- ❌ Add async runtime without explicit approval
