@@ -38,16 +38,14 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any);
 
     let app = Router::new()
-        // WebSocket (agents, internal tools)
         .route("/ws", get(ws_handler::ws_handler))
         .route("/operator", get(operator::operator_ws_handler))
-        // SSE transport (Claude Desktop, Cursor, VSCode)
         .route("/sse", get(sse_handler::sse_handler))
         .route("/sse/message", post(sse_handler::sse_message))
-        // HTTP REST
         .route("/api/chat", post(api_chat))
         .route("/api/status", get(api_status))
-        // Health
+        .route("/mcp/browser-commands", get(mcp_endpoints::browser::poll_commands))
+        .route("/mcp/browser-result", post(mcp_endpoints::browser::report_result))
         .route("/health", get(health))
         .route("/", get(health))
         .layer(
@@ -63,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
     info!("  WS:  ws://0.0.0.0:{}/ws", port);
     info!("  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)", port);
     info!("  REST: http://0.0.0.0:{}/api/chat", port);
+    info!("  BrowserOS: http://0.0.0.0:{}/mcp/browser-commands", port);
     info!("  MCP tools: {} registered", tools::count());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
