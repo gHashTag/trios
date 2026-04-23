@@ -82,11 +82,12 @@ struct NgramModel {
     dropout: f32,
     use_ctx3: bool,
     use_ctx4: bool,
+    label_smoothing: f32,
 }
 
 impl NgramModel {
     #[allow(clippy::too_many_arguments)]
-    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64, dropout: f32, use_ctx3: bool, use_ctx4: bool) -> Self {
+    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64, dropout: f32, use_ctx3: bool, use_ctx4: bool, label_smoothing: f32) -> Self {
         let mut s = seed;
         let mut rng = || {
             s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -108,7 +109,7 @@ impl NgramModel {
             ln_b: vec![0.0; dim],
             residual_alpha: 0.3,
             vocab, dim, hidden, activation,
-            dropout, use_ctx3, use_ctx4,
+            dropout, use_ctx3, use_ctx4, label_smoothing,
         }
     }
 
@@ -231,8 +232,10 @@ impl NgramModel {
             softmax(&mut logits);
 
             let mut d_hidden = vec![0.0f32; h];
+            let smooth = self.label_smoothing;
             for (vi, prob) in logits.iter().enumerate() {
-                let grad = prob - if vi == tgt { 1.0 } else { 0.0 };
+                let target_val = if vi == tgt { 1.0 - smooth + smooth / v as f32 } else { smooth / v as f32 };
+                let grad = prob - target_val;
                 let w = &self.lm_head[vi * h..(vi + 1) * h];
                 for hi in 0..h {
                     g_head[vi * h + hi] += grad * hidden[hi];
@@ -347,6 +350,8 @@ fn main() {
         .map(|a| a[10..].parse::<f32>().unwrap_or(0.0)).unwrap_or(0.0);
     let use_ctx3 = std::env::args().any(|a| a == "--ctx3");
     let use_ctx4 = std::env::args().any(|a| a == "--ctx4");
+    let label_smoothing = std::env::args().find(|a| a.starts_with("--label-smoothing="))
+        .map(|a| a[17..].parse::<f32>().unwrap_or(0.0)).unwrap_or(0.0);
 
     let ngram = if use_ctx4 { "6-Gram" } else if use_ctx3 { "5-Gram" } else { "4-Gram" };
     let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
@@ -362,7 +367,7 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, dim, hidden, activation.clone(), seed, dropout, use_ctx3, use_ctx4);
+    let mut model = NgramModel::new(VOCAB, dim, hidden, activation.clone(), seed, dropout, use_ctx3, use_ctx4, label_smoothing);
     let ps = VOCAB * dim;
     let mut opts = Optimizers {
         e: AdamW::new(ps, wd), c1: AdamW::new(ps, wd), c2: AdamW::new(ps, wd),
