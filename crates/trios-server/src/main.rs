@@ -2,15 +2,26 @@ mod mcp;
 mod mcp_endpoints;
 mod operator;
 mod security;
+mod sse_handler;
 mod tools;
 mod ws_handler;
 
+use axum::extract::{Query, State};
+use axum::response::Json;
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{get, post};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 use ws_handler::AppState;
+
+#[derive(Deserialize)]
+struct AgentIdQuery {
+    agent_id: String,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -27,22 +38,37 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(9005);
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/ws", get(ws_handler::ws_handler))
         .route("/operator", get(operator::operator_ws_handler))
+        .route("/sse", get(sse_handler::sse_handler))
+        .route("/sse/message", post(sse_handler::sse_message))
+        .route("/api/chat", post(api_chat))
+        .route("/api/status", get(api_status))
+        .route("/mcp/browser-commands", get(browser_poll))
+        .route("/mcp/browser-result", post(browser_report))
         .route("/health", get(health))
         .route("/", get(health))
         .layer(
             ServiceBuilder::new()
+                .layer(cors)
                 .layer(axum::middleware::from_fn(security::auth_middleware))
                 .layer(axum::middleware::from_fn(security::timeout_middleware)),
         )
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("trios-server listening on ws://0.0.0.0:{}/ws", port);
-    info!("Operator bridge: ws://0.0.0.0:{}/operator?token=...", port);
-    info!("MCP tools: {count} registered", count = tools::count());
+    info!("trios-server listening on 0.0.0.0:{}", port);
+    info!("  WS:  ws://0.0.0.0:{}/ws", port);
+    info!("  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)", port);
+    info!("  REST: http://0.0.0.0:{}/api/chat", port);
+    info!("  BrowserOS: http://0.0.0.0:{}/mcp/browser-commands", port);
+    info!("  MCP tools: {} registered", tools::count());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -52,4 +78,41 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health() -> &'static str {
     "ok"
+}
+
+async fn api_chat(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let text = serde_json::to_string(&body).unwrap_or_default();
+    let response = ws_handler::handle_message(&text, &state).await;
+    Json(json!({"result": response.result}))
+}
+
+async fn api_status(State(state): State<AppState>) -> Json<Value> {
+    let agents = state.agents.lock().await.len();
+    Json(json!({
+        "status": "ok",
+        "agents": agents,
+        "tools": tools::count(),
+    }))
+}
+
+async fn browser_poll(
+    State(state): State<AppState>,
+    Query(params): Query<AgentIdQuery>,
+) -> Json<Value> {
+    if params.agent_id.is_empty() {
+        return Json(json!({"error": "agent_id is required"}));
+    }
+    let result = mcp_endpoints::browser::browser_commands(&state, &params.agent_id).await;
+    Json(result)
+}
+
+async fn browser_report(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let result = mcp_endpoints::browser::browser_result(&state, body).await;
+    Json(result)
 }

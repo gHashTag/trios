@@ -49,6 +49,20 @@ github.com/gHashTag/trios — file visible in browser
 
 If a file is not in the repo — the task is NOT complete.
 
+## Agent Dispatch
+
+To dispatch an agent to any GitHub issue, use the ONE-SHOT prompt:
+
+```
+.trinity/prompts/agent-dispatch.md
+```
+
+Replace `{{ISSUE_NUMBER}}`, `{{ISSUE_TITLE}}` — the agent picks its own soul-name.
+The prompt embeds all LAWS (L1–L9), the full PHI LOOP (11 steps), HEARTBEAT format,
+architecture overview, and a DONE checklist that blocks premature victory declaration.
+
+See: [.trinity/prompts/agent-dispatch.md](.trinity/prompts/agent-dispatch.md)
+
 ## Architecture
 
 ```

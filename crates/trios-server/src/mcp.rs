@@ -214,6 +214,162 @@ fn build_tool_definitions() -> Vec<Tool> {
                 ("max_depth", json!({"type": "integer"}).as_object().unwrap().clone()),
             ],
         ),
+        // === A2A Protocol (7) ===
+        make_tool(
+            "a2a_register",
+            "Register a new A2A agent with capabilities",
+            vec!["id", "name"],
+            vec![
+                ("id", prop_type("string")),
+                ("name", prop_type("string")),
+                ("description", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "a2a_list_agents",
+            "List all registered A2A agents",
+            vec![],
+            vec![],
+        ),
+        make_tool(
+            "a2a_send",
+            "Send a direct message from one agent to another",
+            vec!["from", "to"],
+            vec![
+                ("from", prop_type("string")),
+                ("to", prop_type("string")),
+                ("payload", json!({"type": "object"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "a2a_broadcast",
+            "Broadcast a message to all registered agents",
+            vec!["from"],
+            vec![
+                ("from", prop_type("string")),
+                ("payload", json!({"type": "object"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "a2a_assign_task",
+            "Assign a task to an A2A agent",
+            vec!["title", "created_by", "assign_to"],
+            vec![
+                ("title", prop_type("string")),
+                ("created_by", prop_type("string")),
+                ("assign_to", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "a2a_task_status",
+            "Get the current status of an A2A task",
+            vec!["task_id"],
+            vec![("task_id", prop_type("string"))],
+        ),
+        make_tool(
+            "a2a_update_task",
+            "Update the state of an A2A task",
+            vec!["task_id", "state"],
+            vec![
+                ("task_id", prop_type("string")),
+                ("state", prop_type("string")),
+            ],
+        ),
+        // === BrowserOS (12) ===
+        make_tool(
+            "browser_get_url",
+            "Get current URL of the browser tab controlled by BrowserOS agent",
+            vec!["agent_id"],
+            vec![("agent_id", prop_type("string"))],
+        ),
+        make_tool(
+            "browser_get_title",
+            "Get page title of the browser tab",
+            vec!["agent_id"],
+            vec![("agent_id", prop_type("string"))],
+        ),
+        make_tool(
+            "browser_navigate",
+            "Navigate the browser tab to a URL",
+            vec!["agent_id", "url"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("url", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "browser_get_dom",
+            "Get full page HTML of the browser tab",
+            vec!["agent_id"],
+            vec![("agent_id", prop_type("string"))],
+        ),
+        make_tool(
+            "browser_query_selector",
+            "Find a DOM element by CSS selector",
+            vec!["agent_id", "selector"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("selector", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "browser_click",
+            "Click a DOM element by CSS selector",
+            vec!["agent_id", "selector"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("selector", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "browser_type",
+            "Type text into an input or textarea element",
+            vec!["agent_id", "selector", "text"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("selector", prop_type("string")),
+                ("text", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "browser_scroll",
+            "Scroll the browser tab to coordinates",
+            vec!["agent_id", "y"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("y", json!({"type": "number"}).as_object().unwrap().clone()),
+            ],
+        ),
+        make_tool(
+            "browser_eval",
+            "Evaluate a JavaScript expression in the browser tab",
+            vec!["agent_id", "js"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("js", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "browser_screenshot",
+            "Capture a screenshot of the browser tab as base64 PNG",
+            vec!["agent_id"],
+            vec![("agent_id", prop_type("string"))],
+        ),
+        make_tool(
+            "browser_open_tab",
+            "Open a new browser tab with given URL",
+            vec!["agent_id", "url"],
+            vec![
+                ("agent_id", prop_type("string")),
+                ("url", prop_type("string")),
+            ],
+        ),
+        make_tool(
+            "browser_close_tab",
+            "Close the current browser tab",
+            vec!["agent_id"],
+            vec![("agent_id", prop_type("string"))],
+        ),
     ]
 }
 

@@ -7,7 +7,7 @@ fn main() {
 
     match subcmd {
         "build-ext" => build_ext(),
-        "help" | _ => {
+        _ => {
             eprintln!("Usage: cargo xtask <command>");
             eprintln!("  build-ext  Build trios-ext WASM + wasm-bindgen → dist/");
         }

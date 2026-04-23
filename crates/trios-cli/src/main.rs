@@ -12,12 +12,16 @@ use trios_cli::{
         dash::{dash_refresh, dash_sync},
         gates::{gate_check, GateStatus},
         issue::{issue_close, issue_new},
+        lang::run as lang_run,
         leaderboard::leaderboard_show,
         report::report,
         roster::roster_update,
+        railway::{run as railway_run, RailwayCommand},
         run::run,
+        status::run as status_run,
         sweep::sweep,
         submit::submit,
+        train::train_cpu,
     },
 };
 
@@ -100,6 +104,39 @@ enum Cmd {
     Commit {
         msg: String,
     },
+
+    /// Railway deployment
+    Railway {
+        #[command(subcommand)]
+        sub: RailwayCommand,
+    },
+
+    /// Language mode (ru/en)
+    Lang {
+        lang: String,
+    },
+
+    /// Show loop status
+    Status {
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Train CPU n-gram model
+    Train {
+        #[arg(long, default_value_t = 12000)]
+        steps: usize,
+        #[arg(long, default_value_t = 128)]
+        hidden: usize,
+        #[arg(long, default_value_t = 0.004)]
+        lr: f64,
+        #[arg(long, default_value = "42,43,44")]
+        seeds: String,
+        #[arg(long, default_value = "relu")]
+        activation: String,
+        #[arg(long, default_value_t = true)]
+        parallel: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -167,6 +204,23 @@ fn main() -> Result<()> {
         }
         Cmd::Commit { msg } => {
             commit(&msg)?;
+        }
+        Cmd::Railway { sub } => {
+            railway_run(sub)?;
+        }
+        Cmd::Lang { lang } => {
+            lang_run(trios_cli::cmd::lang::LangCmd { lang })?;
+        }
+        Cmd::Status { json } => {
+            status_run(trios_cli::cmd::status::StatusCmd { json })?;
+        }
+        Cmd::Train { steps, hidden, lr, seeds, activation, parallel } => {
+            let seed_list: Vec<u64> = seeds.split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            let results = train_cpu(seed_list, steps, hidden, lr, activation, parallel)?;
+            let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
+            println!("\n📊 Average BPB: {:.3} ({})", avg, results.len());
         }
     }
     Ok(())

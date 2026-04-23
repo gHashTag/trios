@@ -5,9 +5,9 @@
 //!   tri gates check size
 
 use anyhow::{Context, Result};
-use std::collections::HashMap;
 
 /// Quality gate thresholds
+#[allow(dead_code)]
 const GATES: &[(&str, f64)] = &[
     ("bpab_target", 6.0),   // Target BPB for BigramHash(729)
     ("bpab_max", 8.0),      // Maximum acceptable BPB
@@ -81,8 +81,6 @@ fn check_time(value: Option<f64>) -> Result<GateStatus> {
 
 fn check_all() -> Result<GateStatus> {
     println!("🚦 Checking all gates...");
-
-    let mut results: HashMap<&'static str, GateStatus> = HashMap::new();
 
     // For now, just check without values (would need to fetch from results)
     println!("  bpab: unknown (target=6.0, max=8.0)");

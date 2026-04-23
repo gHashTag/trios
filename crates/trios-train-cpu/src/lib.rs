@@ -16,6 +16,8 @@ pub mod ortho_init_baseline;
 pub mod swa_phi;
 pub mod residual_mix;
 pub mod sliding_eval;
+pub mod trinity_3k_model;
+
 
 // Real IGLA Phase A/B training
 pub mod real_igla_model;

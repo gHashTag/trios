@@ -5,7 +5,6 @@
 //!   tri sweep hidden 128 144 192
 
 use anyhow::{Context, Result};
-use std::collections::HashMap;
 
 use crate::cmd::run::{run, RunResult};
 

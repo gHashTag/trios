@@ -30,7 +30,7 @@ fn allowed_roots() -> Vec<PathBuf> {
 
 /// Returns the number of registered tools.
 pub fn count() -> usize {
-    19
+    31
 }
 
 /// Main tool dispatcher — chain-of-responsibility pattern.

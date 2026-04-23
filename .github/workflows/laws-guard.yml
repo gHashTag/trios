@@ -1,0 +1,49 @@
+name: Laws Guard
+
+on:
+  push:
+    branches: [main, dev, feat/*, fix/*, bee/*]
+  pull_request:
+    branches: [main, dev]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  constitutional-check:
+    name: Constitutional Enforcement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "LAWS.md must exist"
+        run: "test -f LAWS.md || (echo 'CONSTITUTIONAL BREACH: LAWS.md missing' && exit 1)"
+
+      - name: "LAWS.md must have supremacy clause"
+        run: "grep -q 'SUPREMACY' LAWS.md || (echo 'BREACH: SUPREMACY clause missing' && exit 1)"
+
+      - name: "No .sh files (L1)"
+        run: |
+          COUNT=$(find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*" | wc -l)
+          if [ "$COUNT" -gt 0 ]; then
+            echo "L1 VIOLATION: $COUNT shell scripts found"
+            find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*"
+            exit 1
+          fi
+          echo "L1: No .sh files"
+
+      - name: "PR must close an issue (L2)"
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! echo "${{ github.event.pull_request.body }}" | grep -iE "(Closes|Fixes|Resolves) #[0-9]+"; then
+            echo "L2 VIOLATION: No 'Closes #N' in PR body"
+            exit 1
+          fi
+          echo "L2: PR closes an issue"
+
+      - name: "No /extension root directory"
+        run: "test ! -d ./extension || (echo 'VIOLATION: /extension root exists, use crates/trios-ext/extension/' && exit 1)"
+
+      - name: "agent-dispatch prompt must exist"
+        run: "test -f .trinity/prompts/agent-dispatch.md || (echo 'VIOLATION: agent-dispatch.md missing' && exit 1)"
