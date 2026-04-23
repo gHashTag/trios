@@ -3,7 +3,6 @@
 //! MCP (Model Context Protocol) types and JSON-RPC 2.0 serialization.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// JSON-RPC 2.0 Request
 #[derive(Debug, Clone, Serialize, Deserialize)]
