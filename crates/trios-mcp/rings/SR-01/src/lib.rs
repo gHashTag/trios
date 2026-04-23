@@ -5,11 +5,12 @@
 use anyhow::{Context, Result};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 use std::time::Duration;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{connect_async_with_config, WebSocketStream};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use url::Url;
 
 use trios_mcp_sr00::{JsonRpcMessage, JsonRpcRequest, JsonRpcResponse};
@@ -138,20 +139,17 @@ impl McpWebSocketClient {
 
         debug!("Connecting to WebSocket server at {}", url);
 
-        let mut request = url.into_client_request()
+        let mut request = tokio_tungstenite::tungstenite::handshake::client::Request::builder()
+            .uri(url.as_str())
+            .header("Authorization", self.config.auth.to_header_value())
+            .body(())
             .context("Failed to create WebSocket request")?;
 
-        // Add Basic Auth header
-        request.headers_mut().insert(
-            "Authorization",
-            self.config.auth.to_header_value().parse()
-                .context("Failed to parse Authorization header")?,
-        );
-
-        let config = tokio_tungstenite::tungstenite::client::WebSocketConfig {
+        let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
             max_message_size: Some(64 * 1024 * 1024), // 64MB
-            max_send_queue: None,
+            max_frame_size: Some(64 * 1024 * 1024),
             accept_unmasked_frames: false,
+            ..Default::default()
         };
 
         let (stream, response) = connect_async_with_config(request, Some(config), false)
