@@ -39,20 +39,40 @@ impl ApiClient {
         Self { ws: None }
     }
 
-    /// Connect with message and error callbacks (FnMut for Dioxus Signal compatibility).
-    pub fn connect_with_callback<M, E>(
+    /// Connect with message, open, and error callbacks (FnMut for Dioxus Signal compatibility).
+    /// On open, automatically requests agents/list and tools/list from the server.
+    pub fn connect_with_callback<M, O, E>(
         &mut self,
         on_message: M,
+        on_open: O,
         mut on_error: E,
     ) -> Result<(), JsValue>
     where
         M: FnMut(String) + 'static,
+        O: FnOnce() + 'static,
         E: FnMut() + 'static,
     {
         let ws = WebSocket::new(SERVER_WS_URL)?;
+        let ws_clone = ws.clone();
+        let on_open = std::cell::RefCell::new(Some(on_open));
 
-        let onopen = Closure::<dyn Fn()>::new(|| {
+        let onopen = Closure::<dyn Fn()>::new(move || {
             log::info!("[trios-ui] Connected to trios-server");
+
+            // Request agents and tools on connect
+            let agents_payload = json!({"jsonrpc": "2.0", "id": 2, "method": "agents/list"});
+            if let Ok(json) = serde_json::to_string(&agents_payload) {
+                let _ = ws_clone.send_with_str(&json);
+            }
+            let tools_payload = json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"});
+            if let Ok(json) = serde_json::to_string(&tools_payload) {
+                let _ = ws_clone.send_with_str(&json);
+            }
+
+            // Fire on_open callback once
+            if let Some(cb) = on_open.borrow_mut().take() {
+                cb();
+            }
         });
 
         let onerror = Closure::<dyn FnMut()>::wrap(Box::new(move || {

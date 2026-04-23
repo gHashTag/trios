@@ -13,7 +13,7 @@ pub fn run() {
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());
     log::info!("[trios-ui] Launching Dioxus sidebar");
-    launch(App);
+    launch(app);
 }
 
 /// Message type for chat display
@@ -39,14 +39,14 @@ fn inject_theme() {
 }
 
 /// Root App component
-fn App() -> Element {
+fn app() -> Element {
     // Individual signals for state management
     let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new);
     let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
     let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
     let mut tools: Signal<String> = use_signal(|| "Loading tools...".to_string());
     let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
-    let mut connected: Signal<bool> = use_signal(|| false);
+    let connected: Signal<bool> = use_signal(|| false);
     let mut input_text: Signal<String> = use_signal(String::new);
 
     // Store the connected ApiClient so send_chat can reuse it
@@ -55,7 +55,9 @@ fn App() -> Element {
     // Inject theme CSS once
     use_hook(inject_theme);
 
-    // Clone signals for the on_error callback (must be 'static, mut for Signal::set)
+    // Clone signals for the on_open and on_error callbacks
+    let mut connected_open = connected;
+    let mut status_open = status;
     let mut connected_err = connected;
     let mut status_err = status;
 
@@ -99,6 +101,11 @@ fn App() -> Element {
                     }
                 }
             },
+            // on_open callback — fires when WebSocket actually connects
+            move || {
+                status_open.set("Connected".to_string());
+                connected_open.set(true);
+            },
             // on_error callback — fires on WebSocket error/close
             move || {
                 connected_err.set(false);
@@ -107,8 +114,7 @@ fn App() -> Element {
         );
 
         if result.is_ok() {
-            status.set("Connected".to_string());
-            connected.set(true);
+            status.set("Connecting...".to_string());
             ws_client.set(Some(client));
         } else {
             status.set("Connection failed".to_string());
