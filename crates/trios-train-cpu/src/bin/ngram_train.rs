@@ -273,7 +273,7 @@ fn main() {
     let hidden = std::env::args().find(|a| a.starts_with("--hidden="))
         .map(|a| a[9..].parse::<usize>().unwrap_or(128)).unwrap_or(128);
     let activation = std::env::args().find(|a| a.starts_with("--activation="))
-        .map(|a| a[12..].to_string()).unwrap_or_else(|| "relu".to_string());
+        .map(|a| a[13..].to_string()).unwrap_or_else(|| "relu".to_string());
     let residual = std::env::args().any(|a| a == "--residual");
 
     let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
