@@ -7,12 +7,15 @@ use dioxus::prelude::*;
 use trios_ui_ring_ur07 as api;
 use trios_ui_ring_ur08 as theme;
 
+/// Build version — auto-incremented by xtask bump-version
+pub const BUILD_VERSION: &str = env!("TRIOS_BUILD_VERSION", "dev");
+
 /// WASM entry point — called when the module loads in the browser
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());
-    log::info!("[trios-ui] Launching Dioxus sidebar");
+    log::info!("[trios-ui] Launching Dioxus sidebar v{}", BUILD_VERSION);
     launch(app);
 }
 
@@ -40,7 +43,6 @@ fn inject_theme() {
 
 /// Root App component
 fn app() -> Element {
-    // Individual signals for state management
     let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new);
     let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
     let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
@@ -48,29 +50,35 @@ fn app() -> Element {
     let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
     let connected: Signal<bool> = use_signal(|| false);
     let mut input_text: Signal<String> = use_signal(String::new);
-
-    // Store the connected ApiClient so send_chat can reuse it
     let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
 
-    // Inject theme CSS once
     use_hook(inject_theme);
 
-    // Clone signals for the on_open and on_error callbacks
     let mut connected_open = connected;
     let mut status_open = status;
     let mut connected_err = connected;
     let mut status_err = status;
 
-    // Connect to server on mount
     use_hook(move || {
         let mut client = api::ApiClient::new();
 
         let result = client.connect_with_callback(
-            // on_message callback — FnMut for Signal writes
             move |text| {
-                log::info!("[trios-ui] WS received: {} bytes", text.len());
+                let preview = if text.len() > 120 {
+                    format!("{}…", &text[..120])
+                } else {
+                    text.clone()
+                };
+
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("<no method>");
+                    let has_result = val.get("result").is_some();
+                    let has_error = val.get("error").is_some();
+                    log::info!(
+                        "[trios-ui] WS recv {} bytes | method={} result={} error={} | {}",
+                        text.len(), method, has_result, has_error, preview
+                    );
+
                     match method {
                         "agents/chat" | "chat" => {
                             if let Some(r) = val.get("result") {
@@ -79,35 +87,58 @@ fn app() -> Element {
                                     .and_then(|v| v.as_str())
                                     .or_else(|| r.get("content").and_then(|v| v.as_str()))
                                     .unwrap_or("{no content}");
+                                log::info!("[trios-ui] CHAT response: {} chars", response.len());
                                 messages.write().push(ChatMsg {
                                     role: "agent".to_string(),
                                     content: response.to_string(),
                                 });
+                            } else if has_error {
+                                log::warn!("[trios-ui] CHAT error: {}", val.get("error").unwrap());
                             }
                         }
                         "agents/list" => {
                             if let Some(r) = val.get("result") {
-                                *agents.write() =
-                                    serde_json::to_string_pretty(r).unwrap_or_default();
+                                let pretty = serde_json::to_string_pretty(r).unwrap_or_default();
+                                let count = r.as_array().map(|a| a.len()).unwrap_or(0);
+                                log::info!("[trios-ui] AGENTS list: {} agents", count);
+                                *agents.write() = if count == 0 {
+                                    "No agents registered".to_string()
+                                } else {
+                                    pretty
+                                };
                             }
                         }
                         "tools/list" => {
                             if let Some(r) = val.get("result") {
-                                *tools.write() =
-                                    serde_json::to_string_pretty(r).unwrap_or_default();
+                                let count = r.as_array().map(|a| a.len()).unwrap_or(0);
+                                log::info!("[trios-ui] TOOLS list: {} tools", count);
+                                if count == 0 {
+                                    *tools.write() = "No tools available".to_string();
+                                } else if let Some(arr) = r.as_array() {
+                                    let names: Vec<String> = arr.iter()
+                                        .filter_map(|t| {
+                                            t.get("name").and_then(|n| n.as_str()).map(|s| s.to_string())
+                                        })
+                                        .collect();
+                                    *tools.write() = format!("{} tools:\n{}", count, names.join("\n"));
+                                }
                             }
                         }
-                        _ => {}
+                        other => {
+                            log::warn!("[trios-ui] WS unhandled method='{}' payload={}", other, preview);
+                        }
                     }
+                } else {
+                    log::warn!("[trios-ui] WS recv non-JSON {} bytes: {}", text.len(), preview);
                 }
             },
-            // on_open callback — fires when WebSocket actually connects
             move || {
+                log::info!("[trios-ui] WS on_open fired — sending agents/list + tools/list");
                 status_open.set("Connected".to_string());
                 connected_open.set(true);
             },
-            // on_error callback — fires on WebSocket error/close
             move || {
+                log::warn!("[trios-ui] WS on_error/close fired");
                 connected_err.set(false);
                 status_err.set("Disconnected".to_string());
             },
@@ -117,38 +148,20 @@ fn app() -> Element {
             status.set("Connecting...".to_string());
             ws_client.set(Some(client));
         } else {
+            log::error!("[trios-ui] connect_with_callback failed");
             status.set("Connection failed".to_string());
         }
     });
 
-    // Read state for rendering
     let active = active_tab.read().clone();
     let is_connected = *connected.read();
     let status_text = status.read().clone();
     let input_val = input_text.read().clone();
 
-    let status_cls = if is_connected {
-        "status connected"
-    } else {
-        "status error"
-    };
-
-    let chat_cls = if active == "chat" {
-        "tab-content active"
-    } else {
-        "tab-content"
-    };
-    let agents_cls = if active == "agents" {
-        "tab-content active"
-    } else {
-        "tab-content"
-    };
-    let tools_cls = if active == "tools" {
-        "tab-content active"
-    } else {
-        "tab-content"
-    };
-
+    let status_cls = if is_connected { "status connected" } else { "status error" };
+    let chat_cls = if active == "chat" { "tab-content active" } else { "tab-content" };
+    let agents_cls = if active == "agents" { "tab-content active" } else { "tab-content" };
+    let tools_cls = if active == "tools" { "tab-content active" } else { "tab-content" };
     let chat_tab_cls = if active == "chat" { "tab active" } else { "tab" };
     let agents_tab_cls = if active == "agents" { "tab active" } else { "tab" };
     let tools_tab_cls = if active == "tools" { "tab active" } else { "tab" };
@@ -190,9 +203,7 @@ fn app() -> Element {
                     r#type: "text",
                     value: "{input_val}",
                     placeholder: "Send a message...",
-                    oninput: move |ev| {
-                        input_text.set(ev.value());
-                    },
+                    oninput: move |ev| input_text.set(ev.value()),
                     onkeydown: move |ev: KeyboardEvent| {
                         if ev.key() == Key::Enter {
                             let text = input_text.read().trim().to_string();
@@ -202,14 +213,14 @@ fn app() -> Element {
                                     content: text.clone(),
                                 });
                                 input_text.set(String::new());
-                                // Use the stored connected client
                                 let guard = ws_client.read();
                                 if let Some(client) = guard.as_ref() {
+                                    log::info!("[trios-ui] CHAT send: {}", &text);
                                     if let Err(e) = client.send_chat(&text) {
                                         log::error!("[trios-ui] send_chat failed: {:?}", e);
                                     }
                                 } else {
-                                    log::warn!("[trios-ui] No WebSocket client — message dropped");
+                                    log::warn!("[trios-ui] No WS client — message dropped");
                                 }
                             }
                         }
@@ -218,15 +229,11 @@ fn app() -> Element {
             }
 
             section { class: "{agents_cls}", id: "tab-agents",
-                div { id: "agent-list",
-                    "{agents}"
-                }
+                div { id: "agent-list", "{agents}" }
             }
 
             section { class: "{tools_cls}", id: "tab-tools",
-                div { id: "tool-list",
-                    "{tools}"
-                }
+                div { id: "tool-list", "{tools}" }
             }
         }
     }

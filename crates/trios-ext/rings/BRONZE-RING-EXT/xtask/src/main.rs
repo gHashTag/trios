@@ -9,45 +9,57 @@ fn main() {
         "build-ext" => build_ext(),
         "build-sidepanel" => build_sidepanel(),
         "build-all" => {
+            let ver = bump_build_version();
+            eprintln!("[xtask] Build version: {ver}");
             build_ext();
-            build_sidepanel();
+            build_sidepanel_with_version(&ver);
+        }
+        "bump-version" => {
+            let ver = bump_build_version();
+            eprintln!("[xtask] Bumped to: {ver}");
         }
         _ => {
             eprintln!("Usage: cargo xtask <command>");
             eprintln!("  build-ext        Build trios-ext WASM (background) → dist/");
             eprintln!("  build-sidepanel  Build trios-ui-br-app WASM (sidepanel) → dist/");
-            eprintln!("  build-all        Build both WASM artifacts → dist/");
+            eprintln!("  build-all        Build both WASM artifacts → dist/ (auto-bumps version)");
+            eprintln!("  bump-version     Increment BUILD_NUMBER in .build-version, print new version");
         }
     }
 }
 
+/// Read .build-version, increment BUILD_NUMBER, write back, return version string
+fn bump_build_version() -> String {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let version_file = PathBuf::from(&manifest_dir).join("../../../../..").join(".build-version");
+
+    let current = std::fs::read_to_string(&version_file).unwrap_or_else(|_| "0".to_string());
+    let n: u64 = current.trim().parse().unwrap_or(0);
+    let next = n + 1;
+    std::fs::write(&version_file, next.to_string()).expect("write .build-version");
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    format!("0.1.{next}+{ts}")
+}
+
 /// Build the extension background WASM (trios-ext-ring-ex00)
 fn build_ext() {
-    // Both trios-ext-ring-ex00 and trios-ui-br-app are root workspace members
-    // xtask/ → BRONZE-RING-EXT/ → rings/ → trios-ext/ → crates/ → root workspace
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
     let bronze_dir = PathBuf::from(&manifest_dir).join("..");
     let root_workspace = PathBuf::from(&manifest_dir).join("../../../../..");
-
     let dist_dir = bronze_dir.join("dist");
 
     eprintln!("[xtask] Building trios-ext-ring-ex00 for wasm32-unknown-unknown...");
     let status = Command::new("cargo")
-        .args([
-            "build",
-            "-p",
-            "trios-ext-ring-ex00",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--release",
-        ])
+        .args(["build", "-p", "trios-ext-ring-ex00", "--target", "wasm32-unknown-unknown", "--release"])
         .current_dir(&root_workspace)
         .status()
         .expect("failed to run cargo build");
     assert!(status.success(), "cargo build for trios-ext-ring-ex00 failed");
 
     let wasm_input = root_workspace.join("target/wasm32-unknown-unknown/release/trios_ext_ring_ex00.wasm");
-
     if !wasm_input.exists() {
         eprintln!("[xtask] ERROR: {} not found", wasm_input.display());
         std::process::exit(1);
@@ -57,58 +69,39 @@ fn build_ext() {
 
     eprintln!("[xtask] Running wasm-bindgen for trios-ext-ring-ex00...");
     let status = Command::new("wasm-bindgen")
-        .arg("--target")
-        .arg("no-modules")
-        .arg("--out-dir")
+        .args(["--target", "no-modules", "--out-dir"])
         .arg(&dist_dir)
-        .arg("--no-modules-global")
-        .arg("trios_ext_init")
+        .args(["--no-modules-global", "trios_ext_init"])
         .arg(&wasm_input)
         .status()
         .expect("failed to run wasm-bindgen");
     assert!(status.success(), "wasm-bindgen for trios-ext-ring-ex00 failed");
 
-    let js_out = dist_dir.join("trios_ext_ring_ex00.js");
-    let wasm_out = dist_dir.join("trios_ext_ring_ex00_bg.wasm");
-    if js_out.exists() && wasm_out.exists() {
-        let js_size = std::fs::metadata(&js_out).map(|m| m.len()).unwrap_or(0);
-        let wasm_size = std::fs::metadata(&wasm_out).map(|m| m.len()).unwrap_or(0);
-        eprintln!(
-            "[xtask] SUCCESS: dist/trios_ext_ring_ex00.js ({:.1} KB) + dist/trios_ext_ring_ex00_bg.wasm ({:.1} KB)",
-            js_size as f64 / 1024.0,
-            wasm_size as f64 / 1024.0
-        );
-    } else {
-        eprintln!("[xtask] WARNING: expected output files not found");
-    }
+    report_dist(&dist_dir, "trios_ext_ring_ex00");
 }
 
-/// Build the sidepanel UI WASM (trios-ui-br-app — Dioxus sidebar)
+/// Build sidepanel WASM without version (for standalone build-sidepanel)
 fn build_sidepanel() {
-    // xtask/ → BRONZE-RING-EXT/ → rings/ → trios-ext/ → crates/ → root workspace
+    build_sidepanel_with_version("dev");
+}
+
+/// Build sidepanel WASM with TRIOS_BUILD_VERSION env injected
+fn build_sidepanel_with_version(ver: &str) {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
     let bronze_dir = PathBuf::from(&manifest_dir).join("..");
     let root_workspace = PathBuf::from(&manifest_dir).join("../../../../..");
-
     let dist_dir = bronze_dir.join("dist");
 
-    eprintln!("[xtask] Building trios-ui-br-app for wasm32-unknown-unknown...");
+    eprintln!("[xtask] Building trios-ui-br-app v{ver} for wasm32-unknown-unknown...");
     let status = Command::new("cargo")
-        .args([
-            "build",
-            "-p",
-            "trios-ui-br-app",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--release",
-        ])
+        .args(["build", "-p", "trios-ui-br-app", "--target", "wasm32-unknown-unknown", "--release"])
+        .env("TRIOS_BUILD_VERSION", ver)
         .current_dir(&root_workspace)
         .status()
         .expect("failed to run cargo build");
     assert!(status.success(), "cargo build for trios-ui-br-app failed");
 
     let wasm_input = root_workspace.join("target/wasm32-unknown-unknown/release/trios_ui_br_app.wasm");
-
     if !wasm_input.exists() {
         eprintln!("[xtask] ERROR: {} not found", wasm_input.display());
         std::process::exit(1);
@@ -118,30 +111,29 @@ fn build_sidepanel() {
 
     eprintln!("[xtask] Running wasm-bindgen for trios-ui-br-app...");
     let status = Command::new("wasm-bindgen")
-        .arg("--target")
-        .arg("web")
-        .arg("--out-dir")
+        .args(["--target", "web", "--out-dir"])
         .arg(&dist_dir)
         .arg(&wasm_input)
         .status()
         .expect("failed to run wasm-bindgen");
-
     if !status.success() {
         eprintln!("[xtask] wasm-bindgen failed for trios-ui-br-app");
         std::process::exit(1);
     }
 
-    let js_out = dist_dir.join("trios_ui_br_app.js");
-    let wasm_out = dist_dir.join("trios_ui_br_app_bg.wasm");
+    report_dist(&dist_dir, "trios_ui_br_app");
+    eprintln!("[xtask] Version baked in: TRIOS_BUILD_VERSION={ver}");
+}
+
+/// Print sizes of built artifacts
+fn report_dist(dist_dir: &PathBuf, prefix: &str) {
+    let js_out = dist_dir.join(format!("{prefix}.js"));
+    let wasm_out = dist_dir.join(format!("{prefix}_bg.wasm"));
     if js_out.exists() && wasm_out.exists() {
-        let js_size = std::fs::metadata(&js_out).map(|m| m.len()).unwrap_or(0);
-        let wasm_size = std::fs::metadata(&wasm_out).map(|m| m.len()).unwrap_or(0);
-        eprintln!(
-            "[xtask] SUCCESS: dist/trios_ui_br_app.js ({:.1} KB) + dist/trios_ui_br_app_bg.wasm ({:.1} KB)",
-            js_size as f64 / 1024.0,
-            wasm_size as f64 / 1024.0
-        );
+        let js_kb = std::fs::metadata(&js_out).map(|m| m.len()).unwrap_or(0) as f64 / 1024.0;
+        let wasm_kb = std::fs::metadata(&wasm_out).map(|m| m.len()).unwrap_or(0) as f64 / 1024.0;
+        eprintln!("[xtask] SUCCESS: dist/{prefix}.js ({js_kb:.1} KB) + dist/{prefix}_bg.wasm ({wasm_kb:.1} KB)");
     } else {
-        eprintln!("[xtask] WARNING: expected output files not found");
+        eprintln!("[xtask] WARNING: expected output files not found in dist/");
     }
 }
