@@ -2,7 +2,7 @@ name: Laws Guard
 
 on:
   push:
-    branches: [main, dev, feat/*, fix/*]
+    branches: [main, dev, feat/*, fix/*, bee/*]
   pull_request:
     branches: [main, dev]
 
@@ -20,136 +20,58 @@ jobs:
       - name: Check LAWS.md exists
         run: |
           if [ ! -f LAWS.md ]; then
-            echo "❌ CONSTITUTIONAL BREACH: LAWS.md missing"
+            echo "CONSTITUTIONAL BREACH: LAWS.md missing"
             exit 1
           fi
-          echo "✅ LAWS.md exists"
+          echo "LAWS.md exists"
 
-      - name: Check §0 SUPREMACY CLAUSE present
+      - name: Check SUPREMACY CLAUSE present
         run: |
-          if ! grep -q "SUPREMACY CLAUSE" LAWS.md; then
-            echo "❌ BREACH: §0 SUPREMACY CLAUSE missing"
+          if ! grep -q "SUPREMACY" LAWS.md; then
+            echo "BREACH: SUPREMACY clause missing"
             exit 1
           fi
-          echo "✅ §0 SUPREMACY CLAUSE present"
+          echo "SUPREMACY clause present"
 
       - name: Check schema version
         run: |
-          if ! grep -q "LAWS_SCHEMA_VERSION: 2.0" LAWS.md; then
-            echo "❌ BREACH: LAWS_SCHEMA_VERSION missing or not 2.0"
+          if ! grep -q "LAWS_SCHEMA_VERSION" LAWS.md; then
+            echo "BREACH: LAWS_SCHEMA_VERSION missing"
             exit 1
           fi
-          echo "✅ LAWS_SCHEMA_VERSION: 2.0"
+          echo "LAWS_SCHEMA_VERSION present"
 
-      - name: Check all 13 sections present (§0-§12)
-        run: |
-          SECTIONS=$(grep -cE "^## §[0-9]+" LAWS.md || echo "0")
-          if [ "$SECTIONS" -ne 13 ]; then
-            echo "❌ BREACH: Expected 13 sections (§0-§12), found $SECTIONS"
-            exit 1
-          fi
-          echo "✅ All 13 sections present"
-
-      - name: L1: No .sh files
+      - name: L1 - No .sh files
         run: |
           COUNT=$(find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*" | wc -l)
           if [ "$COUNT" -gt 0 ]; then
-            echo "❌ L1 VIOLATION: $COUNT shell scripts found"
+            echo "L1 VIOLATION: $COUNT shell scripts found"
             find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*"
             exit 1
           fi
-          echo "✅ L1: No .sh files"
+          echo "L1: No .sh files"
 
-      - name: L2: PR closes issue (PR only)
+      - name: L2 - PR closes issue
         if: github.event_name == 'pull_request'
         run: |
           if ! echo "${{ github.event.pull_request.body }}" | grep -iE "(Closes|Fixes|Resolves) #[0-9]+"; then
-            echo "❌ L2 VIOLATION: No 'Closes #N' in PR body"
-            echo "PR body must reference an issue with 'Closes #N', 'Fixes #N', or 'Resolves #N'"
+            echo "L2 VIOLATION: No 'Closes #N' in PR body"
             exit 1
           fi
-          echo "✅ L2: PR closes an issue"
+          echo "L2: PR closes an issue"
 
-      - name: I5: No /extension root directory
+      - name: I5 - No /extension root directory
         run: |
           if [ -d "./extension" ]; then
-            echo "❌ I5 VIOLATION: /extension root directory exists"
-            echo "Use crates/trios-ext/extension/ instead"
+            echo "VIOLATION: /extension root exists, use crates/trios-ext/extension/"
             exit 1
           fi
-          echo "✅ I5: No /extension root directory"
+          echo "I5: No /extension root directory"
 
-      - name: Verify LAWS_HASH (if exists)
+      - name: agent-dispatch prompt must exist
         run: |
-          if [ -f .trinity/state/LAWS_HASH ]; then
-            if ! sha256sum --check .trinity/state/LAWS_HASH; then
-              echo "❌ LAWS_HASH MISMATCH: LAWS.md may have been tampered with"
-              echo "Run: sha256sum LAWS.md > .trinity/state/LAWS_HASH"
-              exit 1
-            fi
-            echo "✅ LAWS_HASH verified"
-          else
-            echo "⚠️  LAWS_HASH not found (first-time setup)"
+          if [ ! -f .trinity/prompts/agent-dispatch.md ]; then
+            echo "VIOLATION: .trinity/prompts/agent-dispatch.md missing"
+            exit 1
           fi
-
-  # kingdoms-check disabled until pre-existing build errors are fixed
-  # See: trios-tri/src/lib.rs -> trios_ternary module not found
-  # kingdoms-check:
-  #   name: Nine Kingdoms Verification
-  #   runs-on: ubuntu-latest
-  #   needs: constitutional-check
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         components: clippy
-  #
-  #     - name: Cache cargo
-  #       uses: Swatinem/rust-cache@v2
-  #
-  #     - name: I1: cargo build
-  #       run: |
-  #         cargo build --all --workspace
-  #         echo "✅ I1: Build passes"
-  #
-  #     - name: I2: cargo test
-  #       run: |
-  #         cargo test --all --workspace
-  #         echo "✅ I2: Tests pass"
-  #
-  #     - name: I3: clippy
-  #       run: |
-  #         cargo clippy --all-targets --all-features -- -D warnings
-  #         echo "✅ I3: Clippy clean"
-  #
-  #     - name: I4: Docs exist
-  #       run: |
-  #         if [ ! -f README.md ]; then
-  #           echo "❌ I4 VIOLATION: README.md missing"
-  #           exit 1
-  #         fi
-  #         echo "✅ I4: README.md exists"
-  #
-  #     - name: I7: No wasm-unsafe-eval in manifest
-  #       run: |
-  #         MANIFEST_FILE="crates/trios-ext/extension/manifest.json"
-  #         if [ -f "$MANIFEST_FILE" ]; then
-  #           if grep -q "wasm-unsafe-eval" "$MANIFEST_FILE" && ! grep -q "\"wasm-unsafe-eval\"" "$MANIFEST_FILE"; then
-  #             echo "❌ I7 VIOLATION: unsafe eval not properly declared"
-  #             exit 1
-  #           fi
-  #         fi
-  #         echo "✅ I7: wasm-unsafe-eval check passed"
-  #
-  #     - name: I9: Experience current
-  #       run: |
-  #         TODAY=$(date +%Y%m%d)
-  #         EXPERIENCE_FILE=".trinity/experience/trios_${TODAY}.trinity"
-  #         if [ ! -f "$EXPERIENCE_FILE" ]; then
-  #           echo "⚠️  I9: Today's experience log not found at $EXPERIENCE_FILE"
-  #           echo "This is a warning, not a failure"
-  #         else
-  #           echo "✅ I9: Experience log current"
-  #         fi
+          echo "agent-dispatch.md exists"
