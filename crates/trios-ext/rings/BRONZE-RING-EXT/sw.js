@@ -1,5 +1,12 @@
 // Trios Background Service Worker
-// This file is a placeholder — replaced by wasm-pack output during build.
-// Run: cargo xtask build-ext  (from BRONZE-RING-EXT/xtask)
+// Configures sidepanel behavior for the extension.
 
-console.log('[trios] Background service worker loaded (placeholder)');
+// Open sidepanel when the extension icon is clicked
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
+// Optional: log when sidepanel action is triggered
+chrome.action.onClicked.addListener((tab) => {
+  console.log('[trios] Extension icon clicked — opening sidepanel for tab', tab.id);
+});
+
+console.log('[trios] Background service worker loaded');
