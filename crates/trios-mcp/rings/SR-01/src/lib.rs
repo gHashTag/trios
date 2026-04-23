@@ -139,7 +139,7 @@ impl McpWebSocketClient {
 
         debug!("Connecting to WebSocket server at {}", url);
 
-        let mut request = tokio_tungstenite::tungstenite::handshake::client::Request::builder()
+        let request = tokio_tungstenite::tungstenite::handshake::client::Request::builder()
             .uri(url.as_str())
             .header("Authorization", self.config.auth.to_header_value())
             .body(())
@@ -206,30 +206,32 @@ impl McpWebSocketClient {
 
     /// Receive next response
     pub async fn receive_response(&mut self) -> Result<JsonRpcResponse> {
-        let stream = self.stream.as_mut()
-            .context("Not connected")?;
+        loop {
+            let stream = self.stream.as_mut()
+                .context("Not connected")?;
 
-        let message = stream.next().await
-            .context("Connection closed")?
-            .context("Failed to receive message")?;
+            let message = stream.next().await
+                .context("Connection closed")?
+                .context("Failed to receive message")?;
 
-        match message {
-            Message::Text(text) => {
-                debug!("Received: {}", text);
+            match message {
+                Message::Text(text) => {
+                    debug!("Received: {}", text);
 
-                match JsonRpcMessage::from_json(&text)? {
-                    JsonRpcMessage::Response(resp) => Ok(resp),
-                    JsonRpcMessage::Request(_) => {
-                        anyhow::bail!("Expected response, got request")
-                    }
+                    return match JsonRpcMessage::from_json(&text)? {
+                        JsonRpcMessage::Response(resp) => Ok(resp),
+                        JsonRpcMessage::Request(_) => {
+                            anyhow::bail!("Expected response, got request")
+                        }
+                    };
                 }
+                Message::Close(_) => {
+                    warn!("Server closed connection");
+                    self.reconnect().await?;
+                    // Loop continues to receive response after reconnect
+                }
+                msg => anyhow::bail!("Unexpected message type: {:?}", msg),
             }
-            Message::Close(_) => {
-                warn!("Server closed connection");
-                self.reconnect().await?;
-                self.receive_response().await
-            }
-            msg => anyhow::bail!("Unexpected message type: {:?}", msg),
         }
     }
 
