@@ -36,7 +36,7 @@ fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
     x.iter().map(|v| (v - mean) / std).collect()
 }
 
-struct Optimizers { e: AdamW, c1: AdamW, c2: AdamW, p: AdamW, h: AdamW }
+struct Optimizers { e: AdamW, c1: AdamW, c2: AdamW, c3: AdamW, p: AdamW, h: AdamW }
 
 struct AdamW {
     m: Vec<f32>, v: Vec<f32>, step: usize,
@@ -66,6 +66,7 @@ struct NgramModel {
     embed: Vec<f32>,
     ctx1: Vec<f32>,
     ctx2: Vec<f32>,
+    ctx3: Vec<f32>,
     proj: Vec<f32>,
     lm_head: Vec<f32>,
     #[allow(dead_code)]
@@ -78,36 +79,40 @@ struct NgramModel {
     hidden: usize,
     activation: String,
     dropout: f32,
+    use_ctx3: bool,
 }
 
 impl NgramModel {
-    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64, dropout: f32) -> Self {
+    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64, dropout: f32, use_ctx3: bool) -> Self {
         let mut s = seed;
         let mut rng = || {
             s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             ((s >> 33) as f32) / (u32::MAX as f32) * 2.0 - 1.0
         };
-        let lim = (6.0f32 / (3 * dim) as f32).sqrt();
+        let n_ctx = if use_ctx3 { 4 } else { 3 };
+        let lim = (6.0f32 / (n_ctx * dim) as f32).sqrt();
         let lim_h = (6.0f32 / (dim + hidden) as f32).sqrt();
         let lim_o = (6.0f32 / (hidden + dim) as f32).sqrt();
         Self {
             embed: (0..vocab * dim).map(|_| rng() * lim).collect(),
             ctx1: (0..vocab * dim).map(|_| rng() * lim).collect(),
             ctx2: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx3: (0..vocab * dim).map(|_| rng() * lim).collect(),
             proj: (0..hidden * dim).map(|_| rng() * lim_h).collect(),
             lm_head: (0..vocab * hidden).map(|_| rng() * lim_o).collect(),
             ln_g: vec![1.0; dim],
             ln_b: vec![0.0; dim],
             residual_alpha: 0.3,
             vocab, dim, hidden, activation,
-            dropout,
+            dropout, use_ctx3,
         }
     }
 
-    fn get_hidden(&self, t2: usize, t1: usize, t0: usize, residual: bool) -> Vec<f32> {
+    fn get_hidden(&self, t3: usize, t2: usize, t1: usize, t0: usize, residual: bool) -> Vec<f32> {
         let v = self.vocab;
         let d = self.dim;
         let h = self.hidden;
+        let t3 = t3.min(v - 1);
         let t2 = t2.min(v - 1);
         let t1 = t1.min(v - 1);
         let t0 = t0.min(v - 1);
@@ -117,7 +122,12 @@ impl NgramModel {
         let c2 = &self.ctx2[t2 * d..(t2 + 1) * d];
 
         let mut combined = vec![0.0f32; d];
-        for j in 0..d { combined[j] = e0[j] + c1[j] * 0.7 + c2[j] * 0.3; }
+        if self.use_ctx3 {
+            let c3 = &self.ctx3[t3 * d..(t3 + 1) * d];
+            for j in 0..d { combined[j] = e0[j] + c1[j] * 0.5 + c2[j] * 0.3 + c3[j] * 0.2; }
+        } else {
+            for j in 0..d { combined[j] = e0[j] + c1[j] * 0.7 + c2[j] * 0.3; }
+        }
 
         let ln = layer_norm(&combined, 1e-5);
 
@@ -155,11 +165,16 @@ impl NgramModel {
     }
 
     fn loss_on_seq(&self, tokens: &[usize], residual: bool) -> f32 {
-        if tokens.len() < 4 { return 0.0; }
+        let start = if self.use_ctx3 { 3 } else { 2 };
+        if tokens.len() < start + 2 { return 0.0; }
         let v = self.vocab;
         let mut total = 0.0f32;
-        for i in 2..tokens.len() - 1 {
-            let h = self.get_hidden(tokens[i - 2], tokens[i - 1], tokens[i], residual);
+        for i in start..tokens.len() - 1 {
+            let t3 = if self.use_ctx3 { tokens[i - 3].min(v - 1) } else { 0 };
+            let t2 = tokens[i - 2].min(v - 1);
+            let t1 = tokens[i - 1].min(v - 1);
+            let t0 = tokens[i].min(v - 1);
+            let h = self.get_hidden(t3, t2, t1, t0, residual);
             let target = tokens[i + 1].min(v - 1);
             let mut logits = vec![0.0f32; v];
             for (vi, logit) in logits.iter_mut().enumerate() {
@@ -169,12 +184,13 @@ impl NgramModel {
             softmax(&mut logits);
             total -= logits[target].max(1e-10).ln();
         }
-        total / (tokens.len() - 3) as f32
+        total / (tokens.len() - start - 1) as f32
     }
 
     fn train_step(&mut self, tokens: &[usize], lr: f32,
         opts: &mut Optimizers, residual: bool) {
-        if tokens.len() < 4 { return; }
+        let start = if self.use_ctx3 { 3 } else { 2 };
+        if tokens.len() < start + 2 { return; }
         let v = self.vocab;
         let d = self.dim;
         let h = self.hidden;
@@ -182,16 +198,18 @@ impl NgramModel {
         let mut g_embed = vec![0.0f32; v * d];
         let mut g_ctx1 = vec![0.0f32; v * d];
         let mut g_ctx2 = vec![0.0f32; v * d];
+        let mut g_ctx3 = vec![0.0f32; v * d];
         let mut g_proj = vec![0.0f32; h * d];
         let mut g_head = vec![0.0f32; v * h];
 
-        for i in 2..tokens.len() - 1 {
+        for i in start..tokens.len() - 1 {
+            let t3 = if self.use_ctx3 { tokens[i - 3].min(v - 1) } else { 0 };
             let t2 = tokens[i - 2].min(v - 1);
             let t1 = tokens[i - 1].min(v - 1);
             let t0 = tokens[i].min(v - 1);
             let tgt = tokens[i + 1].min(v - 1);
 
-            let hidden = self.get_hidden(t2, t1, t0, residual);
+            let hidden = self.get_hidden(t3, t2, t1, t0, residual);
 
             let mut logits = vec![0.0f32; v];
             for (vi, logit) in logits.iter_mut().enumerate() {
@@ -217,7 +235,12 @@ impl NgramModel {
             let c1v = &self.ctx1[t1 * d..(t1 + 1) * d];
             let c2v = &self.ctx2[t2 * d..(t2 + 1) * d];
             let mut combined = vec![0.0f32; d];
-            for j in 0..d { combined[j] = e0[j] + c1v[j] * 0.7 + c2v[j] * 0.3; }
+            if self.use_ctx3 {
+                let c3v = &self.ctx3[t3 * d..(t3 + 1) * d];
+                for j in 0..d { combined[j] = e0[j] + c1v[j] * 0.5 + c2v[j] * 0.3 + c3v[j] * 0.2; }
+            } else {
+                for j in 0..d { combined[j] = e0[j] + c1v[j] * 0.7 + c2v[j] * 0.3; }
+            }
             let ln = layer_norm(&combined, 1e-5);
 
             for hi in 0..h {
@@ -228,22 +251,32 @@ impl NgramModel {
                 }
             }
             for j in 0..d {
-                g_embed[t0 * d + j] += d_hidden.iter().enumerate()
+                let grad_j = d_hidden.iter().enumerate()
                     .map(|(hi, dh)| self.proj[hi * d + j] * if hidden[hi] > 0.0 { 1.0 } else { 0.0 } * dh)
                     .sum::<f32>();
-                g_ctx1[t1 * d + j] += 0.7 * g_embed[t0 * d + j];
-                g_ctx2[t2 * d + j] += 0.3 * g_embed[t0 * d + j];
+                g_embed[t0 * d + j] += grad_j;
+                if self.use_ctx3 {
+                    g_ctx1[t1 * d + j] += 0.5 * grad_j;
+                    g_ctx2[t2 * d + j] += 0.3 * grad_j;
+                    g_ctx3[t3 * d + j] += 0.2 * grad_j;
+                } else {
+                    g_ctx1[t1 * d + j] += 0.7 * grad_j;
+                    g_ctx2[t2 * d + j] += 0.3 * grad_j;
+                }
             }
         }
 
-        let n = (tokens.len() - 3) as f32;
-        for g in [&mut g_embed, &mut g_ctx1, &mut g_ctx2, &mut g_proj, &mut g_head] {
+        let n = (tokens.len() - start - 1) as f32;
+        for g in [&mut g_embed, &mut g_ctx1, &mut g_ctx2, &mut g_ctx3, &mut g_proj, &mut g_head] {
             for x in g.iter_mut() { *x /= n; }
         }
 
         opts.e.update(&mut self.embed, &g_embed, lr);
         opts.c1.update(&mut self.ctx1, &g_ctx1, lr);
         opts.c2.update(&mut self.ctx2, &g_ctx2, lr);
+        if self.use_ctx3 {
+            opts.c3.update(&mut self.ctx3, &g_ctx3, lr);
+        }
         opts.p.update(&mut self.proj, &g_proj, lr);
         opts.h.update(&mut self.lm_head, &g_head, lr);
     }
@@ -289,10 +322,12 @@ fn main() {
         .map(|a| a[9..].parse::<usize>().unwrap_or(0)).unwrap_or(0);
     let dropout = std::env::args().find(|a| a.starts_with("--dropout="))
         .map(|a| a[10..].parse::<f32>().unwrap_or(0.0)).unwrap_or(0.0);
+    let use_ctx3 = std::env::args().any(|a| a == "--ctx3");
 
+    let ngram = if use_ctx3 { "5-Gram" } else { "4-Gram" };
     let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
     let res_suffix = if residual { " + Residual" } else { "" };
-    println!("=== 4-Gram Context Model + {} Hidden{} ===", activation_name, res_suffix);
+    println!("=== {} Context Model + {} Hidden{} ===", ngram, activation_name, res_suffix);
     println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} residual={} wd={} warmup={} dropout={}", VOCAB, dim, hidden, SEQ, steps, seed, base_lr, activation, residual, wd, warmup, dropout);
 
     let tokens = load_data("data/tinyshakespeare.txt");
@@ -303,10 +338,11 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, dim, hidden, activation.clone(), seed, dropout);
+    let mut model = NgramModel::new(VOCAB, dim, hidden, activation.clone(), seed, dropout, use_ctx3);
     let ps = VOCAB * dim;
     let mut opts = Optimizers {
         e: AdamW::new(ps, wd), c1: AdamW::new(ps, wd), c2: AdamW::new(ps, wd),
+        c3: AdamW::new(ps, wd),
         p: AdamW::new(hidden * dim, wd), h: AdamW::new(VOCAB * hidden, wd),
     };
 
