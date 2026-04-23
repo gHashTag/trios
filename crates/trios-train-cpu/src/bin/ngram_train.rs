@@ -129,7 +129,7 @@ impl NgramModel {
             if self.dropout > 0.0 {
                 let mask = (((hi as u64).wrapping_mul(6364136223846793005u64) >> 33) as f32) / (u32::MAX as f32);
                 if mask < self.dropout { *hn = 0.0; }
-                else { *hn /= (1.0 - self.dropout); }
+                else { *hn /= 1.0 - self.dropout; }
             }
         }
         
