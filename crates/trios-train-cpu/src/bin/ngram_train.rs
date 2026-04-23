@@ -45,10 +45,10 @@ struct AdamW {
 }
 
 impl AdamW {
-    fn new(size: usize) -> Self {
+    fn new(size: usize, wd: f32) -> Self {
         let phi = (1.0 + 5.0f64.sqrt()) / 2.0;
         Self { m: vec![0.0; size], v: vec![0.0; size], step: 0,
-            beta1: 1.0 / phi as f32, beta2: 0.999, eps: 1e-8, wd: 0.04 }
+            beta1: 1.0 / phi as f32, beta2: 0.999, eps: 1e-8, wd }
     }
     fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
         self.step += 1;
@@ -78,10 +78,11 @@ struct NgramModel {
     dim: usize,
     hidden: usize,
     activation: String,
+    dropout: f32,
 }
 
 impl NgramModel {
-    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64) -> Self {
+    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64, dropout: f32) -> Self {
         let mut s = seed;
         let mut rng = || {
             s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -100,6 +101,7 @@ impl NgramModel {
             ln_b: vec![0.0; dim],
             residual_alpha: 0.3,
             vocab, dim, hidden, activation,
+            dropout,
         }
     }
 
@@ -125,6 +127,11 @@ impl NgramModel {
             let w = &self.proj[hi * d..(hi + 1) * d];
             for (j, l) in ln.iter().enumerate() { *hn += w[j] * l; }
             *hn = if self.activation == "gelu" { gelu(*hn) } else { (*hn).max(0.0) };
+            if self.dropout > 0.0 {
+                let mask = (((hi as u64).wrapping_mul(6364136223846793005u64) >> 33) as f32) / (u32::MAX as f32);
+                if mask < self.dropout { *hn = 0.0; }
+                else { *hn /= (1.0 - self.dropout); }
+            }
         }
         
         // Apply residual connection if enabled
@@ -275,11 +282,17 @@ fn main() {
     let activation = std::env::args().find(|a| a.starts_with("--activation="))
         .map(|a| a[13..].to_string()).unwrap_or_else(|| "relu".to_string());
     let residual = std::env::args().any(|a| a == "--residual");
+    let wd = std::env::args().find(|a| a.starts_with("--wd="))
+        .map(|a| a[5..].parse::<f32>().unwrap_or(0.04)).unwrap_or(0.04);
+    let warmup = std::env::args().find(|a| a.starts_with("--warmup="))
+        .map(|a| a[9..].parse::<usize>().unwrap_or(0)).unwrap_or(0);
+    let dropout = std::env::args().find(|a| a.starts_with("--dropout="))
+        .map(|a| a[10..].parse::<f32>().unwrap_or(0.0)).unwrap_or(0.0);
 
     let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
     let res_suffix = if residual { " + Residual" } else { "" };
     println!("=== 4-Gram Context Model + {} Hidden{} ===", activation_name, res_suffix);
-    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} residual={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation, residual);
+    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} residual={} wd={} warmup={} dropout={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation, residual, wd, warmup, dropout);
 
     let tokens = load_data("data/tinyshakespeare.txt");
     println!("Dataset: {} tokens", tokens.len());
@@ -289,11 +302,11 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed);
+    let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed, dropout);
     let ps = VOCAB * DIM;
     let mut opts = Optimizers {
-        e: AdamW::new(ps), c1: AdamW::new(ps), c2: AdamW::new(ps),
-        p: AdamW::new(hidden * DIM), h: AdamW::new(VOCAB * hidden),
+        e: AdamW::new(ps, wd), c1: AdamW::new(ps, wd), c2: AdamW::new(ps, wd),
+        p: AdamW::new(hidden * DIM, wd), h: AdamW::new(VOCAB * hidden, wd),
     };
 
     let (init_loss, init_bpb) = evaluate(&model, val, SEQ, residual);
@@ -308,7 +321,7 @@ fn main() {
     let dl = train.len();
 
     for step in 1..=steps {
-        let lr = cosine_lr(step, steps, base_lr, steps / 10);
+        let lr = cosine_lr(step, steps, base_lr, if warmup > 0 { warmup } else { steps / 10 });
         let off = (step * 97 + seed as usize) % (dl.saturating_sub(SEQ + 1));
         model.train_step(&train[off..off + SEQ + 1], lr, &mut opts, residual);
 
