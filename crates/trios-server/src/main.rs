@@ -6,16 +6,22 @@ mod sse_handler;
 mod tools;
 mod ws_handler;
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::Json;
 use axum::Router;
 use axum::routing::{get, post};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 use ws_handler::AppState;
+
+#[derive(Deserialize)]
+struct AgentIdQuery {
+    agent_id: String,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -44,8 +50,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/sse/message", post(sse_handler::sse_message))
         .route("/api/chat", post(api_chat))
         .route("/api/status", get(api_status))
-        .route("/mcp/browser-commands", get(mcp_endpoints::browser::poll_commands))
-        .route("/mcp/browser-result", post(mcp_endpoints::browser::report_result))
+        .route("/mcp/browser-commands", get(browser_poll))
+        .route("/mcp/browser-result", post(browser_report))
         .route("/health", get(health))
         .route("/", get(health))
         .layer(
@@ -90,4 +96,23 @@ async fn api_status(State(state): State<AppState>) -> Json<Value> {
         "agents": agents,
         "tools": tools::count(),
     }))
+}
+
+async fn browser_poll(
+    State(state): State<AppState>,
+    Query(params): Query<AgentIdQuery>,
+) -> Json<Value> {
+    if params.agent_id.is_empty() {
+        return Json(json!({"error": "agent_id is required"}));
+    }
+    let result = mcp_endpoints::browser::browser_commands(&state, &params.agent_id).await;
+    Json(result)
+}
+
+async fn browser_report(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let result = mcp_endpoints::browser::browser_result(&state, body).await;
+    Json(result)
 }
