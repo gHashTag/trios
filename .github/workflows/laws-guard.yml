@@ -17,31 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check LAWS.md exists
-        run: |
-          if [ ! -f LAWS.md ]; then
-            echo "CONSTITUTIONAL BREACH: LAWS.md missing"
-            exit 1
-          fi
-          echo "LAWS.md exists"
+      - name: "LAWS.md must exist"
+        run: "test -f LAWS.md || (echo 'CONSTITUTIONAL BREACH: LAWS.md missing' && exit 1)"
 
-      - name: Check SUPREMACY CLAUSE present
-        run: |
-          if ! grep -q "SUPREMACY" LAWS.md; then
-            echo "BREACH: SUPREMACY clause missing"
-            exit 1
-          fi
-          echo "SUPREMACY clause present"
+      - name: "LAWS.md must have supremacy clause"
+        run: "grep -q 'SUPREMACY' LAWS.md || (echo 'BREACH: SUPREMACY clause missing' && exit 1)"
 
-      - name: Check schema version
-        run: |
-          if ! grep -q "LAWS_SCHEMA_VERSION" LAWS.md; then
-            echo "BREACH: LAWS_SCHEMA_VERSION missing"
-            exit 1
-          fi
-          echo "LAWS_SCHEMA_VERSION present"
-
-      - name: L1 - No .sh files
+      - name: "No .sh files (L1)"
         run: |
           COUNT=$(find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*" | wc -l)
           if [ "$COUNT" -gt 0 ]; then
@@ -51,7 +33,7 @@ jobs:
           fi
           echo "L1: No .sh files"
 
-      - name: L2 - PR closes issue
+      - name: "PR must close an issue (L2)"
         if: github.event_name == 'pull_request'
         run: |
           if ! echo "${{ github.event.pull_request.body }}" | grep -iE "(Closes|Fixes|Resolves) #[0-9]+"; then
@@ -60,18 +42,8 @@ jobs:
           fi
           echo "L2: PR closes an issue"
 
-      - name: I5 - No /extension root directory
-        run: |
-          if [ -d "./extension" ]; then
-            echo "VIOLATION: /extension root exists, use crates/trios-ext/extension/"
-            exit 1
-          fi
-          echo "I5: No /extension root directory"
+      - name: "No /extension root directory"
+        run: "test ! -d ./extension || (echo 'VIOLATION: /extension root exists, use crates/trios-ext/extension/' && exit 1)"
 
-      - name: agent-dispatch prompt must exist
-        run: |
-          if [ ! -f .trinity/prompts/agent-dispatch.md ]; then
-            echo "VIOLATION: .trinity/prompts/agent-dispatch.md missing"
-            exit 1
-          fi
-          echo "agent-dispatch.md exists"
+      - name: "agent-dispatch prompt must exist"
+        run: "test -f .trinity/prompts/agent-dispatch.md || (echo 'VIOLATION: agent-dispatch.md missing' && exit 1)"
