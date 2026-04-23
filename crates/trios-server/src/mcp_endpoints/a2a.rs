@@ -31,10 +31,19 @@ pub async fn register(state: &AppState, params: Option<Value>) -> Value {
     let mut reg = shared.lock().unwrap();
     let mut card = trios_a2a::AgentCard::new(id, name);
     card.description = description.to_string();
-    card.capabilities = capabilities
-        .iter()
-        .map(|c| trios_a2a::Capability { name: c.clone(), description: None })
-        .collect();
+    // Map string capabilities to enum variants
+    for c in &capabilities {
+        let cap = match c.as_str() {
+            "codegen" => trios_a2a::Capability::Codegen,
+            "filesystem" => trios_a2a::Capability::FileSystem,
+            "git" => trios_a2a::Capability::Git,
+            "shell" => trios_a2a::Capability::Shell,
+            "llm" => trios_a2a::Capability::LLM,
+            "orchestrator" => trios_a2a::Capability::Orchestrator,
+            other => trios_a2a::Capability::Custom(other.to_string()),
+        };
+        card = card.with_capability(cap);
+    }
     reg.register_agent(card);
     json!({"ok": true, "id": id})
 }
