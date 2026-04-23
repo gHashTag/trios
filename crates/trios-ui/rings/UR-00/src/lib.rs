@@ -82,16 +82,25 @@ fn app() -> Element {
                     match method {
                         "agents/chat" | "chat" => {
                             if let Some(r) = val.get("result") {
-                                let response = r
-                                    .get("response")
-                                    .and_then(|v| v.as_str())
-                                    .or_else(|| r.get("content").and_then(|v| v.as_str()))
-                                    .unwrap_or("{no content}");
-                                log::info!("[trios-ui] CHAT response: {} chars", response.len());
-                                messages.write().push(ChatMsg {
-                                    role: "agent".to_string(),
-                                    content: response.to_string(),
-                                });
+                                // Check for error inside result
+                                if let Some(err) = r.get("error").and_then(|v| v.as_str()) {
+                                    log::warn!("[trios-ui] CHAT error: {}", err);
+                                    messages.write().push(ChatMsg {
+                                        role: "error".to_string(),
+                                        content: format!("⚠ {}", err),
+                                    });
+                                } else {
+                                    let response = r
+                                        .get("response")
+                                        .and_then(|v| v.as_str())
+                                        .or_else(|| r.get("content").and_then(|v| v.as_str()))
+                                        .unwrap_or("{no content}");
+                                    log::info!("[trios-ui] CHAT response: {} chars", response.len());
+                                    messages.write().push(ChatMsg {
+                                        role: "agent".to_string(),
+                                        content: response.to_string(),
+                                    });
+                                }
                             } else if has_error {
                                 log::warn!("[trios-ui] CHAT error: {}", val.get("error").unwrap());
                             }

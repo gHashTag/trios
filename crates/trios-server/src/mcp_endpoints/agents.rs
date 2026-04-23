@@ -11,8 +11,9 @@ pub async fn chat(state: &AppState, params: Option<Value>) -> Value {
     let agent_id = params.get("agent_id").and_then(|v| v.as_str()).unwrap_or("");
     let message = params.get("message").and_then(|v| v.as_str()).unwrap_or("");
 
+    // No agent specified — echo mode (useful for testing before agents are registered)
     if agent_id.is_empty() {
-        return json!({"error": "agent_id is required"});
+        return json!({"response": format!("[echo] {}", message)});
     }
 
     let agents = state.agents.lock().await;
@@ -20,8 +21,8 @@ pub async fn chat(state: &AppState, params: Option<Value>) -> Value {
     drop(agents);
 
     if !exists {
-        return json!({"error": format!("agent {} not found", agent_id)});
+        return json!({"error": format!("agent '{}' not found. Register an agent first.", agent_id)});
     }
 
-    json!({"response": format!("echo: {}", message)})
+    json!({"response": format!("[{}] {}", agent_id, message)})
 }
