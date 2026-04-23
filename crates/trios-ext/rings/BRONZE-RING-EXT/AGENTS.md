@@ -31,6 +31,63 @@ This is the ONLY ring that produces loadable Chrome Extension artifacts.
 - ❌ Move files outside rings/
 - ❌ Modify SEALED rings without human approval
 
+## Rebuilding dist/ (REQUIRED after git clone / git clean)
+
+`dist/` is gitignored — it must be rebuilt locally every time.
+
+### Prerequisites
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.118
+```
+
+### Option A: xtask (recommended)
+```bash
+# From this directory (BRONZE-RING-EXT/):
+cargo xtask build-all
+
+# Or build individually:
+cargo xtask build-sidepanel   # trios-ui-br-app (Dioxus sidebar)
+cargo xtask build-ext         # trios-ext-ring-ex00 (background)
+```
+
+### Option B: Manual
+```bash
+# From workspace root (/Users/playra/trios):
+
+# 1. Sidepanel UI (trios-ui-br-app → Dioxus sidebar)
+cargo build -p trios-ui-br-app --target wasm32-unknown-unknown --release
+wasm-bindgen \
+  target/wasm32-unknown-unknown/release/trios_ui_br_app.wasm \
+  --target web \
+  --out-dir crates/trios-ext/rings/BRONZE-RING-EXT/dist/
+
+# 2. Extension background (trios-ext-ring-ex00)
+cargo build -p trios-ext-ring-ex00 --target wasm32-unknown-unknown --release
+wasm-bindgen \
+  target/wasm32-unknown-unknown/release/trios_ext_ring_ex00.wasm \
+  --target web \
+  --out-dir crates/trios-ext/rings/BRONZE-RING-EXT/dist/
+```
+
+### Expected dist/ contents
+```
+dist/
+├── trios_ui_br_app.js          # Sidepanel JS glue (imported by sidepanel.html)
+├── trios_ui_br_app_bg.wasm     # Sidepanel WASM binary
+├── trios_ui_br_app.d.ts        # TypeScript declarations
+├── trios_ui_br_app_bg.wasm.d.ts
+├── snippets/                   # Inline JS from wasm-bindgen
+├── trios_ext_ring_ex00.js      # Background JS glue
+└── trios_ext_ring_ex00_bg.wasm # Background WASM binary
+```
+
+## Loading the extension
+1. Build dist/ (see above)
+2. `chrome://extensions` → Enable "Developer mode"
+3. "Load unpacked" → point to `crates/trios-ext/rings/BRONZE-RING-EXT/`
+4. After rebuild: click ⟳ refresh on the extension card
+
 ## Entry point
-- Build: `cargo xtask build-ext`
+- Build: `cargo xtask build-all`
 - Load: chrome://extensions → "Load unpacked" → point to this directory

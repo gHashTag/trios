@@ -1,20 +1,22 @@
 # TASK — SILVER-RING-DR-02
 
-## Status: ACTIVE
+## Status: DONE
 
 ## Completed
 
 - [x] Ring scaffolding: RING.md, AGENTS.md, TASK.md, Cargo.toml
-- [x] `Healer` stub from existing src/heal.rs
+- [x] `Healer` struct with `dry_run` mode and builder pattern
+- [x] `heal()` — heal all checks in a diagnosis
+- [x] `heal_check()` — dispatch to specific healers by check name
+- [x] `heal_fmt()` — `cargo fmt --all` for Yellow fmt checks
+- [x] `heal_clippy()` — `cargo fix --allow-dirty --allow-staged` for Yellow clippy
+- [x] `heal_ring_docs()` — create missing RING.md/AGENTS.md/TASK.md templates
+- [x] `heal_ring_structure()` — L-ARCH-001 guidance (manual fix)
+- [x] 6 unit tests passing
 
 ## Open
 
-- [ ] Implement `cargo fix --allow-dirty` for Yellow checks
-- [ ] Implement `cargo fmt` auto-format
-- [ ] Implement missing ring file creation (RING.md, AGENTS.md, TASK.md)
-- [ ] Add `dry_run` mode — preview changes without applying
+- [ ] Add `cargo fix` for specific crates only (not workspace-wide)
 - [ ] Add L-ARCH-001 auto-fix: create `rings/` scaffold if missing
 
-## Blocked by
-
-Nothing.
+## Next ring: SILVER-RING-DR-03
