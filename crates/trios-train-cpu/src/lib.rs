@@ -28,6 +28,7 @@ pub mod gf16;
 // Real IGLA Phase A/B training
 pub mod real_igla_model;
 pub mod real_igla_trainer;
+pub mod transformer_trainer;
 
 // Re-export commonly used types
 pub use backward::{clip_gradients, cross_entropy_loss, LinearGradients};
