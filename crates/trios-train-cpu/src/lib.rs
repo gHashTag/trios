@@ -21,6 +21,9 @@ pub mod trinity_3k_model;
 // GoldenFloat16 implementation
 pub mod gf16;
 
+// Golden Float Family — φ-based number systems
+pub mod phi_numbers;
+
 // Real IGLA Phase A/B training
 pub mod real_igla_model;
 pub mod real_igla_trainer;
