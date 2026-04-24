@@ -1,6 +1,12 @@
 //! Neon PostgreSQL connection and database operations
+//!
+//! Provides async interface to Neon cloud PostgreSQL for:
+//! - Trial registration and status tracking
+//! - Checkpoint recording at ASHA rungs
+//! - Lesson storage for failure memory
+//! - Leaderboard queries
 
-use tokio_postgres::{NoTls, Error as PgError};
+use tokio_postgres::{NoTls};
 use anyhow::Result;
 use tracing::info;
 use uuid::Uuid;
@@ -54,80 +60,20 @@ impl NeonDb {
         Ok(())
     }
 
-    /// Execute raw SQL query
-    pub async fn execute(&self, query: &str) -> Result<u64> {
-        Ok(self.client.execute(query, &[]).await?)
-    }
-
-    /// Query for leaderboard entries
-    pub async fn get_leaderboard(&self, limit: i32) -> Result<Vec<LeaderboardEntry>> {
-        let rows = self.client
-            .query(
-                "SELECT trial_id, machine_id, config, status, final_bpb, final_step,
-                        started_at, completed_at, best_rung, lesson, bpb_rank
-                 FROM igla_race_leaderboard
-                 ORDER BY bpb_rank ASC
-                 LIMIT $1",
-                &[&limit],
-            )
-            .await?;
-
-        let entries = rows.iter().map(|row| {
-            LeaderboardEntry {
-                trial_id: row.get(0),
-                machine_id: row.get(1),
-                config: row.get(2),
-                status: row.get(3),
-                final_bpb: row.get(4),
-                final_step: row.get(5),
-                started_at: row.get(6),
-                completed_at: row.get(7),
-                best_rung: row.get(8),
-                lesson: row.get(9),
-                bpb_rank: row.get(10),
-            }
-        }).collect();
-
-        Ok(entries)
-    }
-
-    /// Get top lessons from experience
-    pub async fn get_top_lessons(&self, limit: i32) -> Result<Vec<LessonEntry>> {
-        let rows = self.client
-            .query(
-                "SELECT lesson, lesson_type, pattern_count
-                 FROM igla_race_experience
-                 ORDER BY pattern_count DESC, confidence DESC
-                 LIMIT $1",
-                &[&limit],
-            )
-            .await?;
-
-        let lessons = rows.iter().map(|row| {
-            LessonEntry {
-                lesson: row.get(0),
-                lesson_type: row.get(1),
-                pattern_count: row.get(2),
-            }
-        }).collect();
-
-        Ok(lessons)
-    }
-
     /// Register a new trial
     pub async fn register_trial(
         &self,
         trial_id: Uuid,
         machine_id: &str,
         worker_id: i32,
-        config: &serde_json::Value,
+        config_json: &str,
     ) -> Result<()> {
         self.client
             .execute(
                 "INSERT INTO igla_race_trials
                  (trial_id, machine_id, worker_id, config, status, started_at)
-                 VALUES ($1, $2, $3, $4, 'running', NOW())",
-                &[&trial_id, &machine_id, &worker_id, config],
+                 VALUES ($1, $2, $3, $4::jsonb, 'running', NOW())",
+                &[&trial_id, &machine_id, &worker_id, &config_json],
             )
             .await?;
 
@@ -239,36 +185,43 @@ impl NeonDb {
     pub async fn is_config_running(
         &self,
         machine_id: &str,
-        config: &serde_json::Value,
+        config_json: &str,
     ) -> Result<bool> {
         let count: i64 = self.client
             .query_one(
                 "SELECT COUNT(*) FROM igla_race_trials
-                 WHERE machine_id = $1 AND config = $2
+                 WHERE machine_id = $1 AND config = $2::jsonb
                    AND status IN ('pending', 'running')",
-                &[&machine_id, config],
+                &[&machine_id, &config_json],
             )
             .await?
             .get(0);
 
         Ok(count > 0)
     }
-}
 
-/// Leaderboard entry
-#[derive(Debug, Clone)]
-pub struct LeaderboardEntry {
-    pub trial_id: Uuid,
-    pub machine_id: String,
-    pub config: serde_json::Value,
-    pub status: String,
-    pub final_bpb: Option<f64>,
-    pub final_step: Option<i32>,
-    pub started_at: Option<DateTime<Utc>>,
-    pub completed_at: Option<DateTime<Utc>>,
-    pub best_rung: i32,
-    pub lesson: Option<String>,
-    pub bpb_rank: i64,
+    /// Get top lessons from experience
+    pub async fn get_top_lessons(&self, limit: i32) -> Result<Vec<LessonEntry>> {
+        let rows = self.client
+            .query(
+                "SELECT lesson, lesson_type, pattern_count
+                 FROM igla_race_experience
+                 ORDER BY pattern_count DESC, confidence DESC
+                 LIMIT $1",
+                &[&limit],
+            )
+            .await?;
+
+        let lessons = rows.iter().map(|row| {
+            LessonEntry {
+                lesson: row.get(0),
+                lesson_type: row.get(1),
+                pattern_count: row.get(2),
+            }
+        }).collect();
+
+        Ok(lessons)
+    }
 }
 
 /// Lesson entry
@@ -288,3 +241,4 @@ mod tests {
         // Unit test only - requires real connection string for integration tests
     }
 }
+

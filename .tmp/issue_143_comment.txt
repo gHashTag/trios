@@ -1,0 +1,58 @@
+## 🏁 IGLA RACE ONE SHOT — 2026-04-24T13:22+07
+
+### ✅ Neon DB обновлена
+- Таблицы: `igla_race_trials`, `igla_race_experience`, `igla_race_competitors`
+- Views: `igla_leaderboard`, `igla_winning_techniques`
+- Добавлены колонки: `seed`, `best_bpb`, `notes`
+- Seeded: 3 исторических результата (best: 2.5329 BPB)
+
+```sql
+-- Исторические результаты seeded
+INSERT INTO igla_race_trials (trial_id,machine_id,seed,config,status,bpb_final,best_bpb,steps_done,notes)
+VALUES
+  (9001,'mac-local',43,'{"d_model":384,"context":6,"lr":0.004,"optimizer":"adamw","arch":"ngram"}','done',2.5329,2.5329,12000,'BEST 6gram h384 lr0.004 seed43'),
+  (9002,'mac-local',42,'{"d_model":384,"context":6,"lr":0.004,"optimizer":"adamw","arch":"ngram"}','done',2.572,2.572,12000,'seed42'),
+  (9003,'mac-local',44,'{"d_model":384,"context":6,"lr":0.004,"optimizer":"adamw","arch":"ngram"}','done',2.553,2.553,12000,'seed44')
+ON CONFLICT (trial_id) DO NOTHING;
+```
+
+### 📋 5 TASKS — ONE SHOT на каждую машину
+
+| # | Task | Время | Команда |
+|---|------|-------|---------|
+| 1 | git clone + pip install | 5 мин | `pip install optuna psycopg2-binary torch numpy` |
+| 2 | Создать `scripts/igla_race_worker.py` | 2 мин | см. ниже |
+| 3 | Запуск в tmux | 1 мин | `tmux new-session -d -s igla_race` |
+| 4 | Live leaderboard | ongoing | `tri race status` |
+| 5 | Добавить партнёров | 15 мин | Дать .env + инструкцию |
+
+### 📊 Статус гонки
+- **Текущий лучший**: 2.5329 BPB (mac-local, 6-gram h384 lr=0.004)
+- **Target**: < 1.50 BPB
+- **Gap**: -1.03 BPB
+- **Активных машин**: 1/4 → нужно 4
+- **Throughput**: ~320 trials/час при 4 машинах
+
+### 🚀 Быстрый старт на новой машине
+
+```bash
+# TASK-1: Клонирование
+git clone https://github.com/gHashTag/trios.git
+cd trios
+pip install optuna psycopg2-binary torch numpy
+
+# TASK-2: .env config
+cat > .env << EOF
+NEON_URL=postgresql://neondb_owner:PASS@ep-curly-math-ao51pquy-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+MACHINE_ID=mac-studio-2   # ← УНИКАЛЬНЫЙ ID
+EOF
+
+# TASK-3: Создаём worker (см. следующий комментарий)
+# TASK-4: Запуск в tmux
+tmux new-session -d -s igla_race
+tmux send-keys -t igla_race "source .env && python scripts/igla_race_worker.py" Enter
+```
+
+*TRINITY RACE | φ² + 1/φ² = 3 | IGLA OR BUST*
+
+Agent: DELTA

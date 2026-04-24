@@ -248,7 +248,46 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 
 ---
 
-## 📊 ЧАСТЬ 5: SOTA ЛИДЕРБОРД
+## 🏁 ЧАСТЬ 5: IGLA RACE — DISTRIBUTED HUNT
+
+**Статус: ACTIVE | Запущен: 2026-04-24 | Дедлайн: Apr 30**
+
+| Компонент | Статус | Детали |
+|-----------|--------|--------|
+| Neon DB schema | ✅ READY | igla_race_trials + experience + competitors |
+| trios-igla-race crate | ⬜ IN PROGRESS | Tokio + ASHA worker + Neon coord |
+| trios-igla-trainer crate | ✅ READY | CPU trainer with --seed argument |
+| Machine 1 (mac-studio-1) | ✅ SEEDED | best BPB 2.5329 |
+| Machines 2-4 | ⬜ PENDING | ONE SHOT инструкция готова |
+| tri race CLI | ⬜ TODO | PR #223 | race start/status/best |
+
+### ASHA Checkpoints
+- **Rung-0**: 1000 шагов → kill if BPB > threshold (top-33% continue)
+- **Rung-1**: 3000 шагов → top 33% продолжают
+- **Rung-2**: 9000 шагов → top 11% финалист
+- **Rung-3**: 27000 шагов → проверка IGLA (<1.50 BPB)
+
+### Search Space
+| Параметр | Values |
+|----------|--------|
+| `d_model` | 128, 192, 256, 384 |
+| `context` | 4, 5, 6, 7, 8 |
+| `lr` | 1e-4 to 0.01 (log scale) |
+| `optimizer` | adamw, muon |
+| `use_attention` | true, false |
+
+### Throughput Estimation
+```
+1 машина × 4 workers × ASHA Rung-0(1000 шагов ~3 мин) = ~80 trials/час
+4 машины × 4 workers                                   = ~320 trials/час
+4 машины × 8 workers                                   = ~640 trials/час
+```
+
+**Итого до дедлайна (Apr 30, ~6 дней)**: при 320 trials/час = **~46,000 trials**
+
+---
+
+## 📊 ЧАСТЬ 6: SOTA ЛИДЕРБОРД
 
 ### Parameter Golf (TinyShakespeare)
 

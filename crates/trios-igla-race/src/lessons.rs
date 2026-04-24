@@ -157,14 +157,14 @@ pub fn generate_lesson(
     let (lesson, lesson_type) = lessons.into_iter()
         .min_by(|a, b| {
             // Priority: Avoid > Pattern > Warn > Info > Winner
-            let priority = |t: &LessonType| match t {
+            let priority = |t: LessonType| match t {
                 LessonType::Avoid => 0,
                 LessonType::Pattern => 1,
                 LessonType::Warn => 2,
                 LessonType::Info => 3,
                 LessonType::Winner => 4,
             };
-            priority(a).cmp(&priority(b))
+            priority(a.1).cmp(&priority(b.1))
         })
         .unwrap();
 

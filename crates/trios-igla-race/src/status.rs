@@ -64,7 +64,8 @@ pub async fn show_status(db: &NeonDb) -> Result<()> {
     for row in rows {
         let trial_id: Uuid = row.get(0);
         let machine_id: String = row.get(1);
-        let config: serde_json::Value = row.get(2);
+        let config_json: String = row.get(2);
+        let config: serde_json::Value = serde_json::from_str(&config_json).unwrap_or(serde_json::json!({}));
         let status: String = row.get(3);
         let final_bpb: Option<f64> = row.get(4);
         let final_step: Option<i32> = row.get(5);

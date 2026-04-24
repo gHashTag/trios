@@ -153,8 +153,7 @@ pub fn phi_distance(dim: u64) -> f64 {
             (dim - mid) as f64 / (nearest - mid).max(1) as f64
         }
     }
-
-
+}
 #[cfg(test)]
 mod tests {
     use super::*;

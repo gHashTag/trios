@@ -1,14 +1,17 @@
 //! ASHA (Asynchronous Successive Halving Algorithm) implementation
+//!
 //! Trinity-optimized: rungs at 1k → 3k → 9k → 27k (3^k progression)
+//!
+//! ASHA progressively prunes trials that don't perform well at intermediate checkpoints.
+//! At each rung, only the top 33% of trials continue.
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use anyhow::Result;
 use tracing::{info, warn};
 
 use crate::neon::NeonDb;
-use crate::lessons::{generate_lesson, Outcome, RungData, TrialConfig, LessonType};
+use crate::lessons::{generate_lesson, Outcome, RungData, TrialConfig};
 
 /// ASHA rungs (Trinity 3^k progression)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +55,7 @@ impl AshaRung {
 }
 
 /// ASHA trial configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct AshaConfig {
     /// Target BPB to declare winner
     pub target_bpb: f64,
@@ -79,12 +82,12 @@ impl Default for AshaConfig {
 }
 
 /// ASHA trial status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct AshaTrial {
     pub trial_id: Uuid,
     pub machine_id: String,
     pub worker_id: usize,
-    pub config: serde_json::Value,
+    pub config_json: String,
     pub current_rung: Option<AshaRung>,
     pub best_bpb: f64,
     pub status: String,
@@ -92,7 +95,7 @@ pub struct AshaTrial {
 }
 
 /// Checkpoint data at a rung
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RungCheckpoint {
     pub trial_id: Uuid,
     pub rung: AshaRung,
@@ -120,7 +123,7 @@ pub async fn record_checkpoint(
 /// Determine if trial should be pruned at this rung
 pub async fn should_prune(
     db: &NeonDb,
-    trial_id: &Uuid,
+    _trial_id: &Uuid,
     current_bpb: f64,
     config: &AshaConfig,
 ) -> Result<bool> {
@@ -200,12 +203,12 @@ pub async fn mark_completed(
 
     // If BPB target reached, mark as winner
     if final_bpb < 1.5 {
-        let config: serde_json::Value = db.client().query_one(
-            "SELECT config FROM igla_race_trials WHERE trial_id = $1",
+        let config_json: String = db.client().query_one(
+            "SELECT config::text FROM igla_race_trials WHERE trial_id = $1",
             &[trial_id]
         ).await?.get(0);
 
-        let lesson = format!("WINNER: config → BPB={} at step={}", final_bpb, final_step);
+        let lesson = format!("WINNER: config -> BPB={} at step={}", final_bpb, final_step);
 
         db.store_lesson(
             trial_id,
@@ -216,7 +219,7 @@ pub async fn mark_completed(
             "WINNER",
         ).await?;
 
-        info!("IGLA FOUND! trial_id={:?}, BPB={}", trial_id, final_bpb);
+        info!("IGLA FOUND! trial_id={:?}, BPB={}, config={}", trial_id, final_bpb, config_json);
     }
 
     Ok(())
@@ -227,11 +230,11 @@ pub async fn register_trial(
     db: &NeonDb,
     machine_id: &str,
     worker_id: usize,
-    config: &serde_json::Value,
+    config_json: &str,
 ) -> Result<Uuid> {
     let trial_id = Uuid::new_v4();
 
-    db.register_trial(trial_id, machine_id, worker_id as i32, config).await?;
+    db.register_trial(trial_id, machine_id, worker_id as i32, config_json).await?;
 
     info!("Trial registered: trial_id={:?}, machine={}, worker={}",
           trial_id, machine_id, worker_id);
@@ -243,15 +246,15 @@ pub async fn register_trial(
 pub async fn is_config_running(
     db: &NeonDb,
     machine_id: &str,
-    config: &serde_json::Value,
+    config_json: &str,
 ) -> Result<bool> {
     let count: i64 = db.client().query_one(
         r#"
         SELECT COUNT(*) FROM igla_race_trials
-        WHERE machine_id = $1 AND config = $2
+        WHERE machine_id = $1 AND config = $2::jsonb
           AND status IN ('pending', 'running')
         "#,
-        &[&machine_id, config]
+        &[&machine_id, &config_json]
     ).await?.get(0);
 
     Ok(count > 0)
@@ -281,7 +284,7 @@ pub async fn process_rung(
         return Ok(false); // Stop trial (pruned)
     }
 
-    // Check if this was the final rung
+    // Check if this was final rung
     if rung == AshaRung::Rung27000 {
         mark_completed(db, trial_id, rung.step(), bpb).await?;
         return Ok(false); // Stop trial (completed)
