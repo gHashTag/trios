@@ -7,21 +7,17 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
-use tracing::{info, error, debug, warn};
+use tracing::{info, error};
 use rand::seq::SliceRandom;
 use rand::rngs::StdRng;
+use uuid::Uuid;
 
 use trios_igla_race::{
     lessons::TrialConfig,
     asha::AshaRung,
     neon::NeonDb,
-    asha::register_trial,
-    asha::record_checkpoint,
-    asha::should_prune,
-    asha::mark_completed,
 };
 
 /// IGLA Race CLI
@@ -46,22 +42,7 @@ enum RaceCommand {
     Best,
 }
 
-/// Trial configuration for sampling
-#[derive(Debug, Clone, serde::Serialize)]
-struct TrialConfig {
-    seed: i64,
-    d_model: usize,
-    context: usize,
-    lr: f64,
-    optimizer: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    wd: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    use_attention: Option<bool>,
-}
-
 const TARGET_BPB: f64 = 1.50;
-const ASHA_KEEP_FRACTION: f64 = 0.33;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -124,15 +105,18 @@ async fn main() -> Result<()> {
 
         RaceCommand::Status => {
             let db = NeonDb::connect(&neon_url).await?;
-            trios_igla_race::status::show_status(&db).await?;
+            trios_igla_race::status::print_leaderboard(db.client()).await?;
         }
 
         RaceCommand::Best => {
-            show_best(&neon_url).await?;
+            let db = NeonDb::connect(&neon_url).await?;
+            print_best(db.client()).await?;
         }
     }
 
     Ok(())
+}
+
 /// Single worker: runs trials until IGLA found
 async fn run_worker(
     neon_url: &str,
@@ -142,15 +126,15 @@ async fn run_worker(
 ) -> Result<f64> {
     let db = NeonDb::connect(neon_url).await?;
     let mut rng = StdRng::from_entropy().unwrap();
-    
+
     loop {
         // Sample a new config
         let config = TrialConfig {
-            seed: Some(rng.gen_range::<i64>(40..1040) + 40),
-            d_model: [128, 192, 256, 384].choose(&mut rng).copied(),
-            context: [4, 5, 6, 7, 8].choose(&mut rng).copied(),
-            lr: Some((rng.gen_range::<f64>(0.0001..0.01) % 0.0099) + 0.0001),
-            optimizer: Some(if rng.gen_bool(0.5) { "adamw".to_string() } else { "muon".to_string() }),
+            seed: rng.gen_range(40..1040) + 40,
+            d_model: [128, 192, 256, 384].choose(&mut rng).copied().unwrap_or(256),
+            context: [4, 5, 6, 7, 8].choose(&mut rng).copied().unwrap_or(6),
+            lr: (rng.gen_range::<f64>(0.0001..0.01) % 0.0099) + 0.0001,
+            optimizer: if rng.gen_bool(0.5) { "adamw".to_string() } else { "muon".to_string() },
             wd: Some(rng.gen_range::<f64>(0.0001..0.01) % 0.099 + 0.001),
             use_attention: Some(rng.gen_bool(0.5)),
             hidden: Some(384),
@@ -163,7 +147,7 @@ async fn run_worker(
         };
 
         let config_value = serde_json::to_value(&config)?;
-        
+
         // Register trial
         let trial_id = db.register_trial(
             Uuid::new_v4(),
@@ -184,7 +168,7 @@ async fn run_worker(
 
             // Update rung
             db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3", step, step, step, step),
+                &format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3", step, step),
                 &[&(step as i32), &bpb, &trial_id],
             ).await?;
 
@@ -230,13 +214,20 @@ async fn run_worker(
 async fn simulate_training(config: &TrialConfig, steps: u64) -> Result<f64> {
     // Simple simulation based on config parameters
     let base_bpb = 3.0;
-    let lr_effect = config.lr.unwrap_or(0.004) * 100.0;
-    let dim_effect = config.d_model.unwrap_or(256) as f64 / 100.0;
-    let ctx_effect = config.context.unwrap_or(6) as f64 * 0.05;
-    
+    let lr_effect = config.lr * 100.0;
+    let dim_effect = config.d_model as f64 / 100.0;
+    let ctx_effect = config.context as f64 * 0.05;
+
     let simulated_bpb = base_bpb - lr_effect - dim_effect - ctx_effect + (steps as f64 * 0.0001);
     Ok(simulated_bpb.max(1.0))
 }
+
+/// Print best trial
+async fn print_best(client: &tokio_postgres::Client) -> Result<()> {
+    let row = client.query_one(
+        "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text
+         FROM igla_race_trials
+         WHERE final_bpb IS NOT NULL
          ORDER BY final_bpb ASC
          LIMIT 1",
         &[],

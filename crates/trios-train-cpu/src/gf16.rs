@@ -397,10 +397,11 @@ impl QuantizationMetrics {
 #[must_use]
 pub fn benchmark_quantization(n: usize) -> QuantizationMetrics {
     use rand::Rng;
-    let mut rng = rand::rng();
+    use rand::thread_rng;
+    let mut rng = thread_rng();
 
     let original: Vec<f32> = (0..n)
-        .map(|_| rng.random::<f32>() * 0.2 - 0.1)
+        .map(|_| rng.gen::<f32>() * 0.2 - 0.1)
         .collect();
 
     let quantized: Vec<f32> = original

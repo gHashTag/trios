@@ -4,12 +4,13 @@ use dioxus::prelude::*;
 use trios_ui_ring_ur07 as api;
 use trios_ui_ring_ur08 as theme;
 
-pub const BUILD_VERSION: &str = env!("TRIOS_BUILD_VERSION", "dev");
+pub const BUILD_VERSION: &str = option_env!("TRIOS_BUILD_VERSION").unwrap_or("dev");
 
 /// Provider config injected at build time from .env
-pub const ANTHROPIC_KEY_HINT: &str = env!("TRIOS_ANTHROPIC_KEY_HINT", "");
-pub const OPENAI_KEY_HINT: &str = env!("TRIOS_OPENAI_KEY_HINT", "");
-pub const VENICE_KEY_HINT: &str = env!("TRIOS_VENICE_KEY_HINT", "");
+pub const ANTHROPIC_KEY_HINT: &str = option_env!("TRIOS_ANTHROPIC_KEY_HINT").unwrap_or("");
+pub const OPENAI_KEY_HINT: &str = option_env!("TRIOS_OPENAI_KEY_HINT").unwrap_or("");
+pub const VENICE_KEY_HINT: &str = option_env!("TRIOS_VENICE_KEY_HINT").unwrap_or("");
+pub const ZAI_KEY_HINT: &str = option_env!("TRIOS_ZAI_KEY_HINT").unwrap_or("");
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
@@ -39,19 +40,20 @@ fn inject_theme() {
 }
 
 fn app() -> Element {
-    let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new);
+    let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new());
     let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
     let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
-    let mut tools: Signal<Vec<String>> = use_signal(Vec::new);
+    let mut tools: Signal<Vec<String>> = use_signal(Vec::new());
     let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
     let connected: Signal<bool> = use_signal(|| false);
-    let mut input_text: Signal<String> = use_signal(String::new);
+    let mut input_text: Signal<String> = use_signal(String::new());
     let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
 
     // Settings state — pre-filled from .env hints
     let mut anthropic_key: Signal<String> = use_signal(|| ANTHROPIC_KEY_HINT.to_string());
     let mut openai_key: Signal<String> = use_signal(|| OPENAI_KEY_HINT.to_string());
     let mut venice_key: Signal<String> = use_signal(|| VENICE_KEY_HINT.to_string());
+    let mut zai_key: Signal<String> = use_signal(|| ZAI_KEY_HINT.to_string());
 
     use_hook(inject_theme);
 
@@ -127,18 +129,20 @@ fn app() -> Element {
     let tools_list = tools.read().clone();
     let tool_count = tools_list.len();
 
-    let status_cls = if is_connected { "status connected" } else { "status error" };
+    let status_cls = if is_connected { "status-connected" } else { "status-error" };
 
-    macro_rules! tab_cls { ($name:expr) => { if active == $name { "tab active" } else { "tab" } }; }
-    macro_rules! content_cls { ($name:expr) => { if active == $name { "tab-content active" } else { "tab-content" } }; }
+    macro_rules! tab_cls { ($name:expr) => { if active == $name { "tab-active" } else { "tab" } };
+    macro_rules! content_cls { ($name:expr) => { if active == $name { "tab-content-active" } else { "tab-content" } };
 
     let anthropic_val = anthropic_key.read().clone();
     let openai_val = openai_key.read().clone();
     let venice_val = venice_key.read().clone();
+    let zai_val = zai_key.read().clone();
 
     let has_anthropic = !anthropic_val.is_empty() && anthropic_val != "";
     let has_openai = !openai_val.is_empty() && openai_val != "";
     let has_venice = !venice_val.is_empty() && venice_val != "";
+    let has_zai = !zai_val.is_empty() && zai_val != "";
 
     rsx! {
         div { id: "main",
@@ -150,7 +154,7 @@ fn app() -> Element {
 
             nav { class: "tabs",
                 button { class: tab_cls!("chat"),    onclick: move |_| active_tab.set("chat".to_string()),     "Chat" }
-                button { class: tab_cls!("agents"),  onclick: move |_| active_tab.set("agents".to_string()),   "Agents" }
+                button { class: tab_cls!("agents"), onclick: move |_| active_tab.set("agents".to_string()),   "Agents" }
                 button { class: tab_cls!("tools"),   onclick: move |_| active_tab.set("tools".to_string()),    "Tools ({tool_count})" }
                 button { class: tab_cls!("settings"),onclick: move |_| active_tab.set("settings".to_string()), "\u{2699}" }
             }
@@ -159,7 +163,7 @@ fn app() -> Element {
             section { class: content_cls!("chat"), id: "tab-chat",
                 div { id: "messages",
                     for msg in messages.read().iter() {
-                        div { class: "message {msg.role}", "{msg.content}" }
+                        div { class: "message-{msg.role}", "{msg.content}" }
                     }
                 }
                 input {
@@ -168,7 +172,7 @@ fn app() -> Element {
                     value: "{input_val}",
                     placeholder: "Send a message...",
                     oninput: move |ev| input_text.set(ev.value()),
-                    onkeydown: move |ev: KeyboardEvent| {
+                    onkeydown: move |ev| KeyboardEvent| {
                         if ev.key() == Key::Enter {
                             let text = input_text.read().trim().to_string();
                             if !text.is_empty() {
@@ -211,8 +215,8 @@ fn app() -> Element {
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "Anthropic" }
-                            span { class: if has_anthropic { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_anthropic { "active" } else { "no key" }
+                            span { class: if has_anthropic { "provider-badge-active" } else { "provider-badge-inactive" },
+                                if has_anthropic { "active" } else { "no-key" }
                             }
                         }
                         div { class: "token-row",
@@ -234,8 +238,8 @@ fn app() -> Element {
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "OpenAI" }
-                            span { class: if has_openai { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_openai { "active" } else { "no key" }
+                            span { class: if has_openai { "provider-badge-active" } else { "provider-badge-inactive" },
+                                if has_openai { "active" } else { "no-key" }
                             }
                         }
                         div { class: "token-row",
@@ -257,8 +261,8 @@ fn app() -> Element {
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "Venice.ai" }
-                            span { class: if has_venice { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_venice { "active" } else { "no key" }
+                            span { class: if has_venice { "provider-badge-active" } else { "provider-badge-inactive" },
+                                if has_venice { "active" } else { "no-key" }
                             }
                         }
                         div { class: "token-row",
@@ -275,6 +279,29 @@ fn app() -> Element {
                             " in .env"
                         }
                     }
+
+                    // Z.ai
+                    div { class: "provider-card",
+                        div { class: "provider-header",
+                            span { class: "provider-name", "Z.ai" }
+                            span { class: if has_zai { "provider-badge-active" } else { "provider-badge-inactive" },
+                                if has_zai { "active" } else { "no-key" }
+                            }
+                        }
+                        div { class: "token-row",
+                            input {
+                                class: "token-input",
+                                r#type: "password",
+                                value: "{zai_val}",
+                                placeholder: "zai-...",
+                                oninput: move |ev| zai_key.set(ev.value()),
+                            }
+                        }
+                        div { class: "env-hint", "auto-loaded from "
+                            span { "ZAI_API_KEY" }
+                            " in .env"
+                        }
+                    }
                 }
 
                 div { class: "settings-section",
@@ -282,8 +309,8 @@ fn app() -> Element {
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "trios-server" }
-                            span { class: if is_connected { "provider-badge active" } else { "provider-badge inactive" },
-                                if is_connected { "ws:9005 \u{2713}" } else { "offline" }
+                            span { class: if is_connected { "provider-badge-active" } else { "provider-badge-inactive" },
+                                if is_connected { "ws://localhost:9005 \u{2713}" } else { "offline" }
                             }
                         }
                         div { class: "env-hint",
@@ -293,7 +320,8 @@ fn app() -> Element {
                     }
                 }
             }
+
+            div { id: "ver", "v{BUILD_VERSION}" }
         }
-        div { id: "ver", "v{BUILD_VERSION}" }
     }
 }
