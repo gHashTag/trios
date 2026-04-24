@@ -1,6 +1,6 @@
 # Issue #143 — IGLA RACE Master Status
 
-> **Last Updated:** 2026-04-24T16:15Z  
+> **Last Updated:** 2026-04-24T16:40Z  
 > **Agent:** EPSILON
 
 ---
@@ -12,7 +12,7 @@
 | TASK-1 | ✅ DONE | - | IGLA Race CLI (start/status/best) |
 | TASK-3 | ✅ DONE | `ece1e034` | ASHA subprocess integration, tests pass, clippy clean |
 | TASK-5 | ❌ BLOCKED | - | JEPA code does not exist (greenfield R&D required) |
-| TASK-5A | ✅ CREATED | `58f7510b` | JEPA design spec (blocking until greenfield implementation) |
+| TASK-5A | ✅ UPDATED | `e7ecf8fb` | JEPA v2 spec: detailed API, tests, 8-step implementation order |
 | TASK-8 | ✅ DONE | `3123d5f3` | Distributed race rollout with operator runbook |
 
 ---
@@ -47,7 +47,7 @@
 3. **Verify ASHA pruning** is working as expected
 
 ### Future (R&D)
-1. **TASK-5A:** Implement JEPA from design spec
+1. **TASK-5A:** Implement JEPA (v2 spec ready: masking → EMA → predictor → loss)
 2. **NCA integration:** Neural Cellular Automata
 3. **GF16 training:** Golden Float16 precision
 
@@ -59,7 +59,7 @@
 |--------|--------|---------|--------|
 | IGLA Target | BPB < 1.50 | ~3.96 (mock) | ⏳ Active |
 | Active Machines | 4 | 0-1 | ⚠️ Rollout pending |
-| JEPA Integration | Done | Blocked | 📋 TASK-5A spec ready |
+| JEPA Integration | Done | Implementable | 📋 TASK-5A v2 spec ready (e7ecf8fb) |
 
 ---
 
