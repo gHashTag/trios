@@ -13,6 +13,22 @@ fn gelu(x: f32) -> f32 {
     0.5 * x * (1.0 + tanh_arg.tanh())
 }
 
+fn activate(x: f32, name: &str) -> f32 {
+    match name {
+        "gelu" => gelu(x),
+        "relu2" => { let r = x.max(0.0); r * r },
+        _ => x.max(0.0),
+    }
+}
+
+fn activate_grad(x: f32, name: &str) -> f32 {
+    match name {
+        "gelu" => gelu(x),
+        "relu2" => { let r = x.max(0.0); 2.0 * r },
+        _ => if x > 0.0 { 1.0 } else { 0.0 },
+    }
+}
+
 fn load_data(path: &str) -> Vec<usize> {
     let raw = fs::read(path).unwrap_or_else(|e| {
         eprintln!("Failed to load {}: {}. Using fallback.", path, e);
@@ -133,7 +149,7 @@ impl NgramModel {
         for hi in 0..h {
             let w = &self.proj[hi * d..(hi + 1) * d];
             for (j, l) in ln.iter().enumerate() { hidden[hi] += w[j] * l; }
-            hidden[hi] = if self.activation == "gelu" { gelu(hidden[hi]) } else { hidden[hi].max(0.0) };
+            hidden[hi] = activate(hidden[hi], &self.activation);
         }
         hidden
     }
@@ -260,6 +276,7 @@ impl NgramModel {
         let mut all_hidden: Vec<Vec<f32>> = Vec::with_capacity(count);
         let mut all_ln: Vec<Vec<f32>> = Vec::with_capacity(count);
         let mut all_contexts: Vec<Vec<usize>> = Vec::with_capacity(count);
+        let mut all_pre_act: Vec<Vec<f32>> = Vec::with_capacity(count);
 
         for i in 0..count {
             let context: Vec<usize> = tokens[i..i + ngram].to_vec();
@@ -273,15 +290,17 @@ impl NgramModel {
                 for j in 0..d { combined[j] += cv[j] * cw; }
             }
             let ln = layer_norm(&combined, 1e-5);
+            let mut pre_act = vec![0.0f32; h];
             let mut hidden = vec![0.0f32; h];
             for hi in 0..h {
                 let w = &self.proj[hi * d..(hi + 1) * d];
-                for (j, l) in ln.iter().enumerate() { hidden[hi] += w[j] * l; }
-                hidden[hi] = if self.activation == "gelu" { gelu(hidden[hi]) } else { hidden[hi].max(0.0) };
+                for (j, l) in ln.iter().enumerate() { pre_act[hi] += w[j] * l; }
+                hidden[hi] = activate(pre_act[hi], &self.activation);
             }
             all_hidden.push(hidden);
             all_ln.push(ln);
             all_contexts.push(context);
+            all_pre_act.push(pre_act);
         }
 
         for i in 0..count {
@@ -397,6 +416,9 @@ impl NgramModel {
                         for k in 0..h {
                             g_ak[j * h + k] += d_keys[wi][j] * all_hidden[idx][k];
                         }
+                        for k in 0..h {
+                            g_av[j * h + k] += d_values[wi][j] * all_hidden[idx][k];
+                        }
                     }
                 }
             } else {
@@ -417,10 +439,10 @@ impl NgramModel {
                 }
             }
 
-            let relu_masks: Vec<f32> = all_hidden[i].iter().map(|&hv| if hv > 0.0 { 1.0f32 } else { 0.0f32 }).collect();
+            let act_grads: Vec<f32> = all_pre_act[i].iter().map(|&pv| activate_grad(pv, &self.activation)).collect();
             for hi in 0..h {
                 for j in 0..d {
-                    g_proj[hi * d + j] += d_hidden_final[hi] * relu_masks[hi] * all_ln[i][j];
+                    g_proj[hi * d + j] += d_hidden_final[hi] * act_grads[hi] * all_ln[i][j];
                 }
             }
 
@@ -428,7 +450,7 @@ impl NgramModel {
             for j in 0..d {
                 let mut grad_sum = 0.0f32;
                 for hi in 0..h {
-                    grad_sum += self.proj[hi * d + j] * relu_masks[hi] * d_hidden_final[hi];
+                    grad_sum += self.proj[hi * d + j] * act_grads[hi] * d_hidden_final[hi];
                 }
                 g_embed[t0 * d + j] += grad_sum;
                 for (ci, cw) in self.ctx_weights.iter().enumerate() {
@@ -465,9 +487,10 @@ impl NgramModel {
 }
 
 fn evaluate(model: &NgramModel, tokens: &[usize], seq_len: usize) -> (f32, f32) {
+    let eval_step = if model.use_attention { (seq_len + 1) * 8 } else { seq_len + 1 };
     let mut total = 0.0f32;
     let mut n = 0usize;
-    for c in (0..tokens.len()).step_by(seq_len + 1) {
+    for c in (0..tokens.len()).step_by(eval_step) {
         let end = (c + seq_len + 1).min(tokens.len());
         if end - c < model.ctx.len() + 3 { continue; }
         let loss = model.loss_on_seq(&tokens[c..end]);
@@ -506,7 +529,7 @@ fn main() {
     let use_attention = args.iter().any(|a| a == "--attention");
 
     let ngram_name = format!("{}-Gram", ngram_order);
-    let act_name = if activation == "gelu" { "GELU" } else { "ReLU" };
+    let act_name = match activation.as_str() { "gelu" => "GELU", "relu2" => "ReLU²", _ => "ReLU" };
     let attn_str = if use_attention { " + AttentionPool" } else { "" };
     println!("=== {} Context Model + {} Hidden{} ===", ngram_name, act_name, attn_str);
     println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} wd={} ctx={} activation={} attention={}",
