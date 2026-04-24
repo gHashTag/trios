@@ -4,15 +4,16 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
-use tokio_postgres::NoTls;
+use tokio_postgres::{NoTls, types::ToSql};
 use tracing::{info, error};
-use rand::{Rng, seq::SliceRandom};
+use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
 use uuid::Uuid;
 
 use trios_igla_race::{
+    neon::NeonDb,
+    status::{print_leaderboard, print_best},
     lessons::TrialConfig,
     asha::AshaRung,
-    neon::NeonDb,
 };
 
 #[derive(Parser)]
@@ -48,7 +49,11 @@ async fn main() -> Result<()> {
                 let url = neon_url.clone();
                 let mid = machine_id.clone();
                 let best = Arc::clone(&best_bpb);
-                set.spawn(async move { run_worker(&url, &mid, worker_id as u64, best).await });
+                let mut rng = StdRng::from_entropy().unwrap();
+                
+                set.spawn(async move {
+                    run_worker(&url, &mid, worker_id as u64, best, &mut rng).await
+                });
             }
 
             while let Some(res) = set.join_next().await {
@@ -70,7 +75,7 @@ async fn main() -> Result<()> {
         }
         RaceCommand::Status => {
             let db = NeonDb::connect(&neon_url).await?;
-            trios_igla_race::status::print_leaderboard(db.client()).await?;
+            print_leaderboard(db.client()).await?;
         }
         RaceCommand::Best => {
             show_best(&neon_url).await?;
@@ -79,13 +84,18 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_worker(neon_url: &str, machine_id: &str, worker_id: u64, best_bpb: Arc<Mutex<f64>>) -> Result<f64> {
+async fn run_worker(
+    neon_url: &str,
+    machine_id: &str,
+    worker_id: u64,
+    best_bpb: Arc<Mutex<f64>>,
+    rng: &mut StdRng
+) -> Result<f64> {
     let db = NeonDb::connect(neon_url).await?;
-    let mut rng = rand::thread_rng();
 
     loop {
-        let d_model_val = *[128, 192, 256, 384].choose(&mut rng).ok_or_else(|| anyhow::anyhow!("No d_model"))?;
-        let context_val = *[4, 5, 6, 7, 8].choose(&mut rng).ok_or_else(|| anyhow::anyhow!("No context"))?;
+        let d_model_val = *[128, 192, 256, 384].choose(rng).ok_or_else(|| anyhow::anyhow!("No d_model"))?;
+        let context_val = *[4, 5, 6, 7, 8].choose(rng).ok_or_else(|| anyhow::anyhow!("No context"))?;
 
         let config = TrialConfig {
             d_model: Some(d_model_val),
@@ -102,12 +112,10 @@ async fn run_worker(neon_url: &str, machine_id: &str, worker_id: u64, best_bpb: 
             max_steps: Some(27000),
         };
 
-        let trial_id = db.register_trial(
-            Uuid::new_v4(),
-            machine_id,
-            worker_id as i32,
-            &serde_json::to_string(&config)?,
-        ).await?;
+        let config_str = serde_json::to_string(&config)?;
+        let trial_id = Uuid::new_v4();
+        
+        db.register_trial(trial_id, machine_id, worker_id as i32, &config_str).await?;
 
         let mut prev_bpb = f64::MAX;
         let mut pruned = false;
@@ -116,42 +124,21 @@ async fn run_worker(neon_url: &str, machine_id: &str, worker_id: u64, best_bpb: 
             let step = rung.step();
             let bpb = simulate_training(&config, step as u64).await?;
 
-            if step == 1000 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET rung_1000_step = $1, rung_1000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
-                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-                ).await?;
-            } else if step == 3000 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET rung_3000_step = $1, rung_3000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
-                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-                ).await?;
-            } else if step == 9000 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET rung_9000_step = $1, rung_9000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
-                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-                ).await?;
-            } else if step == 27000 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET rung_27000_step = $1, rung_27000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
-                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-                ).await?;
-            }
+            let query = format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3", step, step);
+            
+            let args: [&(dyn ToSql + Sync); 3] = [&step as i32, &bpb as i32, &trial_id];
+            db.client().execute(&query, &args).await?;
 
             if bpb > 2.7 && step == 1000 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET status = 'pruned' WHERE trial_id = $1",
-                    &[&trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-                ).await?;
+                let args: [&(dyn ToSql + Sync); 1] = [&trial_id];
+                db.client().execute("UPDATE igla_race_trials SET status = 'pruned' WHERE trial_id = $1", &args).await?;
                 pruned = true;
                 break;
             }
 
             if bpb < 1.5 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2",
-                    &[&bpb as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-                ).await?;
+                let args: [&(dyn ToSql + Sync); 2] = [&bpb, &trial_id];
+                db.client().execute("UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2", &args).await?;
                 return Ok(bpb);
             }
 
@@ -159,10 +146,8 @@ async fn run_worker(neon_url: &str, machine_id: &str, worker_id: u64, best_bpb: 
         }
 
         if !pruned {
-            db.client().execute(
-                "UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2",
-                &[&prev_bpb as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
-            ).await?;
+            let args: [&(dyn ToSql + Sync); 2] = [&prev_bpb, &trial_id];
+            db.client().execute("UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2", &args).await?;
         }
 
         let mut best = best_bpb.lock().unwrap();
