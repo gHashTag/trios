@@ -22,7 +22,7 @@ pub mod trinity_3k_model;
 pub mod gf16;
 
 // Golden Float Family — φ-based number systems
-pub mod phi_numbers;
+// pub mod phi_numbers; // TODO: fix const fn errors
 
 // Real IGLA Phase A/B training
 pub mod real_igla_model;

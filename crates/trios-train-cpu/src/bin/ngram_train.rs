@@ -9,9 +9,8 @@ const LN_2: f32 = std::f32::consts::LN_2;
 
 fn gelu(x: f32) -> f32 {
     let x3 = x * x * x;
-    let tanh_arg = 0.7978846 * (x + 0.044715 * x3); // sqrt(2/pi) ≈ 0.7978846
-    let tanh_val = tanh_arg.tanh();
-    0.5 * x * (1.0 + tanh_val)
+    let tanh_arg = 0.7978846 * (x + 0.044715 * x3);
+    0.5 * x * (1.0 + tanh_arg.tanh())
 }
 
 fn load_data(path: &str) -> Vec<usize> {
@@ -37,18 +36,16 @@ fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
     x.iter().map(|v| (v - mean) / std).collect()
 }
 
-struct Optimizers { e: AdamW, c1: AdamW, c2: AdamW, c3: AdamW, c4: AdamW, c5: AdamW, c6: AdamW, c7: AdamW, p: AdamW, h: AdamW }
-
 struct AdamW {
     m: Vec<f32>, v: Vec<f32>, step: usize,
     beta1: f32, beta2: f32, eps: f32, wd: f32,
 }
 
 impl AdamW {
-    fn new(size: usize) -> Self {
+    fn new(size: usize, wd: f32) -> Self {
         let phi = (1.0 + 5.0f64.sqrt()) / 2.0;
         Self { m: vec![0.0; size], v: vec![0.0; size], step: 0,
-            beta1: 1.0 / phi as f32, beta2: 0.999, eps: 1e-8, wd: 0.04 }
+            beta1: 1.0 / phi as f32, beta2: 0.999, eps: 1e-8, wd }
     }
     fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
         self.step += 1;
@@ -65,31 +62,23 @@ impl AdamW {
 
 struct NgramModel {
     embed: Vec<f32>,
-    ctx1: Vec<f32>,
-    ctx2: Vec<f32>,
-    ctx3: Vec<f32>,
-    ctx4: Vec<f32>,
-    ctx5: Vec<f32>,
-    ctx6: Vec<f32>,
-    ctx7: Vec<f32>,
+    ctx: Vec<Vec<f32>>,
+    ctx_weights: Vec<f32>,
     proj: Vec<f32>,
     lm_head: Vec<f32>,
-    #[allow(dead_code)]
-    ln_g: Vec<f32>,
-    #[allow(dead_code)]
-    ln_b: Vec<f32>,
-    #[allow(dead_code)]
-    output_ln_g: Vec<f32>,
-    #[allow(dead_code)]
-    output_ln_b: Vec<f32>,
+    attn_query: Vec<f32>,
+    attn_key: Vec<f32>,
+    attn_value: Vec<f32>,
     vocab: usize,
     dim: usize,
     hidden: usize,
     activation: String,
+    use_attention: bool,
+    attn_dim: usize,
 }
 
 impl NgramModel {
-    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64) -> Self {
+    fn new(vocab: usize, dim: usize, hidden: usize, activation: String, seed: u64, num_ctx: usize, use_attention: bool) -> Self {
         let mut s = seed;
         let mut rng = || {
             s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -98,200 +87,390 @@ impl NgramModel {
         let lim = (6.0f32 / (3 * dim) as f32).sqrt();
         let lim_h = (6.0f32 / (dim + hidden) as f32).sqrt();
         let lim_o = (6.0f32 / (hidden + dim) as f32).sqrt();
+
+        let ctx = (0..num_ctx).map(|_| {
+            (0..vocab * dim).map(|_| rng() * lim).collect()
+        }).collect();
+
+        let base_weights: Vec<f32> = vec![0.7, 0.3, 0.2, 0.15, 0.12, 0.1, 0.08, 0.06];
+        let ctx_weights: Vec<f32> = base_weights.iter().take(num_ctx).cloned().collect();
+
+        let attn_dim = hidden / 4;
+
         Self {
             embed: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx1: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx2: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx3: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx4: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx5: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx6: (0..vocab * dim).map(|_| rng() * lim).collect(),
-            ctx7: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx,
+            ctx_weights,
             proj: (0..hidden * dim).map(|_| rng() * lim_h).collect(),
             lm_head: (0..vocab * hidden).map(|_| rng() * lim_o).collect(),
-            ln_g: vec![1.0; dim],
-            ln_b: vec![0.0; dim],
-            output_ln_g: vec![1.0; hidden],
-            output_ln_b: vec![0.0; hidden],
-            vocab, dim, hidden, activation,
+            attn_query: if use_attention { (0..attn_dim).map(|_| rng() * 0.1).collect() } else { vec![] },
+            attn_key: if use_attention { (0..hidden * attn_dim).map(|_| rng() * 0.1).collect() } else { vec![] },
+            attn_value: if use_attention { (0..hidden * attn_dim).map(|_| rng() * 0.1).collect() } else { vec![] },
+            vocab, dim, hidden, activation, use_attention, attn_dim,
         }
     }
 
-    fn get_hidden(&self, t2: usize, t1: usize, t0: usize, layernorm: bool) -> Vec<f32> {
-        let v = self.vocab;
+    fn compute_hidden(&self, tokens_context: &[usize]) -> Vec<f32> {
         let d = self.dim;
         let h = self.hidden;
-        let t2 = t2.min(v - 1);
-        let t1 = t1.min(v - 1);
-        let t0 = t0.min(v - 1);
-        // Additional contexts for 8-gram (use padding token if not enough context)
-        let t3 = if t2 > 0 { t2 - 1 } else { 0 }.min(v - 1);
-        let t4 = if t3 > 0 { t3 - 1 } else { 0 }.min(v - 1);
-        let t5 = if t4 > 0 { t4 - 1 } else { 0 }.min(v - 1);
-        let t6 = if t5 > 0 { t5 - 1 } else { 0 }.min(v - 1);
-        let t7 = if t6 > 0 { t6 - 1 } else { 0 }.min(v - 1);
+        let v = self.vocab;
+        let t0 = tokens_context.last().unwrap().min(&(v - 1)).to_owned();
 
         let e0 = &self.embed[t0 * d..(t0 + 1) * d];
-        let c1 = &self.ctx1[t1 * d..(t1 + 1) * d];
-        let c2 = &self.ctx2[t2 * d..(t2 + 1) * d];
-        // Additional contexts for 8-gram (use padding token if not enough context)
-        let t3 = if t2 > 0 { t2 - 1 } else { 0 }.min(v - 1);
-        let t4 = if t3 > 0 { t3 - 1 } else { 0 }.min(v - 1);
-        let t5 = if t4 > 0 { t4 - 1 } else { 0 }.min(v - 1);
-        let t6 = if t5 > 0 { t5 - 1 } else { 0 }.min(v - 1);
-        let t7 = if t6 > 0 { t6 - 1 } else { 0 }.min(v - 1);
-        let c3 = &self.ctx3[t3 * d..(t3 + 1) * d];
-        let c4 = &self.ctx4[t4 * d..(t4 + 1) * d];
-        let c5 = &self.ctx5[t5 * d..(t5 + 1) * d];
-        let c6 = &self.ctx6[t6 * d..(t6 + 1) * d];
-        let c7 = &self.ctx7[t7 * d..(t7 + 1) * d];
+        let mut combined = e0.to_vec();
 
-        let mut combined = vec![0.0f32; d];
-        // Weighted sum: decreasing weights for older tokens (8-gram)
-        // Weights: 1.0, 0.25, 0.20, 0.16, 0.12, 0.10, 0.07, 0.05
-        for j in 0..d {
-            combined[j] = e0[j] + c1[j] * 0.25 + c2[j] * 0.20
-                         + c3[j] * 0.16 + c4[j] * 0.12
-                         + c5[j] * 0.10 + c6[j] * 0.07
-                         + c7[j] * 0.05;
+        for (ci, cw) in self.ctx_weights.iter().enumerate() {
+            let ctx_idx = tokens_context.len() - 2 - ci;
+            if ctx_idx == 0 && ci > 0 { break; }
+            let t = tokens_context[ctx_idx].min(v - 1);
+            let cv = &self.ctx[ci][t * d..(t + 1) * d];
+            for j in 0..d { combined[j] += cv[j] * cw; }
         }
 
         let ln = layer_norm(&combined, 1e-5);
 
         let mut hidden = vec![0.0f32; h];
-        for (hi, hn) in hidden.iter_mut().enumerate().take(h) {
+        for hi in 0..h {
             let w = &self.proj[hi * d..(hi + 1) * d];
-            for (j, l) in ln.iter().enumerate() { *hn += w[j] * l; }
-            *hn = if self.activation == "gelu" { gelu(*hn) } else { (*hn).max(0.0) };
+            for (j, l) in ln.iter().enumerate() { hidden[hi] += w[j] * l; }
+            hidden[hi] = if self.activation == "gelu" { gelu(hidden[hi]) } else { hidden[hi].max(0.0) };
         }
-        
-        // Apply output LayerNorm if enabled
-        if layernorm {
-            layer_norm(&hidden, 1e-5)
-        } else {
-            hidden
-        }
+        hidden
     }
 
-    fn loss_on_seq(&self, tokens: &[usize], layernorm: bool) -> f32 {
-        if tokens.len() < 4 { return 0.0; }
-        let v = self.vocab;
-        let mut total = 0.0f32;
-        for i in 2..tokens.len() - 1 {
-            let h = self.get_hidden(tokens[i - 2], tokens[i - 1], tokens[i], layernorm);
-            let target = tokens[i + 1].min(v - 1);
-            let mut logits = vec![0.0f32; v];
-            for (vi, logit) in logits.iter_mut().enumerate() {
-                let w = &self.lm_head[vi * self.hidden..(vi + 1) * self.hidden];
-                for (hi, hn) in h.iter().enumerate() { *logit += w[hi] * hn; }
+    fn attention_pool(&self, hidden_states: &[Vec<f32>]) -> Vec<f32> {
+        let h = self.hidden;
+        let ad = self.attn_dim;
+        let n = hidden_states.len();
+
+        let mut keys = vec![vec![0.0f32; ad]; n];
+        let mut values = vec![vec![0.0f32; ad]; n];
+        for (pos, hid) in hidden_states.iter().enumerate() {
+            for j in 0..ad {
+                for k in 0..h {
+                    keys[pos][j] += self.attn_key[j * h + k] * hid[k];
+                    values[pos][j] += self.attn_value[j * h + k] * hid[k];
+                }
             }
-            softmax(&mut logits);
-            total -= logits[target].max(1e-10).ln();
         }
-        total / (tokens.len() - 3) as f32
+
+        let mut scores = vec![0.0f32; n];
+        for pos in 0..n {
+            for j in 0..ad {
+                scores[pos] += self.attn_query[j] * keys[pos][j];
+            }
+            scores[pos] /= (ad as f32).sqrt();
+        }
+        softmax(&mut scores);
+
+        let mut pooled = vec![0.0f32; ad];
+        for pos in 0..n {
+            for j in 0..ad {
+                pooled[j] += scores[pos] * values[pos][j];
+            }
+        }
+        pooled
+    }
+
+    fn predict(&self, hidden_seq: &[Vec<f32>], current_hidden: &[f32]) -> Vec<f32> {
+        let v = self.vocab;
+        let h = self.hidden;
+
+        let final_hidden = if self.use_attention && hidden_seq.len() >= 3 {
+            let attn_vec = self.attention_pool(hidden_seq);
+            let mut combined = current_hidden.to_vec();
+            let ad = self.attn_dim;
+            for j in 0..ad.min(h) {
+                combined[j % h] += attn_vec[j];
+            }
+            combined
+        } else {
+            current_hidden.to_vec()
+        };
+
+        let mut logits = vec![0.0f32; v];
+        for (vi, logit) in logits.iter_mut().enumerate() {
+            let w = &self.lm_head[vi * h..(vi + 1) * h];
+            for (hi, hn) in final_hidden.iter().enumerate() { *logit += w[hi] * hn; }
+        }
+        logits
+    }
+
+    fn loss_on_seq(&self, tokens: &[usize]) -> f32 {
+        let ngram = self.ctx.len() + 2;
+        if tokens.len() < ngram + 1 { return 0.0; }
+        let v = self.vocab;
+        let h = self.hidden;
+        let count = tokens.len() - ngram;
+        let mut total = 0.0f32;
+
+        if self.use_attention {
+            let mut hidden_seq: Vec<Vec<f32>> = Vec::with_capacity(count);
+            for i in 0..count {
+                let context = &tokens[i..i + ngram];
+                hidden_seq.push(self.compute_hidden(context));
+            }
+
+            for i in 0..count {
+                let start = if i >= ngram { i - ngram + 1 } else { 0 };
+                let window = &hidden_seq[start..=i];
+                let logits = self.predict(window, &hidden_seq[i]);
+                let target = tokens[i + ngram].min(v - 1);
+                let mut logits = logits;
+                softmax(&mut logits);
+                total -= logits[target].max(1e-10).ln();
+            }
+        } else {
+            for i in 0..count {
+                let context = &tokens[i..i + ngram];
+                let hidden = self.compute_hidden(context);
+                let target = tokens[i + ngram].min(v - 1);
+                let mut logits = vec![0.0f32; v];
+                for (vi, logit) in logits.iter_mut().enumerate() {
+                    let w = &self.lm_head[vi * h..(vi + 1) * h];
+                    for (hi, hn) in hidden.iter().enumerate() { *logit += w[hi] * hn; }
+                }
+                softmax(&mut logits);
+                total -= logits[target].max(1e-10).ln();
+            }
+        }
+        total / count as f32
     }
 
     fn train_step(&mut self, tokens: &[usize], lr: f32,
-        opts: &mut Optimizers, layernorm: bool) {
-        if tokens.len() < 4 { return; }
+        opt_embed: &mut AdamW, opt_ctx: &mut [AdamW], opt_proj: &mut AdamW, opt_head: &mut AdamW,
+        opt_aq: &mut AdamW, opt_ak: &mut AdamW, opt_av: &mut AdamW) {
+        let ngram = self.ctx.len() + 2;
+        if tokens.len() < ngram + 1 { return; }
         let v = self.vocab;
         let d = self.dim;
         let h = self.hidden;
+        let count = tokens.len() - ngram;
+        let ad = self.attn_dim;
 
         let mut g_embed = vec![0.0f32; v * d];
-        let mut g_ctx1 = vec![0.0f32; v * d];
-        let mut g_ctx2 = vec![0.0f32; v * d];
-        let mut g_ctx3 = vec![0.0f32; v * d];
-        let mut g_ctx4 = vec![0.0f32; v * d];
-        let mut g_ctx5 = vec![0.0f32; v * d];
-        let mut g_ctx6 = vec![0.0f32; v * d];
-        let mut g_ctx7 = vec![0.0f32; v * d];
+        let num_ctx = self.ctx.len();
+        let mut g_ctx: Vec<Vec<f32>> = (0..num_ctx).map(|_| vec![0.0f32; v * d]).collect();
         let mut g_proj = vec![0.0f32; h * d];
         let mut g_head = vec![0.0f32; v * h];
+        let mut g_aq = if self.use_attention { vec![0.0f32; ad] } else { vec![] };
+        let mut g_ak = if self.use_attention { vec![0.0f32; ad * h] } else { vec![] };
+        let mut g_av = if self.use_attention { vec![0.0f32; ad * h] } else { vec![] };
 
-        for i in 2..tokens.len() - 1 {
-            let t2 = tokens[i - 2].min(v - 1);
-            let t1 = tokens[i - 1].min(v - 1);
-            let t0 = tokens[i].min(v - 1);
-            let tgt = tokens[i + 1].min(v - 1);
+        let mut all_hidden: Vec<Vec<f32>> = Vec::with_capacity(count);
+        let mut all_ln: Vec<Vec<f32>> = Vec::with_capacity(count);
+        let mut all_contexts: Vec<Vec<usize>> = Vec::with_capacity(count);
 
-            let hidden = self.get_hidden(t2, t1, t0, layernorm);
-
-            let mut logits = vec![0.0f32; v];
-            for (vi, logit) in logits.iter_mut().enumerate() {
-                let w = &self.lm_head[vi * h..(vi + 1) * h];
-                for (hi, hn) in hidden.iter().enumerate() { *logit += w[hi] * hn; }
-            }
-            softmax(&mut logits);
-
-            let mut d_hidden = vec![0.0f32; h];
-            for (vi, prob) in logits.iter().enumerate() {
-                let grad = prob - if vi == tgt { 1.0 } else { 0.0 };
-                let w = &self.lm_head[vi * h..(vi + 1) * h];
-                for hi in 0..h {
-                    g_head[vi * h + hi] += grad * hidden[hi];
-                    d_hidden[hi] += grad * w[hi];
-                }
-            }
-
-        // Note: LayerNorm backward pass simplified for now
-        // Focus on forward correctness first
-
+        for i in 0..count {
+            let context: Vec<usize> = tokens[i..i + ngram].to_vec();
+            let t0 = context[ngram - 1].min(v - 1);
             let e0 = &self.embed[t0 * d..(t0 + 1) * d];
-            let c1v = &self.ctx1[t1 * d..(t1 + 1) * d];
-            let c2v = &self.ctx2[t2 * d..(t2 + 1) * d];
-            let mut combined = vec![0.0f32; d];
-            for j in 0..d { combined[j] = e0[j] + c1v[j] * 0.7 + c2v[j] * 0.3; }
+            let mut combined = e0.to_vec();
+            for (ci, cw) in self.ctx_weights.iter().enumerate() {
+                let ctx_idx = ngram - 2 - ci;
+                let t = context[ctx_idx].min(v - 1);
+                let cv = &self.ctx[ci][t * d..(t + 1) * d];
+                for j in 0..d { combined[j] += cv[j] * cw; }
+            }
             let ln = layer_norm(&combined, 1e-5);
-
+            let mut hidden = vec![0.0f32; h];
             for hi in 0..h {
-                let _pw = &self.proj[hi * d..(hi + 1) * d];
-                let relu_mask = if hidden[hi] > 0.0 { 1.0f32 } else { 0.0f32 };
-                for j in 0..d {
-                    g_proj[hi * d + j] += d_hidden[hi] * relu_mask * ln[j];
+                let w = &self.proj[hi * d..(hi + 1) * d];
+                for (j, l) in ln.iter().enumerate() { hidden[hi] += w[j] * l; }
+                hidden[hi] = if self.activation == "gelu" { gelu(hidden[hi]) } else { hidden[hi].max(0.0) };
+            }
+            all_hidden.push(hidden);
+            all_ln.push(ln);
+            all_contexts.push(context);
+        }
+
+        for i in 0..count {
+            let target = tokens[i + ngram].min(v - 1);
+            let mut d_hidden_final = vec![0.0f32; h];
+            let mut d_attn_vec = vec![0.0f32; ad];
+
+            if self.use_attention && i >= 3 {
+                let start = if i >= ngram { i - ngram + 1 } else { 0 };
+                let window_len = i - start + 1;
+
+                let mut keys = vec![vec![0.0f32; ad]; window_len];
+                let mut values = vec![vec![0.0f32; ad]; window_len];
+                for (wi, idx) in (start..=i).enumerate() {
+                    for j in 0..ad {
+                        for k in 0..h {
+                            keys[wi][j] += self.attn_key[j * h + k] * all_hidden[idx][k];
+                            values[wi][j] += self.attn_value[j * h + k] * all_hidden[idx][k];
+                        }
+                    }
+                }
+
+                let mut scores = vec![0.0f32; window_len];
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        scores[wi] += self.attn_query[j] * keys[wi][j];
+                    }
+                    scores[wi] /= (ad as f32).sqrt();
+                }
+                softmax(&mut scores);
+
+                let mut attn_vec = vec![0.0f32; ad];
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        attn_vec[j] += scores[wi] * values[wi][j];
+                    }
+                }
+
+                let mut combined = all_hidden[i].clone();
+                for j in 0..ad.min(h) {
+                    combined[j % h] += attn_vec[j];
+                }
+
+                let mut logits = vec![0.0f32; v];
+                for (vi, logit) in logits.iter_mut().enumerate() {
+                    let w = &self.lm_head[vi * h..(vi + 1) * h];
+                    for (hi, hn) in combined.iter().enumerate() { *logit += w[hi] * hn; }
+                }
+                softmax(&mut logits);
+
+                for (vi, prob) in logits.iter().enumerate() {
+                    let grad = prob - if vi == target { 1.0 } else { 0.0 };
+                    for hi in 0..h {
+                        g_head[vi * h + hi] += grad * combined[hi];
+                        d_hidden_final[hi] += grad * self.lm_head[vi * h + hi];
+                    }
+                }
+
+                for j in 0..ad.min(h) {
+                    d_attn_vec[j] += d_hidden_final[j % h];
+                }
+
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        g_av[j * h..(j + 1) * h].iter_mut()
+                            .zip(all_hidden[start + wi].iter())
+                            .for_each(|(g, &h_val)| *g += scores[wi] * d_attn_vec[j] * h_val);
+                    }
+                }
+
+                let mut d_scores = vec![0.0f32; window_len];
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        d_scores[wi] += d_attn_vec[j] * values[wi][j] * scores[wi];
+                        d_scores[wi] += d_attn_vec[j] * values[wi][j];
+                    }
+                    d_scores[wi] -= d_attn_vec.iter().zip(values[wi].iter()).map(|(&da, &vl)| da * vl * scores[wi]).sum::<f32>();
+                }
+
+                let mut d_scores_clean = vec![0.0f32; window_len];
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        d_scores_clean[wi] += d_attn_vec[j] * values[wi][j];
+                    }
+                    for wj in 0..window_len {
+                        let dot: f32 = d_attn_vec.iter().zip(values[wj].iter()).map(|(&da, &vl)| da * vl).sum();
+                        d_scores_clean[wi] -= scores[wi] * scores[wj] * dot;
+                    }
+                }
+
+                for j in 0..ad {
+                    for wi in 0..window_len {
+                        g_aq[j] += d_scores_clean[wi] * keys[wi][j] / (ad as f32).sqrt();
+                    }
+                }
+
+                let mut d_keys = vec![vec![0.0f32; ad]; window_len];
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        d_keys[wi][j] = d_scores_clean[wi] * self.attn_query[j] / (ad as f32).sqrt();
+                    }
+                }
+
+                let mut d_values = vec![vec![0.0f32; ad]; window_len];
+                for wi in 0..window_len {
+                    for j in 0..ad {
+                        d_values[wi][j] = scores[wi] * d_attn_vec[j];
+                    }
+                }
+
+                for (wi, idx) in (start..=i).enumerate() {
+                    for j in 0..ad {
+                        for k in 0..h {
+                            g_ak[j * h + k] += d_keys[wi][j] * all_hidden[idx][k];
+                        }
+                    }
+                }
+            } else {
+                let hidden = &all_hidden[i];
+                let mut logits = vec![0.0f32; v];
+                for (vi, logit) in logits.iter_mut().enumerate() {
+                    let w = &self.lm_head[vi * h..(vi + 1) * h];
+                    for (hi, hn) in hidden.iter().enumerate() { *logit += w[hi] * hn; }
+                }
+                softmax(&mut logits);
+
+                for (vi, prob) in logits.iter().enumerate() {
+                    let grad = prob - if vi == target { 1.0 } else { 0.0 };
+                    for hi in 0..h {
+                        g_head[vi * h + hi] += grad * hidden[hi];
+                        d_hidden_final[hi] += grad * self.lm_head[vi * h + hi];
+                    }
                 }
             }
+
+            let relu_masks: Vec<f32> = all_hidden[i].iter().map(|&hv| if hv > 0.0 { 1.0f32 } else { 0.0f32 }).collect();
+            for hi in 0..h {
+                for j in 0..d {
+                    g_proj[hi * d + j] += d_hidden_final[hi] * relu_masks[hi] * all_ln[i][j];
+                }
+            }
+
+            let t0 = all_contexts[i][ngram - 1].min(v - 1);
             for j in 0..d {
-                g_embed[t0 * d + j] += d_hidden.iter().enumerate()
-                    .map(|(hi, dh)| self.proj[hi * d + j] * if hidden[hi] > 0.0 { 1.0 } else { 0.0 } * dh)
-                    .sum::<f32>();
-                g_ctx1[t1 * d + j] += 0.25 * g_embed[t0 * d + j];
-                g_ctx2[t2 * d + j] += 0.20 * g_embed[t0 * d + j];
-                g_ctx3[t3 * d + j] += 0.16 * g_embed[t0 * d + j];
-                g_ctx4[t4 * d + j] += 0.12 * g_embed[t0 * d + j];
-                g_ctx5[t5 * d + j] += 0.10 * g_embed[t0 * d + j];
-                g_ctx6[t6 * d + j] += 0.07 * g_embed[t0 * d + j];
-                g_ctx7[t7 * d + j] += 0.05 * g_embed[t0 * d + j];
+                let mut grad_sum = 0.0f32;
+                for hi in 0..h {
+                    grad_sum += self.proj[hi * d + j] * relu_masks[hi] * d_hidden_final[hi];
+                }
+                g_embed[t0 * d + j] += grad_sum;
+                for (ci, cw) in self.ctx_weights.iter().enumerate() {
+                    let ctx_idx = ngram - 2 - ci;
+                    let t = all_contexts[i][ctx_idx].min(v - 1);
+                    g_ctx[ci][t * d + j] += cw * grad_sum;
+                }
             }
         }
 
-        let n = (tokens.len() - 3) as f32;
-        for g in [&mut g_embed, &mut g_ctx1, &mut g_ctx2, &mut g_ctx3,
-                 &mut g_ctx4, &mut g_ctx5, &mut g_ctx6, &mut g_ctx7,
-                 &mut g_proj, &mut g_head] {
-            for x in g.iter_mut() { *x /= n; }
+        let n = count as f32;
+        for x in g_embed.iter_mut() { *x /= n; }
+        for gc in g_ctx.iter_mut() { for x in gc.iter_mut() { *x /= n; } }
+        for x in g_proj.iter_mut() { *x /= n; }
+        for x in g_head.iter_mut() { *x /= n; }
+        if self.use_attention {
+            for x in g_aq.iter_mut() { *x /= n; }
+            for x in g_ak.iter_mut() { *x /= n; }
+            for x in g_av.iter_mut() { *x /= n; }
         }
 
-        opts.e.update(&mut self.embed, &g_embed, lr);
-        opts.c1.update(&mut self.ctx1, &g_ctx1, lr);
-        opts.c2.update(&mut self.ctx2, &g_ctx2, lr);
-        opts.c3.update(&mut self.ctx3, &g_ctx3, lr);
-        opts.c4.update(&mut self.ctx4, &g_ctx4, lr);
-        opts.c5.update(&mut self.ctx5, &g_ctx5, lr);
-        opts.c6.update(&mut self.ctx6, &g_ctx6, lr);
-        opts.c7.update(&mut self.ctx7, &g_ctx7, lr);
-        opts.p.update(&mut self.proj, &g_proj, lr);
-        opts.h.update(&mut self.lm_head, &g_head, lr);
+        opt_embed.update(&mut self.embed, &g_embed, lr);
+        for (ci, oc) in opt_ctx.iter_mut().enumerate() {
+            oc.update(&mut self.ctx[ci], &g_ctx[ci], lr);
+        }
+        opt_proj.update(&mut self.proj, &g_proj, lr);
+        opt_head.update(&mut self.lm_head, &g_head, lr);
+        if self.use_attention {
+            opt_aq.update(&mut self.attn_query, &g_aq, lr);
+            opt_ak.update(&mut self.attn_key, &g_ak, lr);
+            opt_av.update(&mut self.attn_value, &g_av, lr);
+        }
     }
 }
 
-fn evaluate(model: &NgramModel, tokens: &[usize], seq_len: usize, layernorm: bool) -> (f32, f32) {
+fn evaluate(model: &NgramModel, tokens: &[usize], seq_len: usize) -> (f32, f32) {
     let mut total = 0.0f32;
     let mut n = 0usize;
     for c in (0..tokens.len()).step_by(seq_len + 1) {
         let end = (c + seq_len + 1).min(tokens.len());
-        if end - c < 5 { continue; }
-        let loss = model.loss_on_seq(&tokens[c..end], layernorm);
+        if end - c < model.ctx.len() + 3 { continue; }
+        let loss = model.loss_on_seq(&tokens[c..end]);
         if loss.is_finite() { total += loss / LN_2; n += 1; }
     }
     if n == 0 { return (f32::MAX, f32::MAX); }
@@ -306,22 +485,32 @@ fn cosine_lr(step: usize, max_steps: usize, base_lr: f32, warmup: usize) -> f32 
 }
 
 fn main() {
-    let seed = std::env::args().find(|a| a.starts_with("--seed="))
+    let args: Vec<String> = std::env::args().collect();
+    let seed: u64 = args.iter().find(|a| a.starts_with("--seed="))
         .map(|a| a[7..].parse::<u64>().unwrap_or(42)).unwrap_or(42);
-    let steps = std::env::args().find(|a| a.starts_with("--steps="))
+    let steps: usize = args.iter().find(|a| a.starts_with("--steps="))
         .map(|a| a[8..].parse::<usize>().unwrap_or(10000)).unwrap_or(10000);
-    let base_lr = std::env::args().find(|a| a.starts_with("--lr="))
+    let base_lr: f32 = args.iter().find(|a| a.starts_with("--lr="))
         .map(|a| a[5..].parse::<f32>().unwrap_or(0.003)).unwrap_or(0.003);
-    let hidden = std::env::args().find(|a| a.starts_with("--hidden="))
+    let hidden: usize = args.iter().find(|a| a.starts_with("--hidden="))
         .map(|a| a[9..].parse::<usize>().unwrap_or(128)).unwrap_or(128);
-    let activation = std::env::args().find(|a| a.starts_with("--activation="))
-        .map(|a| a[12..].to_string()).unwrap_or_else(|| "relu".to_string());
-    let layernorm = std::env::args().any(|a| a == "--layernorm");
+    let wd: f32 = args.iter().find(|a| a.starts_with("--wd="))
+        .map(|a| a[5..].parse::<f32>().unwrap_or(0.04)).unwrap_or(0.04);
+    let activation = args.iter().find(|a| a.starts_with("--activation="))
+        .map(|a| a[13..].to_string()).unwrap_or_else(|| "relu".to_string());
+    let has_ctx5 = args.iter().any(|a| a == "--ctx5");
+    let has_ctx4 = args.iter().any(|a| a == "--ctx4");
+    let has_ctx3 = args.iter().any(|a| a == "--ctx3");
+    let num_ctx = if has_ctx5 { 5 } else if has_ctx4 { 4 } else if has_ctx3 { 3 } else { 2 };
+    let ngram_order = num_ctx + 2;
+    let use_attention = args.iter().any(|a| a == "--attention");
 
-    let activation_name = if activation == "gelu" { "GELU" } else { "ReLU" };
-    let ln_suffix = if layernorm { " + LN" } else { "" };
-    println!("=== 4-Gram Context Model + {} Hidden{} ===", activation_name, ln_suffix);
-    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} activation={} layernorm={}", VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, activation, layernorm);
+    let ngram_name = format!("{}-Gram", ngram_order);
+    let act_name = if activation == "gelu" { "GELU" } else { "ReLU" };
+    let attn_str = if use_attention { " + AttentionPool" } else { "" };
+    println!("=== {} Context Model + {} Hidden{} ===", ngram_name, act_name, attn_str);
+    println!("vocab={} dim={} hidden={} seq={} steps={} seed={} lr={} wd={} ctx={} activation={} attention={}",
+        VOCAB, DIM, hidden, SEQ, steps, seed, base_lr, wd, num_ctx, activation, use_attention);
 
     let tokens = load_data("data/tinyshakespeare.txt");
     println!("Dataset: {} tokens", tokens.len());
@@ -331,15 +520,18 @@ fn main() {
     let val = &tokens[train_end..];
     println!("Split: {} train / {} val", train.len(), val.len());
 
-    let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed);
+    let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed, num_ctx, use_attention);
     let ps = VOCAB * DIM;
-    let mut opts = Optimizers {
-        e: AdamW::new(ps), c1: AdamW::new(ps), c2: AdamW::new(ps),
-        c3: AdamW::new(ps), c4: AdamW::new(ps), c5: AdamW::new(ps), c6: AdamW::new(ps), c7: AdamW::new(ps),
-        p: AdamW::new(hidden * DIM), h: AdamW::new(VOCAB * hidden),
-    };
+    let mut opt_embed = AdamW::new(ps, wd);
+    let mut opt_ctx: Vec<AdamW> = (0..num_ctx).map(|_| AdamW::new(ps, wd)).collect();
+    let mut opt_proj = AdamW::new(hidden * DIM, wd);
+    let mut opt_head = AdamW::new(VOCAB * hidden, wd);
+    let ad = hidden / 4;
+    let mut opt_aq = AdamW::new(if use_attention { ad } else { 1 }, wd);
+    let mut opt_ak = AdamW::new(if use_attention { ad * hidden } else { 1 }, wd);
+    let mut opt_av = AdamW::new(if use_attention { ad * hidden } else { 1 }, wd);
 
-    let (init_loss, init_bpb) = evaluate(&model, val, SEQ, layernorm);
+    let (init_loss, init_bpb) = evaluate(&model, val, SEQ);
     println!("Initial val: loss={:.4} bpb={:.4}", init_loss, init_bpb);
     println!();
     println!("{:>6} | {:>10} | {:>10} | {:>10} | {:>8}", "step", "val_loss", "val_bpb", "best_bpb", "ms");
@@ -353,11 +545,13 @@ fn main() {
     for step in 1..=steps {
         let lr = cosine_lr(step, steps, base_lr, steps / 10);
         let off = (step * 97 + seed as usize) % (dl.saturating_sub(SEQ + 1));
-        model.train_step(&train[off..off + SEQ + 1], lr, &mut opts, layernorm);
+        model.train_step(&train[off..off + SEQ + 1], lr,
+            &mut opt_embed, &mut opt_ctx, &mut opt_proj, &mut opt_head,
+            &mut opt_aq, &mut opt_ak, &mut opt_av);
 
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();
-            let (vl, vb) = evaluate(&model, val, SEQ, layernorm);
+            let (vl, vb) = evaluate(&model, val, SEQ);
             if vb < best_bpb && vb.is_finite() { best_bpb = vb; }
             println!("{:>6} | {:>10.4} | {:>10.4} | {:>10.4} | {:>6}ms", step, vl, vb, best_bpb, ms);
             results.push((step, vl, vb));
@@ -369,24 +563,24 @@ fn main() {
     println!("Time: {:.1}s | BPB: {:.4} → {:.4} | Delta: {:.4}", total.as_secs_f64(), init_bpb, best_bpb, best_bpb - init_bpb);
 
     let _ = fs::create_dir_all(".trinity/results");
-    let exp_name = format!("4gram-{}-hidden{}", activation, if layernorm { "-ln" } else { "" });
-    let model_desc = format!("3-context + embed + {} hidden{} + LM head", 
-        if activation == "gelu" { "GELU" } else { "ReLU" },
-        if layernorm { " + LayerNorm" } else { "" });
-    
+    let attn_tag = if use_attention { "_attn" } else { "" };
+    let exp_name = format!("{}gram-{}-h{}{}", ngram_order, activation, hidden, attn_tag);
+
     let rj = serde_json::json!({
         "experiment": exp_name,
-        "model": model_desc,
-        "seed": seed, "steps": steps, "base_lr": base_lr,
-        "hidden_size": hidden, "activation": activation, "layernorm": layernorm,
+        "model": format!("{}-gram context + {} hidden{} + LM head", ngram_order, act_name, attn_str),
+        "seed": seed, "steps": steps, "base_lr": base_lr, "wd": wd,
+        "hidden_size": hidden, "activation": activation,
+        "num_ctx": num_ctx, "ngram_order": ngram_order,
+        "use_attention": use_attention,
         "train_tokens": train.len(), "val_tokens": val.len(),
         "initial_val_bpb": init_bpb, "final_val_bpb": best_bpb,
         "delta_bpb": best_bpb - init_bpb,
         "duration_seconds": total.as_secs_f64(),
         "results": results.iter().map(|(s, l, b)| serde_json::json!({"step":*s,"loss":*l,"bpb":*b})).collect::<Vec<_>>(),
     });
-    let rp = format!(".trinity/results/4gram_{}_seed{}.json", 
-        if layernorm { "ln" } else { activation.as_str() }, seed);
+    let rp = format!(".trinity/results/{}gram_{}_seed{}.json",
+        ngram_order, activation, seed);
     fs::File::create(&rp).unwrap().write_all(serde_json::to_string_pretty(&rj).unwrap().as_bytes()).unwrap();
     println!("Results: {}", rp);
 
@@ -394,7 +588,7 @@ fn main() {
     let ep = format!(".trinity/experience/trios_{}.trinity", chrono::Utc::now().format("%Y%m%d"));
     let _ = fs::create_dir_all(".trinity/experience");
     let _ = fs::OpenOptions::new().create(true).append(true).open(&ep).unwrap()
-        .write_all(format!("[{}] TASK: 4-gram training | seed={} | steps={} | val_bpb={:.4}->{:.4} | {:.1}s\n",
-            ts, seed, steps, init_bpb, best_bpb, total.as_secs_f64()).as_bytes());
+        .write_all(format!("[{}] TASK: {}-gram{} training | seed={} | steps={} | val_bpb={:.4}->{:.4} | {:.1}s\n",
+            ts, ngram_order, attn_str, seed, steps, init_bpb, best_bpb, total.as_secs_f64()).as_bytes());
     println!("Experience: {}", ep);
 }
