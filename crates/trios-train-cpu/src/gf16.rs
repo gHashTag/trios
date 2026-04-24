@@ -301,7 +301,7 @@ mod tests {
             let gf = GF16::from_f32(v);
             let back = gf.to_f32();
             let rel_error = (back - v).abs() / v.abs().max(1e-10);
-            assert!(rel_error < 0.02, "Roundtrip failed for {}: {} -> {}, error={}", v, back, rel_error);
+            assert!(rel_error < 0.02, "Roundtrip error={}", rel_error);
         }
     }
 

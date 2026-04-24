@@ -13,6 +13,7 @@ use trios_cli::{
         issue::{issue_close, issue_new},
         lang::run as lang_run,
         leaderboard::leaderboard_show,
+        race::{init as race_init, status as race_status},
         report::report,
         roster::roster_update,
         railway::{run as railway_run, RailwayCommand},
@@ -144,6 +145,12 @@ enum Cmd {
         #[arg(long, default_value = "0.04")]
         wd: String,
     },
+
+    /// IGLA RACE commands
+    Race {
+        #[command(subcommand)]
+        sub: RaceSub,
+    },
 }
 
 #[derive(Subcommand)]
@@ -156,6 +163,22 @@ enum IssueSub {
 enum DashSub {
     Sync,
     Refresh,
+}
+
+#[derive(Subcommand)]
+enum RaceSub {
+    /// Initialize IGLA RACE with Optuna study
+    Init {
+        #[arg(long, default_value = "igla-race")]
+        study: String,
+        #[arg(long)]
+        neon_url: Option<String>,
+    },
+    /// Show live leaderboard
+    Status {
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
 }
 
 fn main() -> Result<()> {
@@ -229,6 +252,19 @@ fn main() -> Result<()> {
             let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
             println!("\n📊 Average BPB: {:.3} ({})", avg, results.len());
         }
+        Cmd::Race { sub } => match sub {
+            RaceSub::Init { study, neon_url } => {
+                let mut config = trios_cli::cmd::race::RaceConfig::default();
+                config.study_name = study;
+                if let Some(url) = neon_url {
+                    config.neon_url = url;
+                }
+                race_init(config)?;
+            }
+            RaceSub::Status { limit } => {
+                race_status(Some(limit))?;
+            }
+        },
     }
     Ok(())
 }

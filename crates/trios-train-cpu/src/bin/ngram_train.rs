@@ -37,7 +37,7 @@ fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
     x.iter().map(|v| (v - mean) / std).collect()
 }
 
-struct Optimizers { e: AdamW, c1: AdamW, c2: AdamW, p: AdamW, h: AdamW }
+struct Optimizers { e: AdamW, c1: AdamW, c2: AdamW, c3: AdamW, c4: AdamW, c5: AdamW, c6: AdamW, c7: AdamW, p: AdamW, h: AdamW }
 
 struct AdamW {
     m: Vec<f32>, v: Vec<f32>, step: usize,
@@ -67,6 +67,11 @@ struct NgramModel {
     embed: Vec<f32>,
     ctx1: Vec<f32>,
     ctx2: Vec<f32>,
+    ctx3: Vec<f32>,
+    ctx4: Vec<f32>,
+    ctx5: Vec<f32>,
+    ctx6: Vec<f32>,
+    ctx7: Vec<f32>,
     proj: Vec<f32>,
     lm_head: Vec<f32>,
     #[allow(dead_code)]
@@ -97,6 +102,11 @@ impl NgramModel {
             embed: (0..vocab * dim).map(|_| rng() * lim).collect(),
             ctx1: (0..vocab * dim).map(|_| rng() * lim).collect(),
             ctx2: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx3: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx4: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx5: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx6: (0..vocab * dim).map(|_| rng() * lim).collect(),
+            ctx7: (0..vocab * dim).map(|_| rng() * lim).collect(),
             proj: (0..hidden * dim).map(|_| rng() * lim_h).collect(),
             lm_head: (0..vocab * hidden).map(|_| rng() * lim_o).collect(),
             ln_g: vec![1.0; dim],
@@ -114,13 +124,37 @@ impl NgramModel {
         let t2 = t2.min(v - 1);
         let t1 = t1.min(v - 1);
         let t0 = t0.min(v - 1);
+        // Additional contexts for 8-gram (use padding token if not enough context)
+        let t3 = if t2 > 0 { t2 - 1 } else { 0 }.min(v - 1);
+        let t4 = if t3 > 0 { t3 - 1 } else { 0 }.min(v - 1);
+        let t5 = if t4 > 0 { t4 - 1 } else { 0 }.min(v - 1);
+        let t6 = if t5 > 0 { t5 - 1 } else { 0 }.min(v - 1);
+        let t7 = if t6 > 0 { t6 - 1 } else { 0 }.min(v - 1);
 
         let e0 = &self.embed[t0 * d..(t0 + 1) * d];
         let c1 = &self.ctx1[t1 * d..(t1 + 1) * d];
         let c2 = &self.ctx2[t2 * d..(t2 + 1) * d];
+        // Additional contexts for 8-gram (use padding token if not enough context)
+        let t3 = if t2 > 0 { t2 - 1 } else { 0 }.min(v - 1);
+        let t4 = if t3 > 0 { t3 - 1 } else { 0 }.min(v - 1);
+        let t5 = if t4 > 0 { t4 - 1 } else { 0 }.min(v - 1);
+        let t6 = if t5 > 0 { t5 - 1 } else { 0 }.min(v - 1);
+        let t7 = if t6 > 0 { t6 - 1 } else { 0 }.min(v - 1);
+        let c3 = &self.ctx3[t3 * d..(t3 + 1) * d];
+        let c4 = &self.ctx4[t4 * d..(t4 + 1) * d];
+        let c5 = &self.ctx5[t5 * d..(t5 + 1) * d];
+        let c6 = &self.ctx6[t6 * d..(t6 + 1) * d];
+        let c7 = &self.ctx7[t7 * d..(t7 + 1) * d];
 
         let mut combined = vec![0.0f32; d];
-        for j in 0..d { combined[j] = e0[j] + c1[j] * 0.7 + c2[j] * 0.3; }
+        // Weighted sum: decreasing weights for older tokens (8-gram)
+        // Weights: 1.0, 0.25, 0.20, 0.16, 0.12, 0.10, 0.07, 0.05
+        for j in 0..d {
+            combined[j] = e0[j] + c1[j] * 0.25 + c2[j] * 0.20
+                         + c3[j] * 0.16 + c4[j] * 0.12
+                         + c5[j] * 0.10 + c6[j] * 0.07
+                         + c7[j] * 0.05;
+        }
 
         let ln = layer_norm(&combined, 1e-5);
 
@@ -167,6 +201,11 @@ impl NgramModel {
         let mut g_embed = vec![0.0f32; v * d];
         let mut g_ctx1 = vec![0.0f32; v * d];
         let mut g_ctx2 = vec![0.0f32; v * d];
+        let mut g_ctx3 = vec![0.0f32; v * d];
+        let mut g_ctx4 = vec![0.0f32; v * d];
+        let mut g_ctx5 = vec![0.0f32; v * d];
+        let mut g_ctx6 = vec![0.0f32; v * d];
+        let mut g_ctx7 = vec![0.0f32; v * d];
         let mut g_proj = vec![0.0f32; h * d];
         let mut g_head = vec![0.0f32; v * h];
 
@@ -216,19 +255,31 @@ impl NgramModel {
                 g_embed[t0 * d + j] += d_hidden.iter().enumerate()
                     .map(|(hi, dh)| self.proj[hi * d + j] * if hidden[hi] > 0.0 { 1.0 } else { 0.0 } * dh)
                     .sum::<f32>();
-                g_ctx1[t1 * d + j] += 0.7 * g_embed[t0 * d + j];
-                g_ctx2[t2 * d + j] += 0.3 * g_embed[t0 * d + j];
+                g_ctx1[t1 * d + j] += 0.25 * g_embed[t0 * d + j];
+                g_ctx2[t2 * d + j] += 0.20 * g_embed[t0 * d + j];
+                g_ctx3[t3 * d + j] += 0.16 * g_embed[t0 * d + j];
+                g_ctx4[t4 * d + j] += 0.12 * g_embed[t0 * d + j];
+                g_ctx5[t5 * d + j] += 0.10 * g_embed[t0 * d + j];
+                g_ctx6[t6 * d + j] += 0.07 * g_embed[t0 * d + j];
+                g_ctx7[t7 * d + j] += 0.05 * g_embed[t0 * d + j];
             }
         }
 
         let n = (tokens.len() - 3) as f32;
-        for g in [&mut g_embed, &mut g_ctx1, &mut g_ctx2, &mut g_proj, &mut g_head] {
+        for g in [&mut g_embed, &mut g_ctx1, &mut g_ctx2, &mut g_ctx3,
+                 &mut g_ctx4, &mut g_ctx5, &mut g_ctx6, &mut g_ctx7,
+                 &mut g_proj, &mut g_head] {
             for x in g.iter_mut() { *x /= n; }
         }
 
         opts.e.update(&mut self.embed, &g_embed, lr);
         opts.c1.update(&mut self.ctx1, &g_ctx1, lr);
         opts.c2.update(&mut self.ctx2, &g_ctx2, lr);
+        opts.c3.update(&mut self.ctx3, &g_ctx3, lr);
+        opts.c4.update(&mut self.ctx4, &g_ctx4, lr);
+        opts.c5.update(&mut self.ctx5, &g_ctx5, lr);
+        opts.c6.update(&mut self.ctx6, &g_ctx6, lr);
+        opts.c7.update(&mut self.ctx7, &g_ctx7, lr);
         opts.p.update(&mut self.proj, &g_proj, lr);
         opts.h.update(&mut self.lm_head, &g_head, lr);
     }
@@ -284,6 +335,7 @@ fn main() {
     let ps = VOCAB * DIM;
     let mut opts = Optimizers {
         e: AdamW::new(ps), c1: AdamW::new(ps), c2: AdamW::new(ps),
+        c3: AdamW::new(ps), c4: AdamW::new(ps), c5: AdamW::new(ps), c6: AdamW::new(ps), c7: AdamW::new(ps),
         p: AdamW::new(hidden * DIM), h: AdamW::new(VOCAB * hidden),
     };
 
