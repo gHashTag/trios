@@ -11,11 +11,11 @@ use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
 use tracing::{info, error};
 use rand::seq::SliceRandom;
+use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use uuid::Uuid;
 
 use trios_igla_race::{
-    lessons::TrialConfig,
     asha::AshaRung,
     neon::NeonDb,
 };
@@ -44,6 +44,34 @@ enum RaceCommand {
 
 const TARGET_BPB: f64 = 1.50;
 
+/// Trial configuration for sampling (local to main.rs)
+#[derive(Debug, Clone, serde::Serialize)]
+struct TrialConfig {
+    seed: i64,
+    d_model: usize,
+    context: usize,
+    lr: f64,
+    optimizer: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    use_attention: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hidden: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    n_layers: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    activation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weight_decay: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dropout: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    warmup_steps: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_steps: Option<usize>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
@@ -61,7 +89,7 @@ async fn main() -> Result<()> {
             info!("Target BPB: {}", TARGET_BPB);
 
             // Connect to Neon
-            let db = NeonDb::connect(&neon_url).await?;
+            let _db = NeonDb::connect(&neon_url).await?;
 
             // Shared best BPB across all workers
             let best_bpb = Arc::new(Mutex::new(f64::MAX));
@@ -125,7 +153,7 @@ async fn run_worker(
     best_bpb: Arc<Mutex<f64>>,
 ) -> Result<f64> {
     let db = NeonDb::connect(neon_url).await?;
-    let mut rng = StdRng::from_entropy().unwrap();
+    let mut rng = StdRng::from_entropy();
 
     loop {
         // Sample a new config
@@ -133,9 +161,9 @@ async fn run_worker(
             seed: rng.gen_range(40..1040) + 40,
             d_model: [128, 192, 256, 384].choose(&mut rng).copied().unwrap_or(256),
             context: [4, 5, 6, 7, 8].choose(&mut rng).copied().unwrap_or(6),
-            lr: (rng.gen_range::<f64>(0.0001..0.01) % 0.0099) + 0.0001,
+            lr: (rng.gen_range(0.0001..0.01) % 0.0099) + 0.0001,
             optimizer: if rng.gen_bool(0.5) { "adamw".to_string() } else { "muon".to_string() },
-            wd: Some(rng.gen_range::<f64>(0.0001..0.01) % 0.099 + 0.001),
+            wd: Some(rng.gen_range(0.0001..0.01) % 0.099 + 0.001),
             use_attention: Some(rng.gen_bool(0.5)),
             hidden: Some(384),
             n_layers: Some(1),
@@ -146,47 +174,34 @@ async fn run_worker(
             max_steps: Some(27000),
         };
 
-        let config_value = serde_json::to_value(&config)?;
+        let config_json = serde_json::to_string(&config)?;
 
         // Register trial
-        let trial_id = db.register_trial(
-            Uuid::new_v4(),
-            machine_id,
-            worker_id as i32,
-            &config_value,
-        ).await?;
+        let trial_id = Uuid::new_v4();
+        db.register_trial(trial_id, machine_id, worker_id as i32, &config_json).await?;
 
         let mut prev_bpb = f64::MAX;
         let mut pruned = false;
 
         // Run through all ASHA rungs
         for rung in AshaRung::all() {
-            let step = rung.step();
+            let step = rung.step() as i32;
 
             // Simulate training (would run trainer binary in production)
-            let bpb = simulate_training(&config, step).await?;
+            let bpb = simulate_training(&config, step as u64).await?;
 
             // Update rung
-            db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3", step, step),
-                &[&(step as i32), &bpb, &trial_id],
-            ).await?;
+            db.record_checkpoint(&trial_id, step, bpb).await?;
 
             // Check if should prune
             if bpb > 2.7 && step == 1000 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET status = 'pruned' WHERE trial_id = $1",
-                    &[&trial_id],
-                ).await?;
+                db.mark_pruned(&trial_id, step, bpb).await?;
                 pruned = true;
                 break;
             }
 
             if bpb < 1.5 {
-                db.client().execute(
-                    "UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2",
-                    &[&bpb, &trial_id],
-                ).await?;
+                db.mark_completed(&trial_id, step, bpb).await?;
                 return Ok(bpb);
             }
 
@@ -194,10 +209,7 @@ async fn run_worker(
         }
 
         if !pruned {
-            db.client().execute(
-                "UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2",
-                &[&prev_bpb, &trial_id],
-            ).await?;
+            db.mark_completed(&trial_id, 27000, prev_bpb).await?;
         }
 
         // Update global best
@@ -231,20 +243,24 @@ async fn print_best(client: &tokio_postgres::Client) -> Result<()> {
          ORDER BY final_bpb ASC
          LIMIT 1",
         &[],
-    ).await?;
+    ).await;
 
-    let trial_id: String = row.get(0);
-    let machine_id: String = row.get(1);
-    let config: String = row.get(2);
-    let final_bpb: f64 = row.get(3);
-    let final_step: i32 = row.get(4);
+    if let Ok(row) = row {
+        let trial_id: String = row.get(0);
+        let machine_id: String = row.get(1);
+        let config: String = row.get(2);
+        let final_bpb: f64 = row.get(3);
+        let final_step: i32 = row.get(4);
 
-    println!("BEST TRIAL");
-    println!("  Trial ID: {}", trial_id);
-    println!("  Machine:   {}", machine_id);
-    println!("  BPB:       {:.4}", final_bpb);
-    println!("  Steps:     {}", final_step);
-    println!("  Config:    {}", config);
+        println!("BEST TRIAL");
+        println!("  Trial ID: {}", trial_id);
+        println!("  Machine:   {}", machine_id);
+        println!("  BPB:       {:.4}", final_bpb);
+        println!("  Steps:     {}", final_step);
+        println!("  Config:    {}", config);
+    } else {
+        println!("No trials completed yet");
+    }
 
     Ok(())
 }

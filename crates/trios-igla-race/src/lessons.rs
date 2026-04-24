@@ -6,7 +6,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 /// Lesson type for categorizing patterns
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LessonType {
     Avoid,    // "AVOID: ..." — definite anti-pattern
     Pattern,  // "PATTERN: ..." — observed pattern
@@ -97,7 +97,7 @@ pub fn generate_lesson(
 
     // Analyze model capacity
     if let Some(d_model) = config.d_model {
-        if d_model < 64 && rung.bpb > 2.8 {
+        if d_model <= 64 && rung.bpb > 2.8 {
             lessons.push((
                 format!("PATTERN: d_model={} insufficient capacity, never below {} BPB",
                          d_model, rung.bpb),
@@ -222,9 +222,9 @@ mod tests {
         };
 
         let rung = RungData { step: 1000, bpb: 3.4 };
-        let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
-        assert_eq!(lesson_type, LessonType::Avoid);
+        assert_eq!(_lesson_type, LessonType::Avoid);
         assert!(lesson.contains("lr=0.07"));
         assert!(lesson.contains("too high"));
     }
@@ -288,9 +288,9 @@ mod tests {
         };
 
         let rung = RungData { step: 1000, bpb: 3.5 };
-        let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
         // Should prioritize AVOID lessons
-        assert_eq!(lesson_type, LessonType::Avoid);
+        assert_eq!(_lesson_type, LessonType::Avoid);
     }
 }
