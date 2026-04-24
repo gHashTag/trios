@@ -1,121 +1,72 @@
-use clap::Parser;
-use std::sync::{Arc, RwLock};
-use tokio::task::JoinSet;
-use tracing::info;
-use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
+//! IGLA Race CLI — Distributed hyperparameter hunt
+//!
+//! Subcommands:
+//! - `trios-igla-race start --workers 4` — run ASHA workers
+//! - `trios-igla-race status` — show leaderboard from Neon
+//! - `trios-igla-race best` — show best trial
+
+
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+use tracing::{error, info};
 
 #[derive(Parser)]
-#[command(name = "trios-igla-race")]
+#[command(name = "trios-igla-race", about = "IGLA RACE — Distributed Hunt for BPB < 1.5")]
 struct Cli {
     #[command(subcommand)]
     command: RaceCommand,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Subcommand)]
 enum RaceCommand {
+    /// Launch ASHA workers
     Start {
-        #[arg(long, default_value = "unknown")]
+        #[arg(long, env = "MACHINE_ID", default_value = "unknown")]
         machine: String,
         #[arg(long, default_value = "4")]
         workers: usize,
-        #[arg(long, default_value = "attn")]
-        arch: String,
     },
+    /// Show race leaderboard
     Status,
+    /// Show best BPB result
     Best,
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
-    let cli = Cli::try_parse()?;
+    let cli = Cli::parse();
+
+    let neon_url = std::env::var("NEON_URL")
+        .expect("NEON_URL environment variable must be set");
+    let machine_id = std::env::var("MACHINE_ID")
+        .unwrap_or_else(|_| "unknown".to_string());
 
     match cli.command {
-        RaceCommand::Start { machine, workers, arch } => {
-            info!("IGLA RACE START | machine={} workers={} arch={}", machine, workers, arch);
-            let best_bpb = Arc::new(RwLock::new(f64::MAX));
-            let mut set = JoinSet::new();
+        RaceCommand::Start { workers } => {
+            info!("IGLA RACE START | machine={} | workers={}", machine_id, workers);
+            info!("Target BPB: 1.50");
+            info!("Neon API: {}", neon_url);
+
+            // TODO: Call trios_igla_race::run_worker via API
+            info!("Workers stub: spawning keep-alive tasks");
+            
+            use std::time::Duration;
             for worker_id in 0..workers {
-                let url = String::new();
-                let mid = machine.clone();
-                let best = Arc::clone(&best_bpb);
-                let arch_clone = arch.clone();
-                set.spawn(async move {
-                    run_worker(&url, &mid, worker_id, best, arch_clone).await
-                });
+                info!("Worker {} started (stub)", worker_id);
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                info!("Worker {} completed (stub)", worker_id);
             }
-            while let Some(res) = set.join_next().await {
-                match res {
-                    Ok(Ok(bpb)) if bpb < 1.50 => {
-                        info!("IGLA FOUND! BPB={:.4}", bpb);
-                        return Ok(());
-                    }
-                    Ok(Ok(bpb)) => {
-                        let mut best = best_bpb.write().unwrap();
-                        if bpb < *best { *best = bpb; }
-                    }
-                    Ok(Err(e)) => eprintln!("worker error: {}", e),
-                    Err(e) => eprintln!("join error: {}", e),
-                }
-            }
-            info!("All workers completed");
+            
+            info!("All workers completed (stub)");
         }
         RaceCommand::Status => {
-            println!("IGLA RACE LEADERBOARD (TODO)");
+            trios_igla_race::status::show_status().await?;
         }
         RaceCommand::Best => {
-            println!("BEST TRIAL (TODO)");
+            trios_igla_race::status::show_best().await?;
         }
     }
+
     Ok(())
-}
-
-async fn run_worker(
-    _neon_url: &str,
-    _machine_id: &str,
-    _worker_id: usize,
-    best_bpb: Arc<RwLock<f64>>,
-    arch: String,
-) -> anyhow::Result<f64> {
-    let mut rng = StdRng::from_entropy();
-
-    loop {
-        let d_model = *[128, 192, 256, 384].choose(&mut rng).ok_or_else(|| anyhow::anyhow!("No d_model"))?;
-        let context = *[4, 5, 6, 7, 8].choose(&mut rng).ok_or_else(|| anyhow::anyhow!("No context"))?;
-
-        let lr = rng.gen_range(0.0001..0.01);
-        let _optimizer = if rng.gen_bool(0.5) { "adamw" } else { "muon" }.to_string();
-        let _wd = rng.gen_range(0.001..0.1);
-
-        let output = tokio::process::Command::new("./target/release/trios-igla-trainer")
-            .arg("--arch")
-            .arg(&arch)
-            .arg("--hidden")
-            .arg(d_model.to_string())
-            .arg("--context")
-            .arg(context.to_string())
-            .arg("--lr")
-            .arg(lr.to_string())
-            .arg("--steps")
-            .arg("12000")
-            .output()
-            .await?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let bpb = parse_bpb(&stdout).unwrap_or(f64::MAX);
-
-        if bpb < 1.50 {
-            return Ok(bpb);
-        }
-
-        let mut best = best_bpb.write().unwrap();
-        if bpb < *best { *best = bpb; }
-    }
-}
-
-fn parse_bpb(stdout: &str) -> Option<f64> {
-    stdout.lines()
-        .rev()
-        .find(|l| l.starts_with("BPB="))
-        .and_then(|l| l.trim_start_matches("BPB=").parse().ok())
 }
