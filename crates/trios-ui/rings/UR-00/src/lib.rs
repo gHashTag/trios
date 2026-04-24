@@ -1,16 +1,16 @@
 //! UR-00 — WASM Entry Point for trios-ui
-//!
-//! Dioxus sidebar app that runs inside Chrome Extension sidepanel.
-//! Connects to trios-server via WebSocket and provides chat, agents, and tools UI.
 
 use dioxus::prelude::*;
 use trios_ui_ring_ur07 as api;
 use trios_ui_ring_ur08 as theme;
 
-/// Build version — auto-incremented by xtask bump-version
 pub const BUILD_VERSION: &str = env!("TRIOS_BUILD_VERSION", "dev");
 
-/// WASM entry point — called when the module loads in the browser
+/// Provider config injected at build time from .env
+pub const ANTHROPIC_KEY_HINT: &str = env!("TRIOS_ANTHROPIC_KEY_HINT", "");
+pub const OPENAI_KEY_HINT: &str = env!("TRIOS_OPENAI_KEY_HINT", "");
+pub const VENICE_KEY_HINT: &str = env!("TRIOS_VENICE_KEY_HINT", "");
+
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
     console_error_panic_hook::set_once();
@@ -19,14 +19,12 @@ pub fn run() {
     launch(app);
 }
 
-/// Message type for chat display
 #[derive(Clone, PartialEq, Debug)]
 struct ChatMsg {
     role: String,
     content: String,
 }
 
-/// Inject theme CSS into the document head
 fn inject_theme() {
     if let Some(window) = web_sys::window() {
         if let Some(doc) = window.document() {
@@ -34,23 +32,26 @@ fn inject_theme() {
                 if let Ok(style) = doc.create_element("style") {
                     style.set_text_content(Some(theme::STYLESHEET));
                     let _ = head.append_child(&style);
-                    log::info!("[trios-ui] Theme CSS injected");
                 }
             }
         }
     }
 }
 
-/// Root App component
 fn app() -> Element {
     let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new);
     let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
     let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
-    let mut tools: Signal<String> = use_signal(|| "Loading tools...".to_string());
+    let mut tools: Signal<Vec<String>> = use_signal(Vec::new);
     let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
     let connected: Signal<bool> = use_signal(|| false);
     let mut input_text: Signal<String> = use_signal(String::new);
     let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
+
+    // Settings state — pre-filled from .env hints
+    let mut anthropic_key: Signal<String> = use_signal(|| ANTHROPIC_KEY_HINT.to_string());
+    let mut openai_key: Signal<String> = use_signal(|| OPENAI_KEY_HINT.to_string());
+    let mut venice_key: Signal<String> = use_signal(|| VENICE_KEY_HINT.to_string());
 
     use_hook(inject_theme);
 
@@ -61,103 +62,60 @@ fn app() -> Element {
 
     use_hook(move || {
         let mut client = api::ApiClient::new();
-
         let result = client.connect_with_callback(
             move |text| {
-                let preview = if text.len() > 120 {
-                    format!("{}…", &text[..120])
-                } else {
-                    text.clone()
-                };
-
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("<no method>");
-                    let has_result = val.get("result").is_some();
-                    let has_error = val.get("error").is_some();
-                    log::info!(
-                        "[trios-ui] WS recv {} bytes | method={} result={} error={} | {}",
-                        text.len(), method, has_result, has_error, preview
-                    );
-
+                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
                     match method {
                         "agents/chat" | "chat" => {
                             if let Some(r) = val.get("result") {
-                                // Check for error inside result
-                                if let Some(err) = r.get("error").and_then(|v| v.as_str()) {
-                                    log::warn!("[trios-ui] CHAT error: {}", err);
-                                    messages.write().push(ChatMsg {
-                                        role: "error".to_string(),
-                                        content: format!("⚠ {}", err),
-                                    });
+                                let (role, content) = if let Some(err) = r.get("error").and_then(|e| e.as_str()) {
+                                    ("error".to_string(), format!("⚠ {}", err))
                                 } else {
-                                    let response = r
-                                        .get("response")
-                                        .and_then(|v| v.as_str())
+                                    let resp = r.get("response").and_then(|v| v.as_str())
                                         .or_else(|| r.get("content").and_then(|v| v.as_str()))
                                         .unwrap_or("{no content}");
-                                    log::info!("[trios-ui] CHAT response: {} chars", response.len());
-                                    messages.write().push(ChatMsg {
-                                        role: "agent".to_string(),
-                                        content: response.to_string(),
-                                    });
-                                }
-                            } else if has_error {
-                                log::warn!("[trios-ui] CHAT error: {}", val.get("error").unwrap());
+                                    ("agent".to_string(), resp.to_string())
+                                };
+                                messages.write().push(ChatMsg { role, content });
                             }
                         }
                         "agents/list" => {
                             if let Some(r) = val.get("result") {
-                                let pretty = serde_json::to_string_pretty(r).unwrap_or_default();
                                 let count = r.as_array().map(|a| a.len()).unwrap_or(0);
-                                log::info!("[trios-ui] AGENTS list: {} agents", count);
                                 *agents.write() = if count == 0 {
                                     "No agents registered".to_string()
                                 } else {
-                                    pretty
+                                    serde_json::to_string_pretty(r).unwrap_or_default()
                                 };
                             }
                         }
                         "tools/list" => {
                             if let Some(r) = val.get("result") {
-                                let count = r.as_array().map(|a| a.len()).unwrap_or(0);
-                                log::info!("[trios-ui] TOOLS list: {} tools", count);
-                                if count == 0 {
-                                    *tools.write() = "No tools available".to_string();
-                                } else if let Some(arr) = r.as_array() {
+                                if let Some(arr) = r.as_array() {
                                     let names: Vec<String> = arr.iter()
-                                        .filter_map(|t| {
-                                            t.get("name").and_then(|n| n.as_str()).map(|s| s.to_string())
-                                        })
+                                        .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
                                         .collect();
-                                    *tools.write() = format!("{} tools:\n{}", count, names.join("\n"));
+                                    *tools.write() = names;
                                 }
                             }
                         }
-                        other => {
-                            log::warn!("[trios-ui] WS unhandled method='{}' payload={}", other, preview);
-                        }
+                        _ => {}
                     }
-                } else {
-                    log::warn!("[trios-ui] WS recv non-JSON {} bytes: {}", text.len(), preview);
                 }
             },
             move || {
-                log::info!("[trios-ui] WS on_open fired — sending agents/list + tools/list");
                 status_open.set("Connected".to_string());
                 connected_open.set(true);
             },
             move || {
-                log::warn!("[trios-ui] WS on_error/close fired");
                 connected_err.set(false);
                 status_err.set("Disconnected".to_string());
             },
         );
-
         if result.is_ok() {
-            status.set("Connecting...".to_string());
             ws_client.set(Some(client));
         } else {
-            log::error!("[trios-ui] connect_with_callback failed");
             status.set("Connection failed".to_string());
         }
     });
@@ -166,42 +124,39 @@ fn app() -> Element {
     let is_connected = *connected.read();
     let status_text = status.read().clone();
     let input_val = input_text.read().clone();
+    let tools_list = tools.read().clone();
+    let tool_count = tools_list.len();
 
     let status_cls = if is_connected { "status connected" } else { "status error" };
-    let chat_cls = if active == "chat" { "tab-content active" } else { "tab-content" };
-    let agents_cls = if active == "agents" { "tab-content active" } else { "tab-content" };
-    let tools_cls = if active == "tools" { "tab-content active" } else { "tab-content" };
-    let chat_tab_cls = if active == "chat" { "tab active" } else { "tab" };
-    let agents_tab_cls = if active == "agents" { "tab active" } else { "tab" };
-    let tools_tab_cls = if active == "tools" { "tab active" } else { "tab" };
+
+    macro_rules! tab_cls { ($name:expr) => { if active == $name { "tab active" } else { "tab" } }; }
+    macro_rules! content_cls { ($name:expr) => { if active == $name { "tab-content active" } else { "tab-content" } }; }
+
+    let anthropic_val = anthropic_key.read().clone();
+    let openai_val = openai_key.read().clone();
+    let venice_val = venice_key.read().clone();
+
+    let has_anthropic = !anthropic_val.is_empty() && anthropic_val != "";
+    let has_openai = !openai_val.is_empty() && openai_val != "";
+    let has_venice = !venice_val.is_empty() && venice_val != "";
 
     rsx! {
         div { id: "main",
             header { class: "header",
-                span { style: "font-size:24px;color:#D4AF37;font-weight:bold;", "Φ" }
+                span { class: "phi-icon", "\u{03A6}" }
                 h1 { "Trinity" }
                 span { class: "{status_cls}", "{status_text}" }
             }
 
             nav { class: "tabs",
-                button {
-                    class: "{chat_tab_cls}",
-                    onclick: move |_| active_tab.set("chat".to_string()),
-                    "Chat"
-                }
-                button {
-                    class: "{agents_tab_cls}",
-                    onclick: move |_| active_tab.set("agents".to_string()),
-                    "Agents"
-                }
-                button {
-                    class: "{tools_tab_cls}",
-                    onclick: move |_| active_tab.set("tools".to_string()),
-                    "Tools"
-                }
+                button { class: tab_cls!("chat"),    onclick: move |_| active_tab.set("chat".to_string()),     "Chat" }
+                button { class: tab_cls!("agents"),  onclick: move |_| active_tab.set("agents".to_string()),   "Agents" }
+                button { class: tab_cls!("tools"),   onclick: move |_| active_tab.set("tools".to_string()),    "Tools ({tool_count})" }
+                button { class: tab_cls!("settings"),onclick: move |_| active_tab.set("settings".to_string()), "\u{2699}" }
             }
 
-            section { class: "{chat_cls}", id: "tab-chat",
+            // CHAT
+            section { class: content_cls!("chat"), id: "tab-chat",
                 div { id: "messages",
                     for msg in messages.read().iter() {
                         div { class: "message {msg.role}", "{msg.content}" }
@@ -217,19 +172,11 @@ fn app() -> Element {
                         if ev.key() == Key::Enter {
                             let text = input_text.read().trim().to_string();
                             if !text.is_empty() {
-                                messages.write().push(ChatMsg {
-                                    role: "you".to_string(),
-                                    content: text.clone(),
-                                });
+                                messages.write().push(ChatMsg { role: "you".to_string(), content: text.clone() });
                                 input_text.set(String::new());
                                 let guard = ws_client.read();
                                 if let Some(client) = guard.as_ref() {
-                                    log::info!("[trios-ui] CHAT send: {}", &text);
-                                    if let Err(e) = client.send_chat(&text) {
-                                        log::error!("[trios-ui] send_chat failed: {:?}", e);
-                                    }
-                                } else {
-                                    log::warn!("[trios-ui] No WS client — message dropped");
+                                    let _ = client.send_chat(&text);
                                 }
                             }
                         }
@@ -237,13 +184,116 @@ fn app() -> Element {
                 }
             }
 
-            section { class: "{agents_cls}", id: "tab-agents",
+            // AGENTS
+            section { class: content_cls!("agents"), id: "tab-agents",
                 div { id: "agent-list", "{agents}" }
             }
 
-            section { class: "{tools_cls}", id: "tab-tools",
-                div { id: "tool-list", "{tools}" }
+            // TOOLS
+            section { class: content_cls!("tools"), id: "tab-tools",
+                div { id: "tool-list",
+                    if tools_list.is_empty() {
+                        div { "Loading tools..." }
+                    } else {
+                        for tool in tools_list.iter() {
+                            div { class: "tool-item", "{tool}" }
+                        }
+                    }
+                }
+            }
+
+            // SETTINGS
+            section { class: content_cls!("settings"), id: "tab-settings",
+                div { class: "settings-section",
+                    div { class: "settings-title", "AI Providers" }
+
+                    // Anthropic
+                    div { class: "provider-card",
+                        div { class: "provider-header",
+                            span { class: "provider-name", "Anthropic" }
+                            span { class: if has_anthropic { "provider-badge active" } else { "provider-badge inactive" },
+                                if has_anthropic { "active" } else { "no key" }
+                            }
+                        }
+                        div { class: "token-row",
+                            input {
+                                class: "token-input",
+                                r#type: "password",
+                                value: "{anthropic_val}",
+                                placeholder: "sk-ant-...",
+                                oninput: move |ev| anthropic_key.set(ev.value()),
+                            }
+                        }
+                        div { class: "env-hint", "auto-loaded from "
+                            span { "ANTHROPIC_API_KEY" }
+                            " in .env"
+                        }
+                    }
+
+                    // OpenAI
+                    div { class: "provider-card",
+                        div { class: "provider-header",
+                            span { class: "provider-name", "OpenAI" }
+                            span { class: if has_openai { "provider-badge active" } else { "provider-badge inactive" },
+                                if has_openai { "active" } else { "no key" }
+                            }
+                        }
+                        div { class: "token-row",
+                            input {
+                                class: "token-input",
+                                r#type: "password",
+                                value: "{openai_val}",
+                                placeholder: "sk-...",
+                                oninput: move |ev| openai_key.set(ev.value()),
+                            }
+                        }
+                        div { class: "env-hint", "auto-loaded from "
+                            span { "OPENAI_API_KEY" }
+                            " in .env"
+                        }
+                    }
+
+                    // Venice.ai
+                    div { class: "provider-card",
+                        div { class: "provider-header",
+                            span { class: "provider-name", "Venice.ai" }
+                            span { class: if has_venice { "provider-badge active" } else { "provider-badge inactive" },
+                                if has_venice { "active" } else { "no key" }
+                            }
+                        }
+                        div { class: "token-row",
+                            input {
+                                class: "token-input",
+                                r#type: "password",
+                                value: "{venice_val}",
+                                placeholder: "venice-...",
+                                oninput: move |ev| venice_key.set(ev.value()),
+                            }
+                        }
+                        div { class: "env-hint", "auto-loaded from "
+                            span { "VENICE_API_KEY" }
+                            " in .env"
+                        }
+                    }
+                }
+
+                div { class: "settings-section",
+                    div { class: "settings-title", "Server" }
+                    div { class: "provider-card",
+                        div { class: "provider-header",
+                            span { class: "provider-name", "trios-server" }
+                            span { class: if is_connected { "provider-badge active" } else { "provider-badge inactive" },
+                                if is_connected { "ws:9005 \u{2713}" } else { "offline" }
+                            }
+                        }
+                        div { class: "env-hint",
+                            span { "v{BUILD_VERSION}" }
+                            " — ws://localhost:9005/ws"
+                        }
+                    }
+                }
             }
         }
+        div { id: "ver", "v{BUILD_VERSION}" }
     }
 }
