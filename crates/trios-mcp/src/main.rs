@@ -3,7 +3,6 @@
 //! Run with: `cargo run -p trios-mcp`
 
 use std::env;
-use tracing_subscriber::fmt;
 
 use trios_mcp::{ConnectionConfig, McpClient};
 

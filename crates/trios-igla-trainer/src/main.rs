@@ -1,9 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
-use trios_train_cpu::jepa::{JepaConfig, MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, compute_jepa_loss, JepaLossConfig};
+use trios_train_cpu::jepa::{JepaConfig, MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, JepaLossConfig};
 use trios_train_cpu::objective::{ObjectiveConfig, ComponentLosses, compute_combined_loss};
-use trios_igla_race::asha::{AshaConfig, AshaSchedule};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
@@ -69,16 +68,6 @@ fn main() -> Result<()> {
         repo: args.repo,
         branch: args.branch,
     };
-
-    // ── ASHA schedule (arch-aware) ─────────────────────────────────────────
-    let asha_cfg = AshaConfig::for_arch(&args.arch);
-    let asha_schedule = asha_cfg.schedule();
-    tracing::info!(
-        "ASHA schedule for arch='{}': first_rung={} rungs={:?}",
-        args.arch,
-        asha_schedule.first_rung_steps(),
-        asha_schedule.rungs().iter().map(|r| r.step()).collect::<Vec<_>>()
-    );
 
     // ── T-JEPA setup (only active when --arch jepa) ────────────────────────
     let jepa_active = args.arch == "jepa";
@@ -166,7 +155,7 @@ fn main() -> Result<()> {
 
             // 6. EMA update
             for x in online_params.iter_mut() {
-                *x = (*x * (1.0 - lr as f32)).max(0.01);
+                *x = (*x * (1.0 - lr)).max(0.01);
             }
             ema.update(&mut target_params, &online_params);
 

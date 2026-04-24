@@ -6,7 +6,6 @@
 use anyhow::Result;
 use tracing::info;
 use uuid::Uuid;
-use tokio_postgres::types::ToSql;
 
 /// Neon database connection (stub)
 pub struct NeonDb {
@@ -46,14 +45,68 @@ impl NeonDb {
     }
 
     /// Execute query (stub - returns 0 rows affected)
-    pub fn query(&self, _query: &str, _params: &[&(dyn ToSql + Sync)]) -> Result<u64> {
+    pub fn query(&self, _query: &str, _params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> Result<u64> {
         info!("Query executed (STUB): {}", _query.trim());
         Ok(0)
     }
 
     /// Query one (stub - returns None)
-    pub fn query_one(&self, _query: &str, _params: &[&(dyn ToSql + Sync)]) -> Result<Option<tokio_postgres::Row>> {
+    pub fn query_one(&self, _query: &str, _params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> Result<Option<tokio_postgres::Row>> {
         info!("Query one executed (STUB): {}", _query.trim());
         Ok(None)
+    }
+
+    /// Mark trial as pruned (stub)
+    pub async fn mark_pruned(&self, _trial_id: &Uuid, _rung: i32, _bpb: f64) -> Result<()> {
+        info!("Trial pruned (STUB): rung={}, BPB={}", _rung, _bpb);
+        Ok(())
+    }
+
+    /// Store lesson in experience (stub)
+    pub async fn store_lesson(
+        &self,
+        _trial_id: &Uuid,
+        _outcome: &str,
+        _pruned_at_rung: i32,
+        _bpb_at_pruned: f64,
+        _lesson: &str,
+        _lesson_type: &str,
+    ) -> Result<()> {
+        info!("Lesson stored (STUB)");
+        Ok(())
+    }
+
+    /// Mark trial as completed (stub)
+    pub async fn mark_completed(&self, _trial_id: &Uuid, _final_step: i32, _final_bpb: f64) -> Result<()> {
+        info!("Trial completed (STUB): BPB={}", _final_bpb);
+        Ok(())
+    }
+
+    /// Check if config is already running (stub)
+    pub async fn is_config_running(&self, _machine_id: &str, _config_json: &str) -> Result<bool> {
+        Ok(false)
+    }
+
+    /// Get top lessons from experience (stub)
+    pub async fn get_top_lessons(&self, _limit: i32) -> Result<Vec<LessonEntry>> {
+        Ok(vec![])
+    }
+}
+
+/// Lesson entry (stub)
+#[derive(Debug, Clone)]
+pub struct LessonEntry {
+    pub lesson: String,
+    pub lesson_type: String,
+    pub pattern_count: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_neon_db_creation() {
+        // Stub - no real tests
     }
 }
