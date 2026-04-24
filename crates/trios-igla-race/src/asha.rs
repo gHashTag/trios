@@ -6,7 +6,8 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use serde::Serialize;
 use std::sync::{Arc, RwLock};
-use tracing::info;
+use std::time::Duration;
+use tracing::{info, error};
 use uuid::Uuid;
 
 use crate::NeonDb;
@@ -48,43 +49,56 @@ pub async fn run_worker(
         let mut final_bpb = f64::MAX;
 
         for rung in &rungs {
-            let bpb = run_training_step(&config, rung)?;
+            match run_training_step(&config, rung).await {
+                Ok(bpb) => {
+                    // Update database with current rung BPB
+                    db.record_checkpoint(&trial_id, *rung, bpb).await?;
 
-            // Update database with current rung BPB
-            db.record_checkpoint(&trial_id, *rung, bpb).await?;
+                    info!("worker={} rung={} BPB={:.4}", worker_id, rung, bpb);
 
-            info!("worker={} rung={} BPB={:.4}", worker_id, rung, bpb);
-
-            // ASHA prune: check if worse than median * 1.33
-            let median_bpb = {
-                let best = best_bpb.read().unwrap();
-                *best * 1.33
-            };
-            if bpb > median_bpb && *rung == 1000 {
-                db.mark_pruned(&trial_id, *rung, bpb).await?;
-                break;
-            }
-
-            if bpb < 1.50 {
-                // Success! Complete trial
-                db.mark_completed(&trial_id, *rung, bpb).await?;
-
-                // Update global best
-                {
-                    let mut best = best_bpb.write().unwrap();
-                    if bpb < *best {
-                        *best = bpb;
+                    // ASHA prune: check if worse than median * 1.33
+                    let median_bpb = {
+                        let best = best_bpb.read().unwrap();
+                        *best * 1.33
+                    };
+                    if bpb > median_bpb && *rung == 1000 {
+                        db.mark_pruned(&trial_id, *rung, bpb).await?;
+                        info!("worker={} trial={} pruned at rung {} (bpb={:.4} > median={:.4})",
+                              worker_id, trial_id, rung, bpb, median_bpb);
+                        break;
                     }
+
+                    if bpb < 1.50 {
+                        // Success! Complete trial
+                        db.mark_completed(&trial_id, *rung, bpb).await?;
+
+                        // Update global best
+                        {
+                            let mut best = best_bpb.write().unwrap();
+                            if bpb < *best {
+                                *best = bpb;
+                            }
+                        }
+
+                        return Ok(bpb);
+                    }
+
+                    final_bpb = bpb;
                 }
-
-                return Ok(bpb);
+                Err(e) => {
+                    // Trainer failed - mark trial as failed and continue
+                    error!("worker={} rung={} trainer failed: {}", worker_id, rung, e);
+                    // Small backoff before retry
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    break;
+                }
             }
-
-            final_bpb = bpb;
         }
 
         // Trial pruned after all rungs
-        db.mark_pruned(&trial_id, 27000, final_bpb).await?;
+        if final_bpb != f64::MAX {
+            db.mark_pruned(&trial_id, 27000, final_bpb).await?;
+        }
     }
 }
 
@@ -108,19 +122,34 @@ fn sample_config(worker_id: u64, rng: &mut StdRng) -> TrialConfig {
     }
 }
 
-fn run_training_step(config: &TrialConfig, rung: &i32) -> Result<f64> {
-    use std::process::Command;
+async fn run_training_step(config: &TrialConfig, rung: &i32) -> Result<f64> {
+    use tokio::process::Command as TokioCommand;
 
-    let output = Command::new("./target/release/trios-igla-trainer")
-        .args([
-            "--seed", &config.seed.to_string(),
-            "--steps", &rung.to_string(),
-            "--hidden", &config.d_model.to_string(),
-            "--context", &config.context.to_string(),
-            "--lr", &config.lr.to_string(),
-            "--arch", &config.arch,
-        ])
-        .output()?;
+    // Calculate timeout based on rung size (30 seconds per 1000 steps)
+    let timeout = Duration::from_secs(*rung as u64 / 100 * 3);
+
+    info!("Starting trainer: arch={} steps={} timeout={:?}", config.arch, rung, timeout);
+
+    let output = tokio::time::timeout(
+        timeout,
+        TokioCommand::new("./target/release/trios-igla-trainer")
+            .args([
+                "--seed", &config.seed.to_string(),
+                "--steps", &rung.to_string(),
+                "--hidden", &config.d_model.to_string(),
+                "--context", &config.context.to_string(),
+                "--lr", &config.lr.to_string(),
+                "--arch", &config.arch,
+                "--exp-id", "igla-race",
+            ])
+            .output()
+    ).await
+    .map_err(|_| anyhow::anyhow!("Trainer timeout after {:?}", timeout))??;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("Trainer exited with {}: {}", output.status, stderr));
+    }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 

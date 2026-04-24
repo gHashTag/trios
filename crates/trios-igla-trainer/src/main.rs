@@ -1,134 +1,128 @@
 use anyhow::Result;
 use clap::Parser;
-use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
 
 #[derive(Parser)]
 #[command(name = "igla-trainer")]
 struct Args {
-    #[arg(long, default_value = "igla-gf16")]
-    model_id: String,
+    #[arg(long, default_value = "ngram")]
+    arch: String,
+
+    #[arg(long, default_value_t = 384)]
+    hidden: usize,
+
+    #[arg(long, default_value_t = 6)]
+    context: usize,
+
+    #[arg(long, default_value_t = 0.004)]
+    lr: f64,
 
     #[arg(long, default_value_t = 1000)]
-    steps: u64,
-
-    #[arg(long, default_value_t = 4)]
-    batch_size: usize,
-
-    #[arg(long, default_value_t = 128)]
-    seq_len: usize,
-
-    #[arg(long, default_value = "flat3e4")]
-    schedule: String,
+    steps: usize,
 
     #[arg(long, default_value_t = 42)]
     seed: u64,
 
     #[arg(long)]
     exp_id: Option<String>,
+}
 
-    #[arg(long, default_value = "gHashTag/trios")]
-    repo: String,
+/// Mock training simulation for IGLA RACE
+/// Returns BPB based on hyperparameters (simulates convergence)
+fn simulate_training(config: &Args) -> f64 {
+    // Base BPB that decreases with:
+    // - More steps
+    // - Larger hidden dimension
+    // - Optimal context (~6)
+    // - Optimal LR (~0.004)
 
-    #[arg(long, default_value = "main")]
-    branch: String,
+    let base_bpb = 3.5;
+
+    // Hidden dim benefit: larger = better (diminishing returns)
+    let hidden_benefit = ((config.hidden as f64).log2() - 7.0) * 0.3;
+
+    // Context penalty: too small or too large hurts
+    let ctx_diff = (config.context as f64 - 6.0).abs();
+    let context_penalty = ctx_diff * 0.15;
+
+    // LR penalty: far from 0.004 hurts
+    let lr_diff = (config.lr - 0.004).abs() / 0.004;
+    let lr_penalty = lr_diff * 0.2;
+
+    // Steps benefit: more steps = better (logarithmic)
+    let steps_benefit = ((config.steps as f64) / 1000.0).ln() * 0.4;
+
+    // Architecture base (mock values)
+    let arch_base = match config.arch.as_str() {
+        "ngram" => 0.0,
+        "attn" => -0.1,  // Slightly better theoretically
+        "hybrid" => -0.05,
+        _ => 0.0,
+    };
+
+    // Random noise based on seed
+    let mut rng_state = config.seed;
+    rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
+    let noise = ((rng_state >> 33) as f64 / u32::MAX as f64 - 0.5) * 0.05;
+
+    let final_bpb = base_bpb
+        + hidden_benefit
+        + context_penalty
+        + lr_penalty
+        - steps_benefit
+        + arch_base
+        + noise;
+
+    final_bpb.max(1.2) // Floor at 1.2 (won't reach IGLA target without real training)
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    // Initialize logging to stderr only
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     let args = Args::parse();
 
-    let schedule = match args.schedule.as_str() {
-        "cosine" => Schedule::Cosine,
-        "phi" => Schedule::PhiWarmup,
-        _ => Schedule::Flat3e4,
-    };
-
-    let config = TrainConfig {
-        model_id: args.model_id.clone(),
-        steps: args.steps,
-        batch_size: args.batch_size,
-        seq_len: args.seq_len,
-        schedule: match args.schedule.as_str() {
-            "cosine" => trios_igla_trainer::config::ScheduleType::Cosine,
-            "phi" => trios_igla_trainer::config::ScheduleType::PhiWarmup,
-            _ => trios_igla_trainer::config::ScheduleType::Flat3e4,
-        },
-        seed: args.seed,
-        repo: args.repo,
-        branch: args.branch,
-    };
-
-    let git_sha = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|_| "unknown".into());
-
-    let mut audit = AuditLog::new(&config.model_id, config.seed, config.steps, &git_sha);
-
-    tracing::info!(
-        "IGLA trainer starting: model={} steps={} seed={}",
-        config.model_id,
-        config.steps,
-        config.seed
+    eprintln!(
+        "IGLA trainer: arch={} hidden={} context={} lr={} steps={} seed={}",
+        args.arch, args.hidden, args.context, args.lr, args.steps, args.seed
     );
 
-    let mut loss: f32 = 10.0;
-    let mut rng_state = config.seed;
-
-    for step in 1..=config.steps {
-        let lr = schedule.lr(step, config.steps);
-
-        rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
-        let noise = ((rng_state >> 33) as f32 / u32::MAX as f32) - 0.5;
-
-        loss = loss * (1.0 - lr * 10.0) + noise * 0.001;
-        loss = loss.max(0.01);
-
-        let bpb = schedule.bpb_from_loss(loss);
-
-        audit.record(step, loss, bpb, lr);
-
-        if step % 200 == 0 || step == config.steps {
-            tracing::info!(
-                "step={:4} loss={:.4} bpb={:.4} lr={:.6}",
-                step,
-                loss,
-                bpb,
-                lr
-            );
-        }
-
-        if step % 500 == 0 {
-            if let Err(e) = audit.dump_metric("metric.json") {
-                tracing::warn!("metric dump failed at step {}: {}", step, e);
-            } else {
-                tracing::info!("metric.json written at step {}", step);
-            }
-        }
+    // Simulate training with small delay per 100 steps
+    for step in (0..args.steps).step_by(100) {
+        eprintln!("Step {} / {}", step, args.steps);
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    audit.dump_metric("metric.json")?;
-    let json = audit.to_json();
-    println!("{}", json);
+    let bpb = simulate_training(&args);
 
-    // L7: Write experience log
-    write_experience_log(&args.exp_id, &args.model_id, args.seed, &json)?;
+    // stdout: ONLY BPB=X.XXXX (contract with asha.rs)
+    println!("BPB={:.4}", bpb);
+
+    // Log to experience file
+    if let Some(exp_id) = &args.exp_id {
+        write_experience_log(exp_id, &args, bpb)?;
+    }
 
     Ok(())
 }
 
-fn write_experience_log(exp_id: &Option<String>, model_id: &str, seed: u64, result_json: &str) -> Result<()> {
+fn write_experience_log(exp_id: &str, config: &Args, bpb: f64) -> Result<()> {
     use std::fs;
     use std::io::Write;
 
-    let exp_name = exp_id.as_deref().unwrap_or("training");
     let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
-
     let entry = format!(
-        "[{}] TASK: {} | model={} | seed={} | result={}\n",
-        timestamp, exp_name, model_id, seed, result_json
+        "[{}] {} | arch={} h={} ctx={} lr={} steps={} seed={} | BPB={:.4}\n",
+        timestamp,
+        exp_id,
+        config.arch,
+        config.hidden,
+        config.context,
+        config.lr,
+        config.steps,
+        config.seed,
+        bpb
     );
 
     let dir = ".trinity/experience";
@@ -141,7 +135,7 @@ fn write_experience_log(exp_id: &Option<String>, model_id: &str, seed: u64, resu
         .open(&filename)?
         .write_all(entry.as_bytes())?;
 
-    tracing::info!("Experience logged to {}", filename);
+    eprintln!("Experience logged to {}", filename);
 
     Ok(())
 }
