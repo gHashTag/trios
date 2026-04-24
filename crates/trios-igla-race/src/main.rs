@@ -1,4 +1,4 @@
-//! IGLA Race CLI — Distributed hyperparameter hunt
+//! IGLA Race CLI
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -15,7 +15,6 @@ use trios_igla_race::{
     neon::NeonDb,
 };
 
-/// IGLA Race CLI
 #[derive(Parser)]
 #[command(name = "trios-igla-race", about = "IGLA RACE — Distributed Hunt for BPB < 1.5")]
 struct Cli {
@@ -25,14 +24,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum RaceCommand {
-    /// Start ASHA workers
-    Start {
-        #[arg(long, default_value = "4")]
-        workers: usize,
-    },
-    /// Show leaderboard
+    Start { #[arg(long, default_value = "4")] workers: usize },
     Status,
-    /// Show best trial
     Best,
 }
 
@@ -42,17 +35,12 @@ const TARGET_BPB: f64 = 1.50;
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
     let cli = Cli::parse();
-
-    let neon_url = std::env::var("NEON_URL")
-        .expect("NEON_URL environment variable must be set");
-
-    let machine_id = std::env::var("MACHINE_ID")
-        .unwrap_or_else(|_| "unknown".to_string());
+    let neon_url = std::env::var("NEON_URL").expect("NEON_URL must be set");
+    let machine_id = std::env::var("MACHINE_ID").unwrap_or_else(|_| "unknown".to_string());
 
     match cli.command {
         RaceCommand::Start { workers } => {
             info!("IGLA RACE START | machine={} | workers={}", machine_id, workers);
-
             let best_bpb = Arc::new(Mutex::new(f64::MAX));
             let mut set = JoinSet::new();
 
@@ -60,9 +48,7 @@ async fn main() -> Result<()> {
                 let url = neon_url.clone();
                 let mid = machine_id.clone();
                 let best = Arc::clone(&best_bpb);
-                set.spawn(async move {
-                    run_worker(&url, &mid, worker_id as u64, best).await
-                });
+                set.spawn(async move { run_worker(&url, &mid, worker_id as u64, best).await });
             }
 
             while let Some(res) = set.join_next().await {
@@ -73,40 +59,27 @@ async fn main() -> Result<()> {
                     }
                     Ok(Ok(bpb)) => {
                         info!("worker done, best={:.4}", bpb);
-                        {
-                            let mut best = best_bpb.lock().unwrap();
-                            if bpb < *best {
-                                *best = bpb;
-                            }
-                        }
+                        let mut best = best_bpb.lock().unwrap();
+                        if bpb < *best { *best = bpb; }
                     }
                     Ok(Err(e)) => error!("worker error: {}", e),
                     Err(e) => error!("join error: {}", e),
                 }
             }
-
             info!("All workers completed");
         }
-
         RaceCommand::Status => {
             let db = NeonDb::connect(&neon_url).await?;
             trios_igla_race::status::print_leaderboard(db.client()).await?;
         }
-
         RaceCommand::Best => {
             show_best(&neon_url).await?;
         }
     }
-
     Ok(())
 }
 
-async fn run_worker(
-    neon_url: &str,
-    machine_id: &str,
-    worker_id: u64,
-    best_bpb: Arc<Mutex<f64>>,
-) -> Result<f64> {
+async fn run_worker(neon_url: &str, machine_id: &str, worker_id: u64, best_bpb: Arc<Mutex<f64>>) -> Result<f64> {
     let db = NeonDb::connect(neon_url).await?;
     let mut rng = rand::thread_rng();
 
@@ -129,13 +102,11 @@ async fn run_worker(
             max_steps: Some(27000),
         };
 
-        let config_value = serde_json::to_value(&config)?;
-
         let trial_id = db.register_trial(
             Uuid::new_v4(),
             machine_id,
             worker_id as i32,
-            serde_json::to_string(&config_value).as_str(),
+            &serde_json::to_string(&config)?,
         ).await?;
 
         let mut prev_bpb = f64::MAX;
@@ -145,15 +116,32 @@ async fn run_worker(
             let step = rung.step();
             let bpb = simulate_training(&config, step as u64).await?;
 
-            db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3", step, step),
-                &[&(step as i32), &bpb, &trial_id],
-            ).await?;
+            if step == 1000 {
+                db.client().execute(
+                    "UPDATE igla_race_trials SET rung_1000_step = $1, rung_1000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
+                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
+                ).await?;
+            } else if step == 3000 {
+                db.client().execute(
+                    "UPDATE igla_race_trials SET rung_3000_step = $1, rung_3000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
+                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
+                ).await?;
+            } else if step == 9000 {
+                db.client().execute(
+                    "UPDATE igla_race_trials SET rung_9000_step = $1, rung_9000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
+                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
+                ).await?;
+            } else if step == 27000 {
+                db.client().execute(
+                    "UPDATE igla_race_trials SET rung_27000_step = $1, rung_27000_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3",
+                    &[&(step as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &(bpb as i32) as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
+                ).await?;
+            }
 
             if bpb > 2.7 && step == 1000 {
                 db.client().execute(
                     "UPDATE igla_race_trials SET status = 'pruned' WHERE trial_id = $1",
-                    &[&trial_id],
+                    &[&trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
                 ).await?;
                 pruned = true;
                 break;
@@ -162,7 +150,7 @@ async fn run_worker(
             if bpb < 1.5 {
                 db.client().execute(
                     "UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2",
-                    &[&bpb, &trial_id],
+                    &[&bpb as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
                 ).await?;
                 return Ok(bpb);
             }
@@ -173,16 +161,12 @@ async fn run_worker(
         if !pruned {
             db.client().execute(
                 "UPDATE igla_race_trials SET status = 'completed', final_bpb = $1 WHERE trial_id = $2",
-                &[&prev_bpb, &trial_id],
+                &[&prev_bpb as &(dyn tokio_postgres::types::ToSql + Sync), &trial_id as &(dyn tokio_postgres::types::ToSql + Sync)]
             ).await?;
         }
 
-        {
-            let mut b = best_bpb.lock().unwrap();
-            if prev_bpb < *b {
-                *b = prev_bpb;
-            }
-        }
+        let mut best = best_bpb.lock().unwrap();
+        if prev_bpb < *best { *best = prev_bpb; }
     }
 }
 
@@ -196,7 +180,13 @@ async fn simulate_training(config: &TrialConfig, steps: u64) -> Result<f64> {
 }
 
 async fn show_best(neon_url: &str) -> Result<()> {
-    let client = tokio_postgres::connect(neon_url, NoTls).await?;
+    let (client, connection) = tokio_postgres::connect(neon_url, NoTls).await?;
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("Connection error: {}", e);
+        }
+    });
+
     let row = client.query_one(
         "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text FROM igla_race_trials WHERE final_bpb IS NOT NULL ORDER BY final_bpb ASC LIMIT 1",
         &[],
@@ -218,6 +208,5 @@ async fn show_best(neon_url: &str) -> Result<()> {
     } else {
         println!("No trials completed yet");
     }
-
     Ok(())
 }
