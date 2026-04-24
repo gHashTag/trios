@@ -54,7 +54,7 @@ pub fn get_masked(mask: &[bool]) -> Vec<usize> {
 mod tests {
     use super::*;
     use rand::SeedableRng;
-    use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     #[test]
     fn test_mask_ratio_approximate() {
