@@ -3,8 +3,6 @@
 //! Pure functions, zero dependencies beyond rand.
 //! Theory: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
 
-use rand::{Rng, rngs::StdRng, SeedableRng};
-
 /// Mask configuration
 #[derive(Debug, Clone, Copy)]
 pub struct MaskConfig {
