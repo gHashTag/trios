@@ -97,7 +97,7 @@ async fn run_worker(
             .arg("--arch")
             .arg("ngram")
             .arg("--steps")
-            .arg("1000")
+            .arg("5000")
             .output()
             .await?;
 
