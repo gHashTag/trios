@@ -2,6 +2,7 @@
 
 use tokio_postgres::Client;
 use anyhow::Result;
+use crate::neon::NeonDb;
 
 /// Print race leaderboard from Neon
 pub async fn print_leaderboard(client: &Client) -> Result<()> {
@@ -66,6 +67,11 @@ pub async fn print_leaderboard(client: &Client) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Show race status (alias for print_leaderboard)
+pub async fn show_status(db: &NeonDb) -> Result<()> {
+    print_leaderboard(db.client()).await
 }
 
 /// Print best trial
