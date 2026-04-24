@@ -80,7 +80,7 @@ pub fn nca_entropy_constraint(entropy: f64) -> f64 {
 
 /// Check if NCA entropy is in acceptable band
 pub fn nca_entropy_valid(entropy: f64) -> bool {
-    entropy >= 1.5 && entropy <= 2.8
+    (1.5..=2.8).contains(&entropy)
 }
 
 /// NCA configuration

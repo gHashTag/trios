@@ -48,16 +48,16 @@ pub fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
 pub fn positional_encoding(seq_len: usize, d_model: usize) -> Vec<Vec<f32>> {
     let mut pos_emb = vec![vec![0.0f32; d_model]; seq_len];
 
-    for pos in 0..seq_len {
-        for d in 0..d_model {
+    pos_emb.iter_mut().enumerate().for_each(|(pos, emb)| {
+        emb.iter_mut().enumerate().for_each(|(d, val)| {
             let freq = if d % 2 == 0 {
                 (pos as f32 / 10000.0_f32.powf((d / 2) as f32 / d_model as f32)).sin()
             } else {
                 (pos as f32 / 10000.0_f32.powf(((d - 1) / 2) as f32 / d_model as f32)).cos()
             };
-            pos_emb[pos][d] = freq;
-        }
-    }
+            *val = freq;
+        });
+    });
 
     pos_emb
 }
@@ -113,10 +113,10 @@ pub fn self_attention(
     let weights: Vec<f32> = scores.iter().map(|&s| (s - max_score).exp() / exp_sum.max(1e-10)).collect();
 
     // Weighted sum of all positions
-    for i in 0..seq_len {
+    for (i, &weight) in weights.iter().enumerate() {
         let start_i = i * d_model;
-        for d in 0..d_model {
-            output[d] += weights[i] * x[start_i + d];
+        for (d, out_val) in output.iter_mut().enumerate().take(d_model) {
+            *out_val += weight * x[start_i + d];
         }
     }
 
@@ -126,7 +126,9 @@ pub fn self_attention(
 /// MHA (Multi-Head Attention)
 #[derive(Debug, Clone)]
 pub struct MultiHeadAttention {
+    #[allow(dead_code)]
     n_heads: usize,
+    #[allow(dead_code)]
     d_k: usize,
     d_model: usize,
     // Q, K, V projections for each head
@@ -203,22 +205,22 @@ impl FFNLayer {
 
             // First linear: d_model -> d_ffn
             let mut hidden = vec![0.0f32; self.d_ffn];
-            for i in 0..self.d_ffn {
-                for j in 0..self.d_model {
-                    hidden[i] += x_pos[j] * self.w1[j * self.d_ffn + i];
+            for (i, hidden_val) in hidden.iter_mut().enumerate() {
+                for (j, &x_val) in x_pos.iter().enumerate() {
+                    *hidden_val += x_val * self.w1[j * self.d_ffn + i];
                 }
-                hidden[i] += self.b1[i];
+                *hidden_val += self.b1[i];
             }
 
             // GELU activation (in-place)
             gelu(&mut hidden);
 
             // Second linear: d_ffn -> d_model
-            for i in 0..self.d_model {
-                for j in 0..self.d_ffn {
-                    output[pos * self.d_model + i] += hidden[j] * self.w2[j * self.d_model + i];
+            for (i, output_idx) in (pos * self.d_model..(pos + 1) * self.d_model).enumerate() {
+                for (j, &hidden_val) in hidden.iter().enumerate() {
+                    output[output_idx] += hidden_val * self.w2[j * self.d_model + i];
                 }
-                output[pos * self.d_model + i] += self.b2[i];
+                output[output_idx] += self.b2[i];
             }
         }
 
@@ -248,21 +250,13 @@ impl TransformerLayer {
     pub fn forward(&self, x: &[f32], seq_len: usize, causal: bool) -> Vec<f32> {
         // Self-attention with residual connection
         let attn_out = self.attention.forward(x, seq_len, causal);
-        let mut residual1 = vec![0.0f32; x.len()];
-        for i in 0..x.len() {
-            residual1[i] = x[i] + attn_out[i];
-        }
+        let residual1: Vec<f32> = x.iter().zip(attn_out.iter()).map(|(&a, &b)| a + b).collect();
         let norm1 = layer_norm(&residual1, self.norm1_eps);
 
         // FFN with residual connection
         let ffn_out = self.ffn.forward(&norm1, seq_len);
-        let mut residual2 = vec![0.0f32; norm1.len()];
-        for i in 0..norm1.len() {
-            residual2[i] = norm1[i] + ffn_out[i];
-        }
-        let norm2 = layer_norm(&residual2, self.norm2_eps);
-
-        norm2
+        let residual2: Vec<f32> = norm1.iter().zip(ffn_out.iter()).map(|(&a, &b)| a + b).collect();
+        layer_norm(&residual2, self.norm2_eps)
     }
 }
 
@@ -270,9 +264,13 @@ impl TransformerLayer {
 pub struct MinimalTransformer {
     vocab_size: usize,
     d_model: usize,
+    #[allow(dead_code)]
     d_ffn: usize,
+    #[allow(dead_code)]
     n_heads: usize,
+    #[allow(dead_code)]
     n_layers: usize,
+    #[allow(dead_code)]
     max_seq_len: usize,
 
     // Parameters
@@ -373,14 +371,12 @@ impl MinimalTransformer {
 
         // Project to vocabulary (for each position)
         let mut logits = vec![vec![0.0f32; self.vocab_size]; seq_len];
-        for pos in 0..seq_len {
+        for (pos, logits_row) in logits.iter_mut().enumerate() {
             let x_pos = &x[pos * self.d_model..(pos + 1) * self.d_model];
-            for v in 0..self.vocab_size {
-                let mut logit = 0.0f32;
-                for d in 0..self.d_model {
-                    logit += x_pos[d] * self.lm_head[d * self.vocab_size + v];
+            for (v, logit) in logits_row.iter_mut().enumerate() {
+                for (d, &x_val) in x_pos.iter().enumerate() {
+                    *logit += x_val * self.lm_head[d * self.vocab_size + v];
                 }
-                logits[pos][v] = logit;
             }
         }
 

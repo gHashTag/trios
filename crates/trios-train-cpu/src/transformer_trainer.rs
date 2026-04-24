@@ -104,7 +104,7 @@ impl TransformerTrainConfig {
         println!("=============================================\n");
 
         // Create model
-        let mut model = MinimalTransformer::new(
+        let model = MinimalTransformer::new(
             self.vocab_size,
             self.d_model,
             self.d_ffn,

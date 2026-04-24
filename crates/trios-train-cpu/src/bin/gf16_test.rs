@@ -88,7 +88,7 @@ fn test_quantization_metrics() {
 }
 
 fn test_phi_distance() {
-    let phi = 1.6180339887498948482045868343656f64;
+    let phi = 1.618_033_988_749_895_f64;
     let inv_phi = 1.0 / phi;
     let gf16_phi_dist = GF16::phi_distance();
     let exp_mant_ratio = 6.0 / 9.0;  // GF16's 6:9 split

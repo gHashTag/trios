@@ -142,7 +142,7 @@ impl ArchKind {
     }
 
     /// Parse from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_arch(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "ngram" => Some(ArchKind::Ngram),
             "jepa" => Some(ArchKind::Jepa),
@@ -251,14 +251,14 @@ mod tests {
     }
 
     #[test]
-    fn test_arch_kind_from_str() {
-        assert_eq!(ArchKind::from_str("ngram"), Some(ArchKind::Ngram));
-        assert_eq!(ArchKind::from_str("NGRAM"), Some(ArchKind::Ngram));
-        assert_eq!(ArchKind::from_str("jepa"), Some(ArchKind::Jepa));
-        assert_eq!(ArchKind::from_str("attn"), Some(ArchKind::Attention));
-        assert_eq!(ArchKind::from_str("attention"), Some(ArchKind::Attention));
-        assert_eq!(ArchKind::from_str("hybrid"), Some(ArchKind::Hybrid));
-        assert_eq!(ArchKind::from_str("unknown"), None);
+    fn test_arch_kind_parse_arch() {
+        assert_eq!(ArchKind::parse_arch("ngram"), Some(ArchKind::Ngram));
+        assert_eq!(ArchKind::parse_arch("NGRAM"), Some(ArchKind::Ngram));
+        assert_eq!(ArchKind::parse_arch("jepa"), Some(ArchKind::Jepa));
+        assert_eq!(ArchKind::parse_arch("attn"), Some(ArchKind::Attention));
+        assert_eq!(ArchKind::parse_arch("attention"), Some(ArchKind::Attention));
+        assert_eq!(ArchKind::parse_arch("hybrid"), Some(ArchKind::Hybrid));
+        assert_eq!(ArchKind::parse_arch("unknown"), None);
     }
 
     #[test]

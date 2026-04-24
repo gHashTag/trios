@@ -442,7 +442,7 @@ impl Trinity3kLayer {
         let d = self.d_model;
         let ffn = self.ffn_dim;
         let n_heads = self.attention_heads.len();
-        let _head_dim = if n_heads > 0 { d / n_heads } else { 1 };
+        let _head_dim = d.checked_div(n_heads).unwrap_or(1);
 
         // ── Residual2: grad flows to both residual1 and ffn_output ──
         // output = residual1 + ffn_output

@@ -93,9 +93,8 @@ impl Predictor {
 
             // Simple projection: copy context with small perturbation
             if start < context.len() {
-                for i in start..end {
-                    predicted.push(context[i] + 0.01 * (pos as f32 - context_pos as f32));
-                }
+                let perturbation = 0.01 * (pos as f32 - context_pos as f32);
+                context[start..end].iter().for_each(|&v| predicted.push(v + perturbation));
             } else {
                 predicted.extend(vec![0.0; d_model]);
             }

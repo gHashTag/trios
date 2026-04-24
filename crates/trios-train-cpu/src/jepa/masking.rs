@@ -2,7 +2,7 @@
 //!
 //! Generates random span masks for masked prediction training.
 
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::Rng;
 
 /// Mask configuration
 #[derive(Debug, Clone, Copy)]
@@ -67,9 +67,7 @@ pub fn mask_spans(
         for i in 0..config.num_spans {
             let start = i * span_len;
             let end = ((i + 1) * span_len).min(seq_len);
-            for j in start..end {
-                mask[j] = true;
-            }
+            mask[start..end].fill(true);
             spans.push((start, end));
         }
         return MaskResult { mask, spans };
@@ -80,9 +78,7 @@ pub fn mask_spans(
         let start = rng.gen_range(0..seq_len.saturating_sub(span_len));
         let end = (start + span_len).min(seq_len);
 
-        for i in start..end {
-            mask[i] = true;
-        }
+        mask[start..end].fill(true);
         spans.push((start, end));
     }
 

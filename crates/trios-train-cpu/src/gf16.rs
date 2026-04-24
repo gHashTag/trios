@@ -93,7 +93,7 @@ impl GF16 {
 
         // Normal number
         let f32_exp = exp as i32 - Self::EXP_BIAS + 127;
-        if f32_exp < 0 || f32_exp > 255 {
+        if !(0..=255).contains(&f32_exp) {
             return if sign != 0 { -f32::INFINITY } else { f32::INFINITY };
         }
 
@@ -105,7 +105,7 @@ impl GF16 {
     /// φ-distance of this format (constant for GF16)
     pub fn phi_distance() -> f64 {
         let ratio = 6.0f64 / 9.0f64;
-        let inv_phi = 1.0f64 / 1.6180339887498948482045868343656f64;
+        let inv_phi = 1.0f64 / 1.618_033_988_749_895_f64;
         (ratio - inv_phi).abs()
     }
 
