@@ -3,7 +3,7 @@
 //! Subcommands:
 //! - `trios-igla-race start --workers 4` — run ASHA workers
 //! - `trios-igla-race status` — show leaderboard from Neon
-//! - `trios-igla-race best` — show best trial
+//! - `trios-igla-race best` — show best BPB result
 
 
 use anyhow::Result;
@@ -21,8 +21,6 @@ struct Cli {
 enum RaceCommand {
     /// Launch ASHA workers
     Start {
-        #[arg(long, env = "MACHINE_ID", default_value = "unknown")]
-        machine: String,
         #[arg(long, default_value = "4")]
         workers: usize,
     },
@@ -50,14 +48,14 @@ async fn main() -> Result<()> {
 
             // TODO: Call trios_igla_race::run_worker via API
             info!("Workers stub: spawning keep-alive tasks");
-            
+
             use std::time::Duration;
             for worker_id in 0..workers {
                 info!("Worker {} started (stub)", worker_id);
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 info!("Worker {} completed (stub)", worker_id);
             }
-            
+
             info!("All workers completed (stub)");
         }
         RaceCommand::Status => {

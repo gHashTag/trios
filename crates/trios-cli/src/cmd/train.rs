@@ -13,16 +13,30 @@ pub struct TrainResult {
     pub time_sec: f64,
 }
 
-pub fn train_cpu(seeds: Vec<u64>, steps: usize, hidden: usize, lr: f64, activation: String, parallel: bool, residual: bool, dropout: String, warmup: String, wd: String) -> Result<Vec<TrainResult>> {
+/// Training configuration parameters
+#[derive(Debug, Clone)]
+pub struct TrainConfig {
+    pub steps: usize,
+    pub hidden: usize,
+    pub lr: f64,
+    pub activation: String,
+    pub residual: bool,
+    pub dropout: String,
+    pub warmup: String,
+    pub wd: String,
+}
+
+pub fn train_cpu(seeds: Vec<u64>, config: TrainConfig, parallel: bool) -> Result<Vec<TrainResult>> {
     let binary = find_ngram_train()?;
 
     println!("=== tri train: CPU N-Gram ===");
-    println!("seeds={:?} steps={} hidden={} lr={} activation={} parallel={}", seeds, steps, hidden, lr, activation, parallel);
+    println!("seeds={:?} steps={} hidden={} lr={} activation={} parallel={}",
+             seeds, config.steps, config.hidden, config.lr, config.activation, parallel);
 
     if parallel && seeds.len() > 1 {
-        run_parallel(&binary, &seeds, steps, hidden, lr, &activation, residual, &dropout, &warmup, &wd)
+        run_parallel(&binary, &seeds, &config)
     } else {
-        run_sequential(&binary, &seeds, steps, hidden, lr, &activation, residual, &dropout, &warmup, &wd)
+        run_sequential(&binary, &seeds, &config)
     }
 }
 
@@ -39,36 +53,33 @@ fn find_ngram_train() -> Result<PathBuf> {
     anyhow::bail!("ngram_train binary not found. Run: cargo build --release -p trios-train-cpu --bin ngram_train");
 }
 
-fn run_sequential(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str, residual: bool, dropout: &str, warmup: &str, wd: &str) -> Result<Vec<TrainResult>> {
+fn run_sequential(binary: &Path, seeds: &[u64], config: &TrainConfig) -> Result<Vec<TrainResult>> {
     let mut results = Vec::new();
     for &seed in seeds {
-        let r = run_single(binary, seed, steps, hidden, lr, activation, residual, dropout, warmup, wd)?;
+        let r = run_single(binary, seed, config)?;
         results.push(r);
     }
     Ok(results)
 }
 
-fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str, residual: bool, dropout: &str, warmup: &str, wd: &str) -> Result<Vec<TrainResult>> {
+fn run_parallel(binary: &Path, seeds: &[u64], config: &TrainConfig) -> Result<Vec<TrainResult>> {
     let mut handles = Vec::new();
 
     for &seed in seeds {
         let binary = binary.to_path_buf();
-        let activation = activation.to_string(); // Clone for thread safety
-        let dropout = dropout.to_string(); // Clone for thread safety
-        let warmup = warmup.to_string(); // Clone for thread safety
-        let wd = wd.to_string(); // Clone for thread safety
+        let config = config.clone();
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
             let output = Command::new(&binary)
                 .arg(format!("--seed={}", seed))
-                .arg(format!("--steps={}", steps))
-                .arg(format!("--hidden={}", hidden))
-                .arg(format!("--lr={}", lr))
-                .arg(format!("--activation={}", activation))
-                .arg(if residual { "--residual" } else { "" })
-                .arg(format!("--dropout={}", dropout))
-                .arg(format!("--warmup={}", warmup))
-                .arg(format!("--wd={}", wd))
+                .arg(format!("--steps={}", config.steps))
+                .arg(format!("--hidden={}", config.hidden))
+                .arg(format!("--lr={}", config.lr))
+                .arg(format!("--activation={}", config.activation))
+                .arg(if config.residual { "--residual" } else { "" })
+                .arg(format!("--dropout={}", config.dropout))
+                .arg(format!("--warmup={}", config.warmup))
+                .arg(format!("--wd={}", config.wd))
                 .output()
                 .context("Failed to execute ngram_train")?;
 
@@ -84,9 +95,9 @@ fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f
             Ok::<TrainResult, anyhow::Error>(TrainResult {
                 seed,
                 best_bpb,
-                steps,
-                hidden,
-                lr,
+                steps: config.steps,
+                hidden: config.hidden,
+                lr: config.lr,
                 time_sec,
             })
         });
@@ -111,18 +122,18 @@ fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f
     Ok(results)
 }
 
-fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, activation: &str, residual: bool, dropout: &str, warmup: &str, wd: &str) -> Result<TrainResult> {
+fn run_single(binary: &Path, seed: u64, config: &TrainConfig) -> Result<TrainResult> {
     let start = Instant::now();
     let output = Command::new(binary)
         .arg(format!("--seed={}", seed))
-        .arg(format!("--steps={}", steps))
-        .arg(format!("--hidden={}", hidden))
-        .arg(format!("--lr={}", lr))
-        .arg(format!("--activation={}", activation))
-        .arg(if residual { "--residual" } else { "" })
-        .arg(format!("--dropout={}", dropout))
-        .arg(format!("--warmup={}", warmup))
-        .arg(format!("--wd={}", wd))
+        .arg(format!("--steps={}", config.steps))
+        .arg(format!("--hidden={}", config.hidden))
+        .arg(format!("--lr={}", config.lr))
+        .arg(format!("--activation={}", config.activation))
+        .arg(if config.residual { "--residual" } else { "" })
+        .arg(format!("--dropout={}", config.dropout))
+        .arg(format!("--warmup={}", config.warmup))
+        .arg(format!("--wd={}", config.wd))
         .output()
         .context("Failed to execute ngram_train")?;
 
@@ -141,9 +152,9 @@ fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, ac
     Ok(TrainResult {
         seed,
         best_bpb,
-        steps,
-        hidden,
-        lr,
+        steps: config.steps,
+        hidden: config.hidden,
+        lr: config.lr,
         time_sec,
     })
 }
