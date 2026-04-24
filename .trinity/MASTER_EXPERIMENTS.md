@@ -89,16 +89,42 @@ tri train --seeds 42,43,44 --steps=12000 --hidden=384 --lr=0.004 --parallel
 
 ## 🚀 ЧАСТЬ 2: ATTENTION / TRANSFORMER ЭКСПЕРИМЕНТЫ
 
-> Статус: **PENDING** — N-gram достиг потолка ~2.53 BPB. Нужен architectural jump.
+> Статус: **PHASE 2 STARTED** — N-gram достиг потолка ~2.53 BPB. Transformer infrastructure ready.
+
+### Phase 2: Minimal Transformer (Apr 24)
+
+| # | Эксперимент | BPB | Параметры | Статус |
+|---|------------|-----|-----------|--------|
+| T2-00 | **Infrastructure ready** | — | d_model=384, 8 heads, 2 layers, 28M params | ✅ DONE |
+| T2-01 | **Forward pass** | — | Correct attention, LayerNorm, FFN | ✅ DONE |
+| T2-02 | **Training loop** | — | Config, metrics, BPB tracking | ✅ DONE |
+| T2-03 | **Backward pass** | — | Gradient computation needed | ❌ TODO |
+| T2-04 | **Optimizer** | — | AdamW integration needed | ❌ TODO |
+
+**Initial test results:**
+- Model compiles and runs successfully
+- Initial BPB: 14.99 (expected for random weights)
+- Training speed: ~40 sec/step (too slow — needs optimization)
+- Issue: weights not updating (no backward pass yet)
+
+**Files created:**
+- `crates/trios-train-cpu/src/transformer.rs` — MHA, LayerNorm, FFN, MinimalTransformer
+- `crates/trios-train-cpu/src/transformer_trainer.rs` — Training loop, config, metrics
+- `crates/trios-train-cpu/src/bin/transformer_train.rs` — CLI for training
+
+**Next steps (HIGH PRIORITY):**
+1. Implement backward pass (autograd or manual)
+2. Optimize attention computation (currently O(n²) per position)
+3. Run full training with LR sweep
+4. Target: beat N-gram baseline (2.5329 BPB)
 
 ### TIER 1 — CPU (сегодня, Apr 24)
 
 | # | Эксперимент | Ожидаемый BPB | Команда | Статус |
 |---|------------|--------------|---------|--------|
-| T1-01 | **Attention layer** (--attention=1) | < 2.20 | `tri run attention-v1` | ⬜ NEXT |
+| T1-01 | **Minimal Transformer** | < 2.20 | `cargo run --bin transformer_train --release` | 🟡 IN PROG |
 | T1-02 | N-gram + Witten-Bell smoothing | < 2.00 | `tri run witten-bell` | ⬜ |
-| T1-03 | Minimal Self-Attention (4 heads, 16-dim) | < 2.10 | `tri run mhsa-v1` | ⬜ |
-| T1-04 | RoPE + attention | < 2.00 | `tri run rope-attn` | ⬜ |
+| T1-03 | RoPE + attention | < 2.00 | `tri run rope-attn` | ⬜ |
 
 ### TIER 2 — GPU 8×H100 (Apr 25-26)
 
