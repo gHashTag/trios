@@ -62,6 +62,8 @@ pub struct TrialConfig {
     pub dropout: Option<f64>,
     pub warmup_steps: Option<usize>,
     pub max_steps: Option<usize>,
+    pub context: Option<usize>,
+    pub use_attention: Option<bool>,
 }
 
 /// ASHA rung data

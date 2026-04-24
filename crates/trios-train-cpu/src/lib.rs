@@ -16,6 +16,7 @@ pub mod ortho_init_baseline;
 pub mod swa_phi;
 pub mod residual_mix;
 pub mod sliding_eval;
+pub mod transformer;
 pub mod trinity_3k_model;
 
 // GoldenFloat16 implementation

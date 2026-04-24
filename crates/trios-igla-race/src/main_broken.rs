@@ -7,10 +7,9 @@
 
 use anyhow::Result;
 use tracing::{info, error};
-use std::sync::{Arc, Mutex};
 use clap::{Parser, Subcommand};
 use tokio_postgres::NoTls;
-use rand::{Rng, seq::SliceRandom, rngs::ThreadRng};
+use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use trios_igla_race::{
@@ -142,7 +141,7 @@ async fn run_worker(
             context: Some(context_val),
             lr: Some((rng.gen_range::<f64>(0.0001..0.01) % 0.0099) + 0.0001),
             optimizer: Some(if rng.gen_bool(0.5) { "adamw".to_string() } else { "muon".to_string() }),
-            weight_decay: Some(0.01),
+            wd: Some(rng.gen_range::<f64>(0.0001..0.01) % 0.099 + 0.001),
             use_attention: Some(rng.gen_bool(0.5)),
             hidden: Some(384),
             n_layers: Some(1),
@@ -175,19 +174,7 @@ async fn run_worker(
 
             // Update rung
             db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = {{1}}, rung_{}_bpb = {{2}} WHERE trial_id = {{3}}", step, step),
-                &[&(step as i32), &bpb, &trial_id],
-            ).await?;
-            db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = {{1}}, rung_{}_bpb = {{2}} WHERE trial_id = {{3}}", step, step),
-                &[&(step as i32), &bpb, &trial_id],
-            ).await?;
-            db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = {{1}}, rung_{}_bpb = {{2}} WHERE trial_id = {{3}}", step, step),
-                &[&(step as i32), &bpb, &trial_id],
-            ).await?;
-            db.client().execute(
-                &format!("UPDATE igla_race_trials SET rung_{}_step = {{1}}, rung_{}_bpb = {{2}} WHERE trial_id = {{3}}", step, step),
+                &format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2 WHERE trial_id = $3", step, step, step, step),
                 &[&(step as i32), &bpb, &trial_id],
             ).await?;
 
@@ -240,21 +227,28 @@ async fn simulate_training(config: &TrialConfig, steps: u64) -> Result<f64> {
 }
 
 /// Show best trial
-
-/// Show best trial
 async fn show_best(neon_url: &str) -> Result<()> {
     let client = tokio_postgres::connect(neon_url, NoTls).await?;
+
     let row = client.query_one(
         "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text FROM igla_race_trials WHERE final_bpb IS NOT NULL ORDER BY final_bpb ASC LIMIT 1",
         &[],
-    ).await;
+/// Show best trial
+async fn show_best(neon_url: &str) -> Result<()> {
+    let db = NeonDb::connect(neon_url).await?;
+    let client = db.client();
+    
+    let row_opt = client.query_one(
+        "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text FROM igla_race_trials WHERE final_bpb IS NOT NULL ORDER BY final_bpb ASC LIMIT 1",
+        &[],
+    ).await?;
 
-    if let Ok(row) = row {
-        let trial_id: &str = row.get(0)?;
-        let machine_id: &str = row.get(1)?;
-        let config_json: &str = row.get(2)?;
-        let final_bpb: &str = row.get(3)?;
-        let final_step: &str = row.get(4)?;
+    if let Some(row) = row_opt {
+        let trial_id: &str = row.try_get(0)?;
+        let machine_id: &str = row.try_get(1)?;
+        let config_json: &str = row.try_get(2)?;
+        let final_bpb: &str = row.try_get(3)?;
+        let final_step: &str = row.try_get(4)?;
 
         println!("BEST TRIAL");
         println!("  Trial ID: {}", trial_id);

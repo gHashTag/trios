@@ -10,6 +10,8 @@ pub const BUILD_VERSION: &str = env!("TRIOS_BUILD_VERSION", "dev");
 pub const ANTHROPIC_KEY_HINT: &str = env!("TRIOS_ANTHROPIC_KEY_HINT", "");
 pub const OPENAI_KEY_HINT: &str = env!("TRIOS_OPENAI_KEY_HINT", "");
 pub const VENICE_KEY_HINT: &str = env!("TRIOS_VENICE_KEY_HINT", "");
+pub const ZAI_KEY_HINT: &str = env!("TRIOS_ZAI_KEY_HINT", "");
+pub const ZAI_API_HINT: &str = env!("TRIOS_ZAI_API_HINT", "");
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
@@ -52,6 +54,7 @@ fn app() -> Element {
     let mut anthropic_key: Signal<String> = use_signal(|| ANTHROPIC_KEY_HINT.to_string());
     let mut openai_key: Signal<String> = use_signal(|| OPENAI_KEY_HINT.to_string());
     let mut venice_key: Signal<String> = use_signal(|| VENICE_KEY_HINT.to_string());
+    let mut zai_key: Signal<String> = use_signal(|| ZAI_KEY_HINT.to_string());
 
     use_hook(inject_theme);
 
@@ -135,10 +138,12 @@ fn app() -> Element {
     let anthropic_val = anthropic_key.read().clone();
     let openai_val = openai_key.read().clone();
     let venice_val = venice_key.read().clone();
+    let zai_val = zai_key.read().clone();
 
-    let has_anthropic = !anthropic_val.is_empty() && anthropic_val != "";
-    let has_openai = !openai_val.is_empty() && openai_val != "";
-    let has_venice = !venice_val.is_empty() && venice_val != "";
+    let has_anthropic = !anthropic_val.is_empty();
+    let has_openai = !openai_val.is_empty();
+    let has_venice = !venice_val.is_empty();
+    let has_zai = !zai_val.is_empty();
 
     rsx! {
         div { id: "main",
@@ -206,6 +211,34 @@ fn app() -> Element {
             section { class: content_cls!("settings"), id: "tab-settings",
                 div { class: "settings-section",
                     div { class: "settings-title", "AI Providers" }
+
+                    // z.ai (default)
+                    div { class: "provider-card",
+                        div { class: "provider-header",
+                            span { class: "provider-name", "z.ai" }
+                            span { class: if has_zai { "provider-badge active" } else { "provider-badge inactive" },
+                                if has_zai { "active" } else { "no key" }
+                            }
+                        }
+                        div { class: "token-row",
+                            input {
+                                class: "token-input",
+                                r#type: "password",
+                                value: "{zai_val}",
+                                placeholder: "zai-...",
+                                oninput: move |ev| zai_key.set(ev.value()),
+                            }
+                        }
+                        div { class: "env-hint", "auto-loaded from "
+                            span { "ZAI_KEY_1" }
+                            " in .env"
+                        }
+                        if !ZAI_API_HINT.is_empty() {
+                            div { class: "env-hint",
+                                span { "{ZAI_API_HINT}" }
+                            }
+                        }
+                    }
 
                     // Anthropic
                     div { class: "provider-card",

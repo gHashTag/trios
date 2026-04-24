@@ -29,10 +29,24 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter("trios_server=debug,tower_http=debug")
         .init();
 
+    // Load .env from workspace root (manual parser — handles inline comments)
+    load_dot_env();
+
     let operator_token = operator::init_operator_token();
     info!("Operator token: {}", operator_token);
 
-    let state = AppState::new();
+    // Load z.ai config from environment
+    let zai_api = std::env::var("ZAI_API").unwrap_or_default();
+    let zai_keys: Vec<String> = (1..=6)
+        .filter_map(|i| std::env::var(format!("ZAI_KEY_{}", i)).ok())
+        .filter(|k| !k.is_empty())
+        .collect();
+    if !zai_api.is_empty() {
+        info!("z.ai endpoint: {}", zai_api);
+        info!("z.ai keys loaded: {}", zai_keys.len());
+    }
+
+    let state = AppState::with_zai(zai_api, zai_keys);
     let port: u16 = std::env::var("TRIOS_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -107,6 +121,38 @@ async fn browser_poll(
     }
     let result = mcp_endpoints::browser::browser_commands(&state, &params.agent_id).await;
     Json(result)
+}
+
+/// Manual .env parser — handles inline comments (dotenvy chokes on our format)
+fn load_dot_env() {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let env_path = cwd.join(".env");
+    if !env_path.exists() {
+        info!(".env not found at {}", env_path.display());
+        return;
+    }
+    let content = std::fs::read_to_string(&env_path).unwrap_or_default();
+    let mut count = 0;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            let key = k.trim().to_string();
+            // Strip inline comments (# not inside quotes)
+            let val = v.split_once('#').map(|(v, _)| v).unwrap_or(v);
+            let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
+            if !key.is_empty() && !val.is_empty() {
+                // Only set if not already in environment (env vars take precedence)
+                if std::env::var(&key).is_err() {
+                    std::env::set_var(&key, &val);
+                    count += 1;
+                }
+            }
+        }
+    }
+    info!(".env loaded: {} vars from {}", count, env_path.display());
 }
 
 async fn browser_report(
