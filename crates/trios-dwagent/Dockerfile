@@ -1,5 +1,5 @@
 # Dockerfile for trios-dwagent on Railway
-FROM rust:1.82-slim as builder
+FROM rust:slim as builder
 
 WORKDIR /app
 
@@ -12,19 +12,11 @@ RUN apt-get update && apt-get install -y \
 # Copy manifest and lock
 COPY Cargo.toml Cargo.lock* ./
 
-# Create empty src directory for caching
-RUN mkdir src && \
-    echo "fn main() {}" > src/lib.rs
-
-# Build dependencies
-RUN cargo build --release
-
 # Copy actual source
 COPY src ./src
 
-# Rebuild with actual source
-RUN touch src/main.rs && \
-    cargo build --release && \
+# Build
+RUN cargo build --release && \
     strip /app/target/release/trios-dwagent
 
 # Runtime image
