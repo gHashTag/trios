@@ -145,11 +145,11 @@ async fn run_worker(
         // Sample a new config
         let config = TrialConfig {
             seed: rng.gen_range(40..100),
-            d_model: *[128, 192, 256, 384]
+            d_model: [128, 192, 256, 384]
                 .choose(&mut rng)
                 .copied()
                 .ok_or_else(|| anyhow::anyhow!("No d_model options"))?,
-            context: *[4, 5, 6, 7, 8]
+            context: [4, 5, 6, 7, 8]
                 .choose(&mut rng)
                 .copied()
                 .ok_or_else(|| anyhow::anyhow!("No context options"))?,
@@ -227,7 +227,7 @@ async fn run_worker(
 
         // Trial completed all rungs without pruning
         if !pruned {
-            trios_igla_race::asha::mark_completed(&db, &trial_id, 27000, prev_bpb).await?;
+            trios_igla_race::asha::mark_completed(&db, &trial_id, 27000usize, prev_bpb).await?;
 
             // Check if new global best
             {
