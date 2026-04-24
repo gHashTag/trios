@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 //! TASK-5A.1 — Span Masking for T-JEPA
 //!
 //! Pure functions, zero dependencies beyond rand.
@@ -52,6 +53,7 @@ pub fn get_masked(mask: &[bool]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
 
     #[test]
     fn test_mask_ratio_approximate() {
