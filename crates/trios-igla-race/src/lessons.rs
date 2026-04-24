@@ -1,12 +1,12 @@
 //! Failure Memory — automatic lesson generation from pruned trials
 
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use crate::neon::NeonDb;
 use anyhow::Result;
+use uuid::Uuid;
 
 /// Lesson type for categorizing patterns
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "varchar")]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum LessonType {
     Avoid,    // "AVOID: ..." — definite anti-pattern
     Pattern,  // "PATTERN: ..." — observed pattern
@@ -78,12 +78,12 @@ pub fn generate_lesson(
     outcome: Outcome,
 ) -> (String, LessonType) {
     let mut lessons = Vec::new();
-    
+
     // Analyze learning rate
     if let Some(lr) = config.lr {
         if lr > 0.05 {
             lessons.push((
-                format!("AVOID: lr={} too high — BPB={} at rung-{}, always pruned", 
+                format!("AVOID: lr={} too high — BPB={} at rung-{}, always pruned",
                          lr, rung.bpb, rung.step),
                 LessonType::Avoid
             ));
@@ -94,18 +94,18 @@ pub fn generate_lesson(
             ));
         }
     }
-    
+
     // Analyze model capacity
     if let Some(d_model) = config.d_model {
         if d_model < 64 && rung.bpb > 2.8 {
             lessons.push((
-                format!("PATTERN: d_model={} insufficient capacity, never below {} BPB", 
+                format!("PATTERN: d_model={} insufficient capacity, never below {} BPB",
                          d_model, rung.bpb),
                 LessonType::Pattern
             ));
         }
     }
-    
+
     // Analyze hidden size
     if let Some(hidden) = config.hidden {
         if hidden < 32 {
@@ -115,7 +115,7 @@ pub fn generate_lesson(
             ));
         }
     }
-    
+
     // Analyze weight decay
     if let Some(wd) = config.weight_decay {
         if wd > 0.1 && rung.bpb > 3.0 {
@@ -125,7 +125,7 @@ pub fn generate_lesson(
             ));
         }
     }
-    
+
     // Analyze optimizer
     if let Some(opt) = config.optimizer.as_deref() {
         if opt.contains("sgd") && rung.bpb > 2.7 {
@@ -135,16 +135,16 @@ pub fn generate_lesson(
             ));
         }
     }
-    
+
     // Early pruning pattern
     if rung.step <= 1000 && rung.bpb > 3.0 {
         lessons.push((
-            format!("AVOID: BPB={} at rung-{} — early death, check config", 
+            format!("AVOID: BPB={} at rung-{} — early death, check config",
                      rung.bpb, rung.step),
             LessonType::Avoid
         ));
     }
-    
+
     // If no specific lessons, generate generic one
     if lessons.is_empty() {
         lessons.push((
@@ -152,7 +152,7 @@ pub fn generate_lesson(
             LessonType::Info
         ));
     }
-    
+
     // Return most severe lesson
     let (lesson, lesson_type) = lessons.into_iter()
         .min_by(|a, b| {
@@ -167,66 +167,45 @@ pub fn generate_lesson(
             priority(a).cmp(&priority(b))
         })
         .unwrap();
-    
+
     (lesson, lesson_type)
 }
 
 /// Store lesson in database
 pub async fn store_lesson(
-    pool: &PgPool,
-    trial_id: &uuid::Uuid,
+    db: &NeonDb,
+    trial_id: &Uuid,
     outcome: Outcome,
-    pruned_at_rung: usize,
+    pruned_at_rung: i32,
     bpb_at_pruned: f64,
     lesson: &str,
-    lesson_type: LessonType,
+    lesson_type: &str,
 ) -> Result<()> {
-    sqlx::query!(
-        r#"
-        INSERT INTO igla_race_experience 
-        (trial_id, outcome, pruned_at_rung, bpb_at_pruned, lesson, lesson_type)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (trial_id) DO UPDATE SET
-            pattern_count = igla_race_experience.pattern_count + 1
-        RETURNING pattern_count
-        "#,
+    db.store_lesson(
         trial_id,
-        outcome.to_string(),
-        pruned_at_rung as i32,
+        &outcome.to_string(),
+        pruned_at_rung,
         bpb_at_pruned,
         lesson,
-        lesson_type.to_string()
-    )
-    .fetch_one(pool)
-    .await?;
-    
+        lesson_type,
+    ).await?;
+
     Ok(())
 }
 
 /// Get top lessons from experience
 pub async fn get_top_lessons(
-    pool: &PgPool,
+    db: &NeonDb,
     limit: i32,
 ) -> Result<Vec<(String, String, i32)>> {
-    sqlx::query_as!(
-        r#"
-        SELECT lesson, lesson_type, pattern_count
-        FROM igla_race_experience
-        WHERE pattern_count > 0
-        ORDER BY pattern_count DESC, confidence DESC
-        LIMIT $1
-        "#
-    )
-    .bind(limit)
-    .fetch_all(pool)
-    .await
-    .map_err(Into::into)
+    let lessons = db.get_top_lessons(limit).await?;
+    Ok(lessons.into_iter().map(|l| (l.lesson, l.lesson_type, l.pattern_count)).collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_lesson_high_lr() {
         let config = TrialConfig {
@@ -241,15 +220,15 @@ mod tests {
             warmup_steps: None,
             max_steps: None,
         };
-        
+
         let rung = RungData { step: 1000, bpb: 3.4 };
         let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
-        
+
         assert_eq!(lesson_type, LessonType::Avoid);
         assert!(lesson.contains("lr=0.07"));
         assert!(lesson.contains("too high"));
     }
-    
+
     #[test]
     fn test_lesson_small_model() {
         let config = TrialConfig {
@@ -264,13 +243,13 @@ mod tests {
             warmup_steps: None,
             max_steps: None,
         };
-        
+
         let rung = RungData { step: 1000, bpb: 2.9 };
         let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
-        
+
         assert!(lesson.contains("d_model=64"));
     }
-    
+
     #[test]
     fn test_lesson_early_death() {
         let config = TrialConfig {
@@ -285,14 +264,14 @@ mod tests {
             warmup_steps: None,
             max_steps: None,
         };
-        
+
         let rung = RungData { step: 1000, bpb: 3.2 };
         let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
-        
+
         assert!(lesson.contains("BPB=3.2"));
         assert!(lesson.contains("rung-1000"));
     }
-    
+
     #[test]
     fn test_lesson_type_priority() {
         let config = TrialConfig {
@@ -307,10 +286,10 @@ mod tests {
             warmup_steps: None,
             max_steps: None,
         };
-        
+
         let rung = RungData { step: 1000, bpb: 3.5 };
         let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
-        
+
         // Should prioritize AVOID lessons
         assert_eq!(lesson_type, LessonType::Avoid);
     }

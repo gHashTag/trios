@@ -1,13 +1,13 @@
 //! Race status and leaderboard display
 
-use sqlx::PgPool;
-use serde::Deserialize;
+use crate::neon::NeonDb;
 use anyhow::Result;
+use uuid::Uuid;
 
 /// Leaderboard entry
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct LeaderboardEntry {
-    pub trial_id: String,
+    pub trial_id: Uuid,
     pub machine_id: String,
     pub config: serde_json::Value,
     pub status: String,
@@ -19,31 +19,31 @@ pub struct LeaderboardEntry {
 }
 
 /// Display race status
-pub async fn show_status(pool: &PgPool) -> Result<()> {
-    let entries = sqlx::query_as!(
+pub async fn show_status(db: &NeonDb) -> Result<()> {
+    let rows = db.client().query(
         r#"
-        SELECT 
-            trial_id::text as trial_id,
-            machine_id as machine_id,
-            config as "config!",
-            status as status,
-            final_bpb as "final_bpb?",
-            final_step as "final_step?",
+        SELECT
+            trial_id,
+            machine_id,
+            config,
+            status,
+            final_bpb,
+            final_step,
             COALESCE(
-                CASE 
+                CASE
                     WHEN rung_27000_bpb IS NOT NULL THEN 27000
                     WHEN rung_9000_bpb IS NOT NULL THEN 9000
                     WHEN rung_3000_bpb IS NOT NULL THEN 3000
                     WHEN rung_1000_bpb IS NOT NULL THEN 1000
                     ELSE 0
-                END, 
+                END,
                 0
             )::int as best_rung,
-            (SELECT lesson FROM igla_race_experience e 
-             WHERE e.trial_id = t.trial_id 
-             ORDER BY e.pattern_count DESC LIMIT 1) as "lesson?",
+            (SELECT lesson FROM igla_race_experience e
+             WHERE e.trial_id = t.trial_id
+             ORDER BY e.pattern_count DESC LIMIT 1) as lesson,
             COALESCE(
-                (SELECT COUNT(*) + 1 FROM igla_race_trials t2 
+                (SELECT COUNT(*) + 1 FROM igla_race_trials t2
                  WHERE t2.final_bpb < t.final_bpb),
                 999999
             )::bigint as bpb_rank
@@ -51,103 +51,116 @@ pub async fn show_status(pool: &PgPool) -> Result<()> {
         WHERE t.status IN ('completed', 'pruned') AND t.final_bpb IS NOT NULL
         ORDER BY t.final_bpb ASC NULLS LAST
         LIMIT 20
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
-    
+        "#,
+        &[]
+    ).await?;
+
     println!("┌─────────────────────────────────────────────────────────────────────────────┐");
     println!("│                    IGLA RACE LEADERBOARD                                 │");
     println!("├─────────────────────────────────────────────────────────────────────────────┤");
     println!("│ Rank │  BPB   │ Steps │  Rung  │ Machine      │ Lesson                         │");
     println!("├─────────────────────────────────────────────────────────────────────────────┤");
-    
-    for entry in entries {
-        let rank = format!("#{}", entry.bpb_rank);
-        let bpb = entry.final_bpb.map_or("-".to_string(), |b| format!("{:.4}", b));
-        let steps = entry.final_step.map_or("-".to_string(), |s| format!("{}", s));
-        let rung = entry.best_rung;
-        let machine = &entry.machine_id;
-        let lesson = entry.lesson.as_deref().unwrap_or(&"-".to_string());
-        
-        // Truncate if too long
-        let machine_trunc = if machine.len() > 10 {
-            &machine[..10]
+
+    for row in rows {
+        let trial_id: Uuid = row.get(0);
+        let machine_id: String = row.get(1);
+        let config: serde_json::Value = row.get(2);
+        let status: String = row.get(3);
+        let final_bpb: Option<f64> = row.get(4);
+        let final_step: Option<i32> = row.get(5);
+        let best_rung: i32 = row.get(6);
+        let lesson: Option<String> = row.get(7);
+        let bpb_rank: i64 = row.get(8);
+
+        let rank = format!("#{}", bpb_rank);
+        let bpb = final_bpb.map_or("-".to_string(), |b| format!("{:.4}", b));
+        let steps = final_step.map_or("-".to_string(), |s| format!("{}", s));
+
+        // Truncate machine if too long
+        let machine_trunc = if machine_id.len() > 10 {
+            format!("{}...", &machine_id[..7])
         } else {
-            machine
+            machine_id.clone()
         };
-        let lesson_trunc = if lesson.len() > 28 {
-            format!("{}...", &lesson[..25])
+
+        // Truncate lesson if too long
+        let lesson_display = lesson.as_deref().unwrap_or("-");
+        let lesson_trunc = if lesson_display.len() > 28 {
+            format!("{}...", &lesson_display[..25])
         } else {
-            lesson.clone()
+            lesson_display.to_string()
         };
-        
+
         println!("│ {:4} │ {:6} │ {:5} │ {:6} │ {:11} │ {:30} │",
-                 rank, bpb, steps, rung, machine_trunc, lesson_trunc);
+                 rank, bpb, steps, best_rung, machine_trunc, lesson_trunc);
     }
-    
+
     println!("└─────────────────────────────────────────────────────────────────────────────┘");
-    
+
     // Show top patterns/lessons
     println!("\nTop Patterns (Failure Memory):");
     println!("┌─────────────────────────────────────────────────────────────────────────────┐");
     println!("│ Type    │ Count │ Pattern                                                      │");
     println!("├─────────────────────────────────────────────────────────────────────────────┤");
-    
-    let patterns = sqlx::query_as!(
+
+    let patterns = db.client().query(
         r#"
         SELECT lesson_type, lesson, pattern_count
         FROM igla_race_experience
         WHERE pattern_count > 0
         ORDER BY pattern_count DESC, confidence DESC
         LIMIT 10
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
-    
-    for pattern in patterns {
-        let lesson_type = &pattern.lesson_type;
-        let count = pattern.pattern_count;
-        let lesson = &pattern.lesson;
+        "#,
+        &[]
+    ).await?;
+
+    for row in patterns {
+        let lesson_type: String = row.get(0);
+        let count: i32 = row.get(1);
+        let lesson: String = row.get(2);
+
         let lesson_trunc = if lesson.len() > 58 {
             format!("{}...", &lesson[..55])
         } else {
-            lesson.clone()
+            lesson
         };
-        
+
         println!("│ {:7} │ {:5} │ {:59} │", lesson_type, count, lesson_trunc);
     }
-    
+
     println!("└─────────────────────────────────────────────────────────────────────────────┘");
-    
+
     Ok(())
 }
 
 /// Show summary statistics
-pub async fn show_summary(pool: &PgPool) -> Result<()> {
-    let total_trials: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM igla_race_trials")
-        .fetch_one(pool)
-        .await?;
-    
-    let completed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM igla_race_trials WHERE status = 'completed'")
-        .fetch_one(pool)
-        .await?;
-    
-    let pruned: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM igla_race_trials WHERE status = 'pruned'")
-        .fetch_one(pool)
-        .await?;
-    
-    let running: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM igla_race_trials WHERE status = 'running'")
-        .fetch_one(pool)
-        .await?;
-    
-    let best_bpb: Option<f64> = sqlx::query_scalar(
-        "SELECT MIN(final_bpb) FROM igla_race_trials WHERE final_bpb IS NOT NULL"
-    )
-    .fetch_one(pool)
-    .await?;
-    
+pub async fn show_summary(db: &NeonDb) -> Result<()> {
+    let total_trials: i64 = db.client().query_one(
+        "SELECT COUNT(*) FROM igla_race_trials",
+        &[]
+    ).await?.get(0);
+
+    let completed: i64 = db.client().query_one(
+        "SELECT COUNT(*) FROM igla_race_trials WHERE status = 'completed'",
+        &[]
+    ).await?.get(0);
+
+    let pruned: i64 = db.client().query_one(
+        "SELECT COUNT(*) FROM igla_race_trials WHERE status = 'pruned'",
+        &[]
+    ).await?.get(0);
+
+    let running: i64 = db.client().query_one(
+        "SELECT COUNT(*) FROM igla_race_trials WHERE status = 'running'",
+        &[]
+    ).await?.get(0);
+
+    let best_bpb_row = db.client().query_one(
+        "SELECT MIN(final_bpb) FROM igla_race_trials WHERE final_bpb IS NOT NULL",
+        &[]
+    ).await?;
+    let best_bpb: Option<f64> = best_bpb_row.get(0);
+
     println!("┌─────────────────────────────────────────────────────────────────────────────┐");
     println!("│                    IGLA RACE SUMMARY                                       │");
     println!("├─────────────────────────────────────────────────────────────────────────────┤");
@@ -155,9 +168,9 @@ pub async fn show_summary(pool: &PgPool) -> Result<()> {
     println!("│ Completed:       {:>6}                                                          │", completed);
     println!("│ Pruned:          {:>6}                                                          │", pruned);
     println!("│ Running:         {:>6}                                                          │", running);
-    println!("│ Best BPB:        {:>6}                                                          │", 
+    println!("│ Best BPB:        {:>6}                                                          │",
              best_bpb.map_or("-".to_string(), |b| format!("{:.4}", b)));
     println!("└─────────────────────────────────────────────────────────────────────────────┘");
-    
+
     Ok(())
 }
