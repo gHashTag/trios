@@ -6,6 +6,7 @@
 use anyhow::Result;
 use tracing::info;
 use uuid::Uuid;
+use tokio_postgres::types::ToSql;
 
 /// Neon database connection (stub)
 pub struct NeonDb {
@@ -45,13 +46,13 @@ impl NeonDb {
     }
 
     /// Execute query (stub - returns 0 rows affected)
-    pub fn query(&self, _query: &str, _params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> Result<u64> {
+    pub fn query(&self, _query: &str, _params: &[&(dyn ToSql + Sync)]) -> Result<u64> {
         info!("Query executed (STUB): {}", _query.trim());
         Ok(0)
     }
 
     /// Query one (stub - returns None)
-    pub fn query_one(&self, _query: &str, _params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> Result<Option<tokio_postgres::Row>> {
+    pub fn query_one(&self, _query: &str, _params: &[&(dyn ToSql + Sync)]) -> Result<Option<tokio_postgres::Row>> {
         info!("Query one executed (STUB): {}", _query.trim());
         Ok(None)
     }
