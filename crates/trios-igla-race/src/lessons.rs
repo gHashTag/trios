@@ -237,7 +237,7 @@ mod tests {
     fn test_lesson_small_model() {
         let config = TrialConfig {
             lr: Some(0.004),
-            d_model: Some(64),
+            d_model: Some(32),
             hidden: None,
             n_layers: None,
             optimizer: None,
@@ -253,7 +253,7 @@ mod tests {
         let rung = RungData { step: 1000, bpb: 2.9 };
         let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
-        assert!(lesson.contains("d_model=64"));
+        assert!(lesson.contains("d_model=32"));
     }
 
     #[test]

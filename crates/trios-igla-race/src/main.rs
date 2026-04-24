@@ -1,5 +1,4 @@
-use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinSet;
 use tracing::info;
@@ -12,7 +11,7 @@ struct Cli {
     command: RaceCommand,
 }
 
-#[derive(Subcommand)]
+#[derive(clap::Subcommand)]
 enum RaceCommand {
     Start {
         #[arg(long, default_value = "unknown")]
@@ -71,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_worker(
     _neon_url: &str,
     _machine_id: &str,
-    worker_id: usize,
+    _worker_id: usize,
     best_bpb: Arc<RwLock<f64>>,
 ) -> anyhow::Result<f64> {
     let mut rng = StdRng::from_entropy();
@@ -81,14 +80,12 @@ async fn run_worker(
         let context = *[4, 5, 6, 7, 8].choose(&mut rng).ok_or_else(|| anyhow::anyhow!("No context"))?;
 
         let lr = rng.gen_range(0.0001..0.01);
-        let optimizer = if rng.gen_bool(0.5) { "adamw" } else { "muon" }.to_string();
-        let wd = rng.gen_range(0.001..0.1);
-
-        let config = format!(r#"{{"d_model": {}, "context": {}, "lr": {}, "optimizer": "{}", "wd": {}}}"#, d_model, context, lr, optimizer, wd);
+        let _optimizer = if rng.gen_bool(0.5) { "adamw" } else { "muon" }.to_string();
+        let _wd = rng.gen_range(0.001..0.1);
 
         let output = tokio::process::Command::new("./target/release/trios-igla-trainer")
             .arg("--config")
-            .arg(&format!("d_model={},context={},lr={}", d_model, context, lr))
+            .arg(format!("d_model={},context={},lr={}", d_model, context, lr))
             .arg("--steps")
             .arg("12000")
             .output()
