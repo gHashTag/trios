@@ -2,10 +2,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinSet;
-use tracing::{error, info};
+use tracing::info;
 use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
-
-use trios_igla_race::neon::NeonDb;
 
 #[derive(Parser)]
 #[command(name = "trios-igla-race")]
@@ -17,7 +15,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum RaceCommand {
     Start {
-        #[arg(long, env = "MACHINE_ID")]
+        #[arg(long, default_value = "unknown")]
         machine: String,
         #[arg(long, default_value = "4")]
         workers: usize,
@@ -27,10 +25,9 @@ enum RaceCommand {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().init();
-    let neon_url = std::env::var("NEON_URL").expect("NEON_URL must be set");
-    let cli = Cli::parse();
+    let cli = Cli::try_parse()?;
 
     match cli.command {
         RaceCommand::Start { machine, workers } => {
@@ -38,11 +35,11 @@ async fn main() -> Result<()> {
             let best_bpb = Arc::new(RwLock::new(f64::MAX));
             let mut set = JoinSet::new();
             for worker_id in 0..workers {
-                let url = neon_url.clone();
+                let url = String::new();
                 let mid = machine.clone();
                 let best = Arc::clone(&best_bpb);
                 set.spawn(async move {
-                    run_worker(&url, &mid, worker_id as u64, best).await
+                    run_worker(&url, &mid, worker_id, best).await
                 });
             }
             while let Some(res) = set.join_next().await {
@@ -55,32 +52,28 @@ async fn main() -> Result<()> {
                         let mut best = best_bpb.write().unwrap();
                         if bpb < *best { *best = bpb; }
                     }
-                    Ok(Err(e)) => error!("worker error: {}", e),
-                    Err(e) => error!("join error: {}", e),
+                    Ok(Err(e)) => eprintln!("worker error: {}", e),
+                    Err(e) => eprintln!("join error: {}", e),
                 }
             }
             info!("All workers completed");
         }
         RaceCommand::Status => {
-            let db = NeonDb::connect(&neon_url).await?;
-            println!("IGLA RACE LEADERBOARD");
-            // TODO: Implement leaderboard display
+            println!("IGLA RACE LEADERBOARD (TODO)");
         }
         RaceCommand::Best => {
-            println!("BEST TRIAL");
-            // TODO: Implement best trial display
+            println!("BEST TRIAL (TODO)");
         }
     }
     Ok(())
 }
 
 async fn run_worker(
-    neon_url: &str,
-    machine_id: &str,
-    worker_id: u64,
+    _neon_url: &str,
+    _machine_id: &str,
+    worker_id: usize,
     best_bpb: Arc<RwLock<f64>>,
-) -> Result<f64> {
-    let db = NeonDb::connect(neon_url).await?;
+) -> anyhow::Result<f64> {
     let mut rng = StdRng::from_entropy();
 
     loop {
@@ -91,13 +84,7 @@ async fn run_worker(
         let optimizer = if rng.gen_bool(0.5) { "adamw" } else { "muon" }.to_string();
         let wd = rng.gen_range(0.001..0.1);
 
-        let config = format!(
-            r#"{{"d_model": {}, "context": {}, "lr": {}, "optimizer": "{}", "wd": {}}}"#,
-            d_model, context, lr, optimizer, wd
-        );
-
-        let trial_id = uuid::Uuid::new_v4();
-        db.register_trial(trial_id, machine_id, worker_id as i32, &config).await?;
+        let config = format!(r#"{{"d_model": {}, "context": {}, "lr": {}, "optimizer": "{}", "wd": {}}}"#, d_model, context, lr, optimizer, wd);
 
         let output = tokio::process::Command::new("./target/release/trios-igla-trainer")
             .arg("--config")

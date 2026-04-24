@@ -6,7 +6,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 /// Lesson type for categorizing patterns
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum LessonType {
     Avoid,    // "AVOID: ..." — definite anti-pattern
     Pattern,  // "PATTERN: ..." — observed pattern
@@ -99,7 +99,7 @@ pub fn generate_lesson(
 
     // Analyze model capacity
     if let Some(d_model) = config.d_model {
-        if d_model < 64 && rung.bpb > 2.8 {
+        if d_model <= 64 && rung.bpb > 2.8 {
             lessons.push((
                 format!("PATTERN: d_model={} insufficient capacity, never below {} BPB",
                          d_model, rung.bpb),
@@ -221,6 +221,8 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            context: None,
+            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.4 };
@@ -244,6 +246,8 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            context: None,
+            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 2.9 };
@@ -265,6 +269,8 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            context: None,
+            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.2 };
@@ -287,6 +293,8 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            context: None,
+            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.5 };

@@ -2,7 +2,7 @@
 
 use tokio_postgres::Client;
 use anyhow::Result;
-use crate::neon::NeonDb;
+use crate::NeonDb;
 
 /// Print race leaderboard from Neon
 pub async fn print_leaderboard(client: &Client) -> Result<()> {
@@ -15,15 +15,15 @@ pub async fn print_leaderboard(client: &Client) -> Result<()> {
     println!("Rank |  BPB   | Steps |  Rung  | Machine      | Lesson");
 
     for row in rows.iter() {
-        let _trial_id = row.try_get::<usize, &str>(0).unwrap_or(&"-");
-        let machine_id = row.try_get::<usize, &str>(1).unwrap_or(&"-");
-        let _config_json = row.try_get::<usize, &str>(2).unwrap_or(&"{}");
-        let _status = row.try_get::<usize, &str>(3).unwrap_or(&"-");
-        let final_bpb = row.try_get::<usize, &str>(4).unwrap_or(&"-");
-        let final_step = row.try_get::<usize, &str>(5).unwrap_or(&"-");
-        let best_rung = row.try_get::<usize, &str>(6).unwrap_or(&"0");
-        let lesson = row.try_get::<usize, &str>(7).unwrap_or(&"-");
-        let bpb_rank = row.try_get::<usize, &str>(8).unwrap_or(&"999999");
+        let _trial_id = row.try_get::<usize, &str>(0).unwrap_or("-");
+        let machine_id = row.try_get::<usize, &str>(1).unwrap_or("-");
+        let _config_json = row.try_get::<usize, &str>(2).unwrap_or("{}");
+        let _status = row.try_get::<usize, &str>(3).unwrap_or("-");
+        let final_bpb = row.try_get::<usize, &str>(4).unwrap_or("-");
+        let final_step = row.try_get::<usize, &str>(5).unwrap_or("-");
+        let best_rung = row.try_get::<usize, &str>(6).unwrap_or("0");
+        let lesson = row.try_get::<usize, &str>(7).unwrap_or("-");
+        let bpb_rank = row.try_get::<usize, &str>(8).unwrap_or("999999");
 
         let rank = if bpb_rank == "999999" { "-".to_string() } else { format!("#{}", bpb_rank) };
 
@@ -53,9 +53,9 @@ pub async fn print_leaderboard(client: &Client) -> Result<()> {
     ).await?;
 
     for row in patterns.iter() {
-        let lesson_type = row.try_get::<usize, &str>(0).unwrap_or(&"-");
-        let count = row.try_get::<usize, &str>(1).unwrap_or(&"0");
-        let lesson = row.try_get::<usize, &str>(2).unwrap_or(&"-");
+        let lesson_type = row.try_get::<usize, &str>(0).unwrap_or("-");
+        let count = row.try_get::<usize, &str>(1).unwrap_or("0");
+        let lesson = row.try_get::<usize, &str>(2).unwrap_or("-");
 
         let lesson_trunc = if lesson.len() > 58 {
             format!("{}...", &lesson[..55])
@@ -75,6 +75,7 @@ pub async fn show_status(db: &NeonDb) -> Result<()> {
 }
 
 /// Print best trial
+#[allow(dead_code)]
 pub async fn print_best(client: &Client) -> Result<()> {
     let row = client.query_one(
         "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text FROM igla_race_trials WHERE final_bpb IS NOT NULL ORDER BY final_bpb ASC LIMIT 1",
@@ -82,11 +83,11 @@ pub async fn print_best(client: &Client) -> Result<()> {
     ).await;
 
     if let Ok(row) = row {
-        let _trial_id = row.try_get::<usize, &str>(0).unwrap_or(&"-");
-        let machine_id = row.try_get::<usize, &str>(1).unwrap_or(&"-");
-        let config_json = row.try_get::<usize, &str>(2).unwrap_or(&"{}");
-        let final_bpb = row.try_get::<usize, &str>(3).unwrap_or(&"-");
-        let final_step = row.try_get::<usize, &str>(4).unwrap_or(&"-");
+        let _trial_id = row.try_get::<usize, &str>(0).unwrap_or("-");
+        let machine_id = row.try_get::<usize, &str>(1).unwrap_or("-");
+        let config_json = row.try_get::<usize, &str>(2).unwrap_or("{}");
+        let final_bpb = row.try_get::<usize, &str>(3).unwrap_or("-");
+        let final_step = row.try_get::<usize, &str>(4).unwrap_or("-");
 
         let config: serde_json::Value = serde_json::from_str(config_json).unwrap_or(serde_json::json!({}));
         let config_str = serde_json::to_string_pretty(&config).unwrap_or_else(|_| "?".to_string());

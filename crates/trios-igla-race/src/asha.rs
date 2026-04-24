@@ -1,142 +1,134 @@
-//! ASHA (Asynchronous Successive Halving Algorithm) implementation
-//!
-//! Trinity-optimized: rungs at 1k → 3k → 9k → 27k (3^k progression)
+//! ASHA (Asynchronous Successive Halving Algorithm) worker
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use rand::Rng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use serde::Serialize;
+use std::sync::{Arc, RwLock};
+use tracing::info;
+use uuid::Uuid;
 
-/// ASHA rungs (Trinity 3^k progression)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AshaRung {
-    Rung1000 = 1000,
-    Rung3000 = 3000,
-    Rung9000 = 9000,
-    Rung27000 = 27000,
+use crate::NeonDb;
+
+#[derive(Debug, Serialize)]
+struct TrialConfig {
+    arch: String,
+    d_model: usize,
+    context: usize,
+    lr: f64,
+    seed: u64,
 }
 
-impl AshaRung {
-    /// Get all rungs in order
-    pub fn all() -> Vec<AshaRung> {
-        vec![
-            AshaRung::Rung1000,
-            AshaRung::Rung3000,
-            AshaRung::Rung9000,
-            AshaRung::Rung27000,
-        ]
-    }
+pub async fn run_worker(
+    neon_url: &str,
+    machine_id: &str,
+    worker_id: u64,
+    best_bpb: Arc<RwLock<f64>>,
+) -> Result<f64> {
+    let db = NeonDb::connect(neon_url).await?;
+    let mut rng = StdRng::from_entropy();
 
-    /// Get next rung after current
-    pub fn next(&self) -> Option<AshaRung> {
-        match self {
-            AshaRung::Rung1000 => Some(AshaRung::Rung3000),
-            AshaRung::Rung3000 => Some(AshaRung::Rung9000),
-            AshaRung::Rung9000 => Some(AshaRung::Rung27000),
-            AshaRung::Rung27000 => None,
+    loop {
+        // Sample random hyperparameters
+        let config = sample_config(worker_id, &mut rng);
+        let config_json = serde_json::to_string(&config)?;
+        let trial_id = Uuid::new_v4();
+
+        // Register trial in database
+        db.register_trial(trial_id, machine_id, worker_id as i32, &config_json).await?;
+
+        info!(
+            "worker={} trial={} arch={} d={} ctx={} lr={:.4}",
+            worker_id, trial_id, config.arch, config.d_model, config.context, config.lr
+        );
+
+        // ASHA rungs: 1000, 3000, 9000, 27000
+        let rungs = [1000i32, 3000, 9000, 27000];
+        let mut final_bpb = f64::MAX;
+
+        for rung in &rungs {
+            let bpb = run_training_step(&config, rung)?;
+
+            // Update database with current rung BPB
+            db.record_checkpoint(&trial_id, *rung, bpb).await?;
+
+            info!("worker={} rung={} BPB={:.4}", worker_id, rung, bpb);
+
+            // ASHA prune: check if worse than median * 1.33
+            let median_bpb = {
+                let best = best_bpb.read().unwrap();
+                *best * 1.33
+            };
+            if bpb > median_bpb && *rung == 1000 {
+                db.mark_pruned(&trial_id, *rung, bpb).await?;
+                break;
+            }
+
+            if bpb < 1.50 {
+                // Success! Complete trial
+                db.mark_completed(&trial_id, *rung, bpb).await?;
+
+                // Update global best
+                {
+                    let mut best = best_bpb.write().unwrap();
+                    if bpb < *best {
+                        *best = bpb;
+                    }
+                }
+
+                return Ok(bpb);
+            }
+
+            final_bpb = bpb;
         }
-    }
 
-    /// Get step value
-    pub fn step(&self) -> usize {
-        *self as usize
-    }
-
-    /// Get rung as i32 for database
-    pub fn as_i32(&self) -> i32 {
-        *self as i32
+        // Trial pruned after all rungs
+        db.mark_pruned(&trial_id, 27000, final_bpb).await?;
     }
 }
 
-/// ASHA trial configuration
-#[derive(Debug, Clone)]
-pub struct AshaConfig {
-    /// Target BPB to declare winner
-    pub target_bpb: f64,
+fn sample_config(worker_id: u64, rng: &mut StdRng) -> TrialConfig {
+    let archs = ["ngram", "attn", "hybrid"];
+    let dims = [192usize, 256, 384];
+    let ctxs = [4usize, 6, 8];
 
-    /// Top fraction to keep at each rung (e.g., 0.33 = top 33%)
-    pub keep_fraction: f64,
+    let arch = archs[rng.gen_range(0..archs.len())].to_string();
+    let d_model = dims[rng.gen_range(0..dims.len())];
+    let context = ctxs[rng.gen_range(0..ctxs.len())];
+    let lr: f64 = rng.gen_range(1e-4_f64..1e-2_f64);
+    let seed: u64 = worker_id * 1000 + rng.gen_range(0..1000);
 
-    /// Minimum trials to start pruning
-    pub min_trials: usize,
-
-    /// Whether to run infinite loop (for continuous search)
-    pub continuous: bool,
-}
-
-impl Default for AshaConfig {
-    fn default() -> Self {
-        Self {
-            target_bpb: 1.5,  // IGLA target
-            keep_fraction: 0.33,
-            min_trials: 10,
-            continuous: true,
-        }
+    TrialConfig {
+        arch,
+        d_model,
+        context,
+        lr,
+        seed,
     }
 }
 
-/// Parse BPB from subprocess stdout
-pub fn parse_bpb(output: &Result<std::process::Output, std::io::Error>) -> Result<f64> {
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            stdout
-                .lines()
-                .rev()
-                .find(|l| l.starts_with("BPB="))
-                .and_then(|l| l.trim_start_matches("BPB=").parse().ok())
-                .ok_or_else(|| anyhow::anyhow!("No BPB found in output"))
-        }
-        Err(e) => Err(anyhow::anyhow!("Subprocess error: {}", e)),
-    }
-}
+fn run_training_step(config: &TrialConfig, rung: &i32) -> Result<f64> {
+    use std::process::Command;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    let output = Command::new("./target/release/trios-igla-trainer")
+        .args([
+            "--seed", &config.seed.to_string(),
+            "--steps", &rung.to_string(),
+            "--hidden", &config.d_model.to_string(),
+            "--context", &config.context.to_string(),
+            "--lr", &config.lr.to_string(),
+            "--arch", &config.arch,
+        ])
+        .output()?;
 
-    #[test]
-    fn test_rung_progression() {
-        assert_eq!(AshaRung::Rung1000.next(), Some(AshaRung::Rung3000));
-        assert_eq!(AshaRung::Rung3000.next(), Some(AshaRung::Rung9000));
-        assert_eq!(AshaRung::Rung9000.next(), Some(AshaRung::Rung27000));
-        assert_eq!(AshaRung::Rung27000.next(), None);
-    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
 
-    #[test]
-    fn test_rung_steps() {
-        assert_eq!(AshaRung::Rung1000.step(), 1000);
-        assert_eq!(AshaRung::Rung3000.step(), 3000);
-        assert_eq!(AshaRung::Rung9000.step(), 9000);
-        assert_eq!(AshaRung::Rung27000.step(), 27000);
-    }
-
-    #[test]
-    fn test_asha_config_default() {
-        let config = AshaConfig::default();
-        assert_eq!(config.target_bpb, 1.5);
-        assert_eq!(config.keep_fraction, 0.33);
-        assert!(config.continuous);
-    }
-
-    #[test]
-    fn test_parse_bpb_success() {
-        let stdout = b"Training...\nBPB=2.5329\nDone";
-        let output = Ok(std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
-            stdout: stdout.to_vec(),
-            stderr: vec![],
-        });
-        let bpb = parse_bpb(&output).unwrap();
-        assert!((bpb - 2.5329).abs() < 0.0001);
-    }
-
-    #[test]
-    fn test_parse_bpb_failure() {
-        let stdout = b"Training...\nDone";
-        let output = Ok(std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
-            stdout: stdout.to_vec(),
-            stderr: vec![],
-        });
-        assert!(parse_bpb(&output).is_err());
-    }
+    // Parse BPB from stdout (format: BPB=X.XXXX)
+    stdout
+        .lines()
+        .rev()
+        .find(|l| l.starts_with("BPB="))
+        .and_then(|l| l.trim_start_matches("BPB=").trim().parse().ok())
+        .ok_or_else(|| anyhow::anyhow!("Failed to parse BPB from stdout"))
 }
