@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 
+mod jepa_runner;
+
 #[derive(Parser)]
 #[command(name = "igla-trainer")]
 struct Args {
@@ -89,25 +91,44 @@ fn main() -> Result<()> {
         args.arch, args.hidden, args.context, args.lr, args.steps, args.seed
     );
 
-    // Simulate training with small delay per 100 steps
-    for step in (0..args.steps).step_by(100) {
-        eprintln!("Step {} / {}", step, args.steps);
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
+    // Dispatch by architecture
+    let bpb = match args.arch.as_str() {
+        "jepa" => {
+            use trios_train_cpu::jepa::JepaConfig;
 
-    let bpb = simulate_training(&args);
+            let cfg = JepaConfig {
+                seed: args.seed,
+                d_model: args.hidden,
+                mask_ratio: 0.30,
+                min_span: 3,
+                max_span: 7,
+                num_spans: 2,
+                ema_start: 0.996,
+                ema_end: 1.0,
+                ema_ramp_steps: args.steps,
+                predictor_lr_mult: 0.1,
+            };
+
+            let train_args = jepa_runner::JepaTrainArgs::from_clap(&args);
+            jepa_runner::run_jepa_training(&cfg, &train_args)?
+        }
+        _ => {
+            // Original mock simulation for ngram, attn, hybrid
+            for step in (0..args.steps).step_by(100) {
+                eprintln!("Step {} / {}", step, args.steps);
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            simulate_training(&args)
+        }
+    };
 
     // stdout: ONLY BPB=X.XXXX (contract with asha.rs)
     println!("BPB={:.4}", bpb);
 
-    // Log to experience file
-    if let Some(exp_id) = &args.exp_id {
-        write_experience_log(exp_id, &args, bpb)?;
-    }
-
     Ok(())
 }
 
+#[allow(dead_code)]
 fn write_experience_log(exp_id: &str, config: &Args, bpb: f64) -> Result<()> {
     use std::fs;
     use std::io::Write;

@@ -173,7 +173,8 @@ mod tests {
     fn test_nca_entropy_constraint_too_high() {
         let penalty = nca_entropy_constraint(3.5);
         // (3.5 - 2.8)^2 * 100 = 0.49 * 100 = 49
-        assert_eq!(penalty, 49.0);
+        // Use approx for floating point comparison
+        assert!((penalty - 49.0).abs() < 1e-9);
     }
 
     #[test]

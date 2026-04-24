@@ -328,8 +328,15 @@ mod tests {
         let tiny = GF16::from_f32(1e-10);
         assert_eq!(tiny, GF16::ZERO);
 
+        // GF16 max value is ~6.55×10⁴ (not infinity)
+        // Values larger than max are clamped to max normal (exp=62), not inf
         let huge = GF16::from_f32(1e10);
-        assert!(huge.is_infinite());
+        // Should be max normal value, not infinity
+        assert!(!huge.is_infinite());
+        // Should be very large but finite
+        let huge_f32 = huge.to_f32();
+        assert!(huge_f32 > 10000.0);
+        assert!(huge_f32.is_finite());
     }
 
     #[test]

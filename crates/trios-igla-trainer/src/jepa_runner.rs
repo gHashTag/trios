@@ -7,7 +7,7 @@ use rand::rngs::StdRng;
 use std::io::Write;
 
 use trios_train_cpu::jepa::{
-    JepaConfig, MaskConfig, mask_spans, get_unmasked, get_masked,
+    JepaConfig, MaskConfig, mask_spans, get_masked,
     EmaTarget, EmaConfig, ema_update, compute_decay,
     JepaLossConfig, compute_jepa_loss, mse_loss,
 };
@@ -85,8 +85,6 @@ pub fn run_jepa_training(cfg: &JepaConfig, args: &JepaTrainArgs) -> Result<f64> 
     };
     let mut _ema = EmaTarget::new(ema_config);
 
-    let mut ntp_loss_accum = 0.0;
-    let mut jepa_loss_accum = 0.0;
     let learning_rate = 0.001;
     let loss_cfg = JepaLossConfig::default();
 
@@ -150,9 +148,6 @@ pub fn run_jepa_training(cfg: &JepaConfig, args: &JepaTrainArgs) -> Result<f64> 
         } else {
             2.5
         };
-
-        ntp_loss_accum += ntp_loss;
-        jepa_loss_accum += jepa_loss.total;
 
         for (p, &pos) in masked_positions.iter().enumerate() {
             for d in 0..cfg.d_model {
