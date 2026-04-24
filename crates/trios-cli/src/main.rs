@@ -248,17 +248,20 @@ fn main() -> Result<()> {
             let seed_list: Vec<u64> = seeds.split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
-            let results = train_cpu(seed_list, steps, hidden, lr, activation, parallel, residual, dropout, warmup, wd)?;
+            let config = trios_cli::cmd::train::TrainConfig {
+                steps, hidden, lr, activation, residual, dropout, warmup, wd,
+            };
+            let results = train_cpu(seed_list, config, parallel)?;
             let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
             println!("\n📊 Average BPB: {:.3} ({})", avg, results.len());
         }
         Cmd::Race { sub } => match sub {
             RaceSub::Init { study, neon_url } => {
-                let mut config = trios_cli::cmd::race::RaceConfig::default();
-                config.study_name = study;
-                if let Some(url) = neon_url {
-                    config.neon_url = url;
-                }
+                let config = trios_cli::cmd::race::RaceConfig {
+                    study_name: study,
+                    neon_url: neon_url.unwrap_or_else(|| std::env::var("NEON_DATABASE_URL").unwrap_or_else(|_| "postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb".to_string())),
+                    ..Default::default()
+                };
                 race_init(config)?;
             }
             RaceSub::Status { limit } => {

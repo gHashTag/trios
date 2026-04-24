@@ -131,8 +131,8 @@ fn app() -> Element {
 
     let status_cls = if is_connected { "status-connected" } else { "status-error" };
 
-    macro_rules! tab_cls { ($name:expr) => { if active == $name { "tab-active" } else { "tab" } };
-    macro_rules! content_cls { ($name:expr) => { if active == $name { "tab-content-active" } else { "tab-content" } };
+    macro_rules! tab_cls { ($name:expr) => { if active == $name { "tab-active" } else { "tab" } }; }
+    macro_rules! content_cls { ($name:expr) => { if active == $name { "tab-content-active" } else { "tab-content" } }; }
 
     let anthropic_val = anthropic_key.read().clone();
     let openai_val = openai_key.read().clone();
