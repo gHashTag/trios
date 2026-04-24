@@ -1,10 +1,9 @@
 //! `tri` — Trinity IGLA Needle Hunt CLI
 //!
-//! Main entry point for the tri CLI tool.
+//! Main entry point for tri CLI tool.
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-
 use trios_cli::{
     cmd::{
         agent::agent_dispatch,
@@ -136,6 +135,14 @@ enum Cmd {
         activation: String,
         #[arg(long, default_value_t = true)]
         parallel: bool,
+        #[arg(long, default_value_t = false)]
+        residual: bool,
+        #[arg(long, default_value = "0.0")]
+        dropout: String,
+        #[arg(long, default_value = "0")]
+        warmup: String,
+        #[arg(long, default_value = "0.04")]
+        wd: String,
     },
 }
 
@@ -214,11 +221,11 @@ fn main() -> Result<()> {
         Cmd::Status { json } => {
             status_run(trios_cli::cmd::status::StatusCmd { json })?;
         }
-        Cmd::Train { steps, hidden, lr, seeds, activation, parallel } => {
+        Cmd::Train { steps, hidden, lr, seeds, activation, parallel, residual, dropout, warmup, wd } => {
             let seed_list: Vec<u64> = seeds.split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
-            let results = train_cpu(seed_list, steps, hidden, lr, activation, parallel)?;
+            let results = train_cpu(seed_list, steps, hidden, lr, activation, parallel, residual, dropout, warmup, wd)?;
             let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
             println!("\n📊 Average BPB: {:.3} ({})", avg, results.len());
         }

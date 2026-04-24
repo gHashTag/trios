@@ -13,16 +13,16 @@ pub struct TrainResult {
     pub time_sec: f64,
 }
 
-pub fn train_cpu(seeds: Vec<u64>, steps: usize, hidden: usize, lr: f64, activation: String, parallel: bool) -> Result<Vec<TrainResult>> {
+pub fn train_cpu(seeds: Vec<u64>, steps: usize, hidden: usize, lr: f64, activation: String, parallel: bool, residual: bool, dropout: String, warmup: String, wd: String) -> Result<Vec<TrainResult>> {
     let binary = find_ngram_train()?;
 
     println!("=== tri train: CPU N-Gram ===");
     println!("seeds={:?} steps={} hidden={} lr={} activation={} parallel={}", seeds, steps, hidden, lr, activation, parallel);
 
     if parallel && seeds.len() > 1 {
-        run_parallel(&binary, &seeds, steps, hidden, lr, &activation)
+        run_parallel(&binary, &seeds, steps, hidden, lr, &activation, residual, &dropout, &warmup, &wd)
     } else {
-        run_sequential(&binary, &seeds, steps, hidden, lr, &activation)
+        run_sequential(&binary, &seeds, steps, hidden, lr, &activation, residual, &dropout, &warmup, &wd)
     }
 }
 
@@ -39,21 +39,24 @@ fn find_ngram_train() -> Result<PathBuf> {
     anyhow::bail!("ngram_train binary not found. Run: cargo build --release -p trios-train-cpu --bin ngram_train");
 }
 
-fn run_sequential(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str) -> Result<Vec<TrainResult>> {
+fn run_sequential(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str, residual: bool, dropout: &str, warmup: &str, wd: &str) -> Result<Vec<TrainResult>> {
     let mut results = Vec::new();
     for &seed in seeds {
-        let r = run_single(binary, seed, steps, hidden, lr, activation)?;
+        let r = run_single(binary, seed, steps, hidden, lr, activation, residual, dropout, warmup, wd)?;
         results.push(r);
     }
     Ok(results)
 }
 
-fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str) -> Result<Vec<TrainResult>> {
+fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f64, activation: &str, residual: bool, dropout: &str, warmup: &str, wd: &str) -> Result<Vec<TrainResult>> {
     let mut handles = Vec::new();
 
     for &seed in seeds {
         let binary = binary.to_path_buf();
         let activation = activation.to_string(); // Clone for thread safety
+        let dropout = dropout.to_string(); // Clone for thread safety
+        let warmup = warmup.to_string(); // Clone for thread safety
+        let wd = wd.to_string(); // Clone for thread safety
         let handle = std::thread::spawn(move || {
             let start = Instant::now();
             let output = Command::new(&binary)
@@ -62,6 +65,10 @@ fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f
                 .arg(format!("--hidden={}", hidden))
                 .arg(format!("--lr={}", lr))
                 .arg(format!("--activation={}", activation))
+                .arg(if residual { "--residual" } else { "" })
+                .arg(format!("--dropout={}", dropout))
+                .arg(format!("--warmup={}", warmup))
+                .arg(format!("--wd={}", wd))
                 .output()
                 .context("Failed to execute ngram_train")?;
 
@@ -104,7 +111,7 @@ fn run_parallel(binary: &Path, seeds: &[u64], steps: usize, hidden: usize, lr: f
     Ok(results)
 }
 
-fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, activation: &str) -> Result<TrainResult> {
+fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, activation: &str, residual: bool, dropout: &str, warmup: &str, wd: &str) -> Result<TrainResult> {
     let start = Instant::now();
     let output = Command::new(binary)
         .arg(format!("--seed={}", seed))
@@ -112,6 +119,10 @@ fn run_single(binary: &Path, seed: u64, steps: usize, hidden: usize, lr: f64, ac
         .arg(format!("--hidden={}", hidden))
         .arg(format!("--lr={}", lr))
         .arg(format!("--activation={}", activation))
+        .arg(if residual { "--residual" } else { "" })
+        .arg(format!("--dropout={}", dropout))
+        .arg(format!("--warmup={}", warmup))
+        .arg(format!("--wd={}", wd))
         .output()
         .context("Failed to execute ngram_train")?;
 
