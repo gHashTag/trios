@@ -145,13 +145,11 @@ async fn run_worker(
         // Sample a new config
         let config = TrialConfig {
             seed: rng.gen_range(40..100),
-            d_model: *[128, 192, 256, 384]
+            d_model: **[128, 192, 256, 384]
                 .choose(&mut rng)
-                .copied()
                 .ok_or_else(|| anyhow::anyhow!("No d_model options"))?,
-            context: *[4, 5, 6, 7, 8]
+            context: **[4, 5, 6, 7, 8]
                 .choose(&mut rng)
-                .copied()
                 .ok_or_else(|| anyhow::anyhow!("No context options"))?,
             lr: rng.gen_range(0.0001..0.01),
             optimizer: if rng.gen_bool(0.5) { "adamw" } else { "muon" }.to_string(),
