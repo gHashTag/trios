@@ -1,10 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
 
 //! Pure Rust CPU Training for IGLA-GF16
-//!
-//! Zero-dependency training loop that fits in 50MB RAM.
-//! Configuration: batch=4, seq_len=128, 1000 steps.
-//! Target: ~60 seconds on M2, BPB metric for Parameter Golf.
 
 pub mod backward;
 pub mod bench;
@@ -17,18 +13,18 @@ pub mod swa_phi;
 pub mod residual_mix;
 pub mod sliding_eval;
 pub mod trinity_3k_model;
-
-// GoldenFloat16 implementation
 pub mod gf16;
-
-// Golden Float Family — φ-based number systems
-// pub mod phi_numbers; // TODO: fix const fn errors
-
-// Real IGLA Phase A/B training
 pub mod real_igla_model;
 pub mod real_igla_trainer;
 
-// Re-export commonly used types
+// T-JEPA: Ternary Joint Embedding Predictive Architecture (TASK-5A)
+// Spec: .trinity/specs/issue143-task5a-jepa-design.md
+// Theory: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
+pub mod jepa;
+
+// Multi-objective loss + ASHA rung schedules (TASK-5A.6)
+pub mod objective;
+
 pub use backward::{clip_gradients, cross_entropy_loss, LinearGradients};
 pub use bench::{
     bpb_from_loss, estimate_model_size, print_metrics, train_cpu_loop, train_cpu_trace,
@@ -42,3 +38,5 @@ pub use ortho_init_baseline::ortho_init_baseline;
 pub use swa_phi::{SwaState, swa_init};
 pub use residual_mix::ResidualMixConfig;
 pub use sliding_eval::SlidingEvalConfig;
+pub use jepa::{JepaConfig, JepaResult};
+pub use objective::{ObjectiveConfig, ComponentLosses, CombinedLoss, compute_combined_loss};
