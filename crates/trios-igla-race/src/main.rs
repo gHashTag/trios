@@ -10,6 +10,7 @@ use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
 use uuid::Uuid;
 
 use trios_igla_race::{
+    asha::register_trial,
     neon::NeonDb,
     status::{print_leaderboard, print_best},
     lessons::TrialConfig,
@@ -113,9 +114,7 @@ async fn run_worker(
         };
 
         let config_str = serde_json::to_string(&config)?;
-        let trial_id = Uuid::new_v4();
-        
-        db.register_trial(trial_id, machine_id, worker_id as i32, &config_str).await?;
+        let trial_id = register_trial(&db, machine_id, worker_id as usize, &config_str).await?;
 
         let mut prev_bpb = f64::MAX;
         let mut pruned = false;
