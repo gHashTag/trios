@@ -135,7 +135,7 @@ async fn run_worker(
             Uuid::new_v4(),
             machine_id,
             worker_id as i32,
-            &config_value,
+            serde_json::to_string(&config_value).as_str(),
         ).await?;
 
         let mut prev_bpb = f64::MAX;
@@ -143,7 +143,7 @@ async fn run_worker(
 
         for rung in AshaRung::all() {
             let step = rung.step();
-            let bpb = simulate_training(&config, step).await?;
+            let bpb = simulate_training(&config, step as u64).await?;
 
             db.client().execute(
                 &format!("UPDATE igla_race_trials SET rung_{}_step = $1, rung_{}_bpb = $2, final_step = $1, final_bpb = $2 WHERE trial_id = $3", step, step),
