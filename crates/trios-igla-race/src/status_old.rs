@@ -16,11 +16,11 @@ pub async fn print_leaderboard(client: &Client) -> Result<()> {
     println!("-----|--------|-------|--------");
 
     for row in rows.iter() {
-        let _trial_id: &str = row.get(0)?;
-        let machine_id: &str = row.get(1)?;
-        let final_bpb: &str = row.get(2)?;
-        let final_step: &str = row.get(3)?;
-        let lesson: &str = row.get(4)?;
+        let _trial_id: String = row.get(0)?;
+        let machine_id: String = row.get(1)?;
+        let final_bpb: String = row.get(2)?;
+        let final_step: String = row.get(3)?;
+        let lesson: String = row.get(4)?;
         let bpb_rank: i64 = row.get(5)?;
 
         let rank = if bpb_rank == 999999 { "-".to_string() } else { format!("#{}", bpb_rank) };
@@ -39,13 +39,13 @@ pub async fn print_best(client: &Client) -> Result<()> {
     ).await?;
 
     if let Some(row) = row {
-        let _trial_id: &str = row.get(0)?;
-        let machine_id: &str = row.get(1)?;
-        let config_json: &str = row.get(2)?;
-        let final_bpb: &str = row.get(3)?;
-        let final_step: &str = row.get(4)?;
+        let _trial_id: String = row.get(0)?;
+        let machine_id: String = row.get(1)?;
+        let config_json: String = row.get(2)?;
+        let final_bpb: String = row.get(3)?;
+        let final_step: String = row.get(4)?;
 
-        let config: serde_json::Value = serde_json::from_str(config_json).unwrap_or(serde_json::json!({}));
+        let config: serde_json::Value = serde_json::from_str(&config_json).unwrap_or(serde_json::json!({}));
         let config_str = serde_json::to_string_pretty(&config).unwrap_or_else(|_| "?".to_string());
 
         println!("BEST TRIAL");

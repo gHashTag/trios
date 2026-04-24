@@ -12,10 +12,15 @@ use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
 use tracing::{info, error, debug, warn};
 use rand::seq::SliceRandom;
+use rand::StdRng;
 
 use trios_igla_race::{
     asha::AshaRung,
     neon::NeonDb,
+    asha::register_trial,
+    asha::record_checkpoint,
+    asha::should_prune,
+    asha::mark_completed,
 };
 
 /// IGLA Race CLI
@@ -136,15 +141,13 @@ async fn run_worker(
     worker_id: u64,
     best_bpb: Arc<Mutex<f64>>,
 ) -> Result<f64> {
-    use rand::Rng;
-
     let db = NeonDb::connect(neon_url).await?;
-    let mut rng = rand::thread_rng();
+    let mut rng = StdRng::from_rng(rand::rngs::OsRng);
 
     loop {
         // Sample a new config
         let config = TrialConfig {
-            seed: rng.gen_range(40..100),
+            seed: rng.gen() % 1000 + 40,
             d_model: [128, 192, 256, 384]
                 .choose(&mut rng)
                 .copied()
@@ -153,9 +156,9 @@ async fn run_worker(
                 .choose(&mut rng)
                 .copied()
                 .ok_or_else(|| anyhow::anyhow!("No context options"))?,
-            lr: rng.gen_range(0.0001..0.01),
+            lr: (rng.gen::<f64>() % 0.0099) + 0.0001,
             optimizer: if rng.gen_bool(0.5) { "adamw" } else { "muon" }.to_string(),
-            wd: Some(rng.gen_range(0.001..0.1)),
+            wd: Some(rng.gen::<f64>() % 0.099 + 0.001),
             use_attention: Some(rng.gen_bool(0.5)),
         };
 
@@ -227,7 +230,7 @@ async fn run_worker(
 
         // Trial completed all rungs without pruning
         if !pruned {
-            trios_igla_race::asha::mark_completed(&db, &trial_id, 27000usize, prev_bpb).await?;
+            trios_igla_race::asha::mark_completed(&db, &trial_id, 27000, prev_bpb).await?;
 
             // Check if new global best
             {
@@ -286,7 +289,7 @@ fn parse_bpb_from_output(stdout: &[u8]) -> Result<f64> {
                 let rest = &line[pos..];
                 let parts: Vec<&str> = rest
                     .split_whitespace()
-                    .filter_map(|s| s.trim_starts_with("=").or(Some(s)))
+                    .filter_map(|s| if s.starts_with("=") { Some(&s[1..]) } else { Some(s) })
                     .collect();
 
                 for part in parts {
@@ -327,7 +330,7 @@ async fn should_prune_at_rung(
 
     let rows = db.client().query(&query, &[]).await?;
     let all_bpb: Vec<f64> = rows.iter()
-        .filter_map(|row| row.get::<Option<f64>>(0).flatten())
+        .filter_map(|row| row.get::<usize, Option<f64>>(0))
         .collect();
 
     // ASHA: keep top 33% at each rung, but need minimum data

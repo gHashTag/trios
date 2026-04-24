@@ -240,4 +240,3 @@ mod tests {
         // Unit test only - requires real connection string for integration tests
     }
 }
-
