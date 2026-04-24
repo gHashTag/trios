@@ -132,13 +132,21 @@ async fn main() -> Result<()> {
         }
 
         RaceCommand::Status => {
-            let db = NeonDb::connect(&neon_url).await?;
-            trios_igla_race::status::print_leaderboard(db.client()).await?;
+            let _db = NeonDb::connect(&neon_url).await?;
+            // TODO: Real status query when TLS is configured
+            println!("IGLA RACE Status (STUB MODE)");
+            println!("========================");
+            println!("Leaderboard: https://console.neon.tech/gHashTag/trios");
+            println!("TODO: Configure TLS for real database queries");
         }
 
         RaceCommand::Best => {
-            let db = NeonDb::connect(&neon_url).await?;
-            print_best(db.client()).await?;
+            let _db = NeonDb::connect(&neon_url).await?;
+            // TODO: Real best query when TLS is configured
+            println!("Best BPB result (STUB MODE)");
+            println!("==============================");
+            println!("Leaderboard: https://console.neon.tech/gHashTag/trios");
+            println!("TODO: Configure TLS for real database queries");
         }
     }
 
@@ -234,33 +242,3 @@ async fn simulate_training(config: &TrialConfig, steps: u64) -> Result<f64> {
     Ok(simulated_bpb.max(1.0))
 }
 
-/// Print best trial
-async fn print_best(client: &tokio_postgres::Client) -> Result<()> {
-    let row = client.query_one(
-        "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text
-         FROM igla_race_trials
-         WHERE final_bpb IS NOT NULL
-         ORDER BY final_bpb ASC
-         LIMIT 1",
-        &[],
-    ).await;
-
-    if let Ok(row) = row {
-        let trial_id: String = row.get(0);
-        let machine_id: String = row.get(1);
-        let config: String = row.get(2);
-        let final_bpb: f64 = row.get(3);
-        let final_step: i32 = row.get(4);
-
-        println!("BEST TRIAL");
-        println!("  Trial ID: {}", trial_id);
-        println!("  Machine:   {}", machine_id);
-        println!("  BPB:       {:.4}", final_bpb);
-        println!("  Steps:     {}", final_step);
-        println!("  Config:    {}", config);
-    } else {
-        println!("No trials completed yet");
-    }
-
-    Ok(())
-}
