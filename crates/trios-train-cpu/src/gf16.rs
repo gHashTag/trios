@@ -99,7 +99,7 @@ impl GF16 {
     #[must_use]
     pub fn phi_distance() -> f64 {
         let ratio = 6.0_f64 / 9.0_f64;
-        let inv_phi = 1.0_f64 / 1.618_033_988_749_894_8_f64;
+        let inv_phi = 1.0_f64 / 1.618_033_988_749_895_f64;
         (ratio - inv_phi).abs()
     }
 

@@ -22,7 +22,7 @@ pub struct JepaLoss {
     pub variance: f64,
 }
 
-pub fn l2_normalize(v: &mut Vec<f32>) {
+pub fn l2_normalize(v: &mut [f32]) {
     let norm: f32 = v.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
     if norm > 1e-8 { for x in v.iter_mut() { *x /= norm; } }
 }

@@ -4,7 +4,7 @@
 //! Pure functions, zero dependencies beyond rand.
 //! Theory: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
 
-use rand::{Rng, rngs::StdRng, SeedableRng};
+use rand::Rng;
 
 /// Mask configuration
 #[derive(Debug, Clone, Copy)]
@@ -53,6 +53,7 @@ pub fn get_masked(mask: &[bool]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
     use rand::SeedableRng;
 
     #[test]
