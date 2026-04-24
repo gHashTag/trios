@@ -18,6 +18,8 @@ enum RaceCommand {
         machine: String,
         #[arg(long, default_value = "4")]
         workers: usize,
+        #[arg(long, default_value = "attn")]
+        arch: String,
     },
     Status,
     Best,
@@ -29,16 +31,17 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::try_parse()?;
 
     match cli.command {
-        RaceCommand::Start { machine, workers } => {
-            info!("IGLA RACE START | machine={} workers={}", machine, workers);
+        RaceCommand::Start { machine, workers, arch } => {
+            info!("IGLA RACE START | machine={} workers={} arch={}", machine, workers, arch);
             let best_bpb = Arc::new(RwLock::new(f64::MAX));
             let mut set = JoinSet::new();
             for worker_id in 0..workers {
                 let url = String::new();
                 let mid = machine.clone();
                 let best = Arc::clone(&best_bpb);
+                let arch_clone = arch.clone();
                 set.spawn(async move {
-                    run_worker(&url, &mid, worker_id, best).await
+                    run_worker(&url, &mid, worker_id, best, arch_clone).await
                 });
             }
             while let Some(res) = set.join_next().await {
@@ -72,6 +75,7 @@ async fn run_worker(
     _machine_id: &str,
     _worker_id: usize,
     best_bpb: Arc<RwLock<f64>>,
+    arch: String,
 ) -> anyhow::Result<f64> {
     let mut rng = StdRng::from_entropy();
 
@@ -84,8 +88,14 @@ async fn run_worker(
         let _wd = rng.gen_range(0.001..0.1);
 
         let output = tokio::process::Command::new("./target/release/trios-igla-trainer")
-            .arg("--config")
-            .arg(format!("d_model={},context={},lr={}", d_model, context, lr))
+            .arg("--arch")
+            .arg(&arch)
+            .arg("--hidden")
+            .arg(d_model.to_string())
+            .arg("--context")
+            .arg(context.to_string())
+            .arg("--lr")
+            .arg(lr.to_string())
             .arg("--steps")
             .arg("12000")
             .output()

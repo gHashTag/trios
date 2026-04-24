@@ -209,8 +209,9 @@ mod tests {
 
     #[test]
     fn test_jepa_loss_different() {
-        let a = vec![1.0_f32, 1.0_f32];
-        let b = vec![2.0_f32, 2.0_f32];
+        // Use non-parallel vectors to get non-zero loss after normalization
+        let a = vec![1.0_f32, 2.0_f32];
+        let b = vec![3.0_f32, 1.0_f32];
 
         let loss = compute_jepa_loss(&a, &b, JepaLossConfig::default());
 

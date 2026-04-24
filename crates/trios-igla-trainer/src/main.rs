@@ -54,8 +54,9 @@ fn simulate_training(config: &Args) -> f64 {
     // Architecture base (mock values)
     let arch_base = match config.arch.as_str() {
         "ngram" => 0.0,
-        "attn" => -0.1,  // Slightly better theoretically
+        "attn" => -0.1,   // Slightly better theoretically
         "hybrid" => -0.05,
+        "jepa" => -0.15,   // Joint embedding — best theoretical
         _ => 0.0,
     };
 

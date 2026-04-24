@@ -110,7 +110,7 @@ pub fn spans_non_overlapping(spans: &[(usize, usize)]) -> bool {
     for (i, (start1, end1)) in spans.iter().enumerate() {
         for (start2, end2) in spans.iter().skip(i + 1) {
             // Check for overlap
-            if !(end1 <= *start2 || end2 <= *start1) {
+            if !(end1 <= start2 || end2 <= start1) {
                 return false;
             }
         }

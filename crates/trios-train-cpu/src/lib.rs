@@ -30,6 +30,10 @@ pub mod real_igla_model;
 pub mod real_igla_trainer;
 pub mod transformer_trainer;
 
+// T-JEPA (TASK-5A) - Joint Embedding Predictive Architecture
+pub mod jepa;
+pub mod objective;
+
 // Re-export commonly used types
 pub use backward::{clip_gradients, cross_entropy_loss, LinearGradients};
 pub use bench::{
