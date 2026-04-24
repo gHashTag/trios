@@ -10,7 +10,6 @@ use tokio_postgres::{NoTls};
 use anyhow::Result;
 use tracing::info;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Neon database connection
 pub struct NeonDb {
