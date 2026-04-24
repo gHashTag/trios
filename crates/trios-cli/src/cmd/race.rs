@@ -146,12 +146,7 @@ FROM igla_race_experience e
 WHERE e.promoted = TRUE
 GROUP BY e.technique
 ORDER BY usage_count DESC, avg_bpb ASC;
-"#,
-        config.study_name, config.study_name, config.study_name,
-        config.study_name, config.study_name,
-        config.study_name, config.study_name,
-        config.study_name, config.study_name
-    );
+"#);
 
     println!("\n📋 SQL Schema for Neon PostgreSQL:");
     println!("```sql");
@@ -173,31 +168,31 @@ pub fn status(limit: Option<usize>) -> Result<()> {
 
     let limit = limit.unwrap_or(10);
 
-    // Mock data for now - in production this queries Neon via Optuna REST API
+    // Mock data for now - in production this queries Neon PostgreSQL via igla_leaderboard view
     let mock_entries = vec![
         LeaderboardEntry {
             rank: 1,
-            trial_id: 42,
+            trial_id: 1,
             bpb: 2.716,
-            params: "h=384,lr=0.005,wd=0.01,seed=43".to_string(),
+            params: "h=384,lr=0.00618,wd=0.01,dropout=0.1".to_string(),
             rung: 27,
             agent: Some("ALFA".to_string()),
             timestamp: Utc::now().to_rfc3339(),
         },
         LeaderboardEntry {
             rank: 2,
-            trial_id: 41,
+            trial_id: 2,
             bpb: 2.743,
-            params: "h=384,lr=0.004,wd=0.02,seed=42".to_string(),
+            params: "h=384,lr=0.004,wd=0.02,dropout=0.05".to_string(),
             rung: 27,
             agent: Some("BRAVO".to_string()),
             timestamp: Utc::now().to_rfc3339(),
         },
         LeaderboardEntry {
             rank: 3,
-            trial_id: 40,
+            trial_id: 3,
             bpb: 2.780,
-            params: "h=256,lr=0.005,wd=0.01,seed=44".to_string(),
+            params: "h=256,lr=0.005,wd=0.01,dropout=0.0".to_string(),
             rung: 27,
             agent: Some("CHARLIE".to_string()),
             timestamp: Utc::now().to_rfc3339(),
