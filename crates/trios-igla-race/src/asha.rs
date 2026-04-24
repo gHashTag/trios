@@ -44,8 +44,11 @@ pub async fn run_worker(
             worker_id, trial_id, config.arch, config.d_model, config.context, config.lr
         );
 
-        // ASHA rungs: 1000, 3000, 9000, 27000
-        let rungs = [1000i32, 3000, 9000, 27000];
+        // ASHA rungs per-arch — JEPA needs more steps before pruning
+        let rungs = match config.arch.as_str() {
+            "jepa" => [3000i32, 9000, 27000, 81000],
+            _ => [1000i32, 3000, 9000, 27000],
+        };
         let mut final_bpb = f64::MAX;
 
         for rung in &rungs {
@@ -103,7 +106,7 @@ pub async fn run_worker(
 }
 
 fn sample_config(worker_id: u64, rng: &mut StdRng) -> TrialConfig {
-    let archs = ["ngram", "attn", "hybrid"];
+    let archs = ["ngram", "attn", "hybrid", "jepa"];
     let dims = [192usize, 256, 384];
     let ctxs = [4usize, 6, 8];
 
