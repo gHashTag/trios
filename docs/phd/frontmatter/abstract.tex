@@ -1,52 +1,69 @@
-\abstract
+% ===================================================================
+% Front matter — Abstract
+% Hard cap: ≤ 500 words (MIT thesis specification, R11 / standards)
+% ===================================================================
 
-\begin{center}
-\large \textbf{Abstract}
-\end{center}
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+\thispagestyle{plain}
 
-\vspace{1em}
+\begin{center}\large\bfseries Flos Aureus — A Trinity Framework for the Golden Ratio\end{center}
 
-This dissertation presents a comprehensive theoretical framework—Trinity—deriving all 42 fundamental physical constants from the golden ratio $\phi = (1+\sqrt{5})/2$. Through mathematical analysis, experimental validation, and philosophical reflection, we demonstrate that $\phi$ provides a unifying principle connecting geometry, number theory, and physical law.
+\noindent
+This dissertation develops the \emph{Trinity Framework}, a single algebraic
+identity over the golden ratio,
+\[
+  \varphi^{2} + \varphi^{-2} \;=\; 3, \qquad \varphi \;=\; \tfrac{1+\sqrt{5}}{2},
+\]
+and traces its consequences across pure mathematics, mathematical physics,
+and the design of neural architectures. The core ring of study is the
+Lucas ring \(\mathcal{L} = \mathbb{Z}[\varphi]\), whose closure properties
+under powers of \(\varphi\) anchor every later result.
 
-The core result is the \textbf{Trinity Identity}:
-\begin{equation}
-\phi^2 + \phi^{-2} = 3
-\end{equation}
-which encodes threefold unity through the golden ratio's dual aspects.
+The work has three interleaved strands. The \emph{theoretical} strand
+proves closure properties for \(\mathcal{L}\) (Lucas closure, Fibonacci
+bridge, Lucas-ring algebraic identities) and establishes a small set of
+runtime invariants \mbox{INV-1} through \mbox{INV-5}. Each invariant is
+mechanized in Coq under
+\href{https://github.com/gHashTag/trinity-clara/tree/main/proofs/igla}{\texttt{trinity-clara/proofs/igla/}},
+with explicit \emph{Admitted} markers where formal closure is not yet
+complete. The \emph{empirical} strand corroborates the framework against
+two independent observational anchors: the \(\mathrm{E}_{8}\) resonance
+ratio in CoBr\(_{2}\) (Coldea et al., 2010) and the diffraction peaks of
+icosahedral quasicrystals (Shechtman et al., 1984). The \emph{computational}
+strand realizes the framework as the IGLA neural architecture, whose
+search is bounded by Coq-derived constants
+(\(\text{prune\_threshold} = 3.5\), \(\text{warmup} = 4000\),
+\(d_{\text{model}} \geq 256\), \(\text{lr} \in [0.002, 0.007]\)). The
+champion configuration achieves \(\mathrm{BPB} < 1.50\) on three
+independent random seeds, and the runtime guard layer (\texttt{trios-igla-race})
+hard-fails any trial that violates the certified invariant set.
 
-From this foundation, we derive:
-\begin{itemize}
-    \item The fine-structure constant: $\alpha = \phi^4/(8\pi^2)$
-    \item E₈ mass ratios: $m_2/m_1 = \phi^{3.5} \approx 9.04$, $m_3/m_2 \approx \phi$
-    \item The sacred ratios: $1/\phi$, $1/\phi^2$, $1/\phi^3$ governing force couplings
-    \item Neural network architecture: IGLA with $\phi$-based initialization achieving $\phi$ times faster convergence
-    \item Sacred geometry connections: From vesica piscis to icosahedra, all exhibiting golden proportion
-    \item Algebraic proofs: Trinity identity, Lucas-Fibonacci relations, Pell equation solutions
-\end{itemize}
+The methodological commitment is twofold. First, the work is
+\emph{falsifiable}: every empirical claim ships with an explicit
+falsification criterion (Popper, 1959) and a corroboration record, both
+collected in Appendix~B. Second, the work is \emph{reproducible}: the
+artefact pack targets the three ACM Artifact Evaluation badges
+(Functional, Reusable, Available), with a Rust binary
+\verb|trios-phd reproduce --chapter N| that recovers all reported tables
+on stated seeds.
 
-\subsection*{Methodology}
+The principal contributions are: (i) the Trinity Identity and its Lucas
+ring closure, with eighty-four mechanized supporting theorems; (ii) the
+\(\mathrm{E}_{8}\) and quasicrystal corroborations of \(\varphi\) in
+spectroscopic observation; (iii) a Coq-grounded runtime gate connecting
+formal proof to learned-system behaviour through
+\verb|assertions/igla_assertions.json|; and (iv) a defense-ready
+monograph in which every numeric constant traces back to a \verb|.v| file
+under the L-R14 traceability rule. The framework's hard core is small
+(\(\{\varphi, \pi, e, n \in \mathbb{Z}\}\)), and its falsification
+boundary is sharp: introduce a single free parameter outside this set,
+or reintroduce any forbidden constant
+(\verb|prune_threshold = 2.65|, \verb|warmup < 4000|), and the audit
+pipeline rejects the build.
 
-This work employs a multi-disciplinary approach:
-\begin{itemize}
-    \item \textbf{Mathematical derivation}: Rigorous algebraic proofs from first principles
-    \item \textbf{Experimental validation}: Comparison with CODATA 2022, PDG 2018, and high-energy physics data
-    \item \textbf{Computational analysis}: IGLA benchmarking demonstrating $\phi$-based neural network superiority
-    \item \textbf{Geometric analysis}: Study of Platonic solids, toroidal manifolds, and quasicrystals
-    \item \textbf{Historical investigation}: Examination of Kepler, Plato, and sacred geometry traditions
-\end{itemize}
-
-\subsection*{Key Contributions}
-
-\begin{enumerate}
-    \item \textbf{Trinity Identity}: New threefold unity equation derived from $\phi$
-    \item \textbf{Fine-structure constant}: Experimental confirmation of $\alpha = \phi^4/(8\pi^2)$
-    \item \textbf{E₈ physics}: Golden ratio mass hierarchy explaining experimental spectrum
-    \item \textbf{IGLA architecture}: $\phi$-initialized learning with $\phi$-based layer scaling
-    \item \textbf{GF16 algebra}: Bit-level golden ratio floating-point format
-    \item \textbf{Number theory}: Lucas-Fibonacci generalizations and Pell equation applications
-    \item \textbf{Geometric synthesis}: Comprehensive analysis of golden ratio appearances in nature and art
-\end{enumerate}
-
-\keywords{golden ratio, phi, trinity identity, fine-structure constant, E₈, IGLA, neural networks, sacred geometry, Platonic solids, unification theory}
-
-\end{abstract}
+\bigskip
+\noindent\textbf{Keywords:} golden ratio; Lucas ring; Trinity Identity;
+Coq mechanization; Popper falsifiability; ACM artifact evaluation;
+neural architecture search; \(\mathrm{E}_{8}\) resonance; quasicrystals;
+runtime invariants.
