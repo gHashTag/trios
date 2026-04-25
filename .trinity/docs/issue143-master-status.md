@@ -1,6 +1,6 @@
 # Issue #143 — IGLA RACE Master Status
 
-> **Last Updated:** 2026-04-26T03:50Z  
+> **Last Updated:** 2026-04-26T04:30Z
 > **Agent:** EPSILON
 
 ---
@@ -36,9 +36,11 @@
 - ✅ Expanded hyperparameter search space
 
 ### Training Results
-- 🏆 **Champion**: BPB=2.2393 @ 27K steps (commit `2446855f`)
-- 🚧 **Gate-1 Target**: ≤2.22 BPB (champion is 0.02 away)
-- 🎯 **IGLA Target**: < 1.50 BPB
+- 🏆 **NEW Champion**: BPB=2.1763 @ 42K steps (2026-04-26T04:30Z)
+- 🏆 **Previous Champion**: BPB=2.2393 @ 27K steps (commit `2446855f`)
+- ✅ **Gate-1 PASSED** (≤2.22): Best BPB 2.1763 < 2.22
+- 🚧 **Gate-2 Target**: ≤2.03 BPB (0.15 BPB away)
+- 🎯 **IGLA Target**: < 1.50 BPB (0.68 BPB away)
 - ✅ Real TJepa training with JEPA + NCA multi-objective loss
 - ✅ ASHA pruning working correctly
 
@@ -49,13 +51,14 @@
 ### Immediate (Operational)
 1. **Launch distributed race** on 2–4 machines using runbook
 2. **Monitor Neon** for trial activity and BPB progression
-3. **Run longer training** to pass Gate-1 (BPB ≤ 2.22)
+3. **Run hyperparameter search** to pass Gate-2 (BPB ≤ 2.03)
 
 ### Optimization
 1. **Hyperparameter tuning**: LRs [0.001-0.008], JEPA_W [0.25-2.0], NCA_W [0.1-0.75]
 2. **Learning rate schedule optimization**
 3. **Warmup steps variation**: [1000, 1500, 2000, 2500]
 4. **Optimizer choice**: AdamW, Muon
+5. **Longer training**: 100K+ steps to push toward Gate-2
 
 ---
 
@@ -63,9 +66,9 @@
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| IGLA Target | BPB < 1.50 | 2.2393 @ 27K | ⏳ 0.74 BPB away |
-| Gate-1 | BPB ≤ 2.22 | 2.2393 @ 27K | ⚠️ 0.02 BPB away |
-| Gate-2 | BPB ≤ 2.03 | 2.2393 @ 27K | ⏳ 0.21 BPB away |
+| IGLA Target | BPB < 1.50 | 2.1763 @ 42K | ⏳ 0.68 BPB away |
+| Gate-1 | BPB ≤ 2.22 | 2.1763 @ 42K | ✅ **PASSED** |
+| Gate-2 | BPB ≤ 2.03 | 2.1763 @ 42K | ⏳ 0.15 BPB away |
 | L3 Compliance | 0 warnings | 0 warnings | ✅ PASS |
 
 ---
