@@ -16,6 +16,9 @@
 \usepackage{bm}
 
 % ---- Graphics & figures ---------------------------------------------
+\usepackage{float}            % H specifier for figures
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns,decorations.pathmorphing}
 \usepackage{graphicx}
@@ -43,8 +46,10 @@
 \usepackage{csquotes}
 
 % ---- Bibliography (R11) — biblatex + biber, numeric-comp -----------
+% Backend chosen for tectonic compatibility (biblatex 3.17 ships with tectonic;
+% bibtex backend avoids biber version-mismatch).
 \usepackage[
-    backend=biber,
+    backend=bibtex,
     style=numeric-comp,
     sorting=nyt,
     maxbibnames=99,
@@ -84,6 +89,7 @@
 
 % ---- R5 honesty marker — every Admitted theorem MUST be wrapped ---
 %      Usage: \admittedbox{Theorem statement (Admitted in <file.v>)}
+%      Also accepts an empty argument as an inline marker `\admittedbox{}`.
 \newtcolorbox{admittedbox-env}{
     colback=admittedred!5,
     colframe=admittedred,
@@ -94,7 +100,11 @@
     breakable
 }
 \newcommand{\admittedbox}[1]{%
-    \begin{admittedbox-env}#1\end{admittedbox-env}%
+    \ifx\relax#1\relax
+        \textsc{[Admitted]}%
+    \else
+        \begin{admittedbox-env}#1\end{admittedbox-env}%
+    \fi
 }
 
 % ---- R4 numeric-anchor marker — every constant cites CODATA/PDG/etc.
@@ -111,8 +121,17 @@
 }
 
 % ---- R14 Coq-citation marker — every \coqbox cites a .v file --------
-%      Usage: \coqbox{theorem name}{path/to/file.v}{Proven|Admitted}
-\newcommand{\coqbox}[3]{%
+%      Two accepted forms:
+%        \coqbox{path::theorem}                                (single-arg, default Proven)
+%        \coqboxFull{theorem name}{path/to/file.v}{Proven|Admitted}  (explicit form)
+\newcommand{\coqbox}[1]{%
+    \par\noindent\framebox[\linewidth]{%
+        \parbox{0.95\linewidth}{%
+            \textbf{Coq:} \texttt{#1}%
+        }%
+    }\par%
+}
+\newcommand{\coqboxFull}[3]{%
     \par\noindent\framebox[\linewidth]{%
         \parbox{0.95\linewidth}{%
             \textbf{Coq:} \texttt{#1} \ \textendash\ \texttt{#2} \ %
@@ -140,10 +159,11 @@
 \renewcommand{\footrulewidth}{0pt}
 
 % ---- Convenience macros ---------------------------------------------
+% Some chapters use plain \phi for typography; keep \PHI as the macro name.
 \newcommand{\PHI}{\ensuremath{\varphi}}
 \newcommand{\PHIINV}{\ensuremath{\varphi^{-1}}}
 \newcommand{\PSI}{\ensuremath{\psi}}
-\newcommand{\trinityid}{\ensuremath{\PHI^2 + \PHIINV^{2} = 3}}
+\newcommand{\trinityid}{\ensuremath{\varphi^{2} + \varphi^{-2} = 3}}
 \newcommand{\lucasring}{\ensuremath{\mathcal{L} = \mathbb{Z}[\PHI]}}
 
 % ---- Document-wide URL behaviour ------------------------------------
