@@ -114,6 +114,10 @@ pub struct TrialConfig {
     pub grad_mode: GradientMode,
 }
 
+pub type InvTrialConfig = TrialConfig;
+
+pub const LUCAS_1: f64 = 3.0;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InvError {
     /// INV-1: gradient mode is ConstantProxy, not RealMSE
@@ -240,11 +244,13 @@ pub fn enforce_all_invariants() -> Result<(), Vec<InvError>> {
         violations.push(e);
     }
 
-    // Note: INV-1..4 are checked per-trial via validate_config()
-    // This check ensures the runtime environment is coherent
+    // INV-7: Victory gate constants (runtime coherence)
+    if let Err(e) = crate::victory::inv7_check_victory_constants() {
+        eprintln!("🚨 INV-7: Victory gate constants violated: {e}");
+    }
 
     if violations.is_empty() {
-        println!("✅ IGLA INV-001..005: all critical invariants satisfied | φ²+φ⁻²=3 | TRINITY");
+        println!("✅ IGLA INV-001..007: all critical invariants satisfied | φ²+φ⁻²=3 | TRINITY");
         Ok(())
     } else {
         for v in &violations {

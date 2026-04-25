@@ -174,8 +174,6 @@ pub fn iter_rungs() -> impl Iterator<Item = (Rung, u32)> {
 ///
 /// Coq: `igla_asha_bound.v::asha_rungs_trinity` (Qed).
 pub fn check_inv12_rung_valid(step: u32) -> Result<Rung, InvError> {
-    // Encode the rejected step into Inv4GridMismatch so we don't add a
-    // new InvError variant (avoids touching the L5 lane).
     Rung::from_step(step).ok_or(InvError::Inv4GridMismatch {
         grid: step as usize,
         k: 0,

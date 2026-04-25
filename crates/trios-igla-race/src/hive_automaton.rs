@@ -281,6 +281,7 @@ impl HiveAutomaton {
 
     /// Pick the highest-priority free lane from the queue, falling back to
     /// `None` if every queue entry is currently claimed by someone else.
+    #[allow(clippy::manual_find)]
     fn pick_free_lane(&self, world: &World) -> Option<Lane> {
         self.priority_queue
             .iter()

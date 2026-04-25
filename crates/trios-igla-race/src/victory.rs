@@ -121,6 +121,25 @@ pub enum VictoryError {
     NonFiniteBpb { seed: u64, bpb: f64 },
 }
 
+impl std::fmt::Display for VictoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VictoryError::InsufficientSeeds { passing_distinct, required } =>
+                write!(f, "INSUFFICIENT SEEDS: {passing_distinct} < {required}"),
+            VictoryError::BpbAboveTarget { seed, bpb, target } =>
+                write!(f, "BPB ABOVE TARGET: seed={seed} bpb={bpb:.4} >= {target}"),
+            VictoryError::DuplicateSeed { seed } =>
+                write!(f, "DUPLICATE SEED: {seed}"),
+            VictoryError::JepaProxyDetected { seed, bpb } =>
+                write!(f, "JEPA PROXY ARTEFACT: seed={seed} bpb={bpb:.4} < {JEPA_PROXY_BPB_FLOOR}"),
+            VictoryError::BeforeWarmup { seed, step, warmup } =>
+                write!(f, "BEFORE WARMUP: seed={seed} step={step} < {warmup}"),
+            VictoryError::NonFiniteBpb { seed, bpb: _ } =>
+                write!(f, "NON-FINITE BPB: seed={seed}"),
+        }
+    }
+}
+
 // ----------------------------------------------------------------------
 // Public API
 // ----------------------------------------------------------------------
@@ -219,6 +238,20 @@ pub fn check_victory(results: &[SeedResult]) -> Result<VictoryReport, VictoryErr
 /// reached, e.g. the hive automaton's `global_success` transition.
 pub fn is_victory(results: &[SeedResult]) -> bool {
     check_victory(results).is_ok()
+}
+
+/// INV-7: Verify victory gate constants match Coq definitions.
+/// Call from enforce_all_invariants() to register INV-7.
+///
+/// Coq source: trinity-clara/proofs/igla/igla_found_criterion.v
+pub fn inv7_check_victory_constants() -> Result<(), VictoryError> {
+    const _: () = assert!(JEPA_PROXY_BPB_FLOOR > 0.0);
+    const _: () = assert!(VICTORY_SEED_TARGET >= 3);
+    const _: () = assert!(INV2_WARMUP_BLIND_STEPS >= 4000);
+    if (JEPA_PROXY_BPB_FLOOR - 0.1).abs() > 1e-10 {
+        return Err(VictoryError::JepaProxyDetected { seed: 0, bpb: JEPA_PROXY_BPB_FLOOR });
+    }
+    Ok(())
 }
 
 // ----------------------------------------------------------------------

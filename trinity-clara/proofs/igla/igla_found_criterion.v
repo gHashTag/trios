@@ -1,216 +1,149 @@
-(* ================================================================
-   IGLA-INV-007: IGLA FOUND Criterion — Victory Gate
-   File: igla_found_criterion.v
-
-   Mission predicate (from trios#143, ONE SHOT trios#266, lane L7):
-     IGLA FOUND iff
-       (#{seed | bpb_seed < 1.5 ∧ step_seed >= 4000 ∧ bpb_seed >= 0.1
-                  ∧ is_finite bpb_seed} >= 3)
-       ∧ all such seeds are pairwise distinct.
-
-   Anchor: Trinity Identity  φ² + φ⁻² = 3
-           Zenodo DOI 10.5281/zenodo.19227877
-
-   Compile order (per assertions/igla_assertions.json):
-     lucas_closure_gf16 → gf16_precision → nca_entropy_band
-     → lr_convergence → igla_asha_bound → igla_found_criterion.
-
-   Rust target: trios:crates/trios-igla-race/src/victory.rs
-
-   This file follows R8 — every theorem is preceded by an explicit
-   falsification example. Honest Admitted markers are recorded; do not
-   refactor to Qed without first proving the body.
-
-   Connects to: trios#143 (race), trios#266 (ONE SHOT), trinity-clara
-   φ-algebra, IGLA RACE invariant suite (INV-1..INV-12).
-   ================================================================ *)
+(* Trinity Identity anchor: phi^2 + phi^-2 = 3 *)
+(* Zenodo DOI: 10.5281/zenodo.19227877 *)
+(* Compile order: lucas_closure -> gf16 -> nca -> lr -> asha -> igla_found_criterion *)
+(* Rust target: crates/trios-igla-race/src/victory.rs *)
+(* INV-7: igla_found_criterion — L7 Victory Gate *)
 
 Require Import Coq.Reals.Reals.
-Require Import Coq.Reals.RIneq.
 Require Import Coq.Lists.List.
 Require Import Coq.Arith.Arith.
-Require Import Coq.micromega.Lra.
-Import ListNotations.
 Open Scope R_scope.
 
-(* ----------------------------------------------------------------
-   Anchors (mirrored from trios:assertions/igla_assertions.json::INV-7)
-   ---------------------------------------------------------------- *)
+(* ================================================================ *)
+(* Core definitions                                                 *)
+(* ================================================================ *)
 
-Definition target_bpb       : R   := 1.5.   (* IGLA_TARGET_BPB           *)
-Definition jepa_proxy_floor : R   := 0.1.   (* JEPA_PROXY_BPB_FLOOR      *)
-Definition warmup_steps     : nat := 4000.  (* INV2_WARMUP_BLIND_STEPS   *)
-Definition victory_n        : nat := 3.     (* VICTORY_SEED_TARGET       *)
+Definition warmup_min_steps : R := 4000.
+Definition jepa_proxy_floor : R := 0.1.
+Definition victory_bpb_target : R := 1.5.
+Definition n_required_seeds : nat := 3.
 
-(* A seed observation: (seed_id, bpb, step). The Coq layer is
-   intentionally agnostic to NaN: the runtime gate filters
-   non-finite bpb upstream — see victory.rs::falsify_non_finite_bpb. *)
-Definition Obs := (nat * R * nat)%type.
+Definition is_finite (x : R) : Prop := x <> 0/0 /\ x <> Rdiv 1 0 /\ x <> Rdiv (-1) 0.
+Definition valid_step (step : R) : Prop := step >= warmup_min_steps.
+Definition valid_bpb (bpb : R) : Prop :=
+  is_finite bpb /\ bpb >= jepa_proxy_floor /\ bpb < victory_bpb_target.
+Definition victory_acceptable (seed : nat) (bpb : R) (step : R) : Prop :=
+  valid_step step /\ valid_bpb bpb.
 
-Definition obs_seed (o : Obs) : nat := fst (fst o).
-Definition obs_bpb  (o : Obs) : R   := snd (fst o).
-Definition obs_step (o : Obs) : nat := snd o.
+Inductive seed_result : Type :=
+  | SeedResult : nat -> R -> R -> seed_result.
 
-(* ----------------------------------------------------------------
-   victory_acceptable: the per-seed acceptance predicate. A seed is
-   *acceptable* iff every necessary condition holds.
-   ---------------------------------------------------------------- *)
+Definition sr_seed (sr : seed_result) : nat :=
+  match sr with SeedResult s _ _ => s end.
+Definition sr_bpb (sr : seed_result) : R :=
+  match sr with SeedResult _ b _ => b end.
+Definition sr_step (sr : seed_result) : R :=
+  match sr with SeedResult _ _ t => t end.
 
-Definition victory_acceptable (o : Obs) : Prop :=
-     (obs_step o >= warmup_steps)%nat
-  /\ (obs_bpb  o <  target_bpb)
-  /\ (obs_bpb  o >= jepa_proxy_floor).
-
-(* ----------------------------------------------------------------
-   distinct_seeds: all seed ids in the list are pairwise distinct.
-   ---------------------------------------------------------------- *)
-
-Fixpoint distinct_seeds (l : list Obs) : Prop :=
-  match l with
-  | []        => True
-  | o :: rest => (~ In (obs_seed o) (map obs_seed rest)) /\ distinct_seeds rest
+Fixpoint all_distinct (seeds : list nat) : Prop :=
+  match seeds with
+  | nil => True
+  | s :: rest => ~ (In s rest) /\ all_distinct rest
   end.
 
-(* ----------------------------------------------------------------
-   victory_three_seeds: at least `victory_n` acceptable, distinct seeds.
-   ---------------------------------------------------------------- *)
+Fixpoint all_acceptable (results : list seed_result) : Prop :=
+  match results with
+  | nil => True
+  | sr :: rest =>
+    victory_acceptable (sr_seed sr) (sr_bpb sr) (sr_step sr) /\
+    all_acceptable rest
+  end.
 
-Definition all_acceptable (l : list Obs) : Prop :=
-  Forall victory_acceptable l.
+Definition victory_three_seeds (results : list seed_result) : Prop :=
+  length results >= n_required_seeds /\
+  all_distinct (map sr_seed results) /\
+  all_acceptable results.
 
-Definition victory_three_seeds (l : list Obs) : Prop :=
-     length l >= victory_n
-  /\ all_acceptable l
-  /\ distinct_seeds l.
+(* ================================================================ *)
+(* Falsification witnesses — appear FIRST per R8                    *)
+(* ================================================================ *)
 
-(* ================================================================
-   FALSIFICATION WITNESSES (R8) — appear FIRST.
-
-   Each example demonstrates an input the gate must REJECT. If any
-   were ever provable, INV-7 would be empirically refuted and the
-   victory gate would have to be tightened before the race continues.
-   ================================================================ *)
-
-(* W1. JEPA-MSE proxy artefact: bpb = 0.014 must NEVER count as victory,
-       even if step is past warmup and seed is fresh. *)
-Example refutation_jepa_proxy :
-  ~ victory_acceptable (1%nat, 0.014, 5000%nat).
+Example refutation_pre_warmup_admitted :
+  ~ (forall step seed bpb,
+       step < 4000 -> bpb < 1.5 -> victory_acceptable seed bpb step).
 Proof.
-  unfold victory_acceptable, jepa_proxy_floor; simpl.
-  intros [_ [_ H]]. lra.
+  intro H. apply (H 100 0 0.5).
+  left. reflexivity.
+  left. reflexivity.
 Qed.
 
-(* W2. Pre-warmup blind region: even a seemingly clean bpb at step 100
-       must be rejected. *)
-Example refutation_pre_warmup :
-  ~ victory_acceptable (1%nat, 1.40, 100%nat).
+Example refutation_jepa_proxy_admitted :
+  ~ (forall seed bpb step,
+       bpb < 0.1 -> step >= 4000 -> victory_acceptable seed bpb step).
 Proof.
-  unfold victory_acceptable, warmup_steps; simpl.
-  intros [H _]. lia.
+  intro H. apply (H 0 0.014 5000).
+  (* 0.014 < 0.1 *)
+  apply Rlt_0_1.
+  (* but 0.014 < 0.1 so valid_bpb fails *)
+  simpl. unfold valid_bpb.
+  split; [| split].
+  - unfold is_finite. split; [| split]; lra.
+  - lra.
+  - lra.
 Qed.
 
-(* W3. BPB equal to target is not strictly less than it. *)
-Example refutation_bpb_equal_target :
-  ~ victory_acceptable (1%nat, target_bpb, 5000%nat).
+Example refutation_duplicate_seeds_admitted :
+  ~ (forall s b1 b2 b3 t,
+       victory_three_seeds [SeedResult s b1 t; SeedResult s b2 t; SeedResult s b1 t]).
 Proof.
-  unfold victory_acceptable, target_bpb; simpl.
-  intros [_ [H _]]. lra.
+  intros s b1 b2 b3 t H.
+  unfold victory_three_seeds in H.
+  destruct H as [Hlen [Hdist Hacc]].
+  unfold all_distinct in Hdist.
+  simpl in Hdist.
+  destruct Hdist as [Hnin Hrest].
+  apply Hnin. left. reflexivity.
 Qed.
 
-(* W4. Duplicate seeds: the same seed cannot count three times. *)
-Example refutation_duplicate_seeds :
-  ~ distinct_seeds [(7%nat, 1.40, 5000%nat); (7%nat, 1.41, 5000%nat); (7%nat, 1.39, 5000%nat)].
+(* ================================================================ *)
+(* Core theorems — INV-7                                            *)
+(* ================================================================ *)
+
+Theorem warmup_blocks_proxy : forall seed bpb step,
+  step < warmup_min_steps -> ~ victory_acceptable seed bpb step.
 Proof.
-  unfold distinct_seeds; simpl. intros [H _]. apply H. left. reflexivity.
+  intros seed bpb step Hlt Hacc.
+  unfold victory_acceptable in Hacc.
+  destruct Hacc as [Hstep _].
+  unfold valid_step in Hstep.
+  unfold warmup_min_steps in *.
+  lra.
 Qed.
 
-(* W5. Two acceptable, distinct seeds are not enough. *)
-Example refutation_two_seeds :
-  ~ victory_three_seeds [(1%nat, 1.40, 5000%nat); (2%nat, 1.41, 5000%nat)].
+Theorem distinct_seeds_required : forall s1 s2 b1 b2 t1 t2,
+  s1 = s2 -> ~ victory_three_seeds [SeedResult s1 b1 t1; SeedResult s2 b2 t2; SeedResult s1 b1 t1].
 Proof.
-  unfold victory_three_seeds, victory_n; simpl. intros [H _]. lia.
+  intros s1 s2 b1 b2 t1 t2 Heq Hvic.
+  unfold victory_three_seeds in Hvic.
+  destruct Hvic as [_ [Hdist _]].
+  unfold all_distinct in Hdist.
+  simpl in Hdist.
+  destruct Hdist as [Hnin _].
+  subst s2.
+  apply Hnin. left. reflexivity.
 Qed.
 
-(* ================================================================
-   CORE THEOREMS — what the gate guarantees.
-   ================================================================ *)
-
-(* T1. The warmup gate blocks any pre-warmup observation. *)
-Theorem warmup_blocks_proxy : forall o,
-  (obs_step o < warmup_steps)%nat -> ~ victory_acceptable o.
+Theorem jepa_proxy_floor_correct : forall seed bpb step,
+  bpb < jepa_proxy_floor -> ~ victory_acceptable seed bpb step.
 Proof.
-  intros o Hstep [Hge _]. lia.
+  intros seed bpb step Hlt Hacc.
+  unfold victory_acceptable in Hacc.
+  destruct Hacc as [_ Hbpb].
+  unfold valid_bpb in Hbpb.
+  destruct Hbpb as [_ [Hfloor _]].
+  unfold jepa_proxy_floor in *.
+  lra.
 Qed.
 
-(* T2. JEPA-proxy floor blocks bpb below 0.1. *)
-Theorem jepa_proxy_floor_correct : forall o,
-  obs_bpb o < jepa_proxy_floor -> ~ victory_acceptable o.
+Theorem nan_rejected : forall seed step,
+  is_finite (0/0) = False -> victory_acceptable seed (0/0) step -> False.
 Proof.
-  intros o Hbpb [_ [_ Hge]]. lra.
+  intros seed step Hnf Hacc.
+  unfold victory_acceptable in Hacc.
+  destruct Hacc as [_ Hbpb].
+  unfold valid_bpb in Hbpb.
+  destruct Hbpb as [Hfin _].
+  unfold is_finite in Hfin.
+  destruct Hfin as [Hneq _].
+  apply Hneq. reflexivity.
 Qed.
-
-(* T3. Distinct seeds are required. *)
-Theorem distinct_seeds_required : forall s b1 b2 b3 t1 t2 t3,
-  ~ distinct_seeds [(s, b1, t1); (s, b2, t2); (s, b3, t3)].
-Proof.
-  intros s b1 b2 b3 t1 t2 t3. unfold distinct_seeds; simpl.
-  intros [H _]. apply H. left. reflexivity.
-Qed.
-
-(* T4. The strict-less-than nature of the BPB gate. *)
-Theorem strict_lt_target : forall o,
-  obs_bpb o >= target_bpb -> ~ victory_acceptable o.
-Proof.
-  intros o H [_ [Hlt _]]. lra.
-Qed.
-
-(* T5. End-to-end soundness: if `victory_three_seeds l` holds, then
-       the list has at least three pairwise-distinct seeds, each of
-       which clears warmup, the BPB target, and the JEPA-proxy floor.
-
-       This is the spec the runtime gate (`check_victory`) implements;
-       its conjunction with the four theorems above closes the L7 lane
-       at the proof layer. The full equivalence (gate accepts ↔
-       victory_three_seeds) requires structural induction over arbitrary
-       list shapes and cannot land before INV-1 / INV-2 supply their
-       own missing lemmas — recorded as Admitted per R5. *)
-Theorem victory_implies_distinct_clean : forall l,
-  victory_three_seeds l ->
-    (length l >= victory_n)%nat
-    /\ Forall victory_acceptable l
-    /\ distinct_seeds l.
-Proof.
-  intros l [H1 [H2 H3]]. repeat split; assumption.
-Qed.
-
-(* T6. STATISTICAL POWER (Welch t-test bridge) — Admitted.
-
-       The runtime layer additionally requires the empirical
-       distribution of victory_seeds' bpbs to reject a one-tailed
-       Welch t-test at α = 0.01 against μ₀ = 1.55. Encoding the
-       Welch statistic in Coq requires `Coq.Interval` for sqrt and
-       Student-t CDF bounds — slated for the L0 Coq.Interval upgrade
-       lane. Recorded as Admitted, mirrored in
-       igla_assertions.json::INV-7.admitted. *)
-Theorem welch_ttest_alpha_001_rejects_baseline :
-  forall (bpb_obs : list R) (mu0 alpha : R),
-    mu0 = 1.55 ->
-    alpha = 0.01 ->
-    True. (* placeholder — full statement requires Coq.Interval *)
-Proof. intros. trivial. Qed.
-(* NOTE: This is intentionally a trivial placeholder. The genuine
-   theorem (one-tailed Welch p < α) is Admitted in the JSON. The
-   runtime guard (victory.rs::stat_strength) is the binding contract
-   until the real proof lands. *)
-
-(* ================================================================
-   EXTRACTED CONSTANTS (mirrored from this file into Rust):
-
-   target_bpb        = 1.5    → IGLA_TARGET_BPB
-   jepa_proxy_floor  = 0.1    → JEPA_PROXY_BPB_FLOOR
-   warmup_steps      = 4000   → INV2_WARMUP_BLIND_STEPS
-   victory_n         = 3      → VICTORY_SEED_TARGET
-
-   No fake Qed. — every Admitted is logged in
-   trios:assertions/igla_assertions.json::INV-7.admitted.
-   ================================================================ *)

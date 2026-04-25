@@ -27,9 +27,9 @@ pub use invariants::{TrialConfig as InvTrialConfig, GradientMode, InvError, vali
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 
 pub use victory::{
-    check_victory, is_victory, stat_strength, SeedResult, TtestError, TtestReport,
-    VictoryError, VictoryReport, JEPA_PROXY_BPB_FLOOR, WELCH_ALPHA, WELCH_BASELINE_MU0,
-    WELCH_EFFECT_SIZE_MIN,
+    check_victory, is_victory, stat_strength, inv7_check_victory_constants,
+    SeedResult, VictoryError, VictoryReport, TtestReport, TtestError,
+    JEPA_PROXY_BPB_FLOOR, WELCH_ALPHA, WELCH_BASELINE_MU0, WELCH_EFFECT_SIZE_MIN,
 };
 
 pub use ema::{EmaTracker, EmaError, ALPHA_PHI_INV_3, ALPHA_MIN_EXCLUSIVE, ALPHA_MAX_INCLUSIVE};
