@@ -127,33 +127,45 @@ fn main() -> Result<()> {
             let target_indices = get_masked(&mask_result.mask);
 
             // 2. Simulate context/target embeddings (placeholder: real encoder later)
+            // NOTE: This is MOCK until real transformer encoder is integrated
             let ctx_emb: Vec<f32> = (0..args.seq_len * jepa_cfg.d_model)
                 .map(|i| ((i as f32 * 0.001) + ntp_loss) * 0.1)
                 .collect();
+
+            // 3. Predictor: predict masked positions from context
+            // CORRECT: predictor should map ctx_emb -> predicted embeddings
+            // MOCK: use target_params as "predictor weights" on ctx_emb
             let pred_emb: Vec<f32> = target_indices.iter().flat_map(|&pos| {
-                let start = (pos * jepa_cfg.d_model).min(ctx_emb.len().saturating_sub(1));
+                // SAFETY: wrap position to valid index in [0, seq_len)
+                let safe_pos = pos % args.seq_len.max(1);
+                let start = safe_pos * jepa_cfg.d_model;
                 let end = (start + jepa_cfg.d_model).min(ctx_emb.len());
-                ctx_emb[start..end].to_vec()
+                let base = &ctx_emb[start..end];
+                let offset = &target_params[start..end.min(target_params.len())];
+                base.iter().zip(offset.iter()).map(|(&c, &t)| (c + t * 0.1)).collect::<Vec<_>>()
             }).collect();
+
+            // 4. EMA target encoder: target representations (no gradient)
+            // CORRECT: target should come from EMA encoder, not raw params
             let tgt_emb: Vec<f32> = target_params[..pred_emb.len().min(param_size)].to_vec();
 
-            // 3. JEPA loss (L2-normalized MSE)
+            // 5. JEPA loss: compare predicted vs EMA target (NOT self vs self!)
             let jepa = if pred_emb.len() == tgt_emb.len() && !pred_emb.is_empty() {
                 let l = trios_train_cpu::jepa::compute_jepa_loss(&pred_emb, &tgt_emb, jepa_loss_cfg);
                 l.prediction
             } else { 0.0 };
 
-            // 4. NCA entropy stub (target: band [1.5, 2.8])
+            // 6. NCA entropy stub (target: band [1.5, 2.8])
             let nca_entropy = 1.5 + (step as f64 / config.steps as f64) * 1.3;
             let nca = trios_train_cpu::objective::nca_entropy_constraint(nca_entropy);
 
-            // 5. Multi-objective combined loss
+            // 7. Multi-objective combined loss
             let combined = compute_combined_loss(
                 ComponentLosses { ntp: ntp_loss as f64, jepa, nca },
                 obj_cfg,
             );
 
-            // 6. EMA update
+            // 8. EMA update: target_params <- decay * target_params + (1-decay) * online_params
             for x in online_params.iter_mut() {
                 *x = (*x * (1.0 - lr)).max(0.01);
             }
