@@ -250,6 +250,8 @@ fn champion_config(lr: f64, d_model: usize, use_gf16: bool) -> TrialConfig {
         nca_grid: INV4_NCA_GRID,
         nca_k_states: INV4_NCA_K_STATES,
         grad_mode: GradientMode::RealMSE,
+        current_step: 0,
+        last_bpb: f64::MAX,
     }
 }
 
@@ -288,7 +290,7 @@ pub fn run_trial(
         last_bpb = bpb;
 
         // Victory: take the first rung that crosses the gate (no need to keep training).
-        if bpb < crate::IGLA_TARGET_BPB {
+        if bpb < crate::hive_automaton::BPB_VICTORY_TARGET {
             status = TrialStatus::Victory;
             break;
         }
