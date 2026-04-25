@@ -115,7 +115,7 @@ pub fn champion_lr() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::invariants::{validate_config, GradientMode, InvTrialConfig, INV2_BPB_PRUNE_THRESHOLD,
+    use crate::invariants::{validate_config, GradientMode, TrialConfig as InvTrialConfig, INV2_BPB_PRUNE_THRESHOLD,
         INV2_WARMUP_BLIND_STEPS, INV4_NCA_GRID, INV4_NCA_K_STATES};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
@@ -132,8 +132,6 @@ mod tests {
             nca_grid: INV4_NCA_GRID,
             nca_k_states: INV4_NCA_K_STATES,
             grad_mode: GradientMode::RealMSE,
-            current_step: 5_000,
-            last_bpb: 2.5,
         }
     }
 

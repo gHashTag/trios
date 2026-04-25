@@ -15,9 +15,9 @@
     "HIVE.md",
     "docs/hive/HIVE_PROTOCOL.md"
   ],
-  "cycle": 3,
-  "updated_at": "2026-04-25T15:43:00Z",
-  "updated_by": "perplexity-computer (ignite)",
+  "cycle": 4,
+  "updated_at": "2026-04-25T16:10:00Z",
+  "updated_by": "perplexity-computer-l11 (reconcile)",
   "lanes": {
     "L1": {
       "name": "BPB tracker",
@@ -70,26 +70,24 @@
       "blocks": []
     },
     "L6": {
-      "name": "EMA cosine",
-      "status": "OPEN",
+      "name": "EMA tracker",
+      "status": "DONE",
       "owner_file": "crates/trios-igla-race/src/ema.rs",
-      "invariant": "INV-6",
-      "claimed_by": null,
-      "claimed_at": null,
-      "commit": null,
+      "invariant": "INV-6 (support)",
+      "claimed_by": "perplexity-computer-l6",
+      "claimed_at": "2026-04-25T15:50:00Z",
+      "commit": "7e4db97",
       "blocks": []
     },
     "L7": {
       "name": "Victory gate",
-      "status": "OPEN",
-      "owner_file": "crates/trios-igla-race/src/found.rs",
+      "status": "DONE",
+      "owner_file": "crates/trios-igla-race/src/victory.rs",
       "invariant": "INV-7",
-      "claimed_by": null,
-      "claimed_at": null,
-      "commit": null,
-      "blocks": [
-        "L11"
-      ]
+      "claimed_by": "perplexity-computer-l7",
+      "claimed_at": "2026-04-25T15:47:52Z",
+      "commit": "62be5d6",
+      "blocks": []
     },
     "L8": {
       "name": "LR sampler",
@@ -123,12 +121,12 @@
     },
     "L11": {
       "name": "Worker pool",
-      "status": "OPEN",
+      "status": "DONE",
       "owner_file": "crates/trios-igla-race/src/race.rs",
-      "invariant": "composite",
-      "claimed_by": null,
-      "claimed_at": null,
-      "commit": null,
+      "invariant": "composite (INV-1 \u2227 INV-2 \u2227 INV-12)",
+      "claimed_by": "perplexity-computer-l11",
+      "claimed_at": "2026-04-25T15:51:00Z",
+      "commit": "PENDING",
       "blocks": []
     },
     "L12": {
@@ -143,13 +141,10 @@
     }
   },
   "priority_queue": [
-    "L11",
-    "L7",
     "L12",
     "L1",
     "L3",
     "L4",
-    "L6",
     "L9"
   ],
   "victory": {
@@ -160,10 +155,10 @@
   },
   "metrics": {
     "total_lanes": 12,
-    "done": 4,
-    "open": 8,
-    "claimed_active": 0,
-    "completion_pct": 33.3
+    "done": 7,
+    "open": 5,
+    "claimed_active": 1,
+    "completion_pct": 58.3
   },
   "honey_jar": "assertions/hive_honey.jsonl",
   "events": [
@@ -176,6 +171,31 @@
         "https://github.com/gHashTag/trios/issues/264#issuecomment-4319978151",
         "https://github.com/gHashTag/trios/issues/244#issuecomment-4319978188"
       ]
+    },
+    {
+      "ts": "2026-04-25T15:55:00Z",
+      "kind": "DONE",
+      "agent": "perplexity-computer-l11",
+      "lane": "L11",
+      "files": [
+        "crates/trios-igla-race/src/race.rs",
+        "crates/trios-igla-race/src/lib.rs",
+        "crates/trios-igla-race/src/rungs.rs",
+        "crates/trios-igla-race/src/sampler.rs"
+      ],
+      "tests_added": 10,
+      "note": "Reconciled L8/L10 to ALPHA's renamed TrialConfig + removed LUCAS_1 reference; pure-Rust worker pool with single-writer telemetry sink."
+    },
+    {
+      "ts": "2026-04-25T16:10:00Z",
+      "kind": "RECONCILE",
+      "agent": "perplexity-computer-l11",
+      "lanes_done": [
+        "L6",
+        "L7",
+        "L11"
+      ],
+      "note": "Three lanes landed concurrently. Rebase merged cleanly modulo honey jar (resolved keep-both)."
     }
   ]
 }

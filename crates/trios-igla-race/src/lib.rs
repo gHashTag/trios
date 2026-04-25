@@ -3,6 +3,7 @@ pub mod hive_automaton;
 pub mod invariants;
 pub mod lessons;
 pub mod neon;
+pub mod race;
 pub mod rungs;
 pub mod ema;
 pub mod sampler;
@@ -17,7 +18,7 @@ pub use neon::{NeonDb, LessonEntry, DashboardMeta, spawn_heartbeat};
 
 pub use status::*;
 
-pub use invariants::{InvTrialConfig, GradientMode, InvError, validate_config};
+pub use invariants::{TrialConfig as InvTrialConfig, GradientMode, InvError, validate_config};
 
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 

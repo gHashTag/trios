@@ -30,13 +30,16 @@
 
 use std::fmt;
 
-use crate::invariants::{InvError, LUCAS_1};
+use crate::invariants::InvError;
 
 // ─── Coq-anchored constants ──────────────────────────────────────────────
 
-/// Trinity base: `3 = φ² + φ⁻²` = `LUCAS_1`.
-/// Coq: `lucas_closure_gf16.v::lucas_recurrence_closed`.
-pub const TRINITY_BASE: u32 = LUCAS_1 as u32;
+/// Trinity base: `3 = φ² + φ⁻²` (Lucas L(1) anchor).
+///
+/// Coq: `lucas_closure_gf16.v::lucas_recurrence_closed`. The literal `3` here
+/// is the Trinity Identity itself, not a free numeric constant — see the
+/// L-R14 traceability table for INV-12.
+pub const TRINITY_BASE: u32 = 3;
 
 /// First-rung step count, anchored in `assertions/igla_assertions.json::INV-12`.
 /// Coq: `igla_asha_bound.v::asha_rungs_trinity`.
