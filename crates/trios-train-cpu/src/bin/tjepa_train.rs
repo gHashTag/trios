@@ -24,7 +24,8 @@ use rand::rngs::StdRng;
 
 use trios_train_cpu::{
     jepa::{MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, get_unmasked, JepaLossConfig},
-    optimizer::AdamWCpu,
+    optimizer::{MuonOptimizer, OptimizerKind},
+    objective::{NcaObjective, NcaTransitionRule, ComponentLosses, ObjectiveConfig},
 };
 
 const VOCAB: usize = 128;
