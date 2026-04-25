@@ -61,21 +61,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_jepa_arch(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    use trios_igla_trainer::jepa_runner::JepaTrainArgs;
+
     tracing::info!("Starting JEPA training: steps={} hidden={} context={} seed={}",
         args.steps, args.hidden, args.context, args.seed);
-
-    let jepa_cfg = JepaConfig {
-        seed: args.seed,
-        d_model: args.hidden,
-        mask_ratio: 0.3,
-        min_span: 1,
-        max_span: args.context / 2,
-        num_spans: 2,
-        ema_start: 0.996,
-        ema_end: 1.0,
-        ema_ramp_steps: args.steps as usize,
-        predictor_lr_mult: 0.1,
-    };
 
     let jepa_args = JepaTrainArgs {
         hidden: args.hidden,
@@ -85,7 +74,7 @@ fn run_jepa_arch(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
         exp_id: args.exp_id.clone(),
     };
 
-    let final_bpb = run_jepa_training(&jepa_cfg, &jepa_args)?;
+    let final_bpb = run_jepa_training(&(), &jepa_args)?;
     println!("BPB={:.4}", final_bpb);
 
     // L7: Write experience log
