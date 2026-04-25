@@ -28,11 +28,11 @@ use trios_train_cpu::{
 };
 
 const VOCAB: usize = 128;
-const DIM: usize = 96;
-const HIDDEN: usize = 512;
-const NUM_CTX: usize = 8;
+const DIM: usize = 64;
+const HIDDEN: usize = 384;
+const NUM_CTX: usize = 4;
 const NGRAM: usize = NUM_CTX + 2;
-const SEQ: usize = 96;
+const SEQ: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
 const HEARTBEAT_INTERVAL_SECS: u64 = 60;
 
@@ -171,9 +171,7 @@ impl NgramModel {
         let lim = (6.0f32 / (3 * DIM) as f32).sqrt();
         let lim_h = (6.0f32 / (DIM + HIDDEN) as f32).sqrt();
         let lim_o = (6.0f32 / (HIDDEN + VOCAB) as f32).sqrt();
-        let ctx_weights: Vec<f32> = (0..NUM_CTX)
-            .map(|i| 0.7f32 * 0.45f32.powi(i as i32))
-            .collect();
+        let ctx_weights: Vec<f32> = vec![0.7, 0.3, 0.2, 0.15];
         assert_eq!(ctx_weights.len(), NUM_CTX, "ctx_weights count mismatch");
         Self {
             embed: (0..VOCAB * DIM).map(|_| rng() * lim).collect(),
