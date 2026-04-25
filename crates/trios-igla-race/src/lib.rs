@@ -9,6 +9,7 @@ pub mod attn;
 pub mod bpb;
 pub mod ema;
 pub mod gf16;
+pub mod nca;
 pub mod sampler;
 pub mod status;
 pub mod victory;
@@ -32,6 +33,11 @@ pub use victory::{
 };
 
 pub use ema::{EmaTracker, EmaError, ALPHA_PHI_INV_3, ALPHA_MIN_EXCLUSIVE, ALPHA_MAX_INCLUSIVE};
+
+pub use nca::{
+    assert_bands_distinct, validate_nca_entropy, validate_nca_entropy_canonical, NcaBandMode,
+    NcaError, NcaReport,
+};
 
 pub use attn::{QkHead, QkHeadError, PHI_4, HEAD_DIM_PHI_FLOOR, NUM_HEADS_MAX};
 
