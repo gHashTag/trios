@@ -1,4 +1,4 @@
-//! TASK-5B — T-JEPA Training Binary (ASHA Rung-1)
+//! TASK-5C — T-JEPA Training Binary (ASHA Rung-1)
 //!
 //! Trains Ternary Joint Embedding Predictive Architecture on TinyShakespeare.
 //! Wire-up of existing jepa/ components + simple N-gram encoder.
@@ -9,6 +9,8 @@
 
 use std::fs;
 use std::time::Instant;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use trios_train_cpu::{
     jepa::{MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, get_unmasked, compute_jepa_loss, JepaLossConfig},
@@ -20,10 +22,9 @@ const SEQ_LEN: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
 
 /// Simple N-gram context encoder (online or target)
-#[allow(dead_code)]
 struct NgramEncoder {
     embed: Vec<f32>,        // vocab × d_model
-    ctx_weights: Vec<f32>,   // num_ctx weights
+    ctx_weights: Vec<f32>,  // num_ctx weights
     d_model: usize,
     vocab: usize,
     num_ctx: usize,
@@ -55,7 +56,6 @@ impl NgramEncoder {
             let t_idx = t.min(v - 1);
             let e = &self.embed[t_idx * d..(t_idx + 1) * d];
 
-            // Aggregate context windows
             let mut combined = e.to_vec();
             for (ci, cw) in self.ctx_weights.iter().enumerate() {
                 let ctx_idx = if ci < tokens.len() { tokens.len() - 1 - ci } else { 0 };
@@ -75,10 +75,7 @@ impl NgramEncoder {
     fn encode_positions(&self, tokens: &[usize], positions: &[usize]) -> Vec<Vec<f32>> {
         let full_encoded = self.encode(tokens);
         positions.iter().map(|&pos| {
-            full_encoded.get(pos).cloned().unwrap_or_else(|| {
-                let d = self.d_model;
-                vec![0.0f32; d]
-            })
+            full_encoded.get(pos).cloned().unwrap_or_else(|| vec![0.0f32; self.d_model])
         }).collect()
     }
 }
@@ -100,7 +97,6 @@ fn bpb_from_loss(loss: f32) -> f32 {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
-    // Parse CLI args
     let seed: u64 = args
         .iter()
         .find(|a| a.starts_with("--seed="))
@@ -130,61 +126,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Baseline: 6-gram h=384 lr=0.004 → BPB 2.5329");
     println!("Gate min: ≤ 2.23 | Gate target: ≤ 2.03");
 
-    // Load data
     let train_data = load_data("data/tiny_shakespeare.txt");
     let val_data = load_data("data/tiny_shakespeare_val.txt");
 
-    // Create encoders
-    let num_ctx = 6; // 6-gram context
+    let num_ctx = 6;
     let mut online_encoder = NgramEncoder::new(VOCAB, d_model, num_ctx, seed);
     let mut target_encoder = NgramEncoder::new(VOCAB, d_model, num_ctx, seed.wrapping_add(1));
 
-    // Create optimizer for online encoder embeddings
     let param_count = VOCAB * d_model;
     let mut online_opt = AdamWCpu::with_params(param_count, lr as f64, 0.618, 0.999, 0.01);
 
-    // Create EMA target
+    // EmaTarget::update() handles both EMA math and step increment internally
     let ema_config = EmaConfig { start: 0.996, end: 1.0, ramp_steps: steps };
-    let ema_target = EmaTarget::new(ema_config);
+    let mut ema_target = EmaTarget::new(ema_config);
 
-    // Mask config
-    let mask_config = MaskConfig::default(); // ratio=0.3, min_span=3, max_span=9, num_spans=2
-
-    // Loss config
-    let loss_config = JepaLossConfig::default(); // L2 normalized, variance_weight=0.01
+    let mask_config = MaskConfig::default();
+    let loss_config = JepaLossConfig::default();
 
     let start_time = Instant::now();
     let mut best_val_bpb = f32::MAX;
 
-    // Training loop
     for step in 0..steps {
-        // Sample sequence
         let seq_start = (step * SEQ_LEN) % train_data.len().saturating_sub(SEQ_LEN);
         let seq_end = (seq_start + SEQ_LEN + 1).min(train_data.len());
         let seq = &train_data[seq_start..seq_end];
 
-        // Generate masks
-        use rand::SeedableRng;
-        use rand::rngs::StdRng;
+        // rand imports are now at top of file — no `use` inside loop
         let mut rng = StdRng::seed_from_u64(seed.wrapping_add(step as u64));
         let mask_result = mask_spans(SEQ_LEN, mask_config, &mut rng);
         let target_positions = get_masked(&mask_result.mask);
         let context_positions = get_unmasked(&mask_result.mask);
 
-        // Skip if no target positions
         if target_positions.is_empty() {
             continue;
         }
 
-        // Encode with online encoder
         let online_embeddings = online_encoder.encode(seq);
 
-        // Forward: context → target prediction
-        // Simple: use context avg as prediction for masked positions
         let mut predicted_target: Vec<Vec<f32>> = Vec::with_capacity(target_positions.len());
         for &pos in &target_positions {
             if pos < online_embeddings.len() {
-                // Aggregate context embeddings (simple avg)
                 let ctx_len = context_positions.len().min(10);
                 let mut ctx_agg = vec![0.0f32; d_model];
                 for &ctx_pos in context_positions.iter().take(ctx_len) {
@@ -200,39 +181,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // Target encoder (no grad)
         let target_embeddings = target_encoder.encode_positions(seq, &target_positions);
 
-        // Compute JEPA loss
-        let mut total_jepa_loss = 0.0;
+        let mut total_jepa_loss = 0.0f64;
         for (pred, tgt) in predicted_target.iter().zip(target_embeddings.iter()) {
             let jepa_loss = compute_jepa_loss(pred, tgt, loss_config);
             total_jepa_loss += jepa_loss.total;
         }
 
-        // Backward: compute gradients (simplified MSE gradient)
-        let mut grads = vec![0.0f32; param_count];
-        let loss_scale = total_jepa_loss / target_positions.len().max(1) as f64;
+        // Gradient: f32 throughout — no f64/f32 mismatch
+        let loss_scale = (total_jepa_loss / target_positions.len().max(1) as f64) as f32;
+        let mut grads = vec![loss_scale * 0.01_f32; param_count];
 
-        // Simple gradient: proportional to loss
-        for g in grads.iter_mut() {
-            *g = (loss_scale * 0.01) as f32;
-        }
-
-        // Optimizer step
         online_opt.step(&mut online_encoder.embed, &grads);
+        // Zero grads for next step (avoid stale data)
+        grads.iter_mut().for_each(|g| *g = 0.0);
 
-        // EMA update: target_encoder += tau * (online_encoder - target_encoder)
-        let tau = ema_target.decay();
-        let tau32 = tau as f32;
-        let inv_tau = 1.0 - tau32;
-        for (t, o) in target_encoder.embed.iter_mut().zip(online_encoder.embed.iter()) {
-            *t = tau32 * *t + inv_tau * *o;
-        }
-        // Manually increment EMA step since we're doing the update manually
-        // (EmaTarget::update handles this, but we're doing it directly)
+        // EmaTarget::update() does both the EMA math and self.step += 1
+        ema_target.update(&mut target_encoder.embed, &online_encoder.embed);
 
-        // Log every 100 steps
         if step % 100 == 0 || step == steps - 1 {
             let elapsed = start_time.elapsed().as_secs_f64();
             let avg_loss = total_jepa_loss / target_positions.len().max(1) as f64;
@@ -245,10 +212,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 elapsed
             );
 
-            // Validation
             if step % 500 == 0 || step == steps - 1 {
-                let mut val_loss = 0.0;
-                let mut val_n = 0;
+                let mut val_loss = 0.0f64;
+                let mut val_n = 0usize;
 
                 for v_start in (0..val_data.len()).step_by(SEQ_LEN + 1) {
                     let v_end = (v_start + SEQ_LEN + 1).min(val_data.len());
@@ -258,10 +224,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     let v_seq = &val_data[v_start..v_end];
                     let v_emb = online_encoder.encode(v_seq);
-
-                    // Use first half as context, second half as target
                     let ctx_half = v_emb.len() / 2;
-                    let v_tgt = target_encoder.encode_positions(v_seq, &(ctx_half..v_emb.len()).collect::<Vec<_>>());
+                    let tgt_positions: Vec<usize> = (ctx_half..v_emb.len()).collect();
+                    let v_tgt = target_encoder.encode_positions(v_seq, &tgt_positions);
 
                     for (vp, vt) in v_emb.iter().take(ctx_half).zip(v_tgt.iter()) {
                         let vl = compute_jepa_loss(vp, vt, loss_config);
@@ -282,7 +247,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Final report
     let elapsed = start_time.elapsed().as_secs_f64();
     println!();
     println!("=== T-JEPA Training Complete ===");
@@ -291,14 +255,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Best val BPB: {:.4}", best_val_bpb);
     println!("vs baseline: {:.4}", best_val_bpb - 2.5329);
 
-    // Gate status
     println!();
     if best_val_bpb <= 2.23 {
         println!("✅ Gate MINIMUM (≤2.23) PASSED!");
     } else {
         println!("❌ Gate MINIMUM (≤2.23) FAILED: {:.4} > 2.23", best_val_bpb);
     }
-
     if best_val_bpb <= 2.03 {
         println!("✅✅ Gate TARGET (≤2.03) PASSED!");
     } else {
