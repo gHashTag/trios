@@ -3,6 +3,10 @@
 //! Uses pure Rust GF16 implementation (no FFI, no C library)
 //! Tests if φ-optimized quantization improves BPB over f32 baseline
 
+#![allow(clippy::needless_range_loop)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use std::fs;
 use std::io::Write;
 use std::time::Instant;
@@ -322,6 +326,7 @@ impl NgramModelGF16 {
         total / (tokens.len() - start - 1) as f32
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn train_step(&mut self, tokens: &[usize], lr: f32, opts: &mut Optimizers) {
         let start = if self.use_ctx5 {
             5

@@ -249,14 +249,7 @@ fn main() -> Result<()> {
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
             let config = trios_cli::cmd::train::TrainConfig {
-                steps,
-                hidden,
-                lr,
-                activation,
-                residual,
-                dropout,
-                warmup,
-                wd,
+                steps, hidden, lr, activation, residual, dropout, warmup, wd,
             };
             let results = train_cpu(seed_list, config, parallel)?;
             let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;

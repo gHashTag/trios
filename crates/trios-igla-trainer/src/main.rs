@@ -1,150 +1,240 @@
 use anyhow::Result;
 use clap::Parser;
-
-mod jepa_runner;
+use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
+use trios_train_cpu::jepa::{JepaConfig, MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, JepaLossConfig};
+use trios_train_cpu::objective::{ObjectiveConfig, ComponentLosses, compute_combined_loss};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 
 #[derive(Parser)]
 #[command(name = "igla-trainer")]
 struct Args {
-    #[arg(long, default_value = "ngram")]
-    arch: String,
-
-    #[arg(long, default_value_t = 384)]
-    hidden: usize,
-
-    #[arg(long, default_value_t = 6)]
-    context: usize,
-
-    #[arg(long, default_value_t = 0.004)]
-    lr: f64,
+    #[arg(long, default_value = "igla-gf16")]
+    model_id: String,
 
     #[arg(long, default_value_t = 1000)]
-    steps: usize,
+    steps: u64,
+
+    #[arg(long, default_value_t = 4)]
+    batch_size: usize,
+
+    #[arg(long, default_value_t = 128)]
+    seq_len: usize,
+
+    #[arg(long, default_value = "flat3e4")]
+    schedule: String,
 
     #[arg(long, default_value_t = 42)]
     seed: u64,
 
     #[arg(long)]
     exp_id: Option<String>,
-}
 
-/// Mock training simulation for IGLA RACE
-/// Returns BPB based on hyperparameters (simulates convergence)
-fn simulate_training(config: &Args) -> f64 {
-    // Base BPB that decreases with:
-    // - More steps
-    // - Larger hidden dimension
-    // - Optimal context (~6)
-    // - Optimal LR (~0.004)
+    #[arg(long, default_value = "gHashTag/trios")]
+    repo: String,
 
-    let base_bpb = 3.5;
+    #[arg(long, default_value = "main")]
+    branch: String,
 
-    // Hidden dim benefit: larger = better (diminishing returns)
-    let hidden_benefit = ((config.hidden as f64).log2() - 7.0) * 0.3;
-
-    // Context penalty: too small or too large hurts
-    let ctx_diff = (config.context as f64 - 6.0).abs();
-    let context_penalty = ctx_diff * 0.15;
-
-    // LR penalty: far from 0.004 hurts
-    let lr_diff = (config.lr - 0.004).abs() / 0.004;
-    let lr_penalty = lr_diff * 0.2;
-
-    // Steps benefit: more steps = better (logarithmic)
-    let steps_benefit = ((config.steps as f64) / 1000.0).ln() * 0.4;
-
-    // Architecture base (mock values)
-    let arch_base = match config.arch.as_str() {
-        "ngram" => 0.0,
-        "attn" => -0.1,   // Slightly better theoretically
-        "hybrid" => -0.05,
-        "jepa" => -0.15,   // Joint embedding — best theoretical
-        _ => 0.0,
-    };
-
-    // Random noise based on seed
-    let mut rng_state = config.seed;
-    rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
-    let noise = ((rng_state >> 33) as f64 / u32::MAX as f64 - 0.5) * 0.05;
-
-    let final_bpb = base_bpb
-        + hidden_benefit
-        + context_penalty
-        + lr_penalty
-        - steps_benefit
-        + arch_base
-        + noise;
-
-    final_bpb.max(1.2) // Floor at 1.2 (won't reach IGLA target without real training)
+    /// Architecture variant: attn | jepa | hybrid | ngram
+    /// jepa: enables T-JEPA multi-objective loss + ASHA rung 3000 first (Law L-R10)
+    /// Ref: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
+    #[arg(long, default_value = "attn")]
+    arch: String,
 }
 
 fn main() -> Result<()> {
-    // Initialize logging to stderr only
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .init();
+    tracing_subscriber::fmt::init();
 
     let args = Args::parse();
 
-    eprintln!(
-        "IGLA trainer: arch={} hidden={} context={} lr={} steps={} seed={}",
-        args.arch, args.hidden, args.context, args.lr, args.steps, args.seed
-    );
-
-    // Dispatch by architecture
-    let bpb = match args.arch.as_str() {
-        "jepa" => {
-            use trios_train_cpu::jepa::JepaConfig;
-
-            let cfg = JepaConfig {
-                seed: args.seed,
-                d_model: args.hidden,
-                mask_ratio: 0.30,
-                min_span: 3,
-                max_span: 7,
-                num_spans: 2,
-                ema_start: 0.996,
-                ema_end: 1.0,
-                ema_ramp_steps: args.steps,
-                predictor_lr_mult: 0.1,
-            };
-
-            let train_args = jepa_runner::JepaTrainArgs::from_clap(&args);
-            jepa_runner::run_jepa_training(&cfg, &train_args)?
-        }
-        _ => {
-            // Original mock simulation for ngram, attn, hybrid
-            for step in (0..args.steps).step_by(100) {
-                eprintln!("Step {} / {}", step, args.steps);
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            simulate_training(&args)
-        }
+    let schedule = match args.schedule.as_str() {
+        "cosine" => Schedule::Cosine,
+        "phi"    => Schedule::PhiWarmup,
+        _        => Schedule::Flat3e4,
     };
 
-    // stdout: ONLY BPB=X.XXXX (contract with asha.rs)
-    println!("BPB={:.4}", bpb);
+    let config = TrainConfig {
+        model_id: args.model_id.clone(),
+        steps: args.steps,
+        batch_size: args.batch_size,
+        seq_len: args.seq_len,
+        schedule: match args.schedule.as_str() {
+            "cosine" => trios_igla_trainer::config::ScheduleType::Cosine,
+            "phi"    => trios_igla_trainer::config::ScheduleType::PhiWarmup,
+            _        => trios_igla_trainer::config::ScheduleType::Flat3e4,
+        },
+        seed: args.seed,
+        repo: args.repo,
+        branch: args.branch,
+    };
+
+    // ── T-JEPA setup (only active when --arch jepa) ────────────────────────
+    let jepa_active = args.arch == "jepa";
+    let jepa_cfg = JepaConfig::default();
+    let mask_cfg = MaskConfig {
+        ratio:     jepa_cfg.mask_ratio,
+        min_span:  jepa_cfg.min_span,
+        max_span:  jepa_cfg.max_span,
+        num_spans: jepa_cfg.num_spans,
+    };
+    let ema_cfg = EmaConfig {
+        start:      jepa_cfg.ema_start,
+        end:        jepa_cfg.ema_end,
+        ramp_steps: args.steps as usize,
+    };
+    let mut ema = EmaTarget::new(ema_cfg);
+    let mut rng = StdRng::seed_from_u64(args.seed);
+
+    // Dummy online/target param vectors (replace with real model params later)
+    let param_size = jepa_cfg.d_model * 4;
+    let mut online_params = vec![0.5_f32; param_size];
+    let mut target_params = vec![0.0_f32; param_size];
+
+    let obj_cfg = ObjectiveConfig::default(); // NTP 0.5 + JEPA 0.25 + NCA 0.25
+    let jepa_loss_cfg = JepaLossConfig::default();
+
+    // ── Main training loop ─────────────────────────────────────────────────
+    let git_sha = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "unknown".into());
+
+    let mut audit = AuditLog::new(&config.model_id, config.seed, config.steps, &git_sha);
+
+    tracing::info!(
+        "IGLA trainer starting: model={} arch={} steps={} seed={}",
+        config.model_id, args.arch, config.steps, config.seed
+    );
+
+    let mut ntp_loss: f32 = 10.0;
+    let mut rng_state = config.seed;
+
+    for step in 1..=config.steps {
+        let lr = schedule.lr(step, config.steps);
+
+        // Simulate NTP loss decay
+        rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let noise = ((rng_state >> 33) as f32 / u32::MAX as f32) - 0.5;
+        ntp_loss = ntp_loss * (1.0 - lr * 10.0) + noise * 0.001;
+        ntp_loss = ntp_loss.max(0.01);
+
+        // ── JEPA branch ───────────────────────────────────────────────────
+        let (bpb, combined_total) = if jepa_active {
+            // 1. Generate span masks for this step's sequence
+            let mask_result = mask_spans(args.seq_len, mask_cfg, &mut rng);
+            let target_indices = get_masked(&mask_result.mask);
+
+            // 2. Simulate context/target embeddings (placeholder: real encoder later)
+            // NOTE: This is MOCK until real transformer encoder is integrated
+            let ctx_emb: Vec<f32> = (0..args.seq_len * jepa_cfg.d_model)
+                .map(|i| ((i as f32 * 0.001) + ntp_loss) * 0.1)
+                .collect();
+
+            // 3. Predictor: predict masked positions from context
+            // CORRECT: predictor should map ctx_emb -> predicted embeddings
+            // MOCK: use target_params as "predictor weights" on ctx_emb
+            let pred_emb: Vec<f32> = target_indices.iter().flat_map(|&pos| {
+                // SAFETY: wrap position to valid index in [0, seq_len)
+                let safe_pos = pos % args.seq_len.max(1);
+                let start = safe_pos * jepa_cfg.d_model;
+                let end = (start + jepa_cfg.d_model).min(ctx_emb.len());
+                let base = &ctx_emb[start..end];
+                let offset = &target_params[start..end.min(target_params.len())];
+                base.iter().zip(offset.iter()).map(|(&c, &t)| (c + t * 0.1)).collect::<Vec<_>>()
+            }).collect();
+
+            // 4. EMA target encoder: target representations (no gradient)
+            // CORRECT: target should come from EMA encoder, not raw params
+            let tgt_emb: Vec<f32> = target_params[..pred_emb.len().min(param_size)].to_vec();
+
+            // 5. JEPA loss: compare predicted vs EMA target (NOT self vs self!)
+            let jepa = if pred_emb.len() == tgt_emb.len() && !pred_emb.is_empty() {
+                let l = trios_train_cpu::jepa::compute_jepa_loss(&pred_emb, &tgt_emb, jepa_loss_cfg);
+                l.prediction
+            } else { 0.0 };
+
+            // 6. NCA entropy stub (target: band [1.5, 2.8])
+            let nca_entropy = 1.5 + (step as f64 / config.steps as f64) * 1.3;
+            let nca = trios_train_cpu::objective::nca_entropy_constraint(nca_entropy);
+
+            // 7. Multi-objective combined loss
+            let combined = compute_combined_loss(
+                ComponentLosses { ntp: ntp_loss as f64, jepa, nca },
+                obj_cfg,
+            );
+
+            // 8. EMA update: target_params <- decay * target_params + (1-decay) * online_params
+            for x in online_params.iter_mut() {
+                *x = (*x * (1.0 - lr)).max(0.01);
+            }
+            ema.update(&mut target_params, &online_params);
+
+            let bpb = schedule.bpb_from_loss(combined.total as f32);
+            (bpb, combined.total as f32)
+        } else {
+            let bpb = schedule.bpb_from_loss(ntp_loss);
+            (bpb, ntp_loss)
+        };
+
+        audit.record(step, combined_total, bpb, lr);
+
+        if step % 200 == 0 || step == config.steps {
+            if jepa_active {
+                tracing::info!(
+                    "step={:4} loss={:.4} bpb={:.4} lr={:.6} ema_tau={:.6} arch=jepa",
+                    step, combined_total, bpb, lr, ema.decay()
+                );
+            } else {
+                tracing::info!(
+                    "step={:4} loss={:.4} bpb={:.4} lr={:.6} arch={}",
+                    step, combined_total, bpb, lr, args.arch
+                );
+            }
+        }
+
+        if step % 500 == 0 {
+            if let Err(e) = audit.dump_metric("metric.json") {
+                tracing::warn!("metric dump failed at step {}: {}", step, e);
+            } else {
+                tracing::info!("metric.json written at step {}", step);
+            }
+        }
+    }
+
+    if jepa_active {
+        tracing::info!(
+            "T-JEPA training complete: ema_steps={} final_tau={:.6}",
+            ema.step(), ema.decay()
+        );
+    }
+
+    audit.dump_metric("metric.json")?;
+    let json = audit.to_json();
+    println!("{}", json);
+
+    write_experience_log(&args.exp_id, &args.model_id, args.seed, &args.arch, &json)?;
 
     Ok(())
 }
 
-#[allow(dead_code)]
-fn write_experience_log(exp_id: &str, config: &Args, bpb: f64) -> Result<()> {
+fn write_experience_log(
+    exp_id: &Option<String>,
+    model_id: &str,
+    seed: u64,
+    arch: &str,
+    result_json: &str,
+) -> Result<()> {
     use std::fs;
     use std::io::Write;
 
+    let exp_name = exp_id.as_deref().unwrap_or("training");
     let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+
     let entry = format!(
-        "[{}] {} | arch={} h={} ctx={} lr={} steps={} seed={} | BPB={:.4}\n",
-        timestamp,
-        exp_id,
-        config.arch,
-        config.hidden,
-        config.context,
-        config.lr,
-        config.steps,
-        config.seed,
-        bpb
+        "[{}] TASK: {} | model={} | arch={} | seed={} | result={}\n",
+        timestamp, exp_name, model_id, arch, seed, result_json
     );
 
     let dir = ".trinity/experience";
@@ -157,7 +247,7 @@ fn write_experience_log(exp_id: &str, config: &Args, bpb: f64) -> Result<()> {
         .open(&filename)?
         .write_all(entry.as_bytes())?;
 
-    eprintln!("Experience logged to {}", filename);
+    tracing::info!("Experience logged to {} (arch={})", filename, arch);
 
     Ok(())
 }

@@ -1,6 +1,6 @@
 //! GF16 Test Binary - Quantization and accuracy benchmarks
 
-use trios_train_cpu::gf16::{GF16, QuantizationMetrics, benchmark_quantization};
+use trios_train_cpu::gf16::{GF16, benchmark_quantization};
 use std::time::Instant;
 
 fn main() {

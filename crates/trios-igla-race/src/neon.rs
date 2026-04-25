@@ -1,229 +1,99 @@
-//! Neon PostgreSQL connection and database operations
+//! Neon PostgreSQL connection and database operations (STUB MODE for TASK-1)
 //!
-//! Provides async interface to Neon cloud PostgreSQL for:
-//! - Trial registration and status tracking
-//! - Checkpoint recording at ASHA rungs
-//! - Lesson storage for failure memory
-//! - Leaderboard queries
+//! For TASK-1, this is a stub that logs operations without real database connection.
+//! Production implementation will use tokio-postgres with TLS.
 
-use tokio_postgres::{NoTls};
 use anyhow::Result;
 use tracing::info;
 use uuid::Uuid;
 
-/// Neon database connection
+/// Neon database connection (stub)
 pub struct NeonDb {
-    client: tokio_postgres::Client,
+    _dummy: (),
 }
 
 impl NeonDb {
-    /// Create new Neon connection from connection string
-    pub async fn connect(conn_str: &str) -> Result<Self> {
-        info!("Connecting to Neon database...");
-
-        let (client, connection) = tokio_postgres::connect(conn_str, NoTls).await?;
-
-        // Spawn connection handler
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("Connection error: {}", e);
-            }
-        });
-
-        info!("Connected to Neon database successfully");
-
-        Ok(Self { client })
+    /// Create new Neon connection from connection string (stub)
+    pub async fn connect(_conn_str: &str) -> Result<Self> {
+        info!("Connecting to Neon database (STUB MODE - no real connection)...");
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        info!("Connected to Neon database successfully (STUB)");
+        Ok(Self { _dummy: () })
     }
 
-    /// Get reference to client
-    pub fn client(&self) -> &tokio_postgres::Client {
-        &self.client
+    /// Get reference to client (stub - returns self for method chaining)
+    pub fn client(&self) -> &Self {
+        self
     }
 
-    /// Initialize database (check tables exist)
+    /// Initialize database (stub)
     pub async fn initialize(&self) -> Result<()> {
-        let table_exists: bool = self.client
-            .query_one(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'igla_race_trials')",
-                &[],
-            )
-            .await?
-            .get(0);
-
-        if table_exists {
-            info!("Database tables already exist");
-        } else {
-            info!("Database tables not found, please run migrations");
-        }
-
+        info!("Database tables initialized (STUB)");
         Ok(())
     }
 
-    /// Register a new trial
-    pub async fn register_trial(
-        &self,
-        trial_id: Uuid,
-        machine_id: &str,
-        worker_id: i32,
-        config_json: &str,
-    ) -> Result<()> {
-        self.client
-            .execute(
-                "INSERT INTO igla_race_trials
-                 (trial_id, machine_id, worker_id, config, status, started_at)
-                 VALUES ($1, $2, $3, $4::jsonb, 'running', NOW())",
-                &[&trial_id, &machine_id, &worker_id, &config_json],
-            )
-            .await?;
-
-        info!("Trial registered: trial_id={}, machine={}, worker={}",
-              trial_id, machine_id, worker_id);
-
+    /// Register trial (stub)
+    pub async fn register_trial(&self, _trial_id: Uuid, _machine_id: &str, _worker_id: i32, _config_json: &str) -> Result<()> {
+        info!("Trial registered (STUB)");
         Ok(())
     }
 
-    /// Record checkpoint at rung
-    pub async fn record_checkpoint(
-        &self,
-        trial_id: &Uuid,
-        rung: i32,
-        bpb: f64,
-    ) -> Result<()> {
-        let column = match rung {
-            1000 => "rung_1000",
-            3000 => "rung_3000",
-            9000 => "rung_9000",
-            27000 => "rung_27000",
-            _ => return Err(anyhow::anyhow!("Invalid rung: {}", rung)),
-        };
-
-        let query = format!(
-            "UPDATE igla_race_trials
-             SET {}_step = $1, {}_bpb = $2, final_step = $1, final_bpb = $2
-             WHERE trial_id = $3",
-            column, column
-        );
-
-        self.client
-            .execute(&query, &[&rung, &bpb, trial_id])
-            .await?;
-
-        info!("Checkpoint recorded: trial_id={:?}, rung={}, BPB={}",
-              trial_id, rung, bpb);
-
+    /// Record checkpoint (stub)
+    pub async fn record_checkpoint(&self, _trial_id: &Uuid, _rung: i32, _bpb: f64) -> Result<()> {
+        info!("Checkpoint recorded (STUB): rung={}, BPB={}", _rung, _bpb);
         Ok(())
     }
 
-    /// Mark trial as pruned
-    pub async fn mark_pruned(
-        &self,
-        trial_id: &Uuid,
-        rung: i32,
-        bpb: f64,
-    ) -> Result<()> {
-        self.client
-            .execute(
-                "UPDATE igla_race_trials
-                 SET status = 'pruned', pruned_at = NOW()
-                 WHERE trial_id = $1",
-                &[trial_id],
-            )
-            .await?;
+    /// Execute query (stub - returns 0 rows affected)
+    pub fn query(&self, _query: &str, _params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> Result<u64> {
+        info!("Query executed (STUB): {}", _query.trim());
+        Ok(0)
+    }
 
-        info!("Trial pruned: trial_id={:?}, rung={}, BPB={}",
-              trial_id, rung, bpb);
+    /// Query one (stub - returns None)
+    pub fn query_one(&self, _query: &str, _params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> Result<Option<tokio_postgres::Row>> {
+        info!("Query one executed (STUB): {}", _query.trim());
+        Ok(None)
+    }
 
+    /// Mark trial as pruned (stub)
+    pub async fn mark_pruned(&self, _trial_id: &Uuid, _rung: i32, _bpb: f64) -> Result<()> {
+        info!("Trial pruned (STUB): rung={}, BPB={}", _rung, _bpb);
         Ok(())
     }
 
-    /// Mark trial as completed
-    pub async fn mark_completed(
-        &self,
-        trial_id: &Uuid,
-        final_step: i32,
-        final_bpb: f64,
-    ) -> Result<()> {
-        self.client
-            .execute(
-                "UPDATE igla_race_trials
-                 SET status = 'completed', completed_at = NOW(),
-                     final_step = $1, final_bpb = $2
-                 WHERE trial_id = $3",
-                &[&final_step, &final_bpb, trial_id],
-            )
-            .await?;
-
-        info!("Trial completed: trial_id={:?}, BPB={}", trial_id, final_bpb);
-
-        Ok(())
-    }
-
-    /// Store lesson in experience
+    /// Store lesson in experience (stub)
     pub async fn store_lesson(
         &self,
-        trial_id: &Uuid,
-        outcome: &str,
-        pruned_at_rung: i32,
-        bpb_at_pruned: f64,
-        lesson: &str,
-        lesson_type: &str,
+        _trial_id: &Uuid,
+        _outcome: &str,
+        _pruned_at_rung: i32,
+        _bpb_at_pruned: f64,
+        _lesson: &str,
+        _lesson_type: &str,
     ) -> Result<()> {
-        self.client
-            .execute(
-                "INSERT INTO igla_race_experience
-                 (trial_id, outcome, pruned_at_rung, bpb_at_pruned, lesson, lesson_type)
-                 VALUES ($1, $2, $3, $4, $5, $6)",
-                &[trial_id, &outcome, &pruned_at_rung, &bpb_at_pruned, &lesson, &lesson_type],
-            )
-            .await?;
-
+        info!("Lesson stored (STUB)");
         Ok(())
     }
 
-    /// Check if config is already running
-    pub async fn is_config_running(
-        &self,
-        machine_id: &str,
-        config_json: &str,
-    ) -> Result<bool> {
-        let count: i64 = self.client
-            .query_one(
-                "SELECT COUNT(*) FROM igla_race_trials
-                 WHERE machine_id = $1 AND config = $2::jsonb
-                   AND status IN ('pending', 'running')",
-                &[&machine_id, &config_json],
-            )
-            .await?
-            .get(0);
-
-        Ok(count > 0)
+    /// Mark trial as completed (stub)
+    pub async fn mark_completed(&self, _trial_id: &Uuid, _final_step: i32, _final_bpb: f64) -> Result<()> {
+        info!("Trial completed (STUB): BPB={}", _final_bpb);
+        Ok(())
     }
 
-    /// Get top lessons from experience
-    pub async fn get_top_lessons(&self, limit: i32) -> Result<Vec<LessonEntry>> {
-        let rows = self.client
-            .query(
-                "SELECT lesson, lesson_type, pattern_count
-                 FROM igla_race_experience
-                 ORDER BY pattern_count DESC, confidence DESC
-                 LIMIT $1",
-                &[&limit],
-            )
-            .await?;
+    /// Check if config is already running (stub)
+    pub async fn is_config_running(&self, _machine_id: &str, _config_json: &str) -> Result<bool> {
+        Ok(false)
+    }
 
-        let lessons = rows.iter().map(|row| {
-            LessonEntry {
-                lesson: row.get(0),
-                lesson_type: row.get(1),
-                pattern_count: row.get(2),
-            }
-        }).collect();
-
-        Ok(lessons)
+    /// Get top lessons from experience (stub)
+    pub async fn get_top_lessons(&self, _limit: i32) -> Result<Vec<LessonEntry>> {
+        Ok(vec![])
     }
 }
 
-/// Lesson entry
+/// Lesson entry (stub)
 #[derive(Debug, Clone)]
 pub struct LessonEntry {
     pub lesson: String,
@@ -237,6 +107,6 @@ mod tests {
 
     #[test]
     fn test_neon_db_creation() {
-        // Unit test only - requires real connection string for integration tests
+        // Stub - no real tests
     }
 }

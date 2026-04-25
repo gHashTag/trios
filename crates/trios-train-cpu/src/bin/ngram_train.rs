@@ -1,3 +1,6 @@
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::too_many_arguments)]
+
 use std::fs;
 use std::io::Write;
 use std::time::Instant;
@@ -253,6 +256,7 @@ impl NgramModel {
         total / count as f32
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn train_step(&mut self, tokens: &[usize], lr: f32,
         opt_embed: &mut AdamW, opt_ctx: &mut [AdamW], opt_proj: &mut AdamW, opt_head: &mut AdamW,
         opt_aq: &mut AdamW, opt_ak: &mut AdamW, opt_av: &mut AdamW) {

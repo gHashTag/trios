@@ -2,7 +2,7 @@
 //! Reads .env from workspace root and injects API key hints as TRIOS_*_KEY_HINT env vars.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -164,7 +164,7 @@ fn mask_key(key: &str) -> String {
     format!("{prefix}...{suffix}")
 }
 
-fn report_dist(dist_dir: &PathBuf, prefix: &str) {
+fn report_dist(dist_dir: &Path, prefix: &str) {
     let js_out = dist_dir.join(format!("{prefix}.js"));
     let wasm_out = dist_dir.join(format!("{prefix}_bg.wasm"));
     if js_out.exists() && wasm_out.exists() {

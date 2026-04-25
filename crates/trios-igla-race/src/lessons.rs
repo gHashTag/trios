@@ -6,7 +6,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 /// Lesson type for categorizing patterns
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LessonType {
     Avoid,    // "AVOID: ..." — definite anti-pattern
     Pattern,  // "PATTERN: ..." — observed pattern
@@ -50,7 +50,7 @@ impl std::fmt::Display for Outcome {
 }
 
 /// Trial configuration for analysis
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TrialConfig {
     pub lr: Option<f64>,
     pub d_model: Option<usize>,
@@ -62,8 +62,6 @@ pub struct TrialConfig {
     pub dropout: Option<f64>,
     pub warmup_steps: Option<usize>,
     pub max_steps: Option<usize>,
-    pub context: Option<usize>,
-    pub use_attention: Option<bool>,
 }
 
 /// ASHA rung data
@@ -221,14 +219,12 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
-            context: None,
-            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.4 };
-        let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
-        assert_eq!(lesson_type, LessonType::Avoid);
+        assert_eq!(_lesson_type, LessonType::Avoid);
         assert!(lesson.contains("lr=0.07"));
         assert!(lesson.contains("too high"));
     }
@@ -237,7 +233,7 @@ mod tests {
     fn test_lesson_small_model() {
         let config = TrialConfig {
             lr: Some(0.004),
-            d_model: Some(32),
+            d_model: Some(64),
             hidden: None,
             n_layers: None,
             optimizer: None,
@@ -246,14 +242,12 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
-            context: None,
-            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 2.9 };
         let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
-        assert!(lesson.contains("d_model=32"));
+        assert!(lesson.contains("d_model=64"));
     }
 
     #[test]
@@ -269,8 +263,6 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
-            context: None,
-            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.2 };
@@ -293,14 +285,12 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
-            context: None,
-            use_attention: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.5 };
-        let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
         // Should prioritize AVOID lessons
-        assert_eq!(lesson_type, LessonType::Avoid);
+        assert_eq!(_lesson_type, LessonType::Avoid);
     }
 }

@@ -74,8 +74,7 @@ pub fn init(config: RaceConfig) -> Result<()> {
 
     // In production, this would call Optuna REST API
     // Schema matches actual Neon database structure
-    let schema = format!(
-        r#"
+    let schema = r#"
 -- IGLA RACE Schema for Neon PostgreSQL
 -- Production schema (matches Neon console tables)
 
@@ -146,7 +145,7 @@ FROM igla_race_experience e
 WHERE e.promoted = TRUE
 GROUP BY e.technique
 ORDER BY usage_count DESC, avg_bpb ASC;
-"#);
+"#;
 
     println!("\n📋 SQL Schema for Neon PostgreSQL:");
     println!("```sql");
@@ -169,7 +168,7 @@ pub fn status(limit: Option<usize>) -> Result<()> {
     let limit = limit.unwrap_or(10);
 
     // Mock data for now - in production this queries Neon PostgreSQL via igla_leaderboard view
-    let mock_entries = vec![
+    let mock_entries = [
         LeaderboardEntry {
             rank: 1,
             trial_id: 1,

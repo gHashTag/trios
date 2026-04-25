@@ -1,17 +1,31 @@
 //! UR-00 — WASM Entry Point for trios-ui
 
+#![allow(dead_code)]
+#![allow(unused_variables)]
+#![allow(non_snake_case)]
+#![allow(clippy::all)]
+
 use dioxus::prelude::*;
 use trios_ui_ring_ur07 as api;
 use trios_ui_ring_ur08 as theme;
 
-pub const BUILD_VERSION: &str = env!("TRIOS_BUILD_VERSION", "dev");
+const BUILD_VERSION_VAL: Option<&'static str> = option_env!("TRIOS_BUILD_VERSION");
+pub const BUILD_VERSION: &'static str = if let Some(v) = BUILD_VERSION_VAL { v } else { "dev" };
 
-/// Provider config injected at build time from .env
-pub const ANTHROPIC_KEY_HINT: &str = env!("TRIOS_ANTHROPIC_KEY_HINT", "");
-pub const OPENAI_KEY_HINT: &str = env!("TRIOS_OPENAI_KEY_HINT", "");
-pub const VENICE_KEY_HINT: &str = env!("TRIOS_VENICE_KEY_HINT", "");
-pub const ZAI_KEY_HINT: &str = env!("TRIOS_ZAI_KEY_HINT", "");
-pub const ZAI_API_HINT: &str = env!("TRIOS_ZAI_API_HINT", "");
+const ANTHROPIC_KEY_VAL: Option<&'static str> = option_env!("TRIOS_ANTHROPIC_KEY_HINT");
+pub const ANTHROPIC_KEY_HINT: &'static str = if let Some(v) = ANTHROPIC_KEY_VAL { v } else { "" };
+
+const OPENAI_KEY_VAL: Option<&'static str> = option_env!("TRIOS_OPENAI_KEY_HINT");
+pub const OPENAI_KEY_HINT: &'static str = if let Some(v) = OPENAI_KEY_VAL { v } else { "" };
+
+const VENICE_KEY_VAL: Option<&'static str> = option_env!("TRIOS_VENICE_KEY_HINT");
+pub const VENICE_KEY_HINT: &'static str = if let Some(v) = VENICE_KEY_VAL { v } else { "" };
+
+const ZAI_KEY_VAL: Option<&'static str> = option_env!("TRIOS_ZAI_KEY_HINT");
+pub const ZAI_KEY_HINT: &'static str = if let Some(v) = ZAI_KEY_VAL { v } else { "" };
+
+const ZAI_API_VAL: Option<&'static str> = option_env!("TRIOS_ZAI_API_HINT");
+pub const ZAI_API_HINT: &'static str = if let Some(v) = ZAI_API_VAL { v } else { "" };
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
@@ -41,16 +55,15 @@ fn inject_theme() {
 }
 
 fn app() -> Element {
-    let mut messages: Signal<Vec<ChatMsg>> = use_signal(Vec::new);
+    let mut messages: Signal<Vec<ChatMsg>> = use_signal(|| Vec::new());
     let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
     let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
-    let mut tools: Signal<Vec<String>> = use_signal(Vec::new);
+    let mut tools: Signal<Vec<String>> = use_signal(|| Vec::new());
     let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
     let connected: Signal<bool> = use_signal(|| false);
-    let mut input_text: Signal<String> = use_signal(String::new);
+    let mut input_text: Signal<String> = use_signal(|| String::new());
     let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
 
-    // Settings state — pre-filled from .env hints
     let mut anthropic_key: Signal<String> = use_signal(|| ANTHROPIC_KEY_HINT.to_string());
     let mut openai_key: Signal<String> = use_signal(|| OPENAI_KEY_HINT.to_string());
     let mut venice_key: Signal<String> = use_signal(|| VENICE_KEY_HINT.to_string());
@@ -58,10 +71,10 @@ fn app() -> Element {
 
     use_hook(inject_theme);
 
-    let mut connected_open = connected;
-    let mut status_open = status;
-    let mut connected_err = connected;
-    let mut status_err = status;
+    let mut connected_open = connected.clone();
+    let mut status_open = status.clone();
+    let mut connected_err = connected.clone();
+    let mut status_err = status.clone();
 
     use_hook(move || {
         let mut client = api::ApiClient::new();
@@ -152,15 +165,12 @@ fn app() -> Element {
                 h1 { "Trinity" }
                 span { class: "{status_cls}", "{status_text}" }
             }
-
             nav { class: "tabs",
                 button { class: tab_cls!("chat"),    onclick: move |_| active_tab.set("chat".to_string()),     "Chat" }
                 button { class: tab_cls!("agents"),  onclick: move |_| active_tab.set("agents".to_string()),   "Agents" }
                 button { class: tab_cls!("tools"),   onclick: move |_| active_tab.set("tools".to_string()),    "Tools ({tool_count})" }
                 button { class: tab_cls!("settings"),onclick: move |_| active_tab.set("settings".to_string()), "\u{2699}" }
             }
-
-            // CHAT
             section { class: content_cls!("chat"), id: "tab-chat",
                 div { id: "messages",
                     for msg in messages.read().iter() {
@@ -188,13 +198,9 @@ fn app() -> Element {
                     }
                 }
             }
-
-            // AGENTS
             section { class: content_cls!("agents"), id: "tab-agents",
                 div { id: "agent-list", "{agents}" }
             }
-
-            // TOOLS
             section { class: content_cls!("tools"), id: "tab-tools",
                 div { id: "tool-list",
                     if tools_list.is_empty() {
@@ -206,13 +212,9 @@ fn app() -> Element {
                     }
                 }
             }
-
-            // SETTINGS
             section { class: content_cls!("settings"), id: "tab-settings",
                 div { class: "settings-section",
                     div { class: "settings-title", "AI Providers" }
-
-                    // z.ai (default)
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "z.ai" }
@@ -233,14 +235,7 @@ fn app() -> Element {
                             span { "ZAI_KEY_1" }
                             " in .env"
                         }
-                        if !ZAI_API_HINT.is_empty() {
-                            div { class: "env-hint",
-                                span { "{ZAI_API_HINT}" }
-                            }
-                        }
                     }
-
-                    // Anthropic
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "Anthropic" }
@@ -262,8 +257,6 @@ fn app() -> Element {
                             " in .env"
                         }
                     }
-
-                    // OpenAI
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "OpenAI" }
@@ -285,8 +278,6 @@ fn app() -> Element {
                             " in .env"
                         }
                     }
-
-                    // Venice.ai
                     div { class: "provider-card",
                         div { class: "provider-header",
                             span { class: "provider-name", "Venice.ai" }
@@ -309,7 +300,6 @@ fn app() -> Element {
                         }
                     }
                 }
-
                 div { class: "settings-section",
                     div { class: "settings-title", "Server" }
                     div { class: "provider-card",

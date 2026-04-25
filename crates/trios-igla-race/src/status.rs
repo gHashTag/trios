@@ -2,12 +2,11 @@
 
 use tokio_postgres::Client;
 use anyhow::Result;
-use crate::NeonDb;
 
 /// Print race leaderboard from Neon
 pub async fn print_leaderboard(client: &Client) -> Result<()> {
     let rows = client.query(
-        "SELECT trial_id::text, machine_id, config::text, status, COALESCE(final_bpb::text, "-"), COALESCE(final_step::text, "-"), COALESCE(CASE WHEN rung_27000_bpb IS NOT NULL THEN "27000" WHEN rung_9000_bpb IS NOT NULL THEN "9000" WHEN rung_3000_bpb IS NOT NULL THEN "3000" WHEN rung_1000_bpb IS NOT NULL THEN "1000" ELSE "0" END, "0")::text as best_rung, COALESCE((SELECT lesson FROM igla_race_experience e WHERE e.trial_id::text = t.trial_id::text ORDER BY e.pattern_count DESC LIMIT 1), "-") as lesson, COALESCE((SELECT COUNT(*) + 1 FROM igla_race_trials t2 WHERE t2.final_bpb::float8 < t.final_bpb::float8), 999999)::bigint::text as bpb_rank FROM igla_race_trials t WHERE t.status IN ("completed", "pruned") AND t.final_bpb IS NOT NULL ORDER BY t.final_bpb ASC NULLS LAST LIMIT 20",
+        "SELECT trial_id::text, machine_id, config::text, status, COALESCE(final_bpb::text, '-'), COALESCE(final_step::text, '-'), COALESCE(CASE WHEN rung_27000_bpb IS NOT NULL THEN '27000' WHEN rung_9000_bpb IS NOT NULL THEN '9000' WHEN rung_3000_bpb IS NOT NULL THEN '3000' WHEN rung_1000_bpb IS NOT NULL THEN '1000' ELSE '0' END, '0')::text as best_rung, COALESCE((SELECT lesson FROM igla_race_experience e WHERE e.trial_id::text = t.trial_id::text ORDER BY e.pattern_count DESC LIMIT 1), '-') as lesson, COALESCE((SELECT COUNT(*) + 1 FROM igla_race_trials t2 WHERE t2.final_bpb::float8 < t.final_bpb::float8), 999999)::bigint::text as bpb_rank FROM igla_race_trials t WHERE t.status IN ('completed', 'pruned') AND t.final_bpb IS NOT NULL ORDER BY t.final_bpb ASC NULLS LAST LIMIT 20",
         &[],
     ).await?;
 
@@ -69,21 +68,31 @@ pub async fn print_leaderboard(client: &Client) -> Result<()> {
     Ok(())
 }
 
-/// Show race status (stub for TASK-1)
-pub async fn show_status() -> Result<()> {
-    println!("IGLA RACE Status");
-    println!("===============");
-    println!("Leaderboard: https://console.neon.tech/gHashTag/trios");
-    println!("API endpoint: Set NEON_URL environment variable");
-    println!("===============");
-    Ok(())
-}
+/// Print best trial
+pub async fn print_best(client: &Client) -> Result<()> {
+    let row = client.query_one(
+        "SELECT trial_id::text, machine_id, config::text, final_bpb::text, final_step::text FROM igla_race_trials WHERE final_bpb IS NOT NULL ORDER BY final_bpb ASC LIMIT 1",
+        &[],
+    ).await;
 
-/// Show best trial (stub for TASK-1)
-pub async fn show_best() -> Result<()> {
-    println!("Best BPB result");
-    println!("===============");
-    println!("Checking database...");
-    println!("Leaderboard: https://console.neon.tech/gHashTag/trios");
+    if let Ok(row) = row {
+        let _trial_id = row.try_get::<usize, &str>(0).unwrap_or("-");
+        let machine_id = row.try_get::<usize, &str>(1).unwrap_or("-");
+        let config_json = row.try_get::<usize, &str>(2).unwrap_or("{}");
+        let final_bpb = row.try_get::<usize, &str>(3).unwrap_or("-");
+        let final_step = row.try_get::<usize, &str>(4).unwrap_or("-");
+
+        let config: serde_json::Value = serde_json::from_str(config_json).unwrap_or(serde_json::json!({}));
+        let config_str = serde_json::to_string_pretty(&config).unwrap_or_else(|_| "?".to_string());
+
+        println!("BEST TRIAL");
+        println!("Machine: {}", machine_id);
+        println!("BPB: {}", final_bpb);
+        println!("Steps: {}", final_step);
+        println!("Config: {}", config_str);
+    } else {
+        println!("No trials completed yet");
+    }
+
     Ok(())
 }
