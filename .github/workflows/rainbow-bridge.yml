@@ -1,0 +1,155 @@
+# Rainbow Bridge — INV-8 gate (L13, ONE SHOT trios#267)
+# Validates: Coq proof compiles ≤ 2 Admitted, all 7 falsify_* pass,
+# integration round-trip green, clippy clean, INV-8 JSON keys present.
+name: rainbow-bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/trios-rainbow-bridge/**"
+      - "trinity-clara/proofs/igla/rainbow_bridge_consistency.v"
+      - "assertions/igla_assertions.json"
+      - "assertions/hive_state.json"
+      - "docs/infrastructure/rainbow-bridge.md"
+      - "docs/infrastructure/preregistration_rainbow.md"
+      - ".github/workflows/rainbow-bridge.yml"
+  pull_request:
+    paths:
+      - "crates/trios-rainbow-bridge/**"
+      - "trinity-clara/proofs/igla/rainbow_bridge_consistency.v"
+      - "assertions/igla_assertions.json"
+      - "assertions/hive_state.json"
+      - ".github/workflows/rainbow-bridge.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------- #
+  # 1) INV-8 JSON schema check: keys must exist, admitted_count <= 2 #
+  # ---------------------------------------------------------------- #
+  json-schema:
+    name: INV-8 JSON schema
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate assertions/igla_assertions.json INV-8
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open('assertions/igla_assertions.json'))
+          inv8 = next((i for i in d.get('invariants', []) if i.get('id') == 'INV-8'), None)
+          if inv8 is None:
+              print('INV-8 missing from igla_assertions.json', file=sys.stderr); sys.exit(1)
+          required = ['name', 'coq_file', 'status', 'admitted_count',
+                      'proven_theorems', 'admitted', 'falsification_examples',
+                      'runtime_check', 'numeric_anchor', 'preregistration']
+          miss = [k for k in required if k not in inv8]
+          if miss:
+              print('INV-8 missing keys:', miss, file=sys.stderr); sys.exit(1)
+          if inv8['status'] not in ('Proven', 'Admitted'):
+              print('INV-8 status must be Proven or Admitted', file=sys.stderr); sys.exit(1)
+          if inv8['admitted_count'] > 2:
+              print('INV-8 admitted_count exceeds budget of 2', file=sys.stderr); sys.exit(1)
+          na = inv8['numeric_anchor']
+          for k, v in [('latency_p95_ms', 2000), ('heartbeat_max_s', 14400),
+                       ('channel_count', 7), ('layer_count', 3)]:
+              if na.get(k) != v:
+                  print(f'INV-8 numeric_anchor.{k} != {v}: got', na.get(k), file=sys.stderr)
+                  sys.exit(1)
+          print('INV-8 JSON schema OK')
+          PY
+
+      - name: Pre-registration hash pinned in hive_state.json
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open('assertions/hive_state.json'))
+          pr = d.get('pre_registration', {}).get('INV-8')
+          if not pr or 'hash' not in pr or pr.get('hash_algo') != 'blake3':
+              print('pre_registration.INV-8 missing / wrong algo', file=sys.stderr); sys.exit(1)
+          if len(pr['hash']) != 64:
+              print('pre_registration.INV-8.hash must be 64 hex chars', file=sys.stderr); sys.exit(1)
+          print('pre-registration hash present:', pr['hash'])
+          PY
+
+  # ---------------------------------------------------------------- #
+  # 2) Coq proof compiles with ≤ 2 Admitted                          #
+  # ---------------------------------------------------------------- #
+  coq:
+    name: Coq INV-8
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Coq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y coq
+      - name: Compile rainbow_bridge_consistency.v
+        run: |
+          cd trinity-clara/proofs/igla
+          coqc rainbow_bridge_consistency.v
+      - name: Admitted budget ≤ 2
+        shell: bash
+        run: |
+          N=$(grep -c '^Admitted\.' trinity-clara/proofs/igla/rainbow_bridge_consistency.v || true)
+          echo "Admitted count: $N"
+          if [ "${N:-0}" -gt 2 ]; then
+            echo "INV-8 exceeds Admitted budget of 2" >&2
+            exit 1
+          fi
+      - name: Falsification witnesses present
+        shell: bash
+        run: |
+          for name in counter_duplicate_claim counter_heartbeat_stale \
+                     counter_lamport_regression counter_unsigned_honey \
+                     counter_split_brain counter_funnel_unreachable \
+                     counter_channel_mismatch; do
+            if ! grep -q "$name" trinity-clara/proofs/igla/rainbow_bridge_consistency.v; then
+              echo "missing falsification witness: $name" >&2; exit 1
+            fi
+          done
+          echo "all 7 counter_* witnesses present"
+
+  # ---------------------------------------------------------------- #
+  # 3) Rust tests + clippy on the crate                              #
+  # ---------------------------------------------------------------- #
+  rust:
+    name: Rust INV-8 gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-rainbow-bridge-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build
+        run: cargo build -p trios-rainbow-bridge --locked
+      - name: Clippy -D warnings
+        run: cargo clippy -p trios-rainbow-bridge --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test -p trios-rainbow-bridge --locked -- --nocapture
+      - name: All 7 falsify_* present in tests/falsify.rs
+        shell: bash
+        run: |
+          for name in falsify_duplicate_claim falsify_heartbeat_stale \
+                     falsify_lamport_regression falsify_unsigned_honey \
+                     falsify_split_brain falsify_funnel_unreachable \
+                     falsify_channel_mismatch; do
+            if ! grep -q "fn $name" crates/trios-rainbow-bridge/tests/falsify.rs; then
+              echo "missing test: $name" >&2; exit 1
+            fi
+          done
+          echo "all 7 falsify_* present"

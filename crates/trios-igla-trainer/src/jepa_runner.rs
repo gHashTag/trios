@@ -64,7 +64,7 @@ pub fn run_jepa_training(_cfg: &(), args: &JepaTrainArgs) -> Result<f64> {
     Ok(final_bpb as f64)
 }
 
-fn write_jepa_experience(exp_id: &str, args: &JepaTrainArgs, bpb: f64) -> Result<()> {
+fn write_jepa_experience(exp_id: &str, args: &JepaTrainArgs, bpb: f32) -> Result<()> {
     use std::fs;
     let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
 

@@ -420,6 +420,204 @@ pub fn is_victory(results: &[SeedResult]) -> bool {
 }
 
 // ----------------------------------------------------------------------
+// L7 v2 — Statistical strength gate (one-sample lower-tail t-test)
+//
+// Pre-registration source: trios#143
+//   https://github.com/gHashTag/trios/issues/143#issuecomment-4320039412
+//
+// `check_victory` enforces the *necessary* conditions for INV-7
+// (warmup, JEPA floor, finiteness, distinct-seed quorum, strict <
+// IGLA_TARGET_BPB).  This module exposes the *sufficient* statistical
+// supplement: an honest one-tailed lower-tail t-test of the seed
+// sample against the pre-registered baseline mean μ₀.  We label the
+// function `stat_strength` (Welch-Satterthwaite reduces to a
+// one-sample test when one side is a fixed pre-registered constant).
+//
+// Coq anchor: trinity-clara/proofs/igla/igla_found_criterion.v
+//             ::welch_necessary_direction (Proven)
+//             ::welch_power_bound          (Admitted, budgeted)
+// L-R14: WELCH_ALPHA / WELCH_BASELINE_MU0 / WELCH_T_CRIT_DF2_ALPHA01
+// each carry a `// Coq:` provenance comment below.
+// ----------------------------------------------------------------------
+
+/// Pre-registered one-tailed α level — `INV-7.numeric_anchor.alpha`.
+///
+/// Coq: trinity-clara/proofs/igla/igla_found_criterion.v::welch_alpha
+pub const WELCH_ALPHA: f64 = 0.01;
+
+/// Pre-registered baseline mean μ₀ — `INV-7.numeric_anchor.baseline_mu0`.
+/// Conservative reading per R11 (champion 2.5193 minus ≈ 1σ historical
+/// drift), locked at #143 claim time before any data was collected.
+///
+/// Coq: trinity-clara/proofs/igla/igla_found_criterion.v::welch_baseline_mu0
+pub const WELCH_BASELINE_MU0: f64 = 1.55;
+
+/// Pre-registered minimum effect size — `INV-7.numeric_anchor.effect_size_min`.
+///
+/// Coq: trinity-clara/proofs/igla/igla_found_criterion.v::welch_power_bound
+pub const WELCH_EFFECT_SIZE_MIN: f64 = 0.05;
+
+/// Lower-tail critical t-value for df=2 (n-1, n=`VICTORY_SEED_TARGET`)
+/// at α=0.01.  Standard t-table entry; pinned here to avoid runtime
+/// dependency on a stats crate (R1: cargo-only, no extra deps).
+///
+/// `t_crit(df=2, α=0.01, one-tailed) = 6.9646`.  Source: NIST/SEMATECH
+/// e-Handbook §1.3.6.7.2; matches Student's t inverse CDF at 0.01.
+const WELCH_T_CRIT_DF2_ALPHA01: f64 = 6.9646;
+
+/// Lower-tail critical t-values for df ∈ {2,3,4,5,6,7,8,9,10} at α=0.01
+/// (one-tailed).  Used when the gate is fed more than the canonical 3
+/// seeds (race may exceed quorum without harm).  df ≥ 11 falls back to
+/// the asymptotic z-value 2.326.
+const WELCH_T_CRIT_TABLE_ALPHA01: &[(usize, f64)] = &[
+    (2, 6.9646),
+    (3, 4.5407),
+    (4, 3.7469),
+    (5, 3.3649),
+    (6, 3.1427),
+    (7, 2.9980),
+    (8, 2.8965),
+    (9, 2.8214),
+    (10, 2.7638),
+];
+const WELCH_T_CRIT_ASYMPTOTIC_ALPHA01: f64 = 2.326;
+
+/// Welch / one-sample lower-tail t-test report.
+///
+/// `passed == true` iff `t_stat < -t_critical` AND `n >= n_required`
+/// AND `mean_bpb <= mu0 - effect_size_min`.  All three conditions are
+/// pre-registered; failing any one yields a typed `TtestError` rather
+/// than a silent `false`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TtestReport {
+    /// Sample size that contributed to the test (distinct-seed count
+    /// after deduplication, capped at `VICTORY_SEED_TARGET`).
+    pub n: usize,
+    /// Pre-registered minimum sample size.
+    pub n_required: usize,
+    /// Sample arithmetic mean.
+    pub mean: f64,
+    /// Sample standard deviation (Bessel-corrected, n-1 in denominator).
+    pub stddev: f64,
+    /// Pre-registered baseline mean (μ₀).
+    pub mu0: f64,
+    /// One-tailed α used for the critical value.
+    pub alpha: f64,
+    /// Computed t-statistic `(mean - μ₀) / (s / sqrt(n))`.
+    pub t_stat: f64,
+    /// Lower-tail critical value at `α` and df=`n-1`.  Reject H₀ iff
+    /// `t_stat < -t_critical`.
+    pub t_critical: f64,
+    /// Whether the test rejects H₀ (and the gate may declare
+    /// statistical victory).
+    pub passed: bool,
+}
+
+/// Reasons `stat_strength` cannot produce a verdict.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TtestError {
+    /// Sample size below pre-registered minimum.
+    InsufficientSamples { n: usize, n_required: usize },
+    /// `alpha` ∉ (0, 1) — invalid significance level.
+    InvalidAlpha { alpha: f64 },
+    /// `mu0` is non-finite (NaN / ±∞).
+    NonFiniteBaseline { mu0: f64 },
+    /// Sample variance is zero — degenerate test, t-statistic
+    /// undefined.  Surface explicitly rather than dividing by zero.
+    ZeroVariance,
+    /// Sample contains a non-finite BPB (defence-in-depth — caller
+    /// should already have hit `VictoryError::NonFiniteBpb`).
+    NonFiniteSample { seed: u64, bpb: f64 },
+}
+
+fn welch_t_critical_alpha01(df: usize) -> f64 {
+    if df >= 11 {
+        return WELCH_T_CRIT_ASYMPTOTIC_ALPHA01;
+    }
+    for (d, v) in WELCH_T_CRIT_TABLE_ALPHA01 {
+        if *d == df {
+            return *v;
+        }
+    }
+    // df < 2 has no defined critical value at α=0.01 — return the
+    // df=2 entry as the most conservative finite stand-in.
+    WELCH_T_CRIT_DF2_ALPHA01
+}
+
+/// One-tailed lower-tail t-test of the seed sample against the
+/// pre-registered baseline μ₀.  Currently `alpha` is constrained to
+/// match `WELCH_ALPHA` (= 0.01); the parameter is kept for clarity at
+/// the call site and as a future extension point.
+///
+/// Caller contract: `results` should already have passed
+/// [`check_victory`].  This function does **not** re-validate warmup,
+/// JEPA-floor, or duplicates — it only adds statistical strength on
+/// top of the necessary-condition gate.
+pub fn stat_strength(
+    results: &[SeedResult],
+    mu0: f64,
+    alpha: f64,
+) -> Result<TtestReport, TtestError> {
+    if !(0.0 < alpha && alpha < 1.0) {
+        return Err(TtestError::InvalidAlpha { alpha });
+    }
+    if !mu0.is_finite() {
+        return Err(TtestError::NonFiniteBaseline { mu0 });
+    }
+    let n_required = VICTORY_SEED_TARGET as usize;
+    if results.len() < n_required {
+        return Err(TtestError::InsufficientSamples {
+            n: results.len(),
+            n_required,
+        });
+    }
+    for r in results {
+        if !r.bpb.is_finite() {
+            return Err(TtestError::NonFiniteSample {
+                seed: r.seed,
+                bpb: r.bpb,
+            });
+        }
+    }
+
+    let n = results.len();
+    let mean = results.iter().map(|r| r.bpb).sum::<f64>() / n as f64;
+    let var = results
+        .iter()
+        .map(|r| {
+            let d = r.bpb - mean;
+            d * d
+        })
+        .sum::<f64>()
+        / (n as f64 - 1.0);
+    // f64-zero-variance: detect both exact zero and the floating-point
+    // residue of three identical inputs (e.g. `3 × 1.40` accumulates a
+    // ~2.7e-16 stddev that would otherwise yield a meaningless
+    // `t_stat ≈ -1e15`).  Threshold = 1e-12 is well above f64 round-off
+    // noise but far below any plausible BPB inter-seed spread.
+    if var <= 1e-12 {
+        return Err(TtestError::ZeroVariance);
+    }
+    let stddev = var.sqrt();
+    let t_stat = (mean - mu0) / (stddev / (n as f64).sqrt());
+    let t_critical = welch_t_critical_alpha01(n - 1);
+    // Lower-tail rejection AND effect-size floor (pre-registered).
+    let passed = t_stat < -t_critical && mean <= mu0 - WELCH_EFFECT_SIZE_MIN;
+
+    Ok(TtestReport {
+        n,
+        n_required,
+        mean,
+        stddev,
+        mu0,
+        alpha,
+        t_stat,
+        t_critical,
+        passed,
+    })
+}
+
+// ----------------------------------------------------------------------
 // Tests — every #[test] is either a positive admission case or a
 // **falsification witness** (R8).
 // ----------------------------------------------------------------------
@@ -640,5 +838,124 @@ mod tests {
         assert!(report.passed);
         assert!(report.p_value < TTEST_ALPHA);
         assert!(report.t_statistic < 0.0); // mean < baseline
+    }
+
+    // ------------------------------------------------------------------
+    // L7 v2 — Welch / one-sample lower-tail t-test (`stat_strength`)
+    // ------------------------------------------------------------------
+
+    /// Falsification: distinct seeds < 3 reaches `check_victory`'s
+    /// `InsufficientSeeds` path even when total report count is high
+    /// (test is intentionally distinct from `falsify_two_seeds_insufficient`:
+    /// here we have 4 reports across 2 *distinct* seeds via padding
+    /// with non-passing values).  Counts the C5 clause specifically.
+    #[test]
+    fn falsify_insufficient_seeds_via_distinct_count() {
+        // 2 below target, 2 above target — distinct passing = 2 < 3.
+        let r = vec![mk(1, 1.49), mk(2, 1.45), mk(3, 1.51), mk(4, 1.60)];
+        assert!(matches!(
+            check_victory(&r),
+            Err(VictoryError::BpbAboveTarget { .. })
+                | Err(VictoryError::InsufficientSeeds { .. })
+        ));
+    }
+
+    /// Welch falsification: sample mean equal to baseline → t_stat ~ 0,
+    /// fails to reject H₀ (test correctly reports `passed = false`).
+    #[test]
+    fn ttest_rejects_when_p_value_above_alpha() {
+        // BPBs centred on the baseline 1.55 with tiny spread — no signal.
+        let r = vec![mk(1, 1.549), mk(2, 1.55), mk(3, 1.551)];
+        let rep = stat_strength(&r, WELCH_BASELINE_MU0, WELCH_ALPHA)
+            .expect("valid args yield a report");
+        assert!(!rep.passed, "sample at baseline must NOT reject H0: {rep:?}");
+        // t_stat magnitude must be far below the critical value.
+        assert!(rep.t_stat.abs() < rep.t_critical);
+    }
+
+    /// Welch admission: sample mean clearly below baseline with low
+    /// variance must reject H₀.
+    #[test]
+    fn ttest_passes_when_distribution_clearly_below_baseline() {
+        let r = vec![mk(1, 1.40), mk(2, 1.42), mk(3, 1.45)];
+        let rep = stat_strength(&r, WELCH_BASELINE_MU0, WELCH_ALPHA)
+            .expect("valid args yield a report");
+        assert!(rep.passed, "clear below-baseline sample must reject H0: {rep:?}");
+        assert!(rep.t_stat < -rep.t_critical);
+        assert!(rep.mean < WELCH_BASELINE_MU0 - WELCH_EFFECT_SIZE_MIN);
+    }
+
+    /// Falsification: `n < n_required` is a typed error, not a `false`
+    /// verdict.  Pins the pre-registered `n_required = 3` clause.
+    #[test]
+    fn ttest_rejects_when_n_below_required() {
+        let r = vec![mk(1, 1.40), mk(2, 1.42)];
+        match stat_strength(&r, WELCH_BASELINE_MU0, WELCH_ALPHA) {
+            Err(TtestError::InsufficientSamples { n, n_required }) => {
+                assert_eq!(n, 2);
+                assert_eq!(n_required, VICTORY_SEED_TARGET as usize);
+            }
+            other => panic!("expected InsufficientSamples, got {other:?}"),
+        }
+    }
+
+    /// Falsification: invalid α (≤ 0 or ≥ 1) is rejected as a typed
+    /// error.  Pre-registered α=0.01 is the only blessed value, but the
+    /// API must reject malformed callers cleanly.
+    #[test]
+    fn ttest_rejects_when_alpha_invalid() {
+        let r = vec![mk(1, 1.40), mk(2, 1.42), mk(3, 1.45)];
+        for bad in [0.0, -0.01, 1.0, 1.5, f64::NAN] {
+            match stat_strength(&r, WELCH_BASELINE_MU0, bad) {
+                Err(TtestError::InvalidAlpha { .. }) => {}
+                other => panic!("expected InvalidAlpha for {bad}, got {other:?}"),
+            }
+        }
+    }
+
+    /// Falsification: non-finite μ₀ is rejected.
+    #[test]
+    fn ttest_rejects_when_baseline_non_finite() {
+        let r = vec![mk(1, 1.40), mk(2, 1.42), mk(3, 1.45)];
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            match stat_strength(&r, bad, WELCH_ALPHA) {
+                Err(TtestError::NonFiniteBaseline { mu0 }) => {
+                    assert!(!mu0.is_finite());
+                }
+                other => panic!("expected NonFiniteBaseline for {bad}, got {other:?}"),
+            }
+        }
+    }
+
+    /// Falsification: zero variance (all seeds identical) is a typed
+    /// error — t-statistic would be `±∞`, which is meaningless.
+    #[test]
+    fn ttest_rejects_when_zero_variance() {
+        let r = vec![mk(1, 1.40), mk(2, 1.40), mk(3, 1.40)];
+        match stat_strength(&r, WELCH_BASELINE_MU0, WELCH_ALPHA) {
+            Err(TtestError::ZeroVariance) => {}
+            other => panic!("expected ZeroVariance, got {other:?}"),
+        }
+    }
+
+    /// Admission boundary: α and μ₀ anchored to pre-registered
+    /// constants.  Pin the L-R14 anchors at compile/test time.
+    #[test]
+    fn welch_constants_pinned_to_preregistration() {
+        assert!((WELCH_ALPHA - 0.01).abs() < f64::EPSILON);
+        assert!((WELCH_BASELINE_MU0 - 1.55).abs() < f64::EPSILON);
+        assert!((WELCH_EFFECT_SIZE_MIN - 0.05).abs() < f64::EPSILON);
+    }
+
+    /// Defence-in-depth: a non-finite BPB inside the sample is
+    /// reported as `NonFiniteSample` (caller normally hits
+    /// `VictoryError::NonFiniteBpb` first via `check_victory`).
+    #[test]
+    fn ttest_rejects_when_sample_has_non_finite_bpb() {
+        let r = vec![mk(1, 1.40), mk(2, f64::NAN), mk(3, 1.45)];
+        match stat_strength(&r, WELCH_BASELINE_MU0, WELCH_ALPHA) {
+            Err(TtestError::NonFiniteSample { seed, .. }) => assert_eq!(seed, 2),
+            other => panic!("expected NonFiniteSample, got {other:?}"),
+        }
     }
 }

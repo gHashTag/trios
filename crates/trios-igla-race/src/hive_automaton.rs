@@ -282,7 +282,14 @@ impl HiveAutomaton {
     /// Pick the highest-priority free lane from the queue, falling back to
     /// `None` if every queue entry is currently claimed by someone else.
     fn pick_free_lane(&self, world: &World) -> Option<Lane> {
+<<<<<<< HEAD
         self.priority_queue.iter().find(|&&lane| world.free_lanes.contains(&lane)).copied()
+=======
+        self.priority_queue
+            .iter()
+            .find(|&&lane| world.free_lanes.contains(&lane))
+            .copied()
+>>>>>>> f5caf69fec953bbb08a27d9382b05797b515fb81
     }
 
     /// **The pure transition function.**

@@ -2,6 +2,13 @@ use crate::ws_handler::AppState;
 use serde_json::{json, Value};
 use tracing::{info, warn, error};
 
+const SYSTEM_PROMPT: &str = "You are Trinity — an AI agent orchestrator built on the trios stack. \
+You help developers manage agents, tasks, and tools. \
+Be concise, technical, and precise. \
+When unsure, ask for clarification rather than guessing.";
+
+const MAX_RETRIES: usize = 3;
+
 pub async fn list(state: &AppState) -> Value {
     let agents = state.agents.lock().await;
     serde_json::to_value(&*agents).unwrap_or(json!([]))
@@ -12,7 +19,6 @@ pub async fn chat(state: &AppState, params: Option<Value>) -> Value {
     let agent_id = params.get("agent_id").and_then(|v| v.as_str()).unwrap_or("");
     let message = params.get("message").and_then(|v| v.as_str()).unwrap_or("");
 
-    // No agent specified — use z.ai as default provider
     if agent_id.is_empty() {
         return call_zai(state, message).await;
     }
@@ -28,73 +34,95 @@ pub async fn chat(state: &AppState, params: Option<Value>) -> Value {
     json!({"response": format!("[{}] {}", agent_id, message)})
 }
 
-/// Call z.ai API using Anthropic Messages format
+/// Call z.ai API with round-robin key rotation and retry on 429/5xx
 async fn call_zai(state: &AppState, message: &str) -> Value {
     if state.zai_api.is_empty() || state.zai_keys.is_empty() {
         return json!({"response": format!("[echo] {}", message)});
     }
 
-    // Round-robin key selection (use first key for now)
-    let key = &state.zai_keys[0];
-
     let body = json!({
         "model": "claude-3-7-sonnet-20250219",
         "max_tokens": 1024,
+        "system": SYSTEM_PROMPT,
         "messages": [
             {"role": "user", "content": message}
         ]
     });
 
-    info!("[z.ai] POST {} (msg={} bytes)", state.zai_api, message.len());
+    let n_keys = state.zai_keys.len();
 
-    let response = state.http_client
-        .post(&state.zai_api)
-        .header("x-api-key", key.as_str())
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .await;
+    for attempt in 0..MAX_RETRIES {
+        // Round-robin: each retry picks the next key
+        let idx = state.zai_key_idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % n_keys;
+        let key = &state.zai_keys[idx];
 
-    match response {
-        Ok(resp) => {
-            let status = resp.status();
-            match resp.text().await {
-                Ok(text) => {
-                    if !status.is_success() {
-                        error!("[z.ai] HTTP {} — {}", status, &text[..text.len().min(200)]);
-                        return json!({"error": format!("z.ai HTTP {}: {}", status, &text[..text.len().min(100)])});
-                    }
-                    // Parse Anthropic Messages response
-                    if let Ok(val) = serde_json::from_str::<Value>(&text) {
-                        if let Some(content) = val.get("content").and_then(|c| c.as_array()) {
-                            let text_parts: Vec<&str> = content.iter()
-                                .filter_map(|block| {
-                                    if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                                        block.get("text").and_then(|t| t.as_str())
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                            let reply = text_parts.join("\n");
-                            info!("[z.ai] response: {} bytes", reply.len());
-                            return json!({"response": reply});
+        info!("[z.ai] POST {} attempt={} key_idx={} msg={} bytes",
+            state.zai_api, attempt, idx, message.len());
+
+        let resp = state.http_client
+            .post(&state.zai_api)
+            .header("x-api-key", key.as_str())
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await;
+
+        let resp = match resp {
+            Ok(r) => r,
+            Err(e) => {
+                error!("[z.ai] request failed attempt={}: {}", attempt, e);
+                if attempt + 1 == MAX_RETRIES {
+                    return json!({"error": format!("z.ai request failed: {}", e)});
+                }
+                continue;
+            }
+        };
+
+        let status = resp.status();
+
+        // Retry on rate-limit or server errors
+        if status.as_u16() == 429 || status.is_server_error() {
+            warn!("[z.ai] HTTP {} attempt={} — retrying with next key", status, attempt);
+            if attempt + 1 == MAX_RETRIES {
+                return json!({"error": format!("z.ai HTTP {} after {} retries", status, MAX_RETRIES)});
+            }
+            continue;
+        }
+
+        let text = match resp.text().await {
+            Ok(t) => t,
+            Err(e) => {
+                error!("[z.ai] failed to read body attempt={}: {}", attempt, e);
+                return json!({"error": format!("z.ai read error: {}", e)});
+            }
+        };
+
+        if !status.is_success() {
+            error!("[z.ai] HTTP {} — {}", status, &text[..text.len().min(200)]);
+            return json!({"error": format!("z.ai HTTP {}: {}", status, &text[..text.len().min(100)])});
+        }
+
+        if let Ok(val) = serde_json::from_str::<Value>(&text) {
+            if let Some(content) = val.get("content").and_then(|c| c.as_array()) {
+                let reply: String = content.iter()
+                    .filter_map(|block| {
+                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                            block.get("text").and_then(|t| t.as_str())
+                        } else {
+                            None
                         }
-                    }
-                    // Fallback: return raw text
-                    warn!("[z.ai] unexpected response format, returning raw");
-                    json!({"response": text})
-                }
-                Err(e) => {
-                    error!("[z.ai] failed to read response body: {}", e);
-                    json!({"error": format!("z.ai read error: {}", e)})
-                }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                info!("[z.ai] response: {} bytes (attempt={})", reply.len(), attempt);
+                return json!({"response": reply});
             }
         }
-        Err(e) => {
-            error!("[z.ai] request failed: {}", e);
-            json!({"error": format!("z.ai request failed: {}", e)})
-        }
+
+        warn!("[z.ai] unexpected response format, returning raw");
+        return json!({"response": text});
     }
+
+    json!({"error": "z.ai: all retries exhausted"})
 }

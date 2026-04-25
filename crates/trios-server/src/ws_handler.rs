@@ -5,6 +5,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{broadcast, Mutex, RwLock};
 use tracing::{error, info};
 
@@ -38,6 +39,8 @@ pub struct AppState {
     pub zai_keys: Vec<String>,
     /// HTTP client for outbound requests
     pub http_client: reqwest::Client,
+    /// Round-robin counter for key rotation
+    pub zai_key_idx: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +86,15 @@ impl AppState {
             zai_api,
             zai_keys,
             http_client: reqwest::Client::new(),
+            zai_key_idx: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    /// Pick next key via round-robin
+    pub fn next_zai_key(&self) -> Option<&str> {
+        if self.zai_keys.is_empty() { return None; }
+        let idx = self.zai_key_idx.fetch_add(1, Ordering::Relaxed) % self.zai_keys.len();
+        Some(&self.zai_keys[idx])
     }
 
     /// Broadcast an event to all connected clients
@@ -171,7 +182,6 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
     info!("WS request: method={}", req.method);
 
     let result = match req.method.as_str() {
-        // MCP protocol handshake
         "initialize" => json!({
             "protocolVersion": "2024-11-05",
             "capabilities": {
@@ -184,17 +194,14 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         }),
         "notifications/initialized" => json!({}),
         "ping" => json!({"status": "ok"}),
-        // Legacy agent/task methods
         "agents/list"         => mcp_endpoints::agents::list(state).await,
         "agents/chat"         => mcp_endpoints::agents::chat(state, req.params).await,
         "tasks/assign"        => mcp_endpoints::tasks::assign(state, req.params).await,
         "tasks/status"        => mcp_endpoints::tasks::status(state, req.params).await,
         "tasks/update_status" => mcp_endpoints::tasks::update_status(state, req.params).await,
         "experience/read"     => mcp_endpoints::experience::read(state, req.params).await,
-        // MCP tools
         "tools/list"          => tools_list(state).await,
         "tools/call"          => tools_call(state, req.params).await,
-        // A2A protocol
         "a2a/list_agents"     => mcp_endpoints::a2a::list_agents(state).await,
         "a2a/register"        => mcp_endpoints::a2a::register(state, req.params).await,
         "a2a/send"            => mcp_endpoints::a2a::send(state, req.params).await,
@@ -218,46 +225,23 @@ async fn tools_call(state: &AppState, params: Option<Value>) -> Value {
     let tool_name = params_val.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let arguments = params_val.get("arguments").cloned().unwrap_or(json!({}));
 
-    // Route A2A tool calls to the A2A endpoints
     let a2a_result = match tool_name {
-        "a2a_register" => {
-            let p = Some(arguments);
-            Some(mcp_endpoints::a2a::register(state, p).await)
-        }
-        "a2a_list_agents" => {
-            Some(mcp_endpoints::a2a::list_agents(state).await)
-        }
-        "a2a_send" => {
-            let p = Some(arguments);
-            Some(mcp_endpoints::a2a::send(state, p).await)
-        }
-        "a2a_broadcast" => {
-            let p = Some(arguments);
-            Some(mcp_endpoints::a2a::broadcast(state, p).await)
-        }
-        "a2a_assign_task" => {
-            let p = Some(arguments);
-            Some(mcp_endpoints::a2a::assign_task(state, p).await)
-        }
-        "a2a_task_status" => {
-            let p = Some(arguments);
-            Some(mcp_endpoints::a2a::task_status(state, p).await)
-        }
-        "a2a_update_task" => {
-            let p = Some(arguments);
-            Some(mcp_endpoints::a2a::update_task(state, p).await)
-        }
+        "a2a_register" => Some(mcp_endpoints::a2a::register(state, Some(arguments)).await),
+        "a2a_list_agents" => Some(mcp_endpoints::a2a::list_agents(state).await),
+        "a2a_send" => Some(mcp_endpoints::a2a::send(state, Some(arguments)).await),
+        "a2a_broadcast" => Some(mcp_endpoints::a2a::broadcast(state, Some(arguments)).await),
+        "a2a_assign_task" => Some(mcp_endpoints::a2a::assign_task(state, Some(arguments)).await),
+        "a2a_task_status" => Some(mcp_endpoints::a2a::task_status(state, Some(arguments)).await),
+        "a2a_update_task" => Some(mcp_endpoints::a2a::update_task(state, Some(arguments)).await),
         _ => None,
     };
 
     if let Some(result) = a2a_result {
-        // Wrap in MCP CallToolResult format
         return json!({
             "content": [{"type": "text", "text": serde_json::to_string(&result).unwrap_or_default()}]
         });
     }
 
-    // Non-A2A tools: dispatch via McpService
     let arguments_obj = params_val.get("arguments").cloned();
     use rust_mcp_schema::CallToolRequestParams;
     let call_params = CallToolRequestParams {
@@ -365,7 +349,6 @@ mod tests {
     #[tokio::test]
     async fn test_a2a_assign_task() {
         let state = AppState::new();
-        // Register agent first
         let reg_params = json!({"id": "worker-1", "name": "Worker"});
         mcp_endpoints::a2a::register(&state, Some(reg_params)).await;
 
@@ -382,7 +365,6 @@ mod tests {
     #[tokio::test]
     async fn test_a2a_broadcast() {
         let state = AppState::new();
-        // Register two agents
         for i in 0..2 {
             let p = json!({"id": format!("agent-{}", i), "name": format!("Agent {}", i)});
             mcp_endpoints::a2a::register(&state, Some(p)).await;
@@ -391,5 +373,15 @@ mod tests {
         let result = mcp_endpoints::a2a::broadcast(&state, Some(params)).await;
         assert_eq!(result["ok"], true);
         assert_eq!(result["recipients"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_round_robin_keys() {
+        let state = AppState::new();
+        if state.zai_keys.len() >= 2 {
+            let k0 = state.next_zai_key().map(|s| s.to_string());
+            let k1 = state.next_zai_key().map(|s| s.to_string());
+            assert_ne!(k0, k1);
+        }
     }
 }

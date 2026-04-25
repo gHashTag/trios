@@ -288,7 +288,11 @@ mod tests {
         };
 
         let rung = RungData { step: 1000, bpb: 3.5 };
+<<<<<<< HEAD
         let (_lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+=======
+        let (_lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+>>>>>>> f5caf69fec953bbb08a27d9382b05797b515fb81
 
         // Should prioritize AVOID lessons
         assert_eq!(lesson_type, LessonType::Avoid);
