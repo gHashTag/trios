@@ -27,16 +27,11 @@ pub use invariants::{TrialConfig as InvTrialConfig, GradientMode, InvError, vali
 
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 
-// Race exports (L11 internal constants, not exported per L-R14)
-// Note: WorkerPool, WorkerState, RaceState, PoolStats are internal to L11.
+// Race exports (L11 internal)
 pub use race::{
     WorkerPool,
-    TRINITY_IDENTITY,
-    VICTORY_SEEDS_REQUIRED,
-    IGLA_TARGET_BPB,
-    GF16_MIN_D_MODEL,
-    ASHA_PRUNE_THRESHOLD_MIN,
-    VALID_RUNGS,
+    run_trial,
+    simulate_bpb,
 };
 
 pub use victory::{
