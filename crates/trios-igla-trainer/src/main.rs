@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Parser;
 use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
 use trios_igla_trainer::jepa_runner::{run_jepa_training, JepaTrainArgs};
-use trios_train_cpu::jepa::JepaConfig;
 
 #[derive(Parser)]
 #[command(name = "igla-trainer")]
