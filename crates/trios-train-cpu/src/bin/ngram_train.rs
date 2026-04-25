@@ -5,6 +5,8 @@ use std::fs;
 use std::io::Write;
 use std::time::Instant;
 
+use trios_train_cpu::optimizer::{AdamW as OptimAdamW, MuonOptimizer};
+
 const VOCAB: usize = 128;
 const DIM: usize = 64;
 const SEQ: usize = 64;
@@ -55,12 +57,12 @@ fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
     x.iter().map(|v| (v - mean) / std).collect()
 }
 
-struct AdamW {
+struct LocalAdamW {
     m: Vec<f32>, v: Vec<f32>, step: usize,
     beta1: f32, beta2: f32, eps: f32, wd: f32,
 }
 
-impl AdamW {
+impl LocalAdamW {
     fn new(size: usize, wd: f32) -> Self {
         let phi = (1.0 + 5.0f64.sqrt()) / 2.0;
         Self { m: vec![0.0; size], v: vec![0.0; size], step: 0,
@@ -77,6 +79,27 @@ impl AdamW {
             params[i] -= lr * (self.m[i] / bc1) / ((self.v[i] / bc2).sqrt() + self.eps);
         }
     }
+}
+
+trait Optimizer {
+	fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32);
+}
+impl Optimizer for LocalAdamW {
+	fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) { LocalAdamW::update(self, params, grads, lr) }
+}
+impl Optimizer for MuonOptimizer {
+	fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
+		let mut g = grads.to_vec();
+		// Orthogonalize
+		let norm = g.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-8);
+		for x in g.iter_mut() { *x /= norm; }
+		// Momentum update
+		for i in 0..params.len() {
+			self.momentum_buffer[i] = self.momentum * self.momentum_buffer[i] - lr as f32 * g[i];
+			params[i] += self.momentum_buffer[i];
+		}
+		self.step += 1;
+	}
 }
 
 struct NgramModel {
@@ -258,8 +281,8 @@ impl NgramModel {
 
     #[allow(clippy::needless_range_loop)]
     fn train_step(&mut self, tokens: &[usize], lr: f32,
-        opt_embed: &mut AdamW, opt_ctx: &mut [AdamW], opt_proj: &mut AdamW, opt_head: &mut AdamW,
-        opt_aq: &mut AdamW, opt_ak: &mut AdamW, opt_av: &mut AdamW) {
+        opt_embed: &mut dyn Optimizer, opt_ctx: &mut [Box<dyn Optimizer>], opt_proj: &mut dyn Optimizer, opt_head: &mut dyn Optimizer,
+        opt_aq: &mut dyn Optimizer, opt_ak: &mut dyn Optimizer, opt_av: &mut dyn Optimizer) {
         let ngram = self.ctx.len() + 2;
         if tokens.len() < ngram + 1 { return; }
         let v = self.vocab;
@@ -476,16 +499,16 @@ impl NgramModel {
             for x in g_av.iter_mut() { *x /= n; }
         }
 
-        opt_embed.update(&mut self.embed, &g_embed, lr);
+        Optimizer::update(opt_embed.as_mut(), &mut self.embed, &g_embed, lr);
         for (ci, oc) in opt_ctx.iter_mut().enumerate() {
-            oc.update(&mut self.ctx[ci], &g_ctx[ci], lr);
+            Optimizer::update(oc.as_mut(), &mut self.ctx[ci], &g_ctx[ci], lr);
         }
-        opt_proj.update(&mut self.proj, &g_proj, lr);
-        opt_head.update(&mut self.lm_head, &g_head, lr);
+        Optimizer::update(opt_proj.as_mut(), &mut self.proj, &g_proj, lr);
+        Optimizer::update(opt_head.as_mut(), &mut self.lm_head, &g_head, lr);
         if self.use_attention {
-            opt_aq.update(&mut self.attn_query, &g_aq, lr);
-            opt_ak.update(&mut self.attn_key, &g_ak, lr);
-            opt_av.update(&mut self.attn_value, &g_av, lr);
+            Optimizer::update(opt_aq.as_mut(), &mut self.attn_query, &g_aq, lr);
+            Optimizer::update(opt_ak.as_mut(), &mut self.attn_key, &g_ak, lr);
+            Optimizer::update(opt_av.as_mut(), &mut self.attn_value, &g_av, lr);
         }
     }
 }
@@ -549,14 +572,19 @@ fn main() {
 
     let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed, num_ctx, use_attention);
     let ps = VOCAB * DIM;
-    let mut opt_embed = AdamW::new(ps, wd);
-    let mut opt_ctx: Vec<AdamW> = (0..num_ctx).map(|_| AdamW::new(ps, wd)).collect();
-    let mut opt_proj = AdamW::new(hidden * DIM, wd);
-    let mut opt_head = AdamW::new(VOCAB * hidden, wd);
+    let use_muon = optimizer == "muon";
+
+    fn make_opt(size: usize, wd: f32, muon: bool) -> Box<dyn Optimizer> {
+		if muon { Box::new(MuonOptimizer::new(size, 0.004, 0.95, wd as f64)) } else { Box::new(LocalAdamW::new(size, wd)) }
+    }
+    let mut opt_embed: Box<dyn Optimizer> = make_opt(ps, wd, use_muon);
+    let mut opt_ctx: Vec<Box<dyn Optimizer>> = (0..num_ctx).map(|_| make_opt(ps, wd, use_muon)).collect();
+    let mut opt_proj: Box<dyn Optimizer> = make_opt(hidden * DIM, wd, use_muon);
+    let mut opt_head: Box<dyn Optimizer> = make_opt(VOCAB * hidden, wd, use_muon);
     let ad = hidden / 4;
-    let mut opt_aq = AdamW::new(if use_attention { ad } else { 1 }, wd);
-    let mut opt_ak = AdamW::new(if use_attention { ad * hidden } else { 1 }, wd);
-    let mut opt_av = AdamW::new(if use_attention { ad * hidden } else { 1 }, wd);
+    let mut opt_aq: Box<dyn Optimizer> = make_opt(if use_attention { ad } else { 1 }, wd, use_muon);
+    let mut opt_ak: Box<dyn Optimizer> = make_opt(if use_attention { ad * hidden } else { 1 }, wd, use_muon);
+    let mut opt_av: Box<dyn Optimizer> = make_opt(if use_attention { ad * hidden } else { 1 }, wd, use_muon);
 
     let (init_loss, init_bpb) = evaluate(&model, val, SEQ);
     println!("Initial val: loss={:.4} bpb={:.4}", init_loss, init_bpb);
