@@ -4,6 +4,7 @@ pub mod invariants;
 pub mod lessons;
 pub mod neon;
 pub mod rungs;
+pub mod ema;
 pub mod sampler;
 pub mod status;
 pub mod victory;
@@ -21,6 +22,8 @@ pub use invariants::{InvTrialConfig, GradientMode, InvError, validate_config};
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 
 pub use victory::{check_victory, is_victory, SeedResult, VictoryReport, VictoryError, JEPA_PROXY_BPB_FLOOR};
+
+pub use ema::{EmaTracker, EmaError, ALPHA_PHI_INV_3, ALPHA_MIN_EXCLUSIVE, ALPHA_MAX_INCLUSIVE};
 
 pub use hive_automaton::{
     AbortReason, AgentAction, HaltCause, HiveAutomaton, Lane, State, World,
