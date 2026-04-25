@@ -35,7 +35,7 @@ jobs:
 
       - name: Check schema version
         run: |
-          if ! grep -q "LAWS_SCHEMA_VERSION: 2.0" LAWS.md; then
+          if ! grep -qE "LAWS_SCHEMA_VERSION:?\*?\*? 2\.0" LAWS.md; then
             echo "❌ BREACH: LAWS_SCHEMA_VERSION missing or not 2.0"
             exit 1
           fi
@@ -50,7 +50,7 @@ jobs:
           fi
           echo "✅ All 13 sections present"
 
-      - name: L1: No .sh files
+      - name: "L1: No .sh files"
         run: |
           COUNT=$(find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" ! -path "*/target/*" | wc -l)
           if [ "$COUNT" -gt 0 ]; then
@@ -60,7 +60,7 @@ jobs:
           fi
           echo "✅ L1: No .sh files"
 
-      - name: L2: PR closes issue (PR only)
+      - name: "L2: PR closes issue (PR only)"
         if: github.event_name == 'pull_request'
         run: |
           if ! echo "${{ github.event.pull_request.body }}" | grep -iE "(Closes|Fixes|Resolves) #[0-9]+"; then
@@ -70,7 +70,7 @@ jobs:
           fi
           echo "✅ L2: PR closes an issue"
 
-      - name: I5: No /extension root directory
+      - name: "I5: No /extension root directory"
         run: |
           if [ -d "./extension" ]; then
             echo "❌ I5 VIOLATION: /extension root directory exists"
@@ -107,22 +107,22 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: I1: cargo build
+      - name: "I1: cargo build"
         run: |
           cargo build --all --workspace
           echo "✅ I1: Build passes"
 
-      - name: I2: cargo test
+      - name: "I2: cargo test"
         run: |
           cargo test --all --workspace
           echo "✅ I2: Tests pass"
 
-      - name: I3: clippy
+      - name: "I3: clippy"
         run: |
           cargo clippy --all-targets --all-features -- -D warnings
           echo "✅ I3: Clippy clean"
 
-      - name: I4: Docs exist
+      - name: "I4: Docs exist"
         run: |
           if [ ! -f README.md ]; then
             echo "❌ I4 VIOLATION: README.md missing"
@@ -130,7 +130,7 @@ jobs:
           fi
           echo "✅ I4: README.md exists"
 
-      - name: I7: No wasm-unsafe-eval in manifest
+      - name: "I7: No wasm-unsafe-eval in manifest"
         run: |
           MANIFEST_FILE="crates/trios-ext/extension/manifest.json"
           if [ -f "$MANIFEST_FILE" ]; then
@@ -141,7 +141,7 @@ jobs:
           fi
           echo "✅ I7: wasm-unsafe-eval check passed"
 
-      - name: I9: Experience current
+      - name: "I9: Experience current"
         run: |
           TODAY=$(date +%Y%m%d)
           EXPERIENCE_FILE=".trinity/experience/trios_${TODAY}.trinity"
