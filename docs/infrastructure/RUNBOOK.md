@@ -1,196 +1,174 @@
-# RUNBOOK — trios Infrastructure
-
-> Source of truth for all machines, services, and operational procedures.
-> Related: [issue #143](https://github.com/gHashTag/trios/issues/143) · [tailscale-funnel.md](./tailscale-funnel.md)
-
----
+# IGLA RACE Distributed Runbook
 
 ## Machines
 
-| Name | Role | OS | Tailnet IP | Status |
-|------|------|----|------------|--------|
-| `playras-macbook-pro-1` | Dev / MCP server | macOS | `100.66.38.103` | ✅ Active |
-| RunPod GPU pod | Training (IGLA RACE) | Ubuntu 22.04 | dynamic | ⏳ Grant pending |
+| Machine | IP | Role | Status |
+|---------|-----|------|--------|
+| MacBook Pro | 100.66.38.103 | Primary | Active |
+| RunPod GPU | - | Accelerator | Grant pending |
 
----
-
-## Machine 1 — MacBook Pro (Dev)
+## Machine 1 — MacBook Pro (100.66.38.103)
 
 ### Quick Start
-
 ```bash
-# 1. MCP server
-cargo run -p trios-server
+# Navigate to trios repo
+cd /path/to/trios
 
-# 2. Tailscale Funnel (App Store CLI — ОБЯЗАТЕЛЬНО)
-/Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --bg 9005
+# Export environment
+export NEON_URL="postgresql://user:pass@host/neondb?sslmode=require"
+export MACHINE_ID="mac-pro-1"
+
+# Start IGLA race
+./target/release/trios-igla-race start --workers 4
 ```
 
 ### Endpoints
+- HTTP: `http://100.66.38.103:8080` (health check)
+- IGLA RACE CLI: `./target/release/trios-igla-race`
 
-| Method | URL | Expected |
-|--------|-----|----------|
-| `GET` | `https://playras-macbook-pro-1.tail01804b.ts.net/api/status` | `{"status":"ok"}` |
-| `GET` | `http://100.66.38.103:9005/api/status` | внутри tailnet |
-| `GET` | `/health` | `ok` |
-| `WS` | `/ws` | MCP WebSocket |
+### Tailscale Setup
+```bash
+# Install via App Store (recommended)
+# Or via brew:
+brew install tailscale
+tailscale up
+
+# Funnel setup
+tailscale funnel 8080
+```
 
 ### Health Check
-
 ```bash
-curl http://100.66.38.103:9005/api/status
-# → {"agents":0,"status":"ok","tools":19}
+curl http://100.66.38.103:8080/health
+# Expected: {"status":"ok"}
+
+# Check IGLA race status
+./target/release/trios-igla-race status
 ```
 
-### ⚠️ Tailscale: два CLI на машине
-
+### Stop Procedure
 ```bash
-# ПРАВИЛЬНЫЙ (App Store)
-/Applications/Tailscale.app/Contents/MacOS/Tailscale
+# Stop IGLA race workers
+pkill -f "trios-igla-race"
 
-# СЛОМАННЫЙ (brew — не использовать)
-/opt/homebrew/bin/tailscale
+# Stop any trainer processes
+pkill -f "trios-igla-trainer"
+
+# Verify cleanup
+ps aux | grep trios
 ```
 
-Добавь алиас в `~/.zshrc`:
+## Machine 2 — RunPod GPU
+
+### SSH Access
 ```bash
-alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+ssh root@runpod-pod-id
 ```
 
-### Остановка Funnel
-
+### Clone and Build
 ```bash
-/Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --https=443 off
-```
-
----
-
-## Machine 2 — RunPod GPU (Training)
-
-> **Статус:** Grant не отправлен (см. [RUNPOD_GRANT_STATUS.md](../../RUNPOD_GRANT_STATUS.md))
-> **Action required:** Отправить заявку → обновить этот файл
-
-### После получения пода
-
-```bash
-# SSH
-ssh root@<RUNPOD_IP> -p <PORT> -i ~/.ssh/id_ed25519
-
-# Клонировать репо
+# Clone repository
 git clone https://github.com/gHashTag/trios.git
 cd trios
 
-# Установить Rust
+# Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 
-# Проверить сборку
-cargo build -p trios-train-cpu --release
-cargo clippy -p trios-train-cpu -- -D warnings
-cargo test -p trios-train-cpu
+# Build
+cargo build --release --bin igla_train
+cargo build --release --bin tri
 ```
 
-### Запуск тренировки IGLA RACE
-
+### Launch IGLA Training
 ```bash
-# Wave 9 training (ASHA, 3000+ steps на Rung-1)
-cargo run -p trios-train-cpu --release --bin igla_train -- \
-  --config configs/wave9.json \
-  --output results/wave9/
+# Set environment
+export NEON_URL="postgresql://user:pass@host/neondb?sslmode=require"
+export MACHINE_ID="runpod-gpu-1"
 
-# Мониторинг BPB
-tail -f results/wave9/metrics.jsonl | jq '.bpb'
+# Start training
+./target/release/igla_train --steps 12000 --lr 0.004 --hidden 128
 ```
 
-### Целевые метрики (из issue #143 TASK-5)
-
-| Метрика | Цель |
-|---------|------|
-| BPB vs N-gram | −0.3 … −0.5 |
-| MSE loss | < 0.35 (J-001: 0.30 достигнут) |
-| EMA decay | 0.996 → 1.0 линейно |
-| ASHA Rung-1 min steps | 3000 |
-
----
+### Target Metrics
+- BPB < 1.5 (IGLA target)
+- MSE < 0.5 (for JEPA)
+- Training speed: > 100 samples/sec
 
 ## CI/CD
 
-### GitHub Actions — ветки
+### GitHub Actions Workflows
 
-| Ветка | Триггер | Статус |
-|-------|---------|--------|
-| `main` | push / PR | `cargo test` + `cargo clippy -D warnings` |
+| Workflow | Trigger | Purpose | Status |
+|----------|---------|---------|--------|
+| build-and-test | push | Build & test | ✅ Active |
+| igla-race | manual | Distributed race | ✅ Ready |
+| jepa-train | push | JEPA training | 🚧 WIP |
+| gf16-training | push | GF16 experiments | ✅ Active |
 
-### Локальная проверка перед пушем
+### Local Pre-Push Checklist (LAWS L-R4/L-R5)
+- [ ] `cargo test --workspace`
+- [ ] `cargo clippy --workspace -- -D warnings`
+- [ ] `cargo build --release --all`
+- [ ] Manual smoke test of key binaries
 
-```bash
-# Обязательно перед любым коммитом (LAWS.md L-R4 + L-R5)
-cargo clippy -- -D warnings
-cargo test
-```
+## Key Files
 
-### Если CI красный
+| File | Purpose | Location |
+|------|---------|----------|
+| LAWS.md | Law reference | `docs/laws/` |
+| NOW.json | Current state | `docs/` |
+| tjepa.rs | Temporal JEPA | `crates/trios-train-cpu/src/` |
+| gf16.rs | GF16 arithmetic | `crates/trios-train-cpu/src/` |
 
-```bash
-# Посмотреть последний провалившийся тест
-cargo test 2>&1 | grep FAILED
+## Trinity References
 
-# Проверить конкретный крейт
-cargo clippy -p trios-train-cpu -- -D warnings
-cargo test -p trios-train-cpu -- --nocapture
-```
-
----
-
-## Ключевые файлы
-
-| Файл | Роль |
-|------|------|
-| `LAWS.md` | Конституция проекта — читать первым |
-| `CLAUDE.md` | Доктрина репо + PHI LOOP |
-| `AGENTS.md` | Роли агентов, claiming, handoff |
-| `NOW.json` | Append-only heartbeat лог (не редактировать!) |
-| `docs/infrastructure/tailscale-funnel.md` | Tailscale детали |
-| `RUNPOD_GRANT_STATUS.md` | Статус GPU гранта |
-| `crates/trios-train-cpu/src/gf16.rs` | GF16 арифметика (clippy clean) |
-| `crates/trios-train-cpu/src/tjepa.rs` | T-JEPA scaffold (TASK-5) |
-
----
-
-## Trinity Research References
-
-| Модель | Docs |
-|--------|------|
-| JEPA-T | https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/ |
-| NCA | https://github.com/gHashTag/trinity/tree/main/docs/research/models/NCA/ |
-| Hybrid | https://github.com/gHashTag/trinity/tree/main/docs/research/models/Hybrid/ |
-| VSA | https://github.com/gHashTag/trinity/tree/main/docs/research/models/VSA/ |
-| Ternary | https://github.com/gHashTag/trinity/tree/main/docs/research/models/Ternary/ |
-
----
+| Topic | Document | Status |
+|-------|----------|--------|
+| JEPA-T | `docs/trinity/JEPA_T.md` | ✅ Complete |
+| NCA | `docs/trinity/NCA.md` | ✅ Complete |
+| Hybrid (JEPA+NCA) | `docs/trinity/HYBRID.md` | ✅ Complete |
+| VSA | `docs/trinity/VSA.md` | ✅ Complete |
+| Ternary | `docs/trinity/TERNARY.md` | ✅ Complete |
 
 ## Troubleshooting
 
-### `cargo clippy` упал с warnings
-
+### Clippy Warnings
 ```bash
-cargo clippy -p <crate> -- -D warnings 2>&1 | grep "warning\["
-# Исправить → коммитить → пушить
+# Fix clippy warnings
+cargo clippy --workspace --fix
+
+# Check for remaining issues
+cargo clippy --workspace -- -D warnings
 ```
 
-### Tailscale funnel не работает
-
+### Tailscale Funnel Not Working
 ```bash
-# Проверить какой daemon активен
-ps aux | grep -i tailscale
-# Использовать App Store CLI (IPNExtension, PID ~5646)
-/Applications/Tailscale.app/Contents/MacOS/Tailscale status
+# Check tailscale status
+tailscale status
+
+# Restart funnel
+tailscale funnel reset
+tailscale funnel 8080
+
+# Check firewall
+sudo ufw status
 ```
 
-### Порт 9005 занят
-
+### Port 9005 Already in Use
 ```bash
+# Find process using port 9005
 lsof -i :9005
+
+# Kill the process
 kill -9 <PID>
-cargo run -p trios-server
+```
+
+### Neon Connection Issues
+```bash
+# Test connection
+psql $NEON_URL -c "SELECT 1"
+
+# Check SSL
+psql "postgresql://user:pass@host:5432/neondb?sslmode=require"
 ```

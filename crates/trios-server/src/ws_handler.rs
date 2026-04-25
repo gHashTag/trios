@@ -35,6 +35,10 @@ pub struct AppState {
     pub a2a: Arc<RwLock<A2ARouter>>,
     /// Browser command queue (SR-03) for BrowserOS
     pub browser: Arc<BrowserState>,
+    /// z.ai provider config (loaded from .env)
+    pub zai_api: String,
+    pub zai_keys: Vec<String>,
+    pub http_client: reqwest::Client,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +58,10 @@ pub struct TaskEntry {
 
 impl AppState {
     pub fn new() -> Self {
+        Self::with_zai("".to_string(), Vec::new())
+    }
+
+    pub fn with_zai(zai_api: String, zai_keys: Vec<String>) -> Self {
         let (tx, _) = broadcast::channel(100);
         Self {
             mcp: McpService::new(),
@@ -62,6 +70,9 @@ impl AppState {
             event_tx: tx,
             a2a: Arc::new(RwLock::new(A2ARouter::new())),
             browser: Arc::new(BrowserState::new()),
+            zai_api,
+            zai_keys,
+            http_client: reqwest::Client::new(),
         }
     }
 

@@ -51,7 +51,9 @@ fn load_dot_env() -> HashMap<String, String> {
         if line.is_empty() || line.starts_with('#') { continue; }
         if let Some((k, v)) = line.split_once('=') {
             let key = k.trim().to_string();
-            let val = v.trim().trim_matches('"').trim_matches('\'').to_string();
+            // Strip inline comments (# not inside quotes)
+            let val = v.split_once('#').map(|(v, _)| v).unwrap_or(v);
+            let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
             map.insert(key, val);
         }
     }
@@ -111,10 +113,14 @@ fn build_sidepanel_with_version(ver: &str, env_vars: &HashMap<String, String>) {
     let anthropic_hint = mask_key(env_vars.get("ANTHROPIC_API_KEY").map(|s| s.as_str()).unwrap_or(""));
     let openai_hint    = mask_key(env_vars.get("OPENAI_API_KEY").map(|s| s.as_str()).unwrap_or(""));
     let venice_hint    = mask_key(env_vars.get("VENICE_API_KEY").map(|s| s.as_str()).unwrap_or(""));
+    let zai_hint       = mask_key(env_vars.get("ZAI_KEY_1").map(|s| s.as_str()).unwrap_or(""));
+    let zai_api        = env_vars.get("ZAI_API").cloned().unwrap_or_default();
 
     if !anthropic_hint.is_empty() { eprintln!("[xtask] ANTHROPIC_API_KEY injected: {anthropic_hint}"); }
     if !openai_hint.is_empty()    { eprintln!("[xtask] OPENAI_API_KEY injected: {openai_hint}"); }
     if !venice_hint.is_empty()    { eprintln!("[xtask] VENICE_API_KEY injected: {venice_hint}"); }
+    if !zai_hint.is_empty()       { eprintln!("[xtask] ZAI_KEY_1 injected: {zai_hint}"); }
+    if !zai_api.is_empty()        { eprintln!("[xtask] ZAI_API: {zai_api}"); }
 
     eprintln!("[xtask] Building trios-ui-br-app v{ver} for wasm32-unknown-unknown...");
     let status = Command::new("cargo")
@@ -123,6 +129,8 @@ fn build_sidepanel_with_version(ver: &str, env_vars: &HashMap<String, String>) {
         .env("TRIOS_ANTHROPIC_KEY_HINT", &anthropic_hint)
         .env("TRIOS_OPENAI_KEY_HINT", &openai_hint)
         .env("TRIOS_VENICE_KEY_HINT", &venice_hint)
+        .env("TRIOS_ZAI_KEY_HINT", &zai_hint)
+        .env("TRIOS_ZAI_API_HINT", &zai_api)
         .current_dir(&root_workspace)
         .status()
         .expect("failed to run cargo build");
