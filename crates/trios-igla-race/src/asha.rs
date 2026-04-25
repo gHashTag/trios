@@ -13,6 +13,56 @@ use rand::rngs::StdRng;
 use crate::neon::NeonDb;
 use crate::lessons::{TrialConfig, RungData, Outcome};
 
+/// Architecture kind for IGLA Race (local copy)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArchKind {
+    Ngram,
+    Jepa,
+    Attention,
+    Hybrid,
+}
+
+impl ArchKind {
+    /// Get minimum rung for this architecture
+    ///
+    /// JEPA requires more steps for initial convergence
+    pub fn min_rung(&self) -> i32 {
+        match self {
+            ArchKind::Jepa => 3000,
+            _ => 1000,
+        }
+    }
+
+    /// Get rung schedule for this architecture
+    pub fn rung_schedule(&self) -> Vec<i32> {
+        match self {
+            ArchKind::Jepa => vec![3000, 9000, 27000],
+            _ => vec![1000, 3000, 9000, 27000],
+        }
+    }
+
+    /// Parse from string
+    pub fn parse_arch(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "ngram" => Some(ArchKind::Ngram),
+            "jepa" => Some(ArchKind::Jepa),
+            "attn" | "attention" => Some(ArchKind::Attention),
+            "hybrid" => Some(ArchKind::Hybrid),
+            _ => None,
+        }
+    }
+
+    /// Convert to string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArchKind::Ngram => "ngram",
+            ArchKind::Jepa => "jepa",
+            ArchKind::Attention => "attn",
+            ArchKind::Hybrid => "hybrid",
+        }
+    }
+}
+
 /// ASHA rungs (Trinity 3^k progression)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AshaRung {
@@ -71,7 +121,7 @@ impl Default for AshaConfig {
             keep_fraction: 0.33,
             min_trials: 10,
             continuous: true,
-            arch: "attn".to_owned(),
+            arch: "jepa".to_owned(),
         }
     }
 }
@@ -177,14 +227,22 @@ pub async fn run_worker(
     best_bpb: std::sync::Arc<std::sync::RwLock<f64>>,
 ) -> Result<f64> {
     use tokio::process::Command;
-    
+
     let db = NeonDb::connect(neon_url).await?;
     let mut rng = StdRng::from_entropy();
     let mut trial_counter = worker_id * 1_000_000;
 
+    // Parse architecture type
+    let default_config = AshaConfig::default();
+    let arch_kind = ArchKind::parse_arch(&default_config.arch)
+        .unwrap_or(ArchKind::Jepa);
+
+    // Get rung schedule based on architecture
+    let rungs = arch_kind.rung_schedule();
+
     loop {
         // 1. sample_config(worker_id) → trial config
-        let config = sample_config(&mut rng);
+        let config = sample_config(&mut rng, &default_config.arch);
         let config_json = serde_json::to_string(&config)?;
         
         // 2. register_trial in Neon
@@ -202,10 +260,16 @@ pub async fn run_worker(
         
         let mut pruned = false;
         
-        // 3. For each rung in [1000, 3000, 9000, 27000]
-        let rungs = [AshaRung::Rung1000, AshaRung::Rung3000, AshaRung::Rung9000, AshaRung::Rung27000];
-        
+        // 3. For each rung in schedule (JEPA skips 1000)
+        let min_rung = arch_kind.min_rung();
+
         for &rung in &rungs {
+            // JEPA: skip rung 1000 due to slower convergence
+            if rung < min_rung {
+                info!("Skipping rung {} for JEPA (below min rung {})", rung, min_rung);
+                continue;
+            }
+
             let rung_steps = rung as usize;
             
             // a. Spawn subprocess: ./target/release/trios-igla-trainer with config args
@@ -215,7 +279,7 @@ pub async fn run_worker(
                 .arg("--hidden").arg(config.hidden.unwrap_or(256).to_string())
                 .arg("--context").arg("6") // Fixed context for now
                 .arg("--lr").arg(format!("{:.8}", config.lr.unwrap_or(0.004)))
-                .arg("--arch").arg("ngram") // Fixed arch for now
+                .arg("--arch").arg(&default_config.arch) // Use arch from config
                 .arg("--exp-id").arg(&trial_id)
                 .output()
                 .await?;
@@ -265,14 +329,30 @@ pub async fn run_worker(
     }
 }
 
-fn sample_config(rng: &mut StdRng) -> TrialConfig {
+fn sample_config(rng: &mut StdRng, arch: &str) -> TrialConfig {
     use rand::seq::SliceRandom;
-    
+
     let hiddens = [128, 192, 256, 384];
     let hidden = *hiddens.choose(rng).unwrap();
     let lrs = [0.001, 0.002, 0.004, 0.008];
     let lr = *lrs.choose(rng).unwrap();
-    
+
+    // JEPA uses different parameter structure
+    if arch == "jepa" {
+        return TrialConfig {
+            lr: Some(lr),
+            d_model: Some(hidden),
+            hidden: Some(hidden),
+            n_layers: Some(2),
+            optimizer: Some("adamw".to_string()),
+            activation: Some("relu".to_string()),
+            weight_decay: Some(0.01),
+            dropout: Some(0.1),
+            warmup_steps: Some(1500),
+            max_steps: Some(27000),
+        };
+    }
+
     TrialConfig {
         lr: Some(lr),
         d_model: Some(hidden),

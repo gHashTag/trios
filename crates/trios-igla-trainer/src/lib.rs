@@ -1,10 +1,12 @@
 pub mod audit;
 pub mod config;
 pub mod schedule;
+pub mod jepa_runner;
 
 pub use audit::AuditLog;
 pub use config::TrainConfig;
 pub use schedule::{Schedule, StepResult};
+pub use jepa_runner::{run_jepa_training, JepaTrainArgs};
 
 #[cfg(test)]
 mod tests {
