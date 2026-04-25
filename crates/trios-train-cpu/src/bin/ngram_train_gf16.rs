@@ -612,6 +612,10 @@ fn main() {
         .find(|a| a.starts_with("--label-smoothing="))
         .map(|a| a[17..].parse::<f32>().unwrap_or(0.0))
         .unwrap_or(0.0);
+    let patience: usize = std::env::args()
+        .find(|a| a.starts_with("--patience="))
+        .map(|a| a[11..].parse::<usize>().unwrap_or(500))
+        .unwrap_or(500);
 
     let ngram = if use_ctx5 {
         "7-Gram"
@@ -674,6 +678,8 @@ fn main() {
     let t0 = Instant::now();
     let mut best_bpb = init_bpb;
     let mut max_q_error = 0.0f64;
+    let mut steps_without_improvement = 0usize;
+    let mut best_step = 0usize;
     let dl = train.len();
     let mut results: Vec<(usize, f32, f32)> = Vec::new();
 
@@ -685,8 +691,19 @@ fn main() {
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();
             let (vl, vb) = evaluate(&model, val, SEQ);
-            if vb < best_bpb && vb.is_finite() {
+            let improved = vb < best_bpb && vb.is_finite();
+            if improved {
                 best_bpb = vb;
+                best_step = step;
+                steps_without_improvement = 0;
+            } else {
+                steps_without_improvement += 500;
+            }
+
+            // Early stopping
+            if steps_without_improvement >= patience {
+                println!("\n>>> Early stopping at step {} (patience={} exceeded)", step, patience);
+                break;
             }
 
             // Measure quantization error
@@ -704,7 +721,7 @@ fn main() {
     let total = t0.elapsed();
     let q_final = model.quantization_report();
     println!("\n=== GF16 Training Complete ===");
-    println!("Time: {:.1}s | BPB: {:.4} → {:.4} | Delta: {:.4}", total.as_secs_f64(), init_bpb, best_bpb, best_bpb - init_bpb);
+    println!("Time: {:.1}s | BPB: {:.4} → {:.4} | Delta: {:.4} | Best step: {}", total.as_secs_f64(), init_bpb, best_bpb, best_bpb - init_bpb, best_step);
     println!("\nFinal Quantization Metrics:");
     println!("  φ-distance:    {:.6}", q_final.phi_error);
     println!("  Max error:     {:.4}%", q_final.max_error_pct);
