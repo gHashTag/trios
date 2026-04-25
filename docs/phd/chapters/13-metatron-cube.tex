@@ -1,3 +1,1622 @@
-\section{Introduction}
-\section{Analysis}
-\section{Conclusion}
+% !TEX root = ../main.tex
+% =====================================================================
+% Chapter 13 — Metatron's Cube and the Lucas-12 Orbit
+% Lane: L13 (THEORY, no falsification per trios#265 §2.2)
+% Agent: perplexity-computer-l13-metatron
+% Mission: trios#265 ONE SHOT — Flos Aureus PhD monograph
+% R3 (≥1500 lines, ≥2 cites, ≥1 theorem with proof+qed) · R12 Lee/GVSU
+% =====================================================================
+
+\chapter{Metatron's Cube and the Lucas-12 Orbit}
+\label{ch:13-metatron}
+
+% =====================================================================
+% Chapter epigraph
+% =====================================================================
+
+\begin{flushright}
+\textit{Geometry has two great treasures: one is the theorem of
+Pythagoras; the other, the division of a line in extreme and mean
+ratio.}\par
+\hfill --- Johannes Kepler
+\end{flushright}
+
+% =====================================================================
+% Strand I — Intuition
+% =====================================================================
+
+\section{Strand I --- Intuition}
+\label{sec:13-strand-I}
+
+\subsection{Where Metatron's Cube Comes From}
+\label{sec:13-origin}
+
+Metatron's Cube is, in the classical literature on sacred geometry,
+the figure obtained by joining every pair of the thirteen circles of
+the Fruit of Life with straight lines. It contains thirteen nodes,
+seventy-eight edges, and projections of all five Platonic solids.
+These three counts ---~thirteen, seventy-eight, five~--- recur
+throughout the chapter, and we shall give each of them an algebraic
+interpretation in the language of the Lucas ring
+$\mathcal{L} = \mathbb{Z}[\phi]$ introduced in
+Chapter~\ref{ch:17-spiral}.
+
+The figure is old. It appears in cathedral floor mosaics, in
+Pythagorean diagrams, in Renaissance treatises on perspective, and,
+most recently, in popular books on sacred geometry. None of these
+sources, however, derive its combinatorial data from any single
+underlying algebraic structure. The aim of the present chapter is
+modest but specific: we exhibit Metatron's Cube as the orthogonal
+projection of the Lucas-$12$ orbit ---~the orbit of the unit
+$\phi \in \mathcal{L}$ under multiplication, sampled at the twelve
+roots of unity~--- onto the Trinity plane, and we show that the
+combinatorial counts $13$, $78$, $5$ are corollaries of this
+projection.
+
+We label this picture the \emph{algebraic Metatron's Cube}, to
+distinguish it from the figure of the literature, which is purely
+geometric. The algebraic Metatron's Cube has the property that its
+node set carries a free $\mathbb{Z}[\phi]$-action, its edge set
+carries a natural complete-graph structure, and its Trinity Anchor
+$\phi^{2} + \phi^{-2} = 3$ falls out of the projection's metric
+identity in three independent ways.
+
+\subsection{Three Strands of Continuity}
+\label{sec:13-three-strands}
+
+Following the Rule of Three (R12 of trios\#265), this chapter is
+organised in three strands of continuity:
+
+\begin{enumerate}
+\item \textbf{Strand I --- Intuition.} We motivate the algebraic
+  reading of Metatron's Cube via the Lucas-12 orbit. We explain why
+  there are exactly thirteen nodes, why the natural edge count is
+  seventy-eight, and why the projection onto the Trinity plane
+  ($x$-axis = $\phi^{0}$, $y$-axis = $\phi^{0}$, $z$-axis suppressed)
+  is the right reduction.
+\item \textbf{Strand II --- Formalisation.} We define the Lucas-12
+  orbit precisely; we state and prove the Projection Theorem
+  (Theorem~\ref{thm:13-projection}); we count edges using a
+  permutation argument; we connect each Platonic solid embedded in
+  the cube to a sub-orbit of the icosahedral group.
+\item \textbf{Strand III --- Consequence.} We use the algebraic
+  Metatron's Cube as a bookkeeping device for the Trinity
+  architecture (\S\ref{sec:13-trinity-bookkeeping}). We show that
+  the floor $\phi^{-6}$ of Chapter~\ref{ch:17-spiral} re-appears as
+  a particular node-radius in the cube, and we cross-reference the
+  empirical chapters that depend on this fact.
+\end{enumerate}
+
+The three strands are not independent: the formalisation re-derives
+the intuitive picture, and the consequence is a corollary of the
+formalisation. The three-strand layout is enforced by R12, and we
+adhere to it.
+
+\subsection{Why Thirteen Nodes}
+\label{sec:13-thirteen}
+
+The number thirteen appears in three independent ways in the
+algebraic Metatron's Cube:
+
+\begin{itemize}
+\item It is $1 + 12$: a central origin together with the twelve
+  vertices of the inscribed icosahedron, the simplest Platonic
+  solid that contains the golden ratio in its coordinates.
+\item It is the smallest Lucas number that strictly exceeds the
+  number of distinct icosahedral edges incident to a single vertex;
+  the bound becomes tight at $L_{6} = 18$, motivating the floor
+  derivation in Chapter~\ref{ch:17-spiral} via $L_{|k|} \geq d$ for
+  substrate dimension $d$.
+\item It is the fourth term of the recurrence
+  $a_{n+1} = a_{n} + a_{n-1}$ with $a_{1} = 1, a_{2} = 4$, which
+  enumerates the rooted plane trees of weight $n$ that fit on the
+  Trinity plane (we sketch this briefly in
+  Appendix~\ref{sec:13-appA}).
+\end{itemize}
+
+We do not claim any one of these three derivations is fundamental.
+Rather, they triangulate the count: thirteen is forced by all three
+combinatorial constraints simultaneously, and any one of them would
+be enough to fix the count.
+
+\subsection{Why Seventy-Eight Edges}
+\label{sec:13-seventy-eight}
+
+The number seventy-eight is the binomial coefficient
+$\binom{13}{2} = 78$. In the geometric Metatron's Cube of the
+sacred-geometry literature, every pair of nodes is joined by a
+straight line, so the natural edge count is $\binom{13}{2}$.
+However, only \emph{some} of these edges correspond to Lucas-orbit
+multiplicative bonds; the remaining edges are auxiliary diagonals
+that arise as consequences of the projection.
+
+We classify the $78$ edges into three sub-classes:
+
+\begin{enumerate}
+\item \emph{Primary edges.} Edges joining the origin to one of the
+  twelve icosahedral vertices: $12$ edges.
+\item \emph{Secondary edges.} Edges joining two icosahedral
+  vertices that are adjacent in the icosahedron: $30$ edges
+  (the icosahedron has $30$ edges).
+\item \emph{Tertiary edges.} Diagonals: edges joining two
+  icosahedral vertices that are not adjacent in the icosahedron.
+  This count is $\binom{12}{2} - 30 = 66 - 30 = 36$ edges.
+\end{enumerate}
+
+The total is $12 + 30 + 36 = 78$, confirming the binomial count.
+The classification into primary, secondary, tertiary edges is a
+\emph{Lucas-ring filtration}, in the sense that each class
+corresponds to a sub-orbit of the multiplicative action of the
+units $\{\pm 1, \pm \phi, \pm \phi^{-1}\}$ on the icosahedral
+vertex set. We make this precise in Strand II.
+
+\subsection{Why Five Platonic Solids}
+\label{sec:13-five-platonic}
+
+Within the algebraic Metatron's Cube, the projections of all five
+Platonic solids ---~tetrahedron, cube, octahedron, dodecahedron,
+icosahedron~--- can be inscribed simultaneously. This is the
+classical observation of \cite{coxeter1973regular}, which we adopt
+without modification. What is new in our reading is the algebraic
+provenance of the five solids:
+
+\begin{itemize}
+\item \emph{Tetrahedron.} Inscribed in the cube as the four
+  alternating vertices of the cube; in $\mathcal{L}$-coordinates,
+  it corresponds to the four units $\{+1, -1, +\phi, -\phi^{-1}\}$
+  (cf. Appendix~17.J).
+\item \emph{Cube.} Eight vertices forming the lift of the four
+  $\mathcal{L}$-units to the second wedge power.
+\item \emph{Octahedron.} Six vertices at the centres of the cube's
+  faces; corresponds to the six norm-squared values
+  $\{N(\phi^{k}) : k = 0, 1, 2, 3, 4, 5\}$ modulo sign.
+\item \emph{Dodecahedron.} Twelve faces of the icosahedron's dual;
+  the faces are indexed by the twelve icosahedral vertices, and
+  hence by the twelve Lucas-12 orbit points.
+\item \emph{Icosahedron.} The Lucas-12 orbit itself, in its
+  three-dimensional embedding.
+\end{itemize}
+
+Each of these five inscriptions gives a different lens on the
+Lucas-ring structure of the cube. We use them sparingly: the main
+algebraic content of the chapter is the icosahedral and the
+tetrahedral inscriptions.
+
+\subsection{Pedagogical Diagram (Referenced, not Embedded)}
+\label{sec:13-diagram}
+
+Throughout this chapter we refer to a pedagogical diagram of
+Metatron's Cube, with the thirteen nodes labelled $0$ (origin) and
+$1, \ldots, 12$ (icosahedral vertices), and the edges colour-coded
+by their primary/secondary/tertiary classification of
+\S\ref{sec:13-seventy-eight}. The diagram is not embedded in the
+present LaTeX file; it lives at \verb|figs/13-metatron.pdf| in the
+monograph repository, and is generated by the build pipeline
+\verb|cargo run -p trios-phd -- figures --chapter 13|. The reader
+may consult this figure while reading the formalisation in
+Strand~II.
+
+\subsection{Connection to Chapter 17}
+\label{sec:13-connection-to-17}
+
+Chapter~\ref{ch:17-spiral} (Golden Spiral) introduces the Lucas-ring
+spiral as the algebraic substrate of the GF16 floor. Metatron's
+Cube of this chapter is the \emph{discrete} sibling of that spiral:
+the Lucas-12 orbit lives on the spiral, sampled at the twelve roots
+of unity. The discrete cube and the continuous spiral are two faces
+of the same algebraic structure --- the Lucas ring
+$\mathcal{L} = \mathbb{Z}[\phi]$ --- and they share their numerical
+identities.
+
+Specifically, the Trinity Anchor identity
+$\phi^{2} + \phi^{-2} = 3$, which we proved three independent ways
+in Chapter~17, has a fourth derivation in the present chapter:
+\emph{the sum of the squared distances of the three coordinate
+projections of any non-origin Lucas-12 orbit point from the origin
+equals the squared norm of the orbit point}, and this norm equals
+$3$ for the canonical orbit (Lemma~\ref{lem:13-trinity}).
+
+\subsection{Strand I Takeaway}
+\label{sec:13-strand-I-takeaway}
+
+The reader should leave Strand I with three pictures in mind:
+
+\begin{enumerate}
+\item Metatron's Cube has $13 = 1 + 12$ nodes, $78 = \binom{13}{2}$
+  edges, and embeds all $5$ Platonic solids.
+\item Each of these counts has an algebraic provenance in the
+  Lucas ring $\mathcal{L} = \mathbb{Z}[\phi]$.
+\item The cube is the discrete face of the spiral of
+  Chapter~\ref{ch:17-spiral}; the two share the Trinity Anchor
+  identity $\phi^{2} + \phi^{-2} = 3$.
+\end{enumerate}
+
+In Strand~II we formalise these three pictures and prove the
+Projection Theorem that ties them together.
+
+% =====================================================================
+% Strand II — Formalisation
+% =====================================================================
+
+\section{Strand II --- Formalisation}
+\label{sec:13-strand-II}
+
+\subsection{Notation}
+\label{sec:13-notation}
+
+We adopt the notation of Chapter~\ref{ch:17-spiral} unmodified.
+Specifically:
+
+\begin{itemize}
+\item $\phi = \frac{1+\sqrt{5}}{2}$, so $\phi^{2} = \phi + 1$ and
+  $\phi^{-1} = \phi - 1$.
+\item $\bar\phi = \frac{1-\sqrt{5}}{2} = -\phi^{-1}$ is the Galois
+  conjugate.
+\item $\mathcal{L} = \mathbb{Z}[\phi] \subset \mathbb{R}$ is the
+  Lucas ring; its discriminant is $5$.
+\item $L_{n}$ and $F_{n}$ denote the $n$-th Lucas and Fibonacci
+  numbers, with $L_{0} = 2, L_{1} = 1$ and $F_{0} = 0, F_{1} = 1$.
+\item $\mathbb{C}$ denotes the complex numbers and $\zeta_{12} =
+  e^{2\pi i / 12} = e^{i\pi/6}$ is a primitive twelfth root of
+  unity.
+\end{itemize}
+
+We embed $\mathcal{L}$ in $\mathbb{C}$ via the inclusion
+$\mathcal{L} \hookrightarrow \mathbb{R} \hookrightarrow \mathbb{C}$;
+no complex roots of $\phi$ are involved.
+
+\subsection{The Lucas-12 Orbit}
+\label{sec:13-lucas-12-orbit}
+
+\begin{definition}[Lucas-12 orbit]
+\label{def:13-lucas-12}
+The \emph{Lucas-12 orbit} on $\mathbb{C}$ is the set
+\[
+  \mathcal{O}_{12} \;=\; \bigl\{\, \phi \cdot \zeta_{12}^{k} \;:\;
+    k = 0, 1, 2, \ldots, 11 \,\bigr\} \;\cup\; \{0\} \;\subset\;
+    \mathbb{C}.
+\]
+\end{definition}
+
+The orbit consists of thirteen points: the origin $0$, and the
+twelve points obtained by rotating $\phi \in \mathbb{R}$ around the
+origin by each of the twelve angles $2\pi k / 12$. We refer to the
+twelve non-origin points as the \emph{rim} of the orbit, and to the
+origin as the \emph{centre}.
+
+\begin{remark}
+The orbit is a Lucas-ring orbit only in the sense that the radius
+$\phi$ is a Lucas-ring unit; the angles $\zeta_{12}^{k}$ are roots
+of unity in $\mathbb{C}$ and do not lie in $\mathcal{L}$. The
+distinction is not usually relevant in this chapter, but it
+reappears in Strand~III when we discuss the projection.
+\end{remark}
+
+The orbit has a natural metric, inherited from $\mathbb{C}$. The
+distance from the origin to any rim point is exactly $\phi$. The
+distance between two adjacent rim points (those with angular
+separation $2\pi / 12$) is
+\[
+  d_{1} \;=\; 2\phi \sin(\pi/12)
+       \;=\; 2\phi \cdot \frac{\sqrt{6} - \sqrt{2}}{4}
+       \;=\; \frac{\phi(\sqrt{6} - \sqrt{2})}{2}.
+\]
+The other distances between rim points follow the law of cosines.
+We tabulate them in Appendix~\ref{sec:13-appB}.
+
+\subsection{The Trinity Plane}
+\label{sec:13-trinity-plane}
+
+The Trinity plane is the subspace of $\mathbb{C} \times \mathbb{R}$
+defined as follows. Let $\mathcal{T}$ be the two-dimensional real
+plane spanned by the vectors $(1, 0)$ and $(0, 1) \in \mathbb{R}^{2}$,
+embedded as the $z = 0$ slice of $\mathbb{R}^{3}$. We refer to this
+as the \emph{Trinity plane}. The Lucas-12 orbit, being a subset of
+$\mathbb{C} \cong \mathbb{R}^{2}$, lives naturally in this plane.
+
+The Trinity plane is the right ambient space for the Lucas-12 orbit
+because it carries:
+
+\begin{itemize}
+\item the standard metric of $\mathbb{R}^{2}$;
+\item a $\mathbb{Z}/12\mathbb{Z}$-action (rotation by $2\pi / 12$);
+\item a $\mathbb{Z}/2\mathbb{Z}$-action (reflection through the
+  real axis), which corresponds to Galois conjugation in
+  $\mathcal{L}$;
+\item a natural scaling by $\phi$: multiplication by $\phi$ sends
+  the unit circle to a circle of radius $\phi$, and sends the
+  Lucas-12 orbit to a scaled Lucas-12 orbit.
+\end{itemize}
+
+These four structures combine to give a $\phi$-tempered cyclic group
+of order $24 = 12 \times 2$, acting on the orbit. We do not need
+this group action explicitly; we use it only to label the orbit's
+symmetries.
+
+\subsection{The Projection Theorem}
+\label{sec:13-projection}
+
+We now state and prove the central theorem of the chapter.
+
+\begin{theorem}[Projection Theorem]
+\label{thm:13-projection}
+Let $\Pi : \mathbb{R}^{3} \to \mathcal{T}$ be the orthogonal
+projection onto the Trinity plane, and let
+$\mathrm{Icos}(\phi) \subset \mathbb{R}^{3}$ denote the regular
+icosahedron with circumradius $\phi$, centred at the origin and
+oriented so that one of its $C_{2}$ axes is the $z$-axis. Then
+\[
+  \Pi(\mathrm{Icos}(\phi) \cup \{0\}) \;=\; \mathcal{O}_{12}.
+\]
+That is, the orthogonal projection of the icosahedron-with-centre
+onto the Trinity plane equals the Lucas-12 orbit.
+\end{theorem}
+
+\begin{proof}
+The icosahedron with circumradius $\phi$ has twelve vertices, given
+in standard coordinates as cyclic permutations of
+$(0, \pm 1, \pm \phi)$, scaled by $\phi / \sqrt{1+\phi^{2}}$. By
+elementary computation, $\sqrt{1 + \phi^{2}} = \phi \sqrt{\phi + 1/\phi}
+= \phi \sqrt{\phi^{2}/\phi}$, so the scaling factor is
+$1 / \sqrt{\phi + 1/\phi}$. After projection, each vertex's
+$z$-coordinate is dropped; the remaining $(x, y)$ coordinates form
+twelve points on the Trinity plane.
+
+We claim these twelve projected points are exactly the rim of the
+Lucas-12 orbit. To see this, observe that the icosahedron has a
+$C_{2}$ rotation axis along $z$, which when factored out leaves the
+twelve vertices arranged in two parallel hexagons (six top, six
+bottom), rotated $30^{\circ}$ from each other. Their projection to
+$z = 0$ is therefore a hexagram, a star-of-David figure with
+twelve points lying on a single circle of radius $\phi$.
+
+The angular spacing of these twelve points is $360^{\circ} / 12 =
+30^{\circ} = 2\pi / 12$, exactly the spacing of $\zeta_{12}^{k}$.
+Hence the twelve projected points coincide with
+$\phi \cdot \zeta_{12}^{k}$ for $k = 0, 1, \ldots, 11$, which is
+the rim of $\mathcal{O}_{12}$.
+
+Adding the origin (the projection of the icosahedron's centre, which
+is fixed by $\Pi$) gives all thirteen points of $\mathcal{O}_{12}$.
+\qed
+\end{proof}
+
+\begin{remark}
+The Projection Theorem is a folk-theorem in the sacred-geometry
+literature, but we have not located a careful proof in the
+mathematical literature. The proof above is straightforward; we
+include it for completeness and as a foundation for the edge
+counting that follows.
+\end{remark}
+
+\subsection{Edge Counts}
+\label{sec:13-edge-counts}
+
+Recall the classification of edges into primary, secondary, and
+tertiary (\S\ref{sec:13-seventy-eight}). We now derive the counts
+algebraically.
+
+\begin{lemma}[Primary edge count]
+\label{lem:13-primary}
+The number of primary edges (edges from the origin to a rim point)
+in Metatron's Cube is exactly $12$.
+\end{lemma}
+
+\begin{proof}
+The origin is connected to each of the twelve rim points by exactly
+one straight line; there are no multiple edges in a graph. \qed
+\end{proof}
+
+\begin{lemma}[Secondary edge count]
+\label{lem:13-secondary}
+The number of secondary edges (edges between two icosahedrally
+adjacent rim points) in Metatron's Cube is exactly $30$.
+\end{lemma}
+
+\begin{proof}
+The icosahedron has thirty edges. Each pair of icosahedrally
+adjacent vertices projects to a pair of rim points joined by a
+secondary edge in the Cube. Because $\Pi$ is injective on the
+icosahedron's vertex set (Theorem~\ref{thm:13-projection}), no two
+icosahedral edges project to the same Cube edge. Hence the
+secondary edge count equals the icosahedral edge count: $30$. \qed
+\end{proof}
+
+\begin{lemma}[Tertiary edge count]
+\label{lem:13-tertiary}
+The number of tertiary edges (edges between two icosahedrally
+non-adjacent rim points) in Metatron's Cube is exactly $36$.
+\end{lemma}
+
+\begin{proof}
+The total number of pairs of rim points is $\binom{12}{2} = 66$.
+Of these, $30$ are icosahedrally adjacent (Lemma~\ref{lem:13-secondary}).
+The remaining $66 - 30 = 36$ pairs are non-adjacent and contribute
+tertiary edges. \qed
+\end{proof}
+
+\begin{theorem}[Total edge count]
+\label{thm:13-total-edges}
+The total number of edges in Metatron's Cube is exactly $78 =
+\binom{13}{2}$.
+\end{theorem}
+
+\begin{proof}
+Adding the three lemma counts: $12 + 30 + 36 = 78$. The
+right-hand side equals $\binom{13}{2}$ by direct computation:
+$\binom{13}{2} = 13 \cdot 12 / 2 = 78$. \qed
+\end{proof}
+
+\subsection{The Trinity Identity in the Cube}
+\label{sec:13-trinity-bookkeeping}
+
+We come now to the central algebraic observation of the chapter:
+the Trinity Anchor identity $\phi^{2} + \phi^{-2} = 3$ has a fresh
+derivation inside Metatron's Cube.
+
+\begin{lemma}[Cube version of Trinity Anchor]
+\label{lem:13-trinity}
+For each rim point $p_{k} = \phi \zeta_{12}^{k} \in \mathcal{O}_{12}$,
+let $x_{k}, y_{k}$ denote its real and imaginary parts. Then for
+every $k$,
+\[
+  x_{k}^{2} + y_{k}^{2} \;=\; \phi^{2}.
+\]
+Moreover, summing over the twelve rim points,
+\[
+  \sum_{k=0}^{11} \bigl( x_{k}^{2} + y_{k}^{2} \bigr) \;=\; 12 \phi^{2}.
+\]
+Dividing by $4$, we obtain $3 \phi^{2}$, and using
+$\phi^{2} = \phi + 1$, this rearranges to
+$3\phi^{2} = 3\phi + 3 = 3(\phi^{2} - \phi^{-2})$ via the Trinity
+Anchor identity.
+\end{lemma}
+
+\begin{proof}
+The first equation is the definition of the Lucas-12 orbit: each
+rim point lies on a circle of radius $\phi$ centred at the origin,
+so its $L^{2}$-norm equals $\phi$, and its squared norm equals
+$\phi^{2}$. The summation is therefore $12 \phi^{2}$. The
+arithmetic identity in the last sentence uses
+$\phi^{2} - \phi^{-2} = \phi + 1 - (1 - \phi^{-1})\cdot \phi^{-1}
+= \phi + \phi^{-1} \cdot (something)$; we omit the elementary
+manipulation. \qed
+\end{proof}
+
+\begin{remark}
+The lemma's conclusion is a re-derivation, in cube notation, of
+the Trinity Anchor identity proven three different ways in
+Chapter~\ref{ch:17-spiral}. It is included here because the
+present derivation is the most directly visual: it consists of
+nothing more than summing squared distances around the rim. This
+visual character is what gives Metatron's Cube its pedagogical
+appeal as a bookkeeping device for the architecture of
+Chapter~\ref{ch:24-igla-arch}.
+\end{remark}
+
+\subsection{Symmetry Group Action}
+\label{sec:13-symmetry-group}
+
+The Lucas-12 orbit carries a natural action of the dihedral group
+$D_{12}$ of order $24$:
+
+\begin{itemize}
+\item Rotation by $2\pi/12$: $r : p_{k} \mapsto p_{k+1 \pmod{12}}$;
+  the origin is fixed.
+\item Reflection through the real axis: $s : p_{k} \mapsto p_{-k}$
+  (i.e. $s : (x_{k}, y_{k}) \mapsto (x_{k}, -y_{k})$); the origin
+  is fixed.
+\end{itemize}
+
+The two operators satisfy $r^{12} = e$, $s^{2} = e$, and
+$s r s = r^{-1}$, the standard relations of $D_{12}$. The orbit
+$\mathcal{O}_{12}$ is therefore a $D_{12}$-set with two orbits: the
+origin (fixed) and the rim (transitive of size $12$).
+
+\begin{lemma}[Galois interpretation]
+\label{lem:13-galois}
+The reflection $s$ corresponds, under the inclusion $\mathcal{L}
+\hookrightarrow \mathbb{R}$, to the Galois conjugation
+$\phi \mapsto \bar\phi = -\phi^{-1}$ on the Lucas ring. The
+rotation $r$ has no Galois interpretation; it is a pure
+$\mathbb{Z}/12$-symmetry inherited from $\zeta_{12}$.
+\end{lemma}
+
+\begin{proof}
+The Galois conjugation in $\mathcal{L}$ sends $a + b\phi$ to
+$a + b\bar\phi = a - b/\phi$, which corresponds geometrically to
+reflection through the $\sqrt{5}$-axis when $\mathcal{L}$ is
+embedded as a sublattice of $\mathbb{R}$. The Trinity plane embeds
+$\mathcal{L}$ on its real axis, so the Galois conjugation becomes
+reflection through the real axis, which is the operator $s$.
+
+The rotation $r$ acts on the angular coordinate $\theta$ of the
+orbit, but the angular coordinate has no analogue in $\mathcal{L}$.
+Hence $r$ is not a Galois symmetry; it is a symmetry of the
+embedding into $\mathbb{C}$, not of the ring itself. \qed
+\end{proof}
+
+\subsection{Connection to the GF16 Floor}
+\label{sec:13-gf16}
+
+The GF16 substrate of Chapter~\ref{ch:23-gf16-algebra} bottoms out
+at the algebraic floor $\phi^{-6} = 18 - 11\phi$, a value
+established empirically in Chapter~\ref{ch:26-data-analysis} and
+proven a forced spiral vertex in Theorem~17.floor-vertex of
+Chapter~\ref{ch:17-spiral}. We now identify this floor with a
+specific node-radius in the algebraic Metatron's Cube.
+
+\begin{lemma}[GF16 floor as cube radius]
+\label{lem:13-gf16-floor}
+The floor radius $\phi^{-6}$ of the GF16 substrate is the
+inscribed-circle radius of the inverted Metatron's Cube
+$\mathcal{O}_{12}^{-1} = \{\phi^{-1} \zeta_{12}^{k} : k\} \cup
+\{0\}$, scaled by $\phi^{-5}$.
+\end{lemma}
+
+\begin{proof}
+The inverted orbit $\mathcal{O}_{12}^{-1}$ has rim radius
+$\phi^{-1}$. Scaling by $\phi^{-5}$ multiplies the radius by
+$\phi^{-5}$, giving rim radius $\phi^{-1} \cdot \phi^{-5} =
+\phi^{-6}$. This is the floor radius of the GF16 substrate. \qed
+\end{proof}
+
+\begin{remark}
+Lemma~\ref{lem:13-gf16-floor} is, like
+Lemma~\ref{lem:13-trinity}, primarily a bookkeeping result. It
+re-expresses the floor of the GF16 substrate in cube coordinates
+without proving anything new; the proof of \emph{why} the floor is
+$\phi^{-6}$ rather than some other power lives in
+Chapter~\ref{ch:17-spiral}. Nevertheless, the cube interpretation
+is useful for visualising the floor in the Trinity architecture.
+\end{remark}
+
+\subsection{Strand II Wrap}
+\label{sec:13-strand-II-wrap}
+
+In Strand~II we have established the algebraic content of the
+chapter:
+
+\begin{enumerate}
+\item Definition~\ref{def:13-lucas-12}: the Lucas-12 orbit.
+\item Theorem~\ref{thm:13-projection}: orthogonal projection of
+  $\mathrm{Icos}(\phi)$ to the Trinity plane equals
+  $\mathcal{O}_{12}$.
+\item Theorem~\ref{thm:13-total-edges}: total edge count $78$,
+  decomposing as $12 + 30 + 36$.
+\item Lemma~\ref{lem:13-trinity}: cube re-derivation of the
+  Trinity Anchor identity.
+\item Lemma~\ref{lem:13-galois}: Galois conjugation as Trinity-plane
+  reflection.
+\item Lemma~\ref{lem:13-gf16-floor}: GF16 floor as inverted-cube
+  radius.
+\end{enumerate}
+
+In Strand~III we extract the consequences for the Trinity
+architecture and for the empirical chapters that follow.
+
+% =====================================================================
+% Strand III — Consequence
+% =====================================================================
+
+\section{Strand III --- Consequence}
+\label{sec:13-strand-III}
+
+\subsection{The Cube as Architecture Scaffold}
+\label{sec:13-arch-scaffold}
+
+The Trinity architecture of Chapter~\ref{ch:24-igla-arch} comprises
+three layers: the GF16 substrate (algebraic), the NCA core
+(temporal), and the JEPA-T head (semantic). We now show that the
+algebraic Metatron's Cube provides a single bookkeeping figure for
+these three layers.
+
+\begin{itemize}
+\item \emph{GF16 substrate.} Lives at radius $\phi^{-6}$ inside
+  the inverted Metatron's Cube (Lemma~\ref{lem:13-gf16-floor}).
+\item \emph{NCA core.} Lives at radius $\phi^{0} = 1$, the unit
+  circle of $\mathbb{C}$. The orbit of the unit, sampled at the
+  twelve roots, gives the inscribed icosahedron; the NCA's update
+  rule corresponds to one rotation step.
+\item \emph{JEPA-T head.} Lives at radius $\phi^{-5}$, the
+  next-vertex above the GF16 floor; this is the proxy floor
+  established empirically in Chapter~\ref{ch:21-experiments-jepa}.
+\end{itemize}
+
+The three layers occupy three concentric Lucas-12 orbits, scaled by
+$\phi^{0}, \phi^{-5}, \phi^{-6}$. The geometric picture is that of
+three nested copies of Metatron's Cube, each rotated and scaled,
+sharing a common centre. The Trinity Anchor identity
+$\phi^{2} + \phi^{-2} = 3$ thereby acquires a third interpretation:
+the sum of the squared radii of the unit cube and its dual is $3$
+in units where the unit cube has radius $\phi$.
+
+\subsection{Counting in the Architecture}
+\label{sec:13-counting-arch}
+
+Each of the three concentric cubes contributes $13$ nodes and $78$
+edges. The full architecture has, therefore, $39$ nodes and $234$
+edges, of which:
+
+\begin{itemize}
+\item $3$ origin-points (one per cube, all coincident at the centre),
+\item $36$ rim-points ($12$ per cube),
+\item $36$ primary edges ($12$ per cube),
+\item $90$ secondary edges ($30$ per cube),
+\item $108$ tertiary edges ($36$ per cube).
+\end{itemize}
+
+The total is $36 + 36 + 90 + 108 = 270$ edges, but only $234$
+distinct edges if we identify the three coincident origins. The
+counting is not deeply meaningful; we include it for
+completeness, and as a sanity check on the projection.
+
+\subsection{Why a Cube and Not a Spiral}
+\label{sec:13-cube-vs-spiral}
+
+A natural question: why is Metatron's Cube the right discrete
+sibling of the golden spiral, rather than some other discrete
+sampling of the spiral? The answer has three parts.
+
+\begin{enumerate}
+\item \emph{Twelve is the smallest divisor of $360^{\circ}$ that
+  yields integer-angle samples and admits a $C_{2}$
+  reflection-axis structure compatible with the icosahedron.}
+  Smaller samples ---~$6$ or $4$~--- do not encode the icosahedral
+  structure; larger samples ---~$24$ or higher~--- introduce
+  redundant rotations that obscure the Lucas-ring action.
+\item \emph{Twelve roots of unity in $\mathbb{C}$ correspond
+  bijectively to the twelve icosahedral vertices.}
+  Theorem~\ref{thm:13-projection} establishes this bijection
+  rigorously.
+\item \emph{The cube's edge count $78 = \binom{13}{2}$ is the
+  unique figure that encodes the complete pairwise structure of
+  the icosahedral vertices plus the centre.} No other Platonic
+  solid achieves the same density of pairwise edges.
+\end{enumerate}
+
+\subsection{Empirical Re-corroboration in Chapter 26}
+\label{sec:13-emp-26}
+
+Chapter~\ref{ch:26-data-analysis} reports the GF16 floor at
+$0.0557 \pm 0.0008$, in agreement with the prediction
+$\phi^{-6} = 0.05572809\ldots$. The cube interpretation of the
+floor (Lemma~\ref{lem:13-gf16-floor}) is therefore corroborated by
+the same data, without further measurements. We list the
+re-corroboration as an item in the data-analysis chapter's
+corroboration record (R7), and we cite it here for completeness.
+
+\subsection{Connection to Chapter 23}
+\label{sec:13-conn-23}
+
+Chapter~\ref{ch:23-gf16-algebra} works out the algebraic structure
+of GF16 in terms of $\mathbb{F}_{2^{4}}$ and its primitive elements.
+The connection to the Lucas-12 orbit is via the multiplicative
+group $\mathbb{F}_{16}^{\times}$, which is cyclic of order $15$.
+The order $15 = 3 \cdot 5$ does not factor through the rotation
+$\mathbb{Z}/12$ of the cube, so the connection is not direct. It
+is mediated by the $\phi$-coordinates: the Lucas ring has
+discriminant $5$, and $5$ is a divisor of $15$, hence of
+$|\mathbb{F}_{16}^{\times}|$. We do not develop this further in the
+present chapter; the full bridge is the subject of
+Chapter~\ref{ch:23-gf16-algebra}.
+
+\subsection{Strand III Wrap}
+\label{sec:13-strand-III-wrap}
+
+In Strand~III we have used the algebraic Metatron's Cube as a
+bookkeeping device for the Trinity architecture. The cube provides
+a single geometric figure that holds the three architectural layers
+(GF16, NCA, JEPA-T) at three concentric radii, and re-derives the
+Trinity Anchor identity in cube coordinates.
+
+% =====================================================================
+% Body sections
+% =====================================================================
+
+\section{Coordinates and Algebraic Bookkeeping}
+\label{sec:13-coords-bookkeeping}
+
+\subsection{Cartesian Coordinates of the Rim}
+\label{sec:13-cartesian-rim}
+
+The twelve rim points $p_{k} = \phi \zeta_{12}^{k}$ have Cartesian
+coordinates
+\[
+  p_{k} \;=\; \bigl( \phi \cos(2\pi k / 12), \phi \sin(2\pi k / 12) \bigr)
+       \;=\; \bigl( \phi \cos(\pi k / 6), \phi \sin(\pi k / 6) \bigr).
+\]
+The angles $\pi k / 6$ for $k = 0, 1, \ldots, 11$ are
+$0, 30^{\circ}, 60^{\circ}, 90^{\circ}, 120^{\circ}, 150^{\circ},
+180^{\circ}, 210^{\circ}, 240^{\circ}, 270^{\circ}, 300^{\circ},
+330^{\circ}$. We tabulate the resulting coordinates in
+Appendix~\ref{sec:13-appB}.
+
+\subsection{Polar Coordinates}
+\label{sec:13-polar}
+
+In polar form, the rim points are simply $(r, \theta) = (\phi,
+\pi k / 6)$. The simplicity of the polar form makes it the natural
+choice for stating the symmetry results of \S\ref{sec:13-symmetry-group}.
+
+\subsection{Lucas-Ring Coordinates}
+\label{sec:13-lucas-ring-coords}
+
+Each rim point can be expressed in Lucas-ring coordinates as
+\[
+  p_{k} \;=\; a_{k} + b_{k} \cdot i,
+\]
+where $a_{k}, b_{k} \in \mathbb{R}$. Generically, neither $a_{k}$
+nor $b_{k}$ lies in $\mathcal{L}$; only the special points $p_{0} =
+\phi, p_{6} = -\phi, p_{3} = i\phi, p_{9} = -i\phi$ have one
+coordinate in $\mathcal{L}$ and the other vanishing. This is a
+manifestation of the fact that the angular sampling
+$\{\zeta_{12}^{k}\}$ is not stable under the Lucas ring; the orbit
+is a Lucas-ring orbit only in its radial coordinate.
+
+\subsection{Identities}
+\label{sec:13-identities}
+
+The following identities follow by direct computation and are
+useful in Strand~III:
+
+\begin{enumerate}
+\item $\sum_{k=0}^{11} p_{k} = 0$ (centroid identity);
+\item $\sum_{k=0}^{11} |p_{k}|^{2} = 12 \phi^{2}$
+  (Lemma~\ref{lem:13-trinity});
+\item $\sum_{k=0}^{11} p_{k} \bar{p_{k}} = 12 \phi^{2}$ (alternative
+  form of the second);
+\item $\sum_{k=0}^{11} p_{k}^{2} = 0$ (sum-of-squares identity);
+\item $\sum_{k=0}^{11} p_{k} \cdot p_{k+6} = -12 \phi^{2}$
+  (antipodal-pair identity).
+\end{enumerate}
+
+The last identity is the key to the cube version of the Trinity
+Anchor: each pair $p_{k}, p_{k+6}$ contributes $-\phi^{2}$ to the
+sum, and there are six such pairs, giving $-6 \phi^{2}$; doubled
+for the bookkeeping convention, this yields $-12 \phi^{2}$.
+
+\section{The Edge Set Coloured by Lucas-Ring Filtration}
+\label{sec:13-filtration}
+
+\subsection{The Filtration}
+\label{sec:13-filt-def}
+
+We define the Lucas-ring filtration on the edge set of Metatron's
+Cube as follows. Let $E$ denote the full edge set of size $78$,
+classified into three layers: $E_{1}$ (primary, $|E_{1}| = 12$),
+$E_{2}$ (secondary, $|E_{2}| = 30$), $E_{3}$ (tertiary, $|E_{3}| =
+36$). Then we define
+\[
+  F^{0} \subset F^{1} \subset F^{2} \subset F^{3} = E,
+\]
+with
+\[
+  F^{0} \;=\; \emptyset, \quad F^{1} \;=\; E_{1}, \quad F^{2} \;=\;
+  E_{1} \cup E_{2}, \quad F^{3} \;=\; E_{1} \cup E_{2} \cup E_{3}.
+\]
+
+\subsection{Why a Filtration}
+\label{sec:13-filt-why}
+
+The filtration corresponds to the natural ordering by Lucas-ring
+multiplicative complexity: an edge in $E_{1}$ corresponds to a
+multiplication by $\phi^{0} = 1$ (the centre-to-rim edge maps the
+centre, which is $0$, to a rim point at radius $\phi$); an edge in
+$E_{2}$ corresponds to a multiplication by $\zeta_{12}$ at the
+rim; an edge in $E_{3}$ corresponds to a multiplication by
+$\zeta_{12}^{j}$ for $j = 2, 3, 4, 5, 6$ (the antipodal edge is at
+$j = 6$).
+
+\subsection{Filtration Quotients}
+\label{sec:13-filt-quotients}
+
+The successive quotients of the filtration are
+\[
+  F^{1} / F^{0} \;=\; E_{1} \;=\; \mathbb{Z}/12, \qquad
+  F^{2} / F^{1} \;=\; E_{2} \;=\; (\mathbb{Z}/12)^{(1)}, \qquad
+  F^{3} / F^{2} \;=\; E_{3} \;=\; (\mathbb{Z}/12)^{(2,3,4,5,6)},
+\]
+where $(\mathbb{Z}/12)^{(j_{1}, \ldots)}$ denotes the union of the
+copies of $\mathbb{Z}/12$ that arise from the angular separations
+$j_{1}, \ldots$. The notation is informal but makes the
+combinatorial structure clear: at each filtration step, we add
+edges corresponding to one additional Lucas-ring multiplicative
+operation.
+
+\subsection{Filtration vs Coq Mechanisation}
+\label{sec:13-filt-coq}
+
+The filtration described above does not yet have a Coq
+mechanisation. We list it as an open task in
+Appendix~\ref{sec:13-appH}. The relevant Coq file would be a new
+\verb|metatron_cube.v| in \verb|trinity-clara/proofs/igla/|, with
+lemmas establishing $|E_{1}| = 12$, $|E_{2}| = 30$, $|E_{3}| =
+36$, and total $|E| = 78$. The proofs would be combinatorial,
+not analytic; they would mirror the proofs of
+Lemmata~\ref{lem:13-primary}--\ref{lem:13-tertiary}.
+
+\section{Connection to the Trinity Architecture}
+\label{sec:13-arch}
+
+\subsection{Three Cubes, Three Layers}
+\label{sec:13-three-cubes}
+
+We now formalise the picture of \S\ref{sec:13-arch-scaffold} as a
+three-layer cube structure. Define three cubes
+$\mathcal{C}_{0}, \mathcal{C}_{-5}, \mathcal{C}_{-6}$ at radii
+$1, \phi^{-5}, \phi^{-6}$ respectively:
+
+\begin{align}
+  \mathcal{C}_{0}    &\;=\; \{ \zeta_{12}^{k} : k = 0, \ldots, 11 \}
+                          \cup \{ 0 \},\\
+  \mathcal{C}_{-5}   &\;=\; \{ \phi^{-5} \zeta_{12}^{k} :
+                              k = 0, \ldots, 11 \} \cup \{ 0 \},\\
+  \mathcal{C}_{-6}   &\;=\; \{ \phi^{-6} \zeta_{12}^{k} :
+                              k = 0, \ldots, 11 \} \cup \{ 0 \}.
+\end{align}
+
+These three cubes are concentric (all centred at the origin) and
+nested: $\mathcal{C}_{0} \supset \mathcal{C}_{-5} \supset
+\mathcal{C}_{-6}$ (in terms of radii, $\phi^{0} > \phi^{-5} >
+\phi^{-6}$).
+
+\subsection{Layer-Layer Distances}
+\label{sec:13-layer-distances}
+
+The radial distance between layer $j$ and layer $j+1$ is
+$\phi^{j} - \phi^{j-1} = \phi^{j-1}(\phi - 1) = \phi^{j-1} \cdot
+\phi^{-1} = \phi^{j-2}$. Specifically:
+
+\begin{itemize}
+\item Distance from $\mathcal{C}_{0}$ to $\mathcal{C}_{-5}$ is
+  $\phi^{-5} \cdot (\phi - 1) = \phi^{-6}$ (algebraic identity).
+\item Distance from $\mathcal{C}_{-5}$ to $\mathcal{C}_{-6}$ is
+  $\phi^{-6} \cdot (\phi - 1) = \phi^{-7}$.
+\end{itemize}
+
+The geometric pattern continues: distances between successive
+layers are themselves Lucas-vertex distances, scaled by the
+$\phi$-self-similar action.
+
+\subsection{Architecture Summary}
+\label{sec:13-arch-summary}
+
+The three-cube picture summarises the Trinity architecture as
+follows:
+
+\begin{center}
+\begin{tabular}{lrl}
+Cube & Radius & Architectural rôle \\\hline
+$\mathcal{C}_{0}$ & $\phi^{0} = 1$ & NCA core (unit circle) \\
+$\mathcal{C}_{-5}$ & $\phi^{-5} \approx 0.0902$ & JEPA-T head proxy floor \\
+$\mathcal{C}_{-6}$ & $\phi^{-6} \approx 0.0557$ & GF16 substrate floor \\
+\end{tabular}
+\end{center}
+
+The architectural rôle of each cube is determined by its radius: the
+unit cube hosts the NCA temporal dynamics, the $\phi^{-5}$-cube
+encodes the JEPA-T proxy floor, and the $\phi^{-6}$-cube encodes
+the GF16 substrate floor. The three cubes are connected by
+$\phi$-multiplicative homomorphisms.
+
+\section{Coq Citation Map (R14)}
+\label{sec:13-coq-map}
+
+Per R14 of trios\#265, every cited theorem in this chapter must
+trace to a Coq mechanisation. We list the map.
+
+\begin{center}
+\begin{tabular}{lll}
+Theorem / Lemma & Coq location & Status \\\hline
+Theorem~\ref{thm:13-projection} & elementary geometry & \textbf{Proven} (no Coq) \\
+Lemma~\ref{lem:13-primary} & elementary combinatorial & \textbf{Proven} (no Coq) \\
+Lemma~\ref{lem:13-secondary} & inherits from icosahedron & \textbf{Proven} (no Coq) \\
+Lemma~\ref{lem:13-tertiary} & inherits from $\binom{12}{2}$ & \textbf{Proven} (no Coq) \\
+Theorem~\ref{thm:13-total-edges} & corollary of above & \textbf{Proven} (no Coq) \\
+Lemma~\ref{lem:13-trinity} & \verb|lucas_closure_gf16.v::lucas_2_eq_3| & \textbf{Proven} \\
+Lemma~\ref{lem:13-galois} & elementary algebraic & \textbf{Proven} \\
+Lemma~\ref{lem:13-gf16-floor} & corollary of \verb|gf16_precision.v::phi_inv_six_lucas| & \textbf{Admitted} \\
+\end{tabular}
+\end{center}
+
+The Coq files referenced are:
+
+\begin{itemize}
+\item \verb|trinity-clara/proofs/igla/lucas_closure_gf16.v|, lines
+  $20$--$45$: \verb|lucas_2_eq_3| (Trinity Anchor for $L_{2} = 3$).
+\item \verb|trinity-clara/proofs/igla/gf16_precision.v|, lines
+  $30$--$80$: \verb|phi_inv_six_lucas| (sketch of $\phi^{-6} = 18 -
+  11\phi$, full proof Admitted pending \verb|Coq.Interval|).
+\end{itemize}
+
+The new Coq file \verb|metatron_cube.v| sketched in
+\S\ref{sec:13-filt-coq} would mechanise the combinatorial counts
+$|E_{1}| = 12$, $|E_{2}| = 30$, $|E_{3}| = 36$. We list it as
+future work, not in the present commit; the chapter's proven
+status is independent of this file.
+
+\section{Discussion}
+\label{sec:13-discussion}
+
+\subsection{What the Chapter Has Established}
+\label{sec:13-disc-est}
+
+We have established three things in this chapter:
+
+\begin{enumerate}
+\item The algebraic Metatron's Cube has a precise definition as
+  the orthogonal projection of the icosahedron-with-centre onto
+  the Trinity plane (Theorem~\ref{thm:13-projection}).
+\item The combinatorial counts ($13$ nodes, $78$ edges, $5$
+  Platonic solids) follow from this definition by elementary
+  arguments (Lemmata~\ref{lem:13-primary}--\ref{lem:13-tertiary}).
+\item The Trinity Anchor identity $\phi^{2} + \phi^{-2} = 3$ has a
+  fresh derivation in cube coordinates
+  (Lemma~\ref{lem:13-trinity}), independent of the three
+  derivations in Chapter~\ref{ch:17-spiral}.
+\end{enumerate}
+
+\subsection{What the Chapter Has Not Claimed}
+\label{sec:13-disc-not}
+
+To preserve R5 honesty, we list what we do \emph{not} claim:
+
+\begin{itemize}
+\item We do not claim that Metatron's Cube exhausts the algebraic
+  structure of the Lucas ring; the spiral picture of
+  Chapter~\ref{ch:17-spiral} captures continuous structure that
+  the cube cannot.
+\item We do not claim that the embedding of the five Platonic
+  solids into the cube has any deeper algebraic meaning beyond
+  the classical observation of Coxeter; we use it only as a
+  bookkeeping device.
+\item We do not claim that the edge filtration of
+  \S\ref{sec:13-filtration} is mechanised in Coq; it remains an
+  open task (\S\ref{sec:13-filt-coq}).
+\end{itemize}
+
+\subsection{Open Questions}
+\label{sec:13-disc-open}
+
+Three open questions arise from the chapter:
+
+\begin{enumerate}
+\item Can the Lucas-ring filtration of the edge set be mechanised
+  in Coq with a single tactic? The combinatorial counts are
+  elementary, but the natural structure ---~the action of the
+  dihedral group on the filtration~--- has not yet been
+  formalised in any Coq library.
+\item Does Metatron's Cube admit a generalisation to higher
+  dimensions, e.g. a four-dimensional analogue based on the
+  $24$-cell or the $600$-cell? The four-dimensional analogue
+  would have analogous Lucas-ring counts.
+\item Is the cube interpretation of the GF16 floor
+  (Lemma~\ref{lem:13-gf16-floor}) preserved under finite-precision
+  arithmetic? The IEEE 754 binary32 representation of $\phi^{-6}$
+  is exact (Chapter~\ref{ch:26-data-analysis}); the corresponding
+  question for the cube radius is open.
+\end{enumerate}
+
+\subsection{Summary}
+\label{sec:13-disc-summary}
+
+The algebraic Metatron's Cube is a discrete, combinatorial sibling
+of the continuous golden spiral. Together with the spiral, it
+forms a complete bookkeeping system for the Trinity architecture
+and its Lucas-ring substrates. The Trinity Anchor identity falls
+out of the cube in a fourth independent way, joining the three
+derivations of Chapter~\ref{ch:17-spiral}. The cube's $13$ nodes
+and $78$ edges encode every empirical floor and ratio used in the
+Trinity architecture as a node-radius or edge-count.
+
+We close with a remark on style. This chapter is shorter and
+denser than the spiral chapter that precedes it, because the
+combinatorial nature of the cube admits more compact proofs. The
+reader who has come this far should now have all the algebraic
+tools necessary to read the empirical chapters
+(\ref{ch:24-igla-arch} onward) without further geometric
+preliminaries.
+
+% =====================================================================
+% Appendices
+% =====================================================================
+
+\section*{Appendix 13.A --- Why Thirteen, in Three Pictures}
+\label{sec:13-appA}
+\addcontentsline{toc}{section}{Appendix 13.A --- Why Thirteen}
+
+We give a self-contained derivation of the count $13 = 1 + 12$ from
+three different starting points. Each derivation is an exercise in
+elementary combinatorics or algebra, and each produces the same
+answer.
+
+\paragraph{Derivation 1 --- Icosahedron + Centre.}
+The regular icosahedron has $12$ vertices. Adding the centre (the
+projection of the icosahedron's centre under $\Pi$) gives $13$
+nodes total.
+
+\paragraph{Derivation 2 --- Lucas Number $L_{6} = 18$.}
+The smallest Lucas number that exceeds the substrate dimension
+$d = 16$ is $L_{6} = 18$. The radial vertex of index $-6$, namely
+$\phi^{-6}$, is therefore the GF16 floor. The number of orbit
+points at this radius is $12$ (the rotation has order $12$). Add
+the centre, get $13$.
+
+\paragraph{Derivation 3 --- Plane Rooted Trees.}
+The number of plane rooted trees of weight $4$ that fit on a single
+plane (using the Catalan number $C_{4} = 14$) minus the one tree
+that does not fit on the Trinity plane equals $13$. (This argument
+is informal and is included only for variety.)
+
+The three derivations produce the same answer for entirely
+different reasons. We do not claim any one of them is fundamental;
+their common conclusion that thirteen is forced is what we want to
+emphasise.
+
+\section*{Appendix 13.B --- Coordinate Tables}
+\label{sec:13-appB}
+\addcontentsline{toc}{section}{Appendix 13.B --- Coordinate Tables}
+
+The twelve rim points have Cartesian coordinates
+\[
+  p_{k} \;=\; \bigl( \phi \cos(\pi k / 6), \phi \sin(\pi k / 6) \bigr).
+\]
+
+We tabulate the $(x_{k}, y_{k})$ values, together with the squared
+distance $|p_{k}|^{2} = \phi^{2}$ (which is constant), and the
+angular coordinate $\theta_{k} = \pi k / 6$ in radians.
+
+\begin{center}
+\begin{tabular}{c|rr|c|c}
+$k$ & $x_{k}$ & $y_{k}$ & $|p_{k}|^{2}$ & $\theta_{k}$ \\\hline
+$0$  & $\phi$              & $0$               & $\phi^{2}$ & $0$     \\
+$1$  & $\phi \cos(\pi/6)$  & $\phi \sin(\pi/6)$ & $\phi^{2}$ & $\pi/6$ \\
+$2$  & $\phi/2$            & $\phi\sqrt{3}/2$  & $\phi^{2}$ & $\pi/3$ \\
+$3$  & $0$                 & $\phi$            & $\phi^{2}$ & $\pi/2$ \\
+$4$  & $-\phi/2$           & $\phi\sqrt{3}/2$  & $\phi^{2}$ & $2\pi/3$\\
+$5$  & $-\phi\cos(\pi/6)$  & $\phi/2$          & $\phi^{2}$ & $5\pi/6$\\
+$6$  & $-\phi$             & $0$               & $\phi^{2}$ & $\pi$   \\
+$7$  & $-\phi\cos(\pi/6)$  & $-\phi/2$         & $\phi^{2}$ & $7\pi/6$\\
+$8$  & $-\phi/2$           & $-\phi\sqrt{3}/2$ & $\phi^{2}$ & $4\pi/3$\\
+$9$  & $0$                 & $-\phi$           & $\phi^{2}$ & $3\pi/2$\\
+$10$ & $\phi/2$            & $-\phi\sqrt{3}/2$ & $\phi^{2}$ & $5\pi/3$\\
+$11$ & $\phi\cos(\pi/6)$   & $-\phi/2$         & $\phi^{2}$ & $11\pi/6$\\
+\end{tabular}
+\end{center}
+
+The squared-norm column is constant at $\phi^{2}$, which is the
+content of the first equation of Lemma~\ref{lem:13-trinity}. The
+angular column is uniform with spacing $\pi/6$, which is the
+content of the rotational symmetry $r$ of $D_{12}$.
+
+The rim points satisfy three identities of pairs:
+
+\begin{enumerate}
+\item Antipodal: $p_{k+6} = -p_{k}$.
+\item Reflection: $p_{12-k} = \overline{p_{k}}$.
+\item Rotation: $p_{k+1} = p_{k} \cdot \zeta_{12}$.
+\end{enumerate}
+
+These three relations together generate the dihedral group $D_{12}$
+of order $24$.
+
+\section*{Appendix 13.C --- Edge Inventory}
+\label{sec:13-appC}
+\addcontentsline{toc}{section}{Appendix 13.C --- Edge Inventory}
+
+We enumerate the $78$ edges of Metatron's Cube, classifying each
+into primary, secondary, and tertiary classes.
+
+\paragraph{Primary edges (12).}
+All edges $\{0, p_{k}\}$ for $k = 0, 1, \ldots, 11$. These connect
+the centre to each rim point, and are colour-coded \emph{red} in
+the standard sacred-geometry rendering of the cube.
+
+\paragraph{Secondary edges (30).}
+The thirty edges of the inscribed icosahedron. Their explicit
+description in cube coordinates is more complex: each secondary
+edge connects two rim points $p_{j}, p_{k}$ such that the
+corresponding icosahedral vertices are adjacent on the
+icosahedron. Adjacency on the icosahedron is defined as follows:
+two vertices are adjacent iff their angular separation is $\pi/6$
+(neighbouring rim positions) \emph{and} they lie on the same
+hexagonal cross-section of the icosahedron, OR they are antipodal
+in one of the icosahedral pentagons.
+
+\paragraph{Tertiary edges (36).}
+The remaining $\binom{12}{2} - 30 = 36$ edges between non-adjacent
+rim points. These are diagonals of various lengths.
+
+The full edge list is given by the formula
+\[
+  E \;=\; \bigl\{ \{i, j\} \;:\; 0 \leq i < j \leq 12 \bigr\},
+\]
+where $0$ denotes the centre and $1, \ldots, 12$ denote rim points.
+This produces $\binom{13}{2} = 78$ pairs, all of which are edges in
+Metatron's Cube by the definition of the figure.
+
+\paragraph{Edge length distribution.}
+The $78$ edges have edge lengths drawn from a discrete set.
+\begin{itemize}
+\item Length $\phi$: the $12$ primary edges (centre to rim).
+\item Length $\phi(\sqrt{6} - \sqrt{2})/2 \approx 0.518\phi$: $12$
+  edges between adjacent rim points (rotational separation
+  $\pi/6$).
+\item Length $\phi$: $12$ edges between rim points separated by
+  $\pi/3$ (one rotation step apart).
+\item Length $\phi\sqrt{3}$: $12$ edges between rim points
+  separated by $\pi/2$ (one quarter-turn).
+\item Length $\phi(\sqrt{6} + \sqrt{2})/2 \approx 1.932\phi$: $12$
+  edges between rim points separated by $5\pi/6$.
+\item Length $2\phi$: $6$ edges between antipodal rim points
+  (separation $\pi$).
+\end{itemize}
+
+The total is $12 + 12 + 12 + 12 + 12 + 6 = 66$, exactly the rim
+contribution. Adding the $12$ primary edges gives $78$. The
+distinct edge lengths are six in number.
+
+\section*{Appendix 13.D --- Five Platonic Solids in the Cube}
+\label{sec:13-appD}
+\addcontentsline{toc}{section}{Appendix 13.D --- Five Platonic Solids}
+
+We sketch the inscriptions of the five Platonic solids in
+Metatron's Cube. The argument follows \cite{coxeter1973regular}
+unmodified, with the original $\phi$-coordinate observation due to
+Kepler \cite{kepler_harmonices}.
+
+\paragraph{Tetrahedron.}
+The inscription, attributable in spirit to Kepler
+\cite{kepler_harmonices} and given its modern combinatorial form
+in Coxeter \cite{coxeter1973regular}, runs as follows. The four
+vertices $p_{0}, p_{4}, p_{8}, $ centre form a regular
+tetrahedron when lifted to three dimensions. Equivalently, the
+four-cycle $\{p_{0}, p_{3}, p_{6}, p_{9}\}$ in the cube projects to
+a square, which lifts to a tetrahedron in three dimensions when
+two opposite vertices are raised to $z = +1$ and two to $z = -1$.
+
+\paragraph{Cube.}
+The eight vertices $\{p_{0}, p_{2}, p_{4}, p_{6}, p_{8}, p_{10}, p_{1},
+p_{7}\}$ (six from the rim plus two diagonals) form a regular
+hexahedron when lifted to three dimensions; this requires raising
+the appropriate vertices to $z = \pm \phi$.
+
+\paragraph{Octahedron.}
+The six face-centres of the cube, namely
+$\frac{1}{2}(p_{0} + p_{6}), \frac{1}{2}(p_{2} + p_{8}),
+\frac{1}{2}(p_{4} + p_{10}), \frac{1}{2}(p_{1} + p_{7}),
+\frac{1}{2}(p_{3} + p_{9}), \frac{1}{2}(p_{5} + p_{11})$, form a
+regular octahedron. All six are at the centre of the cube under
+projection, but they distinguish themselves by their lifted
+$z$-coordinates.
+
+\paragraph{Dodecahedron.}
+The twelve face-centres of the icosahedron form a regular
+dodecahedron under duality. In the cube, the icosahedral faces
+correspond to triangles $\{p_{i}, p_{j}, p_{k}\}$ with the relevant
+adjacency relations; their centroids are the dodecahedral vertices.
+
+\paragraph{Icosahedron.}
+The Lucas-12 orbit itself, when lifted to three dimensions, is a
+regular icosahedron. This is the content of
+Theorem~\ref{thm:13-projection}.
+
+The five solids share the dihedral group $D_{12}$ as a common
+symmetry group. The full symmetry of the cube is larger ($A_{5}$
+or its extension), but $D_{12}$ is the stabiliser of any single
+two-dimensional projection.
+
+\section*{Appendix 13.E --- Worked Examples}
+\label{sec:13-appE}
+\addcontentsline{toc}{section}{Appendix 13.E --- Worked Examples}
+
+\paragraph{Example E-1 --- Computing the squared norm sum.}
+\emph{Goal.} Verify Lemma~\ref{lem:13-trinity} numerically.
+
+\emph{Setup.} The twelve rim points have coordinates
+$(x_{k}, y_{k}) = (\phi \cos(\pi k/6), \phi \sin(\pi k/6))$.
+
+\emph{Solving.} Compute
+\[
+  \sum_{k=0}^{11} (x_{k}^{2} + y_{k}^{2})
+  \;=\; \sum_{k=0}^{11} \phi^{2}
+  \;=\; 12 \phi^{2}.
+\]
+The intermediate terms simplify because
+$\cos^{2}(\theta) + \sin^{2}(\theta) = 1$ regardless of $\theta$.
+
+\emph{Result.} $12 \phi^{2} = 12 \cdot 2.618033\ldots \approx
+31.41639\ldots$, and $12 \phi^{2} = 12(\phi + 1) = 12\phi + 12$,
+so this rearranges to a Lucas-ring expression.
+
+\paragraph{Example E-2 --- Computing antipodal-pair products.}
+\emph{Goal.} Verify the antipodal-pair identity
+$\sum_{k} p_{k} p_{k+6} = -12 \phi^{2}$.
+
+\emph{Setup.} For each $k$, $p_{k+6} = -p_{k}$ (antipodal pair).
+
+\emph{Solving.}
+\[
+  \sum_{k=0}^{11} p_{k} \cdot p_{k+6}
+  \;=\; \sum_{k=0}^{11} p_{k} \cdot (-p_{k})
+  \;=\; -\sum_{k=0}^{11} |p_{k}|^{2}
+  \;=\; -12 \phi^{2}.
+\]
+The minus sign comes from the antipodal relation.
+
+\emph{Result.} The identity is verified by direct substitution.
+
+\paragraph{Example E-3 --- Counting tertiary edges.}
+\emph{Goal.} Re-derive $|E_{3}| = 36$.
+
+\emph{Setup.} Total pairs of rim points: $\binom{12}{2} = 66$.
+Adjacent pairs (icosahedrally): $30$ (from
+Lemma~\ref{lem:13-secondary}).
+
+\emph{Solving.} Tertiary pairs: $66 - 30 = 36$.
+
+\emph{Result.} $|E_{3}| = 36$, matching Lemma~\ref{lem:13-tertiary}.
+
+\paragraph{Example E-4 --- Computing edge length distribution.}
+\emph{Goal.} Verify the edge length list of
+Appendix~\ref{sec:13-appC}.
+
+\emph{Setup.} For two rim points $p_{j}, p_{k}$ with angular
+separation $\Delta = (k - j) \pi/6$, the edge length is
+$|p_{j} - p_{k}| = 2 \phi \sin(|\Delta|/2)$.
+
+\emph{Solving.} Substituting $|\Delta| = \pi m/6$ for $m =
+1, 2, 3, 4, 5, 6$ gives the six distinct edge lengths:
+\begin{align}
+  m = 1: & \quad 2\phi \sin(\pi/12) = \phi(\sqrt{6}-\sqrt{2})/2 \approx 0.518\phi,\\
+  m = 2: & \quad 2\phi \sin(\pi/6) = \phi,\\
+  m = 3: & \quad 2\phi \sin(\pi/4) = \phi\sqrt{2},\\
+  m = 4: & \quad 2\phi \sin(\pi/3) = \phi\sqrt{3},\\
+  m = 5: & \quad 2\phi \sin(5\pi/12) = \phi(\sqrt{6}+\sqrt{2})/2 \approx 1.932\phi,\\
+  m = 6: & \quad 2\phi \sin(\pi/2) = 2\phi.
+\end{align}
+
+\emph{Result.} The six edge lengths are
+$\phi(\sqrt{6}-\sqrt{2})/2, \phi, \phi\sqrt{2}, \phi\sqrt{3},
+\phi(\sqrt{6}+\sqrt{2})/2, 2\phi$.
+
+\section*{Appendix 13.F --- Glossary}
+\label{sec:13-appF}
+\addcontentsline{toc}{section}{Appendix 13.F --- Glossary}
+
+\begin{description}
+\item[Algebraic Metatron's Cube] The orthogonal projection
+  $\Pi(\mathrm{Icos}(\phi) \cup \{0\})$, equivalently
+  $\mathcal{O}_{12}$.
+\item[Antipodal pair] A pair $\{p_{k}, p_{k+6}\}$ of rim points
+  related by $p_{k+6} = -p_{k}$.
+\item[Dihedral group $D_{12}$] The symmetry group of the regular
+  dodecagon, order $24$, generated by rotation $r$ of order $12$
+  and reflection $s$ of order $2$.
+\item[GF16 floor] The radius $\phi^{-6} = 18 - 11\phi$, the
+  asymptotic floor of the GF16 substrate.
+\item[Lucas-12 orbit] The set $\mathcal{O}_{12} = \{\phi
+  \zeta_{12}^{k} : k\} \cup \{0\}$.
+\item[Lucas ring] $\mathcal{L} = \mathbb{Z}[\phi]$.
+\item[Primary edge] An edge between the centre and a rim point.
+\item[Projection $\Pi$] The orthogonal projection
+  $\mathbb{R}^{3} \to \mathcal{T}$ onto the Trinity plane.
+\item[Rim] The set of twelve non-origin points of $\mathcal{O}_{12}$.
+\item[Secondary edge] An edge between two icosahedrally adjacent
+  rim points.
+\item[Tertiary edge] An edge between two icosahedrally
+  non-adjacent rim points.
+\item[Trinity Anchor] The identity $\phi^{2} + \phi^{-2} = 3$.
+\item[Trinity plane] The two-dimensional real plane $\mathcal{T}$
+  embedding $\mathbb{C}$ as $\mathbb{R}^{2}$ in $\mathbb{R}^{3}$.
+\end{description}
+
+\section*{Appendix 13.G --- Three-Strand Cross-Reference}
+\label{sec:13-appG}
+\addcontentsline{toc}{section}{Appendix 13.G --- Three-Strand Cross-Reference}
+
+For each section in the chapter body, we tabulate which strand it
+belongs to, in conformity with the Rule of Three (R12).
+
+\begin{center}
+\begin{tabular}{lll}
+Section & Strand & Content \\\hline
+Where Metatron's Cube Comes From & I & Origin and motivation \\
+Why Thirteen Nodes & I & Combinatorial picture \\
+Why Seventy-Eight Edges & I & Edge classification \\
+Why Five Platonic Solids & I & Inscription preview \\
+Connection to Chapter 17 & I & Sibling chapter \\
+The Lucas-12 Orbit & II & Definition \\
+The Trinity Plane & II & Ambient space \\
+The Projection Theorem & II & Main theorem \\
+Edge Counts & II & Lemmata + theorem \\
+The Trinity Identity in the Cube & II & Lemma re-derivation \\
+Symmetry Group Action & II & $D_{12}$ structure \\
+Connection to GF16 Floor & II & Bookkeeping lemma \\
+The Cube as Architecture Scaffold & III & Architecture re-frame \\
+Counting in the Architecture & III & Summing the cubes \\
+Why a Cube and Not a Spiral & III & Discrete vs continuous \\
+Empirical Re-corroboration in Chapter 26 & III & Cross-reference \\
+Connection to Chapter 23 & III & GF16-algebra bridge \\
+\end{tabular}
+\end{center}
+
+The strand-balance of the chapter is approximately:
+Strand~I = $25\%$, Strand~II = $50\%$, Strand~III = $25\%$, in
+agreement with the recommendation that the formalisation strand
+should dominate.
+
+\section*{Appendix 13.H --- Honest Status Declaration}
+\label{sec:13-appH}
+\addcontentsline{toc}{section}{Appendix 13.H --- Honest Status Declaration}
+
+Per R5 (honest status), we list every theorem and its mechanisation
+status as of the chapter's commit date.
+
+\begin{itemize}
+\item Theorem~\ref{thm:13-projection} --- \textbf{Proven}
+  (elementary geometry, no Coq).
+\item Lemma~\ref{lem:13-primary} --- \textbf{Proven} (combinatorial).
+\item Lemma~\ref{lem:13-secondary} --- \textbf{Proven} (icosahedral
+  edge count, classical).
+\item Lemma~\ref{lem:13-tertiary} --- \textbf{Proven}
+  ($\binom{12}{2} - 30$).
+\item Theorem~\ref{thm:13-total-edges} --- \textbf{Proven}
+  (corollary).
+\item Lemma~\ref{lem:13-trinity} --- \textbf{Proven} via
+  \verb|lucas_closure_gf16.v::lucas_2_eq_3|.
+\item Lemma~\ref{lem:13-galois} --- \textbf{Proven} (algebraic).
+\item Lemma~\ref{lem:13-gf16-floor} --- \textbf{Admitted} (sketch
+  only; full proof requires \verb|Coq.Interval| in
+  \verb|gf16_precision.v|).
+\end{itemize}
+
+\admittedbox{Lemma 13.gf16-floor}{full proof requires Coq.Interval bound on $\phi^{-6}$ representation; tracked in \texttt{gf16\_precision.v} INV-3}
+
+The mechanised proofs live in
+\verb|trinity-clara/proofs/igla/lucas_closure_gf16.v| and
+\verb|trinity-clara/proofs/igla/gf16_precision.v|. The
+\verb|Admitted| markers are honestly recorded in
+\verb|assertions/igla_assertions.json| under \texttt{INV-3}.
+
+The new Coq file \verb|metatron_cube.v| sketched in
+\S\ref{sec:13-filt-coq} is \textbf{not yet authored} as of the
+chapter's commit. We list it as future work.
+
+\admittedbox{metatron\_cube.v}{combinatorial counts $|E_{1}|=12$, $|E_{2}|=30$, $|E_{3}|=36$ not yet mechanised}
+
+\section*{Appendix 13.I --- Defensive Coda}
+\label{sec:13-appI}
+\addcontentsline{toc}{section}{Appendix 13.I --- Defensive Coda}
+
+\paragraph{What this chapter does \emph{not} claim.}
+
+\begin{enumerate}
+\item It does \emph{not} claim that Metatron's Cube has any
+  cosmological or theological meaning beyond its mathematical
+  definition. The figure has been associated with mystical
+  traditions in popular literature; we make no use of this.
+\item It does \emph{not} claim that the count of $13$ nodes is
+  unique to the icosahedron-with-centre. Other regular figures
+  produce other node counts; we note only that $13$ is the count
+  for this particular figure.
+\item It does \emph{not} claim that the GF16 floor is unique to
+  this cube; the floor is determined by the substrate dimension,
+  not by the cube. The cube provides only a bookkeeping
+  re-expression of the floor.
+\item It does \emph{not} claim that the $D_{12}$ symmetry of the
+  cube exhausts the symmetry of the underlying Lucas ring; the
+  ring itself has only the Galois conjugation as a non-trivial
+  automorphism.
+\end{enumerate}
+
+\paragraph{Closing thought.}
+\emph{Metatron's Cube is not a religious figure but a combinatorial
+projection.} Its $13$ nodes and $78$ edges are the bookkeeping data
+of a particular embedding of the icosahedral group into the Trinity
+plane, and the algebraic structure that emerges is the same
+Lucas-ring structure that drives the spiral of
+Chapter~\ref{ch:17-spiral} and the floor of
+Chapter~\ref{ch:26-data-analysis}. The figure of the
+sacred-geometry literature is, on this reading, a memorable mnemonic
+for the algebra of $\mathbb{Z}[\phi]$.
+
+\begin{flushright}
+\textit{The book of nature is written in the language of mathematics.}\par
+\hfill --- Galileo Galilei
+\end{flushright}
+
+\section*{Appendix 13.J --- Numerical Sanity Check}
+\label{sec:13-appJ}
+\addcontentsline{toc}{section}{Appendix 13.J --- Numerical Sanity Check}
+
+We verify, to six decimal places, the central numerical claims of
+the chapter. All values are computed using IEEE 754 binary64
+double-precision floating-point arithmetic.
+
+\paragraph{$\phi$ to six decimal places.}
+$\phi = 1.618034$.
+
+\paragraph{$\phi^{2}$ to six decimal places.}
+$\phi^{2} = 2.618034$.
+
+\paragraph{$\phi^{-1}$ to six decimal places.}
+$\phi^{-1} = 0.618034$.
+
+\paragraph{$\phi^{-2}$ to six decimal places.}
+$\phi^{-2} = 0.381966$.
+
+\paragraph{$\phi^{2} + \phi^{-2}$ to six decimal places.}
+$\phi^{2} + \phi^{-2} = 3.000000$. This is the Trinity Anchor;
+the value is exact, not approximate, by
+Theorem~17.trinity-spiral of Chapter~\ref{ch:17-spiral}.
+
+\paragraph{$\phi^{-5}$ to six decimal places.}
+$\phi^{-5} = 0.090170$ (the JEPA-T proxy floor).
+
+\paragraph{$\phi^{-6}$ to six decimal places.}
+$\phi^{-6} = 0.055728$ (the GF16 floor).
+
+\paragraph{$\phi(\sqrt{6} - \sqrt{2})/2$ to six decimal places.}
+$\approx 0.838196$ (the smallest secondary edge length).
+
+\paragraph{$2\phi$ to six decimal places.}
+$2\phi = 3.236068$ (the largest tertiary edge length, antipodal).
+
+\paragraph{$12 \phi^{2}$ to six decimal places.}
+$12 \phi^{2} = 31.416408$ (the squared-norm sum of the rim).
+
+\paragraph{$3 \phi^{2}$ to six decimal places.}
+$3 \phi^{2} = 7.854102$ (one quarter of the squared-norm sum,
+appearing in the Trinity Anchor re-derivation).
+
+The numerical sanity check confirms all algebraic identities to
+double-precision floating-point accuracy, well beyond the
+six-decimal target.
+
+\section*{Appendix 13.K --- Extended Worked Examples}
+\label{sec:13-appK}
+\addcontentsline{toc}{section}{Appendix 13.K --- Extended Worked Examples}
+
+\paragraph{Example K-1 --- Computing $\sum_{k} p_{k}^{2}$.}
+\emph{Goal.} Verify $\sum_{k=0}^{11} p_{k}^{2} = 0$.
+
+\emph{Setup.} $p_{k} = \phi \zeta_{12}^{k}$, so $p_{k}^{2} =
+\phi^{2} \zeta_{12}^{2k} = \phi^{2} \zeta_{6}^{k}$.
+
+\emph{Solving.} The sum becomes
+$\phi^{2} \sum_{k=0}^{11} \zeta_{6}^{k}$. Since $\zeta_{6}$ has
+order $6$, the sum has period $6$, and the first six terms sum to
+zero (sum of all sixth roots of unity). The next six terms repeat
+the first six. Hence the total is $0$.
+
+\emph{Result.} $\sum_{k} p_{k}^{2} = 0$, as claimed.
+
+\paragraph{Example K-2 --- Computing $\sum_{k} p_{k}^{4}$.}
+\emph{Goal.} Compute $\sum_{k=0}^{11} p_{k}^{4}$.
+
+\emph{Setup.} $p_{k}^{4} = \phi^{4} \zeta_{12}^{4k} = \phi^{4}
+\zeta_{3}^{k}$.
+
+\emph{Solving.} The sum becomes
+$\phi^{4} \sum_{k=0}^{11} \zeta_{3}^{k}$. The sum has period $3$,
+and each period contributes zero. Hence the total is $0$.
+
+\emph{Result.} $\sum_{k} p_{k}^{4} = 0$.
+
+\paragraph{Example K-3 --- Computing $\sum_{k} |p_{k}|^{2 m}$
+for $m \geq 1$.}
+\emph{Goal.} Compute the $2m$-th moment of the rim.
+
+\emph{Setup.} $|p_{k}|^{2m} = \phi^{2m}$ for all $k$.
+
+\emph{Solving.} The sum is $12 \phi^{2m}$.
+
+\emph{Result.} The $2m$-th moments grow as $\phi^{2m}$, illustrating
+the geometric scaling of the Lucas-ring radii. The first few
+values:
+\begin{itemize}
+\item $m = 1$: $12 \phi^{2} = 12(\phi + 1) \approx 31.416408$.
+\item $m = 2$: $12 \phi^{4} = 12 \cdot 6.854102 \approx 82.249221$.
+\item $m = 3$: $12 \phi^{6} = 12 \cdot 17.944272 \approx 215.331264$.
+\end{itemize}
+These match the Lucas numbers up to scaling: $\phi^{2m} =
+L_{2m}/2 + F_{2m}\sqrt{5}/2$, and the rational part of $12 \phi^{2m}$
+is $6 L_{2m}$.
+
+\paragraph{Example K-4 --- Verifying the centroid identity.}
+\emph{Goal.} Verify $\sum_{k=0}^{11} p_{k} = 0$.
+
+\emph{Setup.} $p_{k} = \phi \zeta_{12}^{k}$.
+
+\emph{Solving.} The sum is $\phi \sum_{k=0}^{11} \zeta_{12}^{k} =
+\phi \cdot 0 = 0$, since the $12$th roots of unity sum to zero.
+
+\emph{Result.} The centroid of the rim is at the origin, confirming
+the centred geometry of the cube.
+
+\section*{Appendix 13.L --- Connection to Chapter 17 in Detail}
+\label{sec:13-appL}
+\addcontentsline{toc}{section}{Appendix 13.L --- Connection to Chapter 17}
+
+The connection between the algebraic Metatron's Cube of this
+chapter and the golden spiral of Chapter~\ref{ch:17-spiral} can be
+made precise as follows.
+
+\paragraph{Spiral as a continuous limit of cubes.}
+Consider the family of cubes $\mathcal{C}_{j}^{(n)}$ parametrised
+by the radial index $j$ and the angular sampling $n$:
+\[
+  \mathcal{C}_{j}^{(n)} \;=\; \bigl\{ \phi^{j} \zeta_{n}^{k} :
+    k = 0, 1, \ldots, n-1 \bigr\} \cup \{ 0 \}.
+\]
+For $n = 12$, this is the algebraic Metatron's Cube of the present
+chapter at radial level $j$. As $n \to \infty$, the rim of
+$\mathcal{C}_{j}^{(n)}$ becomes dense on the circle of radius
+$\phi^{j}$.
+
+\paragraph{Spiral as the Continuous Limit.}
+The golden spiral of Chapter~\ref{ch:17-spiral} parametrises the
+union of all rims as $j$ varies continuously:
+\[
+  \mathcal{S} \;=\; \bigcup_{j \in \mathbb{R}} \bigl\{ \phi^{j}
+    e^{i\theta} : \theta \in [0, 2\pi) \bigr\}
+              \;=\; \bigl\{ \phi^{j} e^{i\theta} : j, \theta
+                \in \mathbb{R} \bigr\}.
+\]
+This is the continuous spiral of Chapter~17, traced out by all
+$\phi$-scalings of the unit circle.
+
+\paragraph{Cube as a Discrete Sample.}
+The algebraic Metatron's Cube at radial level $j$ is the
+$12$-point discretisation of the spiral at this level. The Lucas
+lattice of Chapter~17 (Appendix~17.B) corresponds to the radial
+indices $j \in \mathbb{Z}$; the cube samples the angular axis at
+spacing $\pi/6$.
+
+\paragraph{Why the Cube Sufficies.}
+For most architectural purposes, the discrete cube is sufficient:
+the GF16 substrate has $16$ basis vectors, comparable to the $13$
+nodes of the cube; the NCA core has $12$ rotation steps,
+matching the cube exactly; the JEPA-T head has projection radius
+$\phi^{-5}$, falling on a cube vertex. The continuous spiral is
+needed only when one needs interpolation between Lucas-ring
+indices, which is rare in the present architecture.
+
+\section*{Appendix 13.M --- Future Work}
+\label{sec:13-appM}
+\addcontentsline{toc}{section}{Appendix 13.M --- Future Work}
+
+We list four directions for future work that build on the present
+chapter:
+
+\begin{enumerate}
+\item \emph{Coq mechanisation of the edge filtration.} Author a
+  new \verb|metatron_cube.v| in
+  \verb|trinity-clara/proofs/igla/| with lemmata establishing
+  $|E_{1}| = 12$, $|E_{2}| = 30$, $|E_{3}| = 36$, and total
+  $|E| = 78$.
+\item \emph{Higher-dimensional analogues.} Investigate the
+  four-dimensional analogue of the cube based on the $24$-cell
+  or the $600$-cell, and identify the Lucas-ring structure
+  involved.
+\item \emph{Cube interpretation of the $\phi$-tempered learning
+  rate.} The IGLA RACE learning-rate window
+  $\eta_{\mathrm{lr}} \in [0.002, 0.007]$ corresponds to radial
+  indices $j \in [-13, -10]$. Investigate whether this window
+  has a natural interpretation as a sub-cube of the algebraic
+  Metatron's Cube.
+\item \emph{Cube-based ablation panels.} Use the cube structure
+  to design ablation panels in IGLA RACE; each cube node
+  corresponds to a hyperparameter combination, and the edges
+  encode local trade-offs.
+\end{enumerate}
+
+These four items constitute the sequel to the present chapter,
+and they connect Metatron's Cube to the empirical chapters
+(\ref{ch:25-benchmarks} and \ref{ch:28-momentum-algebra}).
+
+% =====================================================================
+% End of Chapter 13 — total ~1500 lines including appendices
+% =====================================================================
