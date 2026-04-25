@@ -1,7 +1,7 @@
 //! L7 — IGLA Victory Gate (INV-7 `igla_found_criterion`)
 //!
 //! Single-file gate that decides whether the IGLA RACE has actually
-//! reached the mission predicate `BPB < IGLA_TARGET_BPB on
+//! reached the mission predicate `BPB < BPB_VICTORY_TARGET on
 //! VICTORY_SEED_TARGET distinct seeds`.  Until this gate fires, no agent,
 //! cron, or human is allowed to declare IGLA FOUND.
 //!
@@ -43,16 +43,10 @@
 use std::collections::HashSet;
 
 use crate::invariants::INV2_WARMUP_BLIND_STEPS;
-use crate::IGLA_TARGET_BPB;
 use crate::hive_automaton::{VICTORY_SEED_TARGET, BPB_VICTORY_TARGET};
 
-use crate::invariants::INV2_WARMUP_BLIND_STEPS;
-
-use crate::IGLA_TARGET_BPB;
-use crate::hive_automaton::{VICTORY_SEED_TARGET, BPB_VICTORY_TARGET};
-
-// Sanity: IGLA_TARGET_BPB matches BPB_VICTORY_TARGET (L-R14)
-const _: () = assert!((IGLA_TARGET_BPB - BPB_VICTORY_TARGET).abs() < f64::EPSILON);
+// Sanity: constants match (L-R14)
+const _: () = assert!((BPB_VICTORY_TARGET - 1.5).abs() < f64::EPSILON);
 
 // ----------------------------------------------------------------------
 // INV-7: Welch's t-test for statistical strength (pre-registered)
@@ -154,7 +148,7 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
         0.0
     };
 
-    let t_statistic = (sample_mean - IGLA_TARGET_BPB) / std_error;
+    let t_statistic = (sample_mean - BPB_VICTORY_TARGET) / std_error;
 
     // Degrees of freedom for one-sample t-test
     let df = (n - 1) as f64;
@@ -180,7 +174,7 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
         p_value,
         sample_mean,
         sample_std,
-        baseline_mu0: IGLA_TARGET_BPB,
+        baseline_mu0: BPB_VICTORY_TARGET,
         alpha: TTEST_ALPHA,
         passed,
     })
@@ -284,12 +278,12 @@ pub struct VictoryReport {
 #[derive(Debug, Clone, PartialEq)]
 pub enum VictoryError {
     /// Fewer than `VICTORY_SEED_TARGET` distinct seeds satisfied the
-    /// strict `< IGLA_TARGET_BPB` predicate after warmup.
+    /// strict `< BPB_VICTORY_TARGET` predicate after warmup.
     InsufficientSeeds {
         passing_distinct: usize,
         required: usize,
     },
-    /// At least one reported result has `bpb >= IGLA_TARGET_BPB`.  Listed
+    /// At least one reported result has `bpb >= BPB_VICTORY_TARGET`.  Listed
     /// for diagnostics; gate counts only seeds *strictly below* the
     /// target.
     BpbAboveTarget {
@@ -328,7 +322,7 @@ pub enum VictoryError {
 ///
 /// * every `SeedResult` is finite, post-warmup, and not in the JEPA-proxy
 ///   band;
-/// * the set of distinct seeds with `bpb < IGLA_TARGET_BPB` has size
+/// * the set of distinct seeds with `bpb < BPB_VICTORY_TARGET` has size
 ///   ≥ `VICTORY_SEED_TARGET`;
 /// * no two results share a seed.
 ///
@@ -374,16 +368,16 @@ pub fn check_victory(results: &[SeedResult]) -> Result<VictoryReport, VictoryErr
     // 3. count distinct passing seeds (strict <)
     let passing: Vec<&SeedResult> = results
         .iter()
-        .filter(|r| r.bpb < IGLA_TARGET_BPB)
+        .filter(|r| r.bpb < BPB_VICTORY_TARGET)
         .collect();
 
     if passing.len() < VICTORY_SEED_TARGET as usize {
         // Surface the first non-passing result for diagnostics, if any.
-        if let Some(r) = results.iter().find(|r| r.bpb >= IGLA_TARGET_BPB) {
+        if let Some(r) = results.iter().find(|r| r.bpb >= BPB_VICTORY_TARGET) {
             return Err(VictoryError::BpbAboveTarget {
                 seed: r.seed,
                 bpb: r.bpb,
-                target: IGLA_TARGET_BPB,
+                target: BPB_VICTORY_TARGET,
             });
         }
         return Err(VictoryError::InsufficientSeeds {
@@ -475,7 +469,7 @@ mod tests {
     /// must reject (predicate is strict `<`, not `≤`).
     #[test]
     fn falsify_bpb_equal_target_strict_lt() {
-        let r = vec![mk(1, IGLA_TARGET_BPB), mk(2, IGLA_TARGET_BPB), mk(3, IGLA_TARGET_BPB)];
+        let r = vec![mk(1, BPB_VICTORY_TARGET), mk(2, BPB_VICTORY_TARGET), mk(3, BPB_VICTORY_TARGET)];
         assert!(matches!(
             check_victory(&r),
             Err(VictoryError::BpbAboveTarget { .. })
@@ -556,7 +550,7 @@ mod tests {
         ];
         match check_victory(&r) {
             Err(VictoryError::BpbAboveTarget { target, .. }) => {
-                assert!((target - IGLA_TARGET_BPB).abs() < f64::EPSILON);
+                assert!((target - BPB_VICTORY_TARGET).abs() < f64::EPSILON);
             }
             other => panic!("expected BpbAboveTarget, got {other:?}"),
         }
@@ -597,11 +591,11 @@ mod tests {
         const _: () = assert!(VICTORY_SEED_TARGET == 3);
     }
 
-    /// Pin: `IGLA_TARGET_BPB` is exactly 1.5 — any drift here is a
+    /// Pin: `BPB_VICTORY_TARGET` is exactly 1.5 — any drift here is a
     /// mission-contract violation, not a routine config change.
     #[test]
     fn igla_target_bpb_pinned_to_1_5() {
-        assert!((IGLA_TARGET_BPB - 1.5).abs() < f64::EPSILON);
+        assert!((BPB_VICTORY_TARGET - 1.5).abs() < f64::EPSILON);
     }
 
     /// Falsification 7: Welch t-test rejects when p-value > α.
