@@ -6,6 +6,7 @@ pub mod neon;
 pub mod race;
 pub mod rungs;
 pub mod attn;
+pub mod bpb;
 pub mod ema;
 pub mod sampler;
 pub mod status;
@@ -28,6 +29,8 @@ pub use victory::{check_victory, is_victory, SeedResult, VictoryReport, VictoryE
 pub use ema::{EmaTracker, EmaError, ALPHA_PHI_INV_3, ALPHA_MIN_EXCLUSIVE, ALPHA_MAX_INCLUSIVE};
 
 pub use attn::{QkHead, QkHeadError, PHI_4, HEAD_DIM_PHI_FLOOR, NUM_HEADS_MAX};
+
+pub use bpb::{BpbTracker, BpbError};
 
 pub use hive_automaton::{
     AbortReason, AgentAction, HaltCause, HiveAutomaton, Lane, State, World,
