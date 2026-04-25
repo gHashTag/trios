@@ -1,0 +1,100 @@
+name: PhD monograph — Flos Aureus (R1 Rust-only build/audit)
+
+on:
+  push:
+    paths:
+      - "docs/phd/**"
+      - "crates/trios-phd/**"
+      - ".github/workflows/phd-build.yml"
+  pull_request:
+    paths:
+      - "docs/phd/**"
+      - "crates/trios-phd/**"
+      - ".github/workflows/phd-build.yml"
+  workflow_dispatch:
+
+# R1 — Rust-only. No `.py`, no `.sh`. Every PhD operation goes through the
+# `trios-phd` Rust binary.
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit · Biblio · Coq-map · Reproduce
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-trios-phd-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build trios-phd
+        run: cargo build -p trios-phd --locked
+
+      - name: Unit tests
+        run: cargo test -p trios-phd --locked
+
+      - name: Clippy
+        run: cargo clippy -p trios-phd --locked -- -D warnings
+
+      - name: Audit (R3 / R11 / R14 floors)
+        run: cargo run -q -p trios-phd -- --phd-root docs/phd audit
+
+      - name: Bibliography (R11 ≥150)
+        run: cargo run -q -p trios-phd -- --phd-root docs/phd biblio
+
+      - name: Coq citation map (R14)
+        run: cargo run -q -p trios-phd -- --phd-root docs/phd coq-map --check
+
+      - name: Reproducibility manifest
+        run: cargo run -q -p trios-phd -- --phd-root docs/phd reproduce
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## PhD build · audit summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Anchor: \`phi^2 + phi^-2 = 3\` · Zenodo DOI 10.5281/zenodo.19227877" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Rules enforced: R1 (Rust-only), R3 (chapter floor), R11 (bib ≥150), R14 (Coq table)." >> "$GITHUB_STEP_SUMMARY"
+
+  compile:
+    name: Compile · tectonic
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: audit
+    # The compile job is non-blocking for now: tectonic is a heavy install and
+    # we audit-gate first. Marked continue-on-error so frontmatter / chapter
+    # tweaks land even when the typesetter trips on a stub include.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install tectonic
+        run: |
+          curl -fsSL https://drop-sh.fullyjustified.net | sh -s -- --version 0.15.0
+          sudo mv tectonic /usr/local/bin/tectonic
+
+      - name: Compile main.tex via trios-phd
+        run: cargo run -q -p trios-phd -- --phd-root docs/phd compile
+
+      - name: Upload PDF
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flos-aureus-pdf
+          path: docs/phd/main.pdf
