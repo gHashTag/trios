@@ -522,7 +522,7 @@ mod tests {
     /// audits clean.
     #[test]
     fn production_shaped_blob_audits_clean() {
-        let blob = vec![
+        let blob = [
             r#"{"ts":"2026-04-25T17:00Z","lane":"L1","agent":"x","sha":"26fd3d2","inv":"INV-1"}"#,
             r#"{"ts":"2026-04-25T17:01Z","lane":"L7","agent":"y","sha":"runtime-tool","inv":"INV-7"}"#,
             r#"{"ts":"2026-04-25T17:02Z","lane":"L14","agent":"z","sha":"d29b758","inv":"INV-7"}"#,
