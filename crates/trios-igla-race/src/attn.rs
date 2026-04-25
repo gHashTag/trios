@@ -47,6 +47,11 @@ use crate::invariants::{INV3_D_MODEL_MIN, PHI};
 /// constant surfaces in `anchor_phi_4_matches_derivation`.
 pub const PHI_4: f64 = 3.0 * PHI + 2.0;
 
+/// φ² = φ + 1 ≈ 2.618 (QK gain anchor for INV-9).
+/// Coq: `phi_sq_eq` lemma proves φ² = φ + 1.
+/// INV-9: QK gain should be φ² or φ³ (phi_sq = phi^2, phi_cube = phi^3).
+pub const QK_GAIN_PHI_SQ: f64 = 2.618_033_988_749_895;
+
 /// Concrete head-dim floor used by the guard: `ceil(φ⁴) = 7`.
 /// Sourced symbolically as `PHI_4.ceil() as u32`, but we keep it as a
 /// pub const so callers can pattern-match against it directly without
@@ -284,6 +289,13 @@ mod tests {
     }
 
     // ----- L-R14 anchor guards -------------------------------------
+
+    #[test]
+    fn anchor_qk_gain_phi_sq_matches_phi_sq() {
+        // QK gain = φ² = φ + 1 ≈ 2.618.
+        let derived = PHI + 1.0;
+        assert!((QK_GAIN_PHI_SQ - derived).abs() < 1e-12);
+    }
 
     #[test]
     fn anchor_phi_4_matches_derivation() {
