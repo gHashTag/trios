@@ -1,155 +1,144 @@
 {
-  "version": "1.0.0",
-  "trinity_identity": "phi^2 + phi^-2 = 3",
-  "source": "https://github.com/gHashTag/trinity-clara",
-  "zenodo_doi": "10.5281/zenodo.19227877",
-  "updated": "2026-04-25T21:57+07",
   "_metadata": {
+    "schema_version": "1.0.0",
     "order_ref": "ORDER_OF_THE_GENERAL_2026-04-25T21:46+07",
+    "source_commit": "6a3034d",
+    "source_repo": "https://github.com/gHashTag/trios/tree/main/trinity-clara",
+    "zenodo_doi": "10.5281/zenodo.19227877",
+    "updated": "2026-04-25T21:55+07",
+    "generated_by": "crates/trinity-extract/src/main.rs (L-R1: RUST ONLY)",
+    "theorem_count": {
+      "igla_total": 37,
+      "proven_qed": 34,
+      "honest_admitted": 3,
+      "note": "89 = F₁₁ total across t27+trinity-clara; 34+3=37 IGLA-specific"
+    },
     "admitted_budget": {
       "max": 3,
       "used": 3,
       "breakdown": {
-        "INV-1": 1,
-        "INV-2": 1,
-        "INV-3": 1,
-        "INV-4": 1,
-        "INV-5": 0
+        "gf16_precision.v": "gf16_end_to_end_error_bound (needs coq-interval)",
+        "nca_entropy_band.v": "ln9_over_ln2_upper_bound (needs coq-interval)",
+        "lr_phi_optimality.v": "alpha_phi_tight_numeric_bounds (temporal, closes after TASK-5D)"
       }
     },
     "falsification_witnesses": {
-      "total": 5,
-      "INV-1": "inv1_falsified",
-      "INV-2": "inv2_falsified_warmup_prune",
-      "INV-3": "inv3_falsification_at_255",
-      "INV-4": "inv4_falsification_at_3_0",
-      "INV-5": "gf16_closure_broken"
-    },
-    "theorem_count": {
-      "igla_total": 31,
-      "proven": 28,
-      "admitted": 3
+      "INV-1": "lr_falsification_witness: ~(0.002 < 0.02 < 0.007)",
+      "INV-2": "inv2_falsification_witness: should_prune 2.70 2.65 5000 = true",
+      "INV-3": "gf16_falsification_witness: gf16_safe 255 true = false",
+      "INV-4": "nca_falsification_witness: nca_loss_penalty 3.0 > 0",
+      "INV-5": "lucas_falsification_witness: lucas_even 5 = 123 ∧ ≠ 124 ∧ ≠ 122"
     }
   },
+  "trinity_identity": "φ² + φ⁻² = 3",
+  "nca_loss_weight": 0.25,
   "invariants": [
     {
       "id": "INV-1",
       "name": "bpb_decreases_with_real_gradient",
+      "coq_theorem": "lr_champion_in_safe_range",
+      "coq_file": "trinity-clara/proofs/igla/lr_phi_optimality.v",
       "status": "Admitted",
-      "coq_file": "trinity-clara/proofs/igla/bpb_decreases.v",
-      "admitted_lemmas": 1,
-      "falsification": "inv1_falsified",
+      "temporal": true,
+      "temporal_closes": "after TASK-5D merge (real backward pass)",
+      "description": "BPB monotonically decreases when real MSE gradient flows through encoder",
+      "trinity_link": "7-step derivation of α_φ — zero assumptions, one number",
+      "runtime_check": { "action": "warn", "message": "INV-1: BPB not decreasing — real backward pass needed (TASK-5D)" },
       "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv1_bpb_decreasing",
-      "description": "BPB monotonically decreases when real MSE gradient flows through encoder embeddings",
-      "trinity_link": "7-step derivation of alpha_phi: zero assumptions, one number",
-      "runtime_check": {
-        "condition": "bpb_delta < 0.0",
-        "action": "warn",
-        "message": "INV-1 VIOLATED: BPB not decreasing — real backward pass required (TASK-5D)"
-      },
-      "numeric_anchor": {
-        "lr_min": 0.00382,
-        "lr_max": 0.00618,
-        "comment": "alpha_phi/phi^3 ≈ 0.004 — phi-structured local minimum"
-      }
+      "numeric_anchor": { "lr_min": 0.00382, "lr_max": 0.00618, "comment": "α_φ/φ³ ≈ 0.004" },
+      "falsification_record": { "theorem": "lr_falsification_witness", "value": 0.02, "note": "lr=0.02 outside safe range" }
     },
     {
       "id": "INV-2",
       "name": "asha_champion_survives",
-      "status": "Admitted",
-      "coq_file": "trinity-clara/proofs/igla/asha_champion_survives.v",
-      "admitted_lemmas": 1,
-      "falsification": "inv2_falsified_warmup_prune",
+      "coq_theorem": "champion_survives_pruning",
+      "coq_file": "trinity-clara/proofs/igla/igla_asha_bound.v",
+      "status": "Proven",
+      "description": "ASHA with threshold >= 3.5 never prunes the champion during warmup",
+      "trinity_link": "φ²+φ⁻²+φ⁻⁴ = 3.4721… → conservatively 3.5",
+      "runtime_check": { "action": "abort", "message": "INV-2: ASHA threshold too aggressive — champion will be killed" },
       "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv2_asha_config",
-      "description": "ASHA with threshold >= 3.5 never prunes the champion trial during warmup",
-      "trinity_link": "Monte Carlo p<0.001: threshold significance derived from phi^2+phi^-2=3",
-      "runtime_check": {
-        "condition": "bpb_prune_threshold >= 3.5 && warmup_blind_steps >= 4000",
-        "action": "abort",
-        "message": "INV-2 VIOLATED: ASHA pruning threshold too aggressive — champion will be killed"
-      },
-      "numeric_anchor": {
-        "bpb_prune_threshold": 3.5,
-        "warmup_blind_steps": 4000,
-        "comment": "3.5 = phi^2 + phi^-2 + phi^-4 = 3 + 0.4721"
+      "numeric_anchor": { "bpb_prune_threshold": 3.5, "warmup_blind_steps": 4000 },
+      "falsification_record": {
+        "theorem": "inv2_falsification_witness",
+        "old_broken_threshold": 2.65,
+        "note": "Scientific counter-example: 2.65 kills champion at bpb=2.70"
       }
     },
     {
       "id": "INV-3",
       "name": "gf16_safe_domain",
+      "coq_theorem": "gf16_safe_domain",
+      "coq_file": "trinity-clara/proofs/igla/gf16_precision.v",
       "status": "Admitted",
-      "coq_file": "trinity-clara/proofs/igla/gf16_safe_domain.v",
-      "admitted_lemmas": 1,
-      "falsification": "inv3_falsification_at_255",
+      "description": "GF16 quantization error < φ⁻⁶ ≈ 0.0557 when d_model >= 256",
+      "trinity_link": "Lucas closure: φ is ONLY quadratic irrational with φ²ⁿ+φ⁻²ⁿ ∈ ℤ",
+      "runtime_check": { "action": "abort", "message": "INV-3: GF16 requires d_model >= 256 (L-R9)" },
       "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv3_gf16_domain",
-      "description": "GF16 quantization error < phi^-6 ≈ 0.055 when d_model >= 256",
-      "trinity_link": "Lucas closure: phi^2n + phi^-2n in Z — phi is the ONLY quadratic irrational with integer tower",
-      "runtime_check": {
-        "condition": "d_model >= 256",
-        "action": "abort",
-        "message": "INV-3 VIOLATED: GF16 requires d_model >= 256 (Law L-R9), error would exceed phi^-6"
-      },
-      "numeric_anchor": {
-        "d_model_min": 256,
-        "error_bound": 0.0557,
-        "comment": "phi^-6 = (sqrt(5)-1)^6 / 2^6 ≈ 0.0557"
-      },
+      "numeric_anchor": { "d_model_min": 256, "error_bound_numeric": 0.0557 },
       "bands": {
-        "empirical_band": "97.67% MNIST accuracy = f32 baseline (BENCH-004b)",
-        "certified_band": "phi^-6 error bound — Admitted, pending coq-interval proof",
-        "note": "empirical_band and certified_band coexist — do NOT merge into one constant"
-      }
+        "empirical_band": { "source": "BENCH-004b", "result": "97.67% MNIST = f32 baseline", "guarantee_ratio": 55 },
+        "certified_band": { "bound": "φ⁻⁶ ≈ 0.0557", "status": "Admitted — pending coq-interval" },
+        "policy": "empirical_band and certified_band coexist — do NOT merge (enforced by empirical_wider_than_certified theorem)"
+      },
+      "falsification_record": { "theorem": "gf16_falsification_witness", "value": 255, "note": "gf16_safe 255 true = false" }
     },
     {
       "id": "INV-4",
       "name": "nca_entropy_stability",
+      "coq_theorem": "entropy_band_width",
+      "coq_file": "trinity-clara/proofs/igla/nca_entropy_band.v",
       "status": "Admitted",
-      "coq_file": "trinity-clara/proofs/igla/nca_entropy_stability.v",
-      "admitted_lemmas": 1,
-      "falsification": "inv4_falsification_at_3_0",
-      "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv4_nca_entropy",
-      "description": "NCA loss entropy stays in [1.5, 2.8] iff K=9=3^2 states on 9x9=81=3^4 grid",
-      "trinity_link": "A5 mechanism: E8 symmetry -> entropy band is a physical phenomenon, not a tuned parameter",
+      "description": "NCA entropy in [1.5, 2.8] iff K=9=3² states on 9×9=81=3⁴ grid",
+      "trinity_link": "A₅/E₈ symmetry → entropy band = physical phenomenon",
       "runtime_check": {
-        "condition": "entropy >= 1.5 && entropy <= 2.8",
         "action": "hard_penalty",
-        "message": "INV-4 VIOLATED: NCA entropy outside [1.5, 2.8] — K=9 grid 9x9 required (Law L-R11)"
+        "penalty_formula": "max(0, 1.5-H) + max(0, H-2.8)",
+        "penalty_weight_ref": "nca_loss_weight = 0.25 (applied by caller)",
+        "message": "INV-4: NCA entropy outside [1.5, 2.8] — K=9 on 9×9 grid required"
       },
-      "numeric_anchor": {
-        "nca_grid": "9x9",
-        "nca_states_k": 9,
-        "entropy_low": 1.5,
-        "entropy_high": 2.8,
-        "comment": "81 = 3^4 = (phi^2+phi^-2)^4 — Trinity structural parameter"
-      }
+      "runtime_target": "crates/trios-igla-race/src/invariants.rs::inv4_entropy_penalty",
+      "bands": {
+        "certified": { "lower": "φ ≈ 1.618", "upper": "φ² ≈ 2.618", "width": 1, "status": "entropy_band_width Proven" },
+        "empirical": { "lower": 1.5, "upper": 2.8, "width": 1.3, "source": "BENCH-004b" },
+        "separation_theorem": "empirical_wider_than_certified",
+        "policy": "H_LOWER_CERTIFIED ≠ H_LOWER_EMPIRICAL by distinct Definition names + theorem"
+      },
+      "falsification_record": { "theorem": "nca_falsification_witness", "value": 3.0, "note": "entropy=3.0 outside band, penalty > 0" }
     },
     {
       "id": "INV-5",
       "name": "lucas_closure_gf16",
-      "status": "Proven",
+      "coq_theorem": "igla_found_criterion",
       "coq_file": "trinity-clara/proofs/igla/lucas_closure_gf16.v",
-      "admitted_lemmas": 0,
-      "falsification": "gf16_closure_broken",
+      "status": "Proven",
+      "admitted_count": 0,
+      "description": "GF16 arithmetic algebraically consistent: φ²ⁿ+φ⁻²ⁿ ∈ ℤ ∀n, same closure as GF(2⁴). Z-typed: integer by construction.",
+      "trinity_link": "Lucas closure — Section 3 Trinity paper, machine-verified",
+      "runtime_check": { "action": "abort", "message": "INV-5: GF16 Lucas closure broken" },
       "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv5_gf16_consistency",
-      "description": "GF16 arithmetic is algebraically consistent: phi^2n + phi^-2n in Z for all n, same closure as GF(2^4)",
-      "trinity_link": "Lucas closure property — Section 3 of Trinity paper, machine-verified",
-      "runtime_check": {
-        "condition": "gf16_consistency_check()",
-        "action": "abort",
-        "message": "INV-5 VIOLATED: GF16 arithmetic inconsistency detected — algebraic closure broken"
-      },
-      "numeric_anchor": {
-        "field_size": 16,
-        "characteristic": 2,
-        "exponent": 4,
-        "comment": "GF(2^4) — same algebraic closure structure as phi^2n sequence"
-      }
+      "numeric_anchor": { "field_size": 16, "characteristic": 2, "exponent": 4 },
+      "falsification_record": { "theorem": "lucas_falsification_witness", "value": "lucas_even 5 = 123 ∧ ≠ 124 ∧ ≠ 122" }
+    },
+    {
+      "id": "INV-12",
+      "name": "asha_rung_progression_integrity",
+      "coq_theorem": "asha_rungs_trinity",
+      "coq_file": "trinity-clara/proofs/igla/igla_asha_bound.v",
+      "status": "Proven",
+      "description": "ASHA rungs ∈ {1000, 3000, 9000, 27000} = 1000 × {3⁰, 3¹, 3², 3³}",
+      "trinity_link": "3 = φ²+φ⁻² — Trinity powers",
+      "runtime_check": { "action": "abort", "message": "INV-12: Invalid rung — must be in {1000, 3000, 9000, 27000}" },
+      "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv12_rung_valid",
+      "numeric_anchor": { "valid_rungs": [1000, 3000, 9000, 27000], "comment": "3ⁿ × 1000, n=0..3" }
     }
   ],
   "enforcement": {
-    "l_r14": "All 5 Coq invariants must compile (coqc) before race starts — RACE INVALID otherwise",
+    "l_r14": "coqc trinity-clara/proofs/igla/*.v → exit 0 before race starts",
     "ci_gate": ".github/workflows/coq-check.yml",
-    "runtime_gate": "crates/trios-igla-race/src/invariants.rs",
-    "admitted_policy": "Admitted invariants are blocking in CI but marked as unproven — do NOT mask as proven"
+    "runtime_gate": "crates/trios-igla-race/src/invariants.rs::validate_config",
+    "extractor": "crates/trinity-extract/src/main.rs (L-R1: RUST ONLY)",
+    "admitted_policy": "Admitted = Axiom with comment, blocking in CI, never masked as Proven",
+    "schema_drift_policy": "Rust loader checks schema_version — refuses incompatible JSON"
   }
 }
