@@ -151,7 +151,7 @@ impl Reporter {
         sarif.push_str("\n      ]\n");
         sarif.push_str("    }\n");
         sarif.push_str("  ]\n");
-        sarif.push('}');
+        sarif.push_str("}");
         sarif
     }
 
