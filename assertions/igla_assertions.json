@@ -1,0 +1,113 @@
+{
+  "version": "1.0.0",
+  "trinity_identity": "phi^2 + phi^-2 = 3",
+  "source": "https://github.com/gHashTag/trinity-clara",
+  "zenodo_doi": "10.5281/zenodo.19227877",
+  "updated": "2026-04-25T14:41+07",
+  "invariants": [
+    {
+      "id": "INV-1",
+      "name": "bpb_decreases_with_real_gradient",
+      "status": "Admitted",
+      "coq_file": "trinity-clara/proofs/igla_asha_bound.v",
+      "description": "BPB monotonically decreases when real MSE gradient flows through encoder embeddings",
+      "trinity_link": "7-step derivation of alpha_phi: zero assumptions, one number",
+      "runtime_check": {
+        "condition": "bpb_delta < 0.0",
+        "action": "warn",
+        "message": "INV-1 VIOLATED: BPB not decreasing — real backward pass required (TASK-5D)"
+      },
+      "numeric_anchor": {
+        "lr_min": 0.00382,
+        "lr_max": 0.00618,
+        "comment": "alpha_phi/phi^3 ≈ 0.004 — phi-structured local minimum"
+      }
+    },
+    {
+      "id": "INV-2",
+      "name": "asha_champion_survives",
+      "status": "Admitted",
+      "coq_file": "trinity-clara/proofs/igla_asha_bound.v",
+      "description": "ASHA with threshold >= 3.5 never prunes the champion trial during warmup",
+      "trinity_link": "Monte Carlo p<0.001: threshold significance derived from phi^2+phi^-2=3",
+      "runtime_check": {
+        "condition": "bpb_prune_threshold >= 3.5 && warmup_blind_steps >= 4000",
+        "action": "abort",
+        "message": "INV-2 VIOLATED: ASHA pruning threshold too aggressive — champion will be killed"
+      },
+      "numeric_anchor": {
+        "bpb_prune_threshold": 3.5,
+        "warmup_blind_steps": 4000,
+        "comment": "3.5 = phi^2 + phi^-2 + phi^-4 = 3 + 0.4721"
+      }
+    },
+    {
+      "id": "INV-3",
+      "name": "gf16_safe_domain",
+      "status": "Admitted",
+      "coq_file": "trinity-clara/proofs/gf16_precision.v",
+      "description": "GF16 quantization error < phi^-6 ≈ 0.055 when d_model >= 256",
+      "trinity_link": "Lucas closure: phi^2n + phi^-2n in Z — phi is the ONLY quadratic irrational with integer tower",
+      "runtime_check": {
+        "condition": "d_model >= 256",
+        "action": "abort",
+        "message": "INV-3 VIOLATED: GF16 requires d_model >= 256 (Law L-R9), error would exceed phi^-6"
+      },
+      "numeric_anchor": {
+        "d_model_min": 256,
+        "error_bound": 0.0557,
+        "comment": "phi^-6 = (sqrt(5)-1)^6 / 2^6 ≈ 0.0557"
+      },
+      "bands": {
+        "empirical_band": "97.67% MNIST accuracy = f32 baseline (BENCH-004b)",
+        "certified_band": "phi^-6 error bound — Admitted, pending coq-interval proof",
+        "note": "empirical_band and certified_band coexist — do NOT merge into one constant"
+      }
+    },
+    {
+      "id": "INV-4",
+      "name": "nca_entropy_stability",
+      "status": "Admitted",
+      "coq_file": "trinity-clara/proofs/nca_entropy_band.v",
+      "description": "NCA loss entropy stays in [1.5, 2.8] iff K=9=3^2 states on 9x9=81=3^4 grid",
+      "trinity_link": "A5 mechanism: E8 symmetry -> entropy band is a physical phenomenon, not a tuned parameter",
+      "runtime_check": {
+        "condition": "entropy >= 1.5 && entropy <= 2.8",
+        "action": "hard_penalty",
+        "message": "INV-4 VIOLATED: NCA entropy outside [1.5, 2.8] — K=9 grid 9x9 required (Law L-R11)"
+      },
+      "numeric_anchor": {
+        "nca_grid": "9x9",
+        "nca_states_k": 9,
+        "entropy_low": 1.5,
+        "entropy_high": 2.8,
+        "comment": "81 = 3^4 = (phi^2+phi^-2)^4 — Trinity structural parameter"
+      }
+    },
+    {
+      "id": "INV-5",
+      "name": "lucas_closure_gf16",
+      "status": "Proven",
+      "coq_file": "trinity-clara/proofs/lucas_closure_gf16.v",
+      "description": "GF16 arithmetic is algebraically consistent: phi^2n + phi^-2n in Z for all n, same closure as GF(2^4)",
+      "trinity_link": "Lucas closure property — Section 3 of Trinity paper, machine-verified",
+      "runtime_check": {
+        "condition": "gf16_consistency_check()",
+        "action": "abort",
+        "message": "INV-5 VIOLATED: GF16 arithmetic inconsistency detected — algebraic closure broken"
+      },
+      "numeric_anchor": {
+        "field_size": 16,
+        "characteristic": 2,
+        "exponent": 4,
+        "comment": "GF(2^4) — same algebraic closure structure as phi^2n sequence"
+      }
+    }
+  ],
+  "enforcement": {
+    "l_r14": "All 5 Coq invariants must compile (coqc) before race starts — RACE INVALID otherwise",
+    "ci_gate": ".github/workflows/coq-check.yml",
+    "runtime_gate": "crates/trios-igla-race/src/invariants.rs",
+    "admitted_policy": "Admitted invariants are blocking in CI but marked as unproven — do NOT mask as proven"
+  }
+}

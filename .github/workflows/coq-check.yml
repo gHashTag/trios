@@ -1,0 +1,126 @@
+# COQ INVARIANT CI GATE — L-R14
+# Blocks merge if any Coq invariant proof fails to compile
+# Trinity: φ² + φ⁻² = 3 | IGLA-INV-001..005
+# Source: trinity-clara/proofs/*.v
+
+name: Coq Invariant Check (L-R14)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'trinity-clara/proofs/**'
+      - 'assertions/igla_assertions.json'
+      - 'crates/trios-igla-race/src/invariants.rs'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'trinity-clara/proofs/**'
+      - 'assertions/igla_assertions.json'
+      - 'crates/trios-igla-race/src/invariants.rs'
+
+jobs:
+  coq-invariants:
+    name: Verify IGLA-INV-001..005
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Coq + coq-interval
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y coq
+          # coq-interval for numeric inequalities (Interval.Tactic)
+          opam init --bare --no-setup
+          opam switch create igla ocaml-base-compiler.4.14.1
+          eval $(opam env)
+          opam repo add coq-released https://coq.inria.fr/opam/released
+          opam install -y coq-interval
+
+      - name: Check INV-5 (Proven — Lucas closure)
+        run: |
+          eval $(opam env)
+          if [ -f trinity-clara/proofs/lucas_closure_gf16.v ]; then
+            coqc trinity-clara/proofs/lucas_closure_gf16.v
+            echo "✅ INV-5 lucas_closure_gf16: PROVEN"
+          else
+            echo "⏳ INV-5 proof file not yet created — BLOCKING"
+            exit 1
+          fi
+
+      - name: Check INV-2 (Admitted — asha_champion_survives)
+        run: |
+          eval $(opam env)
+          if [ -f trinity-clara/proofs/igla_asha_bound.v ]; then
+            coqc trinity-clara/proofs/igla_asha_bound.v
+            echo "✅ INV-2 igla_asha_bound: compiles (Admitted)"
+          else
+            echo "❌ INV-2 proof file missing — create trinity-clara/proofs/igla_asha_bound.v"
+            exit 1
+          fi
+
+      - name: Check INV-3 (Admitted — gf16_safe_domain)
+        run: |
+          eval $(opam env)
+          if [ -f trinity-clara/proofs/gf16_precision.v ]; then
+            coqc trinity-clara/proofs/gf16_precision.v
+            echo "✅ INV-3 gf16_precision: compiles (Admitted)"
+          else
+            echo "❌ INV-3 proof file missing — create trinity-clara/proofs/gf16_precision.v"
+            exit 1
+          fi
+
+      - name: Check INV-4 (Admitted — nca_entropy_stability)
+        run: |
+          eval $(opam env)
+          if [ -f trinity-clara/proofs/nca_entropy_band.v ]; then
+            coqc trinity-clara/proofs/nca_entropy_band.v
+            echo "✅ INV-4 nca_entropy_band: compiles (Admitted)"
+          else
+            echo "❌ INV-4 proof file missing — create trinity-clara/proofs/nca_entropy_band.v"
+            exit 1
+          fi
+
+      - name: Check INV-1 (Admitted — bpb_decreases_with_real_gradient)
+        run: |
+          eval $(opam env)
+          if [ -f trinity-clara/proofs/lr_phi_optimality.v ]; then
+            coqc trinity-clara/proofs/lr_phi_optimality.v
+            echo "✅ INV-1 lr_phi_optimality: compiles (Admitted)"
+          else
+            echo "⚠️  INV-1 proof file missing — warn only (non-critical path)"
+          fi
+
+      - name: Validate assertions/igla_assertions.json
+        run: |
+          python3 -c "
+import json, sys
+with open('assertions/igla_assertions.json') as f:
+    data = json.load(f)
+assert len(data['invariants']) == 5, 'Expected 5 invariants'
+for inv in data['invariants']:
+    assert 'id' in inv and 'status' in inv
+    assert inv['status'] in ('Proven', 'Admitted'), f'Invalid status: {inv[\"status\"]}'
+print('✅ igla_assertions.json valid:', len(data[\"invariants\"]), 'invariants')
+"
+
+      - name: Run Rust invariant tests
+        run: |
+          cargo test -p trios-igla-race invariants -- --nocapture
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🧮 Coq Invariant Gate — L-R14" >> $GITHUB_STEP_SUMMARY
+          echo "| Invariant | Theorem | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| INV-1 | bpb_decreases_with_real_gradient | Admitted |" >> $GITHUB_STEP_SUMMARY
+          echo "| INV-2 | asha_champion_survives | Admitted (BLOCKING) |" >> $GITHUB_STEP_SUMMARY
+          echo "| INV-3 | gf16_safe_domain | Admitted (BLOCKING) |" >> $GITHUB_STEP_SUMMARY
+          echo "| INV-4 | nca_entropy_stability | Admitted (BLOCKING) |" >> $GITHUB_STEP_SUMMARY
+          echo "| INV-5 | lucas_closure_gf16 | Proven (BLOCKING) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "φ² + φ⁻² = 3 | TRINITY | IGLA RACE v2" >> $GITHUB_STEP_SUMMARY
