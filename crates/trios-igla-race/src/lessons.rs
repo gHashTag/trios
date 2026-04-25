@@ -245,7 +245,7 @@ mod tests {
         };
 
         let rung = RungData { step: 1000, bpb: 2.9 };
-        let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
         assert!(lesson.contains("d_model=64"));
     }
@@ -266,7 +266,7 @@ mod tests {
         };
 
         let rung = RungData { step: 1000, bpb: 3.2 };
-        let (lesson, lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
         assert!(lesson.contains("BPB=3.2"));
         assert!(lesson.contains("rung-1000"));
@@ -288,7 +288,7 @@ mod tests {
         };
 
         let rung = RungData { step: 1000, bpb: 3.5 };
-        let (lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
+        let (_lesson, _lesson_type) = generate_lesson(&config, &rung, Outcome::Pruned);
 
         // Should prioritize AVOID lessons
         assert_eq!(_lesson_type, LessonType::Avoid);
