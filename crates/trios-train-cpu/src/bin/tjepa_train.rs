@@ -20,6 +20,7 @@ const SEQ_LEN: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
 
 /// Simple N-gram context encoder (online or target)
+#[allow(dead_code)]
 struct NgramEncoder {
     embed: Vec<f32>,        // vocab × d_model
     ctx_weights: Vec<f32>,   // num_ctx weights
@@ -79,11 +80,6 @@ impl NgramEncoder {
                 vec![0.0f32; d]
             })
         }).collect()
-    }
-
-    /// Get mutable embeddings for EMA updates
-    fn embed_mut(&mut self) -> &mut [f32] {
-        &mut self.embed
     }
 }
 
@@ -149,7 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create EMA target
     let ema_config = EmaConfig { start: 0.996, end: 1.0, ramp_steps: steps };
-    let mut ema_target = EmaTarget::new(ema_config);
+    let ema_target = EmaTarget::new(ema_config);
 
     // Mask config
     let mask_config = MaskConfig::default(); // ratio=0.3, min_span=3, max_span=9, num_spans=2
@@ -193,8 +189,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut ctx_agg = vec![0.0f32; d_model];
                 for &ctx_pos in context_positions.iter().take(ctx_len) {
                     if let Some(ctx_emb) = online_embeddings.get(ctx_pos) {
-                        for (i, v) in ctx_agg.iter_mut().enumerate() {
-                            *i += *v / ctx_len as f32;
+                        for i in 0..d_model {
+                            ctx_agg[i] += ctx_emb[i] / ctx_len as f32;
                         }
                     }
                 }
@@ -228,8 +224,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // EMA update: target_encoder += tau * (online_encoder - target_encoder)
         let tau = ema_target.decay();
+        let tau32 = tau as f32;
+        let inv_tau = 1.0 - tau32;
         for (t, o) in target_encoder.embed.iter_mut().zip(online_encoder.embed.iter()) {
-            *t = tau as f32 * *t + (1.0 - tau as f32) * *o;
+            *t = tau32 * *t + inv_tau * *o;
         }
         // Manually increment EMA step since we're doing the update manually
         // (EmaTarget::update handles this, but we're doing it directly)
@@ -237,7 +235,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Log every 100 steps
         if step % 100 == 0 || step == steps - 1 {
             let elapsed = start_time.elapsed().as_secs_f64();
-            let estimated_bpb = bpb_from_loss((total_jepa_loss / target_positions.len().max(1) as f64) as f32);
+            let avg_loss = total_jepa_loss / target_positions.len().max(1) as f64;
+            let estimated_bpb = bpb_from_loss(avg_loss as f32);
             println!(
                 "step={:5} loss={:.6} est_bpb={:.4} time={:.1}s",
                 step,
@@ -272,7 +271,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 if val_n > 0 {
-                    let val_bpb = bpb_from_loss(val_loss / val_n as f32);
+                    let avg_val_loss = val_loss / val_n as f64;
+                    let val_bpb = bpb_from_loss(avg_val_loss as f32);
                     if val_bpb < best_val_bpb {
                         best_val_bpb = val_bpb;
                     }
