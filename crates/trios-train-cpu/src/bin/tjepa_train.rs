@@ -21,12 +21,11 @@ use trios_train_cpu::{
     jepa::{
         MaskConfig, EmaConfig, EmaTarget,
         mask_spans, get_masked, get_unmasked,
-        JepaLossConfig, compute_jepa_loss,
         predictor::{JepaPredictor, PredictorConfig},
     },
     objective::{
         ObjectiveConfig, compute_combined_loss, ComponentLosses,
-        NcaObjective, NcaTransitionRule, NcaRolloutResult,
+        NcaObjective, nca_entropy_loss,
     },
 };
 
@@ -206,10 +205,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ema_target = EmaTarget::new(ema_config);
 
     let mask_config = MaskConfig::default();
-    let loss_config = JepaLossConfig::default();
     let obj_config = ObjectiveConfig::default();
     let nca = NcaObjective::default();
-    let nca_rule = NcaTransitionRule::from_seed(seed);
     let start_time = Instant::now();
     let mut best_val_bpb = f32::MAX;
 
@@ -227,15 +224,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mask_result = mask_spans(SEQ_LEN, mask_config, &mut rng);
         let target_positions = get_masked(&mask_result.mask);
         let context_positions = get_unmasked(&mask_result.mask);
-        if target_positions.is_empty() || context_positions.is_empty() { continue; }
-
-        let jepa_loss_val = 0.0;
-        let nca_loss_val = 0.0;
 
         // ── Encode sequence ─────────────────────────────────────────────────
         let online_embeddings = online_encoder.encode(seq);
+        let target_encoder_embeddings = target_encoder.encode(seq);
 
-        // GF16 quantize embeddings for forward pass
+        if target_positions.is_empty() || context_positions.is_empty() { continue; }
+
+        let zero_embed = vec![0.0f32; d_model];
+        let context_embeddings: Vec<f32> = context_positions.iter()
+            .flat_map(|&pos| online_embeddings.get(pos).unwrap_or(&zero_embed).iter().copied())
+            .collect();
+        let target_embeddings: Vec<f32> = target_positions.iter()
+            .flat_map(|&pos| target_encoder_embeddings.get(pos).unwrap_or(&zero_embed).iter().copied())
+            .collect();
+
+        let jepa_loss_val = predictor.forward_backward(
+            &context_embeddings,
+            &target_embeddings,
+            target_positions.len(),
+        ) as f64;
+
+        let nca_seed = seed.wrapping_add(step as u64 * 7 + 13);
+        let nca_state = nca.init_grid(nca_seed);
+        let (nca_loss_val, _nca_entropy) = nca_entropy_loss(
+            &nca_state,
+            nca.k_states,
+            nca.entropy_min,
+            nca.entropy_max,
+            nca.weight,
+        );
+
         if use_gf16 {
             let mut flat: Vec<f32> = online_embeddings.iter().flat_map(|v| v.iter().copied()).collect();
             gf16_round(&mut flat);

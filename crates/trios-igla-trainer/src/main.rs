@@ -517,6 +517,59 @@ fn pos_encoding(pos: usize, d: usize) -> Vec<f32> {
     }).collect()
 }
 
+fn ln_backward(dy: &[f32], x: &[f32], eps: f32) -> Vec<f32> {
+    let n = x.len() as f32;
+    let mu: f32 = x.iter().sum::<f32>() / n;
+    let var: f32 = x.iter().map(|xi| (xi - mu).powi(2)).sum::<f32>() / n;
+    let sigma = (var + eps).sqrt();
+    if sigma < 1e-8 { return dy.to_vec(); }
+    let y: Vec<f32> = x.iter().map(|xi| (xi - mu) / sigma).collect();
+    let mean_dy: f32 = dy.iter().sum::<f32>() / n;
+    let dot_ydy: f32 = y.iter().zip(dy.iter()).map(|(yi, dyi)| yi * dyi).sum::<f32>() / n;
+    dy.iter().zip(y.iter()).map(|(dyi, yi)| (dyi - mean_dy - yi * dot_ydy) / sigma).collect()
+}
+
+fn attn_forward(embed: &[f32], wq: &[f32], wk: &[f32], wv: &[f32],
+    wh: &[f32], wo: &[f32], ctx_tokens: &[usize], d: usize, h: usize,
+    v: usize, qk_gain: f32) -> (Vec<f32>, Vec<Vec<f32>>, Vec<f32>, Vec<Vec<f32>>,
+    Vec<Vec<f32>>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, usize) {
+    let n = ctx_tokens.len();
+    let scale = (d as f32).sqrt();
+    let embs: Vec<Vec<f32>> = ctx_tokens.iter().enumerate().map(|(p, &t)| {
+        let t = t.min(v - 1);
+        let mut e = embed[t * d..(t + 1) * d].to_vec();
+        let pe = pos_encoding(p, d);
+        for i in 0..d { e[i] += pe[i]; }
+        e
+    }).collect();
+    let xq = &embs[n - 1];
+    let mut q = vec![0.0f32; d];
+    for i in 0..d { for j in 0..d { q[i] += wq[j * d + i] * xq[j]; } }
+    let mut ks = Vec::with_capacity(n);
+    let mut vs = Vec::with_capacity(n);
+    for emb in &embs {
+        let mut k = vec![0.0f32; d];
+        let mut vi = vec![0.0f32; d];
+        for i in 0..d { for j in 0..d { k[i] += wk[j * d + i] * emb[j]; vi[i] += wv[j * d + i] * emb[j]; } }
+        ks.push(k); vs.push(vi);
+    }
+    let mut scores = vec![0.0f32; n];
+    for i in 0..n { let mut dot = 0.0f32; for j in 0..d { dot += q[j] * ks[i][j]; } scores[i] = qk_gain * dot / scale; }
+    softmax(&mut scores);
+    let mut attn = vec![0.0f32; d];
+    for i in 0..n { for j in 0..d { attn[j] += scores[i] * vs[i][j]; } }
+    let mut resid = attn.clone();
+    for j in 0..d { resid[j] += xq[j]; }
+    let normed = layer_norm(&resid, 1e-5);
+    let mut pre_act = vec![0.0f32; h];
+    for hi in 0..h { for j in 0..d { pre_act[hi] += wh[hi * d + j] * normed[j]; } }
+    let mut hid = vec![0.0f32; h];
+    for hi in 0..h { let r = pre_act[hi].max(0.0); hid[hi] = r * r; }
+    let mut logits = vec![0.0f32; v];
+    for vi in 0..v { for hi in 0..h { logits[vi] += wo[vi * h + hi] * hid[hi]; } }
+    (logits, embs, q, ks, vs, scores, normed, pre_act, hid, n)
+}
+
 fn eval_attention(embed: &[f32], wq: &[f32], wk: &[f32], wv: &[f32],
     wh: &[f32], wo: &[f32], val: &[usize], d: usize, h: usize,
     v: usize, nc: usize, qk_gain: f32) -> f32 {
@@ -529,37 +582,7 @@ fn eval_attention(embed: &[f32], wq: &[f32], wk: &[f32], wv: &[f32],
         let seq = &val[start..end];
         let ctx = &seq[..nc + 1];
         let target = seq[nc + 1].min(v - 1);
-        let n = ctx.len();
-        let embs: Vec<Vec<f32>> = ctx.iter().enumerate().map(|(p, &t)| {
-            let t = t.min(v - 1);
-            let mut e = embed[t * d..(t + 1) * d].to_vec();
-            let pe = pos_encoding(p, d);
-            for i in 0..d { e[i] += pe[i]; }
-            e
-        }).collect();
-        let xq = &embs[n - 1];
-        let mut q = vec![0.0f32; d];
-        for i in 0..d { for j in 0..d { q[i] += wq[j * d + i] * xq[j]; } }
-        let mut ks = Vec::with_capacity(n);
-        let mut vs = Vec::with_capacity(n);
-        for emb in &embs {
-            let mut k = vec![0.0f32; d];
-            let mut vi = vec![0.0f32; d];
-            for i in 0..d {
-                for j in 0..d { k[i] += wk[j * d + i] * emb[j]; vi[i] += wv[j * d + i] * emb[j]; }
-            }
-            ks.push(k); vs.push(vi);
-        }
-        let scale = (d as f32).sqrt();
-        let mut scores = vec![0.0f32; n];
-        for i in 0..n { let mut dot = 0.0f32; for j in 0..d { dot += q[j] * ks[i][j]; } scores[i] = qk_gain * dot / scale; }
-        softmax(&mut scores);
-        let mut c = vec![0.0f32; d];
-        for i in 0..n { for j in 0..d { c[j] += scores[i] * vs[i][j]; } }
-        let mut hid = vec![0.0f32; h];
-        for hi in 0..h { let mut z = 0.0f32; for j in 0..d { z += wh[hi * d + j] * c[j]; } let r = z.max(0.0); hid[hi] = r * r; }
-        let mut logits = vec![0.0f32; v];
-        for vi in 0..v { for hi in 0..h { logits[vi] += wo[vi * h + hi] * hid[hi]; } }
+        let (mut logits, _, _, _, _, _, _, _, _, _) = attn_forward(embed, wq, wk, wv, wh, wo, ctx, d, h, v, qk_gain);
         softmax(&mut logits);
         let loss = -logits[target].max(1e-10).ln() / LN_2;
         if loss.is_finite() { total += loss; count += 1; }
@@ -575,6 +598,8 @@ fn train_attention_impl(mut embed: Vec<f32>, seed: u64, steps: usize,
     let nc = context.max(2);
     let base_lr = lr as f32;
     let qk_gain = 4.0f32;
+    let scale = (d as f32).sqrt();
+    let factor = qk_gain / scale;
 
     let tokens = load_data("data/tinyshakespeare.txt");
     let train_end = (tokens.len() as f64 * 0.9) as usize;
@@ -602,126 +627,110 @@ fn train_attention_impl(mut embed: Vec<f32>, seed: u64, steps: usize,
 
     let start = std::time::Instant::now();
     let mut best_bpb = f32::MAX;
+    let n_pos_per_step = SEQ.saturating_sub(nc);
 
     for step in 1..=steps {
         let lr_now = cosine_lr(step, steps, base_lr, steps / 10);
-        let off = (step * 97 + seed as usize) % dl.saturating_sub(nc + 2);
-        let end = (off + nc + 2).min(dl);
+        let off = (step * 97 + seed as usize) % dl.saturating_sub(SEQ + 1);
+        let end = (off + SEQ + 1).min(dl);
         if end - off < nc + 2 { continue; }
         let seq = &train[off..end];
-        let ctx_tokens: Vec<usize> = seq[..nc + 1].to_vec();
-        let target = seq[nc + 1].min(v - 1);
-        let n = ctx_tokens.len();
 
-        let embs: Vec<Vec<f32>> = ctx_tokens.iter().enumerate().map(|(p, &t)| {
-            let t = t.min(v - 1);
-            let mut e = embed[t * d..(t + 1) * d].to_vec();
-            let pe = pos_encoding(p, d);
-            for i in 0..d { e[i] += pe[i]; }
-            e
-        }).collect();
+        let mut ge = vec![0.0f32; v * d];
+        let mut gq = vec![0.0f32; d * d];
+        let mut gk = vec![0.0f32; d * d];
+        let mut gv = vec![0.0f32; d * d];
+        let mut gh = vec![0.0f32; h * d];
+        let mut go = vec![0.0f32; v * h];
+        let np = (seq.len().saturating_sub(nc + 1)).max(1);
 
-        let xq = &embs[n - 1];
-        let mut q = vec![0.0f32; d];
-        for i in 0..d { for j in 0..d { q[i] += wq[j * d + i] * xq[j]; } }
+        for p in 0..np {
+            let ctx_tokens: Vec<usize> = seq[p..p + nc + 1].to_vec();
+            let target = seq[p + nc + 1].min(v - 1);
+            let n = ctx_tokens.len();
 
-        let mut ks: Vec<Vec<f32>> = Vec::with_capacity(n);
-        let mut vs: Vec<Vec<f32>> = Vec::with_capacity(n);
-        for emb in &embs {
-            let mut k = vec![0.0f32; d];
-            let mut vi = vec![0.0f32; d];
-            for i in 0..d { for j in 0..d { k[i] += wk[j * d + i] * emb[j]; vi[i] += wv[j * d + i] * emb[j]; } }
-            ks.push(k); vs.push(vi);
-        }
+            let (mut logits, embs, q, ks, vs, scores, normed, pre_act, hid, _) =
+                attn_forward(&embed, &wq, &wk, &wv, &wh, &wo, &ctx_tokens, d, h, v, qk_gain);
+            softmax(&mut logits);
 
-        let scale = (d as f32).sqrt();
-        let mut scores = vec![0.0f32; n];
-        for i in 0..n { let mut dot = 0.0f32; for j in 0..d { dot += q[j] * ks[i][j]; } scores[i] = qk_gain * dot / scale; }
-        softmax(&mut scores);
+            let mut dl = logits;
+            dl[target] -= 1.0;
 
-        let mut c = vec![0.0f32; d];
-        for i in 0..n { for j in 0..d { c[j] += scores[i] * vs[i][j]; } }
+            let mut dh = vec![0.0f32; h];
+            for vi in 0..v { for hi in 0..h { dh[hi] += wo[vi * h + hi] * dl[vi]; } }
+            for vi in 0..v { for hi in 0..h { go[vi * h + hi] += dl[vi] * hid[hi]; } }
 
-        let mut pre_act = vec![0.0f32; h];
-        for hi in 0..h { for j in 0..d { pre_act[hi] += wh[hi * d + j] * c[j]; } }
-        let mut hid = vec![0.0f32; h];
-        for hi in 0..h { let r = pre_act[hi].max(0.0); hid[hi] = r * r; }
+            let mut dpa = vec![0.0f32; h];
+            for hi in 0..h { dpa[hi] = dh[hi] * 2.0 * pre_act[hi].max(0.0); }
 
-        let mut logits = vec![0.0f32; v];
-        for vi in 0..v { for hi in 0..h { logits[vi] += wo[vi * h + hi] * hid[hi]; } }
-        softmax(&mut logits);
-        let _loss = -logits[target].max(1e-10).ln();
+            let mut dnorm = vec![0.0f32; d];
+            for hi in 0..h { for j in 0..d { dnorm[j] += wh[hi * d + j] * dpa[hi]; } }
+            for hi in 0..h { for j in 0..d { gh[hi * d + j] += dpa[hi] * normed[j]; } }
 
-        // ── Backward ──
-        let mut dl = logits;
-        dl[target] -= 1.0;
+            let xq = &embs[n - 1];
+            let mut resid = vec![0.0f32; d];
+            for j in 0..d { resid[j] = scores.iter().zip(vs.iter()).map(|(s, vi)| s * vi[j]).sum::<f32>() + xq[j]; }
+            let dresid = ln_backward(&dnorm, &resid, 1e-5);
 
-        let mut dh = vec![0.0f32; h];
-        for vi in 0..v { for hi in 0..h { dh[hi] += wo[vi * h + hi] * dl[vi]; } }
+            let mut d_attn = vec![0.0f32; d];
+            let mut d_xq = vec![0.0f32; d];
+            for j in 0..d { d_attn[j] = dresid[j]; d_xq[j] = dresid[j]; }
 
-        let mut dwo = vec![0.0f32; v * h];
-        for vi in 0..v { for hi in 0..h { dwo[vi * h + hi] = dl[vi] * hid[hi]; } }
+            let mut da = vec![0.0f32; n];
+            for i in 0..n { for j in 0..d { da[i] += d_attn[j] * vs[i][j]; } }
+            let ada: f32 = scores.iter().zip(da.iter()).map(|(a, g)| a * g).sum();
+            let mut ds = vec![0.0f32; n];
+            for i in 0..n { ds[i] = scores[i] * (da[i] - ada); }
 
-        let mut dpa = vec![0.0f32; h];
-        for hi in 0..h { dpa[hi] = dh[hi] * 2.0 * pre_act[hi].max(0.0); }
-
-        let mut dc = vec![0.0f32; d];
-        for hi in 0..h { for j in 0..d { dc[j] += wh[hi * d + j] * dpa[hi]; } }
-
-        let mut dwh = vec![0.0f32; h * d];
-        for hi in 0..h { for j in 0..d { dwh[hi * d + j] = dpa[hi] * c[j]; } }
-
-        let mut da = vec![0.0f32; n];
-        for i in 0..n { for j in 0..d { da[i] += dc[j] * vs[i][j]; } }
-
-        let ada: f32 = scores.iter().zip(da.iter()).map(|(a, g)| a * g).sum();
-        let mut ds = vec![0.0f32; n];
-        for i in 0..n { ds[i] = scores[i] * (da[i] - ada) * qk_gain / scale; }
-
-        let mut dvs: Vec<Vec<f32>> = (0..n).map(|_| vec![0.0f32; d]).collect();
-        let mut dks: Vec<Vec<f32>> = (0..n).map(|_| vec![0.0f32; d]).collect();
-        let mut dq = vec![0.0f32; d];
-        for i in 0..n {
-            for j in 0..d {
-                dvs[i][j] = scores[i] * dc[j];
-                dks[i][j] = ds[i] * q[j];
-                dq[j] += ds[i] * ks[i][j];
-            }
-        }
-
-        let mut dwq = vec![0.0f32; d * d];
-        for j in 0..d { for i in 0..d { dwq[j * d + i] = dq[i] * xq[j]; } }
-
-        let mut dwk = vec![0.0f32; d * d];
-        let mut dwv = vec![0.0f32; d * d];
-        for pos in 0..n {
-            for j in 0..d {
-                for i in 0..d {
-                    dwk[j * d + i] += dks[pos][i] * embs[pos][j];
-                    dwv[j * d + i] += dvs[pos][i] * embs[pos][j];
-                }
-            }
-        }
-
-        let mut de = vec![0.0f32; v * d];
-        let tok_q = ctx_tokens[n - 1].min(v - 1);
-        for i in 0..d { for j in 0..d { de[tok_q * d + i] += wq[j * d + i] * dq[j]; } }
-        for pos in 0..n {
-            let tok = ctx_tokens[pos].min(v - 1);
-            for i in 0..d {
+            let mut dvs: Vec<Vec<f32>> = (0..n).map(|_| vec![0.0f32; d]).collect();
+            let mut dks: Vec<Vec<f32>> = (0..n).map(|_| vec![0.0f32; d]).collect();
+            let mut dq = vec![0.0f32; d];
+            for i in 0..n {
                 for j in 0..d {
-                    de[tok * d + i] += wk[j * d + i] * dks[pos][j];
-                    de[tok * d + i] += wv[j * d + i] * dvs[pos][j];
+                    dvs[i][j] = scores[i] * d_attn[j];
+                    dks[i][j] = ds[i] * factor * q[j];
+                    dq[j] += ds[i] * factor * ks[i][j];
+                }
+            }
+            for j in 0..d { for i in 0..d { d_xq[j] += wq[i * d + j] * dq[i]; } }
+
+            for j in 0..d { for i in 0..d { gq[j * d + i] += dq[i] * xq[j]; } }
+            for pos in 0..n {
+                for j in 0..d {
+                    for i in 0..d {
+                        gk[j * d + i] += dks[pos][i] * embs[pos][j];
+                        gv[j * d + i] += dvs[pos][i] * embs[pos][j];
+                    }
+                }
+            }
+
+            let tok_q = ctx_tokens[n - 1].min(v - 1);
+            for i in 0..d { ge[tok_q * d + i] += d_xq[i]; }
+            for pos in 0..n {
+                let tok = ctx_tokens[pos].min(v - 1);
+                for i in 0..d {
+                    for j in 0..d {
+                        ge[tok * d + i] += wk[j * d + i] * dks[pos][j];
+                        ge[tok * d + i] += wv[j * d + i] * dvs[pos][j];
+                    }
                 }
             }
         }
 
-        opt_e.update(&mut embed, &de, lr_now);
-        opt_q.update(&mut wq, &dwq, lr_now);
-        opt_k.update(&mut wk, &dwk, lr_now);
-        opt_v.update(&mut wv, &dwv, lr_now);
-        opt_h.update(&mut wh, &dwh, lr_now);
-        opt_o.update(&mut wo, &dwo, lr_now);
+        let inv = 1.0f32 / np as f32;
+        for g in ge.iter_mut() { *g *= inv; }
+        for g in gq.iter_mut() { *g *= inv; }
+        for g in gk.iter_mut() { *g *= inv; }
+        for g in gv.iter_mut() { *g *= inv; }
+        for g in gh.iter_mut() { *g *= inv; }
+        for g in go.iter_mut() { *g *= inv; }
+
+        opt_e.update(&mut embed, &ge, lr_now);
+        opt_q.update(&mut wq, &gq, lr_now);
+        opt_k.update(&mut wk, &gk, lr_now);
+        opt_v.update(&mut wv, &gv, lr_now);
+        opt_h.update(&mut wh, &gh, lr_now);
+        opt_o.update(&mut wo, &go, lr_now);
 
         if step % 500 == 0 || step == steps {
             let vb = eval_attention(&embed, &wq, &wk, &wv, &wh, &wo, val, d, h, v, nc, qk_gain);
