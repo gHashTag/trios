@@ -24,7 +24,7 @@ use rand::rngs::StdRng;
 
 use trios_train_cpu::{
     jepa::{MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, get_unmasked, JepaLossConfig},
-    optimizer::{MuonOptimizer, OptimizerKind},
+    optimizer::{MuonOptimizer, OptimizerKind, AdamWCpu},
     objective::{NcaObjective, NcaTransitionRule, ComponentLosses, ObjectiveConfig},
 };
 

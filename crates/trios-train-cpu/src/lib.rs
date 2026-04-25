@@ -31,13 +31,6 @@ pub mod transformer_trainer;
 pub mod jepa;
 pub mod objective;
 
-// T-JEPA: Ternary Joint Embedding Predictive Architecture (TASK-5A)
-// Spec: .trinity/specs/issue143-task5a-jepa-design.md
-// Theory: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
-pub mod jepa;
-
-// Multi-objective loss + ASHA rung schedules (TASK-5A.6)
-pub mod objective;
 
 pub use backward::{clip_gradients, cross_entropy_loss, LinearGradients};
 pub use bench::{
