@@ -15,9 +15,9 @@
     "HIVE.md",
     "docs/hive/HIVE_PROTOCOL.md"
   ],
-  "cycle": 8,
-  "updated_at": "2026-04-25T16:48:42Z",
-  "updated_by": "perplexity-computer-l13",
+  "cycle": 9,
+  "updated_at": "2026-04-25T17:45:00Z",
+  "updated_by": "perplexity-computer-apiary-sync",
   "lanes": {
     "L1": {
       "name": "BPB tracker",
@@ -159,9 +159,7 @@
       "ci": "rainbow-bridge.yml=success"
     }
   },
-  "priority_queue": [
-    "L13"
-  ],
+  "priority_queue": [],
   "victory": {
     "achieved": false,
     "seeds": [],
@@ -170,10 +168,10 @@
   },
   "metrics": {
     "total_lanes": 13,
-    "done": 12,
-    "open": 1,
+    "done": 13,
+    "open": 0,
     "claimed_active": 0,
-    "completion_pct": 92.3
+    "completion_pct": 100.0
   },
   "honey_jar": "assertions/hive_honey.jsonl",
   "events": [
@@ -293,6 +291,33 @@
         "https://github.com/gHashTag/trios/issues/244#issuecomment-4320073911"
       ],
       "note": "Rainbow Bridge ONE SHOT dispatched via trinity-grandmaster v1.0 (phases 0-9, gates G1-G7). H\u2088 falsifiable (7 refutations \u2192 7 typed BridgeError); Welch one-tailed t-test \u03b1=0.01 with Bonferroni 0.001428/channel; n=2100/arm; p95 < 2000 ms. R6 \u2014 L13 owns crates/trios-rainbow-bridge/ only; ws_handler.rs and trios-bridge stay read-only."
+    },
+    {
+      "ts": "2026-04-25T17:08:00Z",
+      "kind": "DONE",
+      "agent": "perplexity-computer-l13",
+      "lane": "L13",
+      "sha": "074067d",
+      "files": [
+        "crates/trios-rainbow-bridge/",
+        "crates/trios-server/src/rainbow_routes.rs",
+        "trinity-clara/proofs/igla/rainbow_bridge_consistency.v",
+        "docs/infrastructure/rainbow-bridge.md"
+      ],
+      "note": "Rainbow Bridge substrate landed. Coq proof rainbow_bridge_consistency.v with lamport_monotone_step + counter_split_brain + 6 lemmata. Rust trios-rainbow-bridge crate (8 modules + 7 falsify_* tests). INV-8 JSON entry. trios-server /rainbow/* route mount."
+    },
+    {
+      "ts": "2026-04-25T17:45:00Z",
+      "kind": "STATE_SYNC",
+      "agent": "perplexity-computer-apiary-sync",
+      "sync_target": "ground-truth on main",
+      "corrections": [
+        "L13 already DONE in lane block; cycle++ to mark sync",
+        "priority_queue: [L13] -> [] (L13 DONE)",
+        "metrics.done: 12 -> 13; open: 1 -> 0; completion_pct: 92.3 -> 100.0",
+        "updated_by + updated_at refreshed"
+      ],
+      "note": "Closes the watchdog-misfire loop on #143 (17:10Z release of L5/L13 was false-positive caused by silent>4h heuristic without ground-truth read). After this sync watchdog reads 13/13 DONE consistently. apiary-watch skill triggered; no lane claimed; victory adjudication still empty (seed_results.jsonl has only header line)."
     }
   ],
   "pre_registration": {
