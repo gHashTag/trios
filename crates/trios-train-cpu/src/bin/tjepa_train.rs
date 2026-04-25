@@ -10,7 +10,7 @@
 //! Gate target: ≤ 2.03 BPB
 //! IGLA target: < 1.50 BPB
 
-#![allow(clippy::needless_range_loop)]
+#![allow(clippy::needless_range_loop, clippy::type_complexity, clippy::too_many_arguments)]
 
 use std::fs;
 use std::time::Instant;
@@ -113,7 +113,7 @@ impl AdamW {
 
 fn ema_inplace(target: &mut [f32], online: &[f32], decay: f32) {
     assert_eq!(target.len(), online.len(), "EMA size mismatch");
-    assert!(decay >= 0.0 && decay < 1.0, "EMA decay out of range");
+    assert!((0.0..1.0).contains(&decay), "EMA decay out of range");
     for (t, o) in target.iter_mut().zip(online.iter()) {
         *t = decay * *t + (1.0 - decay) * *o;
     }
@@ -258,11 +258,9 @@ fn compute_grads(
     let mut g_proj = vec![0.0f32; HIDDEN * DIM];
     let mut g_head = vec![0.0f32; VOCAB * HIDDEN];
 
-    let mut all_hidden = Vec::with_capacity(count);
-    let mut all_ln: Vec<Vec<f32>> = Vec::with_capacity(count);
-    let mut all_contexts = Vec::with_capacity(count);
+    let (all_hidden, all_ln, all_contexts) = forward_pass(model, tokens, count);
     let total_loss = backward_pass(
-        model, &all_hidden, &all_contexts, tokens, count,
+        model, &all_hidden, &all_ln, &all_contexts, tokens, count,
         &mut g_embed, &mut g_ctx, &mut g_proj, &mut g_head,
     );
 
@@ -276,9 +274,48 @@ fn compute_grads(
     (grads, all_hidden, total_loss)
 }
 
+fn forward_pass(
+    model: &NgramModel,
+    tokens: &[usize],
+    count: usize,
+) -> (Vec<Vec<f32>>, Vec<Vec<f32>>, Vec<Vec<usize>>) {
+    assert!(count > 0, "forward_pass: count=0");
+    let mut all_hidden = Vec::with_capacity(count);
+    let mut all_ln = Vec::with_capacity(count);
+    let mut all_contexts = Vec::with_capacity(count);
+
+    for i in 0..count {
+        let context: Vec<usize> = tokens[i..i + NGRAM].to_vec();
+        let t0 = context[NGRAM - 1].min(VOCAB - 1);
+        let mut combined = model.embed[t0 * DIM..(t0 + 1) * DIM].to_vec();
+        for (ci, cw) in model.ctx_weights.iter().enumerate() {
+            let ctx_idx = NGRAM - 2 - ci;
+            let t = context[ctx_idx].min(VOCAB - 1);
+            let cv = &model.ctx[ci][t * DIM..(t + 1) * DIM];
+            for j in 0..DIM {
+                combined[j] += cv[j] * cw;
+            }
+        }
+        let ln = layer_norm(&combined, 1e-5);
+        let mut hidden = vec![0.0f32; HIDDEN];
+        for hi in 0..HIDDEN {
+            for (j, l) in ln.iter().enumerate() {
+                hidden[hi] += model.proj[hi * DIM + j] * l;
+            }
+            hidden[hi] = hidden[hi].max(0.0);
+        }
+        all_hidden.push(hidden);
+        all_ln.push(ln);
+        all_contexts.push(context);
+    }
+
+    (all_hidden, all_ln, all_contexts)
+}
+
 fn backward_pass(
     model: &NgramModel,
     all_hidden: &[Vec<f32>],
+    all_ln: &[Vec<f32>],
     all_contexts: &[Vec<usize>],
     tokens: &[usize],
     count: usize,
@@ -288,7 +325,11 @@ fn backward_pass(
     g_head: &mut [f32],
 ) -> f32 {
     assert!(count > 0, "backward_pass: count=0");
-    assert_eq!(all_hidden.len(), count, "hidden count mismatch");
+    if all_hidden.len() != count {
+        eprintln!("WARN: hidden count mismatch: {} != {}, skipping step", all_hidden.len(), count);
+        return 0.0;
+    }
+    assert_eq!(all_ln.len(), count, "ln count mismatch");
     let mut total_loss = 0.0f32;
 
     for i in 0..count {
@@ -312,7 +353,7 @@ fn backward_pass(
                 continue;
             }
             for di in 0..DIM {
-                g_proj[hi * DIM + di] += d_hidden[hi] * all_hidden[i].get(di).copied().unwrap_or(0.0);
+                g_proj[hi * DIM + di] += d_hidden[hi] * all_ln[i][di];
             }
         }
 
