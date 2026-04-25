@@ -210,18 +210,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let obj_config = ObjectiveConfig::default();
     let nca = NcaObjective::default();
     let nca_rule = NcaTransitionRule::from_seed(seed);
-    let warmup_steps = steps / 2;
-
     let start_time = Instant::now();
     let mut best_val_bpb = f32::MAX;
 
     for step in 0..steps {
-        let current_lr = if step < warmup_steps {
-            lr * (step as f32 + 1.0) / warmup_steps as f32
-        } else {
-            let decay = (step - warmup_steps) as f32 / (steps - warmup_steps).max(1) as f32;
-            lr * 0.5 * (1.0 + (std::f32::consts::PI * decay).cos())
-        };
+        let current_lr = lr;
         if current_lr <= 0.0 { continue; }
 
         let data_len = train_data.len();
@@ -300,8 +293,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             obj_config,
         );
 
-        // No need to scale gradients — current_lr passed to adamw_inline directly
-        let _ = lr; // base lr used in schedule above
+        // current_lr = lr (constant)
 
         // THIS is the critical line: encoder embeddings actually get updated
         embed_t += 1;
