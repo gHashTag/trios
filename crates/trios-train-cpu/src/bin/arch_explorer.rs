@@ -395,7 +395,7 @@ fn run_trial(config: TrialConfig, seed: u64, max_steps: usize, prune_step: usize
     let mut opt_embed = AdamW::new(ps, 0.01);
     let mut opt_ctx: Vec<AdamW> = (0..num_ctx).map(|_| AdamW::new(ps, 0.01)).collect();
 
-    let proj_size = if config.weight_tying { config.hidden * DIM } else { DIM * config.hidden };
+    let proj_size = config.hidden * DIM;
     let mut opt_proj = AdamW::new(proj_size, 0.01);
 
     let head_size = if config.weight_tying { VOCAB * DIM } else { VOCAB * config.hidden };

@@ -65,13 +65,13 @@ fn main() {
         Config {
             name: "B: Muon   lr=0.004",
             optimizer: OptimizerKind::Muon(
-                MuonOptimizer::new(N_PARAMS, 0.004)
+                MuonOptimizer::new(N_PARAMS, 0.004, 0.95, 0.01)
             ),
         },
         Config {
             name: "C: Muon   lr=0.001",
             optimizer: OptimizerKind::Muon(
-                MuonOptimizer::with_momentum(N_PARAMS, 0.001, 0.95)
+                MuonOptimizer::new(N_PARAMS, 0.001, 0.95, 0.01)
             ),
         },
     ];

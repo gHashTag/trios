@@ -181,7 +181,7 @@ fn schedule_type_name(schedule_type: LrScheduleType) -> String {
 fn main() {
     println!("=== Issue #54: LR Schedule Calibration ===");
     println!("Calibrating 3 LR schedules to determine optimal decay strategy");
-    println!("");
+    println!();
 
     // Create output directory
     let results_dir = PathBuf::from("experiments/lr_calibration");

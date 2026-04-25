@@ -36,7 +36,6 @@ fn main() {
             }
             "--sweep" => {
                 // Learning rate sweep mode
-                i += 1;
                 run_lr_sweep(&config);
                 return;
             }

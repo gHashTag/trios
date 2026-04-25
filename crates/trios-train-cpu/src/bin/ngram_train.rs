@@ -5,7 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::time::Instant;
 
-use trios_train_cpu::optimizer::{AdamW as OptimAdamW, MuonOptimizer};
+use trios_train_cpu::optimizer::MuonOptimizer;
 
 const VOCAB: usize = 128;
 const DIM: usize = 64;
@@ -89,16 +89,10 @@ impl Optimizer for LocalAdamW {
 }
 impl Optimizer for MuonOptimizer {
 	fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
-		let mut g = grads.to_vec();
-		// Orthogonalize
-		let norm = g.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-8);
-		for x in g.iter_mut() { *x /= norm; }
-		// Momentum update
-		for i in 0..params.len() {
-			self.momentum_buffer[i] = self.momentum * self.momentum_buffer[i] - lr as f32 * g[i];
-			params[i] += self.momentum_buffer[i];
-		}
-		self.step += 1;
+		// Update the optimizer's learning rate with the scheduled value
+		self.lr = lr as f64;
+		// Use the built-in step() method which handles all the optimization logic
+		self.step(params, grads);
 	}
 }
 
@@ -499,16 +493,16 @@ impl NgramModel {
             for x in g_av.iter_mut() { *x /= n; }
         }
 
-        Optimizer::update(opt_embed.as_mut(), &mut self.embed, &g_embed, lr);
+        Optimizer::update(opt_embed, &mut self.embed, &g_embed, lr);
         for (ci, oc) in opt_ctx.iter_mut().enumerate() {
             Optimizer::update(oc.as_mut(), &mut self.ctx[ci], &g_ctx[ci], lr);
         }
-        Optimizer::update(opt_proj.as_mut(), &mut self.proj, &g_proj, lr);
-        Optimizer::update(opt_head.as_mut(), &mut self.lm_head, &g_head, lr);
+        Optimizer::update(opt_proj, &mut self.proj, &g_proj, lr);
+        Optimizer::update(opt_head, &mut self.lm_head, &g_head, lr);
         if self.use_attention {
-            Optimizer::update(opt_aq.as_mut(), &mut self.attn_query, &g_aq, lr);
-            Optimizer::update(opt_ak.as_mut(), &mut self.attn_key, &g_ak, lr);
-            Optimizer::update(opt_av.as_mut(), &mut self.attn_value, &g_av, lr);
+            Optimizer::update(opt_aq, &mut self.attn_query, &g_aq, lr);
+            Optimizer::update(opt_ak, &mut self.attn_key, &g_ak, lr);
+            Optimizer::update(opt_av, &mut self.attn_value, &g_av, lr);
         }
     }
 }
@@ -548,6 +542,8 @@ fn main() {
         .map(|a| a[5..].parse::<f32>().unwrap_or(0.04)).unwrap_or(0.04);
     let activation = args.iter().find(|a| a.starts_with("--activation="))
         .map(|a| a[13..].to_string()).unwrap_or_else(|| "relu".to_string());
+    let optimizer = args.iter().find(|a| a.starts_with("--optimizer="))
+        .map(|a| a[11..].to_string()).unwrap_or_else(|| "adamw".to_string());
     let has_ctx5 = args.iter().any(|a| a == "--ctx5");
     let has_ctx4 = args.iter().any(|a| a == "--ctx4");
     let has_ctx3 = args.iter().any(|a| a == "--ctx3");
@@ -600,18 +596,17 @@ fn main() {
     for step in 1..=steps {
         let lr = cosine_lr(step, steps, base_lr, steps / 10);
         let off = (step * 97 + seed as usize) % (dl.saturating_sub(SEQ + 1));
-        {
-            let mut opts = Optimizers {
-                opt_embed: &mut opt_embed,
-                opt_ctx: &mut opt_ctx,
-                opt_proj: &mut opt_proj,
-                opt_head: &mut opt_head,
-                opt_aq: &mut opt_aq,
-                opt_ak: &mut opt_ak,
-                opt_av: &mut opt_av,
-            };
-            model.train_step(&train[off..off + SEQ + 1], lr, &mut opts);
-        }
+        model.train_step(
+            &train[off..off + SEQ + 1],
+            lr,
+            &mut *opt_embed,
+            &mut opt_ctx[..],
+            &mut *opt_proj,
+            &mut *opt_head,
+            &mut *opt_aq,
+            &mut *opt_ak,
+            &mut *opt_av,
+        );
 
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();
