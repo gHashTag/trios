@@ -1,153 +1,165 @@
-//! UR-07 — WebSocket API Client
+//! UR-07 — Settings
+//!
+//! Settings panel: theme toggle, API key configuration,
+//! MCP server URL, and sidebar preferences.
+//! Reads/writes the `SettingsAtom` from UR-00.
 
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use web_sys::{MessageEvent, WebSocket};
+use dioxus::prelude::*;
+use trios_ui_ur00::{use_settings_atom, Theme};
+use trios_ui_ur01::{toggle_theme, use_palette, radius, spacing, typography};
+use trios_ui_ur02::{Button, ButtonVariant, Input};
 
-pub const SERVER_WS_URL: &str = "ws://localhost:9005/ws";
+// ─── SettingsPanel ───────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessage {
-    pub role: String,
-    pub content: String,
-}
+/// Full settings panel.
+pub fn SettingsPanel() -> Element {
+    let palette = use_palette();
+    let settings = use_settings_atom();
+    let theme_label = match settings.read().theme {
+        Theme::Dark => "🌙 Dark",
+        Theme::Light => "☀️ Light",
+    };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentInfo {
-    pub id: String,
-    pub status: String,
-}
-
-pub struct ApiClient {
-    ws: Option<WebSocket>,
-}
-
-impl Default for ApiClient {
-    fn default() -> Self { Self::new() }
-}
-
-impl ApiClient {
-    pub fn new() -> Self {
-        Self { ws: None }
-    }
-
-    pub fn connect_with_callback<M, O, E>(
-        &mut self,
-        on_message: M,
-        on_open: O,
-        mut on_error: E,
-    ) -> Result<(), JsValue>
-    where
-        M: FnMut(String) + 'static,
-        O: FnOnce() + 'static,
-        E: FnMut() + 'static,
-    {
-        log::info!("[UR-07] WebSocket::new({})", SERVER_WS_URL);
-        let ws = match WebSocket::new(SERVER_WS_URL) {
-            Ok(w) => { log::info!("[UR-07] WS created ok, readyState={}", w.ready_state()); w }
-            Err(e) => { log::error!("[UR-07] WS create FAILED: {:?}", e); return Err(e); }
-        };
-        let ws_clone = ws.clone();
-        let on_open = std::cell::RefCell::new(Some(on_open));
-
-        let onopen = Closure::<dyn Fn()>::new(move || {
-            log::info!("[UR-07] onopen fired — WS is OPEN");
-
-            let agents_payload = json!({"jsonrpc": "2.0", "id": 2, "method": "agents/list"});
-            match serde_json::to_string(&agents_payload) {
-                Ok(json) => {
-                    match ws_clone.send_with_str(&json) {
-                        Ok(_) => log::info!("[UR-07] sent agents/list ({} bytes)", json.len()),
-                        Err(e) => log::error!("[UR-07] send agents/list FAILED: {:?}", e),
+    rsx! {
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                gap: {spacing::LG};
+                padding: {spacing::MD};
+                background: {palette.background};
+                height: 100%;
+                overflow-y: auto;
+            ",
+            // Header
+            div {
+                style: "
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_LG};
+                    font-weight: {typography::WEIGHT_BOLD};
+                    color: {palette.text};
+                ",
+                "⚙ Settings"
+            }
+            // Theme section
+            { SettingsSection {
+                title: "Appearance".to_string(),
+                children: rsx! {
+                    div {
+                        style: "display: flex; align-items: center; justify-content: space-between;",
+                        span {
+                            style: "
+                                font-family: {typography::FONT_FAMILY};
+                                font-size: {typography::SIZE_MD};
+                                color: {palette.text};
+                            ",
+                            "Theme: {theme_label}"
+                        }
+                        Button {
+                            children: "Toggle Theme".to_string(),
+                            variant: ButtonVariant::Secondary,
+                            onclick: move |_| { toggle_theme(); },
+                        }
                     }
-                }
-                Err(e) => log::error!("[UR-07] serialize agents/list FAILED: {}", e),
-            }
-
-            let tools_payload = json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"});
-            match serde_json::to_string(&tools_payload) {
-                Ok(json) => {
-                    match ws_clone.send_with_str(&json) {
-                        Ok(_) => log::info!("[UR-07] sent tools/list ({} bytes)", json.len()),
-                        Err(e) => log::error!("[UR-07] send tools/list FAILED: {:?}", e),
-                    }
-                }
-                Err(e) => log::error!("[UR-07] serialize tools/list FAILED: {}", e),
-            }
-
-            if let Some(cb) = on_open.borrow_mut().take() {
-                log::info!("[UR-07] calling on_open callback");
-                cb();
-            } else {
-                log::warn!("[UR-07] on_open callback already consumed!");
-            }
-        });
-
-        let onerror = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::Event| {
-            log::error!("[UR-07] onerror fired: {:?}", e.type_());
-            on_error();
-        }));
-
-        let onclose = Closure::<dyn Fn(_)>::new(move |e: web_sys::CloseEvent| {
-            log::warn!("[UR-07] onclose fired: code={} reason='{}' wasClean={}",
-                e.code(), e.reason(), e.was_clean());
-        });
-
-        let mut on_message = on_message;
-        let onmessage = Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(
-            move |ev: MessageEvent| {
-                if let Ok(txt) = ev.data().dyn_into::<js_sys::JsString>() {
-                    let text: String = txt.into();
-                    log::debug!("[UR-07] onmessage {} bytes", text.len());
-                    on_message(text);
-                } else {
-                    log::warn!("[UR-07] onmessage got non-string data");
-                }
-            },
-        ));
-
-        ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
-        ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
-        ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-        ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-
-        onopen.forget();
-        onerror.forget();
-        onclose.forget();
-        onmessage.forget();
-
-        log::info!("[UR-07] callbacks registered, readyState={}", ws.ready_state());
-        self.ws = Some(ws);
-        Ok(())
-    }
-
-    pub fn send_chat(&self, message: &str) -> Result<(), JsValue> {
-        let ws = self.ws.as_ref().ok_or_else(|| JsValue::from_str("not connected"))?;
-        log::info!("[UR-07] send_chat readyState={} msg='{}'", ws.ready_state(), message);
-        let payload = json!({
-            "jsonrpc": "2.0", "id": 1,
-            "method": "agents/chat",
-            "params": { "message": message }
-        });
-        let json = serde_json::to_string(&payload).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        match ws.send_with_str(&json) {
-            Ok(_) => { log::info!("[UR-07] send_chat OK ({} bytes)", json.len()); Ok(()) }
-            Err(e) => { log::error!("[UR-07] send_chat FAILED: {:?}", e); Err(e) }
+                },
+            } }
+            // API Key section
+            { ApiKeySection {} }
+            // MCP URL section
+            { McpUrlSection {} }
         }
     }
+}
 
-    pub fn is_connected(&self) -> bool {
-        matches!(&self.ws, Some(ws) if ws.ready_state() == WebSocket::OPEN)
+// ─── SettingsSection ─────────────────────────────────────────
+
+/// A settings section with title and content.
+#[derive(Props, Clone, PartialEq)]
+pub struct SettingsSectionProps {
+    /// Section title.
+    pub title: String,
+    /// Section content.
+    pub children: Element,
+}
+
+/// Render a settings section.
+pub fn SettingsSection(props: SettingsSectionProps) -> Element {
+    let palette = use_palette();
+
+    rsx! {
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                gap: {spacing::SM};
+                background: {palette.surface};
+                border: 1px solid {palette.border};
+                border-radius: {radius::LG};
+                padding: {spacing::MD};
+            ",
+            div {
+                style: "
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_SM};
+                    font-weight: {typography::WEIGHT_BOLD};
+                    color: {palette.text_muted};
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                ",
+                {props.title.clone()}
+            }
+            {props.children}
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn server_url_uses_port_9005() { assert!(SERVER_WS_URL.contains("9005")); }
-    #[test]
-    fn client_starts_disconnected() { assert!(!ApiClient::new().is_connected()); }
+// ─── ApiKeySection ───────────────────────────────────────────
+
+/// API key input section.
+fn ApiKeySection() -> Element {
+    let mut settings = use_settings_atom();
+    let api_key = settings.read().api_key.clone();
+    let masked = if api_key.is_empty() {
+        String::new()
+    } else {
+        format!("{}••••••••", &api_key[..api_key.len().min(4)])
+    };
+
+    rsx! {
+        SettingsSection {
+            title: "API Key".to_string(),
+            Input {
+                placeholder: "Enter z.ai API key...".to_string(),
+                value: masked,
+                label: "z.ai Direct Chat Key".to_string(),
+                mono: true,
+                oninput: move |val: String| {
+                    settings.write().api_key = val;
+                },
+            }
+        }
+    }
+}
+
+// ─── McpUrlSection ───────────────────────────────────────────
+
+/// MCP server URL configuration.
+fn McpUrlSection() -> Element {
+    let mut settings = use_settings_atom();
+    let mcp_url = settings.read().mcp_url.clone();
+
+    rsx! {
+        SettingsSection {
+            title: "MCP Server".to_string(),
+            Input {
+                placeholder: "http://localhost:9005".to_string(),
+                value: mcp_url,
+                label: "Server URL".to_string(),
+                mono: true,
+                oninput: move |val: String| {
+                    settings.write().mcp_url = val;
+                },
+            }
+        }
+    }
 }

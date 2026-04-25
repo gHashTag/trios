@@ -1,71 +1,73 @@
-# Trios Chrome Extension — Rust + Wasm
+# 🔧 trios-ext — Chrome Extension (Ring Isolation Architecture)
 
-## Trinity Stack Law Compliant
+Chrome Extension built entirely in Rust → WASM. Zero handwritten JavaScript (L9 compliance).
 
-- ✅ All code is Rust (no JavaScript outside `dist/`)
-- ✅ Uses `wasm-bindgen` for Chrome Extension API
-- ✅ WebSocket via `gloo-net` to `trios-server` port 9005
-- ✅ TRIOS brand colors (#161616, #F5D3F2, #5D3FF2)
+## Ring Architecture
 
-## Build Instructions
+```
+trios-ext/
+├── Cargo.toml              ← Workspace root ([package] + [workspace])
+├── src/lib.rs              ← Re-exports from rings (backward compat)
+├── rings/
+│   ├── EXT-00/             ← Shell & Transport (DOM + MCP)
+│   ├── EXT-01/             ← Artifact Rendering (BR-OUTPUT)
+│   ├── EXT-02/             ← Settings (chrome.storage.local)
+│   ├── EXT-03/             ← Content Injectors (GitHub, Claude.ai)
+│   └── BR-EXT/             ← WASM Entry Point (wires all rings)
+├── extension/              ← Chrome MV3 extension assets
+├── ring-silver/            ← Legacy build ring
+├── ring-bronze/            ← Legacy deploy ring
+├── README.md
+├── TASK.md
+└── AGENTS.md
+```
+
+## Dependency Graph
+
+```
+BR-EXT ──→ EXT-00 (Shell & Transport)
+        ──→ EXT-01 (Artifact Rendering)
+        ──→ EXT-02 (Settings)
+        ──→ EXT-03 (Content Injectors)
+
+EXT-00 ──→ EXT-01 (artifact CSS + rendering)
+        ──→ EXT-02 (settings API key)
+EXT-03 ──→ EXT-00 (DOM document())
+```
+
+No circular dependencies.
+
+## Sidepanel Tabs
+
+| Tab | Ring | Description |
+|-----|------|-------------|
+| Chat | EXT-00 | MCP/z.ai direct chat |
+| Agents | EXT-00 | Agent list |
+| Tools | EXT-00 | MCP tools browser |
+| Issues | EXT-00 | GitHub issue tracker |
+| Artifacts | EXT-00+01 | BR-OUTPUT artifact viewer |
+| ⚙ Settings | EXT-00+02 | API key management |
+
+## Build
 
 ```bash
-# Install wasm-pack (one-time)
-cargo install wasm-pack
+# Check all rings:
+cargo check --target wasm32-unknown-unknown
 
-# Build WASM
-wasm-pack build --release --target web
-
-# Output
-pkg/trios_ext_bg.wasm
-pkg/trios_ext.js
-pkg/trios_ext_bg.wasm.d.ts
+# Build WASM binary:
+cd crates/trios-ext/rings/BR-EXT
+wasm-pack build --target no-modules --out-dir pkg
 ```
 
-## Chrome Extension Structure
+## Load Extension
 
-```
-extension/
-├── manifest.json       # MV3 manifest (minimal service_worker)
-├── sidepanel.html      # Loads WASM module
-├── sw.js             # Minimal service worker
-└── icons/
-    ├── icon-16.png
-    ├── icon-32.png
-    ├── icon-48.png
-    └── icon-128.png   # Φ symbol with Trinity colors
-```
+1. Build WASM package (see above)
+2. Open `chrome://extensions`
+3. Enable Developer mode
+4. Load unpacked → select `crates/trios-ext/ring-bronze/extension/`
 
-## Deployment to Chrome
+## Invariants
 
-1. Copy WASM artifacts:
-   ```bash
-   cp pkg/trios_ext.js extension/
-   cp pkg/trios_ext_bg.wasm extension/
-   cp pkg/trios_ext_bg.wasm.d.ts extension/
-   ```
-
-2. Load in Chrome:
-   - Open `chrome://extensions`
-   - Enable "Developer mode"
-   - Click "Load unpacked"
-   - Select `extension/` directory
-
-## MCP Protocol
-
-Connects to `ws://localhost:9005/mcp` with JSON-RPC 2.0 format:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": <number>,
-  "method": "agents/list" | "agents/chat" | "tools/list" | "tools/call",
-  "params": { ... }
-}
-```
-
-## Features
-
-- **Chat**: Send messages to agents via MCP
-- **Agents**: View connected agents with status
-- **MCP Tools**: Browse and call MCP tools
+- **I5**: Ring isolation — each ring is a separate crate
+- **L9**: Zero handwritten JS (bootstrap loaders excepted per I9)
+- **BR-OUTPUT parity**: EXT-01 types mirror `trios-a2a-br-output`

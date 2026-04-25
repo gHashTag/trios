@@ -11,7 +11,6 @@ use tracing::{error, info};
 use crate::mcp::McpService;
 use crate::mcp_endpoints;
 use trios_a2a::A2ARouter;
-use crate::mcp_endpoints::browser::BrowserState;
 
 /// Event types broadcasted to all connected clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,12 +32,6 @@ pub struct AppState {
     pub event_tx: broadcast::Sender<BusEvent>,
     /// A2A router for agent-to-agent communication
     pub a2a: Arc<RwLock<A2ARouter>>,
-    /// Browser command queue (SR-03) for BrowserOS
-    pub browser: Arc<BrowserState>,
-    /// z.ai provider config (loaded from .env)
-    pub zai_api: String,
-    pub zai_keys: Vec<String>,
-    pub http_client: reqwest::Client,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,10 +51,6 @@ pub struct TaskEntry {
 
 impl AppState {
     pub fn new() -> Self {
-        Self::with_zai("".to_string(), Vec::new())
-    }
-
-    pub fn with_zai(zai_api: String, zai_keys: Vec<String>) -> Self {
         let (tx, _) = broadcast::channel(100);
         Self {
             mcp: McpService::new(),
@@ -69,10 +58,6 @@ impl AppState {
             tasks: Arc::new(Mutex::new(Vec::new())),
             event_tx: tx,
             a2a: Arc::new(RwLock::new(A2ARouter::new())),
-            browser: Arc::new(BrowserState::new()),
-            zai_api,
-            zai_keys,
-            http_client: reqwest::Client::new(),
         }
     }
 
@@ -90,7 +75,6 @@ struct WsRequest {
 
 #[derive(Debug, Serialize)]
 pub struct WsResponse {
-    pub method: String,
     pub result: Value,
 }
 
@@ -110,7 +94,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         let response = handle_message(&text, &state).await;
                         let response_json = serde_json::to_string(&response).unwrap_or_else(|e| {
                             serde_json::to_string(&WsResponse {
-                                method: "error".to_string(),
                                 result: json!({"error": format!("serialize error: {}", e)}),
                             }).unwrap_or_default()
                         });
@@ -155,16 +138,14 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         Ok(r) => r,
         Err(e) => {
             return WsResponse {
-                method: "error".to_string(),
                 result: json!({"error": format!("invalid request: {}", e)}),
             }
         }
     };
 
-    let method = req.method.clone();
-    info!("WS request: method={}", method);
+    info!("WS request: method={}", req.method);
 
-    let result = match method.as_str() {
+    let result = match req.method.as_str() {
         // MCP protocol handshake
         "initialize" => json!({
             "protocolVersion": "2024-11-05",
@@ -199,7 +180,7 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         _ => json!({"error": format!("unknown method: {}", req.method)}),
     };
 
-    WsResponse { method, result }
+    WsResponse { result }
 }
 
 async fn tools_list(state: &AppState) -> Value {
@@ -240,10 +221,6 @@ async fn tools_call(state: &AppState, params: Option<Value>) -> Value {
         "a2a_update_task" => {
             let p = Some(arguments);
             Some(mcp_endpoints::a2a::update_task(state, p).await)
-        }
-        t if t.starts_with("browser_") => {
-            let p = json!({"tool": t, "agent_id": arguments.get("agent_id").and_then(|v| v.as_str()).unwrap_or(""), "params": arguments});
-            Some(mcp_endpoints::browser::enqueue_command(state, p).await)
         }
         _ => None,
     };

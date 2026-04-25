@@ -40,12 +40,6 @@ pub enum Capability {
     LLM,
     /// Can manage other agents
     Orchestrator,
-    /// Can control browser tabs and navigation (BrowserOS)
-    BrowserControl,
-    /// Can read DOM content from browser pages
-    DomRead,
-    /// Can write/inject into browser DOM
-    DomWrite,
     /// Custom capability
     Custom(String),
 }
@@ -64,13 +58,18 @@ pub struct AgentCard {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentStatus {
+    /// Agent is available for tasks
     Idle,
+    /// Agent is working on a task
     Busy,
+    /// Agent is disconnected
     Offline,
+    /// Agent encountered an error
     Error,
 }
 
 impl AgentCard {
+    /// Create a new agent card.
     pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             id: AgentId::new(id),
@@ -81,28 +80,20 @@ impl AgentCard {
         }
     }
 
+    /// Add a capability.
     pub fn with_capability(mut self, cap: Capability) -> Self {
         self.capabilities.push(cap);
         self
     }
 
+    /// Check if agent has a specific capability.
     pub fn has_capability(&self, cap: &Capability) -> bool {
         self.capabilities.contains(cap)
     }
 
+    /// Check if agent is available for work.
     pub fn is_available(&self) -> bool {
         self.status == AgentStatus::Idle
-    }
-
-    /// Create a BrowserOS agent card.
-    pub fn browser_agent(tab_id: u32) -> Self {
-        Self::new(
-            format!("browser-agent-{}", tab_id),
-            format!("BrowserOS Agent (tab {})", tab_id),
-        )
-        .with_capability(Capability::BrowserControl)
-        .with_capability(Capability::DomRead)
-        .with_capability(Capability::DomWrite)
     }
 }
 
@@ -114,15 +105,6 @@ mod tests {
     fn test_agent_id_display() {
         let id = AgentId::new("alpha-1");
         assert_eq!(id.to_string(), "alpha-1");
-    }
-
-    #[test]
-    fn test_browser_agent_card() {
-        let card = AgentCard::browser_agent(42);
-        assert_eq!(card.id.as_str(), "browser-agent-42");
-        assert!(card.has_capability(&Capability::BrowserControl));
-        assert!(card.has_capability(&Capability::DomRead));
-        assert!(card.has_capability(&Capability::DomWrite));
     }
 
     #[test]
@@ -140,5 +122,13 @@ mod tests {
         let status = AgentStatus::Busy;
         let json = serde_json::to_string(&status).unwrap();
         assert_eq!(json, "\"busy\"");
+    }
+
+    #[test]
+    fn test_agent_is_available() {
+        let mut card = AgentCard::new("alpha-1", "Alpha");
+        assert!(card.is_available());
+        card.status = AgentStatus::Busy;
+        assert!(!card.is_available());
     }
 }

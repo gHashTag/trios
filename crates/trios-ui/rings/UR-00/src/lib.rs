@@ -1,322 +1,216 @@
-//! UR-00 — WASM Entry Point for trios-ui
-
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(non_snake_case)]
-#![allow(clippy::all)]
+//! UR-00 — State atoms (Jotai-style Dioxus Signals)
+//!
+//! Provides global reactive atoms for the entire TRIOS UI.
+//! Each atom is a `Signal<T>` created via `Signal::new()` and
+//! accessed through convenience hooks (`use_agents_atom()`, etc.).
+//!
+//! ## Atoms
+//!
+//! | Atom | Type | Purpose |
+//! |------|------|---------|
+//! | `AgentsAtom` | `Vec<Agent>` | Agent list & status |
+//! | `ChatAtom` | `ChatState` | Messages, input, current chat |
+//! | `McpAtom` | `McpState` | MCP tools & connection status |
+//! | `SettingsAtom` | `Settings` | Theme, API key, preferences |
 
 use dioxus::prelude::*;
-use trios_ui_ring_ur07 as api;
-use trios_ui_ring_ur08 as theme;
+use serde::{Deserialize, Serialize};
 
-const BUILD_VERSION_VAL: Option<&'static str> = option_env!("TRIOS_BUILD_VERSION");
-pub const BUILD_VERSION: &'static str = if let Some(v) = BUILD_VERSION_VAL { v } else { "dev" };
+// ─── Agent types ──────────────────────────────────────────────
 
-const ANTHROPIC_KEY_VAL: Option<&'static str> = option_env!("TRIOS_ANTHROPIC_KEY_HINT");
-pub const ANTHROPIC_KEY_HINT: &'static str = if let Some(v) = ANTHROPIC_KEY_VAL { v } else { "" };
-
-const OPENAI_KEY_VAL: Option<&'static str> = option_env!("TRIOS_OPENAI_KEY_HINT");
-pub const OPENAI_KEY_HINT: &'static str = if let Some(v) = OPENAI_KEY_VAL { v } else { "" };
-
-const VENICE_KEY_VAL: Option<&'static str> = option_env!("TRIOS_VENICE_KEY_HINT");
-pub const VENICE_KEY_HINT: &'static str = if let Some(v) = VENICE_KEY_VAL { v } else { "" };
-
-const ZAI_KEY_VAL: Option<&'static str> = option_env!("TRIOS_ZAI_KEY_HINT");
-pub const ZAI_KEY_HINT: &'static str = if let Some(v) = ZAI_KEY_VAL { v } else { "" };
-
-const ZAI_API_VAL: Option<&'static str> = option_env!("TRIOS_ZAI_API_HINT");
-pub const ZAI_API_HINT: &'static str = if let Some(v) = ZAI_API_VAL { v } else { "" };
-
-#[wasm_bindgen::prelude::wasm_bindgen(start)]
-pub fn run() {
-    console_error_panic_hook::set_once();
-    wasm_logger::init(wasm_logger::Config::default());
-    log::info!("[trios-ui] Launching Dioxus sidebar v{}", BUILD_VERSION);
-    launch(app);
+/// Agent data.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Agent {
+    /// Agent ID.
+    pub id: String,
+    /// Agent display name.
+    pub name: String,
+    /// Agent description.
+    pub description: String,
+    /// Agent type (reasoner, coder, etc.).
+    pub agent_type: String,
+    /// Current status.
+    pub status: AgentStatus,
 }
 
-#[derive(Clone, PartialEq, Debug)]
-struct ChatMsg {
-    role: String,
-    content: String,
+/// Agent status enum.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AgentStatus {
+    /// Agent is idle and available.
+    Idle,
+    /// Agent is working on a task.
+    Busy,
+    /// Agent encountered an error.
+    Error(String),
+    /// Agent is offline.
+    Offline,
 }
 
-fn inject_theme() {
-    if let Some(window) = web_sys::window() {
-        if let Some(doc) = window.document() {
-            if let Some(head) = doc.query_selector("head").ok().flatten() {
-                if let Ok(style) = doc.create_element("style") {
-                    style.set_text_content(Some(theme::STYLESHEET));
-                    let _ = head.append_child(&style);
-                }
-            }
+impl Default for AgentStatus {
+    fn default() -> Self {
+        Self::Offline
+    }
+}
+
+// ─── Chat types ──────────────────────────────────────────────
+
+/// Chat state atom.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChatState {
+    /// Chat messages.
+    pub messages: Vec<ChatMessage>,
+    /// Current input text.
+    pub input: String,
+    /// Whether we're waiting for a response.
+    pub is_loading: bool,
+    /// Active agent ID for the chat.
+    pub active_agent_id: Option<String>,
+}
+
+impl Default for ChatState {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            input: String::new(),
+            is_loading: false,
+            active_agent_id: None,
         }
     }
 }
 
-fn app() -> Element {
-    let mut messages: Signal<Vec<ChatMsg>> = use_signal(|| Vec::new());
-    let mut status: Signal<String> = use_signal(|| "Connecting...".to_string());
-    let mut agents: Signal<String> = use_signal(|| "Loading agents...".to_string());
-    let mut tools: Signal<Vec<String>> = use_signal(|| Vec::new());
-    let mut active_tab: Signal<String> = use_signal(|| "chat".to_string());
-    let connected: Signal<bool> = use_signal(|| false);
-    let mut input_text: Signal<String> = use_signal(|| String::new());
-    let mut ws_client: Signal<Option<api::ApiClient>> = use_signal(|| None);
+/// A single chat message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChatMessage {
+    /// Unique message ID.
+    pub id: String,
+    /// Sender role.
+    pub role: MessageRole,
+    /// Message content.
+    pub content: String,
+    /// ISO 8601 timestamp.
+    pub timestamp: String,
+}
 
-    let mut anthropic_key: Signal<String> = use_signal(|| ANTHROPIC_KEY_HINT.to_string());
-    let mut openai_key: Signal<String> = use_signal(|| OPENAI_KEY_HINT.to_string());
-    let mut venice_key: Signal<String> = use_signal(|| VENICE_KEY_HINT.to_string());
-    let mut zai_key: Signal<String> = use_signal(|| ZAI_KEY_HINT.to_string());
+/// Message sender role.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MessageRole {
+    /// User message.
+    User,
+    /// Agent/assistant message.
+    Assistant,
+    /// System message.
+    System,
+}
 
-    use_hook(inject_theme);
+// ─── MCP types ──────────────────────────────────────────────
 
-    let mut connected_open = connected.clone();
-    let mut status_open = status.clone();
-    let mut connected_err = connected.clone();
-    let mut status_err = status.clone();
+/// MCP state atom.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct McpState {
+    /// Available MCP tools.
+    pub tools: Vec<McpTool>,
+    /// Connection status.
+    pub connected: bool,
+    /// Server URL.
+    pub server_url: String,
+}
 
-    use_hook(move || {
-        let mut client = api::ApiClient::new();
-        let result = client.connect_with_callback(
-            move |text| {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
-                    match method {
-                        "agents/chat" | "chat" => {
-                            if let Some(r) = val.get("result") {
-                                let (role, content) = if let Some(err) = r.get("error").and_then(|e| e.as_str()) {
-                                    ("error".to_string(), format!("⚠ {}", err))
-                                } else {
-                                    let resp = r.get("response").and_then(|v| v.as_str())
-                                        .or_else(|| r.get("content").and_then(|v| v.as_str()))
-                                        .unwrap_or("{no content}");
-                                    ("agent".to_string(), resp.to_string())
-                                };
-                                messages.write().push(ChatMsg { role, content });
-                            }
-                        }
-                        "agents/list" => {
-                            if let Some(r) = val.get("result") {
-                                let count = r.as_array().map(|a| a.len()).unwrap_or(0);
-                                *agents.write() = if count == 0 {
-                                    "No agents registered".to_string()
-                                } else {
-                                    serde_json::to_string_pretty(r).unwrap_or_default()
-                                };
-                            }
-                        }
-                        "tools/list" => {
-                            if let Some(r) = val.get("result") {
-                                if let Some(arr) = r.as_array() {
-                                    let names: Vec<String> = arr.iter()
-                                        .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
-                                        .collect();
-                                    *tools.write() = names;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            },
-            move || {
-                status_open.set("Connected".to_string());
-                connected_open.set(true);
-            },
-            move || {
-                connected_err.set(false);
-                status_err.set("Disconnected".to_string());
-            },
-        );
-        if result.is_ok() {
-            ws_client.set(Some(client));
-        } else {
-            status.set("Connection failed".to_string());
+impl Default for McpState {
+    fn default() -> Self {
+        Self {
+            tools: Vec::new(),
+            connected: false,
+            server_url: "http://localhost:9005".to_string(),
         }
-    });
-
-    let active = active_tab.read().clone();
-    let is_connected = *connected.read();
-    let status_text = status.read().clone();
-    let input_val = input_text.read().clone();
-    let tools_list = tools.read().clone();
-    let tool_count = tools_list.len();
-
-    let status_cls = if is_connected { "status connected" } else { "status error" };
-
-    macro_rules! tab_cls { ($name:expr) => { if active == $name { "tab active" } else { "tab" } }; }
-    macro_rules! content_cls { ($name:expr) => { if active == $name { "tab-content active" } else { "tab-content" } }; }
-
-    let anthropic_val = anthropic_key.read().clone();
-    let openai_val = openai_key.read().clone();
-    let venice_val = venice_key.read().clone();
-    let zai_val = zai_key.read().clone();
-
-    let has_anthropic = !anthropic_val.is_empty();
-    let has_openai = !openai_val.is_empty();
-    let has_venice = !venice_val.is_empty();
-    let has_zai = !zai_val.is_empty();
-
-    rsx! {
-        div { id: "main",
-            header { class: "header",
-                span { class: "phi-icon", "\u{03A6}" }
-                h1 { "Trinity" }
-                span { class: "{status_cls}", "{status_text}" }
-            }
-            nav { class: "tabs",
-                button { class: tab_cls!("chat"),    onclick: move |_| active_tab.set("chat".to_string()),     "Chat" }
-                button { class: tab_cls!("agents"),  onclick: move |_| active_tab.set("agents".to_string()),   "Agents" }
-                button { class: tab_cls!("tools"),   onclick: move |_| active_tab.set("tools".to_string()),    "Tools ({tool_count})" }
-                button { class: tab_cls!("settings"),onclick: move |_| active_tab.set("settings".to_string()), "\u{2699}" }
-            }
-            section { class: content_cls!("chat"), id: "tab-chat",
-                div { id: "messages",
-                    for msg in messages.read().iter() {
-                        div { class: "message {msg.role}", "{msg.content}" }
-                    }
-                }
-                input {
-                    id: "chat-input",
-                    r#type: "text",
-                    value: "{input_val}",
-                    placeholder: "Send a message...",
-                    oninput: move |ev| input_text.set(ev.value()),
-                    onkeydown: move |ev: KeyboardEvent| {
-                        if ev.key() == Key::Enter {
-                            let text = input_text.read().trim().to_string();
-                            if !text.is_empty() {
-                                messages.write().push(ChatMsg { role: "you".to_string(), content: text.clone() });
-                                input_text.set(String::new());
-                                let guard = ws_client.read();
-                                if let Some(client) = guard.as_ref() {
-                                    let _ = client.send_chat(&text);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            section { class: content_cls!("agents"), id: "tab-agents",
-                div { id: "agent-list", "{agents}" }
-            }
-            section { class: content_cls!("tools"), id: "tab-tools",
-                div { id: "tool-list",
-                    if tools_list.is_empty() {
-                        div { "Loading tools..." }
-                    } else {
-                        for tool in tools_list.iter() {
-                            div { class: "tool-item", "{tool}" }
-                        }
-                    }
-                }
-            }
-            section { class: content_cls!("settings"), id: "tab-settings",
-                div { class: "settings-section",
-                    div { class: "settings-title", "AI Providers" }
-                    div { class: "provider-card",
-                        div { class: "provider-header",
-                            span { class: "provider-name", "z.ai" }
-                            span { class: if has_zai { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_zai { "active" } else { "no key" }
-                            }
-                        }
-                        div { class: "token-row",
-                            input {
-                                class: "token-input",
-                                r#type: "password",
-                                value: "{zai_val}",
-                                placeholder: "zai-...",
-                                oninput: move |ev| zai_key.set(ev.value()),
-                            }
-                        }
-                        div { class: "env-hint", "auto-loaded from "
-                            span { "ZAI_KEY_1" }
-                            " in .env"
-                        }
-                    }
-                    div { class: "provider-card",
-                        div { class: "provider-header",
-                            span { class: "provider-name", "Anthropic" }
-                            span { class: if has_anthropic { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_anthropic { "active" } else { "no key" }
-                            }
-                        }
-                        div { class: "token-row",
-                            input {
-                                class: "token-input",
-                                r#type: "password",
-                                value: "{anthropic_val}",
-                                placeholder: "sk-ant-...",
-                                oninput: move |ev| anthropic_key.set(ev.value()),
-                            }
-                        }
-                        div { class: "env-hint", "auto-loaded from "
-                            span { "ANTHROPIC_API_KEY" }
-                            " in .env"
-                        }
-                    }
-                    div { class: "provider-card",
-                        div { class: "provider-header",
-                            span { class: "provider-name", "OpenAI" }
-                            span { class: if has_openai { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_openai { "active" } else { "no key" }
-                            }
-                        }
-                        div { class: "token-row",
-                            input {
-                                class: "token-input",
-                                r#type: "password",
-                                value: "{openai_val}",
-                                placeholder: "sk-...",
-                                oninput: move |ev| openai_key.set(ev.value()),
-                            }
-                        }
-                        div { class: "env-hint", "auto-loaded from "
-                            span { "OPENAI_API_KEY" }
-                            " in .env"
-                        }
-                    }
-                    div { class: "provider-card",
-                        div { class: "provider-header",
-                            span { class: "provider-name", "Venice.ai" }
-                            span { class: if has_venice { "provider-badge active" } else { "provider-badge inactive" },
-                                if has_venice { "active" } else { "no key" }
-                            }
-                        }
-                        div { class: "token-row",
-                            input {
-                                class: "token-input",
-                                r#type: "password",
-                                value: "{venice_val}",
-                                placeholder: "venice-...",
-                                oninput: move |ev| venice_key.set(ev.value()),
-                            }
-                        }
-                        div { class: "env-hint", "auto-loaded from "
-                            span { "VENICE_API_KEY" }
-                            " in .env"
-                        }
-                    }
-                }
-                div { class: "settings-section",
-                    div { class: "settings-title", "Server" }
-                    div { class: "provider-card",
-                        div { class: "provider-header",
-                            span { class: "provider-name", "trios-server" }
-                            span { class: if is_connected { "provider-badge active" } else { "provider-badge inactive" },
-                                if is_connected { "ws:9005 \u{2713}" } else { "offline" }
-                            }
-                        }
-                        div { class: "env-hint",
-                            span { "v{BUILD_VERSION}" }
-                            " — ws://localhost:9005/ws"
-                        }
-                    }
-                }
-            }
-        }
-        div { id: "ver", "v{BUILD_VERSION}" }
     }
+}
+
+/// MCP tool descriptor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct McpTool {
+    /// Tool name.
+    pub name: String,
+    /// Tool description.
+    pub description: String,
+    /// JSON schema for tool parameters.
+    pub parameters: Option<String>,
+}
+
+// ─── Settings types ──────────────────────────────────────────
+
+/// Settings atom.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Settings {
+    /// Active theme.
+    pub theme: Theme,
+    /// API key for z.ai direct chat.
+    pub api_key: String,
+    /// MCP server URL override.
+    pub mcp_url: String,
+    /// Sidebar collapsed state.
+    pub sidebar_collapsed: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            theme: Theme::Dark,
+            api_key: String::new(),
+            mcp_url: "http://localhost:9005".to_string(),
+            sidebar_collapsed: false,
+        }
+    }
+}
+
+/// Theme variant.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Theme {
+    /// Dark theme (default).
+    Dark,
+    /// Light theme.
+    Light,
+}
+
+// ─── Global Signal atoms (Jotai-style) ──────────────────────
+
+/// Global agents atom. Use `use_agents_atom()` to access.
+static AGENTS_ATOM: GlobalSignal<Vec<Agent>> = Signal::new(Vec::new());
+
+/// Global chat state atom. Use `use_chat_atom()` to access.
+static CHAT_ATOM: GlobalSignal<ChatState> = Signal::new(ChatState::default());
+
+/// Global MCP state atom. Use `use_mcp_atom()` to access.
+static MCP_ATOM: GlobalSignal<McpState> = Signal::new(McpState::default());
+
+/// Global settings atom. Use `use_settings_atom()` to access.
+static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::new(Settings::default());
+
+// ─── Atom accessors (Jotai-style hooks) ─────────────────────
+
+/// Access the global agents atom.
+///
+/// # Example
+/// ```rust,ignore
+/// fn MyComponent() -> Element {
+///     let agents = use_agents_atom();
+///     rsx! { {agents.len()} agents loaded }
+/// }
+/// ```
+pub fn use_agents_atom() -> Signal<Vec<Agent>> {
+    AGENTS_ATOM
+}
+
+/// Access the global chat state atom.
+pub fn use_chat_atom() -> Signal<ChatState> {
+    CHAT_ATOM
+}
+
+/// Access the global MCP state atom.
+pub fn use_mcp_atom() -> Signal<McpState> {
+    MCP_ATOM
+}
+
+/// Access the global settings atom.
+pub fn use_settings_atom() -> Signal<Settings> {
+    SETTINGS_ATOM
 }
