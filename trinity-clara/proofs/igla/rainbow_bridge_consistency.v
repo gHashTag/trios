@@ -236,7 +236,7 @@ Lemma lamport_monotone_step :
   forall e : Event,
     ev_lamport e + 1 > ev_lamport e.
 Proof.
-  intros e. apply Nat.lt_succ_diag_r.
+  intros e. lia.
 Qed.
 
 (* Lemma 6 — channel_of_payload_total: every Payload has a unique
