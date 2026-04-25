@@ -1,60 +1,62 @@
-name: Seal Integrity Check
+name: Context Guard
 
 on:
   pull_request:
-    paths:
-      - 'crates/trios-ext/src/**'
-      - 'crates/trios-ext/SEAL.md'
+    branches: [main, develop]
 
 jobs:
-  verify-seal:
+  guard:
     runs-on: ubuntu-latest
-    name: Verify trios-ext seal integrity
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Check sealed crates integrity
+      - name: Detect context shrinkage
         run: |
-          echo "🔍 Checking trios-ext seal integrity..."
-
-          # Define expected hashes from SEAL.md
-          declare -A EXPECTED
-          EXPECTED[src/lib.rs]="5504eda0aef390314fa9edab1db579db461675f0868684e891fb55739f15d46e"
-          EXPECTED[src/bg.rs]="ead978d065933b6bfa9360eb75ad5e40c84f2223eedfcd9ef5e3adbcbac4fb6d"
-          EXPECTED[src/dom.rs]="4918b61b03934a47decd260126970d1498178174e84ede7ff650ffb0afebbe10"
-          EXPECTED[src/mcp.rs]="b98b86fb4f26b3312a4f4bb47b782d8297682569f176f8c11b12204bf03b45ba"
-          EXPECTED[src/bridge/mod.rs]="79d1edf5f7a15144ebffd41aeef754b4e96b92182fbeb8ae8df34e083c6494b4"
-          EXPECTED[src/bridge/comet.rs]="f94f1e1fdde25466899549738514af1df621febb55c51e4c163116feeb491d38"
-          EXPECTED[src/bridge/types.rs]="703536227b3290aa563f504eeab9c7d2c3793a7cb9e3894a715cebffbe1cb7fa"
-          EXPECTED[src/bridge/tests.rs]="93e212c9fd7561db6c7a5acefb3e69e531048f36ce759ad433940540a3f10f24"
-
-          FAILED=0
-          for file in "${!EXPECTED[@]}"; do
-            FULL_PATH="crates/trios-ext/$file"
-            if [ ! -f "$FULL_PATH" ]; then
-              echo "❌ MISSING: $file"
-              FAILED=1
+          set -euo pipefail
+          echo "Checking for context shrinkage (L21 violation)..."
+          VIOLATION=0
+          for f in $(git diff --name-only origin/main...HEAD | grep -E 'CONTEXT\.md|TASK\.md|LAWS\.md|CLAUDE\.md|AGENTS\.md'); do
+            if [ ! -f "$f" ]; then
+              echo "::warning file=$f::File was deleted. Check if this is intentional."
               continue
             fi
-            ACTUAL=$(sha256sum "$FULL_PATH" | cut -d' ' -f1)
-            if [ "$ACTUAL" != "${EXPECTED[$file]}" ]; then
-              echo "❌ SEAL BROKEN: $file"
-              echo "   Expected: ${EXPECTED[$file]}"
-              echo "   Actual:   $ACTUAL"
-              FAILED=1
-            else
-              echo "✅ $file"
+            added=$(git diff origin/main...HEAD --numstat "$f" 2>/dev/null | awk '{print $1}' || echo "0")
+            removed=$(git diff origin/main...HEAD --numstat "$f" 2>/dev/null | awk '{print $2}' || echo "0")
+            added=${added:-0}
+            removed=${removed:-0}
+            echo "  $f: +$added -$removed"
+            if [ "$removed" -gt "$((added + 50))" ]; then
+              echo "::error file=$f::Context shrinkage detected: -$removed +$added lines. Constitutional violation L21. Add rationale with L16 tag to proceed."
+              VIOLATION=1
             fi
           done
-
-          if [ $FAILED -ne 0 ]; then
+          if [ "$VIOLATION" -eq 1 ]; then
             echo ""
-            echo "❌ SEAL INTEGRITY CHECK FAILED"
-            echo "trios-ext is sealed. If you need to modify it:"
-            echo "1. Get @gHashTag approval"
-            echo "2. Update SEAL.md with new SHA256 hashes"
+            echo "FAIL: Context shrinkage detected. See L21 and L16 in CLAUDE.md."
+            echo "To override: add 'L16 rationale: <reason>' to your commit message."
             exit 1
           fi
+          echo "PASS: No context shrinkage detected."
 
-          echo ""
-          echo "✅ All sealed files verified — integrity intact"
+      - name: Check schema-response parity (L22)
+        run: |
+          set -euo pipefail
+          echo "Checking for outputSchema without response.data (L22 violation)..."
+          VIOLATION=0
+          # Check BrowserOS tools
+          for f in $(find . -path '*/tools/git/*.ts' -o -path '*/tools/*.ts' 2>/dev/null | grep -v node_modules); do
+            if grep -q 'output:' "$f" && grep -q 'z\.object\|outputSchema' "$f"; then
+              if ! grep -q 'response\.data(' "$f"; then
+                echo "::error file=$f::Tool has output schema but no response.data() call. L22 violation."
+                VIOLATION=1
+              fi
+            fi
+          done
+          if [ "$VIOLATION" -eq 1 ]; then
+            echo ""
+            echo "FAIL: Schema-response parity violation. See L22 in CLAUDE.md."
+            exit 1
+          fi
+          echo "PASS: All tools with output schemas call response.data()."

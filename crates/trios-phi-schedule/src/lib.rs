@@ -76,20 +76,24 @@ pub fn cosine_lr(step: usize, max_steps: usize, base_lr: f32) -> f32 {
 
 /// Issue #54: Phi-decay LR schedule (hypothesis)
 ///
-/// Decays from base_lr to α_φ (asymptotic floor).
-/// Formula: LR = base_lr * α_φ^(-t/τ)
+/// Decays from base_lr using φ-based decay.
+/// Formula: LR = base_lr * φ^(-t/τ)
 /// where t = (step - warmup) and τ = max_steps / (φ × 27)
+///
+/// This hypothesis: α_φ (≈0.118) relates to decay structure, not absolute LR.
+/// The decay is bounded to prevent vanishing LR.
 pub fn phi_decay_lr(step: usize, max_steps: usize, base_lr: f32, warmup_steps: usize) -> f32 {
     let phi = gf_constants().phi as f32;
-    let alpha_phi = phi.powf(-3.0);  // ≈ 0.23607
 
     if step < warmup_steps {
         base_lr
     } else {
         let tau = max_steps as f32 / (phi * 27.0);
         let t = (step - warmup_steps) as f32 / tau;
-        // Decay towards α_φ as floor
-        base_lr * alpha_phi.powf(-t.min(10.0))  // Clamp exponent to prevent overflow
+        // Decay using phi^(-t/τ) which decreases since phi > 1
+        let decay = phi.powf(-t.min(10.0));
+        // Ensure LR doesn't vanish completely (1e-6 minimum)
+        (base_lr * decay).max(1e-6)
     }
 }
 
@@ -147,5 +151,122 @@ mod tests {
         let lr = phi_schedule(5, base_lr, 0);
         // Division by zero should not panic; result may be NaN or inf
         assert!(lr.is_nan() || lr.is_infinite() || lr == 0.0);
+    }
+
+    // === Issue #54 tests ===
+
+    #[test]
+    fn test_flat_lr_constant() {
+        let base_lr = 3e-4_f32;
+        let lr_0 = flat_lr(0, base_lr);
+        let lr_100 = flat_lr(100, base_lr);
+        let lr_1000 = flat_lr(1000, base_lr);
+
+        assert_eq!(lr_0, base_lr);
+        assert_eq!(lr_100, base_lr);
+        assert_eq!(lr_1000, base_lr);
+    }
+
+    #[test]
+    fn test_cosine_lr_decay() {
+        let base_lr = 3e-4_f32;
+        let max_steps = 1000;
+
+        let lr_0 = cosine_lr(0, max_steps, base_lr);
+        let lr_500 = cosine_lr(500, max_steps, base_lr);
+        let lr_999 = cosine_lr(999, max_steps, base_lr);
+
+        assert_eq!(lr_0, base_lr, "Step 0 should return base_lr");
+        assert!(lr_500 < lr_0, "LR should decay by midpoint");
+        assert!(lr_999 < lr_500, "LR should continue decaying");
+        assert!(lr_999 < 1e-6_f32, "Final LR should approach 0");
+    }
+
+    #[test]
+    fn test_cosine_lr_monotonic_decay() {
+        let base_lr = 1.0_f32;
+        let max_steps = 1000;
+
+        // Cosine decay should monotonically decrease
+        let lr_0 = cosine_lr(0, max_steps, base_lr);
+        let lr_25 = cosine_lr(250, max_steps, base_lr);
+        let lr_50 = cosine_lr(500, max_steps, base_lr);
+        let lr_75 = cosine_lr(750, max_steps, base_lr);
+        let lr_100 = cosine_lr(1000, max_steps, base_lr);
+
+        assert_eq!(lr_0, base_lr, "Step 0 should return base_lr");
+        assert!(lr_25 < lr_0, "LR should decay from start");
+        assert!(lr_50 < lr_25, "LR should continue decaying");
+        assert!(lr_75 < lr_50, "LR should continue decaying");
+        assert!(lr_100 <= lr_75, "LR should reach minimum at end");
+        assert!(lr_100 < 1e-6_f32, "Final LR should approach 0");
+    }
+
+    #[test]
+    fn test_phi_decay_lr_warmup() {
+        let base_lr = 3e-4_f32;
+        let max_steps = 1000;
+        let warmup = 100;
+
+        // During warmup, LR should be constant
+        let lr_0 = phi_decay_lr(0, max_steps, base_lr, warmup);
+        let lr_50 = phi_decay_lr(50, max_steps, base_lr, warmup);
+        let lr_99 = phi_decay_lr(99, max_steps, base_lr, warmup);
+
+        assert_eq!(lr_0, base_lr);
+        assert_eq!(lr_50, base_lr);
+        assert_eq!(lr_99, base_lr);
+    }
+
+    #[test]
+    fn test_phi_decay_lr_post_warmup() {
+        let base_lr = 3e-4_f32;
+        let max_steps = 1000;
+        let warmup = 100;
+
+        let lr_warmup = phi_decay_lr(99, max_steps, base_lr, warmup);
+        // Use step 200 to ensure decay is visible (tau ≈ 23)
+        let lr_decayed = phi_decay_lr(200, max_steps, base_lr, warmup);
+        let lr_later = phi_decay_lr(500, max_steps, base_lr, warmup);
+
+        assert_eq!(lr_warmup, base_lr, "Last warmup step should be base_lr");
+        // LR should decay after warmup (decrease from base_lr)
+        assert!(lr_decayed < base_lr, "LR should decay after warmup");
+        // LR should continue decaying or stay at floor
+        assert!(lr_later <= lr_decayed, "LR should continue decaying");
+    }
+
+    #[test]
+    fn test_lr_schedule_54_flat() {
+        let max_steps = 1000;
+        let lr_0 = lr_schedule_54(LrScheduleType::Flat, 0, max_steps);
+        let lr_500 = lr_schedule_54(LrScheduleType::Flat, 500, max_steps);
+        let lr_999 = lr_schedule_54(LrScheduleType::Flat, 999, max_steps);
+
+        assert_eq!(lr_0, 3e-4_f32);
+        assert_eq!(lr_500, 3e-4_f32);
+        assert_eq!(lr_999, 3e-4_f32);
+    }
+
+    #[test]
+    fn test_lr_schedule_54_cosine() {
+        let max_steps = 1000;
+        let lr_0 = lr_schedule_54(LrScheduleType::Cosine, 0, max_steps);
+        let lr_999 = lr_schedule_54(LrScheduleType::Cosine, 999, max_steps);
+
+        assert_eq!(lr_0, 3e-4_f32);
+        assert!(lr_999 < 3e-4_f32);
+    }
+
+    #[test]
+    fn test_lr_schedule_54_phi_decay() {
+        let max_steps = 1000;
+        let lr_99 = lr_schedule_54(LrScheduleType::PhiDecay, 99, max_steps);
+        let lr_100 = lr_schedule_54(LrScheduleType::PhiDecay, 100, max_steps);
+        let lr_500 = lr_schedule_54(LrScheduleType::PhiDecay, 500, max_steps);
+
+        assert_eq!(lr_99, 3e-4_f32, "Step 99 should be in warmup");
+        // LR changes after warmup
+        assert!(lr_100 != 3e-4_f32 || lr_500 != 3e-4_f32);
     }
 }

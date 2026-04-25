@@ -40,14 +40,27 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], args.port));
+    let ws_addr = std::net::SocketAddr::from(([0, 0, 0, 0], args.port));
+    let relay_port = args.port + 1; // Relay on port+1 (default: 7475)
+    let relay_addr = std::net::SocketAddr::from(([0, 0, 0, 0], relay_port));
 
     tracing::info!("🚀 Starting Trinity Agent Bridge");
     tracing::info!("   Repo: {}", args.repo);
-    tracing::info!("   Port: {}", args.port);
+    tracing::info!("   WebSocket: ws://{}", ws_addr);
+    tracing::info!("   Relay HTTP: http://{}", relay_addr);
 
     let server = Arc::new(BridgeServer::new(&args.repo, args.token));
-    server.serve(addr).await?;
+
+    // Start relay HTTP+SSE server in background
+    let relay_server = server.clone();
+    tokio::spawn(async move {
+        if let Err(e) = trios_bridge::relay::serve_relay(relay_server, relay_addr).await {
+            tracing::error!("Relay server error: {}", e);
+        }
+    });
+
+    // Start WebSocket server (blocking)
+    server.serve(ws_addr).await?;
 
     Ok(())
 }

@@ -47,6 +47,11 @@ impl BridgeServer {
         self.github_token.as_deref()
     }
 
+    /// Subscribe to the broadcast channel (for SSE relay).
+    pub fn subscribe(&self) -> broadcast::Receiver<String> {
+        self.tx.subscribe()
+    }
+
     /// Broadcast a message to all connected clients.
     pub fn broadcast_message(&self, msg: &BridgeMessage) -> Result<()> {
         let json = serde_json::to_string(msg)?;

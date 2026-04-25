@@ -1,0 +1,35 @@
+id: TRIOS-103
+title: "cargo fix workspace warnings"
+assignee_pool: [claude-code, opencode]
+priority: P2
+estimated_loc: 100
+estimated_minutes: 15
+
+scope:
+  touch_only:
+    - crates/trios-ca-mask/**
+    - crates/trios-golden-float/**
+    - crates/trios-hybrid/**
+    - crates/trios-sdk/**
+    - crates/trios-vm/**
+    - crates/trios-vsa/**
+  do_not_touch:
+    - crates/trios-ext/**
+    - crates/trios-server/**
+    - extension/**
+
+depends_on: []
+blocks: []
+
+acceptance_criteria:
+  - "cargo clippy --workspace 2>&1 | grep 'crates/trios-ca-mask' | wc -l == 0"
+  - "cargo clippy --workspace 2>&1 | grep 'crates/trios-golden-float' | wc -l == 0"
+  - "cargo clippy --workspace 2>&1 | grep 'crates/trios-hybrid' | wc -l == 0"
+  - "cargo build --workspace"
+
+invariants_must_hold_after:
+  - "All INVARIANTS.md checks pass"
+
+deliverable:
+  branch: fix/TRIOS-103-clippy-warnings
+  pr_title: "fix: clippy warnings in trios-ca-mask, trios-golden-float, trios-hybrid"

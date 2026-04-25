@@ -1,0 +1,28 @@
+id: TRIOS-104
+title: "fix TypeScript/Bun types in scripts"
+assignee_pool: [opencode]
+priority: P1
+estimated_loc: 30
+estimated_minutes: 10
+
+scope:
+  touch_only:
+    - scripts/tsconfig.json
+    - scripts/package.json
+  do_not_touch:
+    - crates/**
+    - extension/**
+
+depends_on: []
+blocks: []
+
+acceptance_criteria:
+  - "test -f scripts/tsconfig.json"
+  - "grep bun-types scripts/tsconfig.json || grep '@types/bun' scripts/package.json"
+
+invariants_must_hold_after:
+  - "All INVARIANTS.md checks pass"
+
+deliverable:
+  branch: fix/TRIOS-104-bun-types
+  pr_title: "fix(scripts): add Bun types for TypeScript"

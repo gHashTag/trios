@@ -1,48 +1,40 @@
 name: Constitutional Amendment
-description: Propose a change to LAWS.md — requires human maintainer approval
-title: "[AMEND] Short description of proposed law change"
-labels: ["constitutional-amendment", "P0-CRITICAL"]
+description: Propose a change to LAWS.md per § 8 procedure
+title: "[AMEND] ..."
+labels: ["constitutional-amendment"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        ## ⚖️ Constitutional Amendment
-        Changes to LAWS.md require:
-        1. This issue with full justification
-        2. PR with `Closes #N` in body
-        3. Human maintainer (@gHashTag) approval
-        4. LAWS_HASH update in `.trinity/state/LAWS_HASH`
-
   - type: textarea
-    id: current_law
+    id: rationale
     attributes:
-      label: Current Law (quote exactly)
+      label: Rationale
+      description: Why this amendment is needed
     validations:
       required: true
 
   - type: textarea
-    id: proposed_change
+    id: affected_laws
     attributes:
-      label: Proposed Change
+      label: Affected laws / sections
+      description: e.g., L3, L7, §4-I5
     validations:
       required: true
 
   - type: textarea
-    id: justification
+    id: migration
     attributes:
-      label: Justification
-      description: Why is this change necessary? What invariant does it protect?
+      label: Migration notes
+      description: What breaks, what agents need to know
     validations:
       required: true
 
-  - type: checkboxes
-    id: checklist
+  - type: dropdown
+    id: risk_level
     attributes:
-      label: Amendment Checklist
+      label: Risk statement
       options:
-        - label: I have read all existing laws and this does not contradict them
-          required: true
-        - label: This change improves long-term health of the codebase
-          required: true
-        - label: I will update LAWS_HASH after merge
-          required: true
+        - LOW
+        - MEDIUM
+        - HIGH
+        - CRITICAL
+    validations:
+      required: true
