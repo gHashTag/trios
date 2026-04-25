@@ -134,8 +134,9 @@ Definition HeartbeatStale (t_now t_last : nat) : Prop :=
 Example counter_heartbeat_stale :
   exists t_now t_last, HeartbeatStale t_now t_last.
 Proof.
-  exists 20000. exists 0.
-  unfold HeartbeatStale, HEARTBEAT_MAX_S. simpl. lia.
+  (* Symbolic witness — avoids Init.Nat.of_num_uint computation in lia. *)
+  exists (HEARTBEAT_MAX_S + 1). exists 0.
+  unfold HeartbeatStale. lia.
 Qed.
 
 (* -- 3. counter_lamport_regression ------------------------------- *)
@@ -184,7 +185,8 @@ Definition FunnelUnreachable (latency_ms : nat) : Prop :=
 Example counter_funnel_unreachable :
   exists l, FunnelUnreachable l.
 Proof.
-  exists 5000. unfold FunnelUnreachable, LATENCY_P95_MS.
+  (* Symbolic witness — avoids Init.Nat.of_num_uint computation in lia. *)
+  exists (LATENCY_P95_MS + 1). unfold FunnelUnreachable.
   lia.
 Qed.
 
