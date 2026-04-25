@@ -135,7 +135,10 @@
           "G7_doi": "closed (Zenodo 10.5281/zenodo.19227877)"
         }
       }
-    }
+    },
+    "invariant_count": 8,
+    "last_updated": "2026-04-25T16:50:00Z",
+    "last_updated_by": "perplexity-computer-l13"
   },
   "trinity_identity": "φ² + φ⁻² = 3",
   "nca_loss_weight": 0.25,
@@ -411,6 +414,93 @@
           27000
         ]
       }
+    },
+    {
+      "id": "INV-8",
+      "name": "rainbow_bridge_consistency",
+      "coq_theorem": "seven_channels_total",
+      "coq_file": "trinity-clara/proofs/igla/rainbow_bridge_consistency.v",
+      "status": "Admitted",
+      "admitted_count": 2,
+      "description": "Rainbow Bridge online synchronisation protocol consistency: 3 layers (Lamport . CRDT . Merkle) x 7 channels (ROY G BIV), per-agent Lamport monotonicity, ed25519 signatures on honey channel, p95 latency budget 2000ms, watchdog heartbeat deadline 4h. Runtime enforces 7 BridgeError variants each mirrored by a falsify_* test and a counter_* Coq lemma.",
+      "trinity_link": "3 layers = phi^2 + phi^-2 = 3 (Trinity Identity); 3 x 7 channels = 21 = F_8 (Fibonacci). Zenodo DOI 10.5281/zenodo.19227877.",
+      "proven_theorems": [
+        "seven_channels_total",
+        "three_layers_total",
+        "funnel_latency_bound",
+        "heartbeat_release_bound",
+        "lamport_monotone_step",
+        "channel_of_payload_total",
+        "trinity_identity_layer_count",
+        "split_brain_decidable"
+      ],
+      "admitted": [
+        "at_least_once_delivery_probabilistic",
+        "no_split_brain_probabilistic"
+      ],
+      "falsification_examples": [
+        "counter_duplicate_claim",
+        "counter_heartbeat_stale",
+        "counter_lamport_regression",
+        "counter_unsigned_honey",
+        "counter_split_brain",
+        "counter_funnel_unreachable",
+        "counter_channel_mismatch"
+      ],
+      "runtime_check": {
+        "condition": "event.lamport > prev_same_agent.lamport && event.channel == channel_of_payload(event.payload) && (event.channel != Green || event.signed) && funnel_p95_ms <= 2000 && heartbeat_age_s <= 14400",
+        "action": "abort",
+        "message": "INV-8 violated: Rainbow Bridge consistency breach — one of {DuplicateClaim, HeartbeatStale, LamportRegression, UnsignedHoney, SplitBrainDetected, FunnelUnreachable, ChannelMismatch}"
+      },
+      "runtime_target": "crates/trios-rainbow-bridge/src/bridge.rs::Bridge::accept",
+      "numeric_anchor": {
+        "latency_p95_ms": 2000,
+        "heartbeat_max_s": 14400,
+        "channel_count": 7,
+        "layer_count": 3,
+        "phi_identity": "phi^2 + phi^-2 = 3",
+        "fibonacci_index": "F_8 = 21 = 3 * 7"
+      },
+      "bands": {
+        "latency_budget_ms": [
+          0,
+          2000
+        ],
+        "heartbeat_budget_s": [
+          0,
+          14400
+        ]
+      },
+      "rust_tests": [
+        "falsify_duplicate_claim",
+        "falsify_heartbeat_stale",
+        "falsify_lamport_regression",
+        "falsify_unsigned_honey",
+        "falsify_split_brain",
+        "falsify_funnel_unreachable",
+        "falsify_channel_mismatch",
+        "integration_round_trip_all_seven_channels"
+      ],
+      "preregistration": {
+        "file": "docs/infrastructure/preregistration_rainbow.md",
+        "hash_algo": "blake3",
+        "hash": "f9af7cff56a3cc5676a2c04ccef1ffaffc2b091b6f1f1ada74ae05f7ee65b440",
+        "statistical_test": "Welch two-sample one-tailed t-test",
+        "alpha": 0.01,
+        "effect_size_min_ms": 30000,
+        "n_required_per_arm": 2100,
+        "multiple_testing": "Bonferroni across 7 channels",
+        "power_target": 0.8,
+        "seed_set": [
+          "alpha-rng",
+          "beta-rng",
+          "gamma-rng"
+        ],
+        "one_shot": "https://github.com/gHashTag/trios/issues/267",
+        "anchored_in": "assertions/hive_state.json::pre_registration.INV-8"
+      },
+      "one_shot_issue": "https://github.com/gHashTag/trios/issues/267",
+      "lane": "L13"
     }
   ],
   "enforcement": {
