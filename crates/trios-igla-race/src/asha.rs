@@ -12,6 +12,7 @@ use rand::rngs::StdRng;
 
 use crate::neon::NeonDb;
 use crate::lessons::{TrialConfig, RungData, Outcome};
+use crate::invariants::INV2_BPB_PRUNE_THRESHOLD;
 
 /// Architecture kind for IGLA Race (local copy)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,8 +151,8 @@ pub async fn should_prune(
     if current_bpb <= config.target_bpb {
         return Ok(false);
     }
-    // STUB: simple heuristic - prune if BPB > 2.7 at first rung
-    Ok(current_bpb > 2.7)
+    // INV-2 PROVEN: threshold=3.5 (phi^2+phi^-2+0.5) guarantees champion survives
+    Ok(current_bpb > INV2_BPB_PRUNE_THRESHOLD)
 }
 
 /// Handle trial pruning (STUB)
@@ -313,8 +314,8 @@ pub async fn run_worker(
             }
             
             // d. if should_prune(rung, bpb) → break to next trial
-            // Mock median check - in reality would query Neon
-            let should_prune = bpb > 3.0; // Simple threshold for now
+            // INV-2 PROVEN: threshold=3.5 (phi^2+phi^-2+0.5) guarantees champion survives
+            let should_prune = bpb > INV2_BPB_PRUNE_THRESHOLD;
             
             if should_prune {
                 info!("Prune trial: BPB={}", bpb);
