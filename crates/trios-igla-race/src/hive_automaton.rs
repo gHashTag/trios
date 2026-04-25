@@ -567,7 +567,7 @@ mod tests {
         w.only_owned_files_touched = true;
         w.push_succeeded = true;
         // Drive to Done.
-        for _ in 0..6 {
+        for _ in 0..7 {
             h.next_action(&w);
         }
         assert_eq!(h.state(), State::Done);
@@ -622,7 +622,7 @@ mod tests {
         w.only_owned_files_touched = true;
         w.push_succeeded = true;
         // Drive Boot → Scan → Pick → Claim → Work → Commit → CiWait
-        for _ in 0..5 {
+        for _ in 0..7 {
             h.next_action(&w);
         }
         // CI new failure → Blocked.
