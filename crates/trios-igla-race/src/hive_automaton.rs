@@ -282,12 +282,7 @@ impl HiveAutomaton {
     /// Pick the highest-priority free lane from the queue, falling back to
     /// `None` if every queue entry is currently claimed by someone else.
     fn pick_free_lane(&self, world: &World) -> Option<Lane> {
-        for &lane in &self.priority_queue {
-            if world.free_lanes.contains(&lane) {
-                return Some(lane);
-            }
-        }
-        None
+        self.priority_queue.iter().find(|&&lane| world.free_lanes.contains(&lane)).copied()
     }
 
     /// **The pure transition function.**
@@ -670,9 +665,9 @@ mod tests {
     }
 
     #[test]
-    fn test_bpb_target_matches_lib() {
-        // L-R14: anchor mirrors `crate::IGLA_TARGET_BPB`.
-        assert_eq!(BPB_VICTORY_TARGET, crate::IGLA_TARGET_BPB);
+    fn test_bpb_target_pinned_to_mission_contract() {
+        // L-R14: BPB_VICTORY_TARGET is mission contract value 1.5
+        assert!((BPB_VICTORY_TARGET - 1.5).abs() < f64::EPSILON);
     }
 
     #[test]

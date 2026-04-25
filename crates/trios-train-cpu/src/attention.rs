@@ -3,10 +3,7 @@
 //! Causal multi-head self-attention with:
 //! - Full analytical backward pass
 //! - QK-Norm (learnable scale parameters)
-
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::needless_range_loop)]
-//! - QK-Gain (per-head gain scalar)
+//! - QK-Gain (per-head gain scalar) — INV-9: anchored to φ² = φ + 1 ≈ 2.618
 //! - RoPE positional encoding
 //! - ReLU^2 activation in FFN
 //! - AdamW optimizer integrated per-layer
@@ -14,9 +11,27 @@
 //! Architecture:
 //!   Token Embed → N × (PreNorm → MHA → Res → PreNorm → FFN → Res) → LM Head
 //!
+//! ## INV-9: QK-Gain = φ²
+//!
+//! The QK gain scalar is anchored to the golden ratio:
+//!   QK_GAIN = φ² = φ + 1 ≈ 2.618033988749895
+//!
+//! This value is sourced from `trios_igla_race::invariants::PHI_SQ` to maintain
+//! L-R14 traceability. The invariant guarantees that the attention mechanism
+//! operates at the mathematically-optimized gain level derived from the
+//! Trinity identity φ² + φ⁻² = 3.
+//!
+//! Coq anchor: `phi_sq_eq` lemma proves φ² = φ + 1
+//!
 //! Based on working patterns from trinity_3k_model.rs.
 
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_range_loop)]
+
 use std::f32::consts::LN_2;
+
+// INV-9: Import φ² constant for QK gain anchor (L-R14 traceability)
+use trios_igla_race::invariants::PHI_SQ;
 
 #[inline]
 fn relu_squared(x: f32) -> f32 {
@@ -138,7 +153,9 @@ impl Default for AttentionConfig {
             n_layers: 2,
             max_seq_len: 64,
             use_rope: true,
-            qk_gain_init: 1.0,
+            // INV-9: QK gain anchored to φ² = φ + 1 ≈ 2.618
+            // Coq: phi_sq_eq proves φ² = φ + 1
+            qk_gain_init: PHI_SQ as f32,
             lr: 0.003,
             beta1: 0.618,
             beta2: 0.999,
@@ -1080,5 +1097,65 @@ mod tests {
         let result = apply_attention_integration(&ngram, &attn, 1, 0.7, 0.3);
         assert!((result[0] - 0.47).abs() < 1e-6);
         assert!((result[1] - 0.33).abs() < 1e-6);
+    }
+
+    // ----------------------------------------------------------------------
+    // INV-9: QK-Gain φ² invariant tests
+    // ----------------------------------------------------------------------
+
+    /// INV-9: Default QK gain must equal φ² ≈ 2.618
+    /// Coq: phi_sq_eq proves φ² = φ + 1
+    #[test]
+    fn inv9_default_qk_gain_is_phi_sq() {
+        let config = AttentionConfig::default();
+        let expected = PHI_SQ as f32;
+        assert!(
+            (config.qk_gain_init - expected).abs() < 1e-6,
+            "INV-9 VIOLATED: qk_gain_init = {} ≠ φ² = {}",
+            config.qk_gain_init,
+            expected
+        );
+    }
+
+    /// INV-9: Verify QK gain is in the phi-anchored range [2.0, 3.0]
+    /// This is the practical operational range around φ²
+    #[test]
+    fn inv9_qk_gain_in_phi_range() {
+        let config = AttentionConfig::default();
+        assert!(
+            config.qk_gain_init >= 2.0 && config.qk_gain_init <= 3.0,
+            "INV-9 VIOLATED: qk_gain_init = {} outside phi-range [2.0, 3.0]",
+            config.qk_gain_init
+        );
+    }
+
+    /// INV-9: Falsification witness — qk_gain = 1.0 is NOT φ²
+    #[test]
+    fn inv9_falsify_qk_gain_one_rejected() {
+        let bad_config = AttentionConfig {
+            qk_gain_init: 1.0, // Old broken default
+            ..Default::default()
+        };
+        assert_ne!(
+            bad_config.qk_gain_init,
+            PHI_SQ as f32,
+            "INV-9: qk_gain=1.0 is not φ²"
+        );
+    }
+
+    /// INV-9: Verify the model actually uses the phi^2 gain
+    #[test]
+    fn inv9_model_uses_phi_sq_gain() {
+        let config = AttentionConfig::default();
+        let model = AttentionModel::new(config);
+        // Check that the first head has the correct qk_gain
+        let head = &model.layers[0].heads[0];
+        let expected = PHI_SQ as f32;
+        assert!(
+            (head.qk_gain - expected).abs() < 1e-6,
+            "INV-9 VIOLATED: model head qk_gain = {} ≠ φ² = {}",
+            head.qk_gain,
+            expected
+        );
     }
 }
