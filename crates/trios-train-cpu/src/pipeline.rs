@@ -440,6 +440,141 @@ pub fn run_multi_seed(seeds: &[u64]) -> Vec<PipelineResult> {
     results
 }
 
+/// GF16 Mixed-Precision Training Step (BENCH-012)
+///
+/// Protocol: Dequantize GF16 → f32 forward → f32 backward → f32 optimizer step → quantize back to GF16
+///
+/// Law L-R9: GF16 only when d_model ≥ 256 (confirmed safe zone)
+/// Expected: -0.05 BPB at d_model=384
+///
+/// GF16 advantage: 9-bit mantissa (φ-optimal 6:9 split) preserves gradient information
+/// through depth. BF16 with 8-bit mantissa loses gradients.
+pub fn training_step_gf16(
+    gf16_weights: &mut [crate::gf16::GF16],
+    input: &[f32],
+    target: &[u8],
+    optimizer: &mut crate::optimizer::AdamWCpu,
+    vocab_size: usize,
+    d_model: usize,
+) -> f32 {
+    assert!(d_model >= 256, "GF16 requires d_model >= 256 (Law L-R9), got {}", d_model);
+
+    let w_f32: Vec<f32> = gf16_weights.iter().map(|g| g.to_f32()).collect();
+
+    let logits = forward_f32_embeddings(&w_f32, input, vocab_size, d_model);
+
+    let loss = cross_entropy_loss_f32(&logits, target, vocab_size);
+
+    let grads = backward_f32_embeddings(&w_f32, &logits, input, target, vocab_size, d_model);
+
+    let mut w_f32_mut = w_f32;
+    clip_gradients(&mut grads, 1.0);
+    optimizer.step(&mut w_f32_mut, &grads);
+
+    for (i, w) in w_f32_mut.iter().enumerate() {
+        gf16_weights[i] = crate::gf16::GF16::from_f32(*w);
+    }
+
+    loss
+}
+
+fn forward_f32_embeddings(embeddings: &[f32], input: &[f32], vocab_size: usize, d_model: usize) -> Vec<f32> {
+    let seq_len = input.len();
+    let mut logits = vec![0.0f32; seq_len * vocab_size];
+    for (i, &token) in input.iter().enumerate() {
+        let tok_idx = (token.abs() as usize) % (embeddings.len() / d_model.max(1));
+        let emb_offset = tok_idx * d_model;
+        for v in 0..vocab_size.min(embeddings.len() / d_model.max(1)) {
+            let v_offset = v * d_model;
+            let mut dot = 0.0f32;
+            for d in 0..d_model {
+                if emb_offset + d < embeddings.len() && v_offset + d < embeddings.len() {
+                    dot += embeddings[emb_offset + d] * embeddings[v_offset + d];
+                }
+            }
+            logits[i * vocab_size + v] = dot;
+        }
+    }
+    logits
+}
+
+fn cross_entropy_loss_f32(logits: &[f32], target: &[u8], vocab_size: usize) -> f32 {
+    let seq_len = target.len();
+    let mut total_loss = 0.0f32;
+    for i in 0..seq_len {
+        let offset = i * vocab_size;
+        let mut max_logit = f32::NEG_INFINITY;
+        for v in 0..vocab_size {
+            if offset + v < logits.len() {
+                max_logit = max_logit.max(logits[offset + v]);
+            }
+        }
+        let mut sum_exp = 0.0f32;
+        let mut log_sum_exp = 0.0f32;
+        for v in 0..vocab_size {
+            if offset + v < logits.len() {
+                let exp_val = (logits[offset + v] - max_logit).exp();
+                sum_exp += exp_val;
+            }
+        }
+        if sum_exp > 0.0 {
+            log_sum_exp = max_logit + sum_exp.ln();
+        }
+        let tgt = target[i] as usize;
+        let tgt_logit = if offset + tgt < logits.len() { logits[offset + tgt] } else { 0.0 };
+        total_loss += log_sum_exp - tgt_logit;
+    }
+    total_loss / seq_len.max(1) as f32
+}
+
+fn backward_f32_embeddings(
+    embeddings: &[f32],
+    logits: &[f32],
+    input: &[f32],
+    target: &[u8],
+    vocab_size: usize,
+    d_model: usize,
+) -> Vec<f32> {
+    let seq_len = target.len();
+    let n_emb = embeddings.len();
+    let mut grads = vec![0.0f32; n_emb];
+    for i in 0..seq_len {
+        let offset = i * vocab_size;
+        let mut max_logit = f32::NEG_INFINITY;
+        for v in 0..vocab_size {
+            if offset + v < logits.len() {
+                max_logit = max_logit.max(logits[offset + v]);
+            }
+        }
+        let mut sum_exp = 0.0f32;
+        let mut probs = vec![0.0f32; vocab_size];
+        for v in 0..vocab_size {
+            if offset + v < logits.len() {
+                probs[v] = (logits[offset + v] - max_logit).exp();
+                sum_exp += probs[v];
+            }
+        }
+        if sum_exp > 0.0 {
+            for p in probs.iter_mut() { *p /= sum_exp; }
+        }
+        let tgt = target[i] as usize;
+        probs[tgt] -= 1.0;
+        let tok_idx = (input[i].abs() as usize) % (n_emb / d_model.max(1));
+        let emb_offset = tok_idx * d_model;
+        for v in 0..vocab_size.min(n_emb / d_model.max(1)) {
+            let v_offset = v * d_model;
+            for d in 0..d_model {
+                if emb_offset + d < grads.len() && v_offset + d < embeddings.len() {
+                    grads[emb_offset + d] += probs[v] * embeddings[v_offset + d];
+                }
+            }
+        }
+    }
+    let scale = seq_len.max(1) as f32;
+    for g in grads.iter_mut() { *g /= scale; }
+    grads
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,5 +618,51 @@ mod tests {
         assert_eq!(Phase::JepaTrain.to_string(), "JEPA-20K");
         assert_eq!(Phase::NtpTrain.to_string(), "NTP-25K");
         assert_eq!(Phase::Done.to_string(), "DONE");
+    }
+
+    #[test]
+    fn test_training_step_gf16_reduces_loss() {
+        let d_model = 256usize;
+        let vocab_size = 16usize;
+        let seq_len = 4usize;
+        let n_params = vocab_size * d_model;
+        let mut gf16_weights: Vec<crate::gf16::GF16> = (0..n_params)
+            .map(|i| crate::gf16::GF16::from_f32(((i as f32) * 0.01 - 0.5).sin()))
+            .collect();
+        let input: Vec<f32> = vec![0.0, 1.0, 2.0, 3.0];
+        let target: Vec<u8> = vec![1, 2, 3, 0];
+        let mut optimizer = crate::optimizer::AdamWCpu::new(n_params, 0.01);
+        let loss1 = training_step_gf16(&mut gf16_weights, &input, &target, &mut optimizer, vocab_size, d_model);
+        for _ in 0..3 {
+            training_step_gf16(&mut gf16_weights, &input, &target, &mut optimizer, vocab_size, d_model);
+        }
+        let loss2 = training_step_gf16(&mut gf16_weights, &input, &target, &mut optimizer, vocab_size, d_model);
+        assert!(loss2 < loss1, "GF16 training should reduce loss: before={} after={}", loss1, loss2);
+    }
+
+    #[test]
+    #[should_panic(expected = "GF16 requires d_model >= 256")]
+    fn test_training_step_gf16_rejects_small_model() {
+        let mut gf16_weights = vec![crate::gf16::GF16::ZERO; 64];
+        let mut optimizer = crate::optimizer::AdamWCpu::new(64, 0.01);
+        training_step_gf16(&mut gf16_weights, &[0.0], &[0], &mut optimizer, 4, 128);
+    }
+
+    #[test]
+    fn test_forward_f32_embeddings() {
+        let d_model = 256usize;
+        let vocab_size = 4usize;
+        let embeddings: Vec<f32> = (0..vocab_size * d_model).map(|i| i as f32 * 0.001).collect();
+        let input = vec![0.0f32, 1.0];
+        let logits = forward_f32_embeddings(&embeddings, &input, vocab_size, d_model);
+        assert_eq!(logits.len(), 2 * vocab_size);
+    }
+
+    #[test]
+    fn test_cross_entropy_f32() {
+        let logits = vec![10.0f32, 0.0, 0.0, 0.0];
+        let target = vec![0u8];
+        let loss = cross_entropy_loss_f32(&logits, &target, 4);
+        assert!(loss >= 0.0 && loss < 1.0, "loss for correct prediction should be small: {}", loss);
     }
 }

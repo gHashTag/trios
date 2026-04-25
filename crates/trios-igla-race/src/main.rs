@@ -90,7 +90,7 @@ async fn run_worker(
 
         let config = format!(r#"{{"d_model": {}, "context": {}, "lr": {}}}"#, d_model, context, lr);
         let trial_id = uuid::Uuid::new_v4();
-        db.register_trial(trial_id, machine_id, worker_id as i32, &config).await?;
+        db.register_trial(&trial_id, machine_id, worker_id as i32, &config).await?;
 
         let output = tokio::process::Command::new("./target/release/trios-igla-trainer")
             .arg("--arch")

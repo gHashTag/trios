@@ -139,7 +139,7 @@ pub async fn mark_completed(
     final_step: usize,
     final_bpb: f64,
 ) -> Result<()> {
-    db.mark_completed(trial_id, final_step as i32, final_bpb).await?;
+    db.mark_completed(trial_id, final_bpb, final_step as i32).await?;
 
     if final_bpb < 1.5 {
         info!("IGLA FOUND! trial_id={:?}, BPB={}", trial_id, final_bpb);
@@ -156,7 +156,7 @@ pub async fn register_trial(
     config_json: &str,
 ) -> Result<Uuid> {
     let trial_id = Uuid::new_v4();
-    db.register_trial(trial_id, machine_id, worker_id as i32, config_json).await?;
+    db.register_trial(&trial_id, machine_id, worker_id as i32, config_json).await?;
     Ok(trial_id)
 }
 
@@ -192,7 +192,7 @@ pub async fn run_worker(
         let trial_id = format!("{}-w{}-t{}", machine_id, worker_id, trial_counter);
         let trial_uuid = Uuid::parse_str(&trial_id.replace("-", "")).unwrap_or_else(|_| Uuid::new_v4());
         
-        if let Err(e) = db.register_trial(trial_uuid, machine_id, worker_id as i32, &config_json).await {
+        if let Err(e) = db.register_trial(&trial_uuid, machine_id, worker_id as i32, &config_json).await {
             warn!("register trial failed: {e}");
             continue;
         }

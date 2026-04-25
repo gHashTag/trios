@@ -47,4 +47,4 @@ pub use swa_phi::{SwaState, swa_init};
 pub use residual_mix::ResidualMixConfig;
 pub use sliding_eval::SlidingEvalConfig;
 pub use jepa::{JepaConfig, JepaResult, MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, compute_jepa_loss, JepaLossConfig};
-pub use objective::{ObjectiveConfig, ComponentLosses, CombinedLoss, compute_combined_loss};
+pub use objective::{ObjectiveConfig, ComponentLosses, CombinedLoss, compute_combined_loss, NcaObjective, NcaTransitionRule, NcaRolloutResult, shannon_entropy, mse_loss};

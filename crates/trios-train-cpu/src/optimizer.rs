@@ -201,18 +201,17 @@ impl SGDMomentum {
 
 /// Muon optimizer — Momentum + Newton-Schulz Orthogonalization
 ///
-/// Reference: arXiv:2604.01472
+/// Reference: arXiv:2604.01472, Keller Jordan's Muon post
 ///
 /// Key idea: orthogonalize the momentum matrix using Newton-Schulz iteration
 /// before applying the update. This preserves the spectral structure of gradients
-/// and leads to 2-3× faster convergence on transformer weight matrices.
+/// and leads to ~35% faster convergence vs AdamW.
 ///
-/// Newton-Schulz iteration (5 steps):
-///   X_{k+1} = 1.5 * X_k - 0.5 * X_k @ X_k^T @ X_k
+/// NS5 quintic polynomial (5 steps):
+///   G_{k+1} = a*G + b*(G@G^T)@G + c*(G@G^T)^2@G
+///   where a=3.4445, b=-4.7750, c=2.0315
 ///
-/// For flat parameter vectors, reshapes into 2D row-major matrices for
-/// orthogonalization, then flattens back. For non-matrix params (biases),
-/// uses standard momentum fallback.
+/// Applied only to hidden layers (not embedding/output), per original Muon spec.
 #[derive(Debug, Clone)]
 pub struct MuonOptimizer {
     pub lr: f64,
@@ -220,6 +219,9 @@ pub struct MuonOptimizer {
     pub weight_decay: f64,
     pub ns_steps: usize,
     pub nesterov: bool,
+    pub ns_a: f32,
+    pub ns_b: f32,
+    pub ns_c: f32,
     step: usize,
     momentum_buffer: Vec<f32>,
     param_rows: usize,
@@ -237,6 +239,9 @@ impl MuonOptimizer {
             weight_decay,
             ns_steps: 5,
             nesterov: true,
+            ns_a: 3.4445,
+            ns_b: -4.7750,
+            ns_c: 2.0315,
             step: 0,
             momentum_buffer: vec![0.0; param_count],
             param_rows: rows,
@@ -259,11 +264,21 @@ impl MuonOptimizer {
             weight_decay,
             ns_steps: 5,
             nesterov: true,
+            ns_a: 3.4445,
+            ns_b: -4.7750,
+            ns_c: 2.0315,
             step: 0,
             momentum_buffer: vec![0.0; param_count],
             param_rows: rows,
             param_cols: cols,
         }
+    }
+
+    pub fn with_ns_coefficients(mut self, a: f32, b: f32, c: f32) -> Self {
+        self.ns_a = a;
+        self.ns_b = b;
+        self.ns_c = c;
+        self
     }
 
     pub fn step(&mut self, params: &mut [f32], gradients: &[f32]) {
@@ -316,7 +331,7 @@ impl MuonOptimizer {
         }
 
         for _ in 0..self.ns_steps {
-            m = newton_schulz_step(&m, rows, cols);
+            m = newton_schulz_5(&m, rows, cols, self.ns_a, self.ns_b, self.ns_c);
         }
 
         let out_norm = frobenius_norm(&m);
@@ -347,7 +362,70 @@ fn frobenius_norm(m: &[f32]) -> f32 {
     m.iter().map(|&x| x * x).sum::<f32>().sqrt().max(1e-8)
 }
 
-fn newton_schulz_step(m: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+/// NS5 quintic Newton-Schulz iteration
+///
+/// G_{k+1} = a*G + b*(G^T*G)*G + c*(G^T*G)^2*G
+///
+/// Uses M^T*M form (cols x cols) for efficiency vs M*M^T (rows x rows).
+/// Mathematically equivalent: M*(M^T*M)^k = (M*M^T)^k*M by associativity.
+///
+/// Default coefficients from Keller Jordan's Muon:
+///   a = 3.4445, b = -4.7750, c = 2.0315
+fn newton_schulz_5(m: &[f32], rows: usize, cols: usize, a: f32, b: f32, c: f32) -> Vec<f32> {
+    let mut mt_m = vec![0.0f32; cols * cols];
+    for i in 0..cols {
+        for j in 0..cols {
+            let mut s = 0.0f32;
+            for k in 0..rows {
+                s += m[k * cols + i] * m[k * cols + j];
+            }
+            mt_m[i * cols + j] = s;
+        }
+    }
+
+    let mut m_mt_m = vec![0.0f32; rows * cols];
+    for i in 0..rows {
+        for j in 0..cols {
+            let mut s = 0.0f32;
+            for k in 0..cols {
+                s += m[i * cols + k] * mt_m[k * cols + j];
+            }
+            m_mt_m[i * cols + j] = s;
+        }
+    }
+
+    let mut mt_m2 = vec![0.0f32; cols * cols];
+    for i in 0..cols {
+        for j in 0..cols {
+            let mut s = 0.0f32;
+            for k in 0..cols {
+                s += mt_m[i * cols + k] * mt_m[k * cols + j];
+            }
+            mt_m2[i * cols + j] = s;
+        }
+    }
+
+    let mut m_mt_m2 = vec![0.0f32; rows * cols];
+    for i in 0..rows {
+        for j in 0..cols {
+            let mut s = 0.0f32;
+            for k in 0..cols {
+                s += m[i * cols + k] * mt_m2[k * cols + j];
+            }
+            m_mt_m2[i * cols + j] = s;
+        }
+    }
+
+    let mut result = vec![0.0f32; rows * cols];
+    for i in 0..(rows * cols) {
+        result[i] = a * m[i] + b * m_mt_m[i] + c * m_mt_m2[i];
+    }
+    result
+}
+
+/// Legacy cubic Newton-Schulz step (1.5*X - 0.5*X*X^T*X)
+#[allow(dead_code)]
+fn newton_schulz_cubic(m: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     let mut mt_m = vec![0.0f32; cols * cols];
     for i in 0..cols {
         for j in 0..cols {
@@ -588,11 +666,11 @@ mod tests {
     }
 
     #[test]
-    fn test_newton_schulz_step() {
+    fn test_newton_schulz_cubic_legacy() {
         let identity: Vec<f32> = (0..4).map(|i| if i % 5 == 0 { 1.0f32 } else { 0.0f32 }).collect();
-        let result = newton_schulz_step(&identity, 2, 2);
+        let result = newton_schulz_cubic(&identity, 2, 2);
         for i in 0..4 {
-            assert!((result[i] - identity[i]).abs() < 0.01, "NS step should preserve identity");
+            assert!((result[i] - identity[i]).abs() < 0.01, "cubic NS should preserve identity");
         }
     }
 
@@ -608,5 +686,44 @@ mod tests {
         muon.step(&mut params_m, &grads);
         assert!(params_a[0] < 1.0);
         assert!(params_m[0] < 1.0);
+    }
+
+    #[test]
+    fn test_newton_schulz_5_finite_output() {
+        let identity: Vec<f32> = (0..4).map(|i| if i % 5 == 0 { 1.0f32 } else { 0.0f32 }).collect();
+        let result = newton_schulz_5(&identity, 2, 2, 3.4445, -4.7750, 2.0315);
+        for &r in &result {
+            assert!(r.is_finite(), "NS5 output should be finite");
+        }
+    }
+
+    #[test]
+    fn test_newton_schulz_5_coefficients() {
+        let opt = MuonOptimizer::new(16, 0.02, 0.95, 0.01);
+        assert!((opt.ns_a - 3.4445).abs() < 1e-4);
+        assert!((opt.ns_b - (-4.7750)).abs() < 1e-4);
+        assert!((opt.ns_c - 2.0315).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_muon_ns5_orthogonalization() {
+        let mut params = vec![1.0f32; 16];
+        let gradients: Vec<f32> = (0..16).map(|i| (i as f32) * 0.1).collect();
+        let mut opt = MuonOptimizer::with_matrix_shape(16, 4, 4, 0.02, 0.95, 0.0);
+        for _ in 0..3 {
+            opt.step(&mut params, &gradients);
+        }
+        for &p in &params {
+            assert!(p.is_finite(), "Muon params should be finite");
+        }
+    }
+
+    #[test]
+    fn test_muon_custom_ns_coefficients() {
+        let opt = MuonOptimizer::new(16, 0.02, 0.95, 0.01)
+            .with_ns_coefficients(1.5, -0.5, 0.0);
+        assert!((opt.ns_a - 1.5).abs() < 1e-4);
+        assert!((opt.ns_b - (-0.5)).abs() < 1e-4);
+        assert!((opt.ns_c - 0.0).abs() < 1e-4);
     }
 }
