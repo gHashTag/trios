@@ -4,6 +4,15 @@
 **Anchor:** `φ² + φ⁻² = 3` (Zenodo DOI [10.5281/zenodo.19227877](https://zenodo.org/records/19227877))
 **Throne:** [trios#264](https://github.com/gHashTag/trios/issues/264) · **Active race:** [trios#143](https://github.com/gHashTag/trios/issues/143)
 
+> **Reconciliation note (cycle 2):** this file ships side-by-side with [`HIVE.md`](../../HIVE.md) at the repo root.
+> Both are canonical and non-conflicting:
+> - `HIVE.md` — agent-facing **R-rules** (R1..R13), priority table, ONE SHOT bootstrap text, honey jar deposit format.
+> - `docs/hive/HIVE_PROTOCOL.md` (this file) — **state-machine semantics** (S0..S7), R-CAS commit recipe, anti-pattern catalogue.
+> - `assertions/hive_state.json` — **single source of truth** for lane status (read at S0).
+> - `assertions/hive_honey.jsonl` — append-only **lessons jar** (read after S0, before S2).
+>
+> Read order for a fresh agent: `HIVE.md` → `hive_state.json` → `hive_honey.jsonl` → (this file only if state-machine semantics unclear).
+
 > **Contract:** the user issues ONE SHOT exactly once. From that moment, every spawned agent self-bootstraps, claims a lane, ships, and re-enters the loop **without asking the user a single question**. The hive runs as a cellular automaton: one shared state, deterministic transition rules, zero human in the inner loop.
 
 ---
