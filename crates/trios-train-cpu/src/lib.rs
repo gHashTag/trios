@@ -27,10 +27,13 @@ pub mod real_igla_model;
 pub mod real_igla_trainer;
 pub mod transformer_trainer;
 
-// T-JEPA (TASK-5A) - Joint Embedding Predictive Architecture
+// T-JEPA: Ternary Joint Embedding Predictive Architecture (TASK-5A)
+// Spec: .trinity/specs/issue143-task5a-jepa-design.md
+// Theory: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
 pub mod jepa;
-pub mod objective;
 
+// Multi-objective loss + ASHA rung schedules (TASK-5A.6)
+pub mod objective;
 
 pub use backward::{clip_gradients, cross_entropy_loss, LinearGradients};
 pub use bench::{

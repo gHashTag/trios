@@ -1,21 +1,15 @@
-//! TASK-5E — T-JEPA Two-Phase Training (JEPA Warm-up + NTP Finetune)
+//! TASK-5D — T-JEPA Hybrid Training Binary (ASHA Rung-1)
 //!
-//! Diagnosis: NTP gradient interference with JEPA in TASK-5D.
-//! BPB=3.8165 (degraded to 4.2 by step=2999) = conflicting gradients.
+//! Multi-objective: L = 0.5*NTP + 0.25*JEPA + 0.25*NCA
+//! Components: MLP predictor + NCA auxiliary + Muon/AdamW + GF16
 //!
-//! Fix: Two-phase training:
-//!   Phase-1 (0..jepa_warmup): JEPA-only, encoder builds representations
-//!   Phase-2 (warmup..end):    NTP unfreezes with low lr, finetunes on top
+//! Key insight: encoder MUST receive NTP gradients every step.
+//! JEPA trains the predictor; NTP trains the encoder embeddings.
+//! EMA copies online→target for JEPA stability.
 //!
 //! Champion baseline: 6-gram h=384 lr=0.004 seed=43 → BPB 2.5329
 //! Gate min (ASHA Rung-1): ≤ 2.23 BPB
 //! Gate target: ≤ 2.03 BPB
-//!
-//! Usage:
-//!   cargo run --release --bin tjepa_train -- \
-//!     --seed=43 --steps=3000 --d-model=384 \
-//!     --encoder-lr=0.004 --ntp-lr=0.001 \
-//!     --jepa-warmup=1500 --hidden=256
 
 use std::fs;
 use std::time::Instant;
@@ -23,111 +17,23 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use trios_train_cpu::{
-    jepa::{MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, get_unmasked, JepaLossConfig},
-    optimizer::{MuonOptimizer, OptimizerKind, AdamWCpu},
-    objective::{NcaObjective, NcaTransitionRule, ComponentLosses, ObjectiveConfig},
+    gf16::GF16,
+    jepa::{
+        MaskConfig, EmaConfig, EmaTarget,
+        mask_spans, get_masked, get_unmasked,
+        JepaLossConfig, compute_jepa_loss,
+        predictor::{JepaPredictor, PredictorConfig},
+    },
+    optimizer::{AdamWCpu, MuonOptimizer, OptimizerKind},
+    objective::{
+        ObjectiveConfig, compute_combined_loss, ComponentLosses,
+        NcaObjective, NcaTransitionRule, NcaRolloutResult,
+    },
 };
 
 const VOCAB: usize = 128;
 const SEQ_LEN: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
-
-// ── 2-layer MLP predictor (JEPA) ──────────────────────────────────────────
-
-struct MlpPredictor {
-    w1: Vec<f32>,
-    w2: Vec<f32>,
-    m1: Vec<f32>, v1: Vec<f32>,
-    m2: Vec<f32>, v2: Vec<f32>,
-    d_model: usize,
-    hidden: usize,
-    lr: f32,
-    t: u32,
-}
-
-impl MlpPredictor {
-    fn new(d_model: usize, hidden: usize, seed: u64, lr: f32) -> Self {
-        let n1 = d_model * hidden;
-        let n2 = hidden * d_model;
-        let mut s = seed;
-        let mut lcg = move || -> f32 {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-            ((s >> 33) as f32) / (u32::MAX as f32) * 2.0 - 1.0
-        };
-        let lim1 = (6.0f32 / (d_model + hidden) as f32).sqrt();
-        let lim2 = (6.0f32 / (hidden + d_model) as f32).sqrt();
-        let w1: Vec<f32> = (0..n1).map(|_| lcg() * lim1).collect();
-        let w2: Vec<f32> = (0..n2).map(|_| lcg() * lim2).collect();
-        Self {
-            m1: vec![0.0; n1], v1: vec![0.0; n1],
-            m2: vec![0.0; n2], v2: vec![0.0; n2],
-            w1, w2, d_model, hidden, lr, t: 0,
-        }
-    }
-
-    fn forward(&self, ctx: &[f32]) -> (Vec<f32>, Vec<f32>) {
-        let d = self.d_model;
-        let h = self.hidden;
-        let h1_pre: Vec<f32> = (0..h).map(|j| {
-            (0..d).map(|i| ctx[i] * self.w1[i * h + j]).sum::<f32>()
-        }).collect();
-        let h1: Vec<f32> = h1_pre.iter().map(|&x| x.max(0.0)).collect();
-        let pred: Vec<f32> = (0..d).map(|j| {
-            (0..h).map(|i| h1[i] * self.w2[i * d + j]).sum::<f32>()
-        }).collect();
-        (h1_pre, pred)
-    }
-
-    fn backward_step(&mut self, ctx: &[f32], target: &[f32]) -> f32 {
-        let d = self.d_model;
-        let h = self.hidden;
-        let norm_t = l2_norm(target);
-        let tgt_n: Vec<f32> = if norm_t > 1e-8 { target.iter().map(|x| x / norm_t).collect() } else { target.to_vec() };
-        let (h1_pre, pred) = self.forward(ctx);
-        let norm_p = l2_norm(&pred);
-        let pred_n: Vec<f32> = if norm_p > 1e-8 { pred.iter().map(|x| x / norm_p).collect() } else { pred.clone() };
-        let loss: f32 = pred_n.iter().zip(tgt_n.iter()).map(|(p, t)| (p - t).powi(2)).sum::<f32>() / d as f32;
-        let dp: Vec<f32> = pred_n.iter().zip(tgt_n.iter()).map(|(p, t)| 2.0 * (p - t) / d as f32).collect();
-        let dot = dp.iter().zip(pred_n.iter()).map(|(a, b)| a * b).sum::<f32>();
-        let grad_pred: Vec<f32> = if norm_p > 1e-8 {
-            dp.iter().zip(pred_n.iter()).map(|(a, b)| (a - dot * b) / norm_p).collect()
-        } else { dp.clone() };
-        let h1: Vec<f32> = h1_pre.iter().map(|&x| x.max(0.0)).collect();
-        let mut dw2 = vec![0.0f32; h * d];
-        for i in 0..h { for j in 0..d { dw2[i * d + j] = h1[i] * grad_pred[j]; } }
-        let dh1: Vec<f32> = (0..h).map(|i| (0..d).map(|j| grad_pred[j] * self.w2[i * d + j]).sum::<f32>()).collect();
-        let dh1_pre: Vec<f32> = dh1.iter().zip(h1_pre.iter()).map(|(g, &x)| if x > 0.0 { *g } else { 0.0 }).collect();
-        let mut dw1 = vec![0.0f32; d * h];
-        for i in 0..d { for j in 0..h { dw1[i * h + j] = ctx[i] * dh1_pre[j]; } }
-        self.t += 1;
-        adamw_step(&mut self.w1, &dw1, &mut self.m1, &mut self.v1, self.lr, self.t, 0.618, 0.999, 0.01);
-        adamw_step(&mut self.w2, &dw2, &mut self.m2, &mut self.v2, self.lr, self.t, 0.618, 0.999, 0.01);
-        loss
-    }
-}
-
-fn l2_norm(v: &[f32]) -> f32 {
-    v.iter().map(|x| x.powi(2)).sum::<f32>().sqrt()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn adamw_step(
-    w: &mut [f32], g: &[f32],
-    m: &mut [f32], v: &mut [f32],
-    lr: f32, t: u32, b1: f32, b2: f32, wd: f32,
-) {
-    let bc1 = 1.0 - b1.powi(t as i32);
-    let bc2 = 1.0 - b2.powi(t as i32);
-    for i in 0..w.len() {
-        m[i] = b1 * m[i] + (1.0 - b1) * g[i];
-        v[i] = b2 * v[i] + (1.0 - b2) * g[i] * g[i];
-        let m_hat = m[i] / bc1;
-        let v_hat = v[i] / bc2;
-        w[i] = w[i] * (1.0 - lr * wd) - lr * m_hat / (v_hat.sqrt() + 1e-8);
-    }
-}
-
-// ── N-gram encoder ───────────────────────────────────────────────────────────
 
 struct NgramEncoder {
     embed: Vec<f32>,
@@ -175,8 +81,6 @@ impl NgramEncoder {
     }
 }
 
-// ── NTP head ────────────────────────────────────────────────────────────────
-
 struct NtpHead {
     w: Vec<f32>,
     m: Vec<f32>,
@@ -198,8 +102,6 @@ impl NtpHead {
         Self { m: vec![0.0; n], v: vec![0.0; n], w, d_model, t: 0, lr }
     }
 
-    /// Forward+backward. Returns (ce_loss_nats, grad_wrt_embed).
-    /// Called only in Phase-2 (step >= jepa_warmup).
     fn forward_backward(&mut self, embed: &[f32], target_tok: usize) -> (f32, Vec<f32>) {
         let d = self.d_model;
         let logits: Vec<f32> = (0..VOCAB).map(|j| (0..d).map(|i| embed[i] * self.w[i * VOCAB + j]).sum()).collect();
@@ -208,17 +110,22 @@ impl NtpHead {
         let sum_p: f32 = probs.iter().sum();
         probs.iter_mut().for_each(|p| *p /= sum_p);
         let loss = -(probs[target_tok].max(1e-10).ln());
-        let mut dl = probs.clone();
+        let mut dl = probs;
         dl[target_tok] -= 1.0;
         let mut dw = vec![0.0f32; d * VOCAB];
-        for i in 0..d { for j in 0..VOCAB { dw[i * VOCAB + j] = embed[i] * dl[j]; } }
-        let grad_embed: Vec<f32> = (0..d).map(|i| (0..VOCAB).map(|j| self.w[i * VOCAB + j] * dl[j]).sum()).collect();
+        for i in 0..d {
+            for j in 0..VOCAB {
+                dw[i * VOCAB + j] = embed[i] * dl[j];
+            }
+        }
+        let grad_embed: Vec<f32> = (0..d)
+            .map(|i| (0..VOCAB).map(|j| self.w[i * VOCAB + j] * dl[j]).sum())
+            .collect();
         self.t += 1;
-        adamw_step(&mut self.w, &dw, &mut self.m, &mut self.v, self.lr, self.t, 0.618, 0.999, 0.01);
+        adamw_inline(&mut self.w, &dw, &mut self.m, &mut self.v, self.lr, self.t);
         (loss, grad_embed)
     }
 
-    /// Inference only (val BPB measurement, both phases).
     fn loss(&self, embed: &[f32], target_tok: usize) -> f32 {
         let d = self.d_model;
         let logits: Vec<f32> = (0..VOCAB).map(|j| (0..d).map(|i| embed[i] * self.w[i * VOCAB + j]).sum()).collect();
@@ -230,7 +137,26 @@ impl NtpHead {
     }
 }
 
-// ── Data loading ─────────────────────────────────────────────────────────────
+fn adamw_inline(w: &mut [f32], g: &[f32], m: &mut [f32], v: &mut [f32], lr: f32, t: u32) {
+    let b1: f32 = 0.618;
+    let b2: f32 = 0.999;
+    let wd: f32 = 0.01;
+    let bc1 = 1.0 - b1.powi(t as i32);
+    let bc2 = 1.0 - b2.powi(t as i32);
+    for i in 0..w.len() {
+        m[i] = b1 * m[i] + (1.0 - b1) * g[i];
+        v[i] = b2 * v[i] + (1.0 - b2) * g[i] * g[i];
+        let m_hat = m[i] / bc1;
+        let v_hat = v[i] / bc2;
+        w[i] = w[i] * (1.0 - lr * wd) - lr * m_hat / (v_hat.sqrt() + 1e-8);
+    }
+}
+
+fn gf16_round(embed: &mut [f32]) {
+    for v in embed.iter_mut() {
+        *v = GF16::from_f32(*v).to_f32();
+    }
+}
 
 fn load_data(path: &str) -> Vec<usize> {
     let raw = fs::read(path).unwrap_or_else(|e| {
@@ -240,141 +166,170 @@ fn load_data(path: &str) -> Vec<usize> {
     raw.into_iter().map(|b| (b as usize) % VOCAB).collect()
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────────
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
-    let seed: u64      = args.iter().find(|a| a.starts_with("--seed="))
+    let seed: u64 = args.iter().find(|a| a.starts_with("--seed="))
         .map(|a| a[7..].parse().unwrap_or(43)).unwrap_or(43);
-    let steps: usize   = args.iter().find(|a| a.starts_with("--steps="))
+    let steps: usize = args.iter().find(|a| a.starts_with("--steps="))
         .map(|a| a[8..].parse().unwrap_or(3000)).unwrap_or(3000);
     let d_model: usize = args.iter().find(|a| a.starts_with("--d-model="))
         .map(|a| a[10..].parse().unwrap_or(384)).unwrap_or(384);
-    let encoder_lr: f32 = args.iter().find(|a| a.starts_with("--encoder-lr="))
-        .map(|a| a[13..].parse().unwrap_or(0.004)).unwrap_or(0.004);
-    // legacy --lr= still works
-    let encoder_lr: f32 = args.iter().find(|a| a.starts_with("--lr="))
-        .map(|a| a[5..].parse().unwrap_or(encoder_lr)).unwrap_or(encoder_lr);
-    let hidden: usize  = args.iter().find(|a| a.starts_with("--hidden="))
-        .map(|a| a[9..].parse().unwrap_or(256)).unwrap_or(256);
-    let ntp_lr: f32    = args.iter().find(|a| a.starts_with("--ntp-lr="))
-        .map(|a| a[9..].parse().unwrap_or(0.001)).unwrap_or(0.001);
-    let jepa_warmup: usize = args.iter().find(|a| a.starts_with("--jepa-warmup="))
-        .map(|a| a[14..].parse().unwrap_or(1500)).unwrap_or(1500);
+    let lr: f32 = args.iter().find(|a| a.starts_with("--lr="))
+        .map(|a| a[5..].parse().unwrap_or(0.004)).unwrap_or(0.004);
+    let use_muon: bool = args.iter().any(|a| a == "--muon");
+    let use_gf16: bool = d_model >= 256;
 
-    eprintln!("=== T-JEPA Two-Phase Training (TASK-5E) ===");
-    eprintln!("seed={} steps={} d_model={} encoder_lr={} ntp_lr={} hidden={}",
-        seed, steps, d_model, encoder_lr, ntp_lr, hidden);
-    eprintln!("Phase-1: steps 0..{}  → JEPA only (NTP frozen)", jepa_warmup);
-    eprintln!("Phase-2: steps {}..{} → NTP unfreezes (lr={:.4})", jepa_warmup, steps, ntp_lr);
-    eprintln!("Baseline: 6-gram h=384 lr=0.004 → BPB 2.5329");
+    eprintln!("=== T-JEPA Hybrid Training (TASK-5D) ===");
+    eprintln!("seed={} steps={} d_model={} lr={} muon={} gf16={}",
+        seed, steps, d_model, lr, use_muon, use_gf16);
+    eprintln!("L = 0.5*NTP + 0.25*JEPA + 0.25*NCA");
+    eprintln!("Baseline: 6-gram h=384 lr=0.004 seed=43 → BPB 2.5329");
     eprintln!("Gate min: ≤ 2.23 | Gate target: ≤ 2.03");
 
     let train_data = load_data("data/tiny_shakespeare.txt");
-    let val_data   = load_data("data/tiny_shakespeare_val.txt");
+    let val_data = load_data("data/tiny_shakespeare_val.txt");
 
     let num_ctx = 6;
     let mut online_encoder = NgramEncoder::new(VOCAB, d_model, num_ctx, seed);
     let mut target_encoder = NgramEncoder::new(VOCAB, d_model, num_ctx, seed.wrapping_add(1));
-    let mut predictor      = MlpPredictor::new(d_model, hidden, seed.wrapping_add(2), encoder_lr);
-    let mut ntp_head       = NtpHead::new(d_model, seed.wrapping_add(3), ntp_lr);
 
-    // Encoder embedding optimizer (AdamW, always active)
-    let param_count = VOCAB * d_model;
-    let mut online_opt = AdamWCpu::with_params(param_count, encoder_lr as f64, 0.618, 0.999, 0.01);
+    let pred_config = PredictorConfig::with_d_model(d_model);
+    let mut predictor = JepaPredictor::new(pred_config);
+    let mut ntp_head = NtpHead::new(d_model, seed.wrapping_add(3), lr);
 
-    let ema_config  = EmaConfig { start: 0.996, end: 1.0, ramp_steps: steps };
+    let embed_param_count = VOCAB * d_model;
+    let mut embed_opt: OptimizerKind = if use_muon {
+        OptimizerKind::Muon(MuonOptimizer::new(embed_param_count, lr as f64, 0.95, 0.01))
+    } else {
+        OptimizerKind::AdamW(AdamWCpu::with_params(embed_param_count, lr as f64, 0.618, 0.999, 0.01))
+    };
+
+    let ema_config = EmaConfig { start: 0.996, end: 1.0, ramp_steps: steps };
     let mut ema_target = EmaTarget::new(ema_config);
 
     let mask_config = MaskConfig::default();
-    let _loss_config = JepaLossConfig::default();
+    let loss_config = JepaLossConfig::default();
+    let obj_config = ObjectiveConfig::default();
+    let nca = NcaObjective::default();
+    let nca_rule = NcaTransitionRule::from_seed(seed);
+    let warmup_steps = steps / 2;
 
     let start_time = Instant::now();
     let mut best_val_bpb = f32::MAX;
-    let mut phase2_announced = false;
 
     for step in 0..steps {
-        // ── Phase detection ──────────────────────────────────────────────────────
-        let phase2 = step >= jepa_warmup;
-        if phase2 && !phase2_announced {
-            eprintln!("\n╔════════════════════════════════════════════╗");
-            eprintln!("║ PHASE-2 START: NTP head unfreezing at step={:4} ║", step);
-            eprintln!("║ Encoder representations locked in. ntp_lr={:.4} ║", ntp_lr);
-            eprintln!("╚════════════════════════════════════════════╝\n");
-            phase2_announced = true;
-        }
+        let current_lr = if step < warmup_steps {
+            lr * (step as f32 + 1.0) / warmup_steps as f32
+        } else {
+            let decay = (step - warmup_steps) as f32 / (steps - warmup_steps).max(1) as f32;
+            lr * 0.5 * (1.0 + (std::f32::consts::PI * decay).cos())
+        };
+        if current_lr <= 0.0 { continue; }
 
-        let data_len   = train_data.len();
-        let seq_start  = (step * SEQ_LEN) % data_len.saturating_sub(SEQ_LEN + 1);
-        let seq_end    = (seq_start + SEQ_LEN + 1).min(data_len);
+        let data_len = train_data.len();
+        let seq_start = (step * SEQ_LEN) % data_len.saturating_sub(SEQ_LEN + 1);
+        let seq_end = (seq_start + SEQ_LEN + 1).min(data_len);
         if seq_end - seq_start < 2 { continue; }
         let seq = &train_data[seq_start..seq_end];
 
         let mut rng = StdRng::seed_from_u64(seed.wrapping_add(step as u64));
-        let mask_result       = mask_spans(SEQ_LEN, mask_config, &mut rng);
-        let target_positions  = get_masked(&mask_result.mask);
+        let mask_result = mask_spans(SEQ_LEN, mask_config, &mut rng);
+        let target_positions = get_masked(&mask_result.mask);
         let context_positions = get_unmasked(&mask_result.mask);
         if target_positions.is_empty() || context_positions.is_empty() { continue; }
 
-        // ── Encoder forward (always) ──────────────────────────────────────────
+        // ── NCA auxiliary ───────────────────────────────────────────────────
+        let nca_seed = seed.wrapping_add(step as u64).wrapping_mul(7919);
+        let NcaRolloutResult { final_state, final_entropy, .. } = nca.rollout(nca_seed, &nca_rule);
+        let k = nca.k_states;
+        let nca_embed: Vec<f32> = final_state.iter().map(|&s| s / (k - 1) as f32).collect();
+        let nca_target: Vec<f32> = final_state.iter().map(|&s| s / (k - 1) as f32).collect();
+        let nca_loss_val = nca.compute_loss(&nca_embed, &nca_target, &final_state);
+
+        // ── Encode sequence ─────────────────────────────────────────────────
         let online_embeddings = online_encoder.encode(seq);
+
+        // GF16 quantize embeddings for forward pass
+        if use_gf16 {
+            let mut flat: Vec<f32> = online_embeddings.iter().flat_map(|v| v.iter().copied()).collect();
+            gf16_round(&mut flat);
+        }
+
+        // ── JEPA forward with JepaPredictor ─────────────────────────────────
         let ctx_len = context_positions.len();
-        let mut ctx_mean = vec![0.0f32; d_model];
-        for &cp in &context_positions {
+        let mut ctx_flat = vec![0.0f32; ctx_len * d_model];
+        for (ci, &cp) in context_positions.iter().enumerate() {
             if let Some(e) = online_embeddings.get(cp) {
-                for i in 0..d_model { ctx_mean[i] += e[i] / ctx_len as f32; }
+                ctx_flat[ci * d_model..(ci + 1) * d_model].copy_from_slice(e);
             }
         }
         let target_embeddings = target_encoder.encode_positions(seq, &target_positions);
-
-        // ── JEPA backward (always, both phases) ───────────────────────────────
-        let mut total_jepa_loss = 0.0f64;
-        for tgt_emb in &target_embeddings {
-            let mse = predictor.backward_step(&ctx_mean, tgt_emb);
-            total_jepa_loss += mse as f64;
+        let mut tgt_flat = vec![0.0f32; target_positions.len() * d_model];
+        for (ti, te) in target_embeddings.iter().enumerate() {
+            tgt_flat[ti * d_model..(ti + 1) * d_model].copy_from_slice(te);
         }
-        let avg_jepa = total_jepa_loss / target_positions.len().max(1) as f64;
+        let predicted = predictor.forward(&ctx_flat, &target_positions, &tgt_flat);
 
-        // ── NTP backward (Phase-2 only!) ────────────────────────────────────────
+        let mut tgt_mean = vec![0.0f32; d_model];
+        for te in &target_embeddings {
+            for i in 0..d_model { tgt_mean[i] += te[i] / target_positions.len() as f32; }
+        }
+        let jepa_loss_struct = compute_jepa_loss(&predicted, &tgt_mean, loss_config);
+        predictor.optimizer_step(jepa_loss_struct.total, &predicted, &tgt_mean);
+
+        // ── NTP backward: THIS is what trains the encoder embeddings ────────
         let mut ntp_train_loss = 0.0f64;
+        let mut embed_grads = vec![0.0f32; VOCAB * d_model];
         let ntp_pairs = (seq.len() - 1).min(SEQ_LEN);
-        if phase2 {
-            // In Phase-2: NTP head trains, but encoder embeddings are NOT
-            // updated by NTP gradient (embed_grads intentionally zero).
-            // Encoder is already trained by JEPA; NTP head learns on top.
-            for pos in 0..ntp_pairs {
-                let ctx_emb    = &online_embeddings[pos];
-                let target_tok = seq[pos + 1];
-                let (tok_loss, _grad_emb) = ntp_head.forward_backward(ctx_emb, target_tok);
-                ntp_train_loss += tok_loss as f64;
-                // _grad_emb intentionally discarded: encoder frozen to JEPA repr
+        for pos in 0..ntp_pairs {
+            let ctx_emb = &online_embeddings[pos];
+            let target_tok = seq[pos + 1];
+            let (tok_loss, grad_emb) = ntp_head.forward_backward(ctx_emb, target_tok);
+            ntp_train_loss += tok_loss as f64;
+            let tok = seq[pos].min(VOCAB - 1);
+            for i in 0..d_model {
+                embed_grads[tok * d_model + i] += grad_emb[i] / ntp_pairs as f32;
             }
         }
-        let avg_ntp = ntp_train_loss / ntp_pairs.max(1) as f64;
 
-        // ── Encoder update: JEPA gradient only (no NTP contamination) ──────
-        // JEPA trains encoder via EMA, not direct gradient on embeddings.
-        // online_opt only called in Phase-1 for JEPA signal from predictor.
-        if !phase2 {
-            // Phase-1: encoder gets no direct gradient update
-            // (JEPA signal flows through EMA target, not online encoder grad)
-            // This is correct per I-JEPA/V-JEPA: only EMA updates target encoder
+        // ── Combined loss ───────────────────────────────────────────────────
+        let combined = compute_combined_loss(
+            ComponentLosses {
+                ntp: ntp_train_loss / ntp_pairs.max(1) as f64,
+                jepa: jepa_loss_struct.total,
+                nca: nca_loss_val,
+            },
+            obj_config,
+        );
+
+        // Scale gradients by LR schedule
+        let lr_scale = current_lr / lr;
+        if lr_scale < 1.0 {
+            for g in embed_grads.iter_mut() { *g *= lr_scale; }
         }
+
+        // THIS is the critical line: encoder embeddings actually get updated
+        embed_opt.step(&mut online_encoder.embed, &embed_grads);
+
+        if use_gf16 {
+            gf16_round(&mut online_encoder.embed);
+        }
+
         ema_target.update(&mut target_encoder.embed, &online_encoder.embed);
 
         if step % 100 == 0 || step == steps - 1 {
             let elapsed = start_time.elapsed().as_secs_f64();
-            let phase_str = if phase2 { "P2" } else { "P1" };
             eprintln!(
-                "[{}] step={:5} jepa={:.4} ntp={:.4} bpb_est={:.4} t={:.1}s",
-                phase_str, step, avg_jepa,
-                avg_ntp, avg_ntp as f32 / LN_2, elapsed
+                "step={:5} ntp={:.4} jepa={:.4} nca={:.4} total={:.4} h_nca={:.2} lr={:.5} t={:.1}s",
+                step, combined.components.ntp, combined.components.jepa,
+                combined.components.nca, combined.total,
+                final_entropy, current_lr, elapsed,
             );
 
             if step % 500 == 0 || step == steps - 1 {
                 let mut val_ce = 0.0f64;
-                let mut val_n  = 0usize;
+                let mut val_n = 0usize;
                 for v_start in (0..val_data.len().saturating_sub(SEQ_LEN + 1)).step_by(SEQ_LEN) {
                     let v_end = (v_start + SEQ_LEN + 1).min(val_data.len());
                     if v_end - v_start < 2 { continue; }
@@ -382,14 +337,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let v_emb = online_encoder.encode(v_seq);
                     for pos in 0..(v_seq.len() - 1) {
                         val_ce += ntp_head.loss(&v_emb[pos], v_seq[pos + 1]) as f64;
-                        val_n  += 1;
+                        val_n += 1;
                     }
                 }
                 if val_n > 0 {
                     let val_bpb = (val_ce / val_n as f64) as f32 / LN_2;
                     if val_bpb < best_val_bpb { best_val_bpb = val_bpb; }
-                    eprintln!("  >> val_ntp_bpb={:.4} (best={:.4}) n={} phase={}",
-                        val_bpb, best_val_bpb, val_n, phase_str);
+                    eprintln!("  >> val_bpb={:.4} (best={:.4}) n={}", val_bpb, best_val_bpb, val_n);
                 }
             }
         }
@@ -397,11 +351,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let elapsed = start_time.elapsed().as_secs_f64();
     eprintln!();
-    eprintln!("=== T-JEPA Two-Phase Training Complete ===");
-    eprintln!("Steps: {} | Warmup: {} | Time: {:.1}s", steps, jepa_warmup, elapsed);
-    eprintln!("Best val NTP BPB: {:.4} | vs baseline: {:+.4}", best_val_bpb, best_val_bpb - 2.5329);
+    eprintln!("=== T-JEPA Hybrid Training Complete ===");
+    eprintln!("Steps: {} | Time: {:.1}s | {}{}", steps, elapsed,
+        if use_muon { "Muon" } else { "AdamW" },
+        if use_gf16 { "+GF16" } else { "" });
+    eprintln!("Best val BPB: {:.4} | vs baseline: {:+.4}", best_val_bpb, best_val_bpb - 2.5329);
 
-    // L-R8: stdout = ONLY BPB=X.XXXX
     println!("BPB={:.4}", best_val_bpb);
 
     eprintln!();

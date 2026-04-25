@@ -435,6 +435,11 @@ fn train_jepa(seed: u64, steps: usize, hidden: usize, lr: f64, exp_id: &str) -> 
 
         let output = predictor.predict(&ctx_flat, &target_positions, &tgt_flat);
 
+        if step == 0 {
+            eprintln!("[DEBUG] n_tgt={} pred.len()={} tgt.len()={} d_model={}",
+                      target_positions.len(), output.predicted.len(), tgt_flat.len(), d_model);
+        }
+
         let total_jepa_loss = if output.predicted.len() == tgt_flat.len() && !output.predicted.is_empty() {
             let mut loss = 0.0f64;
             for i in 0..output.predicted.len() {

@@ -75,30 +75,31 @@ pub fn softmax_with_temp(scores: &mut [f32], temperature: f32) {
     for x in scores.iter_mut() { *x /= sum; }
 }
 
-/// Cached forward state for backward pass
 struct ForwardCache {
     context_avg: Vec<f32>,
     q: Vec<f32>,
     k: Vec<f32>,
     v: Vec<f32>,
+    #[allow(dead_code)]
     attn_scores_raw: Vec<f32>,
     attn_weights: Vec<f32>,
     attn_out: Vec<f32>,
+    #[allow(dead_code)]
     predicted_prenorm: Vec<f32>,
     predicted_norm: Vec<f32>,
-    predicted_norm_val: f32, // ||predicted_prenorm||
+    predicted_norm_val: f32,
     target_norm: Vec<f32>,
     num_targets: usize,
 }
 
 /// Cross-attention JEPA predictor with full backward pass
 pub struct JepaPredictor {
-    config: PredictorConfig,
-    w_q: Vec<f32>,   // [d_model * d_key]
-    w_k: Vec<f32>,   // [d_model * d_key]
-    w_v: Vec<f32>,   // [d_model * d_key]
-    w_out: Vec<f32>, // [d_key * d_model]
-    optimizer: AdamWCpu,
+    pub config: PredictorConfig,
+    pub w_q: Vec<f32>,
+    pub w_k: Vec<f32>,
+    pub w_v: Vec<f32>,
+    pub w_out: Vec<f32>,
+    pub optimizer: AdamWCpu,
 }
 
 impl JepaPredictor {
@@ -382,9 +383,106 @@ impl Predictor {
         target_positions: &[usize],
         target_embeddings: &[f32],
     ) -> PredictionOutput {
-        let predicted = self.inner.forward(context, target_positions, target_embeddings);
-        let loss = self.inner.compute_loss(&predicted, target_embeddings);
-        PredictionOutput::new(predicted, target_embeddings.to_vec(), loss)
+        let d_model = self.inner.config.d_model;
+        let d_key = self.inner.config.d_key;
+        let n_tgt = target_positions.len();
+        if n_tgt == 0 {
+            return PredictionOutput::new(vec![], vec![], 0.0);
+        }
+
+        let seq_len = context.len() / d_model.max(1);
+        let scale = (d_key as f32).sqrt();
+
+        let mut all_predicted = Vec::with_capacity(n_tgt * d_model);
+        let mut total_loss = 0.0f64;
+
+        for t in 0..n_tgt {
+            let tgt_emb = &target_embeddings[t * d_model..(t + 1) * d_model];
+
+            let mut q = vec![0.0f32; d_key];
+            for i in 0..d_key {
+                let mut sum = 0.0f32;
+                for j in 0..d_model {
+                    sum += tgt_emb[j] * self.inner.w_q[j * d_key + i];
+                }
+                q[i] = sum;
+            }
+
+            let mut k = vec![0.0f32; seq_len * d_key];
+            for s in 0..seq_len {
+                let ctx = &context[s * d_model..(s + 1) * d_model];
+                for i in 0..d_key {
+                    let mut sum = 0.0f32;
+                    for j in 0..d_model {
+                        sum += ctx[j] * self.inner.w_k[j * d_key + i];
+                    }
+                    k[s * d_key + i] = sum;
+                }
+            }
+
+            let mut v = vec![0.0f32; seq_len * d_key];
+            for s in 0..seq_len {
+                let ctx = &context[s * d_model..(s + 1) * d_model];
+                for i in 0..d_key {
+                    let mut sum = 0.0f32;
+                    for j in 0..d_model {
+                        sum += ctx[j] * self.inner.w_v[j * d_key + i];
+                    }
+                    v[s * d_key + i] = sum;
+                }
+            }
+
+            let mut attn_scores = vec![0.0f32; seq_len];
+            for s in 0..seq_len {
+                let mut score = 0.0f32;
+                for i in 0..d_key {
+                    score += q[i] * k[s * d_key + i];
+                }
+                attn_scores[s] = score / scale;
+            }
+            softmax_with_temp(&mut attn_scores, 1.0);
+
+            let mut attn_out = vec![0.0f32; d_key];
+            for i in 0..d_key {
+                let mut sum = 0.0f32;
+                for s in 0..seq_len {
+                    sum += attn_scores[s] * v[s * d_key + i];
+                }
+                attn_out[i] = sum;
+            }
+
+            let mut pred = vec![0.0f32; d_model];
+            for i in 0..d_model {
+                let mut sum = 0.0f32;
+                for j in 0..d_key {
+                    sum += attn_out[j] * self.inner.w_out[j * d_model + i];
+                }
+                pred[i] = sum;
+            }
+
+            if self.inner.config.use_l2_norm {
+                pred = l2_normalize(&pred);
+            }
+
+            let tgt_norm = if self.inner.config.use_l2_norm {
+                l2_normalize(tgt_emb)
+            } else {
+                tgt_emb.to_vec()
+            };
+
+            for i in 0..d_model {
+                let d = pred[i] - tgt_norm[i];
+                total_loss += d as f64 * d as f64;
+            }
+
+            all_predicted.extend_from_slice(&pred);
+        }
+
+        total_loss /= (n_tgt * d_model) as f64;
+        let _loss_f32 = total_loss as f32;
+        self.inner.optimizer_step(total_loss, &all_predicted, target_embeddings);
+
+        PredictionOutput::new(all_predicted, target_embeddings.to_vec(), total_loss)
     }
 
     /// Real backward: train predictor on one (context, targets) pair
