@@ -202,27 +202,186 @@ impl SGDMomentum {
 /// Phi-based learning rate schedule
 ///
 /// Returns the learning rate for a given step using the φ-schedule.
-///
-/// # Arguments
-///
-/// * `step` - Current training step
-/// * `base_lr` - Base learning rate
-/// * `warmup_steps` - Number of warmup steps
-///
-/// # Returns
-///
-/// Scheduled learning rate for the current step
 pub fn phi_lr_schedule(step: usize, base_lr: f64, warmup_steps: usize) -> f64 {
     let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
 
     if step < warmup_steps {
-        // Linear warmup
         base_lr * (step as f64 / warmup_steps as f64)
     } else {
-        // φ-based decay: LR = base_lr * φ^(-(step - warmup) / warmup)
         let decay_steps = (step - warmup_steps) as f64 / warmup_steps as f64;
         base_lr * phi.powf(-decay_steps)
     }
+}
+
+/// Muon optimizer — Momentum + Newton-Schulz Orthogonalization
+///
+/// Reference: arXiv:2604.01472
+///
+/// Key idea: orthogonalize the momentum matrix using Newton-Schulz iteration
+/// before applying the update. This preserves the spectral structure of gradients
+/// and leads to 2-3× faster convergence.
+///
+/// Newton-Schulz iteration (5 steps):
+///   X_{k+1} = 1.5 * X_k - 0.5 * X_k @ X_k^T @ X_k
+///
+/// For flat parameter vectors, reshapes into 2D row-major matrices for
+/// orthogonalization, then flattens back. For non-matrix params (biases),
+/// uses standard momentum fallback.
+#[derive(Debug, Clone)]
+pub struct MuonOptimizer {
+    pub lr: f64,
+    pub momentum: f64,
+    pub weight_decay: f64,
+    pub ns_steps: usize,
+    pub nesterov: bool,
+    step: usize,
+    momentum_buffer: Vec<f32>,
+    param_rows: usize,
+    param_cols: usize,
+}
+
+impl MuonOptimizer {
+    pub fn new(param_count: usize, lr: f64, momentum: f64, weight_decay: f64) -> Self {
+        let cols = (param_count as f64).sqrt().round() as usize;
+        let cols = cols.max(1);
+        let rows = (param_count as f64 / cols as f64).ceil() as usize;
+        Self {
+            lr,
+            momentum,
+            weight_decay,
+            ns_steps: 5,
+            nesterov: true,
+            step: 0,
+            momentum_buffer: vec![0.0; param_count],
+            param_rows: rows,
+            param_cols: cols,
+        }
+    }
+
+    pub fn with_matrix_shape(param_count: usize, rows: usize, cols: usize, lr: f64, momentum: f64, weight_decay: f64) -> Self {
+        assert!(rows * cols >= param_count);
+        Self {
+            lr,
+            momentum,
+            weight_decay,
+            ns_steps: 5,
+            nesterov: true,
+            step: 0,
+            momentum_buffer: vec![0.0; param_count],
+            param_rows: rows,
+            param_cols: cols,
+        }
+    }
+
+    pub fn step(&mut self, params: &mut [f32], gradients: &[f32]) {
+        assert_eq!(params.len(), gradients.len());
+        assert_eq!(params.len(), self.momentum_buffer.len());
+        self.step += 1;
+
+        let lr = self.lr as f32;
+        let mom = self.momentum as f32;
+        let wd = self.weight_decay as f32;
+        let n = params.len();
+
+        for p in params.iter_mut() {
+            *p *= 1.0 - lr * wd;
+        }
+
+        for i in 0..n {
+            self.momentum_buffer[i] = mom * self.momentum_buffer[i] + (1.0 - mom) * gradients[i];
+        }
+
+        let update = self.orthogonalize_update();
+
+        for i in 0..n {
+            params[i] -= lr * update[i];
+        }
+    }
+
+    fn orthogonalize_update(&self) -> Vec<f32> {
+        let n = self.momentum_buffer.len();
+        let rows = self.param_rows;
+        let cols = self.param_cols;
+        let matrix_size = rows * cols;
+
+        if matrix_size == 0 || rows < 2 || cols < 2 {
+            return self.momentum_buffer.clone();
+        }
+
+        let mut m = vec![0.0f32; matrix_size];
+        let copy_len = n.min(matrix_size);
+        m[..copy_len].copy_from_slice(&self.momentum_buffer[..copy_len]);
+
+        let norm = frobenius_norm(&m);
+        if norm < 1e-8 {
+            return self.momentum_buffer.clone();
+        }
+
+        let scale = 1.0 / norm;
+        for v in m.iter_mut() {
+            *v *= scale;
+        }
+
+        for _ in 0..self.ns_steps {
+            m = newton_schulz_step(&m, rows, cols);
+        }
+
+        let out_norm = frobenius_norm(&m);
+        if out_norm > 1e-8 {
+            let rescale = norm / out_norm;
+            for v in m.iter_mut() {
+                *v *= rescale;
+            }
+        }
+
+        let mut result = vec![0.0f32; n];
+        let copy_len = n.min(matrix_size);
+        result[..copy_len].copy_from_slice(&m[..copy_len]);
+        result
+    }
+
+    pub fn step_count(&self) -> usize {
+        self.step
+    }
+
+    pub fn reset(&mut self) {
+        self.step = 0;
+        self.momentum_buffer.fill(0.0);
+    }
+}
+
+fn frobenius_norm(m: &[f32]) -> f32 {
+    m.iter().map(|&x| x * x).sum::<f32>().sqrt().max(1e-8)
+}
+
+fn newton_schulz_step(m: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut mt_m = vec![0.0f32; cols * cols];
+    for i in 0..cols {
+        for j in 0..cols {
+            let mut s = 0.0f32;
+            for k in 0..rows {
+                s += m[k * cols + i] * m[k * cols + j];
+            }
+            mt_m[i * cols + j] = s;
+        }
+    }
+
+    let mut m_mt_m = vec![0.0f32; rows * cols];
+    for i in 0..rows {
+        for j in 0..cols {
+            let mut s = 0.0f32;
+            for k in 0..cols {
+                s += m[i * cols + k] * mt_m[k * cols + j];
+            }
+            m_mt_m[i * cols + j] = s;
+        }
+    }
+
+    let mut result = vec![0.0f32; rows * cols];
+    for i in 0..(rows * cols) {
+        result[i] = 1.5 * m[i] - 0.5 * m_mt_m[i];
+    }
+    result
 }
 
 #[cfg(test)]
@@ -348,16 +507,74 @@ mod tests {
 
     #[test]
     fn test_phi_constants_precision() {
-        // Verify phi-based constants meet precision requirements from Issue #32
         let optimizer = AdamWCpu::with_phi_defaults(10);
-
-        // beta1 = phi()^-1 = 0.618 (Δ < 1e-6)
         let expected_beta1 = 1.0 / phi();
         assert!((optimizer.beta1 - expected_beta1).abs() < 1e-6);
-
-        // weight_decay = 1/phi^3 = 0.236... (Δ < 1e-6)
         let expected_wd = 1.0 / (phi() * phi() * phi());
         assert!((optimizer.weight_decay - expected_wd).abs() < 1e-6);
         assert!((expected_wd - 0.23607).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_muon_creation() {
+        let opt = MuonOptimizer::new(100, 0.02, 0.95, 0.01);
+        assert_eq!(opt.step_count(), 0);
+    }
+
+    #[test]
+    fn test_muon_step_decreases_param() {
+        let mut params = vec![1.0f32; 10];
+        let gradients = vec![0.1f32; 10];
+        let mut opt = MuonOptimizer::new(10, 0.02, 0.95, 0.01);
+        let initial = params[0];
+        opt.step(&mut params, &gradients);
+        assert!(params[0] < initial, "Muon should decrease params");
+        assert_eq!(opt.step_count(), 1);
+    }
+
+    #[test]
+    fn test_muon_reset() {
+        let mut params = vec![1.0f32; 10];
+        let gradients = vec![0.1f32; 10];
+        let mut opt = MuonOptimizer::new(10, 0.02, 0.95, 0.01);
+        opt.step(&mut params, &gradients);
+        assert!(opt.step_count() > 0);
+        opt.reset();
+        assert_eq!(opt.step_count(), 0);
+        assert!(opt.momentum_buffer.iter().all(|&x| x == 0.0));
+    }
+
+    #[test]
+    fn test_muon_with_matrix_shape() {
+        let mut params = vec![1.0f32; 12];
+        let gradients = vec![0.1f32; 12];
+        let mut opt = MuonOptimizer::with_matrix_shape(12, 3, 4, 0.02, 0.95, 0.01);
+        let initial = params[0];
+        opt.step(&mut params, &gradients);
+        assert!(params[0] < initial);
+        assert_eq!(opt.param_rows, 3);
+        assert_eq!(opt.param_cols, 4);
+    }
+
+    #[test]
+    fn test_muon_orthogonalization() {
+        let mut params = vec![1.0f32; 16];
+        let gradients: Vec<f32> = (0..16).map(|i| (i as f32) * 0.1).collect();
+        let mut opt = MuonOptimizer::with_matrix_shape(16, 4, 4, 0.02, 0.95, 0.0);
+        for _ in 0..3 {
+            opt.step(&mut params, &gradients);
+        }
+        for &p in &params {
+            assert!(p.is_finite(), "Muon params should be finite");
+        }
+    }
+
+    #[test]
+    fn test_newton_schulz_step() {
+        let identity: Vec<f32> = (0..4).map(|i| if i % 5 == 0 { 1.0f32 } else { 0.0f32 }).collect();
+        let result = newton_schulz_step(&identity, 2, 2);
+        for i in 0..4 {
+            assert!((result[i] - identity[i]).abs() < 0.01, "NS step should preserve identity");
+        }
     }
 }

@@ -1,4 +1,8 @@
 #![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::excessive_precision)]
+#![allow(clippy::manual_range_contains)]
 
 //! Pure Rust CPU Training for IGLA-GF16
 
@@ -13,6 +17,10 @@ pub mod swa_phi;
 pub mod residual_mix;
 pub mod sliding_eval;
 pub mod trinity_3k_model;
+// Self-Attention (TASK-0A rewrite)
+pub mod attention;
+
+// GoldenFloat16 implementation
 pub mod gf16;
 pub mod real_igla_model;
 pub mod real_igla_trainer;
@@ -31,7 +39,7 @@ pub use bench::{
     BenchmarkConfig, BenchmarkMetrics, BenchmarkRun, StepTrace, TrainConfig, TrainMetrics,
 };
 pub use forward::{gelu, layer_norm, matmul, softmax, LayerDims};
-pub use optimizer::{phi_lr_schedule, AdamWCpu};
+pub use optimizer::{phi_lr_schedule, AdamWCpu, MuonOptimizer};
 pub use tokenizer::BPETokenizer;
 pub use phi_ortho_init::phi_ortho_init;
 pub use ortho_init_baseline::ortho_init_baseline;
