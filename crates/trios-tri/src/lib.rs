@@ -156,7 +156,15 @@ impl Ternary {
     /// assert_eq!(Ternary::NegOne.to_f32(), -1.0);
     /// ```
     pub fn to_f32(self) -> f32 {
-        self as i8 as f32
+        self.as_i8() as f32
+    }
+
+    /// Get the i8 representation of this ternary value.
+    ///
+    /// Returns -1, 0, or 1.
+    #[inline]
+    pub const fn as_i8(self) -> i8 {
+        self as i8
     }
 
     /// Get bit-width per parameter (log₂(3) ≈ 1.585).

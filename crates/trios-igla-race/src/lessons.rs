@@ -222,6 +222,9 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            jepa_weight: None,
+            nca_weight: None,
+            seed: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.4 };
@@ -245,6 +248,9 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            jepa_weight: None,
+            nca_weight: None,
+            seed: None,
         };
 
         let rung = RungData { step: 1000, bpb: 2.9 };
@@ -266,6 +272,9 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            jepa_weight: None,
+            nca_weight: None,
+            seed: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.2 };
@@ -288,6 +297,9 @@ mod tests {
             dropout: None,
             warmup_steps: None,
             max_steps: None,
+            jepa_weight: None,
+            nca_weight: None,
+            seed: None,
         };
 
         let rung = RungData { step: 1000, bpb: 3.5 };
