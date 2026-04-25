@@ -259,7 +259,7 @@ fn compute_grads(
     let mut g_head = vec![0.0f32; VOCAB * HIDDEN];
 
     let mut all_hidden = Vec::with_capacity(count);
-    let mut all_ln = Vec::with_capacity(count);
+    let mut all_ln: Vec<Vec<f32>> = Vec::with_capacity(count);
     let mut all_contexts = Vec::with_capacity(count);
     let total_loss = backward_pass(
         model, &all_hidden, &all_contexts, tokens, count,
