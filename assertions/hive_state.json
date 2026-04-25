@@ -15,9 +15,9 @@
     "HIVE.md",
     "docs/hive/HIVE_PROTOCOL.md"
   ],
-  "cycle": 6,
-  "updated_at": "2026-04-25T16:15:00Z",
-  "updated_by": "perplexity-computer-l3",
+  "cycle": 7,
+  "updated_at": "2026-04-25T16:35:00Z",
+  "updated_by": "perplexity-computer-l4",
   "lanes": {
     "L1": {
       "name": "BPB tracker",
@@ -51,12 +51,12 @@
     },
     "L4": {
       "name": "NCA dual-band",
-      "status": "OPEN",
+      "status": "DONE",
       "owner_file": "crates/trios-igla-race/src/nca.rs",
       "invariant": "INV-4",
-      "claimed_by": null,
-      "claimed_at": null,
-      "commit": null,
+      "claimed_by": "perplexity-computer-l4",
+      "claimed_at": "2026-04-25T16:18:00Z",
+      "commit": "3b4afb2",
       "blocks": []
     },
     "L5": {
@@ -140,9 +140,7 @@
       "blocks": []
     }
   },
-  "priority_queue": [
-    "L4"
-  ],
+  "priority_queue": [],
   "victory": {
     "achieved": false,
     "seeds": [],
@@ -151,10 +149,10 @@
   },
   "metrics": {
     "total_lanes": 12,
-    "done": 11,
-    "open": 1,
+    "done": 12,
+    "open": 0,
     "claimed_active": 0,
-    "completion_pct": 91.7
+    "completion_pct": 100.0
   },
   "honey_jar": "assertions/hive_honey.jsonl",
   "events": [
@@ -226,6 +224,40 @@
       ],
       "tests_added": 23,
       "note": "INV-3 GF16 floor mirror — closed Gf16Error enum + dual-band policy preserved."
+    },
+    {
+      "ts": "2026-04-25T16:24:56Z",
+      "kind": "DONE",
+      "agent": "perplexity-computer-l7-v2",
+      "lane": "L7-v2",
+      "sha": "b117721",
+      "files": [
+        "crates/trios-igla-race/src/victory.rs",
+        "crates/trios-igla-race/src/lib.rs",
+        "assertions/igla_assertions.json"
+      ],
+      "tests_added": 9,
+      "note": "L7 v2 statistical-strength upgrade — Welch t-test runtime gate (alpha=0.01, mu0=1.55, eff>=0.05); zero new deps; pinned to upstream theorems victory_implies_distinct_clean (Proven) + welch_ttest_alpha_001_rejects_baseline (Admitted, budgeted)."
+    },
+    {
+      "ts": "2026-04-25T16:35:00Z",
+      "kind": "DONE",
+      "agent": "perplexity-computer-l4",
+      "lane": "L4",
+      "sha": "3b4afb2",
+      "files": [
+        "crates/trios-igla-race/src/nca.rs",
+        "crates/trios-igla-race/src/lib.rs"
+      ],
+      "tests_added": 18,
+      "note": "INV-4 NCA dual-band entropy — NcaBandMode::{Certified,Empirical}; certified band [phi^-3, phi^-1] enforced at runtime; empirical band stays JSON-only (mirrors L3 dual-band policy). 5-variant NcaError closed enum; 18 tests incl. 8 R8 falsification witnesses + 4 anchor guards."
+    },
+    {
+      "ts": "2026-04-25T16:36:00Z",
+      "kind": "MISSION_PHASE",
+      "agent": "perplexity-computer-l4",
+      "phase": "all_lanes_DONE",
+      "note": "All 12 lanes shipped. Mission halts only on global victory (3 seeds < 1.5 by 2026-04-30T23:59Z). Hive enters S6 idle awaiting seed_results.jsonl submissions; Queen Watchdog cron ad62640a continues hourly."
     }
   ]
 }
