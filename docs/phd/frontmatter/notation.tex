@@ -1,31 +1,153 @@
 % ===================================================================
-% Front matter — Notation table
+% Front matter — Notation / List of Symbols
+% Cambridge / Springer LNM convention.
+% Monograph: Flos Aureus: A Theorem-Guided Architecture Search
+%            through the Trinity Identity φ²+φ⁻²=3
+% Author:    Кирилл Шамин (Cyril Shamin)
+% Institute: University of Reading / gHashTag Open Doctorate
+% ===================================================================
+%
+% Requirements: booktabs, longtable packages in preamble.
+%
+% TODO: This is a scaffold stub with ≥ 20 symbol rows.
+%       Action the following before submission:
+%
+%   TODO-1: Add any chapter-local symbols not yet listed below.
+%           Each symbol must be defined at its first use in the text
+%           AND listed here — dual provenance is required (R4).
+%   TODO-2: Verify all \ref{} cross-references compile without
+%           warnings (run cargo run -p trios-phd -- compile).
+%   TODO-3: If any constant is φ-derived (R6), annotate its row
+%           with \textsf{[φ-derived]} in the Meaning column.
+%   TODO-4: Confirm GF(16) row matches INV-3 in
+%           assertions/igla_assertions.json byte-for-byte (R5).
+%   TODO-5: Add missing operators (e.g., ∇, ⊗, ≅) as they appear
+%           in chapters 10–16 (geometry / energy chapters).
 % ===================================================================
 
 \chapter*{Notation}
 \addcontentsline{toc}{chapter}{Notation}
 \thispagestyle{plain}
 
-\begin{longtable}{@{}p{4cm}p{10cm}@{}}
+\noindent
+The following table defines symbols used throughout the monograph.
+Symbols local to a single section are defined at their point of first
+use and are not repeated here. The column ``Ref.'' points to the
+chapter or appendix where the symbol is introduced formally.
+
+\bigskip
+
+\begin{longtable}{@{}p{3.2cm}p{9cm}p{2cm}@{}}
 \toprule
-\textbf{Symbol} & \textbf{Meaning} \\
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Ref.} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Symbol} & \textbf{Meaning} \\
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Ref.} \\
 \midrule
 \endhead
 \bottomrule
 \endfoot
-\(\varphi\) & Golden ratio, \((1 + \sqrt{5})/2 \approx 1.618\,033\,988\). \\
-\(\psi\) & Algebraic conjugate, \((1 - \sqrt{5})/2 = -\varphi^{-1}\). \\
-\(\mathcal{L}\) & Lucas ring \(\mathbb{Z}[\varphi]\). \\
-\(F_n\), \(L_n\) & Fibonacci and Lucas numbers respectively. \\
-\(\alpha_\varphi\) & The constant \(\varphi^{-3}/2 \approx 0.1180\); learning-rate champion seed (Chapter~\ref{ch:igla-architecture}). \\
-\(\mathrm{INV}\text{-}k\) & The \(k\)-th runtime invariant, \(k=1,\ldots,5\); see Appendix~F. \\
-\(\mathrm{BPB}\) & Bits-per-byte, the empirical training metric of IGLA (Chapter~\ref{ch:benchmarks}). \\
-\(\mathrm{NCA}\) & Neural cellular automata; see Chapter~\ref{ch:igla-architecture}. \\
-\(\mathrm{GF}_{16}\) & Galois field of order 16; precision floor of IGLA (INV-3). \\
-\(\square\), \(\blacksquare\) & End of proof (\(\square\) for empty proofs, \(\blacksquare\) for completed). \\
-\(\partial\) & Boundary of the falsification region (Appendix~B). \\
+%
+% ── Golden-ratio family ──────────────────────────────────────────
+\(\varphi\)
+  & Golden ratio, \((1+\sqrt{5})/2 \approx 1.618\,033\,988\).
+    \textsf{[φ-derived]}
+  & Ch.~\ref{ch:golden-seed} \\
+\(\psi\)
+  & Algebraic conjugate of \(\varphi\):
+    \(\psi = (1-\sqrt{5})/2 = -\varphi^{-1} \approx -0.618\).
+  & Ch.~\ref{ch:golden-seed} \\
+\(\varphi^{2}\)
+  & \(\varphi+1 \approx 2.618\). \textsf{[φ-derived]}
+  & Ch.~\ref{ch:golden-egg} \\
+\(\varphi^{-2}\)
+  & \(2-\varphi \approx 0.382\). \textsf{[φ-derived]}
+  & Ch.~\ref{ch:golden-egg} \\
+\(\varphi^{-3}\)
+  & \(2\varphi-3 \approx 0.236\). Used as learning-rate seed
+    \(\alpha_{\varphi} = \varphi^{-3}/2\). \textsf{[φ-derived]}
+  & Ch.~\ref{ch:igla-race} \\
+\(\alpha_{\varphi}\)
+  & Learning-rate champion seed, \(\varphi^{-3}/2 \approx 0.118\).
+    \textsf{[φ-derived]}
+  & Ch.~\ref{ch:igla-race} \\
+%
+% ── Number sequences ─────────────────────────────────────────────
+\(F_{n}\)
+  & \(n\)-th Fibonacci number: \(F_{0}=0,\,F_{1}=1,\,F_{n}=F_{n-1}+F_{n-2}\).
+  & Ch.~\ref{ch:fibonacci} \\
+\(L_{n}\)
+  & \(n\)-th Lucas number: \(L_{0}=2,\,L_{1}=1,\,L_{n}=L_{n-1}+L_{n-2}\).
+  & Ch.~\ref{ch:lucas-ring} \\
+\(\mathcal{L}\)
+  & Lucas ring \(\mathbb{Z}[\varphi]\); the algebraic home of all
+    φ-derived constants in this monograph.
+  & Ch.~\ref{ch:lucas-ring} \\
+%
+% ── Algebra / geometry ───────────────────────────────────────────
+\(\mathrm{GF}(16)\)
+  & Galois field of order 16; precision floor of IGLA (INV-3).
+  & Ch.~\ref{ch:experiments-gf16} \\
+\(\langle \cdot,\cdot \rangle\)
+  & Inner product in \(\mathbb{R}^{d}\) (Euclidean unless noted).
+  & Ch.~\ref{ch:energy} \\
+\(\|\cdot\|\)
+  & Euclidean norm, \(\|x\|=\sqrt{\langle x,x\rangle}\).
+  & Ch.~\ref{ch:energy} \\
+\(\otimes\)
+  & Kronecker / tensor product.
+  & Ch.~\ref{ch:three-strands} \\
+\(\cong\)
+  & Ring or group isomorphism.
+  & Ch.~\ref{ch:lucas-ring} \\
+%
+% ── Runtime invariants ───────────────────────────────────────────
+\(\mathrm{INV}\text{-}k\)
+  & The \(k\)-th IGLA runtime invariant, \(k=1,\ldots,5\);
+    mechanized in \texttt{trinity-clara/proofs/igla/}.
+    Full list in Appendix~F.
+  & App.~F \\
+%
+% ── Empirical metrics ────────────────────────────────────────────
+\(\mathrm{BPB}\)
+  & Bits-per-byte; primary empirical loss metric for IGLA
+    language models. Lower is better.
+  & Ch.~\ref{ch:experiments-bpb} \\
+\(\mathrm{ASHA}\)
+  & Asynchronous Successive Halving Algorithm; hyperparameter
+    scheduler used in all IGLA experiments.
+  & Ch.~\ref{ch:experiments-asha} \\
+\(\varepsilon\text{-greedy}\)
+  & Exploration strategy with probability \(\varepsilon\) of random
+    action; \(\varepsilon \in (0,1)\).
+  & Ch.~\ref{ch:igla-race} \\
+%
+% ── Architecture components ──────────────────────────────────────
+\(\mathrm{NCA}\)
+  & Neural Cellular Automata; spatial-update architecture (INV-4).
+  & Ch.~\ref{ch:nca} \\
+\(\mathrm{JEPA}\)
+  & Joint Embedding Predictive Architecture; an encoder family
+    contrasted with IGLA in Chapter~\ref{ch:jepa}.
+  & Ch.~\ref{ch:jepa} \\
+\(\mathrm{VSA}\)
+  & Vector Symbolic Architecture; holographic representation
+    framework (INV-3, Ch.~\ref{ch:vsa}).
+  & Ch.~\ref{ch:vsa} \\
+%
+% ── Proof conventions ────────────────────────────────────────────
+\(\square\)
+  & End of proof (open square = informal / sketch proof).
+  & — \\
+\(\blacksquare\)
+  & End of proof (filled square = fully mechanized in Coq).
+  & — \\
+\(\partial\)
+  & Boundary of a falsification region; see Appendix~B.
+  & App.~B \\
+%
+% ── Notation TBD ─────────────────────────────────────────────────
+% TODO-ADD: Insert additional symbols from chapters 10–16 here.
+%
 \end{longtable}
