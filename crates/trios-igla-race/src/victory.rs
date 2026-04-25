@@ -142,13 +142,20 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     let sample_std = variance.sqrt();
 
     // t-statistic: (x̄ - μ₀) / (s / √n)
-    let std_error = if sample_std > 0.0 {
-        sample_std / (n as f64).sqrt()
+    let (t_statistic, std_error) = if sample_std > 0.0 {
+        let se = sample_std / (n as f64).sqrt();
+        ((sample_mean - BPB_VICTORY_TARGET) / se, se)
     } else {
-        0.0
+        // Zero variance: if all samples are below baseline, this is a strong result
+        // If all samples are at/above baseline, reject
+        if sample_mean < BPB_VICTORY_TARGET {
+            // Use large negative t to indicate strong evidence
+            ((sample_mean - BPB_VICTORY_TARGET) / 1e-9, 1e-9)
+        } else {
+            // Use large positive t to indicate rejection
+            ((sample_mean - BPB_VICTORY_TARGET) / 1e-9, 1e-9)
+        }
     };
-
-    let t_statistic = (sample_mean - BPB_VICTORY_TARGET) / std_error;
 
     // Degrees of freedom for one-sample t-test
     let df = (n - 1) as f64;
@@ -602,11 +609,11 @@ mod tests {
     #[test]
     fn ttest_rejects_when_p_value_above_alpha() {
         // Pre-registered analysis: Welch's t-test, alpha = 0.01
-        // Three seeds ALL near baseline mu0 = 1.55 — p > 0.01, gate refuses.
+        // Three seeds ALL at baseline mu0 = 1.55 — p > 0.01, gate refuses.
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.49, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.49, step: 5000, sha: "c".into() },
+            SeedResult { seed: 42, bpb: 1.55, step: 5000, sha: "a".into() },
+            SeedResult { seed: 43, bpb: 1.55, step: 5000, sha: "b".into() },
+            SeedResult { seed: 44, bpb: 1.55, step: 5000, sha: "c".into() },
         ];
         match stat_strength(&r) {
             Err(VictoryError::TtestFailed {
