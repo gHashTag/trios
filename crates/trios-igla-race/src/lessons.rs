@@ -50,7 +50,7 @@ impl std::fmt::Display for Outcome {
 }
 
 /// Trial configuration for analysis
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TrialConfig {
     pub lr: Option<f64>,
     pub d_model: Option<usize>,

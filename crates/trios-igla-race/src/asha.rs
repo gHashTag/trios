@@ -7,9 +7,11 @@
 use uuid::Uuid;
 use anyhow::Result;
 use tracing::{info, warn};
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use crate::neon::NeonDb;
-use crate::lessons::{Outcome, RungData, TrialConfig};
+use crate::lessons::{TrialConfig, RungData, Outcome};
 
 /// ASHA rungs (Trinity 3^k progression)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,4 +167,122 @@ pub async fn is_config_running(
     config_json: &str,
 ) -> Result<bool> {
     db.is_config_running(machine_id, config_json).await
+}
+
+/// ASHA worker loop (TASK-3)
+pub async fn run_worker(
+    neon_url: &str,
+    machine_id: &str,
+    worker_id: u64,
+    best_bpb: std::sync::Arc<std::sync::RwLock<f64>>,
+) -> Result<f64> {
+    use tokio::process::Command;
+    
+    let db = NeonDb::connect(neon_url).await?;
+    let mut rng = StdRng::from_entropy();
+    let mut trial_counter = worker_id * 1_000_000;
+
+    loop {
+        // 1. sample_config(worker_id) → trial config
+        let config = sample_config(&mut rng);
+        let config_json = serde_json::to_string(&config)?;
+        
+        // 2. register_trial in Neon
+        trial_counter += 1;
+        let trial_id = format!("{}-w{}-t{}", machine_id, worker_id, trial_counter);
+        let trial_uuid = Uuid::parse_str(&trial_id.replace("-", "")).unwrap_or_else(|_| Uuid::new_v4());
+        
+        if let Err(e) = db.register_trial(trial_uuid, machine_id, worker_id as i32, &config_json).await {
+            warn!("register trial failed: {e}");
+            continue;
+        }
+        
+        info!("[w{worker_id}] trial {trial_id}: h={} lr={:.6}", 
+              config.hidden.unwrap_or(256), config.lr.unwrap_or(0.004));
+        
+        let mut pruned = false;
+        
+        // 3. For each rung in [1000, 3000, 9000, 27000]
+        let rungs = [AshaRung::Rung1000, AshaRung::Rung3000, AshaRung::Rung9000, AshaRung::Rung27000];
+        
+        for &rung in &rungs {
+            let rung_steps = rung as usize;
+            
+            // a. Spawn subprocess: ./target/release/trios-igla-trainer with config args
+            let output = Command::new("./target/release/trios-igla-trainer")
+                .arg("--seed").arg("42") // Fixed seed for now
+                .arg("--steps").arg(rung_steps.to_string())
+                .arg("--hidden").arg(config.hidden.unwrap_or(256).to_string())
+                .arg("--context").arg("6") // Fixed context for now
+                .arg("--lr").arg(format!("{:.8}", config.lr.unwrap_or(0.004)))
+                .arg("--arch").arg("ngram") // Fixed arch for now
+                .arg("--exp-id").arg(&trial_id)
+                .output()
+                .await?;
+            
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("[w{worker_id}] trainer failed at rung {rung_steps}: {stderr}");
+                let _ = db.mark_pruned(&trial_uuid, rung_steps as i32, 999.0).await;
+                pruned = true;
+                break;
+            }
+            
+            // b. Parse BPB from stdout last line
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let last_line = stdout.lines().last().unwrap_or("");
+            let bpb_str = last_line.strip_prefix("BPB=")
+                .ok_or_else(|| anyhow::anyhow!("last stdout line is not BPB=: {last_line}"))?;
+            let bpb: f64 = bpb_str.parse()?;
+            
+            // c. update_rung in Neon - mock for now
+            info!("Update rung: trial={}, rung={}, BPB={}", trial_id, rung_steps, bpb);
+            
+            // e. if bpb < 1.50 → save_winner in Neon → return Ok(bpb)
+            if bpb < 1.50 {
+                info!("[w{worker_id}] IGLA FOUND! BPB={bpb:.4}");
+                {
+                    let mut best = best_bpb.write().unwrap();
+                    if bpb < *best { *best = bpb; }
+                }
+                return Ok(bpb);
+            }
+            
+            // d. if should_prune(rung, bpb) → break to next trial
+            // Mock median check - in reality would query Neon
+            let should_prune = bpb > 3.0; // Simple threshold for now
+            
+            if should_prune {
+                info!("Prune trial: BPB={}", bpb);
+                pruned = true;
+                break;
+            }
+        }
+        
+        if !pruned {
+            info!("Mark trial completed: {}", trial_id);
+        }
+    }
+}
+
+fn sample_config(rng: &mut StdRng) -> TrialConfig {
+    use rand::seq::SliceRandom;
+    
+    let hiddens = [128, 192, 256, 384];
+    let hidden = *hiddens.choose(rng).unwrap();
+    let lrs = [0.001, 0.002, 0.004, 0.008];
+    let lr = *lrs.choose(rng).unwrap();
+    
+    TrialConfig {
+        lr: Some(lr),
+        d_model: Some(hidden),
+        hidden: Some(hidden),
+        n_layers: Some(2),
+        optimizer: Some("adamw".to_string()),
+        activation: Some("relu".to_string()),
+        weight_decay: Some(0.01),
+        dropout: Some(0.1),
+        warmup_steps: Some(100),
+        max_steps: Some(10000),
+    }
 }
