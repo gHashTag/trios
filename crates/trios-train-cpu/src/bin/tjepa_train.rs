@@ -24,7 +24,6 @@ use trios_train_cpu::{
         JepaLossConfig, compute_jepa_loss,
         predictor::{JepaPredictor, PredictorConfig},
     },
-    optimizer::{AdamWCpu, MuonOptimizer, OptimizerKind},
     objective::{
         ObjectiveConfig, compute_combined_loss, ComponentLosses,
         NcaObjective, NcaTransitionRule, NcaRolloutResult,
@@ -199,11 +198,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ntp_head = NtpHead::new(d_model, seed.wrapping_add(3), lr);
 
     let embed_param_count = VOCAB * d_model;
-    let mut embed_opt: OptimizerKind = if use_muon {
-        OptimizerKind::Muon(MuonOptimizer::new(embed_param_count, lr as f64, 0.95, 0.01))
-    } else {
-        OptimizerKind::AdamW(AdamWCpu::with_params(embed_param_count, lr as f64, 0.618, 0.999, 0.01))
-    };
+    let mut embed_m = vec![0.0f32; embed_param_count];
+    let mut embed_v = vec![0.0f32; embed_param_count];
+    let mut embed_t: u32 = 0;
 
     let ema_config = EmaConfig { start: 0.996, end: 1.0, ramp_steps: steps };
     let mut ema_target = EmaTarget::new(ema_config);
@@ -303,14 +300,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             obj_config,
         );
 
-        // Scale gradients by LR schedule
-        let lr_scale = current_lr / lr;
-        if lr_scale < 1.0 {
-            for g in embed_grads.iter_mut() { *g *= lr_scale; }
-        }
+        // No need to scale gradients — current_lr passed to adamw_inline directly
+        let _ = lr; // base lr used in schedule above
 
         // THIS is the critical line: encoder embeddings actually get updated
-        embed_opt.step(&mut online_encoder.embed, &embed_grads);
+        embed_t += 1;
+        adamw_inline(&mut online_encoder.embed, &embed_grads, &mut embed_m, &mut embed_v, current_lr, embed_t);
 
         if use_gf16 {
             gf16_round(&mut online_encoder.embed);
