@@ -31,7 +31,7 @@ pub use bench::{
     BenchmarkConfig, BenchmarkMetrics, BenchmarkRun, StepTrace, TrainConfig, TrainMetrics,
 };
 pub use forward::{gelu, layer_norm, matmul, softmax, LayerDims};
-pub use optimizer::{phi_lr_schedule, AdamWCpu};
+pub use optimizer::{phi_lr_schedule, AdamWCpu, MuonOptimizer};
 pub use tokenizer::BPETokenizer;
 pub use phi_ortho_init::phi_ortho_init;
 pub use ortho_init_baseline::ortho_init_baseline;

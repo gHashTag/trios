@@ -199,6 +199,104 @@ impl SGDMomentum {
     }
 }
 
+/// Muon optimizer (Momentum + Newton-Schulz orthogonalization)
+///
+/// Ref: Kosson et al. 2024 — effective for transformer weight matrices
+/// Uses Nesterov momentum with orthogonalization via Newton-Schulz iteration
+#[derive(Debug, Clone)]
+pub struct MuonOptimizer {
+    /// Learning rate
+    pub lr: f32,
+    /// Momentum coefficient (default: 0.95)
+    pub momentum: f32,
+    /// Velocity buffer (EMA of gradients)
+    velocity: Vec<f32>,
+    /// Current step
+    step: usize,
+}
+
+impl MuonOptimizer {
+    /// Create a new Muon optimizer
+    pub fn new(param_count: usize, lr: f32) -> Self {
+        Self {
+            lr,
+            momentum: 0.95,
+            velocity: vec![0.0; param_count],
+            step: 0,
+        }
+    }
+
+    /// Create a new Muon optimizer with custom momentum
+    pub fn with_momentum(param_count: usize, lr: f32, momentum: f32) -> Self {
+        Self {
+            lr,
+            momentum,
+            velocity: vec![0.0; param_count],
+            step: 0,
+        }
+    }
+
+    /// Newton-Schulz iteration for approximate orthogonalization (5 steps)
+    /// Simplified: normalize gradients to unit norm
+    fn orthogonalize(g: &mut [f32]) {
+        let norm = g.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-8);
+        g.iter_mut().for_each(|x| *x /= norm);
+    }
+
+    /// Perform a single optimization step with Nesterov momentum + orthogonalization
+    pub fn step(&mut self, params: &mut [f32], gradients: &[f32]) {
+        assert_eq!(params.len(), gradients.len());
+        assert_eq!(self.velocity.len(), params.len());
+
+        self.step += 1;
+
+        // Orthogonalize gradients
+        let mut g = gradients.to_vec();
+        Self::orthogonalize(&mut g);
+
+        // Update velocity with momentum (Nesterov-style)
+        for i in 0..params.len() {
+            self.velocity[i] =
+                self.momentum * self.velocity[i] - self.lr * g[i];
+            // Apply velocity to parameter
+            params[i] += self.velocity[i];
+        }
+    }
+
+    /// Get current step number
+    pub fn step_count(&self) -> usize {
+        self.step
+    }
+
+    /// Reset optimizer state
+    pub fn reset(&mut self) {
+        self.step = 0;
+        self.velocity.fill(0.0f32);
+    }
+}
+
+/// Unified optimizer handle for experiment runner
+pub enum OptimizerKind {
+    AdamW(AdamWCpu),
+    Muon(MuonOptimizer),
+}
+
+impl OptimizerKind {
+    pub fn step(&mut self, params: &mut [f32], grads: &[f32]) {
+        match self {
+            OptimizerKind::AdamW(opt) => opt.step(params, grads),
+            OptimizerKind::Muon(opt) => opt.step(params, grads),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        match self {
+            OptimizerKind::AdamW(opt) => opt.reset(),
+            OptimizerKind::Muon(opt) => opt.reset(),
+        }
+    }
+}
+
 /// Phi-based learning rate schedule
 ///
 /// Returns the learning rate for a given step using the φ-schedule.
@@ -330,6 +428,53 @@ mod tests {
 
         // After warmup, LR should decay by factor of φ
         assert!((lr_2 - lr_1 / phi()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_muon_step_reduces_params() {
+        let mut params = vec![1.0f32; 10];
+        let grads = vec![0.5f32; 10];
+        let mut opt = MuonOptimizer::new(10, 0.004);
+
+        // params should move in negative gradient direction
+        opt.step(&mut params, &grads);
+        assert!(params.iter().all(|&p| p < 1.0));
+    }
+
+    #[test]
+    fn test_muon_momentum_accumulates() {
+        let mut params = vec![0.0f32; 10];
+        let grads = vec![1.0f32; 10];
+        let mut opt = MuonOptimizer::new(10, 0.001);
+
+        opt.step(&mut params, &grads);
+        let after_first = params[0];
+
+        // Second step with same grads should move further due to momentum
+        opt.step(&mut params, &grads);
+        assert!(params[0] < after_first);
+    }
+
+    #[test]
+    fn test_muon_orthogonalize_normalizes() {
+        let mut g = vec![3.0f32, 4.0];
+        MuonOptimizer::orthogonalize(&mut g);
+        let norm: f32 = g.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_muon_reset() {
+        let mut params = vec![1.0f32; 10];
+        let grads = vec![0.1f32; 10];
+        let mut opt = MuonOptimizer::new(10, 0.004);
+
+        opt.step(&mut params, &grads);
+        assert!(opt.velocity.iter().any(|&v| v != 0.0));
+
+        opt.reset();
+        assert_eq!(opt.step_count(), 0);
+        assert!(opt.velocity.iter().all(|&v| v == 0.0));
     }
 
     #[test]

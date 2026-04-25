@@ -379,11 +379,10 @@ fn run_trial(config: TrialConfig, seed: u64, max_steps: usize, prune_step: usize
     println!("╠════════════════════════════════════════════════════════════╣");
     println!("║  {}-gram | h={} | lr={:.6} | seed={} {:<18}║", ngram_order, config.hidden, config.base_lr, seed,
         if config.weight_tying { "| tying" } else { "" });
-    println!("║  cosine={} | clip={:<5} | warmup={:<4} {}",
+    println!("║  cosine={} | clip={:<5} | warmup={:<4}                                                      ║",
         config.cosine_lr,
         config.gradient_clip.map(|c| format!("{:.2}", c)).unwrap_or_else(|| "none".to_string()),
-        config.warmup_steps,
-        "                                                      ║");
+        config.warmup_steps);
     println!("╚════════════════════════════════════════════════════════════╝");
 
     let tokens = load_data("data/tinyshakespeare.txt");
@@ -396,10 +395,10 @@ fn run_trial(config: TrialConfig, seed: u64, max_steps: usize, prune_step: usize
     let mut opt_embed = AdamW::new(ps, 0.01);
     let mut opt_ctx: Vec<AdamW> = (0..num_ctx).map(|_| AdamW::new(ps, 0.01)).collect();
 
-    let proj_size = if config.weight_tying { config.hidden * DIM } else { DIM * config.hidden };
+    let proj_size = DIM * config.hidden;
     let mut opt_proj = AdamW::new(proj_size, 0.01);
 
-    let head_size = if config.weight_tying { VOCAB * DIM } else { VOCAB * config.hidden };
+    let head_size = VOCAB * config.hidden;
     let mut opt_head = AdamW::new(head_size, 0.01);
 
     let (init_loss, init_bpb) = evaluate(&model, val, SEQ);
@@ -422,7 +421,7 @@ fn run_trial(config: TrialConfig, seed: u64, max_steps: usize, prune_step: usize
             config.gradient_clip);
 
         if step % 500 == 0 || step == max_steps || step == prune_step {
-            let ms = t0.elapsed().as_millis();
+            let _ms = t0.elapsed().as_millis();
             let (vl, vb) = evaluate(&model, val, SEQ);
             if vb < best_bpb && vb.is_finite() {
                 best_bpb = vb;
@@ -461,7 +460,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     // Trial configurations
-    let trials = vec![
+    let trials: [TrialConfig; 5] = [
         TrialConfig {
             name: "X1".to_string(),
             hidden: 384,
@@ -511,7 +510,9 @@ fn main() {
 
     let max_steps = 5000;
     let prune_step = 3000;
-    let prune_threshold = 2.60;
+    // SEED-EXPLORER finding (2026-04-25): model needs ~4000 warmup steps;
+    // BPB @ step 3000 = 3.32-3.44 for all good configs. Raised from 2.60 → 3.5
+    let prune_threshold = 3.5;
     let target_bpb = 2.52;
 
     // Determine which trial(s) to run

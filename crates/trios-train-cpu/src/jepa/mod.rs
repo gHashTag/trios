@@ -11,9 +11,9 @@ pub mod masking;
 pub mod predictor;
 
 pub use ema::{EmaConfig, EmaTarget, ema_update};
-pub use loss::{JepaLoss, JepaLossConfig, compute_jepa_loss, l2_normalize, l2_normalized};
+pub use loss::{JepaLoss, JepaLossConfig, compute_jepa_loss, l2_normalize, l2_normalized, jepa_mse_grad};
 pub use masking::{MaskConfig, MaskResult, get_masked, get_unmasked, mask_spans};
-pub use predictor::{PredictionOutput, Predictor, PredictorConfig};
+pub use predictor::{JepaPredictionOutput, JepaPredictor, JepaPredictorConfig};
 
 /// T-JEPA training configuration
 #[derive(Debug, Clone)]

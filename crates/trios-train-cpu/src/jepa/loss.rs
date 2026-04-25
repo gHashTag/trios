@@ -55,6 +55,14 @@ pub fn compute_jepa_loss(predicted: &[f32], target: &[f32], config: JepaLossConf
     }
 }
 
+/// MSE gradient: d_loss/d_pred = 2*(pred - target) / n
+pub fn jepa_mse_grad(predicted: &[f32], target: &[f32]) -> Vec<f32> {
+    let n = predicted.len().max(1) as f32;
+    predicted.iter().zip(target.iter())
+        .map(|(p, t)| 2.0 * (p - t) / n)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
