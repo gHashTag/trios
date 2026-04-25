@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinSet;
@@ -30,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().init();
     let cli = Cli::parse();
     let neon_url = std::env::var("NEON_URL").expect("NEON_URL must be set");
-    let machine_id = std::env::var("MACHINE_ID").unwrap_or_else(|_| "unknown".to_string());
+    let _machine_id = std::env::var("MACHINE_ID").unwrap_or_else(|_| "unknown".to_string());
 
     match cli.command {
         RaceCommand::Start { machine, workers } => {
