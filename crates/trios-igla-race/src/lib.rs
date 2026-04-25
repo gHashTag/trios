@@ -2,13 +2,14 @@ pub mod asha;
 pub mod invariants;
 pub mod lessons;
 pub mod neon;
+pub mod sampler;
 pub mod status;
 
 pub use asha::{AshaConfig, AshaRung, record_checkpoint, register_trial};
 
 pub use lessons::{generate_lesson, get_top_lessons, store_lesson, LessonType, Outcome, TrialConfig, RungData};
 
-pub use neon::{NeonDb, LessonEntry, DashboardMeta, spawn_agent_heartbeat};
+pub use neon::{NeonDb, LessonEntry, DashboardMeta, spawn_heartbeat};
 
 pub use status::*;
 
