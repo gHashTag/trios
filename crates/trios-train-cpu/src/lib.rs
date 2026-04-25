@@ -16,6 +16,7 @@ pub mod ortho_init_baseline;
 pub mod swa_phi;
 pub mod residual_mix;
 pub mod sliding_eval;
+pub mod transformer;
 pub mod trinity_3k_model;
 // Self-Attention (TASK-0A rewrite)
 pub mod attention;
@@ -24,6 +25,11 @@ pub mod attention;
 pub mod gf16;
 pub mod real_igla_model;
 pub mod real_igla_trainer;
+pub mod transformer_trainer;
+
+// T-JEPA (TASK-5A) - Joint Embedding Predictive Architecture
+pub mod jepa;
+pub mod objective;
 
 // T-JEPA: Ternary Joint Embedding Predictive Architecture (TASK-5A)
 // Spec: .trinity/specs/issue143-task5a-jepa-design.md
