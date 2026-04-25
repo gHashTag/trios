@@ -600,9 +600,18 @@ fn main() {
     for step in 1..=steps {
         let lr = cosine_lr(step, steps, base_lr, steps / 10);
         let off = (step * 97 + seed as usize) % (dl.saturating_sub(SEQ + 1));
-        model.train_step(&train[off..off + SEQ + 1], lr,
-            &mut opt_embed, &mut opt_ctx, &mut opt_proj, &mut opt_head,
-            &mut opt_aq, &mut opt_ak, &mut opt_av);
+        {
+            let mut opts = Optimizers {
+                opt_embed: &mut opt_embed,
+                opt_ctx: &mut opt_ctx,
+                opt_proj: &mut opt_proj,
+                opt_head: &mut opt_head,
+                opt_aq: &mut opt_aq,
+                opt_ak: &mut opt_ak,
+                opt_av: &mut opt_av,
+            };
+            model.train_step(&train[off..off + SEQ + 1], lr, &mut opts);
+        }
 
         if step % 500 == 0 || step == steps {
             let ms = t0.elapsed().as_millis();

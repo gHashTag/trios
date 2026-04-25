@@ -2,8 +2,11 @@
 //!
 //! Generates random span masks for masked prediction training.
 
+<<<<<<< HEAD
 use rand::Rng;
 
+=======
+>>>>>>> origin/task-1-tri-cli
 /// Mask configuration
 #[derive(Debug, Clone, Copy)]
 pub struct MaskConfig {
