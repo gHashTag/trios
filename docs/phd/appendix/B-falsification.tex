@@ -1,0 +1,74 @@
+% ===================================================================
+% Appendix B — Falsification Record
+% R7 (Popper): every empirical claim in the monograph appears here
+% with an explicit falsifier and a corroboration record.
+% ===================================================================
+
+\chapter{Falsification Record}
+\label{app:falsification}
+
+This appendix consolidates the falsification stance of the monograph.
+Following Popper (\cite{popper1959}) and the methodological refinements of
+Lakatos (\cite{lakatos1976}), every empirical claim must specify, in
+advance of the experiment, the observation that would refute it. The
+table below collects those statements across the empirical chapters
+(see Chapters~\ref{ch:golden-crystal}, \ref{ch:golden-seal},
+\ref{ch:golden-spiral}, \ref{ch:torus-geometry},
+\ref{ch:standard-model}, \ref{ch:quantum-field}, \ref{ch:e8-symmetry},
+\ref{ch:igla-architecture}, \ref{ch:benchmarks}, \ref{ch:data-analysis}).
+
+\begin{longtable}{@{}p{1.4cm}p{4.0cm}p{4.4cm}p{2.4cm}p{1.5cm}@{}}
+\caption{Falsification record: claim, falsifier, corroboration, status, last test.}\label{tab:falsification}\\
+\toprule
+\textbf{Ch.} & \textbf{Claim} & \textbf{Falsifier} & \textbf{Status} & \textbf{Last} \\
+\midrule
+\endfirsthead
+\multicolumn{5}{l}{\itshape (continued)}\\
+\toprule
+\textbf{Ch.} & \textbf{Claim} & \textbf{Falsifier} & \textbf{Status} & \textbf{Last} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+8  & E$_8$ resonance ratio \(M_2/M_1 = \varphi\) in CoBr$_2$. & Mass ratio outside \([\varphi - 0.05,\ \varphi + 0.05]\) at \(T=25\) mK. & Corroborated (Coldea \emph{et al.}, 2010). & 2010 \\
+9  & Icosahedral diffraction peaks scale by \(\varphi\). & Peak ratio outside \([\varphi - 0.02,\ \varphi + 0.02]\). & Corroborated (Shechtman \emph{et al.}, 1984). & 1984 \\
+17 & VSA capacity \(O(d/\log d)\) for \(d \geq 256\). & Capacity drops below \(0.8\,d/\log d\) at \(d=256\). & Corroborated (this work, Ch.~25). & 2026 \\
+18 & 1.58-bit BitNet preserves the \(\varphi\)-band when \(\mathrm{lr}\in[0.002, 0.007]\). & BPB \(>1.50\) at champion lr. & Corroborated (this work, Ch.~24). & 2026 \\
+20 & IGLA RACE search achieves BPB \(<1.50\) on three independent seeds. & BPB \(\geq 1.50\) on any seed in \(\{17, 42, 1729\}\). & Corroborated (this work, Ch.~24). & 2026 \\
+21 & JEPA-MSE proxy is unsafe; \verb|validate_bpb| must hard-fail at BPB \(\approx 0.014\). & A trial reports BPB \(\approx 0.014\) without \texttt{Err} from \verb|validate_bpb|. & Corroborated (J-001/J-002 audit). & 2026 \\
+22 & NCA entropy in the certified band \([\varphi, \varphi^{2}]\). & Steady-state entropy outside \([\varphi-0.05, \varphi^{2}+0.05]\). & Partially corroborated (Ch.~22). & 2026 \\
+24 & Champion at \(\mathrm{lr}=0.004\), \(d=384\) achieves BPB \(<1.50\). & Reproduction with \texttt{trios-phd reproduce --chapter 24} reports BPB \(\geq 1.50\) on \(\geq 1\) seed. & Corroborated (this work, Ch.~24). & 2026 \\
+25 & ASHA \(\text{prune\_threshold}=3.5\) preserves the champion. & Threshold \(3.5\) prunes the BPB-best run within the first 4000 warmup steps. & Corroborated (this work, Ch.~25). & 2026 \\
+26 & GF16 floor: \(d_{\text{model}}<256\) implies training error \(>\varphi^{-6}\). & Run with \(d=256\) reports training error \(\leq \varphi^{-6}\). & Corroborated (this work, Ch.~26). & 2026 \\
+28 & Removing any of INV-1..5 degrades BPB by \(\geq 0.3\). & Ablation reports BPB regression \(<0.3\) for some INV. & Corroborated (this work, Ch.~28). & 2026 \\
+29 & Reproduction binary recovers all reported tables within \(\pm 0.5\%\). & A reported table cannot be recovered to within \(\pm 0.5\%\) on stated seeds. & Corroborated (this work, Ch.~29). & 2026 \\
+\end{longtable}
+
+\section*{Audit semantics}
+
+The audit utility \verb|cargo run -p trios-phd -- audit --falsification|
+parses the \verb|empirical| chapters and verifies that each contains a
+\verb|\section{Falsification Criterion}| with the two subsections
+\verb|What Would Refute This Claim| and \verb|Corroboration Record|.
+A missing section, a missing subsection, or a chapter that registers
+itself as empirical without a corroboration record causes the audit to
+exit non-zero (R7).
+
+\section*{Status legend}
+
+\begin{description}
+  \item[Corroborated.] A primary observation, repeatable to the stated
+       precision, agrees with the claim within the falsifier window.
+  \item[Partially corroborated.] The claim is consistent with available
+       data within a wider tolerance, but the tighter falsifier window
+       has not yet been entered.
+  \item[Open.] No primary observation has yet been brought into contact
+       with the falsifier.
+\end{description}
+
+\noindent
+The hard core of the framework (\(\{\varphi, \pi, e, n \in \mathbb{Z}\}\)
+plus INV-1 through INV-5) is not itself a candidate for falsification by
+this appendix; falsification operates at the level of the empirical
+chapters, exactly as Lakatos prescribes.
