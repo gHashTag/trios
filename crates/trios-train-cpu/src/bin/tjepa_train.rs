@@ -252,7 +252,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ntp_train_loss += tok_loss as f64;
             let tok = seq[pos].min(VOCAB - 1);
             for i in 0..d_model {
-                embed_grads[tok * d_model + i] += grad_emb[i] / ntp_pairs as f32;
+                embed_grads[tok * d_model + i] += grad_emb[i];
             }
         }
 
