@@ -16,7 +16,7 @@ pub struct JepaTrainArgs {
 /// Run JEPA training (simplified mock)
 ///
 /// Returns final BPB value
-pub fn run_jepa_training(_cfg: &(), args: &JepaTrainArgs) -> Result<f64> {
+pub fn run_jepa_training(_cfg: (), args: &JepaTrainArgs) -> Result<f64> {
     use std::time::Instant;
 
     let start = Instant::now();
@@ -58,7 +58,7 @@ pub fn run_jepa_training(_cfg: &(), args: &JepaTrainArgs) -> Result<f64> {
 
     // Log experience
     if let Some(exp_id) = &args.exp_id {
-        write_jepa_experience(exp_id, args, final_bpb)?;
+        write_jepa_experience(exp_id, args, final_bpb as f64)?;
     }
 
     Ok(final_bpb as f64)
