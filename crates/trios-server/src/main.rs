@@ -1,6 +1,7 @@
 mod mcp;
 mod mcp_endpoints;
 mod operator;
+mod rainbow_routes;
 mod security;
 mod sse_handler;
 mod tools;
@@ -56,6 +57,8 @@ async fn main() -> anyhow::Result<()> {
         // Health
         .route("/health", get(health))
         .route("/", get(health))
+        // Rainbow Bridge (L13 / INV-8) — see crates/trios-rainbow-bridge.
+        .merge(rainbow_routes::rainbow_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
