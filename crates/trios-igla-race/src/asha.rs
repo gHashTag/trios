@@ -64,6 +64,56 @@ impl ArchKind {
     }
 }
 
+/// Architecture kind for IGLA Race (local copy)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArchKind {
+    Ngram,
+    Jepa,
+    Attention,
+    Hybrid,
+}
+
+impl ArchKind {
+    /// Get minimum rung for this architecture
+    ///
+    /// JEPA requires more steps for initial convergence
+    pub fn min_rung(&self) -> i32 {
+        match self {
+            ArchKind::Jepa => 3000,
+            _ => 1000,
+        }
+    }
+
+    /// Get rung schedule for this architecture
+    pub fn rung_schedule(&self) -> Vec<i32> {
+        match self {
+            ArchKind::Jepa => vec![3000, 9000, 27000],
+            _ => vec![1000, 3000, 9000, 27000],
+        }
+    }
+
+    /// Parse from string
+    pub fn parse_arch(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "ngram" => Some(ArchKind::Ngram),
+            "jepa" => Some(ArchKind::Jepa),
+            "attn" | "attention" => Some(ArchKind::Attention),
+            "hybrid" => Some(ArchKind::Hybrid),
+            _ => None,
+        }
+    }
+
+    /// Convert to string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArchKind::Ngram => "ngram",
+            ArchKind::Jepa => "jepa",
+            ArchKind::Attention => "attn",
+            ArchKind::Hybrid => "hybrid",
+        }
+    }
+}
+
 /// ASHA rungs (Trinity 3^k progression)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AshaRung {
