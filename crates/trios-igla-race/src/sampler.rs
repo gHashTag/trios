@@ -115,15 +115,15 @@ pub fn champion_lr() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::invariants::{validate_config, GradientMode, InvTrialConfig, INV2_BPB_PRUNE_THRESHOLD,
+    use crate::invariants::{validate_config, GradientMode, TrialConfig, INV2_BPB_PRUNE_THRESHOLD,
         INV2_WARMUP_BLIND_STEPS, INV4_NCA_GRID, INV4_NCA_K_STATES};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
 
     /// Helper: champion-shaped trial config with `lr` injected.
     /// Coq: every field is anchored — see `invariants.rs` constants.
-    fn cfg_with_lr(lr: f64) -> InvTrialConfig {
-        InvTrialConfig {
+    fn cfg_with_lr(lr: f64) -> TrialConfig {
+        TrialConfig {
             lr,
             d_model: 384,
             bpb_prune_threshold: INV2_BPB_PRUNE_THRESHOLD,

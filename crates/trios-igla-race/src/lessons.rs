@@ -62,6 +62,9 @@ pub struct TrialConfig {
     pub dropout: Option<f64>,
     pub warmup_steps: Option<usize>,
     pub max_steps: Option<usize>,
+    pub jepa_weight: Option<f64>,
+    pub nca_weight: Option<f64>,
+    pub seed: Option<u64>,
 }
 
 /// ASHA rung data
