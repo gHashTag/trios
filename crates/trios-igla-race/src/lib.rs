@@ -6,6 +6,7 @@ pub mod neon;
 pub mod rungs;
 pub mod sampler;
 pub mod status;
+pub mod victory;
 
 pub use asha::{AshaConfig, AshaRung, record_checkpoint, register_trial};
 
@@ -18,6 +19,8 @@ pub use status::*;
 pub use invariants::{InvTrialConfig, GradientMode, InvError, validate_config};
 
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
+
+pub use victory::{check_victory, is_victory, SeedResult, VictoryReport, VictoryError, JEPA_PROXY_BPB_FLOOR};
 
 pub use hive_automaton::{
     AbortReason, AgentAction, HaltCause, HiveAutomaton, Lane, State, World,
