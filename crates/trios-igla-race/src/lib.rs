@@ -8,6 +8,7 @@ pub mod rungs;
 pub mod attn;
 pub mod bpb;
 pub mod ema;
+pub mod gf16;
 pub mod sampler;
 pub mod status;
 pub mod victory;
