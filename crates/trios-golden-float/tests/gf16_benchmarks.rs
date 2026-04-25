@@ -712,6 +712,7 @@ fn gf16_from_bits() {
 
 /// Test GF16 identity element for addition.
 #[test]
+#[ignore = "requires zig-golden-float vendor submodule"]
 fn gf16_additive_identity() {
     let value = 1.618_034f32;
     let gf16_val = GF16::from_f32(value);
@@ -728,6 +729,7 @@ fn gf16_additive_identity() {
 
 /// Test GF16 identity element for multiplication.
 #[test]
+#[ignore = "requires zig-golden-float vendor submodule"]
 fn gf16_multiplicative_identity() {
     let value = 1.618_034f32;
     let gf16_val = GF16::from_f32(value);

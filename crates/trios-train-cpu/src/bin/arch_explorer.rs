@@ -379,12 +379,11 @@ fn run_trial(config: TrialConfig, seed: u64, max_steps: usize, prune_step: usize
     println!("╠════════════════════════════════════════════════════════════╣");
     println!("║  {}-gram | h={} | lr={:.6} | seed={} {:<18}║", ngram_order, config.hidden, config.base_lr, seed,
         if config.weight_tying { "| tying" } else { "" });
-    println!("║  cosine={} | clip={:<5} | warmup={:<4} {}",
+    println!("║  cosine={} | clip={:<5} | warmup={:<4}",
         config.cosine_lr,
         config.gradient_clip.map(|c| format!("{:.2}", c)).unwrap_or_else(|| "none".to_string()),
-        config.warmup_steps,
-        "                                                      ║");
-    println!("╚════════════════════════════════════════════════════════════╝");
+        config.warmup_steps);
+    println!("║                                                      ║");
 
     let tokens = load_data("data/tinyshakespeare.txt");
     let train_end = (tokens.len() as f64 * 0.9) as usize;
@@ -422,7 +421,7 @@ fn run_trial(config: TrialConfig, seed: u64, max_steps: usize, prune_step: usize
             config.gradient_clip);
 
         if step % 500 == 0 || step == max_steps || step == prune_step {
-            let ms = t0.elapsed().as_millis();
+            let _ms = t0.elapsed().as_millis();
             let (vl, vb) = evaluate(&model, val, SEQ);
             if vb < best_bpb && vb.is_finite() {
                 best_bpb = vb;
@@ -461,7 +460,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     // Trial configurations
-    let trials = vec![
+    let trials = [
         TrialConfig {
             name: "X1".to_string(),
             hidden: 384,
