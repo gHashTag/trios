@@ -21,6 +21,10 @@ pub use status::*;
 
 pub use invariants::{TrialConfig as InvTrialConfig, GradientMode, InvError, validate_config};
 
+pub use race::{WorkerPool, WorkerState, RaceState, PoolStats, check_worker_pool_invariant,
+               TRINITY_IDENTITY, VICTORY_SEEDS_REQUIRED, IGLA_TARGET_BPB,
+               GF16_MIN_D_MODEL, ASHA_PRUNE_THRESHOLD_MIN, VALID_RUNGS};
+
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 
 pub use victory::{check_victory, is_victory, SeedResult, VictoryReport, VictoryError, JEPA_PROXY_BPB_FLOOR};
@@ -35,5 +39,4 @@ pub use hive_automaton::{
     VICTORY_SEED_TARGET,
 };
 
-pub const IGLA_TARGET_BPB: f64 = 1.5;
 pub const ASHA_KEEP_FRACTION: f64 = 0.33;

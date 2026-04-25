@@ -90,6 +90,14 @@ pub const INV4_NCA_K_STATES: usize = 9; // 3² = (φ²+φ⁻²)²
 pub const INV5_GF16_BITS: usize = 4;      // GF(2⁴)
 pub const INV5_GF16_ELEMENTS: usize = 15; // 2⁴ - 1
 
+/// Lucas integer values (L(n) = φⁿ + φ⁻ⁿ)
+/// Coq: lucas_even function in lucas_closure_gf16.v
+pub const LUCAS_0: i64 = 2;
+pub const LUCAS_1: i64 = 3;  // = φ² + φ⁻² = Trinity Identity
+pub const LUCAS_2: i64 = 7;
+pub const LUCAS_3: i64 = 18;
+pub const LUCAS_4: i64 = 47;
+
 // ================================================================
 // Types
 // ================================================================
@@ -112,7 +120,14 @@ pub struct TrialConfig {
     pub nca_grid: usize,
     pub nca_k_states: usize,
     pub grad_mode: GradientMode,
+    /// Current training step (for warmup blind zone check, INV-2)
+    pub current_step: u64,
+    /// Last observed BPB (0.0 = not yet measured / JEPA proxy bug)
+    pub last_bpb: f64,
 }
+
+/// Alias for L8/L10 compatibility
+pub type InvTrialConfig = TrialConfig;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InvError {
@@ -302,6 +317,8 @@ mod tests {
             nca_grid: INV4_NCA_GRID,
             nca_k_states: INV4_NCA_K_STATES,
             grad_mode: GradientMode::RealMSE,
+            current_step: 0,
+            last_bpb: 0.0,
         }
     }
 

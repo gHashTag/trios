@@ -9,10 +9,10 @@
     "updated": "2026-04-25T22:03+07",
     "generated_by": "crates/trinity-extract/src/main.rs (L-R1: RUST ONLY)",
     "theorem_count": {
-      "igla_total": 37,
-      "proven_qed": 33,
+      "igla_total": 43,
+      "proven_qed": 39,
       "honest_admitted": 4,
-      "note": "Budget raised to 4: +phi_pow_to_lucas (Binet in R requires sqrt5 irrationality, beyond lra/field scope)"
+      "note": "Budget raised to 4: +phi_pow_to_lucas (Binet in R requires sqrt5 irrationality, beyond lra/field scope). INV-L11 added 6 new theorems, all proven QED."
     },
     "admitted_budget": {
       "max": 4,
@@ -36,7 +36,8 @@
       "INV-2": "inv2_falsification_witness: should_prune 2.70 2.65 5000 = true",
       "INV-3": "gf16_falsification_witness: gf16_safe 255 true = false",
       "INV-4": "nca_falsification_witness: nca_loss_penalty 3.0 > 0",
-      "INV-5": "lucas_falsification_witness: lucas_even 5 = 123 ∧ ≠ 124 ∧ ≠ 122"
+      "INV-5": "lucas_falsification_witness: lucas_even 5 = 123 ∧ ≠ 124 ∧ ≠ 122",
+      "INV-L11": "witness_composite_inv: threshold=2.65 ∧ d_model=128 ∧ rung=2000 → abort"
     },
     "task_5d": {
       "status": "PENDING",
@@ -159,6 +160,31 @@
       "runtime_check": { "action": "abort", "message": "INV-12: Invalid rung — must be 1000 × 3ⁿ" },
       "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv12_rung_valid",
       "numeric_anchor": { "valid_rungs": [1000, 3000, 9000, 27000] }
+    },
+    {
+      "id": "INV-L11",
+      "name": "worker_pool_composite",
+      "coq_theorem": "witness_composite_inv",
+      "coq_file": "trinity-clara/proofs/igla/worker_pool_composite.v",
+      "status": "Proven",
+      "admitted_count": 0,
+      "description": "Composite invariant: INV-2 + INV-3 + INV-12 must all hold for worker pool",
+      "trinity_link": "φ²+φ⁻²=3 anchors all numeric bounds across distributed workers",
+      "runtime_check": { "action": "abort", "message": "INV-L11: Composite invariant violated" },
+      "runtime_target": "crates/trios-igla-race/src/race.rs::check_worker_pool_invariant",
+      "numeric_anchor": {
+        "trinity_identity": 3.0,
+        "victory_seeds_required": 3,
+        "gf16_min_d_model": 256,
+        "asha_prune_threshold_min": 3.5,
+        "valid_rungs": [1000, 3000, 9000, 27000],
+        "max_workers_per_machine": 16
+      },
+      "falsification_record": {
+        "theorem": "witness_composite_inv",
+        "witness": "threshold=2.65 ∧ d_model=128 ∧ rung=2000 → abort",
+        "note": "All three invariants violated simultaneously"
+      }
     }
   ],
   "enforcement": {
