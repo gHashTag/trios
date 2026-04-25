@@ -19,6 +19,12 @@ use ws_handler::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env before tracing (so env vars are available for AppState)
+    let env_path = std::path::Path::new(".env");
+    if env_path.exists() {
+        let _ = dotenv::from_path(env_path);
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter("trios_server=debug,tower_http=debug")
         .init();

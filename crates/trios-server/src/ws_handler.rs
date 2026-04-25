@@ -32,6 +32,12 @@ pub struct AppState {
     pub event_tx: broadcast::Sender<BusEvent>,
     /// A2A router for agent-to-agent communication
     pub a2a: Arc<RwLock<A2ARouter>>,
+    /// z.ai API endpoint (Anthropic-compatible)
+    pub zai_api: String,
+    /// z.ai API keys (rotated round-robin)
+    pub zai_keys: Vec<String>,
+    /// HTTP client for outbound requests
+    pub http_client: reqwest::Client,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,12 +58,31 @@ pub struct TaskEntry {
 impl AppState {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(100);
+
+        // Load z.ai credentials from environment
+        let zai_api = std::env::var("ZAI_API").unwrap_or_default();
+        let mut zai_keys = Vec::new();
+        for i in 1..=6 {
+            if let Ok(key) = std::env::var(format!("ZAI_KEY_{}", i)) {
+                if !key.is_empty() {
+                    zai_keys.push(key);
+                }
+            }
+        }
+
+        info!(".env loaded: zai_api={} keys={}",
+            if zai_api.is_empty() { "(empty)" } else { &zai_api },
+            zai_keys.len());
+
         Self {
             mcp: McpService::new(),
             agents: Arc::new(Mutex::new(Vec::new())),
             tasks: Arc::new(Mutex::new(Vec::new())),
             event_tx: tx,
             a2a: Arc::new(RwLock::new(A2ARouter::new())),
+            zai_api,
+            zai_keys,
+            http_client: reqwest::Client::new(),
         }
     }
 

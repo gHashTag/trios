@@ -38,7 +38,7 @@ async fn call_zai(state: &AppState, message: &str) -> Value {
     let key = &state.zai_keys[0];
 
     let body = json!({
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-3-7-sonnet-20250219",
         "max_tokens": 1024,
         "messages": [
             {"role": "user", "content": message}
