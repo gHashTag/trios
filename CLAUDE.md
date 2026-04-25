@@ -1,16 +1,5 @@
 # CLAUDE.md — trios Laws
 
-## ⛔ ABSOLUTE RULE — CONTEXT PRESERVATION
-
-You NEVER delete, truncate, rewrite, or "clean up" content in:
-- `CONTEXT.md`
-- `TASK.md` (preserve all sections, only edit status fields)
-- issue #143 or any task issue body
-- `.trinity/experience/**`
-
-If you think context is "too long", you APPEND a summary. You NEVER remove.
-Violation = immediate task revocation and soul-name blacklist.
-
 ## PHI LOOP (mandatory for every task)
 ```
 edit spec → seal hash → gen → test → verdict → experience → skill commit → git commit
@@ -48,76 +37,31 @@ Every significant task writes a line to `.trinity/experience/`.
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] TASK: description | result" >> .trinity/experience/trios_$(date +%Y%m%d).trinity
 ```
 
-### L8: Push first
-Every commit MUST be pushed immediately. Unpushed commits are a violation.
+### L8: PUSH FIRST LAW
+Every file change = immediate commit + push. There is no such thing as "done locally".
 
-### L9: No handwritten forbidden surface
-Auto-generated code (WASM pkg, dist/) is committed. Hand-written code in those dirs is forbidden.
+Checklist before saying "done":
+```
+git status — 0 untracked/modified files
+git log --oneline -3 — commit is visible
+github.com/gHashTag/trios — file visible in browser
+```
 
-### L10: Issue #143 is eternal
-Issue #143 is the source of truth for all agents. Never close it.
+If a file is not in the repo — the task is NOT complete.
 
-### L11: Name before mutation
-Every agent takes a soul-name before making any changes. Format: humorous English name related to the task.
+## Agent Dispatch
 
-### L12: Spec before implementation
-Write the spec (TASK.md) before writing code. No spec = no code.
+To dispatch an agent to any GitHub issue, use the ONE-SHOT prompt:
 
-### L13: Bounded authority
-Agents only modify files within their assigned scope. Cross-scope changes require human approval.
+```
+.trinity/prompts/agent-dispatch.md
+```
 
-### L14: Auditability by default
-Every action must be traceable. Commit messages, issue comments, experience logs.
+Replace `{{ISSUE_NUMBER}}`, `{{ISSUE_TITLE}}` — the agent picks its own soul-name.
+The prompt embeds all LAWS (L1–L9), the full PHI LOOP (11 steps), HEARTBEAT format,
+architecture overview, and a DONE checklist that blocks premature victory declaration.
 
-### L15: Validation is a separate duty
-Verification is done by a different agent than the one who wrote the code.
-
-### L16: Tailoring requires rationale
-Any deviation from laws must include a written rationale in the commit.
-
-### L17: Improve code health, not perform heroics
-Fix what's broken. Don't gold-plate.
-
-### L18: Structured conflict resolution
-When agents disagree, escalate to issue #143 with evidence.
-
-### L19: Humans remain sovereign
-Human overrides always win. No exceptions.
-
-### L20: Turn sessions into tools
-Every manual workflow must be codified into `tri` CLI within one session.
-
-### L21: Context immutability
-Task context is sacred. Agents MAY append, MAY NOT delete.
-
-- `CONTEXT.md` is append-only. Deletions require human maintainer approval + rationale.
-- `TASK.md` mutations require a matching SEAL update (`tri seal`).
-- Issue bodies for tracked tasks are lockfiles, not scratchpads.
-- CI MUST reject PRs with net-negative context diff > 50 lines without L16 rationale.
-- Agents that violate L21 forfeit their soul-name and are blacklisted for the session.
-
-Rationale: Autonomous agents routinely "tidy" context under token pressure,
-destroying situational awareness. Memory is infrastructure, not decoration.
-
-### L22: Schema-response parity
-Tools declaring `outputSchema` MUST emit `structuredContent` matching it.
-`response.text()` alone is never sufficient when `outputSchema` is present.
-CI MUST fail if a tool declares `outputSchema` but no code path calls `response.data()`.
-
-### L23: No cryptic fallbacks
-Stub implementations of external dependencies (CDP, network, FS) MUST throw
-descriptive errors naming: the unavailable capability, the required setup step,
-and the relevant env var or flag. `"X is not a function"` is a constitutional bug.
-
-### L24: Agent traffic through MCP bridge
-All traffic between agents MUST pass through `trios-server` MCP bridge.
-Direct A2A calls bypassing broadcast are forbidden. Every dispatch, response,
-and tool-call MUST flow through the relay for SSE observability.
-
-### L25: Chrome Extension is the observability channel
-Chrome Extension (Trinity Agent Bridge) is the single visual channel for
-human observability. Any new tool MUST appear in sidepanel Tools tab
-automatically via `tools/list`. No hidden tool surfaces.
+See: [.trinity/prompts/agent-dispatch.md](.trinity/prompts/agent-dispatch.md)
 
 ## Architecture
 
