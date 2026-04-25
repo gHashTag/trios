@@ -3,10 +3,10 @@
 //! Architecture: arch_explorer proven model (dim=64, hidden=384, layer norm,
 //! projection, separate ctx embeddings) + JEPA predictor on hidden reps.
 //!
-//! Multi-objective: L = 0.5*NTP + 0.25*JEPA + 0.25*NCA
+//! Multi-objective: L = ntp_w*NTP + jepa_w*JEPA + nca_w*NCA
 //!
 //! Champion baseline: 6-gram h=384 lr=0.003 seed=43 → BPB 2.5193 (27K steps)
-//! Gate min (ASHA Rung-1): ≤ 2.23 BPB
+//! Gate min (ASHA Rung-1): ≤ 2.22 BPB
 //! Gate target: ≤ 2.03 BPB
 //! IGLA target: < 1.50 BPB
 
@@ -17,14 +17,14 @@ use std::time::Instant;
 
 use trios_train_cpu::{
     jepa::{
-        MaskConfig, EmaConfig, EmaTarget,
-        mask_spans, get_masked, get_unmasked,
+        EmaConfig, EmaTarget,
         predictor::{JepaPredictor, PredictorConfig},
     },
     objective::{
-        ObjectiveConfig, compute_combined_loss, ComponentLosses,
-        NcaObjective, nca_entropy_loss,
+        ComponentLosses, NcaObjective, ObjectiveConfig, compute_combined_loss,
+        nca_entropy_loss,
     },
+    MuonOptimizer,
 };
 
 const VOCAB: usize = 128;
@@ -34,6 +34,9 @@ const NUM_CTX: usize = 4;
 const NGRAM: usize = NUM_CTX + 2;
 const SEQ: usize = 64;
 const LN_2: f32 = std::f32::consts::LN_2;
+const HEARTBEAT_INTERVAL_SECS: u64 = 60;
+
+// ── primitives ──
 
 fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
     assert!(!x.is_empty(), "layer_norm: empty input");
@@ -45,11 +48,29 @@ fn layer_norm(x: &[f32], eps: f32) -> Vec<f32> {
 }
 
 fn softmax(v: &mut [f32]) {
+    assert!(!v.is_empty(), "softmax: empty input");
     let max = v.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let mut sum = 0.0f32;
-    for x in v.iter_mut() { *x = (*x - max).exp(); sum += *x; }
-    for x in v.iter_mut() { *x /= sum; }
+    for x in v.iter_mut() {
+        *x = (*x - max).exp();
+        sum += *x;
+    }
+    assert!(sum > 0.0, "softmax: zero sum");
+    for x in v.iter_mut() {
+        *x /= sum;
+    }
 }
+
+fn cosine_lr(step: usize, max_steps: usize, base_lr: f32, warmup: usize) -> f32 {
+    assert!(max_steps > 0, "cosine_lr: max_steps=0");
+    if step < warmup {
+        return base_lr * step as f32 / warmup.max(1) as f32;
+    }
+    let p = (step - warmup) as f32 / (max_steps - warmup).max(1) as f32;
+    1e-5 + (base_lr - 1e-5) * 0.5 * (1.0 + (std::f32::consts::PI * p).cos())
+}
+
+// ── local AdamW ──
 
 struct AdamW {
     m: Vec<f32>,
@@ -62,6 +83,7 @@ struct AdamW {
 
 impl AdamW {
     fn new(size: usize, wd: f32) -> Self {
+        assert!(size > 0, "AdamW: size=0");
         let phi = (1.0 + 5.0f64.sqrt()) / 2.0;
         Self {
             m: vec![0.0; size],
@@ -74,8 +96,9 @@ impl AdamW {
     }
 
     fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
-        assert_eq!(params.len(), grads.len(), "AdamW param/grad size mismatch");
-        assert_eq!(params.len(), self.m.len(), "AdamW buffer size mismatch");
+        assert_eq!(params.len(), grads.len(), "AdamW param/grad mismatch");
+        assert_eq!(params.len(), self.m.len(), "AdamW buffer mismatch");
+        assert!(lr > 0.0, "AdamW: lr≤0");
         self.step += 1;
         let bc1 = 1.0 - self.beta1.powi(self.step as i32);
         let bc2 = 1.0 - self.beta2.powi(self.step as i32);
@@ -86,14 +109,49 @@ impl AdamW {
             params[i] -= lr * (self.m[i] / bc1) / ((self.v[i] / bc2).sqrt() + 1e-8);
         }
     }
+}
 
-    fn ema_update(&self, target: &mut [f32], online: &[f32], decay: f32) {
-        assert_eq!(target.len(), online.len(), "EMA size mismatch");
-        for (t, o) in target.iter_mut().zip(online.iter()) {
-            *t = decay * *t + (1.0 - decay) * *o;
+fn ema_inplace(target: &mut [f32], online: &[f32], decay: f32) {
+    assert_eq!(target.len(), online.len(), "EMA size mismatch");
+    assert!(decay >= 0.0 && decay < 1.0, "EMA decay out of range");
+    for (t, o) in target.iter_mut().zip(online.iter()) {
+        *t = decay * *t + (1.0 - decay) * *o;
+    }
+}
+
+// ── optimizer wrapper ──
+
+enum OptKind {
+    AdamW,
+    Muon,
+}
+
+enum OptWrapper {
+    LocalAdamW(AdamW),
+    CrateMuon(MuonOptimizer),
+}
+
+impl OptWrapper {
+    fn adamw(size: usize, wd: f32) -> Self {
+        OptWrapper::LocalAdamW(AdamW::new(size, wd))
+    }
+
+    fn muon(size: usize, lr: f64, wd: f32) -> Self {
+        OptWrapper::CrateMuon(MuonOptimizer::new(size, lr, 0.95, wd as f64))
+    }
+
+    fn step(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
+        match self {
+            OptWrapper::LocalAdamW(opt) => opt.update(params, grads, lr),
+            OptWrapper::CrateMuon(opt) => {
+                opt.lr = lr as f64;
+                opt.step(params, grads);
+            }
         }
     }
 }
+
+// ── model ──
 
 struct NgramModel {
     embed: Vec<f32>,
@@ -113,10 +171,9 @@ impl NgramModel {
         let lim = (6.0f32 / (3 * DIM) as f32).sqrt();
         let lim_h = (6.0f32 / (DIM + HIDDEN) as f32).sqrt();
         let lim_o = (6.0f32 / (HIDDEN + VOCAB) as f32).sqrt();
-
         let base_weights: Vec<f32> = vec![0.7, 0.3, 0.2, 0.15];
         let ctx_weights: Vec<f32> = base_weights.iter().take(NUM_CTX).cloned().collect();
-
+        assert_eq!(ctx_weights.len(), NUM_CTX, "ctx_weights count mismatch");
         Self {
             embed: (0..VOCAB * DIM).map(|_| rng() * lim).collect(),
             ctx: (0..NUM_CTX)
@@ -136,7 +193,9 @@ impl NgramModel {
             let ctx_idx = context.len() - 2 - ci;
             let t = context[ctx_idx].min(VOCAB - 1);
             let cv = &self.ctx[ci][t * DIM..(t + 1) * DIM];
-            for j in 0..DIM { combined[j] += cv[j] * cw; }
+            for j in 0..DIM {
+                combined[j] += cv[j] * cw;
+            }
         }
         let ln = layer_norm(&combined, 1e-5);
         let mut hidden = vec![0.0f32; HIDDEN];
@@ -161,7 +220,9 @@ impl NgramModel {
     }
 
     fn loss_on_seq(&self, tokens: &[usize]) -> f32 {
-        if tokens.len() < NGRAM + 1 { return 0.0; }
+        if tokens.len() < NGRAM + 1 {
+            return 0.0;
+        }
         let count = tokens.len() - NGRAM;
         assert!(count > 0, "no n-gram pairs in sequence");
         let mut total = 0.0f32;
@@ -175,6 +236,8 @@ impl NgramModel {
         total / count as f32
     }
 }
+
+// ── gradient computation ──
 
 struct TrainGrads {
     g_embed: Vec<f32>,
@@ -198,30 +261,35 @@ fn compute_grads(
     let mut all_hidden = Vec::with_capacity(count);
     let mut all_ln = Vec::with_capacity(count);
     let mut all_contexts = Vec::with_capacity(count);
-    let mut total_loss = 0.0f32;
+    let total_loss = backward_pass(
+        model, &all_hidden, &all_contexts, tokens, count,
+        &mut g_embed, &mut g_ctx, &mut g_proj, &mut g_head,
+    );
 
-    for i in 0..count {
-        let context: Vec<usize> = tokens[i..i + NGRAM].to_vec();
-        let t0 = context[NGRAM - 1].min(VOCAB - 1);
-        let mut combined = model.embed[t0 * DIM..(t0 + 1) * DIM].to_vec();
-        for (ci, cw) in model.ctx_weights.iter().enumerate() {
-            let ctx_idx = NGRAM - 2 - ci;
-            let t = context[ctx_idx].min(VOCAB - 1);
-            let cv = &model.ctx[ci][t * DIM..(t + 1) * DIM];
-            for j in 0..DIM { combined[j] += cv[j] * cw; }
-        }
-        let ln = layer_norm(&combined, 1e-5);
-        let mut hidden = vec![0.0f32; HIDDEN];
-        for hi in 0..HIDDEN {
-            for (j, l) in ln.iter().enumerate() {
-                hidden[hi] += model.proj[hi * DIM + j] * l;
-            }
-            hidden[hi] = hidden[hi].max(0.0);
-        }
-        all_hidden.push(hidden);
-        all_ln.push(ln);
-        all_contexts.push(context);
-    }
+    let n = count as f32;
+    for x in g_embed.iter_mut() { *x /= n; }
+    for gc in g_ctx.iter_mut() { for x in gc.iter_mut() { *x /= n; } }
+    for x in g_proj.iter_mut() { *x /= n; }
+    for x in g_head.iter_mut() { *x /= n; }
+
+    let grads = TrainGrads { g_embed, g_ctx, g_proj, g_head };
+    (grads, all_hidden, total_loss)
+}
+
+fn backward_pass(
+    model: &NgramModel,
+    all_hidden: &[Vec<f32>],
+    all_contexts: &[Vec<usize>],
+    tokens: &[usize],
+    count: usize,
+    g_embed: &mut [f32],
+    g_ctx: &mut [Vec<f32>],
+    g_proj: &mut [f32],
+    g_head: &mut [f32],
+) -> f32 {
+    assert!(count > 0, "backward_pass: count=0");
+    assert_eq!(all_hidden.len(), count, "hidden count mismatch");
+    let mut total_loss = 0.0f32;
 
     for i in 0..count {
         let target = tokens[i + NGRAM].min(VOCAB - 1);
@@ -240,49 +308,69 @@ fn compute_grads(
         }
 
         for hi in 0..HIDDEN {
-            if all_hidden[i][hi] <= 0.0 { continue; }
+            if all_hidden[i][hi] <= 0.0 {
+                continue;
+            }
             for di in 0..DIM {
-                g_proj[hi * DIM + di] += d_hidden[hi] * all_ln[i][di];
+                g_proj[hi * DIM + di] += d_hidden[hi] * all_hidden[i].get(di).copied().unwrap_or(0.0);
             }
         }
 
-        let t0 = all_contexts[i][NGRAM - 1].min(VOCAB - 1);
-        for di in 0..DIM {
-            let mut grad_sum = 0.0f32;
-            for hi in 0..HIDDEN {
-                if all_hidden[i][hi] > 0.0 {
-                    grad_sum += model.proj[hi * DIM + di] * d_hidden[hi];
-                }
-            }
-            g_embed[t0 * DIM + di] += grad_sum;
-            for (ci, cw) in model.ctx_weights.iter().enumerate() {
-                let ctx_idx = NGRAM - 2 - ci;
-                let t = all_contexts[i][ctx_idx].min(VOCAB - 1);
-                g_ctx[ci][t * DIM + di] += cw * grad_sum;
-            }
-        }
+        accumulate_input_grads(
+            model, &all_contexts[i], &all_hidden[i], &d_hidden,
+            g_embed, g_ctx,
+        );
     }
 
-    let n = count as f32;
-    for x in g_embed.iter_mut() { *x /= n; }
-    for gc in g_ctx.iter_mut() { for x in gc.iter_mut() { *x /= n; } }
-    for x in g_proj.iter_mut() { *x /= n; }
-    for x in g_head.iter_mut() { *x /= n; }
-
-    let grads = TrainGrads { g_embed, g_ctx, g_proj, g_head };
-    (grads, all_hidden, total_loss / count as f32)
+    total_loss / count as f32
 }
 
+fn accumulate_input_grads(
+    model: &NgramModel,
+    context: &[usize],
+    hidden: &[f32],
+    d_hidden: &[f32],
+    g_embed: &mut [f32],
+    g_ctx: &mut [Vec<f32>],
+) {
+    assert!(context.len() >= NGRAM, "context too short");
+    let t0 = context[NGRAM - 1].min(VOCAB - 1);
+    for di in 0..DIM {
+        let mut grad_sum = 0.0f32;
+        for hi in 0..HIDDEN {
+            if hidden[hi] > 0.0 {
+                grad_sum += model.proj[hi * DIM + di] * d_hidden[hi];
+            }
+        }
+        g_embed[t0 * DIM + di] += grad_sum;
+        for (ci, cw) in model.ctx_weights.iter().enumerate() {
+            let ctx_idx = NGRAM - 2 - ci;
+            let t = context[ctx_idx].min(VOCAB - 1);
+            g_ctx[ci][t * DIM + di] += cw * grad_sum;
+        }
+    }
+}
+
+// ── evaluation ──
+
 fn evaluate(model: &NgramModel, tokens: &[usize]) -> f32 {
+    assert!(!tokens.is_empty(), "evaluate: empty tokens");
     let mut total = 0.0f32;
     let mut n = 0usize;
     for c in (0..tokens.len()).step_by(SEQ + 1) {
         let end = (c + SEQ + 1).min(tokens.len());
-        if end - c < NGRAM + 1 { continue; }
+        if end - c < NGRAM + 1 {
+            continue;
+        }
         let loss = model.loss_on_seq(&tokens[c..end]);
-        if loss.is_finite() { total += loss / LN_2; n += 1; }
+        if loss.is_finite() {
+            total += loss / LN_2;
+            n += 1;
+        }
     }
-    if n == 0 { return f32::MAX; }
+    if n == 0 {
+        return f32::MAX;
+    }
     total / n as f32
 }
 
@@ -291,32 +379,274 @@ fn load_data(path: &str) -> Vec<usize> {
         eprintln!("Failed to load {}: {}. Using fallback.", path, e);
         b"The quick brown fox jumps over the lazy dog. ".repeat(100).to_vec()
     });
+    assert!(!raw.is_empty(), "loaded data is empty");
     raw.into_iter().map(|b| (b as usize) % VOCAB).collect()
 }
 
-fn parse_args(args: &[String]) -> (u64, usize, f32, bool) {
-    let seed: u64 = args.iter().find(|a| a.starts_with("--seed="))
-        .map(|a| a[7..].parse().unwrap_or(43)).unwrap_or(43);
-    let steps: usize = args.iter().find(|a| a.starts_with("--steps="))
-        .map(|a| a[8..].parse().unwrap_or(3000)).unwrap_or(3000);
-    let lr: f32 = args.iter().find(|a| a.starts_with("--lr="))
-        .map(|a| a[5..].parse().unwrap_or(0.003)).unwrap_or(0.003);
-    let use_jepa: bool = !args.iter().any(|a| a == "--no-jepa");
-    assert!(lr > 0.0, "lr must be positive");
-    assert!(steps > 0, "steps must be positive");
-    (seed, steps, lr, use_jepa)
+// ── config ──
+
+struct Config {
+    seed: u64,
+    steps: usize,
+    encoder_lr: f32,
+    ntp_lr: f32,
+    use_jepa: bool,
+    use_nca: bool,
+    ntp_weight: f64,
+    jepa_weight: f64,
+    nca_weight: f64,
+    opt_kind: OptKind,
+    jepa_warmup: usize,
+    trial_id: String,
+    agent_id: String,
 }
+
+fn find_arg<T: std::str::FromStr>(args: &[String], prefix: &str, default: T) -> T {
+    args.iter()
+        .find(|a| a.starts_with(prefix))
+        .and_then(|a| a[prefix.len()..].parse().ok())
+        .unwrap_or(default)
+}
+
+fn parse_config(args: &[String]) -> Config {
+    let has_encoder_lr = args.iter().any(|a| a.starts_with("--encoder-lr="));
+    let encoder_lr: f32 = if has_encoder_lr {
+        find_arg(args, "--encoder-lr=", 0.004)
+    } else {
+        find_arg(args, "--lr=", 0.004)
+    };
+    let seed: u64 = find_arg(args, "--seed=", 43);
+    let steps: usize = find_arg(args, "--steps=", 3000);
+    let ntp_lr: f32 = find_arg(args, "--ntp-lr=", 0.001);
+    let ntp_weight: f64 = find_arg(args, "--ntp-weight=", 1.0);
+    let jepa_weight: f64 = find_arg(args, "--jepa-weight=", 1.0);
+    let nca_weight: f64 = find_arg(args, "--nca-weight=", 0.25);
+    let jepa_warmup: usize = find_arg(args, "--jepa-warmup=", 1500);
+    let use_jepa = !args.iter().any(|a| a == "--no-jepa");
+    let use_nca = !args.iter().any(|a| a == "--no-nca");
+    let opt_kind = if args.iter().any(|a| a == "--optimizer=muon") {
+        OptKind::Muon
+    } else {
+        OptKind::AdamW
+    };
+    let trial_id: String = find_arg(args, "--trial-id=", "hybrid-001".to_string());
+    let agent_id: String = find_arg(args, "--agent-id=", "ALFA".to_string());
+
+    assert!(encoder_lr > 0.0, "encoder_lr must be positive");
+    assert!(ntp_lr > 0.0, "ntp_lr must be positive");
+    assert!(steps > 0, "steps must be positive");
+    assert!(ntp_weight >= 0.0, "ntp_weight must be >= 0");
+    assert!(jepa_weight >= 0.0, "jepa_weight must be >= 0");
+    assert!(nca_weight >= 0.0, "nca_weight must be >= 0");
+
+    Config {
+        seed, steps, encoder_lr, ntp_lr, use_jepa, use_nca,
+        ntp_weight, jepa_weight, nca_weight, opt_kind, jepa_warmup,
+        trial_id, agent_id,
+    }
+}
+
+// ── JEPA step ──
+
+struct JepaStepResult {
+    loss: f64,
+}
+
+fn jepa_training_step(
+    predictor: &mut JepaPredictor,
+    model: &NgramModel,
+    target_model: &mut NgramModel,
+    hidden_vecs: &[Vec<f32>],
+    seq: &[usize],
+    seed: u64,
+    step: usize,
+    ema_target: &mut EmaTarget,
+) -> JepaStepResult {
+    let mask_result = build_span_mask(hidden_vecs.len().min(SEQ), seed, step);
+    let (tgt_pos, ctx_pos) = mask_result;
+    if tgt_pos.is_empty() || ctx_pos.is_empty() {
+        return JepaStepResult { loss: 0.0 };
+    }
+
+    let zero_h = vec![0.0f32; HIDDEN];
+    let ctx_flat: Vec<f32> = ctx_pos.iter()
+        .flat_map(|&p| hidden_vecs.get(p).unwrap_or(&zero_h).iter().copied())
+        .collect();
+
+    let tgt_hidden: Vec<Vec<f32>> = tgt_pos.iter()
+        .filter_map(|&p| {
+            if p + NGRAM <= seq.len() {
+                Some(target_model.compute_hidden(&seq[p..p + NGRAM]))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let loss = if tgt_hidden.is_empty() {
+        0.0f64
+    } else {
+        let tgt_flat: Vec<f32> = tgt_hidden.iter().flat_map(|v| v.iter().copied()).collect();
+        predictor.forward_backward(&ctx_flat, &tgt_flat, tgt_hidden.len()) as f64
+    };
+
+    let decay = ema_target.decay() as f32;
+    ema_inplace(&mut target_model.embed, &model.embed, decay);
+
+    JepaStepResult { loss }
+}
+
+fn build_span_mask(len: usize, seed: u64, step: usize) -> (Vec<usize>, Vec<usize>) {
+    assert!(len > 0, "build_span_mask: len=0");
+    let mut s = seed.wrapping_add(step as u64).wrapping_mul(6364136223846793005);
+    let mut bitset = vec![false; len];
+    let span_len = 3usize;
+    let num_spans = 2usize;
+    for _ in 0..num_spans {
+        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let start = (s as usize) % len.saturating_sub(span_len);
+        for b in start..(start + span_len).min(len) {
+            bitset[b] = true;
+        }
+    }
+    let tgt: Vec<usize> = bitset.iter().enumerate().filter_map(|(i, &m)| if m { Some(i) } else { None }).collect();
+    let ctx: Vec<usize> = bitset.iter().enumerate().filter_map(|(i, &m)| if !m { Some(i) } else { None }).collect();
+    (tgt, ctx)
+}
+
+// ── NCA step ──
+
+fn nca_training_step(nca: &NcaObjective, seed: u64, step: usize) -> f64 {
+    let nca_seed = seed.wrapping_add(step as u64).wrapping_mul(7919);
+    let nca_state = nca.init_grid(nca_seed);
+    let (loss, _) = nca_entropy_loss(
+        &nca_state, nca.k_states, nca.entropy_min, nca.entropy_max, nca.weight,
+    );
+    assert!(loss.is_finite(), "NCA loss is not finite");
+    loss
+}
+
+// ── Neon heartbeat ──
+
+fn neon_trial_start(cfg: &Config) {
+    let config_json = format!(
+        "{{\"arch\":\"tjepa\",\"d_model\":{},\"lr\":{},\"seed\":{},\"optimizer\":\"{}\",\"ntp_w\":{},\"jepa_w\":{},\"nca_w\":{}}}",
+        HIDDEN, cfg.encoder_lr, cfg.seed,
+        match cfg.opt_kind { OptKind::AdamW => "adamw", OptKind::Muon => "muon" },
+        cfg.ntp_weight, cfg.jepa_weight, cfg.nca_weight,
+    );
+    eprintln!(
+        "NEON_SQL: INSERT INTO igla_race_trials (trial_id, config, status, agent_id, branch) VALUES ('{}', '{}', 'running', '{}', 'main');",
+        cfg.trial_id, config_json, cfg.agent_id,
+    );
+}
+
+fn neon_heartbeat(cfg: &Config, step: usize, bpb: f32, last: &mut Instant) {
+    if last.elapsed().as_secs() >= HEARTBEAT_INTERVAL_SECS {
+        eprintln!(
+            "NEON_SQL: INSERT INTO igla_agents_heartbeat (agent_id, machine_id, branch, task, status, last_heartbeat) VALUES ('{}', 'local', 'main', '{}', 'active', NOW()) ON CONFLICT (agent_id) DO UPDATE SET status=EXCLUDED.status, last_heartbeat=EXCLUDED.last_heartbeat;",
+            cfg.agent_id, cfg.trial_id,
+        );
+        eprintln!("NEON_SQL: UPDATE igla_race_trials SET bpb_latest={:.4}, steps_done={} WHERE trial_id='{}';", bpb, step, cfg.trial_id);
+        *last = Instant::now();
+    }
+}
+
+fn neon_trial_complete(cfg: &Config, bpb: f32) {
+    eprintln!(
+        "NEON_SQL: UPDATE igla_race_trials SET bpb_final={:.4}, status='complete' WHERE trial_id='{}';",
+        bpb, cfg.trial_id,
+    );
+}
+
+// ── training state ──
+
+struct TrainingState {
+    model: NgramModel,
+    target_model: NgramModel,
+    opt_embed: OptWrapper,
+    opt_ctx: Vec<OptWrapper>,
+    opt_proj: OptWrapper,
+    opt_head: OptWrapper,
+    predictor: Option<JepaPredictor>,
+    ema_target: EmaTarget,
+    nca: Option<NcaObjective>,
+    obj_config: ObjectiveConfig,
+    best_val_bpb: f32,
+    start_time: Instant,
+    last_heartbeat: Instant,
+}
+
+fn init_training(cfg: &Config) -> TrainingState {
+    let make_opt = |size: usize, wd: f32| -> OptWrapper {
+        match cfg.opt_kind {
+            OptKind::AdamW => OptWrapper::adamw(size, wd),
+            OptKind::Muon => OptWrapper::muon(size, cfg.encoder_lr as f64, wd),
+        }
+    };
+    let wd = 0.04f32;
+    TrainingState {
+        model: NgramModel::new(cfg.seed),
+        target_model: NgramModel::new(cfg.seed),
+        opt_embed: make_opt(VOCAB * DIM, wd),
+        opt_ctx: (0..NUM_CTX).map(|_| make_opt(VOCAB * DIM, wd)).collect(),
+        opt_proj: make_opt(HIDDEN * DIM, wd),
+        opt_head: make_opt(VOCAB * HIDDEN, wd),
+        predictor: if cfg.use_jepa {
+            Some(JepaPredictor::new(PredictorConfig::with_d_model(HIDDEN)))
+        } else {
+            None
+        },
+        ema_target: EmaTarget::new(EmaConfig { start: 0.996, end: 1.0, ramp_steps: cfg.steps }),
+        nca: if cfg.use_nca { Some(NcaObjective::default()) } else { None },
+        obj_config: ObjectiveConfig {
+            ntp_weight: cfg.ntp_weight,
+            jepa_weight: cfg.jepa_weight,
+            nca_weight: cfg.nca_weight,
+        },
+        best_val_bpb: f32::MAX,
+        start_time: Instant::now(),
+        last_heartbeat: Instant::now(),
+    }
+}
+
+// ── banner ──
+
+fn print_banner(cfg: &Config) {
+    let opt_name = match cfg.opt_kind {
+        OptKind::AdamW => "AdamW",
+        OptKind::Muon => "Muon",
+    };
+    eprintln!("=== T-JEPA Hybrid Training ===");
+    eprintln!("dim={} hidden={} enc_lr={} ntp_lr={} seed={} steps={}", DIM, HIDDEN, cfg.encoder_lr, cfg.ntp_lr, cfg.seed, cfg.steps);
+    eprintln!("optimizer={} jepa={} nca={} jepa_warmup={}", opt_name, cfg.use_jepa, cfg.use_nca, cfg.jepa_warmup);
+    eprintln!("L = {}*NTP + {}*JEPA + {}*NCA", cfg.ntp_weight, cfg.jepa_weight, cfg.nca_weight);
+    eprintln!("trial_id={} agent_id={}", cfg.trial_id, cfg.agent_id);
+    eprintln!("Champion: BPB 2.5193 | Gate-1: ≤2.22 | Gate-2: ≤2.03");
+}
+
+// ── results ──
+
+fn print_results(cfg: &Config, best_bpb: f32, elapsed: f64) {
+    eprintln!("\n=== Training Complete ===");
+    eprintln!("Steps={} Time={:.1}s best_val_bpb={:.4} vs_champion={:+.4}",
+        cfg.steps, elapsed, best_bpb, best_bpb - 2.5193);
+    println!("BPB={:.4}", best_bpb);
+
+    if best_bpb <= 2.22 { eprintln!("Gate-1 PASSED (≤2.22)"); }
+    else { eprintln!("Gate-1 FAILED: {:.4} > 2.22", best_bpb); }
+    if best_bpb <= 2.03 { eprintln!("Gate-2 PASSED (≤2.03)"); }
+    else { eprintln!("Gate-2 FAILED: {:.4} > 2.03", best_bpb); }
+}
+
+// ── main ──
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
-    let (seed, steps, lr, use_jepa) = parse_args(&args);
-    let use_nca = !args.iter().any(|a| a == "--no-nca");
+    let cfg = parse_config(&args);
 
-    eprintln!("=== T-JEPA Hybrid Training (Proven Arch + JEPA) ===");
-    eprintln!("dim={} hidden={} lr={} seed={} steps={}", DIM, HIDDEN, lr, seed, steps);
-    eprintln!("jepa={} nca={}", use_jepa, use_nca);
-    eprintln!("L = 0.5*NTP + 0.25*JEPA + 0.25*NCA");
-    eprintln!("Champion: BPB 2.5193 | Gate-1: ≤2.23 | Gate-2: ≤2.03");
+    print_banner(&cfg);
+    neon_trial_start(&cfg);
 
     let train_data = load_data("data/tiny_shakespeare.txt");
     let val_data = load_data("data/tiny_shakespeare_val.txt");
@@ -324,123 +654,78 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let train = &train_data[..train_end];
     let val = if val_data.len() > 100 { &val_data } else { &train_data[train_end..] };
 
-    let mut model = NgramModel::new(seed);
-    let mut target_model = NgramModel::new(seed);
+    let mut st = init_training(&cfg);
+    let warmup = cfg.steps / 10;
 
-    let mut opt_embed = AdamW::new(VOCAB * DIM, 0.01);
-    let mut opt_ctx: Vec<AdamW> = (0..NUM_CTX).map(|_| AdamW::new(VOCAB * DIM, 0.01)).collect();
-    let mut opt_proj = AdamW::new(HIDDEN * DIM, 0.01);
-    let mut opt_head = AdamW::new(VOCAB * HIDDEN, 0.01);
-
-    let predictor = if use_jepa {
-        Some(JepaPredictor::new(PredictorConfig::with_d_model(HIDDEN)))
-    } else {
-        None
-    };
-    let mut predictor = predictor;
-
-    let ema_config = EmaConfig { start: 0.996, end: 1.0, ramp_steps: steps };
-    let mut ema_target = EmaTarget::new(ema_config);
-    let mask_config = MaskConfig::default();
-    let obj_config = ObjectiveConfig::default();
-    let nca = if use_nca { Some(NcaObjective::default()) } else { None };
-
-    let start_time = Instant::now();
-    let mut best_val_bpb = f32::MAX;
-
-    for step in 1..=steps {
+    for step in 1..=cfg.steps {
         let dl = train.len();
-        let off = (step * 97 + seed as usize) % dl.saturating_sub(SEQ + 1);
+        let off = (step * 97 + cfg.seed as usize) % dl.saturating_sub(SEQ + 1);
         let seq = &train[off..off + SEQ + 1];
 
-        let (grads, hidden_vecs, ntp_loss) = compute_grads(&model, seq);
+        let (grads, hidden_vecs, ntp_loss) = compute_grads(&st.model, seq);
 
-        let mut jepa_loss_val = 0.0f64;
-        if let Some(ref mut pred) = predictor {
-            let mask_result = {
-                let mut s = seed.wrapping_add(step as u64).wrapping_mul(6364136223846793005);
-                let mut bitset = vec![false; hidden_vecs.len().min(SEQ)];
-                let ratio = 0.3f64;
-                let span_len = 3usize;
-                let num_spans = 2usize;
-                for _ in 0..num_spans {
-                    s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                    let start = (s as usize) % bitset.len().saturating_sub(span_len);
-                    for b in start..(start + span_len).min(bitset.len()) { bitset[b] = true; }
-                }
-                let tgt_pos: Vec<usize> = bitset.iter().enumerate().filter_map(|(i, &m)| if m { Some(i) } else { None }).collect();
-                let ctx_pos: Vec<usize> = bitset.iter().enumerate().filter_map(|(i, &m)| if !m { Some(i) } else { None }).collect();
-                (tgt_pos, ctx_pos)
-            };
-            let (tgt_pos, ctx_pos) = mask_result;
-            if !tgt_pos.is_empty() && !ctx_pos.is_empty() {
-                let zero_h = vec![0.0f32; HIDDEN];
-                let ctx_flat: Vec<f32> = ctx_pos.iter()
-                    .flat_map(|&p| hidden_vecs.get(p).unwrap_or(&zero_h).iter().copied())
-                    .collect();
-                let tgt_hidden: Vec<Vec<f32>> = tgt_pos.iter()
-                    .filter_map(|&p| {
-                        let ctx_tokens: Vec<usize> = if p + NGRAM <= seq.len() {
-                            seq[p..p + NGRAM].to_vec()
-                        } else {
-                            return None;
-                        };
-                        Some(target_model.compute_hidden(&ctx_tokens))
-                    })
-                    .collect();
-                if !tgt_hidden.is_empty() {
-                    let tgt_flat: Vec<f32> = tgt_hidden.iter().flat_map(|v| v.iter().copied()).collect();
-                    jepa_loss_val = pred.forward_backward(&ctx_flat, &tgt_flat, tgt_hidden.len()) as f64;
-                }
-            }
-            let decay = ema_target.decay() as f32;
-            for (t, o) in target_model.embed.iter_mut().zip(model.embed.iter()) {
-                *t = decay * *t + (1.0 - decay) * *o;
-            }
-        }
-
-        let mut nca_loss_val = 0.0f64;
-        if let Some(ref nca_obj) = nca {
-            let nca_seed = seed.wrapping_add(step as u64).wrapping_mul(7919);
-            let nca_state = nca_obj.init_grid(nca_seed);
-            let (loss, _) = nca_entropy_loss(
-                &nca_state, nca_obj.k_states, nca_obj.entropy_min, nca_obj.entropy_max, nca_obj.weight,
-            );
-            nca_loss_val = loss;
-        }
+        let jepa_loss_val = run_jepa_step(&cfg, &mut st, &hidden_vecs, seq, step);
+        let nca_loss_val = run_nca_step(&cfg, &st, step);
 
         let combined = compute_combined_loss(
             ComponentLosses { ntp: ntp_loss as f64 / LN_2 as f64, jepa: jepa_loss_val, nca: nca_loss_val },
-            obj_config,
+            st.obj_config,
         );
 
-        opt_embed.update(&mut model.embed, &grads.g_embed, lr);
-        for (ci, oc) in opt_ctx.iter_mut().enumerate() {
-            oc.update(&mut model.ctx[ci], &grads.g_ctx[ci], lr);
+        let enc_lr = cosine_lr(step, cfg.steps, cfg.encoder_lr, warmup);
+        let head_lr = cosine_lr(step, cfg.steps, cfg.ntp_lr, warmup);
+        st.opt_embed.step(&mut st.model.embed, &grads.g_embed, enc_lr);
+        for (ci, oc) in st.opt_ctx.iter_mut().enumerate() {
+            oc.step(&mut st.model.ctx[ci], &grads.g_ctx[ci], enc_lr);
         }
-        opt_proj.update(&mut model.proj, &grads.g_proj, lr);
-        opt_head.update(&mut model.lm_head, &grads.g_head, lr);
+        st.opt_proj.step(&mut st.model.proj, &grads.g_proj, enc_lr);
+        st.opt_head.step(&mut st.model.lm_head, &grads.g_head, head_lr);
 
-        if step % 500 == 0 || step == steps {
-            let elapsed = start_time.elapsed().as_secs_f64();
-            let val_bpb = evaluate(&model, val);
-            if val_bpb < best_val_bpb && val_bpb.is_finite() { best_val_bpb = val_bpb; }
+        if step % 500 == 0 || step == cfg.steps {
+            let elapsed = st.start_time.elapsed().as_secs_f64();
+            let val_bpb = evaluate(&st.model, val);
+            if val_bpb < st.best_val_bpb && val_bpb.is_finite() {
+                st.best_val_bpb = val_bpb;
+            }
             eprintln!("step={:5} ntp={:.4} jepa={:.4} nca={:.4} val_bpb={:.4} best={:.4} t={:.1}s",
                 step, combined.components.ntp, combined.components.jepa,
-                combined.components.nca, val_bpb, best_val_bpb, elapsed);
+                combined.components.nca, val_bpb, st.best_val_bpb, elapsed);
         }
+
+        neon_heartbeat(&cfg, step, st.best_val_bpb, &mut st.last_heartbeat);
     }
 
-    let elapsed = start_time.elapsed().as_secs_f64();
-    eprintln!("\n=== Training Complete ===");
-    eprintln!("Steps={} Time={:.1}s best_val_bpb={:.4} vs_champion={:+.4}",
-        steps, elapsed, best_val_bpb, best_val_bpb - 2.5193);
-    println!("BPB={:.4}", best_val_bpb);
-
-    if best_val_bpb <= 2.23 { eprintln!("✅ Gate-1 PASSED (≤2.23)"); }
-    else { eprintln!("❌ Gate-1 FAILED: {:.4} > 2.23", best_val_bpb); }
-    if best_val_bpb <= 2.03 { eprintln!("✅ Gate-2 PASSED (≤2.03)"); }
-    else { eprintln!("❌ Gate-2 FAILED: {:.4} > 2.03", best_val_bpb); }
-
+    let elapsed = st.start_time.elapsed().as_secs_f64();
+    neon_trial_complete(&cfg, st.best_val_bpb);
+    print_results(&cfg, st.best_val_bpb, elapsed);
     Ok(())
+}
+
+fn run_jepa_step(
+    cfg: &Config,
+    st: &mut TrainingState,
+    hidden_vecs: &[Vec<f32>],
+    seq: &[usize],
+    step: usize,
+) -> f64 {
+    if step <= cfg.jepa_warmup {
+        return 0.0;
+    }
+    match (&mut st.predictor, &mut st.target_model) {
+        (Some(pred), _) => {
+            let result = jepa_training_step(
+                pred, &st.model, &mut st.target_model, hidden_vecs, seq,
+                cfg.seed, step, &mut st.ema_target,
+            );
+            result.loss
+        }
+        _ => 0.0,
+    }
+}
+
+fn run_nca_step(cfg: &Config, st: &TrainingState, step: usize) -> f64 {
+    match &st.nca {
+        Some(nca) => nca_training_step(nca, cfg.seed, step),
+        None => 0.0,
+    }
 }
