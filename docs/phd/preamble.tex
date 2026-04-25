@@ -1,0 +1,150 @@
+% ===================================================================
+% preamble.tex — Flos Aureus PhD Monograph (Lane L0.5)
+% Single source of LaTeX preamble logic. Included from main.tex.
+% Macros mandated by ONE SHOT trios#265 / trios#268: \admittedbox,
+% \codatabox, \coqbox, \theoremstyle{...}, formal proof discipline.
+% ===================================================================
+
+% ---- Encoding & fonts ------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ---- Math ------------------------------------------------------------
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+
+% ---- Graphics & figures ---------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns,decorations.pathmorphing}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+
+% ---- Layout ----------------------------------------------------------
+\usepackage{geometry}
+\geometry{margin=1in,top=1in,bottom=1in,left=1in,right=1in}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+
+% ---- Fonts colours --------------------------------------------------
+\definecolor{golden}{RGB}{212,175,55}
+\definecolor{goldlight}{RGB}{255,223,128}
+\definecolor{golddark}{RGB}{184,134,11}
+\definecolor{phicolor}{RGB}{193,161,49}
+\definecolor{admittedred}{RGB}{178,34,52}
+
+% ---- Babel / language -----------------------------------------------
+\usepackage[english]{babel}
+\usepackage{csquotes}
+
+% ---- Bibliography (R11) — biblatex + biber, numeric-comp -----------
+\usepackage[
+    backend=biber,
+    style=numeric-comp,
+    sorting=nyt,
+    maxbibnames=99,
+    giveninits=true,
+    uniquename=init,
+    isbn=true,
+    doi=true,
+    url=false
+]{biblatex}
+\addbibresource{bibliography.bib}
+
+% ---- Hyperlinks (load late) ----------------------------------------
+\usepackage[hidelinks,colorlinks=false]{hyperref}
+\usepackage{cleveref}
+
+% ---- Theorem environments (R12 — Lee / GVSU conventions) -----------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{construction}[theorem]{Construction}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{principle}[theorem]{Principle}
+
+% Force \qed to be a filled square (R12)
+\renewcommand{\qedsymbol}{\ensuremath{\blacksquare}}
+
+% ---- R5 honesty marker — every Admitted theorem MUST be wrapped ---
+%      Usage: \admittedbox{Theorem statement (Admitted in <file.v>)}
+\newtcolorbox{admittedbox-env}{
+    colback=admittedred!5,
+    colframe=admittedred,
+    coltitle=admittedred,
+    fonttitle=\bfseries,
+    title={\textsc{Admitted} (awaits Coq machine check)},
+    sharp corners,
+    breakable
+}
+\newcommand{\admittedbox}[1]{%
+    \begin{admittedbox-env}#1\end{admittedbox-env}%
+}
+
+% ---- R4 numeric-anchor marker — every constant cites CODATA/PDG/etc.
+%      Usage: \codatabox{constant = value}{source}
+\newtcolorbox{codatabox-env}{
+    colback=goldlight!20,
+    colframe=golddark,
+    sharp corners,
+    breakable,
+    enhanced jigsaw
+}
+\newcommand{\codatabox}[2]{%
+    \begin{codatabox-env}\textbf{Anchor:} \(#1\) \hfill \emph{\small Source: #2}\end{codatabox-env}%
+}
+
+% ---- R14 Coq-citation marker — every \coqbox cites a .v file --------
+%      Usage: \coqbox{theorem name}{path/to/file.v}{Proven|Admitted}
+\newcommand{\coqbox}[3]{%
+    \par\noindent\framebox[\linewidth]{%
+        \parbox{0.95\linewidth}{%
+            \textbf{Coq:} \texttt{#1} \ \textendash\ \texttt{#2} \ %
+            (\textsc{#3})%
+        }%
+    }\par%
+}
+
+% ---- Falsification banner (R7) -------------------------------------
+\newtcolorbox{falsificationbox}{
+    colback=blue!5,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title={\textsc{Falsification Criterion} (Popper, 1959)},
+    sharp corners,
+    breakable
+}
+
+% ---- Page style ------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\textcolor{golden}{\small\bfseries Flos Aureus}}
+\fancyfoot[LE,RO]{\textcolor{golddark}{\scriptsize \thepage}}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ---- Convenience macros ---------------------------------------------
+\newcommand{\PHI}{\ensuremath{\varphi}}
+\newcommand{\PHIINV}{\ensuremath{\varphi^{-1}}}
+\newcommand{\PSI}{\ensuremath{\psi}}
+\newcommand{\trinityid}{\ensuremath{\PHI^2 + \PHIINV^{2} = 3}}
+\newcommand{\lucasring}{\ensuremath{\mathcal{L} = \mathbb{Z}[\PHI]}}
+
+% ---- Document-wide URL behaviour ------------------------------------
+\urlstyle{same}
