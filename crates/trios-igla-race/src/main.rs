@@ -1,12 +1,15 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinSet;
 use tracing::info;
-use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
+
+use trios_igla_race::asha::run_worker;
 use trios_igla_race::neon::NeonDb;
+use trios_igla_race::status;
 
 #[derive(Parser)]
-#[command(name = "trios-igla-race")]
+#[command(name = "trios-igla-race", about = "IGLA RACE — distributed hunt for BPB < 1.5")]
 struct Cli {
     #[command(subcommand)]
     command: RaceCommand,
@@ -15,7 +18,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum RaceCommand {
     Start {
-        #[arg(long, default_value = "unknown")]
+        #[arg(long, env = "MACHINE_ID", default_value = "local")]
         machine: String,
         #[arg(long, default_value = "4")]
         workers: usize,
@@ -25,52 +28,57 @@ enum RaceCommand {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().init();
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
+
     let cli = Cli::parse();
-    let neon_url = std::env::var("NEON_URL").expect("NEON_URL must be set");
-    let _machine_id = std::env::var("MACHINE_ID").unwrap_or_else(|_| "unknown".to_string());
+    let neon_url = std::env::var("NEON_URL")
+        .expect("NEON_URL env var must be set");
 
     match cli.command {
         RaceCommand::Start { machine, workers } => {
-            info!("IGLA RACE START | machine={} workers={}", machine, workers);
+            info!("IGLA RACE START | machine={machine} | workers={workers}");
+
             let best_bpb = Arc::new(RwLock::new(f64::MAX));
             let mut set = JoinSet::new();
-            for worker_id in 0..workers {
+
+            for wid in 0..workers {
                 let url = neon_url.clone();
                 let mid = machine.clone();
                 let best = Arc::clone(&best_bpb);
                 set.spawn(async move {
-                    run_worker(&url, &mid, worker_id, best).await
+                    run_worker(&url, &mid, wid as u64, best).await
                 });
             }
+
             while let Some(res) = set.join_next().await {
                 match res {
-                    Ok(Ok(bpb)) if bpb < 1.50 => {
-                        info!("IGLA FOUND! BPB={:.4}", bpb);
+                    Ok(Ok(bpb)) if bpb < 1.5 => {
+                        info!("IGLA FOUND! BPB={bpb:.4}");
                         return Ok(());
                     }
                     Ok(Ok(bpb)) => {
+                        info!("worker finished, best={bpb:.4}");
                         let mut best = best_bpb.write().unwrap();
-                        if bpb < *best {
-                            *best = bpb;
-                            info!("NEW BEST BPB={:.4}", bpb);
-                        }
+                        if bpb < *best { *best = bpb; }
                     }
-                    Ok(Err(e)) => eprintln!("worker error: {}", e),
-                    Err(e) => eprintln!("join error: {}", e),
+                    Ok(Err(e)) => eprintln!("worker error: {e}"),
+                    Err(e) => eprintln!("join error: {e}"),
                 }
             }
-            info!("All workers completed");
         }
         RaceCommand::Status => {
-            let _db = NeonDb::connect(&neon_url).await?;
-            println!("IGLA RACE Status (STUB MODE)");
+            let db = NeonDb::connect(&neon_url).await?;
+            status::show_status(&db).await?;
         }
         RaceCommand::Best => {
-            println!("BEST TRIAL (STUB MODE)");
+            let db = NeonDb::connect(&neon_url).await?;
+            status::show_best(&db).await?;
         }
     }
+
     Ok(())
 }
 
