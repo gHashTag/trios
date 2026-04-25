@@ -199,27 +199,13 @@ impl SGDMomentum {
     }
 }
 
-/// Phi-based learning rate schedule
-///
-/// Returns the learning rate for a given step using the φ-schedule.
-pub fn phi_lr_schedule(step: usize, base_lr: f64, warmup_steps: usize) -> f64 {
-    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
-
-    if step < warmup_steps {
-        base_lr * (step as f64 / warmup_steps as f64)
-    } else {
-        let decay_steps = (step - warmup_steps) as f64 / warmup_steps as f64;
-        base_lr * phi.powf(-decay_steps)
-    }
-}
-
 /// Muon optimizer — Momentum + Newton-Schulz Orthogonalization
 ///
 /// Reference: arXiv:2604.01472
 ///
 /// Key idea: orthogonalize the momentum matrix using Newton-Schulz iteration
 /// before applying the update. This preserves the spectral structure of gradients
-/// and leads to 2-3× faster convergence.
+/// and leads to 2-3× faster convergence on transformer weight matrices.
 ///
 /// Newton-Schulz iteration (5 steps):
 ///   X_{k+1} = 1.5 * X_k - 0.5 * X_k @ X_k^T @ X_k
@@ -258,7 +244,14 @@ impl MuonOptimizer {
         }
     }
 
-    pub fn with_matrix_shape(param_count: usize, rows: usize, cols: usize, lr: f64, momentum: f64, weight_decay: f64) -> Self {
+    pub fn with_matrix_shape(
+        param_count: usize,
+        rows: usize,
+        cols: usize,
+        lr: f64,
+        momentum: f64,
+        weight_decay: f64,
+    ) -> Self {
         assert!(rows * cols >= param_count);
         Self {
             lr,
@@ -384,6 +377,57 @@ fn newton_schulz_step(m: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     result
 }
 
+/// Unified optimizer handle for R12 experiment runner and future sweeps
+///
+/// Allows switching between AdamW and Muon without code duplication.
+/// Both variants expose the same step()/reset() interface.
+pub enum OptimizerKind {
+    AdamW(AdamWCpu),
+    Muon(MuonOptimizer),
+}
+
+impl OptimizerKind {
+    pub fn step(&mut self, params: &mut [f32], grads: &[f32]) {
+        match self {
+            OptimizerKind::AdamW(opt) => opt.step(params, grads),
+            OptimizerKind::Muon(opt) => opt.step(params, grads),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        match self {
+            OptimizerKind::AdamW(opt) => opt.reset(),
+            OptimizerKind::Muon(opt) => opt.reset(),
+        }
+    }
+}
+
+/// Phi-based learning rate schedule
+///
+/// Returns the learning rate for a given step using the φ-schedule.
+///
+/// # Arguments
+///
+/// * `step` - Current training step
+/// * `base_lr` - Base learning rate
+/// * `warmup_steps` - Number of warmup steps
+///
+/// # Returns
+///
+/// Scheduled learning rate for the current step
+pub fn phi_lr_schedule(step: usize, base_lr: f64, warmup_steps: usize) -> f64 {
+    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
+
+    if step < warmup_steps {
+        // Linear warmup
+        base_lr * (step as f64 / warmup_steps as f64)
+    } else {
+        // φ-based decay: LR = base_lr * φ^(-(step - warmup) / warmup)
+        let decay_steps = (step - warmup_steps) as f64 / warmup_steps as f64;
+        base_lr * phi.powf(-decay_steps)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,11 +439,8 @@ mod tests {
     #[test]
     fn test_adamw_phi_defaults() {
         let optimizer = AdamWCpu::with_phi_defaults(100);
-
-        // Verify phi-based constants
         let expected_beta1 = 1.0 / phi();
         let expected_weight_decay = 1.0 / (phi() * phi() * phi());
-
         assert!((optimizer.beta1 - expected_beta1).abs() < 1e-6);
         assert!((optimizer.weight_decay - expected_weight_decay).abs() < 1e-6);
     }
@@ -407,7 +448,6 @@ mod tests {
     #[test]
     fn test_adamw_custom_params() {
         let optimizer = AdamWCpu::with_params(100, 0.001, 0.9, 0.999, 0.01);
-
         assert_eq!(optimizer.lr, 0.001);
         assert_eq!(optimizer.beta1, 0.9);
         assert_eq!(optimizer.beta2, 0.999);
@@ -419,15 +459,10 @@ mod tests {
         let mut params = vec![1.0f32; 10];
         let gradients = vec![0.1f32; 10];
         let mut optimizer = AdamWCpu::with_phi_defaults(10);
-
         let initial_param = params[0];
         optimizer.step(&mut params, &gradients);
-
-        // Parameter should have decreased
         assert!(params[0] < initial_param);
         assert_eq!(optimizer.step_count(), 1);
-
-        // Step again
         optimizer.step(&mut params, &gradients);
         assert_eq!(optimizer.step_count(), 2);
     }
@@ -437,10 +472,8 @@ mod tests {
         let mut params = vec![1.0f32; 10];
         let gradients = vec![0.1f32; 10];
         let mut optimizer = AdamWCpu::with_phi_defaults(10);
-
         optimizer.step(&mut params, &gradients);
         assert!(optimizer.m.iter().any(|&m| m != 0.0));
-
         optimizer.reset();
         assert_eq!(optimizer.step_count(), 0);
         assert!(optimizer.m.iter().all(|&m| m == 0.0));
@@ -451,16 +484,10 @@ mod tests {
     fn test_phi_lr_schedule_warmup() {
         let base_lr = 0.1;
         let warmup_steps = 10;
-
-        // At step 0, LR should be 0
         let lr_0 = phi_lr_schedule(0, base_lr, warmup_steps);
         assert_eq!(lr_0, 0.0);
-
-        // At step 5 (half warmup), LR should be half base
         let lr_5 = phi_lr_schedule(5, base_lr, warmup_steps);
         assert!((lr_5 - 0.05).abs() < 1e-6);
-
-        // At step 10 (end of warmup), LR should be base
         let lr_10 = phi_lr_schedule(10, base_lr, warmup_steps);
         assert!((lr_10 - base_lr).abs() < 1e-6);
     }
@@ -469,12 +496,9 @@ mod tests {
     fn test_phi_lr_schedule_decay() {
         let base_lr = 0.1;
         let warmup_steps = 10;
-
-        // After warmup, LR should decay
         let lr_10 = phi_lr_schedule(10, base_lr, warmup_steps);
         let lr_20 = phi_lr_schedule(20, base_lr, warmup_steps);
         let lr_30 = phi_lr_schedule(30, base_lr, warmup_steps);
-
         assert!(lr_20 < lr_10, "LR should decay");
         assert!(lr_30 < lr_20, "LR should continue decaying");
     }
@@ -483,11 +507,8 @@ mod tests {
     fn test_phi_lr_schedule_phi_factor() {
         let base_lr = 1.0;
         let warmup_steps = 1;
-
         let lr_1 = phi_lr_schedule(1, base_lr, warmup_steps);
         let lr_2 = phi_lr_schedule(2, base_lr, warmup_steps);
-
-        // After warmup, LR should decay by factor of φ
         assert!((lr_2 - lr_1 / phi()).abs() < 1e-6);
     }
 
@@ -496,11 +517,8 @@ mod tests {
         let mut params = vec![1.0f32; 10];
         let gradients = vec![0.1f32; 10];
         let mut optimizer = SGDMomentum::new(10, 0.01, 0.9);
-
         let initial_param = params[0];
         optimizer.step(&mut params, &gradients);
-
-        // Parameter should decrease
         assert!(params[0] < initial_param);
         assert_eq!(optimizer.step_count(), 1);
     }
@@ -576,5 +594,19 @@ mod tests {
         for i in 0..4 {
             assert!((result[i] - identity[i]).abs() < 0.01, "NS step should preserve identity");
         }
+    }
+
+    #[test]
+    fn optimizer_kind_dispatch() {
+        let n = 4;
+        let mut params_a = vec![1.0f32; n];
+        let mut params_m = vec![1.0f32; n];
+        let grads = vec![0.1f32; n];
+        let mut adamw = OptimizerKind::AdamW(AdamWCpu::with_params(n, 0.004, 0.9, 0.999, 0.01));
+        let mut muon = OptimizerKind::Muon(MuonOptimizer::new(n, 0.004, 0.95, 0.01));
+        adamw.step(&mut params_a, &grads);
+        muon.step(&mut params_m, &grads);
+        assert!(params_a[0] < 1.0);
+        assert!(params_m[0] < 1.0);
     }
 }
