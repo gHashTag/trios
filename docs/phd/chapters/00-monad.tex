@@ -1,0 +1,149 @@
+% ===================================================================
+% Chapter 0 — Monadic Prologue
+% Part I: The Foundations | Lane L0 (editorial scaffold)
+% Issue: trios#265
+% ===================================================================
+%
+% This is the editorial scaffold of Chapter 0. Its purpose is twofold:
+%
+%   1. To unblock the monograph build: `main.tex` already \include's
+%      `chapters/00-monad`, and without this file `tectonic` aborts on
+%      the very first \include of \mainmatter.
+%
+%   2. To open a slot for the per-chapter expansion lane L0 (claim it
+%      separately on issue trios#265). The expansion target is
+%      \(\geq 1500\) lines, with at least two citations, one theorem
+%      with a complete proof, and a Rule-of-Three exposition (Brain /
+%      Throne / Proof strands), per R3.
+%
+% The current text is intentionally short (under the 1500-line
+% per-chapter floor) and fully replaceable. It carries:
+%   - an honest \admittedbox{} on the placeholder character of the
+%     chapter (R5),
+%   - the canonical Trinity Identity statement (Anchor R4),
+%   - and a compile-ready structure with the Rule-of-Three skeleton.
+% ===================================================================
+
+\chapter{Monadic Prologue}
+\label{ch:monad}
+
+\admittedbox{This chapter is an editorial scaffold (lane L0 of the ONE
+SHOT mission, see issue \href{https://github.com/gHashTag/trios/issues/265}{trios\#265}).
+Per-chapter expansion (\(\geq 1500\) lines, two citations, one
+\texttt{\textbackslash proof}, Rule of Three) is delegated to lane L0
+of the per-chapter swarm. Until that lane closes, treat this prologue
+as scaffolding rather than as a finished proof artefact (R5).}
+
+\section{The Single Source}
+
+We open the monograph with a single irrational number.
+\[
+  \varphi \;=\; \frac{1 + \sqrt{5}}{2} \;\approx\; 1.618{,}033{,}988{,}749{,}894{,}8.
+\]
+The whole architecture of the dissertation is the unfolding of one
+algebraic identity over \(\varphi\):
+
+\begin{theorem}[Trinity Identity]\label{thm:trinity-identity-prologue}
+  Let \(\varphi\) be the positive root of \(x^{2} - x - 1 = 0\). Then
+  \[
+    \varphi^{2} + \varphi^{-2} \;=\; 3.
+  \]
+\end{theorem}
+\begin{proof}
+  From \(\varphi^{2} = \varphi + 1\) and \(\varphi^{-2} = 2 - \varphi\)
+  (both immediate from \(\varphi^{2} - \varphi - 1 = 0\)),
+  \(\varphi^{2} + \varphi^{-2} = (\varphi + 1) + (2 - \varphi) = 3\).
+  \qed
+\end{proof}
+
+This is the gate of the monograph. Every later chapter pulls one
+strand from this identity and follows it to its empirical, geometric,
+or computational consequence.
+
+\section{Three Strands (Rule of Three)}
+
+The monograph runs on three strands that re-converge in every
+chapter. They are introduced once here, in skeletal form.
+
+\begin{description}
+  \item[Brain.] The cognitive substrate (cf.\ Chapter~\ref{ch:three-strands}).
+        The Brain houses the eighty-four theorems of the
+        \texttt{t27} specification \cite{t27spec} and the four Coq
+        files that mechanize them in
+        \href{https://github.com/gHashTag/trinity-clara/tree/main/proofs/igla}{\texttt{trinity-clara/proofs/igla/}}.
+  \item[Throne.] The orchestrator. The Throne is where the runtime
+        guards live: \texttt{crates/trios-igla-race/src/invariants.rs}
+        loads \texttt{assertions/igla\_assertions.json} at build time
+        and turns each Coq theorem into an \texttt{Err} at the start
+        of every trial, per L-R14.
+  \item[Proof.] The empirical falsification record. The Proof strand
+        is the corroboration log: physical observations
+        (\citealp{coldea2010}, \citealp{shechtman1984}), neural
+        benchmarks (Chapter~\ref{ch:benchmarks}), and the Popper
+        appendix (Appendix~B).
+\end{description}
+
+\section{Reading the Monograph}
+
+A reader who is short on time may navigate the work in three slices.
+
+\begin{itemize}
+  \item \emph{Theory slice.} Chapters \ref{ch:monad}--\ref{ch:lucas-ring}
+        and \ref{ch:trinity-identity}--\ref{ch:lucas-closure} present
+        the algebraic core: \(\varphi\), the Lucas ring \(\mathcal{L} = \mathbb{Z}[\varphi]\),
+        and closure properties.
+  \item \emph{Empirical slice.} Chapters \ref{ch:e8-symmetry},
+        \ref{ch:standard-model}--\ref{ch:igla-architecture}, and
+        \ref{ch:benchmarks}--\ref{ch:data-analysis} carry the
+        falsifiable claims and their corroboration record.
+  \item \emph{Geometric slice.} Chapters \ref{ch:vesica-piscis}--\ref{ch:fibonacci-tesselation}
+        give the sacred-geometric reading of \(\varphi\), Metatron's
+        cube, and the Platonic / Kepler solids in \(\mathcal{L}\).
+\end{itemize}
+
+\section{Falsification Stance}
+
+Following Popper \cite{popper1959} and Lakatos \cite{lakatos1976}, we
+state the falsification stance of the monograph at the gate. Every
+empirical chapter contains an explicit
+\texttt{\textbackslash section\{Falsification Criterion\}} block
+specifying which observation would refute the chapter's main claim
+and a corroboration record (Appendix~B). The hard core of the research
+programme is small:
+\[
+  \{\;\varphi,\; \pi,\; e,\; n \in \mathbb{Z}\;\} \cup \{\;\text{INV-1}, \ldots, \text{INV-5}\;\}.
+\]
+Any free parameter outside this set is an editorial bug, and any
+chapter that introduces one is rejected by the audit pipeline
+(\texttt{cargo run -p trios-phd -- audit}).
+
+\section{Notation}
+
+We collect here the symbols used throughout the monograph; the full
+table lives in the front-matter notation page.
+
+\begin{itemize}
+  \item \(\varphi\) — golden ratio, \((1+\sqrt{5})/2\).
+  \item \(\psi\) — algebraic conjugate, \((1-\sqrt{5})/2 = -\varphi^{-1}\).
+  \item \(\mathcal{L}\) — Lucas ring \(\mathbb{Z}[\varphi]\).
+  \item \(L_n, F_n\) — Lucas and Fibonacci numbers.
+  \item \(\alpha_\varphi\) — the constant \(\varphi^{-3}/2\), used for
+        the learning-rate champion in Chapter~\ref{ch:igla-architecture}.
+  \item \(\text{INV-}k\) — the \(k\)-th runtime invariant
+        (\(k = 1, \ldots, 5\); see Chapter~\ref{ch:gf16-algebra} and
+        Appendix~F).
+\end{itemize}
+
+\section{Where to Begin}
+
+A first reader may proceed linearly, but the recommended on-ramps are:
+Chapter~\ref{ch:trinity-identity} for the algebra,
+Chapter~\ref{ch:e8-symmetry} for the empirical anchor (Coldea 2010),
+and Chapter~\ref{ch:igla-architecture} for the runtime that ties
+them together.
+
+\smallskip
+
+\noindent \emph{Status.} Editorial scaffold. Lane L0 of issue
+\href{https://github.com/gHashTag/trios/issues/265}{trios\#265} is
+the slot for full expansion to PhD scope.

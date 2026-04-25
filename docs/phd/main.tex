@@ -17,7 +17,6 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usepackage[T1]{lmmodern}
 
 % Math
 \usepackage{amsmath,amssymb,amsthm}
@@ -32,15 +31,14 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 
-% References
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+% Babel + bibliography (Springer LNCS-compatible style)
+\usepackage[english]{babel}
 \usepackage{csquotes}
+\usepackage{url}
+\usepackage[style=numeric-comp,backend=biber,sorting=nyt]{biblatex}
+\addbibresource{bibliography.bib}
 \usepackage{hyperref}
 \usepackage{cleveref}
-\usepackage[style=english]{babel}
-\usepackage{biblatex}
-\usepackage{url}
 
 % Layout
 \usepackage{geometry}
@@ -55,21 +53,57 @@
 
 % Golden color
 \definecolor{phi}{RGB}{193,161,49}
-\usepackage[rgb]{xcolor}{\phi}
 
-% Theorem environments
+% Frames for honest Admitted markers (R5)
+\usepackage[most]{tcolorbox}
+
+% Theorem environments (R12 — Lee/GVSU conventions)
+\usepackage{thmtools}
 \newtheorem{theorem}{Theorem}[chapter]
-\newtheorem{lemma}[theorem]{Lemma}[chapter]
-\newtheorem{corollary}[theorem]{Corollary}[chapter]
-\newtheorem{definition}[theorem]{Definition}[chapter]
-\newtheorem{example}[theorem]{Example}[chapter]
-\newtheorem{remark}[theorem]{Remark}[chapter]
-\newtheorem{proposition}[theorem]{Proposition}[chapter]
-\newtheorem{axiom}[theorem]{Axiom}[chapter]
-\newtheorem{conjecture}[theorem]{Conjecture}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
 
 % Proof environment
 \renewcommand{\qedsymbol}{\blacksquare}
+
+% \admittedbox{<text>} — the honest visual marker for Admitted theorems (R5).
+% Renders a red-bordered box around the text. Use whenever a theorem's Coq
+% counterpart in trinity-clara/proofs/igla/*.v is still Admitted; never use
+% to mask Admitted as Proven.
+\newtcolorbox{admittedbox}[1][]{
+  colback=red!4!white,
+  colframe=red!60!black,
+  boxrule=0.6pt,
+  arc=2pt,
+  left=4pt,right=4pt,top=4pt,bottom=4pt,
+  fontupper=\small\itshape,
+  title={\bfseries Admitted (Coq status: not Proven \textemdash{} R5)},
+  #1
+}
+\newcommand{\admittedbox}[1]{\begin{admittedbox}#1\end{admittedbox}}
+
+% Falsification box (R7) — used by empirical chapters.
+\newtcolorbox{falsificationbox}[1][]{
+  colback=blue!4!white,
+  colframe=blue!60!black,
+  boxrule=0.6pt,
+  arc=2pt,
+  left=4pt,right=4pt,top=4pt,bottom=4pt,
+  fontupper=\small,
+  title={\bfseries Falsification Criterion (Popper)},
+  #1
+}
+
+% Convenience: \citealp = author-year inline (used by 00-monad)
+\providecommand{\citealp}[1]{\textcite{#1}}
 
 % Page style
 \pagestyle{fancy}
@@ -86,16 +120,19 @@
 % Front matter
 \frontmatter
 \include{frontmatter/title-page}
+\include{frontmatter/declaration}
 \include{frontmatter/abstract}
 \include{frontmatter/dedication}
 \include{frontmatter/acknowledgements}
 \include{frontmatter/preface}
-\end{frontmatter}
+\include{frontmatter/biographical-note}
 
 % Table of contents
 \tableofcontents
 \listoffigures
 \listoftables
+\include{frontmatter/list-of-theorems}
+\include{frontmatter/notation}
 
 % Main matter
 \mainmatter
@@ -156,11 +193,16 @@
 \include{chapters/30-golden-imagery}
 \include{chapters/31-philosophy}
 \include{chapters/32-conclusion}
+\include{chapters/33-epilogue}
 
 % Appendices
 \appendix
 \include{appendix/A-catalogue}
+\include{appendix/B-falsification}
 \include{appendix/E-lexicon}
+\include{appendix/F-coq-citation-map}
+\include{appendix/G-data-availability}
+\include{appendix/H-acm-ae-checklist}
 
 % Bibliography
 \printbibliography

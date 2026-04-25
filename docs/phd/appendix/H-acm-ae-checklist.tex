@@ -1,0 +1,86 @@
+% ===================================================================
+% Appendix H — ACM Artifact Evaluation Checklist
+% Targets: Functional, Reusable, Available (3-badge submission).
+% ===================================================================
+
+\chapter{ACM Artifact Evaluation Checklist}
+\label{app:acm-ae}
+
+This appendix records the artefact-evaluation submission against the
+ACM Artifact Review and Badging policy. The submission targets the
+three available badges.
+
+\section{Artifact summary}
+
+\begin{description}
+  \item[Title.] \emph{Flos Aureus} — Trinity Framework artefact pack.
+  \item[Authors.] Dmitrii Vasilev (Trinity Research Programme).
+  \item[Repository.] \url{https://github.com/gHashTag/trios}, branch
+        tagged \verb|phd/v1.0| at submission.
+  \item[License.] MIT (code), CC-BY-4.0 (text), Apache-2.0 (Coq proofs).
+\end{description}
+
+\section{Functional badge}
+
+The \emph{Functional} badge is awarded to artefacts that are
+documented, complete, exercisable, and consistent with the claims in
+the paper.
+
+\begin{itemize}
+  \item Documentation entry point: \texttt{docs/phd/reproducibility.md}.
+  \item Build entry point: \verb|cargo run -p trios-phd -- compile|.
+  \item Tests exercised by reviewer: \verb|cargo test -p trios-phd|
+        and \verb|cargo test -p trios-igla-race -- invariants|.
+  \item Smoke run: \verb|cargo run -p trios-phd -- reproduce --chapter 24|
+        recovers Table~24.1 within \(\pm 0.5\%\) on seeds
+        \(\{17, 42, 1729\}\).
+\end{itemize}
+
+\section{Reusable badge}
+
+The \emph{Reusable} badge requires that the artefact can be reused by
+others, with documentation that supports adaptation.
+
+\begin{itemize}
+  \item All numeric constants traceable to a \verb|.v| file via the
+        single source of truth (rule L-R14).
+  \item Reviewer-facing manifest at \texttt{docs/phd/reproducibility.md}
+        listing dependencies, hardware profile, expected wall-clock,
+        and SHA-256 checksums for every CSV.
+  \item Modular structure: per-chapter reproduction is selectable via
+        \verb|--chapter NN|.
+  \item Public API: the runtime guard layer
+        (\texttt{crates/trios-igla-race}) exports
+        \verb|enforce_all_invariants(...)| as a stable entry point
+        for downstream reuse.
+\end{itemize}
+
+\section{Available badge}
+
+The \emph{Available} badge requires permanent retrieval of the
+artefact via a stable identifier.
+
+\begin{itemize}
+  \item Zenodo deposit (DOI in Appendix~G).
+  \item GitHub source mirror at the \verb|phd/v1.0| tag.
+  \item License files (\texttt{LICENSE-MIT}, \texttt{LICENSE-CC-BY},
+        \texttt{LICENSE-APACHE-2.0}) shipped at repository root.
+\end{itemize}
+
+\section{Reviewer instructions (compact)}
+
+\begin{enumerate}
+  \item Clone the tag: \\
+        \verb|git clone --branch phd/v1.0 https://github.com/gHashTag/trios|.
+  \item Install Rust toolchain (stable, version pinned in
+        \verb|rust-toolchain.toml|).
+  \item Run the audit gate: \verb|cargo run -p trios-phd -- audit|.
+  \item Reproduce a chapter: \verb|cargo run -p trios-phd -- reproduce --chapter 24|.
+  \item Verify hashes against \verb|docs/phd/reproducibility.md|.
+\end{enumerate}
+
+\noindent
+A reviewer who hits any deviation greater than \(\pm 0.5\%\) on a
+reported table is invited to file an issue at
+\href{https://github.com/gHashTag/trios/issues}{the issue tracker}; the
+reproduction binary's deterministic seeding makes this self-debugging.

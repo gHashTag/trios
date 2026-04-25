@@ -1,0 +1,49 @@
+% ===================================================================
+% Appendix G — Data Availability (ACM AE / Available badge)
+% ===================================================================
+
+\chapter{Data Availability}
+\label{app:data-availability}
+
+The artefacts associated with this monograph have been deposited under
+permanent identifiers as follows.
+
+\begin{itemize}
+  \item \textbf{Trinity paper anchor.} Zenodo DOI
+        \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}
+        — the algebraic identity and 84 supporting theorems.
+  \item \textbf{Companion deposits.}
+        \href{https://doi.org/10.5281/zenodo.18947017}{10.5281/zenodo.18947017},
+        \href{https://doi.org/10.5281/zenodo.19227879}{10.5281/zenodo.19227879}.
+  \item \textbf{Source repositories} (versioned, MIT-licensed for code,
+        CC-BY-4.0 for monograph text):
+        \href{https://github.com/gHashTag/trios}{\texttt{gHashTag/trios}},
+        \href{https://github.com/gHashTag/trinity-clara}{\texttt{gHashTag/trinity-clara}},
+        \href{https://github.com/gHashTag/t27}{\texttt{gHashTag/t27}}.
+  \item \textbf{Single source of truth} for runtime guards:
+        \href{https://github.com/gHashTag/trios/blob/main/assertions/igla_assertions.json}{\texttt{assertions/igla\_assertions.json}}.
+\end{itemize}
+
+\section*{Reproduction binary}
+
+The artefact is reproduced from a single Rust entry point. There is no
+\verb|.sh| wrapper anywhere in the pipeline (R1).
+
+\begin{verbatim}
+# Reproduce the table for chapter NN on stated seeds
+cargo run -p trios-phd -- reproduce --chapter <NN>
+
+# Reproduce the full monograph PDF
+cargo run -p trios-phd -- compile
+
+# Run the audit gate
+cargo run -p trios-phd -- audit
+\end{verbatim}
+
+\section*{Persistent identifiers}
+
+Each chapter table that participates in the artefact-evaluation badge
+carries a \verb|\dataref{...}| in its caption pointing to the Zenodo
+record that hosts the underlying CSV. The reproduction binary verifies
+the SHA-256 hash of every loaded CSV against the manifest in
+\verb|docs/phd/reproducibility.md|.
