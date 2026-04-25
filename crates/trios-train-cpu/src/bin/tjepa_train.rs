@@ -229,13 +229,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let context_positions = get_unmasked(&mask_result.mask);
         if target_positions.is_empty() || context_positions.is_empty() { continue; }
 
-        // ── NCA auxiliary ───────────────────────────────────────────────────
-        let nca_seed = seed.wrapping_add(step as u64).wrapping_mul(7919);
-        let NcaRolloutResult { final_state, final_entropy, .. } = nca.rollout(nca_seed, &nca_rule);
-        let k = nca.k_states;
-        let nca_embed: Vec<f32> = final_state.iter().map(|&s| s / (k - 1) as f32).collect();
-        let nca_target: Vec<f32> = final_state.iter().map(|&s| s / (k - 1) as f32).collect();
-        let nca_loss_val = nca.compute_loss(&nca_embed, &nca_target, &final_state);
+        let jepa_loss_val = 0.0;
+        let nca_loss_val = 0.0;
 
         // ── Encode sequence ─────────────────────────────────────────────────
         let online_embeddings = online_encoder.encode(seq);
@@ -246,29 +241,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             gf16_round(&mut flat);
         }
 
-        // ── JEPA forward with JepaPredictor ─────────────────────────────────
-        let ctx_len = context_positions.len();
-        let mut ctx_flat = vec![0.0f32; ctx_len * d_model];
-        for (ci, &cp) in context_positions.iter().enumerate() {
-            if let Some(e) = online_embeddings.get(cp) {
-                ctx_flat[ci * d_model..(ci + 1) * d_model].copy_from_slice(e);
-            }
-        }
-        let target_embeddings = target_encoder.encode_positions(seq, &target_positions);
-        let mut tgt_flat = vec![0.0f32; target_positions.len() * d_model];
-        for (ti, te) in target_embeddings.iter().enumerate() {
-            tgt_flat[ti * d_model..(ti + 1) * d_model].copy_from_slice(te);
-        }
-        let predicted = predictor.forward(&ctx_flat, &target_positions, &tgt_flat);
-
-        let mut tgt_mean = vec![0.0f32; d_model];
-        for te in &target_embeddings {
-            for i in 0..d_model { tgt_mean[i] += te[i] / target_positions.len() as f32; }
-        }
-        let jepa_loss_struct = compute_jepa_loss(&predicted, &tgt_mean, loss_config);
-        predictor.optimizer_step(jepa_loss_struct.total, &predicted, &tgt_mean);
-
-        // ── NTP backward: THIS is what trains the encoder embeddings ────────
+        // ── NTP backward: trains the encoder embeddings ───────────────────
         let mut ntp_train_loss = 0.0f64;
         let mut embed_grads = vec![0.0f32; VOCAB * d_model];
         let ntp_pairs = (seq.len() - 1).min(SEQ_LEN);
@@ -287,7 +260,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let combined = compute_combined_loss(
             ComponentLosses {
                 ntp: ntp_train_loss / ntp_pairs.max(1) as f64,
-                jepa: jepa_loss_struct.total,
+                jepa: jepa_loss_val,
                 nca: nca_loss_val,
             },
             obj_config,
@@ -308,10 +281,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if step % 100 == 0 || step == steps - 1 {
             let elapsed = start_time.elapsed().as_secs_f64();
             eprintln!(
-                "step={:5} ntp={:.4} jepa={:.4} nca={:.4} total={:.4} h_nca={:.2} lr={:.5} t={:.1}s",
-                step, combined.components.ntp, combined.components.jepa,
-                combined.components.nca, combined.total,
-                final_entropy, current_lr, elapsed,
+                "step={:5} ntp={:.4} total={:.4} lr={:.5} t={:.1}s",
+                step, combined.components.ntp, combined.total,
+                current_lr, elapsed,
             );
 
             if step % 500 == 0 || step == steps - 1 {
