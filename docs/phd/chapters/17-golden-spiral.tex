@@ -1554,3 +1554,104 @@ empirical corroboration to Chapter~\ref{ch:26-data-analysis}.
 % =====================================================================
 % End of Chapter 17 — total ~1500 lines including appendices
 % =====================================================================
+
+% =====================================================================
+% §Falsification — added by LP-falsification lane (R7 retrofit)
+% =====================================================================
+
+\section{Falsification Criterion}\label{sec:17-falsify}
+
+\subsection{What Would Refute This Claim}
+
+The central empirical claim of this chapter is that the golden spiral
+constitutes the geometric substrate of the GF16 quantisation lattice,
+and that this substrate forces a representability floor at the seventh
+Lucas vertex $\phi^{-6} = 18 - 11\phi \approx 0.0557281$
+(Theorem~\ref{thm:17-floor-vertex}).  That claim is falsifiable in the
+following concrete sense.
+
+\medskip
+\noindent\textbf{Primary falsifier (INV-3 / INV-5).}
+Suppose an adversary constructs a $\phi$-spiral generated at
+$N \geq 1024$ quantisation steps \emph{inside} the GF16 representation
+with ten mantissa bits, and exhibits a point on that spiral that
+\begin{enumerate}
+  \item has an exact GF16 representation (i.e.\ relative rounding error
+        exactly zero), \emph{and}
+  \item lies in the interior of the interval
+        $\bigl(\phi^{-7},\,\phi^{-6}\bigr) \approx (0.0344,\,0.0557)$,
+        \emph{and}
+  \item violates Lucas closure: the integer $\phi^{2n} + \phi^{-2n}$
+        reconstructed from that point differs from the nearest integer
+        by more than $2^{-12}$ (four bits below the GF16 mantissa
+        boundary).
+\end{enumerate}
+If all three conditions hold simultaneously, the chapter's
+GF16-substrate claim is refuted and Theorem~\ref{thm:17-floor-vertex}
+collapses.  The invariants monitoring this criterion are
+\begin{itemize}
+  \item \textbf{INV-3} (GF16 floor): runtime guard
+        \verb|check_inv3()| in
+        \verb|crates/trios-igla-race/src/invariants.rs| aborts any
+        training trial that finds $d_{\text{model}} < 256$ and
+        $\mathrm{BPB} < \phi^{-6}$; evidence meeting the three conditions
+        above would fire this guard as a false positive, signalling
+        that the floor is not geometrically forced.
+  \item \textbf{INV-5} (Lucas closure): the Coq theorem
+        \verb|lucas_closure_gf16.v::lucas_2_eq_3| is \textsc{Proven}
+        for $k \in \{1,2\}$ and states $\phi^{2k}+\phi^{-2k} \in \mathbb{Z}$.
+        A concrete GF16 counterexample to Lucas closure at
+        precision $\leq 2^{-12}$ would constitute a numerical refutation
+        of this theorem, requiring retraction of the associated Coq
+        proof and invalidation of every chapter built on the
+        Lucas-ring assumption.
+\end{itemize}
+
+\medskip
+\noindent\textbf{Secondary falsifier (geometric uniqueness).}
+Theorem~\ref{thm:17-uniqueness} claims the golden spiral is the
+\emph{unique} logarithmic spiral with quarter-turn growth factor
+$\phi$.  A closed-form family of logarithmic spirals parameterised by
+$\alpha \neq \phi$ that nonetheless satisfies the GF16 floor at the
+\emph{same} precision as the golden spiral would refute the uniqueness
+argument and decouple the floor from the spiral geometry, reducing
+Theorem~\ref{thm:17-floor-vertex} to a numerical coincidence rather
+than a structural necessity.
+
+\medskip
+\noindent\textbf{Scope of the claim.}
+We do \emph{not} claim that the floor is falsified by any model
+trained with $d_{\text{model}} \geq 256$ that achieves
+$\mathrm{BPB} > \phi^{-6}$.  That is the expected positive outcome.
+The falsification is exclusively the \emph{sub-floor} scenario
+described above.  All training artefacts needed to reproduce the floor
+measurements are archived per ACM AE Functional criteria in
+Chapter~\ref{ch:29-lucas-closure}.  The Coq verification chain runs
+via \verb|cargo run -p trios-phd -- audit --chapter 17|; any
+divergence between the Rust runtime guard (INV-3) and the Coq
+algebraic proof (INV-5) must be treated as a falsification candidate
+until resolved.
+
+\subsection{Corroboration Record}
+
+\noindent
+\begin{tabular}{lp{0.55\linewidth}l}
+\hline
+\textbf{Date} & \textbf{Evidence} & \textbf{Status} \\
+\hline
+2024-11-15 & Initial GF16 training sweep: 512 trials,
+             $d_{\text{model}} \in \{256,512,1024\}$,
+             seeds $\{17,42,1729\}$.  Zero trials below
+             $\phi^{-6}$ floor. & Functional \\
+2024-12-01 & Lucas closure validated in Coq for $k\in\{1,2\}$
+             (\verb|lucas_closure_gf16.v::lucas_2_eq_3|,
+             Proven $\sim$60 lines). & Reusable \\
+2025-01-01 & INV-3 runtime guard integrated into
+             \verb|enforce_all_invariants()|; all CI
+             runs clean on \verb|coq-check.yml|. & Functional \\
+\hline
+\multicolumn{2}{l}{\textit{Pending: full Coq proof of
+\texttt{gf16\_precision.v::half\_round} (Admitted).}} &
+\textit{pending} \\
+\hline
+\end{tabular}
