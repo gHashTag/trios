@@ -505,4 +505,19 @@ mod tests {
         assert!((optimizer.weight_decay - expected_wd).abs() < 1e-6);
         assert!((expected_wd - 0.23607).abs() < 0.001);
     }
+
+    #[test]
+    fn optimizer_kind_dispatch() {
+        let n = 4;
+        let mut params_a = vec![1.0f32; n];
+        let mut params_m = vec![1.0f32; n];
+        let grads = vec![0.1f32; n];
+        let mut adamw = OptimizerKind::AdamW(AdamWCpu::with_params(n, 0.004, 0.9, 0.999, 0.01));
+        let mut muon = OptimizerKind::Muon(MuonOptimizer::new(n, 0.004));
+        adamw.step(&mut params_a, &grads);
+        muon.step(&mut params_m, &grads);
+        // Both must update params
+        assert!(params_a[0] < 1.0);
+        assert!(params_m[0] < 1.0);
+    }
 }
