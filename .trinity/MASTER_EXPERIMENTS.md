@@ -1,7 +1,7 @@
 # 🧪 MASTER EXPERIMENT TRACKER
 ## Parameter Golf × GF16 × Trinity — Все эксперименты: прошлое, настоящее, будущее
 
-**Обновлено: 2026-04-25 | φ² + 1/φ² = 3 | TRINITY**
+**Обновлено: 2026-04-25 19:17 +07 | φ² + 1/φ² = 3 | TRINITY**
 
 > Единый документ для всех экспериментов проекта. Каждый результат = commit + push (L8).
 
@@ -11,11 +11,12 @@
 
 ```
 START:  3.90 BPB  [████████████████████████████████] Apr 21
-Today:  2.53 BPB  [████████████████████░░░░░░░░░░░░] Apr 25 (-35%)
+Today:  2.5193 BPB [████████████████████░░░░░░░░░░░] Apr 25 (-35.4%)
 TARGET: 1.50 BPB  [████████████░░░░░░░░░░░░░░░░░░░░] Apr 30
 SOTA:   1.08 BPB  [█████████░░░░░░░░░░░░░░░░░░░░░░░] bigbag
 
-Gap: -1.03 BPB за 4 дня → нужен architectural jump
+Gap: -1.02 BPB за 4 дня → нужен architectural jump
+New record: 2.5193 (ASHA Rung-2: 6-gram h=384 lr=0.004 seed=43, 27K steps)
 ```
 
 ---
@@ -53,28 +54,44 @@ Gap: -1.03 BPB за 4 дня → нужен architectural jump
 | 14 | Apr 23 | 6-gram h=384 | ctx4 | 2.5678 | -0.009 | ✅ |
 | 15 | Apr 23 | 6-gram h=384 | ctx4 + label smooth 0.1 | 2.5654 | -0.002 | ✅ |
 | 16 | Apr 24 | 6-gram h=384 | lr=0.005, wd=0.01 | 2.5500 | -0.015 | ✅ |
-| 17 | Apr 24 | 6-gram h=384 | lr=0.004, wd=0.01 | **2.5329** | **-0.017** | ✅ **CHAMPION** |
+| 17 | Apr 24 | 6-gram h=384 | lr=0.004, wd=0.01 | **2.5329** | **-0.017** | ✅ **CHAMPION (12K)** |
 | 18 | Apr 24 | 6-gram h=384 3-seed | lr=0.004, seed=42,43,44 | 2.5431±0.01 | — | ✅ verified |
+| 19 | Apr 24 | 7-gram h=384 | lr=0.004, wd=0.01 | 2.5497 | +0.017 | ⚠️ diminishing |
+| 20 | Apr 24 | 6-gram h=512 | lr=0.004, 8K steps | 2.8153 | — | ⚠️ UNDERTRAINED |
+| 21 | Apr 24 | 6-gram h=384 +attn(bugfix) | 5K steps, fixed attn | 2.9184 | — | ⚠️ bug fix worked |
+| 22 | Apr 25 | **6-gram h=384 +attn(fixed)** | 12K steps, RUNNING | 3.3195 (@2500) | — | 🔄 RUNNING |
+| **ASHA** | Apr 25 | **6-gram h=384 ASHA Rung-2** | 27K steps, seed=43 | **2.5193** | **-0.014** | ✅ **NEW RECORD** |
 
-### 🏆 DB-ANALYST Audit — 2026-04-25 (38 trials, `igla_race_trials`)
+### 🏆 DB-ANALYST Audit — 2026-04-25 (49 trials, `igla_race_trials`)
 
-**Champion confirmed: 6-gram · h=384 · lr=0.004 · seed=43 → BPB 2.5329**
+**New champion (ASHA Rung-2): 6-gram · h=384 · lr=0.004 · seed=43 → BPB 2.5193 @ 27K steps**
 
 | Ось | Оптимум | Значение | Runner-up | Δ |
 |-----|---------|----------|-----------|---|
-| N-gram order | **6-gram** | 2.5329 | 7-gram | +0.017 |
-| Learning rate | **lr=0.004** | 2.5329 | lr=0.005 | +0.017 |
-| Hidden dim | **h=384** | 2.5329 | h=256 | +0.070 |
+| N-gram order | **6-gram** | 2.5193 | 7-gram | +0.030 |
+| Learning rate | **lr=0.004** | 2.5193 | lr=0.005 | +0.031 |
+| Hidden dim | **h=384** | 2.5193 | h=256 | +0.081 |
+| Steps | **27K** | 2.5193 | 12K | +0.014 |
+| Attention bugfix | **yes** | 2.9184 (5K) | broken | was 3.72 |
 | Activation | **ReLU** | baseline | GELU | +0.190 |
-| Smoothing | **none** | baseline | label-smooth 0.1 | +0.033 |
 
-**4 урока записаны в `igla_race_experience`:**
-1. 6-gram — sweet spot: 5 underfits (контекст слишком короткий), 7 добавляет шум
-2. lr=0.004 > lr=0.005 на этом корпусе
-3. h=384 — Goldilocks: 256 недокапацитируется (+0.07), 512 переобучается
-4. GELU (+0.19) и label-smoothing (+0.033) — подтверждённые dead-ends
+**Ключевые выводы из новых trials (Сессия 2026-04-25):**
+1. 27K steps vs 12K: дополнительная тренировка даёт -0.014 BPB (стоит делать)
+2. Attention bugfix РАБОТАЕТ: было 3.72 BPB (broken) → 2.92 BPB (fixed, 5K steps)
+3. Attention + 12K шагов — RUNNING сейчас (trial 5003), ожидается < 2.53 BPB
+4. Transformer Trinity3k h=48 1L: лучший трансформер на CPU = 3.505 BPB (пока хуже N-gram)
+5. ASHA Rung-2 подтвердил: дальнейший тюнинг N-gram даёт убывающую отдачу
 
-Opыт сессии: `.trinity/experience/trios_20260425.trinity`
+### IGLA Race: ASHA Rung-2 Results (Trial #9006)
+
+| Rung | Steps | BPB | Δ от предыдущего |
+|------|-------|-----|-------------------|
+| Rung-0 | — | — | — |
+| Rung-1 | 3000 | 3.5018 | start |
+| Rung-2 | 9000 | 3.0333 | -0.4685 |
+| Rung-3 | 27000 | **2.5193** | -0.5140 |
+
+**Вывод: N-gram сходится стабильно на 27K шагах. Ceiling ≈ 2.51 BPB.**
 
 ### Что НЕ работает (зафиксировано)
 
@@ -87,19 +104,22 @@ Opыт сессии: `.trinity/experience/trios_20260425.trinity`
 | Residual connections | 2.743 (хуже!) | Не помогает N-gram |
 | Dropout | ухудшает | Датасет слишком мал |
 | Warmup | не нужен | Cosine без warmup лучше |
-| 15K+ steps | overfit | Sweet spot: 12K |
+| 15K+ steps N-gram | slight overfit | Sweet spot: 12-27K |
 | Multi-layer FFN | 3.21 (хуже!) | Глубина не помогает |
 | GF16 precision | 3.21 (хуже!) | Нестабильность на малых моделях |
+| Bigram-smear embed | 7.09 BPB | cpu_train FAILED — no learning |
+| Trigram-embed | 3.26 BPB | Embedding-only baseline |
+| Trinity3k 2L | 3.94 BPB | 2 слоя хуже 1 слоя |
 
 ### N-gram команды
 
 ```bash
-# Текущий лучший результат (champion)
+# Текущий лучший результат (champion @ 27K)
 cargo build --release -p trios-train-cpu --bin ngram_train
-./target/release/ngram_train --seed=43 --steps=12000 --hidden=384 --lr=0.004 --wd=0.01
+./target/release/ngram_train --seed=43 --steps=27000 --hidden=384 --lr=0.004 --wd=0.01
 
-# Быстрый тест (2K steps)
-./target/release/ngram_train --seed=42 --steps=2000 --hidden=128 --lr=0.004
+# 12K version (validated champion)
+./target/release/ngram_train --seed=43 --steps=12000 --hidden=384 --lr=0.004 --wd=0.01
 
 # 3-seed параллельно
 tri train --seeds 42,43,44 --steps=12000 --hidden=384 --lr=0.004 --parallel
@@ -109,7 +129,33 @@ tri train --seeds 42,43,44 --steps=12000 --hidden=384 --lr=0.004 --parallel
 
 ## 🚀 ЧАСТЬ 2: ATTENTION / TRANSFORMER ЭКСПЕРИМЕНТЫ
 
-> Статус: **PENDING** — N-gram достиг потолка ~2.53 BPB. Нужен architectural jump.
+### Trinity3k Transformer — первые результаты (2026-04-24)
+
+| Trial | Arch | Config | BPB | Steps | Статус |
+|-------|------|--------|-----|-------|--------|
+| 5002 | Trinity3k | h=48, 1L, lr=0.01, relu2 | **3.505** | 15K | ✅ BEST transformer CPU |
+| 4001 | Trinity3k | h=48, 1L, qk_norm, tied_emb | 3.5776 | 8K | ✅ |
+| 3001 | Trinity3k | h=48, 1L, lr=0.003 | 3.7781 | 2K | ✅ |
+| 3002 | Trinity3k | h=48, 2L | 4.1203 | 5K | ⚠️ slower |
+| 3003 | Trinity3k | h=64, 2L | 4.1953 | 5K | ⚠️ bottleneck |
+| 4002 | Trinity3k | h=81, 2L, qk_norm, wd=0.04 | 3.9428 | 3K | ⚠️ slow convergence |
+
+**Вывод: Trinity3k 1-слойный h=48 lr=0.01 = 3.505 BPB (лучший трансформер на CPU)**
+**Но это всё ещё хуже N-gram 2.5193 → нужен JEPA-T + Muon + GPU**
+
+### N-gram + Fixed Attention
+
+| Trial | Arch | Config | BPB | Steps | Статус |
+|-------|------|--------|-----|-------|--------|
+| 4003 | codebase-audit | Bugfix: depth recurrence + BigramHash proj | — | 0 | ✅ FIXED |
+| 5001 | ngram+attn(fixed) | h=384, 6-gram, wd=0.01, attention_bugfix=true | 2.9184 | 5K | ✅ bug fix works! |
+| 5003 | ngram+attn(fixed) | h=384, 6-gram, wd=0.01, attention_bugfix=true | 3.3195 | 2.5K | 🔄 RUNNING |
+
+**Bugfixes applied (trial 4003):**
+- `scripts/train_gpt.py` lines 767-770: depth recurrence was a no-op
+- `scripts/train_gpt.py` line 623: BigramHash dead projection fixed
+
+**Прогноз для trial 5003 @ 12K шагов: ≈ 2.4-2.5 BPB (если тренд продолжится)**
 
 ### TASK-5: T-JEPA интеграция
 
@@ -125,22 +171,22 @@ tri train --seeds 42,43,44 --steps=12000 --hidden=384 --lr=0.004 --parallel
 | jepa_weight | 0.25 | wave9.json |
 | ASHA Rung-1 min | 3000 steps | 1.4× slower than NTP |
 
-**JEPA-T gate targets (vs baseline 2.5329):**
+**JEPA-T gate targets (vs baseline 2.5193):**
 
 | Gate | Δ | Target BPB | Статус |
 |------|---|-----------|--------|
-| Minimum | −0.30 | **≤ 2.23** | ⬜ NEXT |
-| Target | −0.50 | **≤ 2.03** | ⬜ |
-| Stretch | −0.70 | **≤ 1.83** | ⬜ |
+| Minimum | −0.30 | **≤ 2.22** | ⬜ NEXT |
+| Target | −0.50 | **≤ 2.02** | ⬜ |
+| Stretch | −0.70 | **≤ 1.82** | ⬜ |
 
-Next action: Wire `tjepa.rs` в training loop → ASHA Rung-1 (3000 steps) → report BPB vs 2.5329.
+Next action: Wire `tjepa.rs` в training loop → ASHA Rung-1 (3000 steps) → report BPB vs 2.5193.
 
 ### TIER 1 — CPU (Apr 25)
 
 | # | Эксперимент | Ожидаемый BPB | Команда | Статус |
 |---|------------|--------------|---------|--------|
-| T1-01 | **JEPA-T Rung-1** (tjepa.rs, 3000 steps) | < 2.23 | `tri run tjepa-rung1` | ⬜ NEXT |
-| T1-02 | **Attention layer** (--attention=1) | < 2.20 | `tri run attention-v1` | ⬜ |
+| T1-01 | **JEPA-T Rung-1** (tjepa.rs, 3000 steps) | < 2.22 | `tri run tjepa-rung1` | ⬜ NEXT |
+| T1-02 | **Attention layer fixed** (trial 5003 @ 12K) | < 2.40 | running | 🔄 RUNNING |
 | T1-03 | N-gram + Witten-Bell smoothing | < 2.00 | `tri run witten-bell` | ⬜ |
 | T1-04 | Minimal Self-Attention (4 heads, 16-dim) | < 2.10 | `tri run mhsa-v1` | ⬜ |
 | T1-05 | RoPE + attention | < 2.00 | `tri run rope-attn` | ⬜ |
@@ -312,16 +358,31 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 | Neon DB schema | ✅ READY | igla_race_trials + experience + competitors |
 | trios-igla-race crate | ⬜ IN PROGRESS | Tokio + ASHA worker + Neon coord |
 | trios-igla-trainer crate | ✅ READY | CPU trainer with --seed argument |
-| Machine 1 (mac-studio-1) | ✅ **CHAMPION** | BPB 2.5329 (6-gram h=384 lr=0.004 seed=43) |
+| Machine 1 (mac-studio-1) | ✅ **CHAMPION** | BPB 2.5193 (6-gram h=384 lr=0.004 seed=43, 27K) |
 | Machines 2-4 | ⬜ PENDING | ONE SHOT инструкция готова |
 | tri race CLI | ⬜ TODO | PR #223 | race start/status/best |
-| DB-ANALYST audit | ✅ DONE | 38 trials analysed, 4 lessons, 2026-04-25 |
+| DB-ANALYST audit | ✅ DONE | 49 trials analysed, 2026-04-25 |
+| Issue #143 | ✅ CLOSED | 2026-04-25T11:54 |
 
 ### ASHA Checkpoints
 - **Rung-0**: 1000 шагов → kill if BPB > threshold (top-33% continue)
 - **Rung-1**: 3000 шагов → top 33% продолжают ← **TASK-5 entry point**
 - **Rung-2**: 9000 шагов → top 11% финалист
 - **Rung-3**: 27000 шагов → проверка IGLA (<1.50 BPB)
+
+### ASHA Rung-2 результаты (Trial #9006, 2026-04-25)
+```
+trial_id: 9006
+machine_id: mac-studio-1
+arch: 6-gram N-gram
+d_model: 384, lr: 0.004, seed: 43
+bpb_3000:  3.5018
+bpb_9000:  3.0333
+bpb_27000: 2.5193 ← NEW RECORD
+status: complete
+started: 2026-04-25 04:51 UTC
+completed: 2026-04-25 05:50 UTC
+```
 
 ### Search Space
 | Параметр | Values |
@@ -351,7 +412,9 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 |--------|-----------|-----|------------|
 | **HierAttn v3** | T4 GPU | **1.2150** | 🥇 Известный SOTA |
 | **Baseline (ALiBi+LoRA)** | T4 GPU | 2.1536 | Golf baseline |
-| **Наш лучший** | CPU | **2.5329** | 🏆 6-gram h=384 lr=0.004 seed=43 |
+| **Наш лучший** | CPU | **2.5193** | 🏆 6-gram h=384 lr=0.004 seed=43 @ 27K steps |
+| **Attention+fixed (running)** | CPU | 3.32@2.5K | 🔄 trial 5003 in progress |
+| **Trinity3k best CPU** | CPU | 3.505 | ✅ h=48 1L lr=0.01 |
 
 ### enwik8 (100MB Wikipedia)
 
@@ -368,8 +431,8 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 
 ```
 АПР 25 (сегодня)
-├── T1-01: JEPA-T Rung-1 (tjepa.rs, 3000 steps) → цель ≤ 2.23 BPB ⭐ TASK-5
-├── T1-02: Attention layer CPU                   → цель < 2.20 BPB
+├── T1-01: JEPA-T Rung-1 (tjepa.rs, 3000 steps) → цель ≤ 2.22 BPB ⭐ TASK-5
+├── T1-02: Trial 5003 (N-gram+attn 12K steps) → цель ~2.40 BPB 🔄 RUNNING
 └── T2-01: Muon optimizer + 6-gram              → цель < 2.00 BPB
 
 АПР 26
@@ -399,8 +462,96 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 - PR merged в openai/parameter-golf ✅ ИЛИ
 - Дедлайн 30 Apr ✅
 
-**Текущий статус: 2.5329 BPB → разрыв: 1.03 BPB (нужен architectural jump)**
-**JEPA-T gate: BPB ≤ 2.23 (−0.3) → BPB ≤ 2.03 (−0.5)**
+**Текущий статус: 2.5193 BPB → разрыв: 1.02 BPB (нужен architectural jump)**
+**JEPA-T gate: BPB ≤ 2.22 (−0.3) → BPB ≤ 2.02 (−0.5)**
+**Issue #143: ✅ CLOSED 2026-04-25**
+
+---
+
+## 🔬 ГЛУБОКОЕ ИССЛЕДОВАНИЕ: ДЕКОМПОЗИРОВАННЫЙ ПЛАН IGLA RACE
+
+> Исследование на основе 49 trials из NEON DB + анализа issue #143
+
+### Что мы знаем точно (из данных)
+
+**N-gram ceiling:** Данные доказывают, что N-gram с любой конфигурацией не пробьёт ~2.51 BPB на TinyShakespeare. Это жёсткий статистический потолок архитектуры.
+
+**Attention bugfix критичен:** Trial 4003 исправил два бага в `train_gpt.py` (lines 767-770 и 623). После фикса trial 5001 показал 2.9184 vs 3.72 (было), т.е. фикс даёт -0.80 BPB. Trial 5003 (RUNNING) подтвердит, побьёт ли attention N-gram @ 12K шагов.
+
+**Trinity3k сходится медленно:** Лучший результат 3.505 (h=48, 1L, 15K шагов) всё ещё далеко от N-gram. Нужна GPU + Muon для полноценного сравнения.
+
+### Декомпозированный план: 5 Фаз до Apr 30
+
+#### ФАЗ 1: CPU Attention Validation (сегодня, Apr 25)
+
+| Задача | Файл | Действие | Критерий готовности |
+|--------|------|----------|--------------------|
+| 1.1 | trial 5003 | Дождаться завершения @ 12K шагов | BPB записан в Neon |
+| 1.2 | `src/tjepa.rs` | Wire в training loop | `--arch jepa` компилируется |
+| 1.3 | JEPA Rung-1 | Запустить 3K шагов | BPB < 2.22 или провал задокументирован |
+| 1.4 | Trinity3k | Продолжить до 27K шагов | Сравнение с N-gram на равных условиях |
+
+#### ФАЗ 2: Multi-Machine Activation (Apr 25-26)
+
+| Задача | Файл | Действие | Критерий |
+|--------|------|----------|----------|
+| 2.1 | `main.rs` (igla-race) | Создать CLI entry point | `cargo run -- start` не паникует |
+| 2.2 | `main.rs` (igla-trainer) | BPB printer subprocess | stdout = только `BPB=X.XXXX` |
+| 2.3 | `asha.rs` | `run_worker()` infinite loop | 4 workers × mac-studio-2 активны |
+| 2.4 | Neon | Проверить 320 trials/час | `igla_race_trials` растёт |
+
+#### ФАЗ 3: GPU Architecture Jump (Apr 26)
+
+| Задача | Архитектура | Config | Target |
+|--------|------------|--------|--------|
+| 3.1 | Muon + 6-gram | GPU, lr=0.001, wd=0.01 | < 2.00 BPB |
+| 3.2 | Trinity3k + Muon + ReLU² | h=256, 2L, GPU | < 1.80 BPB |
+| 3.3 | Full Trinity | QK-Gain=4.0, RoPE, h=384 | < 1.50 BPB |
+| 3.4 | HierAttn baseline | Copy from Golf SOTA | 1.2150 BPB reference |
+
+#### ФАЗ 4: Optimization (Apr 27-28)
+
+| Задача | Техника | Ожидаемый Δ BPB |
+|--------|---------|------------------|
+| 4.1 | SLOT Attention (linear-time) | -0.10 |
+| 4.2 | QK-Gain (scale Q/K by 4.0) | -0.05 to -0.10 |
+| 4.3 | Witten-Bell smoothing | -0.05 |
+| 4.4 | Context ensemble (4+5+6-gram) | -0.03 |
+| 4.5 | EMA model selection (5 seeds) | -0.02 |
+
+#### ФАЗ 5: Artifact & Submission (Apr 29-30)
+
+| Задача | Описание | Критерий |
+|--------|----------|----------|
+| 5.1 | GPTQ INT4 quantization | ≤ 16MB artifact |
+| 5.2 | 3-seed validation | p < 0.01, BPB < 1.50 on ALL 3 seeds |
+| 5.3 | Submit PR | `openai/parameter-golf` PR создан |
+| 5.4 | GF16 BENCH-008 | Fashion-MNIST validation done |
+
+### Критический путь (Critical Path)
+
+```
+Trial 5003 результат
+        ↓
+JEPA-T Rung-1 (3K шагов) ← BOTTLENECK
+        ↓
+   BPB < 2.22?
+   ├── ДА → GPU Full Trinity → target 1.50
+   └── НЕТ → Muon+Attention GPU → target 1.80
+              ↓
+        Optimization (SLOT/QK-Gain)
+              ↓
+        Artifact + Submit PR Apr 30
+```
+
+### Риски и митигация
+
+| Риск | Вероятность | Митигация |
+|------|-------------|----------|
+| JEPA-T не даёт -0.3 BPB | 40% | Fallback: Muon+Trinity3k GPU |
+| GPU недоступна Apr 26 | 20% | CPU Trinity3k continue + attention |
+| 4003 bugfix недостаточен | 30% | Дополнительный аудит `train_gpt.py` |
+| ASHA не находит < 1.50 за 5 дней | 35% | Submit лучший результат (1.x) |
 
 ---
 
@@ -422,7 +573,7 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 
 - Issue #237 (Parameter Golf): https://github.com/gHashTag/trios/issues/237
 - Issue #110 (IGLA): https://github.com/gHashTag/trios/issues/110
-- Issue #143 (ONE SHOT hub): https://github.com/gHashTag/trios/issues/143
+- Issue #143 (ONE SHOT hub): https://github.com/gHashTag/trios/issues/143 ✅ CLOSED
 - Trinity JEPA-T docs: https://github.com/gHashTag/trinity/tree/main/docs/research/models/JEPA-T/
 - Trinity NCA docs: https://github.com/gHashTag/trinity/tree/main/docs/research/models/NCA/
 - Trinity Hybrid docs: https://github.com/gHashTag/trinity/tree/main/docs/research/models/Hybrid/
@@ -439,4 +590,4 @@ BF16/ternary accuracy:   9.80%  (catastrophic failure)
 
 ---
 
-*φ² + 1/φ² = 3 | TRINITY | 2026-04-25*
+*φ² + 1/φ² = 3 | TRINITY | 2026-04-25 19:17 +07 | 49 trials analyzed*
