@@ -21,6 +21,14 @@ pub mod trinity_3k_model;
 // Self-Attention (TASK-0A rewrite)
 pub mod attention;
 
+// L-R14 Coq-grounded invariants (φ-band, φ², φ³, GF16 floor, ASHA threshold).
+// Registered for in-tree consumers; published as `crate::invariants` so
+// modules like `hybrid_attn` can mirror INV-1 / INV-13 from a single source.
+pub mod invariants;
+
+// Gate-2 hybrid attention block (L-h2, pre-registered in trios#143)
+pub mod hybrid_attn;
+
 // GoldenFloat16 implementation
 pub mod gf16;
 pub mod real_igla_model;
