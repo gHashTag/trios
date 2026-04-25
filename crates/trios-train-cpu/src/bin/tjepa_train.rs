@@ -28,11 +28,11 @@ use trios_train_cpu::{
 };
 
 const VOCAB: usize = 128;
-const DIM: usize = 64;
-const HIDDEN: usize = 384;
-const NUM_CTX: usize = 4;
+const DIM: usize = 96;
+const HIDDEN: usize = 512;
+const NUM_CTX: usize = 8;
 const NGRAM: usize = NUM_CTX + 2;
-const SEQ: usize = 64;
+const SEQ: usize = 96;
 const LN_2: f32 = std::f32::consts::LN_2;
 const HEARTBEAT_INTERVAL_SECS: u64 = 60;
 
@@ -171,8 +171,9 @@ impl NgramModel {
         let lim = (6.0f32 / (3 * DIM) as f32).sqrt();
         let lim_h = (6.0f32 / (DIM + HIDDEN) as f32).sqrt();
         let lim_o = (6.0f32 / (HIDDEN + VOCAB) as f32).sqrt();
-        let base_weights: Vec<f32> = vec![0.7, 0.3, 0.2, 0.15];
-        let ctx_weights: Vec<f32> = base_weights.iter().take(NUM_CTX).cloned().collect();
+        let ctx_weights: Vec<f32> = (0..NUM_CTX)
+            .map(|i| 0.7f32 * 0.45f32.powi(i as i32))
+            .collect();
         assert_eq!(ctx_weights.len(), NUM_CTX, "ctx_weights count mismatch");
         Self {
             embed: (0..VOCAB * DIM).map(|_| rng() * lim).collect(),
@@ -438,6 +439,7 @@ struct Config {
     nca_weight: f64,
     opt_kind: OptKind,
     jepa_warmup: usize,
+    weight_decay: f32,
     trial_id: String,
     agent_id: String,
 }
@@ -463,6 +465,7 @@ fn parse_config(args: &[String]) -> Config {
     let jepa_weight: f64 = find_arg(args, "--jepa-weight=", 1.0);
     let nca_weight: f64 = find_arg(args, "--nca-weight=", 0.25);
     let jepa_warmup: usize = find_arg(args, "--jepa-warmup=", 1500);
+    let weight_decay: f32 = find_arg(args, "--weight-decay=", 0.01);
     let use_jepa = !args.iter().any(|a| a == "--no-jepa");
     let use_nca = !args.iter().any(|a| a == "--no-nca");
     let opt_kind = if args.iter().any(|a| a == "--optimizer=muon") {
@@ -480,10 +483,12 @@ fn parse_config(args: &[String]) -> Config {
     assert!(jepa_weight >= 0.0, "jepa_weight must be >= 0");
     assert!(nca_weight >= 0.0, "nca_weight must be >= 0");
 
+    assert!(weight_decay >= 0.0, "weight_decay must be >= 0");
+
     Config {
         seed, steps, encoder_lr, ntp_lr, use_jepa, use_nca,
         ntp_weight, jepa_weight, nca_weight, opt_kind, jepa_warmup,
-        trial_id, agent_id,
+        weight_decay, trial_id, agent_id,
     }
 }
 
@@ -625,7 +630,7 @@ fn init_training(cfg: &Config) -> TrainingState {
             OptKind::Muon => OptWrapper::muon(size, cfg.encoder_lr as f64, wd),
         }
     };
-    let wd = 0.04f32;
+    let wd = cfg.weight_decay;
     TrainingState {
         model: NgramModel::new(cfg.seed),
         target_model: NgramModel::new(cfg.seed),
