@@ -253,11 +253,14 @@ pub async fn run_worker(
 
             // a. Spawn subprocess: ./target/release/tjepa_train (real JEPA training)
             // Note: tjepa_train expects --key=value format
+            let encoder_lr = config.lr.unwrap_or(0.004);
+            let ntp_lr = encoder_lr * 0.25; // NTP head LR is 1/4 of encoder LR
+
             let output = Command::new("./target/release/tjepa_train")
                 .arg(format!("--seed={}", config.seed.unwrap_or(42)))
                 .arg(format!("--steps={}", rung_steps))
-                .arg(format!("--encoder-lr={:.8}", config.lr.unwrap_or(0.004)))
-                .arg(format!("--ntp-lr={:.8}", config.lr.unwrap_or(0.004) * 0.25))
+                .arg(format!("--encoder-lr={:.8}", encoder_lr))
+                .arg(format!("--ntp-lr={:.8}", ntp_lr))
                 .arg("--ntp-weight=1.0")
                 .arg(format!("--jepa-weight={}", config.jepa_weight.unwrap_or(1.0)))
                 .arg(format!("--nca-weight={}", config.nca_weight.unwrap_or(0.25)))
@@ -315,31 +318,39 @@ fn sample_config(rng: &mut StdRng) -> TrialConfig {
     use rand::seq::SliceRandom;
 
     // INV-8: lr in [0.001, 0.01] - phi-anchored
-    // Using 0.004 = alpha_phi/phi^3 (champion LR)
-    let lrs = [0.001, 0.002, 0.004, 0.008];
+    // Expanded range for better search
+    let lrs = [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008];
     let lr = *lrs.choose(rng).unwrap();
 
     // INV-3: d_model >= 256 for GF16
-    let hiddens = [256, 384];
+    let hiddens = [256, 384, 512];
     let hidden = *hiddens.choose(rng).unwrap();
 
-    // JEPA weights for multi-objective loss
-    let jepa_weights = [0.5, 1.0, 1.5, 2.0];
-    let nca_weights = [0.1, 0.25, 0.5];
+    // JEPA weights for multi-objective loss - expanded range
+    let jepa_weights = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    let nca_weights = [0.1, 0.2, 0.25, 0.3, 0.5, 0.75];
 
     // IGLA requires 3-seed verification: 42, 43, 44
     let seeds = [42, 43, 44];
+
+    // Warmup steps variation
+    let warmup_steps = [1000, 1500, 2000, 2500];
+    let warmup = *warmup_steps.choose(rng).unwrap();
+
+    // Optimizer choice
+    let optimizers = ["adamw", "muon"];
+    let optimizer = optimizers.choose(rng).unwrap().to_string();
 
     TrialConfig {
         lr: Some(lr),
         d_model: Some(hidden),
         hidden: Some(hidden),
         n_layers: Some(2),
-        optimizer: Some("adamw".to_string()),
+        optimizer: Some(optimizer),
         activation: Some("relu".to_string()),
         weight_decay: Some(0.04), // INV-3 consistent
         dropout: Some(0.0),
-        warmup_steps: Some(1500),
+        warmup_steps: Some(warmup),
         max_steps: Some(27000),
         jepa_weight: Some(*jepa_weights.choose(rng).unwrap()),
         nca_weight: Some(*nca_weights.choose(rng).unwrap()),
