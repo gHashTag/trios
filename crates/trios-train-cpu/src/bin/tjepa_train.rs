@@ -13,7 +13,7 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use trios_train_cpu::{
-    jepa::{MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, get_unmasked, compute_jepa_loss, JepaLossConfig},
+    jepa::{MaskConfig, EmaConfig, EmaTarget, mask_spans, get_masked, get_unmasked, JepaLossConfig},
     optimizer::AdamWCpu,
 };
 
@@ -139,9 +139,10 @@ fn l2_norm(v: &[f32]) -> f32 {
     v.iter().map(|x| x.powi(2)).sum::<f32>().sqrt()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn adamw_step(
-    w: &mut Vec<f32>, g: &[f32],
-    m: &mut Vec<f32>, v: &mut Vec<f32>,
+    w: &mut [f32], g: &[f32],
+    m: &mut [f32], v: &mut [f32],
     lr: f32, t: u32, b1: f32, b2: f32, wd: f32,
 ) {
     let bc1 = 1.0 - b1.powi(t as i32);
@@ -162,6 +163,7 @@ struct NgramEncoder {
     ctx_weights: Vec<f32>,
     d_model: usize,
     vocab: usize,
+    #[allow(dead_code)]
     num_ctx: usize,
 }
 
@@ -187,7 +189,7 @@ impl NgramEncoder {
             let e = &self.embed[t_idx * d..(t_idx + 1) * d];
             let mut combined = e.to_vec();
             for (ci, cw) in self.ctx_weights.iter().enumerate() {
-                let ctx_pos = if ci + 1 <= pos { pos - ci - 1 } else { 0 };
+                let ctx_pos = if ci < pos { pos - ci - 1 } else { 0 };
                 let t_ctx = tokens.get(ctx_pos).copied().unwrap_or(0).min(v - 1);
                 let cv = &self.embed[t_ctx * d..(t_ctx + 1) * d];
                 for j in 0..d { combined[j] += cv[j] * cw; }
@@ -229,7 +231,7 @@ impl NtpHead {
     fn forward_backward(&mut self, embed: &[f32], target_tok: usize) -> (f32, Vec<f32>) {
         let d = self.d_model;
         // logits = embed @ W  [VOCAB]
-        let mut logits: Vec<f32> = (0..VOCAB).map(|j| (0..d).map(|i| embed[i] * self.w[i * VOCAB + j]).sum()).collect();
+        let logits: Vec<f32> = (0..VOCAB).map(|j| (0..d).map(|i| embed[i] * self.w[i * VOCAB + j]).sum()).collect();
         // stable softmax
         let max_l = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         let mut probs: Vec<f32> = logits.iter().map(|&x| (x - max_l).exp()).collect();
@@ -259,7 +261,7 @@ impl NtpHead {
     /// Inference only: returns CE loss in nats
     fn loss(&self, embed: &[f32], target_tok: usize) -> f32 {
         let d = self.d_model;
-        let mut logits: Vec<f32> = (0..VOCAB).map(|j| (0..d).map(|i| embed[i] * self.w[i * VOCAB + j]).sum()).collect();
+        let logits: Vec<f32> = (0..VOCAB).map(|j| (0..d).map(|i| embed[i] * self.w[i * VOCAB + j]).sum()).collect();
         let max_l = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         let mut probs: Vec<f32> = logits.iter().map(|&x| (x - max_l).exp()).collect();
         let sum_p: f32 = probs.iter().sum();
@@ -315,7 +317,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ema_target = EmaTarget::new(ema_config);
 
     let mask_config = MaskConfig::default();
-    let loss_config = JepaLossConfig::default();
+    let _loss_config = JepaLossConfig::default();
 
     let start_time = Instant::now();
     let mut best_val_bpb = f32::MAX;
