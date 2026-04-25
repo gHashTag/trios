@@ -185,6 +185,39 @@
         "witness": "threshold=2.65 ∧ d_model=128 ∧ rung=2000 → abort",
         "note": "All three invariants violated simultaneously"
       }
+    },
+    {
+      "id": "INV-7",
+      "name": "igla_found_criterion",
+      "coq_theorem": "igla_found_criterion",
+      "coq_file": "trinity-clara/proofs/igla/igla_found_criterion.v",
+      "status": "Admitted",
+      "admitted_count": 3,
+      "admitted_theorems": ["refutation_pre_warmup_admitted", "refutation_jepa_proxy_admitted", "refutation_duplicate_seeds_admitted"],
+      "admitted_reason": "Falsification witnesses demonstrate impossibility of victory for pre-warmup, JEPA-proxy, and duplicate-seed cases. Main theorems QED.",
+      "description": "Victory gate: BPB < 1.50 on 3 distinct seeds after warmup (step >= 4000), no JEPA-MSE-proxy artefact (bpb >= 0.1), all finite, Welch t-test p < 0.01 vs baseline μ₀ = 1.55",
+      "trinity_link": "φ² + φ⁻² = 3 anchors victory_seeds_required = 3",
+      "runtime_check": { "action": "abort", "message": "INV-7: Victory gate violated — insufficient seeds, pre-warmup, JEPA-proxy, duplicate, or non-finite BPB" },
+      "runtime_target": "crates/trios-igla-race/src/victory.rs::{check_victory, stat_strength}",
+      "numeric_anchor": {
+        "victory_bpb_target": 1.5,
+        "warmup_blind_steps": 4000,
+        "jepa_proxy_floor": 0.1,
+        "victory_seeds_required": 3,
+        "ttest_alpha": 0.01,
+        "ttest_baseline_mu0": 1.55,
+        "ttest_effect_size_min": 0.05
+      },
+      "bands": {
+        "statistical": { "test": "Welch two-sample t-test, one-tailed", "alpha": 0.01, "baseline_mu0": 1.55 }
+      },
+      "falsification_record": {
+        "theorem": "warmup_blocks_proxy",
+        "witness": "step=3999, bpb=1.40 → rejected (pre-warmup)",
+        "witness2": "bpb=0.014, step=5000 → rejected (JEPA-proxy)",
+        "witness3": "seeds=[42,42,43] → rejected (duplicate)"
+      },
+      "proven_theorems": ["warmup_blocks_proxy", "distinct_seeds_required", "jepa_proxy_floor_correct", "nan_rejected"]
     }
   ],
   "enforcement": {
