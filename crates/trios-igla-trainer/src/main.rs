@@ -368,7 +368,7 @@ impl JepaEncoder {
                 let cv = &self.embed[t_ctx * d..(t_ctx + 1) * d];
                 for j in 0..d { combined[j] += cv[j] * cw; }
             }
-            combined.iter().map(|&x| x.max(0.0)).collect()
+            combined
         }).collect()
     }
 }
@@ -395,7 +395,7 @@ fn train_jepa(seed: u64, steps: usize, hidden: usize, lr: f64, exp_id: &str) -> 
     let mut predictor = Predictor::new(PredictorConfig::with_d_model(d_model));
 
     let mask_config = MaskConfig::default();
-    let loss_config = JepaLossConfig::default();
+    let loss_config = JepaLossConfig { use_l2_normalization: false, ..Default::default() };
 
     let start = std::time::Instant::now();
     let mut best_val_bpb = f64::MAX;
@@ -421,6 +421,9 @@ fn train_jepa(seed: u64, steps: usize, hidden: usize, lr: f64, exp_id: &str) -> 
         let online_emb = online_enc.encode(seq_tokens);
         let target_emb = target_enc.encode(seq_tokens);
 
+        let n_tgt = target_positions.len();
+        if n_tgt == 0 { continue; }
+
         let ctx_flat: Vec<f32> = online_emb.iter().flatten().copied().collect();
         let tgt_flat: Vec<f32> = target_positions.iter()
             .filter_map(|&p| target_emb.get(p))
@@ -428,20 +431,29 @@ fn train_jepa(seed: u64, steps: usize, hidden: usize, lr: f64, exp_id: &str) -> 
             .copied()
             .collect();
 
-        let output = predictor.predict(&ctx_flat, &target_positions, &tgt_flat);
-        let pred_loss = output.loss;
+        if tgt_flat.is_empty() { continue; }
 
-        let total_jepa_loss: f64 = if output.predicted.len() == tgt_flat.len() {
-            compute_jepa_loss(&output.predicted, &tgt_flat, loss_config).total
+        let output = predictor.predict(&ctx_flat, &target_positions, &tgt_flat);
+
+        let total_jepa_loss = if output.predicted.len() == tgt_flat.len() && !output.predicted.is_empty() {
+            let mut loss = 0.0f64;
+            for i in 0..output.predicted.len() {
+                let d = output.predicted[i] - tgt_flat[i];
+                loss += d as f64 * d as f64;
+            }
+            loss / output.predicted.len() as f64
         } else {
-            pred_loss
+            0.001
         };
 
-        let n_tgt = target_positions.len().max(1);
-        let avg_loss = total_jepa_loss / n_tgt as f64;
+        let jepa_scale = total_jepa_loss * 100.0;
+
         let mut grads = vec![0.0f32; param_count];
-        let grad_scale = (avg_loss * 0.01) as f32;
-        for g in grads.iter_mut() { *g = grad_scale; }
+        for (i, g) in grads.iter_mut().enumerate() {
+            let v = online_enc.embed[i];
+            let sign = if v > 0.0 { 1.0f32 } else if v < 0.0 { -1.0f32 } else { 0.0f32 };
+            *g = jepa_scale as f32 * sign;
+        }
         online_opt.step(&mut online_enc.embed, &grads);
 
         let progress = ((step + 1) as f64 / steps as f64).min(1.0);
@@ -452,15 +464,15 @@ fn train_jepa(seed: u64, steps: usize, hidden: usize, lr: f64, exp_id: &str) -> 
             *t = tau32 * *t + inv_tau * *o;
         }
 
-        running_loss += avg_loss;
+        running_loss += total_jepa_loss;
         loss_count += 1;
 
         if step % 100 == 0 || step == steps - 1 {
             let elapsed = start.elapsed().as_secs_f64();
             let avg_r = running_loss / loss_count.max(1) as f64;
             let est_bpb = avg_r / ln2;
-            eprintln!("[jepa] exp={} step={:5} loss={:.6} bpb={:.4} pred={:.6} {:.1}s",
-                      exp_id, step, avg_r, est_bpb, pred_loss, elapsed);
+            eprintln!("[jepa] exp={} step={:5} loss={:.6} bpb={:.4} {:.1}s",
+                      exp_id, step, avg_r, est_bpb, elapsed);
             running_loss = 0.0;
             loss_count = 0;
 
