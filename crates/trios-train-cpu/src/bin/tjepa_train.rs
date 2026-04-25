@@ -295,9 +295,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|a| a[5..].parse().unwrap_or(0.004)).unwrap_or(0.004);
     let hidden: usize = args.iter().find(|a| a.starts_with("--hidden="))
         .map(|a| a[9..].parse().unwrap_or(256)).unwrap_or(256);
+    let ntp_lr_scale: f32 = args.iter().find(|a| a.starts_with("--ntp-lr-scale="))
+        .map(|a| a[15..].parse().unwrap_or(0.25)).unwrap_or(0.25);
+    let ntp_lr = lr * ntp_lr_scale;
 
     eprintln!("=== T-JEPA Training TASK-5D (Real NTP BPB) ===");
-    eprintln!("seed={} steps={} d_model={} lr={} hidden={}", seed, steps, d_model, lr, hidden);
+    eprintln!("seed={} steps={} d_model={} lr={} hidden={} ntp_lr={} (scale={})", seed, steps, d_model, lr, hidden, ntp_lr, ntp_lr_scale);
     eprintln!("Baseline: 6-gram h=384 lr=0.004 → BPB 2.5329");
     eprintln!("Gate min: ≤ 2.23 | Gate target: ≤ 2.03");
 
@@ -308,7 +311,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut online_encoder = NgramEncoder::new(VOCAB, d_model, num_ctx, seed);
     let mut target_encoder = NgramEncoder::new(VOCAB, d_model, num_ctx, seed.wrapping_add(1));
     let mut predictor = MlpPredictor::new(d_model, hidden, seed.wrapping_add(2), lr);
-    let mut ntp_head = NtpHead::new(d_model, seed.wrapping_add(3), lr);
+    let mut ntp_head = NtpHead::new(d_model, seed.wrapping_add(3), ntp_lr);
 
     let param_count = VOCAB * d_model;
     let mut online_opt = AdamWCpu::with_params(param_count, lr as f64, 0.618, 0.999, 0.01);
