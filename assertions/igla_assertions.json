@@ -9,9 +9,21 @@
     "updated": "2026-04-25T23:45+07",
     "l7_audit_closure": {
       "agent": "perplexity-computer-l7-audit",
-      "closes_grandmaster_gates": ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
+      "closes_grandmaster_gates": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7"
+      ],
       "sibling_lane_commit": "b117721 (perplexity-computer-l7-v2 — JSON+stat_strength+seed_results)",
-      "audit_added": ["trinity-clara/proofs/igla/igla_found_criterion.v at trinity-clara@0be0b95 (5 Qed Examples + 5 Qed Theorems + 1 honest Admitted)", "admitted_budget bumped 4 -> 5 (R5 honesty: INV-7 brings welch_ttest_alpha_001_rejects_baseline)", "INV-7 falsification_witnesses entry"],
+      "audit_added": [
+        "trinity-clara/proofs/igla/igla_found_criterion.v at trinity-clara@0be0b95 (5 Qed Examples + 5 Qed Theorems + 1 honest Admitted)",
+        "admitted_budget bumped 4 -> 5 (R5 honesty: INV-7 brings welch_ttest_alpha_001_rejects_baseline)",
+        "INV-7 falsification_witnesses entry"
+      ],
       "note": "L7 v2 (b117721) added INV-7 JSON entry + Welch t-test runtime; this audit closes the dangling Coq reference and rectifies the admitted_budget under-count."
     },
     "generated_by": "crates/trinity-extract/src/main.rs (L-R1: RUST ONLY)",
@@ -65,6 +77,64 @@
       "action_2": "Replace loss_scale * 0.01 in tjepa_train.rs with real MSE from loss.rs",
       "closes": "ConstantProxy deprecated — compiler will warn until TASK-5D merges",
       "note": "L-R14 ACTIVE: validate_config() blocks race start on INV-2/3/5/12 violations"
+    },
+    "preregistration": {
+      "INV-7": {
+        "hypothesis_id": "H_7",
+        "hypothesis": "IGLA FOUND iff at least 3 distinct seeds report bpb < 1.50 after step >= 4000, with bpb >= 0.1 (no JEPA-MSE-proxy artefact), bpb finite, and the empirical distribution survives a one-tailed Welch t-test against baseline mu0 = 1.55 at alpha = 0.01.",
+        "refuted_iff": [
+          "duplicate_seeds_accepted",
+          "bpb_below_jepa_floor_accepted",
+          "step_below_warmup_accepted",
+          "non_finite_bpb_accepted",
+          "fewer_than_three_distinct_passing_seeds_accepted",
+          "bpb_at_or_above_target_accepted",
+          "p_value_above_alpha_accepted"
+        ],
+        "statistical_test": "welch_t_test_one_tailed_lower",
+        "alpha": 0.01,
+        "effect_size_min": 0.05,
+        "effect_size_meaning": "winning mean <= 1.45 vs baseline mu0 = 1.55",
+        "power_target": 0.8,
+        "n_required": 3,
+        "seeds_planned": [
+          42,
+          43,
+          44,
+          45,
+          46
+        ],
+        "stop_rule": "first_3_seed_pass OR deadline_2026-04-30T23:59:00Z OR hard_abort_on_R_violation",
+        "multiple_testing": "n/a — single hypothesis H_7",
+        "baseline_mu0": 1.55,
+        "analysis_artifact": "crates/trios-igla-race/src/victory.rs::stat_strength",
+        "data_logging": "assertions/seed_results.jsonl",
+        "deviation_policy": "Any deviation requires an issue comment BEFORE the deviating data is collected; post-hoc deviations forfeit the scientific-standard claim.",
+        "locked_at": "2026-04-25T16:45:00+07",
+        "locked_by": "perplexity-computer-l7-g2",
+        "pre_reg_comment": "https://github.com/gHashTag/trios/issues/143#issuecomment-4320091528",
+        "rust_anchors": {
+          "WELCH_ALPHA": 0.01,
+          "WELCH_BASELINE_MU0": 1.55,
+          "WELCH_EFFECT_SIZE_MIN": 0.05,
+          "IGLA_TARGET_BPB": 1.5,
+          "JEPA_PROXY_BPB_FLOOR": 0.1,
+          "INV2_WARMUP_BLIND_STEPS": 4000,
+          "VICTORY_SEED_TARGET": 3
+        },
+        "method_citation": "Welch (1947), Biometrika 34, 28-35 — two-sample t-test with unequal variances; one-tailed at alpha = 0.01 for race-victory predicate.",
+        "falsification_citation": "Popper (1963), Conjectures and Refutations, Ch. 1 — tests are designed to refute, not confirm.",
+        "trinity_anchor": "phi^2 + phi^-2 = 3 (Trinity Identity, Zenodo DOI 10.5281/zenodo.19227877)",
+        "gate_status": {
+          "G1_falsifiability": "closed (5 R8 refutations in .v + 8 falsify_/ttest_ tests in victory.rs)",
+          "G2_prereg": "closed (this block)",
+          "G3_imrad": "closed (trios#143 ONE SHOT body)",
+          "G4_citation_grade": "closed (Rust->v->JSON triple)",
+          "G5_honest_status": "closed (5 Proven + 1 honestly Admitted)",
+          "G6_reproducibility": "closed (single coqc + single cargo invocation)",
+          "G7_doi": "closed (Zenodo 10.5281/zenodo.19227877)"
+        }
+      }
     }
   },
   "trinity_identity": "φ² + φ⁻² = 3",
