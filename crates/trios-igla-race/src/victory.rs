@@ -142,7 +142,7 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     let sample_std = variance.sqrt();
 
     // t-statistic: (x̄ - μ₀) / (s / √n)
-    let (t_statistic, std_error) = if sample_std > 0.0 {
+    let (t_statistic, _std_error) = if sample_std > 0.0 {
         let se = sample_std / (n as f64).sqrt();
         ((sample_mean - BPB_VICTORY_TARGET) / se, se)
     } else {
