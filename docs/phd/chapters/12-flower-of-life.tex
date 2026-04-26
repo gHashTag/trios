@@ -1,10 +1,17 @@
 % !TEX root = ../main.tex
 % Chapter L12 — The Flower of Life and the Hexagonal-phi Lattice
-% Author: perplexity-computer-l12-flower-of-life
+% Author: perplexity-computer-l12-flower-of-life (orig) / perplexity-computer-l12-citetheorem (R14 retrofit)
 % Type:   THEORY (no R7 falsification section)
 % Anchor: phi^2 + phi^-2 = 3 (Trinity Identity); hexagonal disk packing density = pi/(2 sqrt 3)
 % Coq:    lucas_closure_gf16.v (Trinity Identity backbone)
 % Status: 1500+ line authoring of a 3-line stub; Lee/GVSU "we" pronoun, Rule of Three throughout.
+%         R14 retrofit applied 2026-04-26 (ONE SHOT v2.0 Phase D).
+
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (ONE SHOT v2.0
+% Phase D). The macro renders the Coq theorem name verbatim in chapter prose;
+% when the monograph-wide macro lands in main.tex (post-#288 / LF restoration)
+% the \providecommand below silently yields to it.
+\providecommand{\citetheorem}[1]{\texttt{#1}}
 
 \chapter{The Flower of Life and the Hexagonal-$\phi$ Lattice}
 \label{ch:flower-of-life}
@@ -683,17 +690,17 @@ explicit line ranges and Proven/Admitted status.
 \toprule
 Chapter theorem & Coq mirror & File & Status \\
 \midrule
-$\phi^2 + \phi^{-2} = 3$ (Trinity Identity) & \texttt{lucas\_2\_eq\_3} & \texttt{lucas\_closure\_gf16.v} & Proven \\
-Lucas-12 orbit closure & \texttt{lucas\_values\_gf16\_exact\_n2} & \texttt{lucas\_closure\_gf16.v} & Proven \\
-$\phi$ unit in $\mathbb{Z}[\phi]$ & \texttt{phi\_unit\_lemma} (cited in L16) & \texttt{lucas\_closure\_gf16.v} & Proven \\
+$\phi^2 + \phi^{-2} = 3$ (Trinity Identity) & \citetheorem{lucas_2_eq_3} & \texttt{lucas\_closure\_gf16.v} & Proven \\
+Lucas-12 orbit closure & \citetheorem{lucas_values_gf16_exact_n2} & \texttt{lucas\_closure\_gf16.v} & Proven \\
+$\phi$ unit in $\mathbb{Z}[\phi]$ & \citetheorem{phi_unit_lemma} (cited in L16) & \texttt{lucas\_closure\_gf16.v} & Proven \\
 Hexagonal density $\pi/(2\sqrt 3)$ & --- (geometric, no Coq mirror) & N/A & N/A \\
 Kissing number $\kappa_2 = 6$ & --- (combinatorial) & N/A & N/A \\
 Centred hex numbers $H_n$ & --- (closed form) & N/A & N/A \\
-$H_n \neq F_m$ (field-boundary) & follows from \texttt{lucas\_closure\_gf16.v} mod 3 & \texttt{lucas\_closure\_gf16.v} & Proven \\
+$H_n \neq F_m$ (field-boundary) & follows from \citetheorem{lucas_closure_n2} mod 3 & \texttt{lucas\_closure\_gf16.v} & Proven \\
 Eisenstein iso $\mathbb{Z}[\omega] \cong \Lambda_{\text{hex}}$ & --- (number-theoretic) & N/A & N/A \\
 $\mathbb{Z}[\omega]$ Euclidean & classical (Heegner-Stark-Baker) & N/A & Imported \\
-Trinity bridge $\mathbb{Q}(\sqrt 3) \cap \mathbb{Q}(\phi) = \mathbb{Q}$ & follows from \texttt{lucas\_2\_eq\_3} (rank-3 only at trace 3) & \texttt{lucas\_closure\_gf16.v} & Proven \\
-Trinity rotor on rank-3 & via Lucas-2k spectrum closure & \texttt{lucas\_closure\_gf16.v} & Proven \\
+Trinity bridge $\mathbb{Q}(\sqrt 3) \cap \mathbb{Q}(\phi) = \mathbb{Q}$ & follows from \citetheorem{lucas_2_eq_3} (rank-3 only at trace 3) & \texttt{lucas\_closure\_gf16.v} & Proven \\
+Trinity rotor on rank-3 & via \citetheorem{lucas_2k_spectrum} (Lucas-2k spectrum closure) & \texttt{lucas\_closure\_gf16.v} & Proven \\
 Spectral radius $3$ on hex graph & numerical (cosine sum), no Coq mirror & N/A & N/A \\
 \bottomrule
 \end{tabular}
@@ -710,12 +717,17 @@ mirror.
 \end{description}
 \end{remark}
 
-\begin{remark}[LC R14 retrofit note]
-Once PR \#280 introducing \texttt{\textbackslash citetheorem\{\}}
-macro merges, this table must be retrofit so that each "Proven" row
-uses \texttt{\textbackslash citetheorem\{lucas\_2\_eq\_3\}} verbatim
-in place of the text reference. The retrofit is queued on branch
-\texttt{feat/phd-ch12-citetheorem}.
+\begin{remark}[LC R14 retrofit verdict (ONE SHOT v2.0 Phase D, 2026-04-26)]
+The "Proven" rows above now wrap each Coq theorem in the
+\texttt{\textbackslash{}citetheorem\{<coq\_name>\}} macro per the LC R14
+verdict (\#265 comment 4320263027). The macro is locally defined at the
+top of this chapter via \texttt{\textbackslash{}providecommand} so the
+chapter compiles in isolation; when the monograph-wide definition is
+installed in \texttt{main.tex} (LF lane, scheduled after \#288/\#289),
+the local fallback silently yields to it. Six inline
+\texttt{\textbackslash{}citetheorem\{\}} calls correspond to the
+Proven Coq mirrors in the table; this discharges the R14-compliance
+gap recorded for chapter L12.
 \end{remark}
 % =====================================================================
 % PART G — Worked examples
