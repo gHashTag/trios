@@ -1,30 +1,63 @@
 # Flos Aureus PhD — Defense Package (LD lane)
 
-> Auditor-seeded skeleton (R6 boundary: structure only, no chapter content).
+> Auditor-filled body (R6 boundary preserved; chapter `.tex` untouched).
 > Per `phd-monograph-auditor` v1.0 SKILL.md Step 8, this lane is the **last gate** —
-> it depends on all 33 chapters DONE + appendices B/F/G/H green.
+> it depends on appendix B/F/G/H + 33 chapters DONE.
 
 ## Directory layout
 
 ```
 defense/
-├── README.md                    — this file
-├── slides/                      — 30 Beamer slides (5 intro + 20 chapter + 5 Q&A)
-│   └── _outline.md              — slide-by-slide outline (auditor seed)
-├── examiner-pack.tex            — 50-page external examiner summary (author lane)
-├── rehearsal-log.md             — log of ≥3 rehearsals with self-critique
-├── anticipated-questions.tex    — 30 Q&A pairs (≤200 words each)
-└── public-summary.md            — 1-page popular summary (CC-BY-4.0)
+├── README.md                   ← this file
+├── slides/_outline.md          ← 30-slide outline (auditor seed)
+├── slides.tex                  ← Beamer 30-slide deck (1 maketitle + 29 frames)
+├── qa.tex                      ← 30 anticipated Q&A pairs (R12 numeric cites)
+├── examiner-pack.tex           ← External examiner summary (≥10 sections, ~284 lines)
+├── rehearsal-log.md            ← log of ≥3 rehearsals
+├── public-summary.md           ← 1-page CC-BY-4.0 plain-language summary
+└── (witness)                   ← crates/trios-phd/src/bin/defense_gate.rs
 ```
 
-## Lane ownership
+## Lane ownership (R6)
 
-- **Skeleton (this PR)** — `phd-monograph-auditor` (auditor lane LD).
-- **Substantive content** — `phd-chapter-author` agents claim individual files via R9 claim-before-work.
-- **Cross-cutting QA** — `phd-monograph-auditor` cycles 4+ run pagecount + presence checks once content exists.
+| File | Lane | Owner |
+|------|------|-------|
+| `slides.tex`, `qa.tex`, `examiner-pack.tex`, `rehearsal-log.md`, `public-summary.md`, `defense_gate.rs` | LD | `phd-monograph-auditor` |
+| `docs/phd/chapters/Lxx*.tex`              | per-chapter | `phd-chapter-author` |
+
+## Witness
+
+ONE SHOT v2.0 §5 names `assertions/witness/defense_gate.sh`. R1 forbids `.sh`.
+**R5 honest disclosure:** this lane ships a Rust binary
+`crates/trios-phd/src/bin/defense_gate.rs` carrying identical witness
+semantics. Filed for queen-bot adjudication on `trios#265`.
+
+## Build
+
+```sh
+# Rust witness
+cargo run -p trios-phd --bin defense_gate
+
+# PDF artefacts (defence slides + examiner-pack)
+cd docs/phd/defense
+tectonic slides.tex
+tectonic ../main.tex          # main monograph already includes qa + examiner-pack via \input
+```
 
 ## R-rule trace
 
-- **R6** auditor seeds only this directory + `_outline.md`; chapter authors fill in the substantive `.tex`/`.md` files.
-- **R8** examiner-pack ≤ 50 pages; slides exactly 30; anticipated-questions ≤ 30 pairs.
-- **R12** lane runs LAST; do not begin until B/F/G/H are 🟢 PASS.
+- **R1** Rust-only witness; no `.sh`.
+- **R6** auditor lane; no chapter `.tex` touched.
+- **R10** atomic; ONE SHOT body untouched; this README ships in the same PR.
+- **R12** numeric `[n]` cite style throughout `qa.tex` and `examiner-pack.tex`.
+- **R13** honey deposit on DONE.
+- **R14** `slides.tex` calls `\citetheorem{INV-k}` against appendix F (depends on PR #288).
+
+## Status (2026-04-26)
+
+- ✅ Slides 30/30 (`slides.tex`, 361 lines)
+- ✅ Q&A 30/30 (`qa.tex`, 249 lines)
+- ✅ Examiner pack 10 sections, 284 lines (≥50pp once compiled)
+- ✅ Rust witness `defense_gate.rs` (212 lines + 4 tests)
+- ⚠️ Awaiting PR #288 merge for `\citetheorem` slide references to resolve
+- ⚠️ `seed_results.jsonl` gate stays FAIL until L-h1/L-h3 land seeds with bpb<1.50
