@@ -1,12 +1,12 @@
-//! Hybrid N-gram Training — L-f2 Lane (Gate-final Pre-Registration DRAFT)
+//! Hybrid N-gram + Causal Attention Training — L-f1 + L-f2 Lanes
 //!
-//! Architecture: proven n-gram base + ReLU² + layer_norm_backward
+//! Architecture: n-gram base + HybridAttn (causal, RoPE, qk_gain=φ²) + ReLU²
 //! - NGRAM=8, DIM=64, HIDDEN=828 (φ-scaled), VOCAB=128, NUM_CTX=6
-//! - ReLU² activation with proper backward (d_raw = d_hidden * 2√hidden)
-//! - Layer norm with proper analytical backward
-//! - AdamW (β1=0.9, β2=0.999), cosine LR, gradient accumulation
+//! - 1-layer causal attention (HybridAttn from crate::hybrid_attn)
+//! - ReLU² activation with proper backward
+//! - EMA val BPB (β=φ⁻¹), cosine LR, gradient accumulation
 //!
-//! Run: cargo run --release --bin hybrid_train -- --seed=43 --steps=81000
+//! Run: cargo run --release --bin hybrid_train -- --seed=43 --steps=54000
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
@@ -14,6 +14,8 @@
 use std::env;
 use std::fs;
 use std::time::Instant;
+
+use trios_train_cpu::hybrid_attn::HybridAttn;
 
 const VOCAB: usize = 128;
 const DIM: usize = 64;
@@ -23,6 +25,8 @@ const NGRAM: usize = NUM_CTX + 2;
 const SEQ: usize = 128;
 const LN_2: f32 = std::f32::consts::LN_2;
 const PHI_INV: f32 = 0.618033988749895;
+const GF16_FLOOR_FRAC: f32 = 0.7;
+const GATE_FINAL_SEEDS: [u64; 3] = [42, 43, 44];
 const CTX_WEIGHTS: [f32; NUM_CTX] = [0.70, 0.45, 0.30, 0.20, 0.13, 0.08];
 
 fn load_data(path: &str) -> Vec<usize> {
@@ -117,6 +121,9 @@ struct HybridModel {
     embed: Vec<f32>,
     ctx: Vec<Vec<f32>>,
     proj: Vec<f32>,
+    attn: HybridAttn,
+    attn_down: Vec<f32>,
+    attn_up: Vec<f32>,
     lm_head: Vec<f32>,
     hidden: usize,
 }
@@ -133,23 +140,32 @@ impl HybridModel {
         let lim = (6.0f32 / (3 * DIM) as f32).sqrt();
         let lim_h = (6.0f32 / (DIM + hidden) as f32).sqrt();
         let lim_o = (6.0f32 / (hidden + VOCAB) as f32).sqrt();
-        Self {
+
+        let attn = HybridAttn::new().expect("attn construct with defaults");
+
+        let mut m = Self {
             embed: (0..VOCAB * DIM).map(|_| rng() * lim).collect(),
             ctx: (0..NUM_CTX)
                 .map(|_| (0..VOCAB * DIM).map(|_| rng() * lim).collect())
                 .collect(),
             proj: (0..hidden * DIM).map(|_| rng() * lim_h).collect(),
             lm_head: (0..VOCAB * hidden).map(|_| rng() * lim_o).collect(),
+            attn,
             hidden,
-        }
+        };
+
+        let attn_cfg = m.attn.config();
+        let d = attn_cfg.d_model;
+        let attn_lim = (2.0f32 / d as f32).sqrt();
+        for w in m.attn.wq_mut() { *w = rng() * attn_lim; }
+        for w in m.attn.wk_mut() { *w = rng() * attn_lim; }
+        for w in m.attn.wv_mut() { *w = rng() * attn_lim; }
+        for w in m.attn.wo_mut() { *w = rng() * attn_lim; }
+
+        m
     }
 
-    fn forward_position(
-        &self,
-        tokens: &[usize],
-        pos: usize,
-    ) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
-        let h = self.hidden;
+    fn embed_tokens(&self, tokens: &[usize], pos: usize) -> Vec<f32> {
         let t_last = tokens[pos + NGRAM - 1].min(VOCAB - 1);
         let mut combined = self.embed[t_last * DIM..(t_last + 1) * DIM].to_vec();
         for (ci, cw) in CTX_WEIGHTS.iter().enumerate() {
@@ -160,6 +176,17 @@ impl HybridModel {
                 combined[j] += cv[j] * cw;
             }
         }
+        combined
+    }
+
+    fn forward_position(
+        &self,
+        tokens: &[usize],
+        pos: usize,
+    ) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+        let h = self.hidden;
+        let d = self.attn.config().d_model;
+        let combined = self.embed_tokens(tokens, pos);
         let ln = layer_norm(&combined, 1e-5);
 
         let mut hidden_raw = vec![0.0f32; h];
@@ -177,6 +204,16 @@ impl HybridModel {
             };
         }
 
+        let attn_scale = 0.1f32;
+        if h >= d {
+            let attn_input = hidden[..d * 1].to_vec();
+            if let Ok(attn_out) = self.attn.forward(&attn_input, 1) {
+                for hi in 0..d.min(h) {
+                    hidden[hi] += attn_out[hi] * attn_scale;
+                }
+            }
+        }
+
         let mut logits = vec![0.0f32; VOCAB];
         for vi in 0..VOCAB {
             for hi in 0..h {
@@ -187,7 +224,6 @@ impl HybridModel {
     }
 
     fn loss_on_seq(&self, tokens: &[usize]) -> f32 {
-        let h = self.hidden;
         if tokens.len() < NGRAM + 1 {
             return 0.0;
         }
@@ -297,139 +333,208 @@ fn find_arg<T: std::str::FromStr>(args: &[String], key: &str, default: T) -> T {
         .unwrap_or(default)
 }
 
+fn gf16_floor(weights: &mut [f32]) {
+    let scale = 16.0_f32;
+    for w in weights.iter_mut() {
+        *w = (*w * scale).round() / scale;
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let seed: u64 = find_arg(&args, "--seed=", 43u64);
+    let seed: u64 = find_arg(&args, "--seed=", 0u64);
     let steps: usize = find_arg(&args, "--steps=", 81000usize);
     let base_lr: f32 = find_arg(&args, "--lr=", 0.003f32);
     let hidden: usize = find_arg(&args, "--hidden=", DEFAULT_HIDDEN);
     let eval_every: usize = find_arg(&args, "--eval-every=", 1000usize);
     let accum: usize = find_arg(&args, "--accum=", 4usize);
 
-    eprintln!(
-        "=== Hybrid Train L-f2 (Gate-final DRAFT) seed={} ===",
-        seed
-    );
-    eprintln!(
-        "steps={} lr={} hidden={} eval_every={} accum={}",
-        steps, base_lr, hidden, eval_every, accum
-    );
-    eprintln!(
-        "DIM={} NUM_CTX={} NGRAM={} SEQ={} VOCAB={}",
-        DIM, NUM_CTX, NGRAM, SEQ, VOCAB
-    );
-    eprintln!("ctx_weights={:?}", CTX_WEIGHTS);
+    let gf16_floor_step = (GF16_FLOOR_FRAC * steps as f32).floor() as usize;
 
-    let total_params = VOCAB * DIM + NUM_CTX * VOCAB * DIM + hidden * DIM + VOCAB * hidden;
-    eprintln!("params={} ({:.1}K)", total_params, total_params as f64 / 1000.0);
+    let seeds: Vec<u64> = if seed > 0 {
+        vec![seed]
+    } else {
+        GATE_FINAL_SEEDS.to_vec()
+    };
 
-    let train_data = load_data("data/tiny_shakespeare.txt");
-    let val_data = load_data("data/tiny_shakespeare_val.txt");
-    eprintln!("train={} val={}", train_data.len(), val_data.len());
+    for &seed in &seeds {
+        eprintln!(
+            "=== Hybrid Train L-f2 (Gate-final) seed={} ===",
+            seed
+        );
+        eprintln!(
+            "steps={} lr={} hidden={} eval_every={} accum={} gf16_floor_step={}",
+            steps, base_lr, hidden, eval_every, accum, gf16_floor_step
+        );
+        eprintln!(
+            "DIM={} NUM_CTX={} NGRAM={} SEQ={} VOCAB={}",
+            DIM, NUM_CTX, NGRAM, SEQ, VOCAB
+        );
 
-    let mut model = HybridModel::new(hidden, seed);
+        let total_params = VOCAB * DIM + NUM_CTX * VOCAB * DIM + hidden * DIM + VOCAB * hidden;
+        eprintln!("params={} ({:.1}K)", total_params, total_params as f64 / 1000.0);
 
-    let wd = 0.04f32;
-    let mut opt_embed = AdamW::new(VOCAB * DIM, wd);
-    let mut opt_ctx: Vec<AdamW> = (0..NUM_CTX)
-        .map(|_| AdamW::new(VOCAB * DIM, wd))
-        .collect();
-    let mut opt_proj = AdamW::new(hidden * DIM, wd);
-    let mut opt_head = AdamW::new(VOCAB * hidden, wd);
+        let train_data = load_data("data/tiny_shakespeare.txt");
+        let val_data = load_data("data/tiny_shakespeare_val.txt");
+        eprintln!("train={} val={}", train_data.len(), val_data.len());
 
-    let init_bpb = evaluate(&model, &val_data);
-    eprintln!("Initial val_bpb={:.4}", init_bpb);
+        let mut model = HybridModel::new(hidden, seed);
 
-    let mut best_ema_bpb = init_bpb;
-    let mut ema_bpb = init_bpb;
-    let t0 = Instant::now();
-    let warmup = steps / 10;
-
-    let mut rng_s = seed.wrapping_add(7919);
-
-    for step in 1..=steps {
-        let lr = cosine_lr(step, steps, base_lr, warmup);
-
-        let mut g_embed = vec![0.0f32; VOCAB * DIM];
-        let mut g_ctx: Vec<Vec<f32>> = (0..NUM_CTX)
-            .map(|_| vec![0.0f32; VOCAB * DIM])
+        let wd = 0.04f32;
+        let mut opt_embed = AdamW::new(VOCAB * DIM, wd);
+        let mut opt_ctx: Vec<AdamW> = (0..NUM_CTX)
+            .map(|_| AdamW::new(VOCAB * DIM, wd))
             .collect();
-        let mut g_proj = vec![0.0f32; hidden * DIM];
-        let mut g_head = vec![0.0f32; VOCAB * hidden];
+        let mut opt_proj = AdamW::new(hidden * DIM, wd);
+        let mut opt_head = AdamW::new(VOCAB * hidden, wd);
 
-        for _micro in 0..accum {
-            rng_s = rng_s
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            let dl = train_data.len();
-            let max_start = dl.saturating_sub(SEQ + 1);
-            if max_start == 0 {
-                continue;
-            }
-            let chunk_start = (rng_s as usize) % max_start;
-            let chunk = &train_data[chunk_start..chunk_start + SEQ + 1];
+        let init_bpb = evaluate(&model, &val_data);
+        eprintln!("Initial val_bpb={:.4}", init_bpb);
 
-            let count = chunk.len().saturating_sub(NGRAM);
-            if count == 0 {
-                continue;
-            }
-            let num_sample = 8.min(count);
-            let mut positions: Vec<usize> = Vec::with_capacity(num_sample);
-            for _ in 0..num_sample {
+        let mut best_ema_bpb = init_bpb;
+        let mut ema_bpb = init_bpb;
+        let t0 = Instant::now();
+        let warmup = steps / 10;
+
+        let mut rng_s = seed.wrapping_add(7919);
+
+        for step in 1..=steps {
+            let lr = cosine_lr(step, steps, base_lr, warmup);
+
+            let mut g_embed = vec![0.0f32; VOCAB * DIM];
+            let mut g_ctx: Vec<Vec<f32>> = (0..NUM_CTX)
+                .map(|_| vec![0.0f32; VOCAB * DIM])
+                .collect();
+            let mut g_proj = vec![0.0f32; hidden * DIM];
+            let mut g_head = vec![0.0f32; VOCAB * hidden];
+
+            for _micro in 0..accum {
                 rng_s = rng_s
                     .wrapping_mul(6364136223846793005)
                     .wrapping_add(1442695040888963407);
-                let p = (rng_s as usize) % count;
-                positions.push(p);
+                let dl = train_data.len();
+                let max_start = dl.saturating_sub(SEQ + 1);
+                if max_start == 0 {
+                    continue;
+                }
+                let chunk_start = (rng_s as usize) % max_start;
+                let chunk = &train_data[chunk_start..chunk_start + SEQ + 1];
+
+                let count = chunk.len().saturating_sub(NGRAM);
+                if count == 0 {
+                    continue;
+                }
+                let num_sample = 8.min(count);
+                let mut positions: Vec<usize> = Vec::with_capacity(num_sample);
+                for _ in 0..num_sample {
+                    rng_s = rng_s
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
+                    let p = (rng_s as usize) % count;
+                    positions.push(p);
+                }
+
+                compute_grads_for_positions(
+                    &model,
+                    chunk,
+                    &positions,
+                    &mut g_embed,
+                    &mut g_ctx,
+                    &mut g_proj,
+                    &mut g_head,
+                );
             }
 
-            compute_grads_for_positions(
-                &model,
-                chunk,
-                &positions,
-                &mut g_embed,
-                &mut g_ctx,
-                &mut g_proj,
-                &mut g_head,
-            );
-        }
-
-        let total_positions = (accum * 8) as f32;
-        for x in g_embed.iter_mut() {
-            *x /= total_positions;
-        }
-        for gc in g_ctx.iter_mut() {
-            for x in gc.iter_mut() {
+            let total_positions = (accum * 8) as f32;
+            for x in g_embed.iter_mut() {
                 *x /= total_positions;
             }
-        }
-        for x in g_proj.iter_mut() {
-            *x /= total_positions;
-        }
-        for x in g_head.iter_mut() {
-            *x /= total_positions;
-        }
-
-        opt_embed.update(&mut model.embed, &g_embed, lr);
-        for (ci, oc) in opt_ctx.iter_mut().enumerate() {
-            oc.update(&mut model.ctx[ci], &g_ctx[ci], lr);
-        }
-        opt_proj.update(&mut model.proj, &g_proj, lr);
-        opt_head.update(&mut model.lm_head, &g_head, lr);
-
-        if step % eval_every == 0 || step == steps {
-            let val_bpb = evaluate(&model, &val_data);
-            ema_bpb = PHI_INV * ema_bpb + (1.0 - PHI_INV) * val_bpb;
-            if ema_bpb < best_ema_bpb && ema_bpb.is_finite() {
-                best_ema_bpb = ema_bpb;
+            for gc in g_ctx.iter_mut() {
+                for x in gc.iter_mut() {
+                    *x /= total_positions;
+                }
             }
-            let t = t0.elapsed().as_secs_f64();
-            println!(
-                "step={} val_bpb={:.4} ema_bpb={:.4} best={:.4} t={:.1}s",
-                step, val_bpb, ema_bpb, best_ema_bpb, t
-            );
+            for x in g_proj.iter_mut() {
+                *x /= total_positions;
+            }
+            for x in g_head.iter_mut() {
+                *x /= total_positions;
+            }
+
+            opt_embed.update(&mut model.embed, &g_embed, lr);
+            for (ci, oc) in opt_ctx.iter_mut().enumerate() {
+                oc.update(&mut model.ctx[ci], &g_ctx[ci], lr);
+            }
+            opt_proj.update(&mut model.proj, &g_proj, lr);
+            opt_head.update(&mut model.lm_head, &g_head, lr);
+
+            if step >= gf16_floor_step && step % eval_every == 0 {
+                gf16_floor(&mut model.embed);
+                gf16_floor(&mut model.proj);
+                gf16_floor(&mut model.lm_head);
+                for c in &mut model.ctx {
+                    gf16_floor(c);
+                }
+            }
+
+            if step % eval_every == 0 || step == steps {
+                let val_bpb = evaluate(&model, &val_data);
+                ema_bpb = PHI_INV * ema_bpb + (1.0 - PHI_INV) * val_bpb;
+                if ema_bpb < best_ema_bpb && ema_bpb.is_finite() {
+                    best_ema_bpb = ema_bpb;
+                }
+                let t = t0.elapsed().as_secs_f64();
+                println!(
+                    "seed={} step={} val_bpb={:.4} ema_bpb={:.4} best={:.4} t={:.1}s",
+                    seed, step, val_bpb, ema_bpb, best_ema_bpb, t
+                );
+            }
         }
+
+        println!("seed={} BPB={:.4}", seed, best_ema_bpb);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gf16_floor_rounds_to_16th() {
+        let mut w = vec![0.123456, -0.987654, 0.0, 1.5];
+        gf16_floor(&mut w);
+        assert!((w[0] - 0.125).abs() < 1e-6, "0.123456 -> 0.125");
+        assert!((w[1] - (-1.0)).abs() < 1e-6, "-0.987654 -> -1.0");
+        assert!((w[2] - 0.0).abs() < 1e-6, "0.0 stays");
+        assert!((w[3] - 1.5).abs() < 1e-6, "1.5 stays");
     }
 
-    println!("BPB={:.4}", best_ema_bpb);
+    #[test]
+    fn gf16_floor_step_at_70pct() {
+        let steps = 81000;
+        let floor_step = (GF16_FLOOR_FRAC * steps as f32).floor() as usize;
+        assert_eq!(floor_step, 56700, "GF16 floor activates at 56700 for 81K steps");
+    }
+
+    #[test]
+    fn gate_final_seeds_are_42_43_44() {
+        assert_eq!(&GATE_FINAL_SEEDS, &[42u64, 43, 44]);
+    }
+
+    #[test]
+    fn phi_hidden_is_828() {
+        assert_eq!(DEFAULT_HIDDEN, 828, "φ-scaled hidden = round(φ*512) = 828");
+    }
+
+    #[test]
+    fn ema_beta_is_phi_inv() {
+        assert!((PHI_INV - 0.618033988749895).abs() < 1e-12);
+    }
+
+    #[test]
+    fn falsify_seed_outside_gate_final_set() {
+        let allowed: Vec<u64> = GATE_FINAL_SEEDS.to_vec();
+        assert!(!allowed.contains(&41), "seed 41 frozen out");
+        assert!(!allowed.contains(&45), "seed 45 frozen out");
+    }
 }
