@@ -1,0 +1,25 @@
+[package]
+name = "page-gate"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "LT page-count gate — Phase D witness for the «Flos Aureus» PhD monograph (trios#265)"
+license = "MIT OR Apache-2.0"
+
+# R1: Rust only. R3: lands on main. R6: tools/page_gate is greenfield.
+# Witness contract: exit 0 if MIN_PAGES <= pages(pdf) <= MAX_PAGES, else 60..=63.
+
+[[bin]]
+name = "page-gate"
+path = "src/main.rs"
+
+[lib]
+name = "page_gate"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+lopdf = { version = "0.32", default-features = false, features = ["pom_parser"] }
