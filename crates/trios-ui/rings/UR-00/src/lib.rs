@@ -175,7 +175,7 @@ pub enum Theme {
 // ─── Global Signal atoms (Jotai-style) ──────────────────────
 
 /// Global agents atom. Use `use_agents_atom()` to access.
-static AGENTS_ATOM: RwLock<Vec<Agent>> = RwLock::new(Vec::new());
+static AGENTS_ATOM: RwLock<Vec<Agent>>> = RwLock::new(Vec::new());
 
 /// Global chat state atom. Use `use_chat_atom()` to access.
 static CHAT_ATOM: RwLock<ChatState> = RwLock::new(ChatState::default());
