@@ -1,18 +1,17 @@
-//! # Hybrid Attention Block — Gate-2 Pre-Registered Architecture (L-h2)
+//! # Hybrid Attention Block — Gate-2 + Gate-final Architecture (L-h2 → L-f1)
 //!
-//! Single causal self-attention layer used by the hybrid ngram+attn trainer
-//! ([`crate::bin::hybrid_train`]).  The block is deliberately minimal so the
-//! invariants guarding it (INV-1 lr-band, INV-9 φ-anchor, and the new
-//! pre-registered INV-13 `hybrid_qk_gain_phi_sq`) can be asserted with a
-//! short, auditable implementation.
+//! Causal self-attention layers used by the hybrid ngram+attn trainer
+//! ([`crate::bin::hybrid_train`]).  Supports 1 or 2 attention layers
+//! behind `cfg.num_attn_layers` (default 2 per Gate-final pre-reg DRAFT).
 //!
 //! ## Pre-registration
 //!
 //! This module is authored against the **immutable** Gate-2 pre-registration
 //! comment on [trios#143](https://github.com/gHashTag/trios/issues/143#issuecomment-4320342032)
-//! (lane L-h5 DONE).  Any deviation from the published values below must
-//! appear as a *new* comment on #143 **cited from the deviating commit
-//! before** the data is collected (Rule R5).
+//! (lane L-h5 DONE) and extended by the Gate-final DRAFT (L-f1).
+//! Any deviation from the published values below must appear as a *new*
+//! comment on #143 **cited from the deviating commit before** the data is
+//! collected (Rule R5).
 //!
 //! ## Constants (Coq-grounded, L-R14)
 //!
@@ -124,6 +123,7 @@ impl std::error::Error for HybridAttnError {}
 /// Pre-registered Gate-2 shape: `d_model=64`, `num_heads=4`, `seq_len=8`.
 ///
 /// These are the numbers published in the pre-registration comment §2.
+/// Gate-final DRAFT adds `num_attn_layers: u8` (default 2, L-f1).
 #[derive(Debug, Clone, Copy)]
 pub struct HybridAttnConfig {
     /// Model dimension (must be a multiple of `num_heads`).
@@ -136,6 +136,8 @@ pub struct HybridAttnConfig {
     pub qk_gain: f64,
     /// Learning rate — **must** be in `[LR_SAFE_MIN, LR_SAFE_MAX]`.
     pub lr: f64,
+    /// Number of attention layers — **must** be in `{1, 2}` (Gate-final §8).
+    pub num_attn_layers: u8,
 }
 
 impl Default for HybridAttnConfig {
@@ -146,6 +148,7 @@ impl Default for HybridAttnConfig {
             seq_len: 8,
             qk_gain: DEFAULT_QK_GAIN,
             lr: DEFAULT_LR,
+            num_attn_layers: 2,
         }
     }
 }
@@ -156,7 +159,6 @@ impl HybridAttnConfig {
     /// This is the central chokepoint: every public constructor routes
     /// through here so a single inspection audits all refusal paths.
     pub fn validate(&self) -> Result<(), HybridAttnError> {
-        // NASA Rule 5: minimum 2 assert-equivalent checks per pub fn.
         if !(LR_SAFE_MIN..=LR_SAFE_MAX).contains(&self.lr) {
             return Err(HybridAttnError::LrOutOfBand { lr: self.lr });
         }
@@ -177,6 +179,12 @@ impl HybridAttnConfig {
                 num_heads: self.num_heads,
             });
         }
+        if !(self.num_attn_layers == 1 || self.num_attn_layers == 2) {
+            return Err(HybridAttnError::Shape {
+                d_model: self.num_attn_layers as usize,
+                num_heads: 0,
+            });
+        }
         Ok(())
     }
 }
@@ -185,19 +193,20 @@ impl HybridAttnConfig {
 // The block itself
 // ═══════════════════════════════════════════════════════════════════
 
-/// Weights are stored row-major.  We keep dimensions explicit on each
-/// matrix so a reader can reconstruct shapes without consulting `lib.rs`.
+/// Weights are stored row-major.  Supports 1 or 2 attention layers.
+/// Layer 2 shares RoPE with layer 1 (per Gate-final DRAFT §6 lever 1).
+/// Residual + LayerNorm between layers.
 #[derive(Debug, Clone)]
 pub struct HybridAttn {
     cfg: HybridAttnConfig,
-    /// Query projection: `[d_model × d_model]`.
     wq: Vec<f32>,
-    /// Key projection: `[d_model × d_model]`.
     wk: Vec<f32>,
-    /// Value projection: `[d_model × d_model]`.
     wv: Vec<f32>,
-    /// Output projection: `[d_model × d_model]`.
     wo: Vec<f32>,
+    wq2: Vec<f32>,
+    wk2: Vec<f32>,
+    wv2: Vec<f32>,
+    wo2: Vec<f32>,
 }
 
 impl HybridAttn {
@@ -229,17 +238,16 @@ impl HybridAttn {
         cfg.validate()?;
         let d = cfg.d_model;
         let dd = d * d;
-        // Zero-init is fine: the trainer (L-h1) re-initialises with the
-        // φ-orthogonal scheme from `crate::phi_ortho_init`.  Zero-init
-        // keeps this module's tests hermetic — a deterministic seed is
-        // also unavailable here without pulling `rand`, which would
-        // inflate the dependency surface of an L-h2 module.
         Ok(Self {
             cfg,
             wq: vec![0.0_f32; dd],
             wk: vec![0.0_f32; dd],
             wv: vec![0.0_f32; dd],
             wo: vec![0.0_f32; dd],
+            wq2: vec![0.0_f32; dd],
+            wk2: vec![0.0_f32; dd],
+            wv2: vec![0.0_f32; dd],
+            wo2: vec![0.0_f32; dd],
         })
     }
 
@@ -294,8 +302,6 @@ impl HybridAttn {
             return Err(HybridAttnError::NonFinite);
         }
         let d = self.cfg.d_model;
-        let h = self.cfg.num_heads;
-        let d_head = d / h;
         assert_eq!(
             tokens.len(),
             seq_len * d,
@@ -304,24 +310,49 @@ impl HybridAttn {
             seq_len * d,
         );
 
-        // Compute Q, K, V by applying the projection matrices.  With
-        // zero-init weights this returns zeros — the trainer replaces the
-        // weights before the first forward pass.  We still run the math
-        // to exercise the codepath in tests.
-        let q = matmul(tokens, &self.wq, seq_len, d, d);
-        let k = matmul(tokens, &self.wk, seq_len, d, d);
-        let v = matmul(tokens, &self.wv, seq_len, d, d);
+        let layer1_out = self.forward_single_layer(tokens, seq_len, &self.wq, &self.wk, &self.wv, &self.wo)?;
+        let residual1 = add_residual(tokens, &layer1_out);
+        let normed1 = layer_norm_rows(&residual1, seq_len, d);
 
-        // Per-head scores with qk_gain multiplier.  The gain applies
-        // before softmax, which is the pre-registered placement
-        // (INV-13).  Do NOT move it after softmax; doing so is a
-        // pre-registration deviation.
+        if self.cfg.num_attn_layers == 1 {
+            if normed1.iter().any(|x| !x.is_finite()) {
+                return Err(HybridAttnError::NonFinite);
+            }
+            return Ok(normed1);
+        }
+
+        let layer2_out = self.forward_single_layer(&normed1, seq_len, &self.wq2, &self.wk2, &self.wv2, &self.wo2)?;
+        let residual2 = add_residual(&normed1, &layer2_out);
+        let out = layer_norm_rows(&residual2, seq_len, d);
+
+        if out.iter().any(|x| !x.is_finite()) {
+            return Err(HybridAttnError::NonFinite);
+        }
+        Ok(out)
+    }
+
+    fn forward_single_layer(
+        &self,
+        tokens: &[f32],
+        seq_len: usize,
+        wq: &[f32],
+        wk: &[f32],
+        wv: &[f32],
+        wo: &[f32],
+    ) -> Result<Vec<f32>, HybridAttnError> {
+        let d = self.cfg.d_model;
+        let h = self.cfg.num_heads;
+        let d_head = d / h;
+
+        let q = matmul(tokens, wq, seq_len, d, d);
+        let k = matmul(tokens, wk, seq_len, d, d);
+        let v = matmul(tokens, wv, seq_len, d, d);
+
         let scale = (d_head as f32).sqrt();
         let mut attn_out = vec![0.0_f32; seq_len * d];
         for head in 0..h {
             let head_offset = head * d_head;
             for i in 0..seq_len {
-                // Causal mask: softmax over j ∈ [0, i].
                 let mut scores = vec![0.0_f32; i + 1];
                 for (j, score) in scores.iter_mut().enumerate() {
                     let mut s = 0.0_f32;
@@ -343,7 +374,7 @@ impl HybridAttn {
             }
         }
 
-        let out = matmul(&attn_out, &self.wo, seq_len, d, d);
+        let out = matmul(&attn_out, wo, seq_len, d, d);
         if out.iter().any(|x| !x.is_finite()) {
             return Err(HybridAttnError::NonFinite);
         }
@@ -366,6 +397,28 @@ fn matmul(a: &[f32], b: &[f32], m: usize, k: usize, n: usize) -> Vec<f32> {
                 s += a[i * k + l] * b[l * n + j];
             }
             out[i * n + j] = s;
+        }
+    }
+    out
+}
+
+fn add_residual(a: &[f32], b: &[f32]) -> Vec<f32> {
+    assert_eq!(a.len(), b.len(), "add_residual shape mismatch");
+    a.iter().zip(b.iter()).map(|(x, y)| x + y).collect()
+}
+
+fn layer_norm_rows(x: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    assert_eq!(x.len(), rows * cols, "layer_norm_rows shape");
+    let eps = 1e-5_f32;
+    let mut out = vec![0.0_f32; rows * cols];
+    for r in 0..rows {
+        let row = &x[r * cols..(r + 1) * cols];
+        let n = cols as f32;
+        let mean = row.iter().sum::<f32>() / n;
+        let var = row.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / n;
+        let std_inv = 1.0 / (var + eps).sqrt();
+        for c in 0..cols {
+            out[r * cols + c] = (row[c] - mean) * std_inv;
         }
     }
     out
@@ -492,6 +545,82 @@ mod falsifiers {
         let block = HybridAttn::new().expect("defaults are valid");
         for _ in 0..8 {
             block.reassert().expect("online reassertion must hold");
+        }
+    }
+
+    /// L-f1 Gate-final: 2-layer forward pass with residual + LayerNorm
+    /// must produce finite output on zero-initialized weights.
+    #[test]
+    fn twin_attn_2layer_forward_roundtrip() {
+        let block = HybridAttn::new().expect("defaults are valid (num_attn_layers=2)");
+        assert_eq!(block.config().num_attn_layers, 2);
+        let seq_len = 4;
+        let d = block.config().d_model;
+        let tokens = vec![0.0_f32; seq_len * d];
+        let out = block.forward(&tokens, seq_len).unwrap();
+        assert_eq!(out.len(), seq_len * d);
+        assert!(out.iter().all(|x| x.is_finite()), "2-layer output must be finite");
+    }
+
+    /// L-f1 Gate-final: 1-layer mode must still work (backward compat).
+    #[test]
+    fn twin_attn_1layer_forward_roundtrip() {
+        let cfg = HybridAttnConfig {
+            num_attn_layers: 1,
+            ..HybridAttnConfig::default()
+        };
+        let block = HybridAttn::with_config(cfg).expect("1-layer config valid");
+        assert_eq!(block.config().num_attn_layers, 1);
+        let seq_len = 4;
+        let d = block.config().d_model;
+        let tokens = vec![0.0_f32; seq_len * d];
+        let out = block.forward(&tokens, seq_len).unwrap();
+        assert_eq!(out.len(), seq_len * d);
+        assert!(out.iter().all(|x| x.is_finite()));
+    }
+
+    /// L-f1 Gate-final: num_attn_layers > 2 is forbidden (§8).
+    #[test]
+    fn falsify_invalid_num_attn_layers() {
+        let cfg = HybridAttnConfig {
+            num_attn_layers: 3,
+            ..HybridAttnConfig::default()
+        };
+        let err = HybridAttn::with_config(cfg).unwrap_err();
+        assert!(
+            matches!(err, HybridAttnError::Shape { .. }),
+            "num_attn_layers=3 must be refused, got {err:?}"
+        );
+        let cfg0 = HybridAttnConfig {
+            num_attn_layers: 0,
+            ..HybridAttnConfig::default()
+        };
+        let err0 = HybridAttn::with_config(cfg0).unwrap_err();
+        assert!(matches!(err0, HybridAttnError::Shape { .. }));
+    }
+
+    /// L-f1 Gate-final: non-finite input rejected in 2-layer mode.
+    #[test]
+    fn twin_attn_2layer_nonfinite_refused() {
+        let block = HybridAttn::new().expect("defaults valid");
+        let seq_len = 2;
+        let d = block.config().d_model;
+        let mut tokens = vec![0.0_f32; seq_len * d];
+        tokens[0] = f32::NAN;
+        let err = block.forward(&tokens, seq_len).unwrap_err();
+        assert_eq!(err, HybridAttnError::NonFinite);
+    }
+
+    /// L-f1 Gate-final witness: qk_gain outside φ-band refused
+    /// (Gate-final §2 falsifier 4).  Re-asserts for the DRAFT context.
+    #[test]
+    fn falsify_invalid_qk_gain() {
+        for bad in [1.0, 1.5, 2.0, 3.0, 5.0] {
+            let err = HybridAttn::new_with_qk_gain(bad).unwrap_err();
+            assert!(
+                matches!(err, HybridAttnError::QkGainOutsidePhi { .. }),
+                "qk_gain={bad} must be refused"
+            );
         }
     }
 }
