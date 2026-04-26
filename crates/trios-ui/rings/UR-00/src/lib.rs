@@ -196,21 +196,21 @@ static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::new(Settings::default());
 ///     rsx! { {agents.len()} agents loaded }
 /// }
 /// ```
-pub fn use_agents_atom() -> Signal<Vec<Agent>> {
+pub fn use_agents_atom() -> GlobalSignal<Vec<Agent>> {
     AGENTS_ATOM
 }
 
 /// Access the global chat state atom.
-pub fn use_chat_atom() -> Signal<ChatState> {
+pub fn use_chat_atom() -> GlobalSignal<ChatState> {
     CHAT_ATOM
 }
 
 /// Access the global MCP state atom.
-pub fn use_mcp_atom() -> Signal<McpState> {
+pub fn use_mcp_atom() -> GlobalSignal<McpState> {
     MCP_ATOM
 }
 
 /// Access the global settings atom.
-pub fn use_settings_atom() -> Signal<Settings> {
+pub fn use_settings_atom() -> GlobalSignal<Settings> {
     SETTINGS_ATOM
 }

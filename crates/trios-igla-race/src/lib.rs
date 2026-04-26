@@ -3,13 +3,9 @@ pub mod hive_automaton;
 pub mod invariants;
 pub mod lessons;
 pub mod neon;
-pub mod race;
 pub mod rungs;
-pub mod attn;
-pub mod ema;
 pub mod sampler;
 pub mod status;
-pub mod victory;
 
 // ----------------------------------------------------------------------
 // INV-7: Welch t-test and TtestReport exports (L-R14)
@@ -27,37 +23,9 @@ pub use invariants::{TrialConfig as InvTrialConfig, GradientMode, InvError, vali
 
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 
-// Race exports (L11 internal)
-pub use race::{
-    WorkerPool,
-    run_trial,
-    simulate_bpb,
-};
-
-pub use victory::{
-    check_victory,
-    is_victory,
-    SeedResult,
-    VictoryReport,
-    VictoryError,
-    JEPA_PROXY_BPB_FLOOR,
-    stat_strength,
-    TtestReport,
-    // T-test constants (re-exported from victory.rs)
-    TTEST_ALPHA,
-    TTEST_BASELINE_MU0,
-    TTEST_EFFECT_SIZE_MIN,
-};
-
-pub use VictoryError::ZeroVariance;
-
-// IGLA_TARGET_BPB alias for BPB_VICTORY_TARGET (L-R14)
-pub const IGLA_TARGET_BPB: f64 = crate::hive_automaton::BPB_VICTORY_TARGET;
-
-pub use ema::{EmaTracker, EmaError, ALPHA_PHI_INV_3, ALPHA_MIN_EXCLUSIVE, ALPHA_MAX_INCLUSIVE};
-
-pub use attn::{QkHead, QkHeadError, PHI_4, HEAD_DIM_PHI_FLOOR, NUM_HEADS_MAX};
-
+// ----------------------------------------------------------------------
+// Hive automaton exports
+// ----------------------------------------------------------------------
 pub use hive_automaton::{
     AbortReason,
     AgentAction,
@@ -71,3 +39,8 @@ pub use hive_automaton::{
     SCHEMA_VERSION as HIVE_SCHEMA_VERSION,
     VICTORY_SEED_TARGET,
 };
+
+// ----------------------------------------------------------------------
+// INV-7: Welch t-test and TtestReport exports (L-R14)
+// ----------------------------------------------------------------------
+pub use hive_automaton::BPB_VICTORY_TARGET as IGLA_TARGET_BPB;
