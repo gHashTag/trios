@@ -42,15 +42,17 @@ pub fn train_cpu(seeds: Vec<u64>, config: TrainConfig, parallel: bool) -> Result
 
 fn find_ngram_train() -> Result<PathBuf> {
     let paths = [
-        "target/release/ngram_train",
-        "target/debug/ngram_train",
+        "target/release/trios-train",
+        "target/debug/trios-train",
+        "ngram_train",
+        "trios-train",
     ];
     for p in &paths {
         if PathBuf::from(p).exists() {
             return Ok(PathBuf::from(p));
         }
     }
-    anyhow::bail!("ngram_train binary not found. Run: cargo build --release -p trios-train-cpu --bin ngram_train");
+    anyhow::bail!("ngram_train binary not found. Install external SoT trainer: cargo install --git https://github.com/gHashTag/trios-trainer-igla --bin trios-train --locked");
 }
 
 fn run_sequential(binary: &Path, seeds: &[u64], config: &TrainConfig) -> Result<Vec<TrainResult>> {

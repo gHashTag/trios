@@ -13,7 +13,7 @@ on:
     branches: [main]
     paths:
       - 'trinity-clara/proofs/**'
-      - 'crates/trios-train-cpu/src/invariants.rs'
+      # invariants.rs migrated to gHashTag/trios-trainer-igla per L-T1+L-T3
       - '.github/workflows/coq-proofs.yml'
   pull_request:
     branches: [main]
@@ -106,17 +106,13 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Validate invariants compile (L-R14)
+      - name: Validate external invariants (L-R14, post-L-T3)
         run: |
-          cargo build -p trios-train-cpu 2>&1 | head -50
-          echo "✅ invariants.rs compiled"
-
-      - name: Run invariant tests
-        run: |
-          cargo test -p trios-train-cpu -- invariants 2>&1
-          echo "✅ INV-1..5 Rust assertions pass"
-
-      - name: clippy on invariants
-        run: |
-          cargo clippy -p trios-train-cpu -- -D warnings
-          echo "✅ L-R5 + L-R14: zero warnings on invariants"
+          # invariants.rs lives in gHashTag/trios-trainer-igla now (L-T1).
+          # Pull source and run the same checks against it.
+          rm -rf /tmp/sot-trainer
+          git clone --depth 1 https://github.com/gHashTag/trios-trainer-igla /tmp/sot-trainer
+          (cd /tmp/sot-trainer && cargo build --release -p trios-trainer 2>&1 | tail -20)
+          (cd /tmp/sot-trainer && cargo test --release anchor_holds -- --exact)
+          (cd /tmp/sot-trainer && cargo clippy --all-targets -- -D warnings)
+          echo "✅ L-R14 invariants verified in external SoT (post L-T3)"

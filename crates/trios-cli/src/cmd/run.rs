@@ -66,10 +66,9 @@ pub fn run(exp_id: &str, seeds: u32) -> Result<RunResult> {
 
 fn find_trainer() -> Result<PathBuf> {
     let paths = [
-        "target/debug/trios-igla-trainer",
-        "target/release/trios-igla-trainer",
-        "crates/trios-igla-trainer/target/debug/trios-igla-trainer",
-        "crates/trios-igla-trainer/target/release/trios-igla-trainer",
+        "target/release/trios-train",
+        "target/debug/trios-train",
+        "trios-train",
     ];
 
     for path in paths {
@@ -78,7 +77,7 @@ fn find_trainer() -> Result<PathBuf> {
         }
     }
 
-    anyhow::bail!("Trainer binary not found. Run: cargo build --release -p trios-igla-trainer")
+    anyhow::bail!("Trainer binary not found. Install external SoT trainer: cargo install --git https://github.com/gHashTag/trios-trainer-igla --bin trios-train --locked")
 }
 
 fn parse_bpb(stdout: &str) -> Result<(f64, f64)> {
