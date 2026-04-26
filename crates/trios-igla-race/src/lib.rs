@@ -62,3 +62,4 @@ pub use hive_automaton::{
     SCHEMA_VERSION as HIVE_SCHEMA_VERSION,
     VICTORY_SEED_TARGET,
 };
+pub mod proxies;
