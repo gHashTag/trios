@@ -1,0 +1,24 @@
+# Gate-2 attempt — HybridAttn + JEPA push
+# Target: BPB < 1.85 on 3 seeds {43, 44, 45}
+
+[training]
+seed = 43  # Override via TRIOS_SEED env for other seeds
+steps = 4000  # Minimum for Gate-2 (can extend to 27K if promising)
+batch_size = 32
+lr = 0.004
+checkpoint_interval = 1000
+eval_interval = 500
+
+[model]
+d_model = 384
+n_layers = 4
+context_len = 6
+ff_mult = 4
+
+[jepa]
+mask_ratio = 0.30
+ema_decay = 0.996
+
+[ledger]
+path = "../../assertions/seed_results.jsonl"
+push_to_repo = false
