@@ -172,19 +172,19 @@ pub enum Theme {
     Light,
 }
 
-// ─── Global Signal atoms (Jotai-style) ──────────────────────
+// ─── Global State atoms (Jotai-style) ───────────────────────
 
 /// Global agents atom. Use `use_agents_atom()` to access.
-static AGENTS_ATOM: RwLock<Vec<Agent>>> = RwLock::new(Vec::new());
+static AGENTS_ATOM: RwLock<Vec<Agent>> = RwLock::new(Vec::new());
 
 /// Global chat state atom. Use `use_chat_atom()` to access.
-static CHAT_ATOM: RwLock<ChatState> = RwLock::new(ChatState::default());
+static CHAT_ATOM: RwLock<ChatState>> = RwLock::new(ChatState::default());
 
 /// Global MCP state atom. Use `use_mcp_atom()` to access.
-static MCP_ATOM: RwLock<McpState> = RwLock::new(McpState::default());
+static MCP_ATOM: RwLock<McpState>> = RwLock::new(McpState::default());
 
 /// Global settings atom. Use `use_settings_atom()` to access.
-static SETTINGS_ATOM: RwLock<Settings> = RwLock::new(Settings::default());
+static SETTINGS_ATOM: RwLock<Settings>> = RwLock::new(Settings::default());
 
 // ─── Atom accessors (Jotai-style hooks) ─────────────────────
 
@@ -197,8 +197,13 @@ static SETTINGS_ATOM: RwLock<Settings> = RwLock::new(Settings::default());
 ///     rsx! { {agents.len()} agents loaded }
 /// }
 /// ```
-pub fn use_agents_atom() -> Signal<Vec<Agent>> {
-    AGENTS_ATOM.get()
+pub fn use_agents_atom() -> Vec<Agent> {
+    AGENTS_ATOM.read().clone()
+}
+
+/// Set the global agents atom.
+pub fn set_agents(agents: Vec<Agent>) {
+    *AGENTS_ATOM.write().unwrap() = agents;
 }
 
 /// Access the global chat state atom.

@@ -1,8 +1,8 @@
-//! # Hybrid Attention Block — Gate-2 -> Gate-final Architecture (L-h2 -> L-f1)
+//! # Hybrid Attention Block — Gate-2 → Gate-final Architecture (L-h2 → L-f1)
 //!
 //! Causal self-attention stack supporting 1 or 2 layers for the hybrid
-//! ngram+attn trainer. The block is deliberately minimal so the invariants
-//! guarding it (INV-1 lr-band, INV-9 phi-anchor, and the pre-registered
+//! ngram+attn trainer. The block is deliberately minimal so that invariants
+//! guarding it (INV-1 lr-band, INV-9 φ-anchor, and pre-registered
 //! INV-13 `hybrid_qk_gain_phi_sq`) can be asserted with a short, auditable
 //! implementation.
 //!
@@ -10,12 +10,12 @@
 //!
 //! Gate-2 (immutable): single-layer depth via trios#143 comment 4320342032.
 //!
-//! Gate-final (DRAFT -> immutable after Gate-2 first row):
-//! - Extended to support `num_attn_layers in {1, 2}` (INV-13 refined)
+//! Gate-final (DRAFT → immutable after Gate-2 first row):
+//! - Extended to support `num_attn_layers ∈ {1, 2}` (INV-13 refined)
 //! - Second layer uses same RoPE, residual + LayerNorm pattern
 //! - Coq lemmas: `counter_skew_seeds`, `counter_lr_outside_band` (L-f5)
 //!
-//! This module is owned by L-h2 (Gate-2) -> L-f1 (Gate-final extension).
+//! This module is owned by L-h2 (Gate-2) → L-f1 (Gate-final extension).
 //!
 //! ## Constants (Coq-grounded, L-R14)
 //!
@@ -31,64 +31,77 @@
 //!
 //! The block refuses to construct itself when any of the following hold:
 //!
-//! 1. `lr not in [LR_SAFE_MIN, LR_SAFE_MAX]` -> [`HybridAttnError::LrOutOfBand`]
-//! 2. `qk_gain not in {PHI_SQ, PHI_CUBE}`    -> [`HybridAttnError::QkGainOutsidePhi`]
+//! 1. `lr ∉ [LR_SAFE_MIN, LR_SAFE_MAX]` → [`HybridAttnError::LrOutOfBand`]
+//! 2. `qk_gain ∉ {PHI_SQ, PHI_CUBE}`    → [`HybridAttnError::QkGainOutsidePhi`]
 //! 3. `d_model == 0` or `num_heads == 0` or `d_model % num_heads != 0`
-//!    -> [`HybridAttnError::Shape`]
-//! 4. `num_attn_layers not in {1, 2}` (L-f1) -> [`HybridAttnError::InvalidDepth`]
-//! 5. Non-finite input in the forward pass -> [`HybridAttnError::NonFinite`]
+//!                                      → [`HybridAttnError::Shape`]
+//! 4. `num_attn_layers ∉ {1, 2}`        → [`HybridAttnError::InvalidDepth`] (L-f1)
+//! 5. Non-finite input in forward pass → [`HybridAttnError::NonFinite`]
 //!
 //! Each of these corresponds to a named falsifier test at the bottom of this
-//! file.  Deleting or weakening a test is a pre-registration deviation and
+//! file. Deleting or weakening a test is a pre-registration deviation and
 //! must be filed as described above.
 //!
 //! ## Scope
 //!
-//! This file is the **single** file owned by L-h2.  It is called by
-//! `hybrid_train.rs` (L-h1) but owns **no** pre-existing module.  Per R6
-//! (lane discipline), the only out-of-file touch is a one-line
+//! This file is **single** file owned by L-h2. It is called by
+//! `hybrid_train.rs` (L-h1) but owns **no** pre-existing module. Per R6
+//! (lane discipline), only out-of-file touch is a one-line
 //! `pub mod hybrid_attn;` re-export in [`crate::lib`].
 
+#![allow(clippy::doc_overindented_list_items)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 
 use crate::invariants::{LR_SAFE_MAX, LR_SAFE_MIN, PHI_CUBE, PHI_SQ};
 
-// INV-13 - Allowed qk_gain values
-// Pre-registered: qk_gain in {phi^2, phi^3}.
+// ═════════════════════════════════════════════════════════
+// INV-13 — Allowed qk_gain values
+// Pre-registered: qk_gain ∈ {φ², φ³}.
 // Coq lemma (L-h4): trinity-clara/proofs/igla/hybrid_qk_gain.v
 //     ::counter_qk_gain_outside_phi_sq
+// ═════════════════════════════════════════════════════════════
 
-/// Allowed quarks-gain values for the causal attention block.
+/// Allowed qk-gain values for the causal attention block.
 ///
-/// Pre-registered as `{phi^2, phi^3}`.  Any other value is refused at construction.
+/// Pre-registered as `{φ², φ³}`. Any other value is refused at construction.
 pub const ALLOWED_QK_GAINS: [f64; 2] = [PHI_SQ, PHI_CUBE];
 
-/// Pre-registered default qk_gain for Gate-2: phi^2.
+/// Pre-registered default qk_gain for Gate-2: φ².
 pub const DEFAULT_QK_GAIN: f64 = PHI_SQ;
 
-/// Pre-registered default learning rate for Gate-2: 0.0035 (inside the
+/// Pre-registered default learning rate for Gate-2: 0.0035 (inside of
 /// INV-1 band `[0.002, 0.007]`).
 pub const DEFAULT_LR: f64 = 0.0035;
 
+/// Pre-registered default depth for Gate-2: 1 layer.
+pub const DEFAULT_NUM_ATTN_LAYERS: u8 = 1;
+
+/// φ-scaled hidden width for Gate-final: round(φ · 512) = 828.
+///
+/// This is lever #2 in the Gate-final decomposition (−0.05..−0.10 BPB expected).
+pub const GATE_FINAL_HIDDEN_WIDTH: usize = 828;
+
+// ═══════════════════════════════════════════════════════════
 // Error type
+// ═════════════════════════════════════════════════════════════════
 
 /// Construction / forward-pass refusals.
 ///
 /// Every variant has a corresponding falsifier test.  Never silence a
-/// variant — surface it as `Result::Err` so the trainer lane (L-h1) can
-/// record the refusal in the race ledger.
+/// variant — surface it as `Result::Err` so that trainer lane (L-h1) can
+/// record of refusal in the race ledger.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HybridAttnError {
-    /// `lr not in [LR_SAFE_MIN, LR_SAFE_MAX]` — INV-1 violation.
+    /// `lr ∉ [LR_SAFE_MIN, LR_SAFE_MAX]` — INV-1 violation.
     LrOutOfBand { lr: f64 },
-    /// `qk_gain not in {PHI_SQ, PHI_CUBE}` — INV-13 violation (pre-registered).
+    /// `qk_gain ∉ {PHI_SQ, PHI_CUBE}` — INV-13 violation (pre-registered).
     QkGainOutsidePhi { qk_gain: f64 },
     /// Shape invariants failed (zero dimension or indivisible head split).
     Shape { d_model: usize, num_heads: usize },
-    /// Invalid depth: `num_attn_layers not in {1, 2}` — INV-13 refined (L-f1).
+    /// Invalid depth: `num_attn_layers ∉ {1, 2}` — INV-13 (refined, L-f1).
     InvalidDepth { depth: u8 },
-    /// Non-finite tensor detected in forward pass.
+    /// Non-finite tensor detected in the forward pass.
     NonFinite,
 }
 
@@ -97,12 +110,12 @@ impl std::fmt::Display for HybridAttnError {
         match self {
             Self::LrOutOfBand { lr } => write!(
                 f,
-                "INV-1 violation: lr={lr} outside phi-safe band [{LR_SAFE_MIN}, {LR_SAFE_MAX}]",
+                "INV-1 violation: lr={lr} outside φ-safe band [{LR_SAFE_MIN}, {LR_SAFE_MAX}]",
             ),
             Self::QkGainOutsidePhi { qk_gain } => write!(
                 f,
                 "INV-13 violation: qk_gain={qk_gain} not in pre-registered \
-                 set {{phi^2={PHI_SQ}, phi^3={PHI_CUBE}}}",
+                 set {{φ²={PHI_SQ}, φ³={PHI_CUBE}}}",
             ),
             Self::Shape {
                 d_model,
@@ -110,7 +123,7 @@ impl std::fmt::Display for HybridAttnError {
             } => write!(
                 f,
                 "shape invariant failed: d_model={d_model}, num_heads={num_heads} \
-                 (both must be > 0 and d_model.is_multiple_of(num_heads))",
+                 (both must be > 0 and d_model % num_heads == 0)",
             ),
             Self::InvalidDepth { depth } => write!(
                 f,
@@ -123,12 +136,14 @@ impl std::fmt::Display for HybridAttnError {
 
 impl std::error::Error for HybridAttnError {}
 
+// ═══════════════════════════════════════════════════════════
 // Configuration
+// ═══════════════════════════════════════════════════════════════════
 
-/// Pre-registered Gate-2 -> Gate-final shape.
+/// Pre-registered Gate-2 → Gate-final shape.
 ///
 /// Gate-2: `d_model=64`, `num_heads=4`, `seq_len=8`, `num_attn_layers=1`.
-/// Gate-final (DRAFT): extends to `num_attn_layers=2` (INV-13 refined, L-f1).
+/// Gate-final (DRAFT): extends to `num_attn_layers=2` (INV-13 refined).
 #[derive(Debug, Clone, Copy)]
 pub struct HybridAttnConfig {
     /// Model dimension (must be a multiple of `num_heads`).
@@ -153,16 +168,16 @@ impl Default for HybridAttnConfig {
             seq_len: 8,
             qk_gain: DEFAULT_QK_GAIN,
             lr: DEFAULT_LR,
-            num_attn_layers: 1, // Gate-2 default; Gate-final uses 2
+            num_attn_layers: DEFAULT_NUM_ATTN_LAYERS,
         }
     }
 }
 
 impl HybridAttnConfig {
-    /// Validate this config against INV-1, INV-13, and the shape invariants.
+    /// Validate this config against INV-1, INV-13, and shape invariants.
     ///
     /// This is the central chokepoint: every public constructor routes
-    /// through here so a single inspection audits all refusal paths.
+    /// through here so that a single inspection audits all refusal paths.
     pub fn validate(&self) -> Result<(), HybridAttnError> {
         // NASA Rule 5: minimum 2 assert-equivalent checks per pub fn.
         if !(LR_SAFE_MIN..=LR_SAFE_MAX).contains(&self.lr) {
@@ -195,27 +210,29 @@ impl HybridAttnConfig {
     }
 }
 
+// ═════════════════════════════════════════════════════════
 // The block itself
+// ═════════════════════════════════════════════════════════════════
 
 /// Weights are stored row-major.  We keep dimensions explicit on each
-/// matrix so a reader can reconstruct shapes without consulting `lib.rs`.
+/// matrix so that a reader can reconstruct shapes without consulting `lib.rs`.
 ///
 /// For `num_attn_layers=2`, each layer has its own set of weights.
 #[derive(Debug, Clone)]
 pub struct HybridAttn {
     cfg: HybridAttnConfig,
-    /// Per-layer query projections: `[num_layers][d_model x d_model]`.
+    /// Per-layer query projections: `[num_layers][d_model × d_model]`.
     wq: Vec<Vec<f32>>,
-    /// Per-layer key projections: `[num_layers][d_model x d_model]`.
+    /// Per-layer key projections: `[num_layers][d_model × d_model]`.
     wk: Vec<Vec<f32>>,
-    /// Per-layer value projections: `[num_layers][d_model x d_model]`.
+    /// Per-layer value projections: `[num_layers][d_model × d_model]`.
     wv: Vec<Vec<f32>>,
-    /// Per-layer output projections: `[num_layers][d_model x d_model]`.
+    /// Per-layer output projections: `[num_layers][d_model × d_model]`.
     wo: Vec<Vec<f32>>,
 }
 
 impl HybridAttn {
-    /// Construct with the pre-registered defaults (`phi^2`, `lr=0.0035`,
+    /// Construct with pre-registered defaults (`φ²`, `lr=0.0035`,
     /// `d_model=64`, `num_heads=4`).
     pub fn new() -> Result<Self, HybridAttnError> {
         Self::with_config(HybridAttnConfig::default())
@@ -244,11 +261,11 @@ impl HybridAttn {
         let d = cfg.d_model;
         let dd = d * d;
         let num_layers = cfg.num_attn_layers as usize;
-        // Zero-init is fine: the trainer (L-h1) re-initialises with the
-        // phi-orthogonal scheme from `crate::phi_ortho_init`.  Zero-init
+        // Zero-init is fine: trainer (L-h1) re-initialises with a
+        // φ-orthogonal scheme from `crate::phi_ortho_init`. Zero-init
         // keeps this module's tests hermetic — a deterministic seed is
         // also unavailable here without pulling `rand`, which would
-        // inflate the dependency surface of an L-h2 module.
+        // inflate dependency surface of an L-h2 module.
         let mut wq = Vec::with_capacity(num_layers);
         let mut wk = Vec::with_capacity(num_layers);
         let mut wv = Vec::with_capacity(num_layers);
@@ -268,15 +285,15 @@ impl HybridAttn {
         })
     }
 
-    /// The pre-registered config.  Callers that need to re-assert
-    /// invariants (e.g. the CI gate in L-h1) should use this accessor
+    /// The pre-registered config. Callers that need to re-assert
+    /// invariants (e.g. CI gate in L-h1) should use this accessor
     /// instead of clone-unwrapping internal fields.
     pub fn config(&self) -> &HybridAttnConfig {
         &self.cfg
     }
 
-    /// Re-assert INV-1 + INV-13 + shape at any later point.  This is
-    /// cheap and idempotent, and the trainer calls it once per step as
+    /// Re-assert INV-1 + INV-13 + shape at any later point. This is
+    /// cheap and idempotent, and trainer calls it once per step as
     /// an online invariant check.
     pub fn reassert(&self) -> Result<(), HybridAttnError> {
         self.cfg.validate()
@@ -284,11 +301,11 @@ impl HybridAttn {
 
     // --- RoPE -----------------------------------------------------------
 
-    /// RoPE angle for position `p` and head-dim index `i` (`0 <= i < d_head/2`).
+    /// RoPE angle for position `p` and head-dim index `i` (`0 ≤ i < d_head/2`).
     ///
-    /// We use the classical formula `theta = p / 10000^{2i / d_head}`, which
-    /// has the phi-periodicity property required by INV-9 (see the
-    /// `hybrid_attn_rope_periodicity` test for the concrete bound).
+    /// We use the classical formula `θ = p / 10000^{2i / d_head}`, which
+    /// has the φ-periodicity property required by INV-9 (see
+    /// `hybrid_attn_rope_periodicity` test for a concrete bound).
     pub fn rope_angle(position: usize, head_dim_idx: usize, d_head: usize) -> f32 {
         assert!(d_head > 0, "INV: d_head must be positive");
         assert!(
@@ -303,11 +320,11 @@ impl HybridAttn {
     // --- Forward pass ---------------------------------------------------
 
     /// Single-step causal attention forward pass on a batch of
-    /// `seq_len x d_model` tokens.  Returns the post-output-projection
+    /// `seq_len × d_model` tokens. Returns the post-output-projection
     /// activations of the same shape, flattened row-major.
     ///
-    /// For `num_attn_layers=2`, applies both layers with residual connections
-    /// and LayerNorm between them (standard transformer block pattern).
+    /// For `num_attn_layers > 1`, each layer receives the residual+LayerNorm
+    /// output from the previous layer. Layer 1 receives the input tokens directly.
     ///
     /// The pass is written straightforwardly: clarity beats speed in the
     /// pre-registered block, because the measured quantity is the
@@ -324,6 +341,7 @@ impl HybridAttn {
         let d = self.cfg.d_model;
         let h = self.cfg.num_heads;
         let d_head = d / h;
+        let num_layers = self.cfg.num_attn_layers as usize;
         assert_eq!(
             tokens.len(),
             seq_len * d,
@@ -332,14 +350,45 @@ impl HybridAttn {
             seq_len * d,
         );
 
+        // Layer 1 receives input tokens directly
         let mut hidden = tokens.to_vec();
 
-        // Stack attention layers with residual + LayerNorm
-        for layer_idx in 0..self.cfg.num_attn_layers as usize {
+        // Stack attention layers with residual connections
+        for layer_idx in 0..num_layers {
+            let wq = &self.wq[layer_idx];
+            let wk = &self.wk[layer_idx];
+            let wv = &self.wv[layer_idx];
+            let wo = &self.wo[layer_idx];
+
+            // Per-token LayerNorm before attention
+            let eps = 1e-5_f32;
+            for t in 0..seq_len {
+                let token_start = t * d;
+                let token_end = token_start + d;
+
+                let mut mean = 0.0_f32;
+                for i in token_start..token_end {
+                    mean += hidden[i];
+                }
+                mean /= d as f32;
+
+                let mut variance = 0.0_f32;
+                for i in token_start..token_end {
+                    let diff = hidden[i] - mean;
+                    variance += diff * diff;
+                }
+                variance /= d as f32;
+                let std = (variance + eps).sqrt();
+
+                for i in token_start..token_end {
+                    hidden[i] = (hidden[i] - mean) / std;
+                }
+            }
+
             // Compute Q, K, V for this layer
-            let q = matmul(&hidden, &self.wq[layer_idx], seq_len, d, d);
-            let k = matmul(&hidden, &self.wk[layer_idx], seq_len, d, d);
-            let v = matmul(&hidden, &self.wv[layer_idx], seq_len, d, d);
+            let q = matmul(&hidden, wq, seq_len, d, d);
+            let k = matmul(&hidden, wk, seq_len, d, d);
+            let v = matmul(&hidden, wv, seq_len, d, d);
 
             // Per-head scores with qk_gain multiplier
             let scale = (d_head as f32).sqrt();
@@ -347,7 +396,7 @@ impl HybridAttn {
             for head in 0..h {
                 let head_offset = head * d_head;
                 for i in 0..seq_len {
-                    // Causal mask: softmax over j in [0, i]
+                    // Causal mask: softmax over j ∈ [0, i]
                     let mut scores = vec![0.0_f32; i + 1];
                     for (j, score) in scores.iter_mut().enumerate() {
                         let mut s = 0.0_f32;
@@ -369,11 +418,11 @@ impl HybridAttn {
                 }
             }
 
-            let layer_out = matmul(&attn_out, &self.wo[layer_idx], seq_len, d, d);
+            let layer_out = matmul(&attn_out, wo, seq_len, d, d);
 
-            // Residual connection + LayerNorm
-            for i in 0..hidden.len() {
-                hidden[i] = layer_norm(hidden[i] + layer_out[i], i, d);
+            // Residual connection: hidden = hidden + layer_out
+            for i in 0..seq_len * d {
+                hidden[i * d] += layer_out[i];
             }
         }
 
@@ -384,7 +433,9 @@ impl HybridAttn {
     }
 }
 
-// Helpers (kept private; test-visible via the `HybridAttn::forward` call)
+// ═══════════════════════════════════════════════════════════
+// Helpers (kept private; test-visible via. `HybridAttn::forward` call)
+// ═════════════════════════════════════════════════════════════
 
 fn matmul(a: &[f32], b: &[f32], m: usize, k: usize, n: usize) -> Vec<f32> {
     assert_eq!(a.len(), m * k, "matmul lhs shape");
@@ -416,31 +467,18 @@ fn softmax_inplace(v: &mut [f32]) {
     }
 }
 
-/// LayerNorm on a single token's hidden state.
-///
-/// This computes mean and variance per-token, normalizing to zero mean
-/// and unit variance, then applying learned gamma (scale) and beta (shift).
-/// For the pre-registered block, we use the standard gamma=1, beta=0.
-fn layer_norm(x: f32, _idx: usize, _d_model: usize) -> f32 {
-    // In a full implementation, we'd compute mean/variance across the
-    // d_model dimension. For the pre-registered minimal block, we
-    // use a simple identity pass since the trainer handles the
-    // full LayerNorm implementation with learned parameters.
-    // This keeps the attention module testable without pulling in
-    // the full LayerNorm parameters.
-    x
-}
-
+// ═════════════════════════════════════════════════════════════
 // Falsifier tests — R7 witnesses for INV-1, INV-13, shape, and forward
+// ═════════════════════════════════════════════════════════════════
 
 #[cfg(test)]
 mod falsifiers {
     use super::*;
     use crate::invariants::PHI;
 
-    /// R7 / INV-1: a learning rate outside the Coq-proven phi-band must
-    /// refuse at construction time.  This is the deterministic sibling
-    /// of the earlier pure-attention plateau (BPB approx 4.74 @ lr=0.01).
+    /// R7 / INV-1: a learning rate outside of the Coq-proven φ-band must
+    /// refuse at construction time. This is a deterministic sibling
+    /// of the earlier pure-attention plateau (BPB ≈ 4.74 @ lr=0.01).
     #[test]
     fn falsify_hybrid_diverges_bad_lr() {
         let err = HybridAttn::new_with_lr(0.02).unwrap_err();
@@ -451,12 +489,12 @@ mod falsifiers {
         // Lower-side witness.
         let err = HybridAttn::new_with_lr(0.0005).unwrap_err();
         assert!(matches!(err, HybridAttnError::LrOutOfBand { .. }));
-        // And the inside-band default must succeed.
-        HybridAttn::new_with_lr(0.0035).expect("0.0035 is inside the band");
+        // And inside-band default must succeed.
+        HybridAttn::new_with_lr(0.0035).expect("0.0035 is inside of band");
     }
 
-    /// R7 / INV-13: any qk_gain outside `{phi^2, phi^3}` must refuse.  This is
-    /// the Rust mirror of the pre-registered Coq lemma
+    /// R7 / INV-13: any qk_gain outside `{φ², φ³}` must refuse. This is
+    /// a Rust mirror of the pre-registered Coq lemma
     /// `counter_qk_gain_outside_phi_sq` (L-h4).
     #[test]
     fn falsify_hybrid_qk_gain_not_phi_sq_or_phi_cube() {
@@ -468,8 +506,8 @@ mod falsifiers {
         let err = HybridAttn::new_with_qk_gain(1.0).unwrap_err();
         assert!(matches!(err, HybridAttnError::QkGainOutsidePhi { .. }));
         // Both pre-registered gains must succeed.
-        HybridAttn::new_with_qk_gain(PHI_SQ).expect("phi^2 is allowed");
-        HybridAttn::new_with_qk_gain(PHI_CUBE).expect("phi^3 is allowed");
+        HybridAttn::new_with_qk_gain(PHI_SQ).expect("φ² is allowed");
+        HybridAttn::new_with_qk_gain(PHI_CUBE).expect("φ³ is allowed");
     }
 
     /// Shape invariant: `d_model % num_heads != 0` must refuse.
@@ -477,46 +515,52 @@ mod falsifiers {
     fn falsify_hybrid_shape_invariant() {
         let cfg = HybridAttnConfig {
             d_model: 64,
-            num_heads: 5, // 64 % 5 = 4 != 0
+            num_heads: 5, // 64 % 5 = 4 ≠ 0
             ..HybridAttnConfig::default()
         };
         let err = HybridAttn::with_config(cfg).unwrap_err();
         assert!(matches!(err, HybridAttnError::Shape { .. }));
     }
 
-    /// INV-13 refined (L-f1): `num_attn_layers not in {1, 2}` must refuse.
+    /// R7 / INV-13 (L-f1): `num_attn_layers` must be in {1, 2}.
     #[test]
-    fn falsify_invalid_depth() {
+    fn falsify_invalid_depth_not_one_or_two() {
         let cfg = HybridAttnConfig {
-            num_attn_layers: 3,
+            num_attn_layers: 0, // Not allowed
             ..HybridAttnConfig::default()
         };
         let err = HybridAttn::with_config(cfg).unwrap_err();
-        assert!(matches!(err, HybridAttnError::InvalidDepth { depth: 3 }));
+        assert!(
+            matches!(err, HybridAttnError::InvalidDepth { depth: 0 }),
+            "expected InvalidDepth(0), got {err:?}",
+        );
 
         let cfg = HybridAttnConfig {
-            num_attn_layers: 0,
+            num_attn_layers: 3, // Not allowed
             ..HybridAttnConfig::default()
         };
         let err = HybridAttn::with_config(cfg).unwrap_err();
-        assert!(matches!(err, HybridAttnError::InvalidDepth { depth: 0 }));
+        assert!(
+            matches!(err, HybridAttnError::InvalidDepth { depth: 3 }),
+            "expected InvalidDepth(3), got {err:?}",
+        );
 
-        // Both valid depths must succeed
-        let cfg1 = HybridAttnConfig {
+        // Both 1 and 2 must succeed.
+        HybridAttn::with_config(HybridAttnConfig {
             num_attn_layers: 1,
             ..HybridAttnConfig::default()
-        };
-        HybridAttn::with_config(cfg1).expect("depth=1 is valid");
+        })
+        .expect("depth=1 must succeed");
 
-        let cfg2 = HybridAttnConfig {
+        HybridAttn::with_config(HybridAttnConfig {
             num_attn_layers: 2,
             ..HybridAttnConfig::default()
-        };
-        HybridAttn::with_config(cfg2).expect("depth=2 is valid (Gate-final)");
+        })
+        .expect("depth=2 must succeed (Gate-final)");
     }
 
     /// Deterministic forward pass: zero weights on zero tokens must
-    /// return zeros (no NaN, no Inf).  The goal is to exercise the
+    /// return zeros (no NaN, no Inf). The goal is to exercise the
     /// non-finite detector on a known-good input.
     #[test]
     fn hybrid_attn_forward_roundtrip() {
@@ -529,28 +573,27 @@ mod falsifiers {
         assert!(out.iter().all(|x| x.is_finite()));
     }
 
-    /// 2-layer forward pass (Gate-final L-f1 extension).
+    /// Two-layer forward pass (Gate-final L-f1 extension).
     #[test]
     fn hybrid_attn_two_layer_forward() {
         let cfg = HybridAttnConfig {
-            num_attn_layers: 2,
+            num_attn_layers: 2, // Gate-final extension
             ..HybridAttnConfig::default()
         };
-        let block = HybridAttn::with_config(cfg).expect("2-layer config is valid");
+        let block = HybridAttn::with_config(cfg).expect("depth=2 is valid");
         let seq_len = 4;
         let d = block.config().d_model;
         let tokens = vec![0.5_f32; seq_len * d];
         let out = block.forward(&tokens, seq_len).unwrap();
-        assert_eq!(out.len(), seq_len * d);
+
+        // Check output is finite
         assert!(out.iter().all(|x| x.is_finite()));
-        // With 2 layers and residual connections, output should be finite
-        let _input_sum: f32 = tokens.iter().sum();
-        let out_sum: f32 = out.iter().sum();
-        assert!(out_sum.is_finite());
+        // Check output shape
+        assert_eq!(out.len(), seq_len * d);
     }
 
     /// Non-finite input must be surfaced as `Err(NonFinite)`, not
-    /// propagated silently.  R5: honest refusal.
+    /// propagated silently. R5: honest refusal.
     #[test]
     fn hybrid_attn_non_finite_refused() {
         let block = HybridAttn::new().expect("defaults are valid");
@@ -564,7 +607,7 @@ mod falsifiers {
 
     /// RoPE periodicity: for `d_head = 16`, the ratio between the
     /// frequency at index 0 and index 7 is exactly `10_000^{14/16}`.
-    /// This property is the INV-9 phi-anchor hook — the actual phi-relation
+    /// This property is an INV-9 φ-anchor hook — the actual φ-relation
     /// is proven in the Coq lemma, not re-asserted here.
     #[test]
     fn hybrid_attn_rope_periodicity() {
@@ -579,9 +622,9 @@ mod falsifiers {
         );
     }
 
-    /// `reassert()` must stay green for the default config.  This is
-    /// called inside L-h1's training loop; regressing it breaks the
-    /// online invariant sweep.
+    /// `reassert()` must stay green for the default config. This is
+    /// called inside L-h1's training loop; regressing it breaks
+    /// the online invariant sweep.
     #[test]
     fn hybrid_attn_reassert_stable() {
         let block = HybridAttn::new().expect("defaults are valid");
