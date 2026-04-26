@@ -243,8 +243,11 @@ fn cosine_lr(step: usize, max_steps: usize, base_lr: f32, warmup: usize) -> f32 
     if step < warmup {
         return base_lr * step as f32 / warmup.max(1) as f32;
     }
+    // Pre-registered INV-1 band: lr ∈ [α_φ/φ⁴, α_φ] where α_φ = 0.0072
+    // α_φ/φ⁴ = 0.0072 / (φ² * φ²) = 0.0072 / 6.854 ≈ 0.00105
+    let min_lr = (ALPHA_PHI / (PHI_SQ * PHI_SQ)) as f32;
     let p = (step - warmup) as f32 / (max_steps - warmup).max(1) as f32;
-    1e-5 + (base_lr - 1e-5) * 0.5 * (1.0 + (std::f32::consts::PI * p).cos())
+    min_lr + (base_lr - min_lr) * 0.5 * (1.0 + (std::f32::consts::PI * p).cos())
 }
 
 fn compute_bpb(loss: f32) -> f32 {

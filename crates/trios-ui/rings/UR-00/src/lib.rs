@@ -15,6 +15,7 @@
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::sync::RwLock;
 
 // ─── Agent types ──────────────────────────────────────────────
 
@@ -174,16 +175,16 @@ pub enum Theme {
 // ─── Global Signal atoms (Jotai-style) ──────────────────────
 
 /// Global agents atom. Use `use_agents_atom()` to access.
-static AGENTS_ATOM: Signal<Vec<Agent>> = Signal::use(|| Vec::new());
+static AGENTS_ATOM: RwLock<Vec<Agent>> = RwLock::new(Vec::new());
 
 /// Global chat state atom. Use `use_chat_atom()` to access.
-static CHAT_ATOM: Signal<ChatState> = Signal::use(|| ChatState::default());
+static CHAT_ATOM: RwLock<ChatState> = RwLock::new(ChatState::default());
 
 /// Global MCP state atom. Use `use_mcp_atom()` to access.
-static MCP_ATOM: Signal<McpState> = Signal::use(|| McpState::default());
+static MCP_ATOM: RwLock<McpState> = RwLock::new(McpState::default());
 
 /// Global settings atom. Use `use_settings_atom()` to access.
-static SETTINGS_ATOM: Signal<Settings> = Signal::use(|| Settings::default());
+static SETTINGS_ATOM: RwLock<Settings> = RwLock::new(Settings::default());
 
 // ─── Atom accessors (Jotai-style hooks) ─────────────────────
 
@@ -196,21 +197,36 @@ static SETTINGS_ATOM: Signal<Settings> = Signal::use(|| Settings::default());
 ///     rsx! { {agents.len()} agents loaded }
 /// }
 /// ```
-pub fn use_agents_atom() -> &'static Signal<Vec<Agent>> {
-    &AGENTS_ATOM
+pub fn use_agents_atom() -> Signal<Vec<Agent>> {
+    AGENTS_ATOM.get()
 }
 
 /// Access the global chat state atom.
-pub fn use_chat_atom() -> &'static Signal<ChatState> {
-    &CHAT_ATOM
+pub fn use_chat_atom() -> ChatState {
+    CHAT_ATOM.read().clone()
+}
+
+/// Set the global chat state atom.
+pub fn set_chat(state: ChatState) {
+    *CHAT_ATOM.write().unwrap() = state;
 }
 
 /// Access the global MCP state atom.
-pub fn use_mcp_atom() -> &'static Signal<McpState> {
-    &MCP_ATOM
+pub fn use_mcp_atom() -> McpState {
+    MCP_ATOM.read().clone()
+}
+
+/// Set the global MCP state atom.
+pub fn set_mcp(state: McpState) {
+    *MCP_ATOM.write().unwrap() = state;
 }
 
 /// Access the global settings atom.
-pub fn use_settings_atom() -> &'static Signal<Settings> {
-    &SETTINGS_ATOM
+pub fn use_settings_atom() -> Settings {
+    SETTINGS_ATOM.read().clone()
+}
+
+/// Set the global settings atom.
+pub fn set_settings(settings: Settings) {
+    *SETTINGS_ATOM.write().unwrap() = settings;
 }
