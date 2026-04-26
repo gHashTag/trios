@@ -159,6 +159,20 @@
       "runtime_check": { "action": "abort", "message": "INV-12: Invalid rung — must be 1000 × 3ⁿ" },
       "runtime_target": "crates/trios-igla-race/src/invariants.rs::check_inv12_rung_valid",
       "numeric_anchor": { "valid_rungs": [1000, 3000, 9000, 27000] }
+    },
+    {
+      "id": "INV-17",
+      "name": "phi_prior_grid_completeness",
+      "coq_theorem": "phi_grid_covers_optimal_space",
+      "coq_file": "proofs/igla/phi_prior_grid.v",
+      "status": "Admitted",
+      "admitted_theorems": ["phi_grid_nonempty"],
+      "admitted_reason": "V5 acceleration vector: phi-prior grid covers optimal search space. Full proof requires formal definition of HistoricalTop10% and dominance relation.",
+      "description": "Phi-prior grid (V5) must contain at least one configuration that is not strictly worse than any historical top-10% config. Ensures search space compression does not exclude optimal regions.",
+      "trinity_link": "φ² + φ⁻² = 3 — phi-prior values derived from powers of φ",
+      "runtime_check": { "action": "abort", "message": "INV-17: Phi-grid excludes historical optimum — V5 disabled" },
+      "runtime_target": "crates/trios-igla-race/tests/phi_grid_completeness.rs::falsify_phi_grid_excludes_champion",
+      "numeric_anchor": { "grid_compression_ratio": "2187→128 ≈ 17×", "phi_hidden_base": 64 }
     }
   ],
   "enforcement": {

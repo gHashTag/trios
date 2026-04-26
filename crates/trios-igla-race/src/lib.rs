@@ -1,4 +1,5 @@
 pub mod asha;
+pub mod grid;
 pub mod hive_automaton;
 pub mod invariants;
 pub mod lessons;

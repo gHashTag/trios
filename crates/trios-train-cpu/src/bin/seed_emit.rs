@@ -98,3 +98,8 @@ mod tests {
         }
     }
 }
+
+fn main() {
+    println!("seed_emit: Use as library, not as binary");
+}
+
