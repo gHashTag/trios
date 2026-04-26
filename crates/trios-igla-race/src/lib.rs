@@ -14,6 +14,7 @@ pub mod ema;
 pub mod sampler;
 pub mod status;
 pub mod victory;
+pub mod proxies;
 
 // ----------------------------------------------------------------------
 // INV-7: Welch t-test and TtestReport exports (L-R14)
