@@ -9,6 +9,7 @@ pub mod eval;
 pub mod igla_stack_training;
 pub mod layer_sharing;
 pub mod model;
+pub mod mup;
 pub mod muon;
 pub mod phi_schedule;
 pub mod spectral_init;

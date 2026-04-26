@@ -161,6 +161,21 @@
       "numeric_anchor": { "valid_rungs": [1000, 3000, 9000, 27000] }
     },
     {
+      "id": "INV-13",
+      "name": "mup_coord_check",
+      "coq_theorem": "l1_norm_flat_across_widths",
+      "coq_file": "trinity-clara/proofs/igla/mup_coord_check.v",
+      "status": "Admitted",
+      "admitted_theorems": ["l1_norm_flat_across_widths", "valid_widths_are_powers_of_2"],
+      "admitted_reason": "muP scaling requires proving that l1 activation norm is constant across width changes. This follows from gradient norm invariance but requires formal verification of our specific implementation.",
+      "description": "muP (maximal update parametrization) coordinate check: l1 norm must be flat across widths {8, 16, 32, 64}. Enables ~10x speedup via transfer learning across model sizes.",
+      "trinity_link": "μP theory: lr ∝ w^{-1/2}, params ∝ w^{+1/2} — gradient invariance holds",
+      "runtime_check": { "action": "warn", "message": "INV-13: muP coord check failed — l1 norm slopes > 0.1" },
+      "runtime_target": "crates/trios-training/tests/test_coord_check.rs::test_synthetic_data_flat_passes",
+      "numeric_anchor": { "valid_widths": [8, 16, 32, 64], "slope_threshold": 0.1, "lr_scale_power": -0.5 },
+      "falsification_record": { "theorem": "mup_coord_falsification_witness", "value": "width=7, slope>0.1", "note": "Invalid width or steep slope violates coord check" }
+    },
+    {
       "id": "INV-17",
       "name": "phi_prior_grid_completeness",
       "coq_theorem": "phi_grid_covers_optimal_space",
