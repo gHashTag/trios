@@ -5,7 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::time::Instant;
 
-use trios_train_cpu::optimizer::{AdamW as OptimAdamW, MuonOptimizer};
+use trios_train_cpu::optimizer::MuonOptimizer;
 
 const VOCAB: usize = 128;
 const DIM: usize = 64;
@@ -89,16 +89,7 @@ impl Optimizer for LocalAdamW {
 }
 impl Optimizer for MuonOptimizer {
 	fn update(&mut self, params: &mut [f32], grads: &[f32], lr: f32) {
-		let mut g = grads.to_vec();
-		// Orthogonalize
-		let norm = g.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-8);
-		for x in g.iter_mut() { *x /= norm; }
-		// Momentum update
-		for i in 0..params.len() {
-			self.momentum_buffer[i] = self.momentum * self.momentum_buffer[i] - lr as f32 * g[i];
-			params[i] += self.momentum_buffer[i];
-		}
-		self.step += 1;
+		self.step(params, &grads.iter().map(|&g| g * lr).collect::<Vec<_>>());
 	}
 }
 
@@ -499,16 +490,16 @@ impl NgramModel {
             for x in g_av.iter_mut() { *x /= n; }
         }
 
-        Optimizer::update(opt_embed.as_mut(), &mut self.embed, &g_embed, lr);
+        opt_embed.update(&mut self.embed, &g_embed, lr);
         for (ci, oc) in opt_ctx.iter_mut().enumerate() {
-            Optimizer::update(oc.as_mut(), &mut self.ctx[ci], &g_ctx[ci], lr);
+            oc.update(&mut self.ctx[ci], &g_ctx[ci], lr);
         }
-        Optimizer::update(opt_proj.as_mut(), &mut self.proj, &g_proj, lr);
-        Optimizer::update(opt_head.as_mut(), &mut self.lm_head, &g_head, lr);
+        opt_proj.update(&mut self.proj, &g_proj, lr);
+        opt_head.update(&mut self.lm_head, &g_head, lr);
         if self.use_attention {
-            Optimizer::update(opt_aq.as_mut(), &mut self.attn_query, &g_aq, lr);
-            Optimizer::update(opt_ak.as_mut(), &mut self.attn_key, &g_ak, lr);
-            Optimizer::update(opt_av.as_mut(), &mut self.attn_value, &g_av, lr);
+            opt_aq.update(&mut self.attn_query, &g_aq, lr);
+            opt_ak.update(&mut self.attn_key, &g_ak, lr);
+            opt_av.update(&mut self.attn_value, &g_av, lr);
         }
     }
 }
@@ -572,6 +563,8 @@ fn main() {
 
     let mut model = NgramModel::new(VOCAB, DIM, hidden, activation.clone(), seed, num_ctx, use_attention);
     let ps = VOCAB * DIM;
+    let mut optimizer = args.iter().find(|a| a.starts_with("--optimizer="))
+        .map(|a| a[11..].to_string()).unwrap_or_else(|| "adamw".to_string());
     let use_muon = optimizer == "muon";
 
     fn make_opt(size: usize, wd: f32, muon: bool) -> Box<dyn Optimizer> {
@@ -601,16 +594,9 @@ fn main() {
         let lr = cosine_lr(step, steps, base_lr, steps / 10);
         let off = (step * 97 + seed as usize) % (dl.saturating_sub(SEQ + 1));
         {
-            let mut opts = Optimizers {
-                opt_embed: &mut opt_embed,
-                opt_ctx: &mut opt_ctx,
-                opt_proj: &mut opt_proj,
-                opt_head: &mut opt_head,
-                opt_aq: &mut opt_aq,
-                opt_ak: &mut opt_ak,
-                opt_av: &mut opt_av,
-            };
-            model.train_step(&train[off..off + SEQ + 1], lr, &mut opts);
+            model.train_step(&train[off..off + SEQ + 1], lr,
+                opt_embed.as_mut(), &mut opt_ctx[..], opt_proj.as_mut(), opt_head.as_mut(),
+                opt_aq.as_mut(), opt_ak.as_mut(), opt_av.as_mut());
         }
 
         if step % 500 == 0 || step == steps {
