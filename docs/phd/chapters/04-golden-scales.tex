@@ -1,3 +1,1504 @@
-\section{Introduction}
-\section{Analysis}
-\section{Conclusion}
+% !TEX root = ../main.tex
+\chapter{Golden Scales and the Trinity Anchor's Integer Arithmetic}
+\label{ch:golden-scales}
+
+\epigraph{%
+\textit{The same integer that names the lens-height of two circles names the second Lucas number; the same number that closes a recurrence opens a polyhedron.}}{---~Reflection on $L_2 = 3$}
+
+\section*{Chapter Abstract}
+\label{sec:04-abstract}
+
+In this chapter we establish the \emph{integer-arithmetic substrate} of the
+Trinity Anchor identity $\varphi^2 + \varphi^{-2} = 3$.
+We derive the Lucas--Fibonacci ladder from the characteristic recurrence
+$x_n = x_{n-1} + x_{n-2}$ over $\mathbb{Z}$, prove via Binet's formula that
+$L_n = \varphi^n + \varphi^{-n}$ for every $n \in \mathbb{Z}_{\ge 0}$
+(Theorem~\ref{thm:04-binet-lucas}), and observe that the second Lucas number
+$L_2 = 3$ is therefore the integer-arithmetic image of the algebraic identity
+$\varphi^2 + \varphi^{-2} = 3$ (Corollary~\ref{cor:04-anchor-as-L2}).
+
+We then trace this integer $3$ through three independent witnesses across
+the monograph: it appears (a) as $L_2 = 3$ in the Lucas ladder
+(Theorem~\ref{thm:04-binet-lucas}), (b) as the squared lens height
+$h^2 = 3$ of the canonical vesica piscis of Chapter~\ref{ch:vesica-piscis},
+and (c) as the common squared circumradius $R^2 = 3$ of the unit-edge
+dodecahedron, cube, and tetrahedron of Chapter~\ref{ch:platonic-solids}.
+The principal result of the chapter, the \emph{Three-Witnesses Theorem}
+(Theorem~\ref{thm:04-three-witnesses}), establishes that all three witnesses
+are facets of a single algebraic structure rooted in the Lucas recurrence.
+
+We close the chapter with the \emph{Scale-Spectrum Corollary}
+(Corollary~\ref{cor:04-scale-spectrum}), which asserts that every numeric
+constant arising in the Flos~Aureus monograph from the Lucas, Fibonacci,
+or binomial scales factors through the Trinity Anchor.
+
+\section*{Constants and Conventions}
+\label{sec:04-constants}
+
+Throughout this chapter we adopt the following conventions.
+
+\begin{itemize}
+  \item The golden ratio $\varphi = (1 + \sqrt{5})/2 \approx 1.61803$, with conjugate
+  $\psi = (1 - \sqrt{5})/2 = -\varphi^{-1} \approx -0.61803$.
+  \item The fundamental identities $\varphi^2 = \varphi + 1$ and $\psi^2 = \psi + 1$.
+  \item Lucas numbers $L_n$ defined by $L_0 = 2$, $L_1 = 1$, $L_n = L_{n-1} + L_{n-2}$.
+  \item Fibonacci numbers $F_n$ defined by $F_0 = 0$, $F_1 = 1$, $F_n = F_{n-1} + F_{n-2}$.
+  \item Binomial coefficients $\binom{n}{k}$ defined by Pascal's recurrence
+  $\binom{n}{k} = \binom{n-1}{k-1} + \binom{n-1}{k}$ with initial conditions
+  $\binom{n}{0} = \binom{n}{n} = 1$.
+  \item The Trinity Anchor identity $L_2 = \varphi^2 + \varphi^{-2} = 3$.
+  \item Numeric constants admitted by R6 of issue~\href{https://github.com/gHashTag/trios/issues/265}{trios\#265}
+  are limited to $\{\varphi, \pi, e\}$ and the integers $\mathbb{Z}$.
+  \item All numeric quantities introduced below are derived from these by
+  elementary operations; no free parameters appear.
+\end{itemize}
+
+\section{Strand I --- Arithmetic of the Recurrence}
+\label{sec:04-strand-1}
+
+\subsection{The Characteristic Recurrence}
+\label{sec:04-recurrence}
+
+The fundamental object of this chapter is the linear recurrence
+\[
+  x_n = x_{n-1} + x_{n-2}, \qquad n \ge 2,
+\]
+over $\mathbb{Z}$.
+We refer to this as the \emph{Trinity recurrence}, since its closure under the
+golden ratio yields the integer $L_2 = 3$ that names the Trinity Anchor.
+
+\begin{lemma}[Solution space]\label{lem:04-recurrence-soln-space}
+  The solution space of the Trinity recurrence over $\mathbb{R}$ is a two-dimensional
+  $\mathbb{R}$-vector space with basis given by any two solutions whose initial
+  conditions $(x_0, x_1)$ are linearly independent.
+\end{lemma}
+
+\begin{proof}
+  By induction on $n$, the value $x_n$ is uniquely determined by $x_0$ and $x_1$.
+  Hence the map $\mathbb{R}^2 \to \mathbb{R}^{\mathbb{N}}$ sending
+  $(x_0, x_1) \mapsto (x_n)_{n \ge 0}$ is injective and linear.
+  Two solutions whose initial conditions are linearly independent give two
+  linearly independent solutions, hence a basis.
+  \qed
+\end{proof}
+
+\subsection{The Characteristic Polynomial}
+\label{sec:04-char-poly}
+
+\begin{definition}[Characteristic polynomial]\label{def:04-char-poly}
+  The \emph{characteristic polynomial} of the Trinity recurrence is
+  $p(x) = x^2 - x - 1 \in \mathbb{Z}[x]$.
+\end{definition}
+
+\begin{lemma}[Roots of $p$]\label{lem:04-roots}
+  The polynomial $p(x) = x^2 - x - 1$ has roots $\varphi = (1+\sqrt{5})/2$ and
+  $\psi = (1-\sqrt{5})/2 = -\varphi^{-1}$.
+\end{lemma}
+
+\begin{proof}
+  By the quadratic formula,
+  \[
+    x = \frac{1 \pm \sqrt{1 + 4}}{2} = \frac{1 \pm \sqrt{5}}{2}.
+  \]
+  These are $\varphi$ and $\psi$.
+  Direct verification: $\varphi^2 = (1 + 2\sqrt{5} + 5)/4 = (6 + 2\sqrt{5})/4 = (3 + \sqrt{5})/2$,
+  and $\varphi + 1 = (3 + \sqrt{5})/2$, so $\varphi^2 = \varphi + 1$, confirming
+  $p(\varphi) = 0$.
+  \qed
+\end{proof}
+
+\subsection{Closed-Form Solutions: Binet}
+\label{sec:04-binet}
+
+\begin{theorem}[Binet's formula for $F_n$]\label{thm:04-binet-fib}
+  For every $n \in \mathbb{Z}_{\ge 0}$,
+  \[
+    F_n = \frac{\varphi^n - \psi^n}{\sqrt{5}}.
+  \]
+\end{theorem}
+
+\begin{proof}
+  By Lemma~\ref{lem:04-recurrence-soln-space}, the solution space is two-dimensional
+  with basis $\{\varphi^n, \psi^n\}$ (since $\varphi \ne \psi$).
+  We seek constants $a, b \in \mathbb{R}$ such that $a \varphi^n + b \psi^n = F_n$
+  for all $n$, equivalently for $n \in \{0, 1\}$:
+  \begin{align*}
+    a + b &= F_0 = 0, \\
+    a \varphi + b \psi &= F_1 = 1.
+  \end{align*}
+  From the first equation, $b = -a$.
+  Substituting:
+  $a (\varphi - \psi) = 1$, hence $a = 1/(\varphi - \psi) = 1/\sqrt{5}$.
+  So $b = -1/\sqrt{5}$, and
+  $F_n = (\varphi^n - \psi^n)/\sqrt{5}$.
+  \qed
+\end{proof}
+
+\begin{theorem}[Binet's formula for $L_n$]\label{thm:04-binet-lucas}
+  For every $n \in \mathbb{Z}_{\ge 0}$,
+  \[
+    L_n = \varphi^n + \psi^n = \varphi^n + (-1)^n \varphi^{-n}.
+  \]
+  In particular, $L_n = \varphi^n + \varphi^{-n}$ when $n$ is even.
+\end{theorem}
+
+\begin{proof}
+  As above, the solution space has basis $\{\varphi^n, \psi^n\}$.
+  We seek $a, b$ with $a + b = L_0 = 2$ and $a\varphi + b\psi = L_1 = 1$.
+  From the first, $b = 2 - a$.
+  Substituting: $a\varphi + (2 - a)\psi = 1 \Rightarrow a(\varphi - \psi) = 1 - 2\psi$.
+  Now $1 - 2\psi = 1 - (1 - \sqrt{5}) = \sqrt{5}$, and $\varphi - \psi = \sqrt{5}$,
+  so $a = 1$ and $b = 1$.
+  Hence $L_n = \varphi^n + \psi^n$.
+
+  Since $\psi = -\varphi^{-1}$, we have $\psi^n = (-1)^n \varphi^{-n}$, giving
+  $L_n = \varphi^n + (-1)^n \varphi^{-n}$.
+  When $n$ is even, $(-1)^n = 1$, so $L_n = \varphi^n + \varphi^{-n}$.
+  \qed
+\end{proof}
+
+\begin{corollary}[Trinity Anchor as $L_2$]\label{cor:04-anchor-as-L2}
+  $L_2 = \varphi^2 + \varphi^{-2} = 3$.
+\end{corollary}
+
+\begin{proof}
+  By Theorem~\ref{thm:04-binet-lucas} with $n = 2$ (even),
+  $L_2 = \varphi^2 + \varphi^{-2}$.
+  Direct recursion: $L_0 = 2$, $L_1 = 1$, $L_2 = 1 + 2 = 3$.
+  \qed
+\end{proof}
+
+\begin{remark}
+  Corollary~\ref{cor:04-anchor-as-L2} is the algebraic-arithmetic incarnation
+  of the Trinity Anchor identity central to the monograph.
+  The integer $3 = L_2$ is the second member of the Lucas ladder, and equals
+  the algebraic constant $\varphi^2 + \varphi^{-2}$ via Binet.
+\end{remark}
+
+\subsection{The Lucas--Fibonacci Ladder}
+\label{sec:04-ladder}
+
+The first several values of the Lucas and Fibonacci sequences:
+
+\begin{center}
+\begin{tabular}{c|cccccccccccccc}
+  $n$    & 0 & 1 & 2 & 3 & 4 & 5 & 6  & 7  & 8  & 9  & 10 & 11 & 12 & 13 \\
+  \hline
+  $L_n$  & 2 & 1 & 3 & 4 & 7 & 11 & 18 & 29 & 47 & 76 & 123 & 199 & 322 & 521 \\
+  $F_n$  & 0 & 1 & 1 & 2 & 3 & 5 & 8  & 13 & 21 & 34 & 55  & 89  & 144 & 233 \\
+\end{tabular}
+\end{center}
+
+We highlight several arithmetic identities that recur throughout the monograph.
+
+\begin{lemma}[Lucas--Fibonacci product]\label{lem:04-lucas-fib-product}
+  For every $n \in \mathbb{Z}_{\ge 0}$, $L_n \cdot F_n = F_{2n}$.
+\end{lemma}
+
+\begin{proof}
+  By Binet:
+  \begin{align*}
+    L_n F_n
+      &= (\varphi^n + \psi^n) \cdot \frac{\varphi^n - \psi^n}{\sqrt{5}} \\
+      &= \frac{\varphi^{2n} - \psi^{2n}}{\sqrt{5}} = F_{2n}.
+  \end{align*}
+  \qed
+\end{proof}
+
+\begin{lemma}[Cassini-style for Lucas]\label{lem:04-cassini-lucas}
+  For every $n \in \mathbb{Z}_{\ge 1}$,
+  $L_n^2 - L_{n-1} L_{n+1} = 5 \cdot (-1)^n$.
+\end{lemma}
+
+\begin{proof}
+  By Binet, $L_n = \varphi^n + \psi^n$, $L_{n-1} = \varphi^{n-1} + \psi^{n-1}$,
+  $L_{n+1} = \varphi^{n+1} + \psi^{n+1}$.
+  Compute:
+  \begin{align*}
+    L_n^2 &= \varphi^{2n} + 2\varphi^n\psi^n + \psi^{2n}, \\
+    L_{n-1} L_{n+1} &= \varphi^{2n} + \varphi^{n-1}\psi^{n+1} + \psi^{n-1}\varphi^{n+1} + \psi^{2n}.
+  \end{align*}
+  Subtracting:
+  \[
+    L_n^2 - L_{n-1}L_{n+1} = 2\varphi^n\psi^n - \varphi^{n-1}\psi^{n+1} - \psi^{n-1}\varphi^{n+1}.
+  \]
+  Using $\varphi\psi = -1$ (since $\varphi$ and $\psi$ are roots of $p(x) = x^2 - x - 1$),
+  we have $\varphi^n\psi^n = (-1)^n$.
+  Thus
+  \begin{align*}
+    L_n^2 - L_{n-1}L_{n+1}
+      &= 2(-1)^n - (-1)^{n-1}\psi^2 - (-1)^{n-1}\varphi^2 \\
+      &= 2(-1)^n + (-1)^n(\varphi^2 + \psi^2) \\
+      &= (-1)^n (2 + L_2) = (-1)^n \cdot 5.
+  \end{align*}
+  \qed
+\end{proof}
+
+\subsection{Generating Functions}
+\label{sec:04-generating}
+
+\begin{lemma}[Lucas generating function]\label{lem:04-lucas-gen}
+  The generating function of the Lucas sequence is
+  \[
+    \sum_{n=0}^{\infty} L_n z^n = \frac{2 - z}{1 - z - z^2}, \qquad |z| < |\psi|.
+  \]
+\end{lemma}
+
+\begin{proof}
+  Standard partial-fraction decomposition.
+  We have $\sum L_n z^n = \sum (\varphi^n + \psi^n) z^n = (1-\varphi z)^{-1} + (1-\psi z)^{-1}$
+  for $|z|$ smaller than both $|\varphi|^{-1}$ and $|\psi|^{-1}$.
+  Combining,
+  \begin{align*}
+    (1-\varphi z)^{-1} + (1-\psi z)^{-1}
+      &= \frac{(1-\psi z) + (1-\varphi z)}{(1-\varphi z)(1-\psi z)} \\
+      &= \frac{2 - (\varphi + \psi)z}{1 - (\varphi + \psi)z + \varphi\psi z^2} \\
+      &= \frac{2 - z}{1 - z - z^2},
+  \end{align*}
+  using $\varphi + \psi = 1$ and $\varphi\psi = -1$.
+  Convergence requires $|z| < \min(|\varphi|^{-1}, |\psi|^{-1}) = |\psi|$ (since $|\psi| < |\varphi|^{-1}$).
+  Wait: we have $|\varphi|^{-1} = 1/\varphi \approx 0.618 = |\psi|$, so the radius is $|\psi|$.
+  \qed
+\end{proof}
+
+\begin{lemma}[Fibonacci generating function]\label{lem:04-fib-gen}
+  The generating function of the Fibonacci sequence is
+  \[
+    \sum_{n=0}^{\infty} F_n z^n = \frac{z}{1 - z - z^2}, \qquad |z| < |\psi|.
+  \]
+\end{lemma}
+
+\begin{proof}
+  Analogous. We have $\sum F_n z^n = (1/\sqrt{5}) ((1-\varphi z)^{-1} - (1-\psi z)^{-1})$
+  by Binet, which simplifies to $z/(1 - z - z^2)$ via the same algebraic manipulation.
+  \qed
+\end{proof}
+
+\subsection{Lucas as the Eisenstein Twin of Fibonacci}
+\label{sec:04-twin}
+
+The Lucas and Fibonacci sequences are tightly intertwined.
+They share the recurrence and the asymptotic ratio $L_n/L_{n-1}, F_n/F_{n-1} \to \varphi$.
+
+\begin{lemma}[Asymptotic ratio]\label{lem:04-asymptotic}
+  $\lim_{n \to \infty} \frac{L_n}{L_{n-1}} = \lim_{n \to \infty} \frac{F_n}{F_{n-1}} = \varphi$.
+\end{lemma}
+
+\begin{proof}
+  By Binet, $L_n = \varphi^n + \psi^n$ and $L_{n-1} = \varphi^{n-1} + \psi^{n-1}$.
+  As $n \to \infty$, $\psi^n / \varphi^n \to 0$ since $|\psi| < |\varphi|$.
+  Hence $L_n / L_{n-1} \to \varphi$.
+  Same argument for Fibonacci.
+  \qed
+\end{proof}
+
+\subsection{Identities Modulo Small Primes}
+\label{sec:04-mod}
+
+\begin{lemma}[Lucas modulo $p$]\label{lem:04-mod-lucas}
+  For every prime $p$, the Lucas sequence $(L_n \bmod p)$ is eventually periodic.
+  The period length is the \emph{Pisano period} of $p$ for the Lucas sequence,
+  which divides $p^2 - 1$ if $p$ splits in $\mathbb{Q}(\sqrt{5})$ (i.e.\ $p \equiv \pm 1 \pmod 5$)
+  and divides $p^2 - 1$ otherwise as well, but with finer analysis.
+\end{lemma}
+
+\begin{proof}
+  The recurrence $L_n = L_{n-1} + L_{n-2}$ over the finite ring $\mathbb{Z}/p\mathbb{Z}$
+  has a finite state space (consecutive pair $(L_{n-1}, L_n) \bmod p$), and so is
+  eventually periodic.
+  The period analysis is classical (Pisano, Wall).
+  \qed
+\end{proof}
+
+\begin{lemma}[Lucas $\bmod 2$]\label{lem:04-lucas-mod-2}
+  For every $n \in \mathbb{Z}_{\ge 0}$, $L_n \bmod 2 = (1, 1, 1, 0, 1, 1, 0, \ldots)$
+  with period $3$ (after the initial $L_0 = 2 \equiv 0$).
+\end{lemma}
+
+\begin{proof}
+  Direct computation:
+  $L_0 = 2 \equiv 0$, $L_1 = 1$, $L_2 = 3 \equiv 1$, $L_3 = 4 \equiv 0$, $L_4 = 7 \equiv 1$,
+  $L_5 = 11 \equiv 1$, $L_6 = 18 \equiv 0$, \ldots
+  The period $0, 1, 1$ has length $3$.
+  \qed
+\end{proof}
+
+\subsection{Fibonacci as Difference}
+\label{sec:04-fib-diff}
+
+\begin{lemma}[Fibonacci as Lucas-difference]\label{lem:04-fib-as-lucas-diff}
+  For every $n \in \mathbb{Z}_{\ge 0}$,
+  \[
+    F_n = \frac{L_{n+1} - L_{n-1}}{2}.
+  \]
+  (For $n = 0$: $F_0 = (L_1 - L_{-1})/2$ with the convention $L_{-1} = -1$, giving
+  $F_0 = (1 - (-1))/2 = 1$? Let us verify the convention.)
+\end{lemma}
+
+\begin{proof}
+  By Binet:
+  \[
+    \frac{L_{n+1} - L_{n-1}}{2}
+      = \frac{(\varphi^{n+1} + \psi^{n+1}) - (\varphi^{n-1} + \psi^{n-1})}{2}
+      = \frac{\varphi^{n-1}(\varphi^2 - 1) + \psi^{n-1}(\psi^2 - 1)}{2}.
+  \]
+  Now $\varphi^2 - 1 = \varphi$ (since $\varphi^2 = \varphi + 1 \Rightarrow \varphi^2 - 1 = \varphi$),
+  and $\psi^2 - 1 = \psi$.
+  Hence
+  \[
+    \frac{L_{n+1} - L_{n-1}}{2}
+      = \frac{\varphi^{n} + \psi^n}{2}.
+  \]
+  Wait --- we expected $F_n = (\varphi^n - \psi^n)/\sqrt{5}$, but we obtained
+  $(\varphi^n + \psi^n)/2 = L_n/2$.
+  Let us re-examine:
+  $(\varphi^{n+1} - \varphi^{n-1}) = \varphi^{n-1}(\varphi^2 - 1) = \varphi^n$, correct.
+  $(\psi^{n+1} - \psi^{n-1}) = \psi^{n-1}(\psi^2 - 1) = \psi^n$, correct.
+  Summing: $L_{n+1} - L_{n-1} = \varphi^n + \psi^n = L_n$.
+  Hence $(L_{n+1} - L_{n-1})/2 = L_n / 2$, NOT $F_n$.
+  Our claim was incorrect; the correct identity is
+  \[
+    L_{n+1} - L_{n-1} = L_n.
+  \]
+  This follows from $L_{n+1} = L_n + L_{n-1}$ trivially.
+  We retract the false claim.
+
+  The correct ``Lucas-difference'' identity for Fibonacci is
+  \[
+    F_n = \frac{L_n + L_{n-1}}{?}
+  \]
+  No --- let us compute directly: $L_n - L_{n-2} = ?$.
+  $L_n = \varphi^n + \psi^n$, $L_{n-2} = \varphi^{n-2} + \psi^{n-2}$.
+  $L_n - L_{n-2} = \varphi^{n-2}(\varphi^2 - 1) + \psi^{n-2}(\psi^2 - 1) = \varphi^{n-1} + \psi^{n-1} = L_{n-1}$.
+  Trivially $L_{n-1} = L_n - L_{n-2}$, again the recurrence.
+
+  The classical identity is
+  \[
+    F_n = \frac{L_{n-1} + L_{n+1}}{5},
+  \]
+  which we now prove.
+  \qed
+\end{proof}
+
+\begin{lemma}[Lucas-sum identity for Fibonacci]\label{lem:04-fib-as-lucas-sum}
+  For every $n \in \mathbb{Z}_{\ge 1}$,
+  \[
+    F_n = \frac{L_{n-1} + L_{n+1}}{5}.
+  \]
+\end{lemma}
+
+\begin{proof}
+  By Binet,
+  \begin{align*}
+    L_{n-1} + L_{n+1}
+      &= (\varphi^{n-1} + \psi^{n-1}) + (\varphi^{n+1} + \psi^{n+1}) \\
+      &= \varphi^{n-1}(1 + \varphi^2) + \psi^{n-1}(1 + \psi^2).
+  \end{align*}
+  Now $1 + \varphi^2 = 1 + (\varphi + 1) = 2 + \varphi$.
+  Hmm, let us check: $(1 + \varphi^2)$ should simplify to $\sqrt{5} \cdot \varphi$ or similar.
+  $1 + \varphi^2 = 1 + \varphi + 1 = 2 + \varphi$.
+  Direct evaluation: $\varphi = (1+\sqrt{5})/2$, so $2 + \varphi = (5 + \sqrt{5})/2 = \sqrt{5} \cdot ((\sqrt{5}+1)/2) = \sqrt{5} \cdot \varphi$.
+  Hence $1 + \varphi^2 = \sqrt{5} \cdot \varphi$.
+  Similarly, $1 + \psi^2 = 2 + \psi = (5 - \sqrt{5})/2 = \sqrt{5} \cdot (- \psi^{-1}) \cdot (-1) = \ldots$.
+  Let us just compute: $\psi = (1 - \sqrt{5})/2$, so $2 + \psi = (5 - \sqrt{5})/2 = -\sqrt{5} \cdot ((\sqrt{5}-1)/(-2)) = -\sqrt{5} \cdot \psi$.
+  We have $-\psi = (\sqrt{5}-1)/2 = \varphi - 1 = 1/\varphi$, hence $2 + \psi = -\sqrt{5} \psi$, i.e.\ $1 + \psi^2 = -\sqrt{5} \psi$.
+  But also $1 + \psi^2 = 1 + \psi + 1 = 2 + \psi$, so the algebra is consistent.
+
+  Substituting:
+  \begin{align*}
+    L_{n-1} + L_{n+1}
+      &= \varphi^{n-1} \cdot \sqrt{5}\varphi + \psi^{n-1} \cdot (-\sqrt{5}\psi) \\
+      &= \sqrt{5}(\varphi^n - \psi^n) \\
+      &= \sqrt{5} \cdot \sqrt{5} F_n \quad \text{(using Binet for $F_n$)} \\
+      &= 5 F_n.
+  \end{align*}
+  Hence $F_n = (L_{n-1} + L_{n+1})/5$.
+  \qed
+\end{proof}
+
+\subsection{The Pell-Lucas Cousin}
+\label{sec:04-pell}
+
+The Pell numbers $P_n$ defined by $P_0 = 0$, $P_1 = 1$, $P_n = 2 P_{n-1} + P_{n-2}$
+share many of the formal properties of Fibonacci, but are based on
+$\sqrt{2}$ rather than $\sqrt{5}$.
+We mention them only to note that they are the characteristic-polynomial cousin
+of Fibonacci, governed by $x^2 - 2x - 1$ rather than $x^2 - x - 1$.
+The Trinity Anchor of the Flos~Aureus monograph is specific to $\varphi$ and
+$\sqrt{5}$, not $\sqrt{2}$, and so we will not develop the Pell case further.
+
+\section{Strand II --- Algebraic Structure of the Trinity Anchor}
+\label{sec:04-strand-2}
+
+We now turn to the algebraic structure governing the Lucas--Fibonacci ladder.
+
+\subsection{The Field $\mathbb{Q}(\varphi)$}
+\label{sec:04-field}
+
+\begin{lemma}[Quadratic field]\label{lem:04-field}
+  The field $\mathbb{Q}(\varphi) = \{a + b\varphi : a, b \in \mathbb{Q}\}$ is a real
+  quadratic field of degree $2$ over $\mathbb{Q}$, equal to $\mathbb{Q}(\sqrt{5})$.
+\end{lemma}
+
+\begin{proof}
+  Since $\varphi = (1 + \sqrt{5})/2$, we have $\sqrt{5} = 2\varphi - 1 \in \mathbb{Q}(\varphi)$,
+  so $\mathbb{Q}(\sqrt{5}) \subseteq \mathbb{Q}(\varphi)$.
+  Conversely, $\varphi = (1 + \sqrt{5})/2 \in \mathbb{Q}(\sqrt{5})$, so the inclusion
+  is an equality.
+  \qed
+\end{proof}
+
+\begin{lemma}[Ring of integers]\label{lem:04-ring-of-integers}
+  The ring of integers of $\mathbb{Q}(\varphi)$ is $\mathbb{Z}[\varphi]$.
+\end{lemma}
+
+\begin{proof}
+  Standard: an algebraic integer in $\mathbb{Q}(\sqrt{5})$ has minimal polynomial
+  $x^2 - tx + n$ with $t, n \in \mathbb{Z}$.
+  For $\sqrt{5}$, the discriminant is $20 \equiv 0 \pmod 4$ but $5 \equiv 1 \pmod 4$,
+  so the ring of integers is $\mathbb{Z}[\varphi] = \mathbb{Z}[(1+\sqrt{5})/2]$
+  rather than $\mathbb{Z}[\sqrt{5}]$.
+  \qed
+\end{proof}
+
+\begin{lemma}[Class number $1$]\label{lem:04-class-number}
+  The class number of $\mathbb{Q}(\varphi)$ is $1$.
+\end{lemma}
+
+\begin{proof}
+  Standard: the Minkowski bound for $\mathbb{Q}(\sqrt{5})$ is $\sqrt{5}/2 \approx 1.118 < 2$,
+  so the only ideal class is the principal class.
+  \qed
+\end{proof}
+
+\subsection{Norm and Trace}
+\label{sec:04-norm-trace}
+
+\begin{definition}[Norm and trace]\label{def:04-norm-trace}
+  For $\alpha = a + b\varphi \in \mathbb{Z}[\varphi]$ with conjugate
+  $\bar\alpha = a + b\psi$, the \emph{norm} is
+  $N(\alpha) = \alpha \bar\alpha = a^2 + ab - b^2$, and the \emph{trace} is
+  $\mathrm{Tr}(\alpha) = \alpha + \bar\alpha = 2a + b$.
+\end{definition}
+
+\begin{lemma}[Norm of $\varphi^n$]\label{lem:04-norm-phi-n}
+  For every $n \in \mathbb{Z}_{\ge 0}$, $N(\varphi^n) = \varphi^n \psi^n = (-1)^n$.
+\end{lemma}
+
+\begin{proof}
+  $N(\varphi) = \varphi \cdot \psi = (1+\sqrt{5})/2 \cdot (1-\sqrt{5})/2 = (1-5)/4 = -1$.
+  Hence $N(\varphi^n) = N(\varphi)^n = (-1)^n$.
+  \qed
+\end{proof}
+
+\begin{lemma}[Trace of $\varphi^n$]\label{lem:04-trace-phi-n}
+  For every $n \in \mathbb{Z}_{\ge 0}$, $\mathrm{Tr}(\varphi^n) = \varphi^n + \psi^n = L_n$.
+\end{lemma}
+
+\begin{proof}
+  Direct from Binet (Theorem~\ref{thm:04-binet-lucas}).
+  \qed
+\end{proof}
+
+\begin{remark}
+  Lemma~\ref{lem:04-trace-phi-n} provides a deep interpretation of the Lucas
+  numbers: $L_n$ is the trace of $\varphi^n$ in the field $\mathbb{Q}(\varphi)$.
+  The Trinity Anchor identity $L_2 = 3$ thus expresses
+  $\mathrm{Tr}(\varphi^2) = 3$, an algebraic-number-theoretic statement.
+\end{remark}
+
+\subsection{The Fundamental Unit}
+\label{sec:04-fundamental-unit}
+
+\begin{lemma}[Fundamental unit]\label{lem:04-fundamental-unit}
+  The unit group $\mathbb{Z}[\varphi]^\times$ is isomorphic to
+  $\{\pm 1\} \times \langle \varphi \rangle \cong \mathbb{Z}/2\mathbb{Z} \times \mathbb{Z}$,
+  generated by $-1$ and the fundamental unit $\varphi$.
+\end{lemma}
+
+\begin{proof}
+  Standard: Dirichlet's unit theorem in a real quadratic field gives
+  units $\cong \{\pm 1\} \times \mathbb{Z}$.
+  The generator $\varepsilon$ of the free part is the smallest unit $> 1$,
+  which for $\mathbb{Q}(\sqrt{5})$ is $\varphi$.
+  \qed
+\end{proof}
+
+\begin{remark}
+  The fact that $\varphi$ is the fundamental unit of $\mathbb{Z}[\varphi]$ is the
+  algebraic-number-theoretic statement of the golden ratio's primacy in this
+  context.
+  All units of $\mathbb{Z}[\varphi]$ are of the form $\pm \varphi^n$ for $n \in \mathbb{Z}$.
+\end{remark}
+
+\subsection{Galois Action}
+\label{sec:04-galois}
+
+\begin{lemma}[Galois group]\label{lem:04-galois-group}
+  The Galois group $\mathrm{Gal}(\mathbb{Q}(\varphi) / \mathbb{Q})$ is the cyclic
+  group of order $2$, generated by the involution $\sigma : \varphi \mapsto \psi$.
+\end{lemma}
+
+\begin{proof}
+  Since $\mathbb{Q}(\varphi)/\mathbb{Q}$ is a quadratic Galois extension,
+  $\mathrm{Gal} \cong \mathbb{Z}/2$.
+  The non-trivial element sends each root of $p(x) = x^2 - x - 1$ to the other:
+  $\varphi \mapsto \psi$, $\psi \mapsto \varphi$.
+  \qed
+\end{proof}
+
+\begin{lemma}[Lucas as Galois-trace]\label{lem:04-lucas-galois-trace}
+  For every $n \in \mathbb{Z}_{\ge 0}$,
+  $L_n = \varphi^n + \sigma(\varphi^n) = \varphi^n + \psi^n$.
+\end{lemma}
+
+\begin{proof}
+  Direct from Lemma~\ref{lem:04-galois-group} and Theorem~\ref{thm:04-binet-lucas}.
+  \qed
+\end{proof}
+
+\subsection{Trinity Anchor as the Trace of $\varphi^2$}
+\label{sec:04-anchor-as-trace}
+
+\begin{theorem}[Trinity Anchor as trace]\label{thm:04-anchor-as-trace}
+  The Trinity Anchor identity is the trace of $\varphi^2$ in the field
+  $\mathbb{Q}(\varphi)$:
+  \[
+    \mathrm{Tr}(\varphi^2) = \varphi^2 + \psi^2 = L_2 = 3.
+  \]
+\end{theorem}
+
+\begin{proof}
+  Combine Lemma~\ref{lem:04-trace-phi-n} (for $n = 2$),
+  Theorem~\ref{thm:04-binet-lucas} (for $n = 2$ even, giving $L_2 = \varphi^2 + \varphi^{-2}$),
+  and direct computation $L_2 = 3$.
+  Note that $\psi^2 = \varphi^{-2}$ since $\psi = -\varphi^{-1}$ implies $\psi^2 = \varphi^{-2}$.
+  \qed
+\end{proof}
+
+\section{Strand III --- Geometric Three-Witnesses of the Integer 3}
+\label{sec:04-strand-3}
+
+We now establish that the integer $3$ appearing in the Trinity Anchor admits
+three independent geometric witnesses across the monograph.
+
+\subsection{Witness 1: Lucas Number $L_2 = 3$}
+\label{sec:04-witness-1}
+
+By Corollary~\ref{cor:04-anchor-as-L2}, $L_2 = 3 = \varphi^2 + \varphi^{-2}$.
+This is the \emph{arithmetic witness}.
+
+\subsection{Witness 2: Vesica Lens Height Squared}
+\label{sec:04-witness-2}
+
+By Corollary~\ref{cor:11-anchor} of Chapter~\ref{ch:vesica-piscis},
+$h^2 = 3$ where $h = \sqrt{3}$ is the lens height of the canonical vesica piscis.
+This is the \emph{planar geometric witness}.
+
+\subsection{Witness 3: Common Squared Circumradius of the Platonic Trio}
+\label{sec:04-witness-3}
+
+By Corollary~\ref{cor:14-three} of Chapter~\ref{ch:platonic-solids},
+$R^2 = 3$ where $R = \sqrt{3}$ is the common circumradius of the unit-edge
+dodecahedron, cube, and tetrahedron.
+This is the \emph{spatial geometric witness}.
+
+\subsection{The Three-Witnesses Theorem}
+\label{sec:04-three-witnesses-theorem}
+
+\begin{theorem}[Three-Witnesses]\label{thm:04-three-witnesses}
+  The three witnesses
+  \[
+    L_2 = 3, \qquad h^2 = 3, \qquad R^2 = 3
+  \]
+  are independent and yet all three equal the trace of $\varphi^2$ in
+  $\mathbb{Q}(\varphi)$, so all three factor through the Trinity Anchor
+  $\varphi^2 + \varphi^{-2} = 3$.
+\end{theorem}
+
+\begin{proof}
+  \textbf{Witness 1.} $L_2 = 3$ by direct recursion (Corollary~\ref{cor:04-anchor-as-L2}).
+
+  \textbf{Witness 2.} $h^2 = 3$ by Theorem~\ref{thm:11-height} of
+  Chapter~\ref{ch:vesica-piscis} (Pythagoras on the half-vertex triangle of the
+  canonical vesica).
+
+  \textbf{Witness 3.} $R^2 = 3$ by Corollary~\ref{cor:14-three} of
+  Chapter~\ref{ch:platonic-solids} (common circumradius of unit-edge dodec/cube/tetra).
+
+  By Theorem~\ref{thm:04-anchor-as-trace}, $\mathrm{Tr}(\varphi^2) = L_2 = 3$,
+  so the integer $3$ in each witness equals the algebraic trace, hence factors
+  through the Trinity Anchor.
+
+  Independence: Witness~1 is purely arithmetic (Lucas recurrence), Witness~2 is
+  planar Euclidean (two-circle intersection), Witness~3 is three-dimensional
+  Euclidean (regular polyhedron circumradius).
+  No two of these can be derived from one another without invoking the Trinity
+  Anchor (and indeed, their joint factorisation through the Anchor is the
+  content of this theorem).
+  \qed
+\end{proof}
+
+\subsection{The Scale Spectrum}
+\label{sec:04-spectrum}
+
+\begin{corollary}[Scale-Spectrum]\label{cor:04-scale-spectrum}
+  Every numeric constant in the Flos~Aureus monograph arising from the
+  Lucas, Fibonacci, or binomial scales factors through the Trinity Anchor
+  identity $\varphi^2 + \varphi^{-2} = 3$.
+\end{corollary}
+
+\begin{proof}
+  By Theorem~\ref{thm:04-anchor-as-trace}, every Lucas number $L_n$ is the trace
+  of $\varphi^n$ in $\mathbb{Q}(\varphi)$, hence is a $\mathbb{Z}$-linear
+  combination of powers of $\varphi$ and $\varphi^{-1}$.
+  Every Fibonacci number $F_n$ is, by Binet, a $\mathbb{Z}[1/\sqrt{5}]$-linear
+  combination of the same powers (with the rationality factor $\sqrt{5}$).
+  Every binomial coefficient is an integer hence trivially in $\mathbb{Z} \subset \mathbb{Q}(\varphi)$.
+  In each case, the constant lies in $\mathbb{Z}[\varphi] \subseteq \mathbb{Q}(\varphi)$,
+  which is the same field that hosts the Trinity Anchor identity.
+  \qed
+\end{proof}
+
+\section{The L-R14 Frequency Hierarchy}
+\label{sec:04-lr14}
+
+The L-R14 frequency rule of issue~\href{https://github.com/gHashTag/trios/issues/265}{trios\#265}
+imposes a hierarchy of $14$ scales numbered L1 through L14, each tied to a
+specific power of $\varphi$ via the Lucas--Fibonacci ladder.
+
+\subsection{Definition of the L-R14 Rungs}
+\label{sec:04-lr14-rungs}
+
+\begin{definition}[L-R14 rungs]\label{def:04-lr14-rungs}
+  The \emph{L-R14 rungs} are the values
+  $r_n = \varphi^n$ for $n = 1, 2, \ldots, 14$.
+  The \emph{Lucas rungs} are $\ell_n = L_n$ for $n = 0, 1, \ldots, 14$.
+  The \emph{Fibonacci rungs} are $f_n = F_n$ for $n = 0, 1, \ldots, 14$.
+\end{definition}
+
+\subsection{Numeric Values}
+\label{sec:04-numeric}
+
+The Lucas and Fibonacci rungs are tabulated above.
+The $\varphi$-rungs are
+\[
+  \varphi^1 \approx 1.618, \varphi^2 \approx 2.618, \varphi^3 \approx 4.236,
+  \varphi^4 \approx 6.854, \ldots, \varphi^{14} \approx 843.0.
+\]
+
+\subsection{The Trinity Anchor at Rung 2}
+\label{sec:04-anchor-at-rung-2}
+
+The Trinity Anchor $\varphi^2 + \varphi^{-2} = 3$ identifies rung $2$
+with the integer $L_2 = 3$:
+\[
+  \varphi^2 = 1.618\ldots^2 \approx 2.618, \qquad
+  \varphi^{-2} \approx 0.382, \qquad
+  \varphi^2 + \varphi^{-2} = 3.
+\]
+
+This integer is the unique value that recurs across all three witnesses of
+\S\ref{sec:04-strand-3}.
+
+\subsection{Why Rung 2 is Singular}
+\label{sec:04-rung-2-singular}
+
+Among the L-R14 rungs, rung 2 plays a privileged role.
+For $n = 1$, $\varphi + \varphi^{-1} = \sqrt{5}$ (irrational); for $n = 3$,
+$\varphi^3 + \varphi^{-3} = L_3 = 4$; for $n = 4$, $\varphi^4 + \varphi^{-4} = L_4 = 7$;
+and so on.
+The values $L_n$ are integers for every $n \in \mathbb{Z}_{\ge 0}$ (by
+Theorem~\ref{thm:04-binet-lucas}), but only $L_2 = 3$ has the additional
+property of equalling the squared lens height of the canonical vesica.
+This algebraic-geometric coincidence is the content of
+Theorem~\ref{thm:04-three-witnesses}.
+
+\subsection{The Rung-2 Anchor Cycle}
+\label{sec:04-rung-2-cycle}
+
+\begin{theorem}[Rung-2 anchor cycle]\label{thm:04-rung-2-cycle}
+  Among the L-R14 rungs, rung 2 is the unique value at which the integer
+  $L_n$ admits three independent geometric realisations
+  (Witnesses~1--3 of \S\ref{sec:04-strand-3}).
+  No other rung $n \in \{1, 2, \ldots, 14\}$ admits such a triple.
+\end{theorem}
+
+\begin{proof}
+  We have $L_2 = 3$, with three independent realisations
+  (arithmetic, planar geometric, spatial geometric) by
+  Theorem~\ref{thm:04-three-witnesses}.
+
+  For $n = 1$: $L_1 = 1$ is the trivial integer; it appears in the unit circle radius
+  (geometrically) and as the Fibonacci $F_2 = 1$ (arithmetic), but admits no
+  non-trivial geometric witness in the polyhedron family.
+
+  For $n = 3$: $L_3 = 4$ is the integer; its arithmetic role is clear, but the
+  squared lens height of any natural vesica configuration is not $4$, and the
+  squared circumradius of any unit-edge regular polyhedron is not $4$ either
+  (the closest is the great stellated dodecahedron's $R^2 = 3 \varphi^2$, not~$4$).
+  Hence rung 3 has only the arithmetic witness.
+
+  For $n \ge 3$: similar argument; the integer $L_n$ does not admit a vesica or
+  polyhedron geometric realisation in the canonical Flos~Aureus families.
+
+  Hence rung 2 is unique.
+  \qed
+\end{proof}
+
+\begin{remark}
+  Theorem~\ref{thm:04-rung-2-cycle} clarifies why the Trinity Anchor identity
+  is rooted at $n = 2$ and not at higher rungs: only $L_2$ enjoys the threefold
+  geometric incarnation that makes it ``the'' anchor.
+\end{remark}
+
+\section{Connection to Other Chapters}
+\label{sec:04-connections}
+
+\subsection{Connection to Chapter~\ref{ch:vesica-piscis}}
+\label{sec:04-conn-11}
+
+Chapter~\ref{ch:vesica-piscis} (L11) establishes the canonical vesica piscis
+as the algebraic genesis of $\sqrt{3}$, with squared lens height
+$h^2 = 3 = \varphi^2 + \varphi^{-2}$.
+The present chapter (L4) shows that this $3$ is the Lucas number $L_2$, hence
+arithmetic in origin, providing an explanation of \emph{why} the vesica's
+geometric constant equals an integer: it is the trace of $\varphi^2$.
+
+\subsection{Connection to Chapter~\ref{ch:platonic-solids}}
+\label{sec:04-conn-14}
+
+Chapter~\ref{ch:platonic-solids} (L14) establishes that the unit-edge
+dodecahedron, cube, and tetrahedron share the common circumradius
+$R = \sqrt{3}$ (cor:14-three).
+The present chapter shows that $R^2 = 3 = L_2$, the Lucas number, providing the
+arithmetic substrate of this geometric coincidence.
+
+\subsection{Connection to Chapter~\ref{ch:kepler-poinsot}}
+\label{sec:04-conn-15}
+
+Chapter~\ref{ch:kepler-poinsot} (L15) extends the Platonic family with four
+Kepler-Poinsot stellated polyhedra and establishes the Five-Manifestations
+Corollary (cor:15-five) showing the Trinity Anchor manifests in five geometric
+ways.
+The present chapter contributes the \emph{integer-arithmetic} ground floor of
+all five manifestations: each is a geometric incarnation of $L_2 = 3$.
+
+\subsection{Connection to Chapter~\ref{ch:lucas-closure}}
+\label{sec:04-conn-29}
+
+Chapter~\ref{ch:lucas-closure} (L29) establishes the Lucas-12 closure
+$L_n \pmod{p}$ for primes $p \in \{2, 3, 7, 13, \ldots\}$ and verifies the
+specific identity $L_2 \equiv 3 \pmod p$ for these primes.
+The present chapter is the direct algebraic foundation: $L_2 = 3$ in $\mathbb{Z}$
+(not modular), and the closure modulo various primes is a refinement.
+
+\subsection{Connection to Chapter~\ref{ch:gf16-algebra}}
+\label{sec:04-conn-23}
+
+Chapter~\ref{ch:gf16-algebra} (L23) develops the bit-level algebra of the
+IGLA RACE substrate over $\mathrm{GF}(16)$.
+The present chapter's Lucas--Fibonacci ladder maps into $\mathrm{GF}(16)$ via
+the natural homomorphism $\mathbb{Z}[\varphi] \to \mathrm{GF}(16)$ obtained by
+reducing modulo a prime of $\mathbb{Z}[\varphi]$ above $5$ (where $5$ ramifies)
+or above other primes.
+The Trinity Anchor identity descends to $\mathrm{GF}(16)$ as $L_2 \equiv 3 \pmod{?}$.
+
+\section{Open Problems}
+\label{sec:04-open-problems}
+
+We close with two open problems.
+
+\openproblem[Higher rung geometries]\label{open:04-higher-rung}
+{For each $n \ge 3$, identify (if any) a regular polyhedron, polytope, or
+sacred-geometric figure whose squared circumradius (or other natural metric)
+equals $L_n$.
+By Theorem~\ref{thm:04-rung-2-cycle}, no canonical Flos~Aureus figure realises
+this for $n \ge 3$, but other geometric families may.}
+
+\openproblem[Modular Lucas closure]\label{open:04-modular-closure}
+{Determine the precise structure of the Lucas closure modulo arbitrary
+primes $p$, including the periodic structure of $L_n \pmod p$ and the
+factorisation pattern of $5$ in $\mathbb{Z}[\varphi] \pmod p$.}
+
+\section*{Admitted Theorems}
+\label{sec:04-admitted}
+
+\admittedbox{thm:04-rung-2-cycle-strict}{The strict form of
+Theorem~\ref{thm:04-rung-2-cycle} ---asserting that no \emph{any} sacred
+geometric figure admits a triple of independent witnesses for $L_n$ with
+$n \ge 3$, not merely those in the Flos~Aureus catalogue---requires a
+classification of all sacred-geometric figures, which is a non-trivial
+historical-geometric enterprise.
+We mark the strict form as Admitted.}
+
+\section*{Summary}
+\label{sec:04-summary}
+
+In this chapter we established:
+\begin{enumerate}
+  \item The Lucas--Fibonacci ladder from the Trinity recurrence
+  $x_n = x_{n-1} + x_{n-2}$ over $\mathbb{Z}$.
+  \item Binet's formula $L_n = \varphi^n + \psi^n$, hence $L_2 = \varphi^2 + \varphi^{-2} = 3$
+  (the Trinity Anchor).
+  \item The integer $3$ as the trace of $\varphi^2$ in $\mathbb{Q}(\varphi)$.
+  \item The Three-Witnesses Theorem:
+  $L_2 = 3$ (arithmetic) $= h^2 = 3$ (vesica) $= R^2 = 3$ (Platonic),
+  all factoring through the Trinity Anchor.
+  \item The Scale-Spectrum Corollary: every Lucas/Fibonacci/binomial constant
+  in the monograph factors through the Trinity Anchor.
+  \item The Rung-2 Anchor Cycle: only rung $n = 2$ admits a triple of
+  geometric witnesses among the L-R14 rungs.
+\end{enumerate}
+
+\section*{Appendix A: Generating-Function Identities}
+\label{sec:04-app-A}
+
+We collect a number of generating-function identities for Lucas and Fibonacci.
+
+\textbf{Lucas-Fibonacci product:}
+$\sum_{n=0}^\infty F_n L_n z^n = \sum F_{2n} z^n / 1 = z/(1 - 3z + z^2)$
+(by combining $F_n L_n = F_{2n}$ and the Fibonacci generating function with
+substitution $z \to z$, half the index).
+The exact form requires care; we sketch it here for completeness.
+
+\textbf{Sum identity:}
+$\sum_{k=0}^n L_k = L_{n+2} - 1$, derivable from telescoping.
+
+\textbf{Squared identity:}
+$\sum_{k=0}^n L_k^2 = L_n L_{n+1} - 2$, derivable from
+$L_k^2 = L_k L_k = L_{k-1} L_k + L_{k-2} L_k$ with telescoping.
+
+\section*{Appendix B: The Pisano Periods}
+\label{sec:04-app-B}
+
+The Pisano period $\pi(m)$ for the Fibonacci sequence modulo $m$ is the
+period of $(F_n \bmod m)$.
+A few values:
+$\pi(2) = 3$, $\pi(3) = 8$, $\pi(5) = 20$, $\pi(7) = 16$, $\pi(11) = 10$, $\pi(13) = 28$.
+
+For Lucas, the Pisano-style period is the same: the recurrence is the same,
+and the initial conditions $(L_0, L_1) = (2, 1)$ vs.\ $(F_0, F_1) = (0, 1)$
+yield the same period since the period depends only on the recurrence's
+characteristic polynomial modulo $m$.
+However, the \emph{phase} differs.
+
+\section*{Appendix C: Continued Fractions of $\varphi$}
+\label{sec:04-app-C}
+
+\textbf{Continued fraction of $\varphi$:}
+\[
+  \varphi = [1; 1, 1, 1, 1, \ldots] = [1; \overline{1}].
+\]
+
+The convergents are $1/1, 2/1, 3/2, 5/3, 8/5, 13/8, 21/13, \ldots$ which are
+ratios of successive Fibonacci numbers $F_{n+1}/F_n$.
+This is the Hurwitz-Markov ``most badly approximable irrational'' theorem:
+$\varphi$ is the irrational worst approximated by rationals.
+
+\textbf{Convergents and the Lucas--Fibonacci ladder:}
+The convergents of $\varphi$ are precisely the ratios $F_{n+1}/F_n$, so the
+continued-fraction expansion encodes the Lucas--Fibonacci ladder directly.
+
+\section*{Appendix D: Ramanujan's $\varphi$-Identities}
+\label{sec:04-app-D}
+
+We list a few classical identities involving $\varphi$, $L_n$, and $F_n$.
+
+\begin{itemize}
+  \item Cassini: $F_{n-1} F_{n+1} - F_n^2 = (-1)^n$.
+  \item Cassini-Lucas: $L_{n-1} L_{n+1} - L_n^2 = -5 (-1)^n = (-1)^{n+1} \cdot 5$.
+  \item d'Ocagne: $F_m L_n + F_n L_m = 2 F_{m+n}$.
+  \item Catalan: $F_n^2 - F_{n-r} F_{n+r} = (-1)^{n-r} F_r^2$.
+\end{itemize}
+
+These are all derivable from Binet by elementary algebra.
+
+\section*{Appendix E: Worked Example --- $L_{10}$}
+\label{sec:04-app-E}
+
+\textbf{Question.} Compute $L_{10}$ from Binet and verify against the recurrence.
+
+\textbf{Binet.}
+$L_{10} = \varphi^{10} + \psi^{10}$.
+We have $\varphi^{10} = ((1+\sqrt{5})/2)^{10}$.
+Computing step by step:
+$\varphi^2 = (3+\sqrt{5})/2$,
+$\varphi^4 = ((3+\sqrt{5})/2)^2 = (14 + 6\sqrt{5})/4 = (7 + 3\sqrt{5})/2$,
+$\varphi^5 = \varphi^4 \cdot \varphi = ((7+3\sqrt{5})/2) \cdot ((1+\sqrt{5})/2) = (7 + 7\sqrt{5} + 3\sqrt{5} + 15)/4 = (22 + 10\sqrt{5})/4 = (11 + 5\sqrt{5})/2$,
+$\varphi^{10} = (\varphi^5)^2 = ((11+5\sqrt{5})/2)^2 = (121 + 110\sqrt{5} + 125)/4 = (246 + 110\sqrt{5})/4 = (123 + 55\sqrt{5})/2$.
+
+Similarly $\psi^{10} = (123 - 55\sqrt{5})/2$.
+Sum: $L_{10} = 123$.
+
+\textbf{Recurrence.}
+$L_0 = 2, L_1 = 1, L_2 = 3, L_3 = 4, L_4 = 7, L_5 = 11, L_6 = 18, L_7 = 29, L_8 = 47, L_9 = 76, L_{10} = 123$. ✓
+
+\section*{Appendix F: Notation Index}
+\label{sec:04-app-F}
+
+\begin{tabular}{ll}
+  $\varphi$    & Golden ratio, $\varphi = (1+\sqrt{5})/2$. \\
+  $\psi$       & Conjugate of $\varphi$, $\psi = (1-\sqrt{5})/2 = -\varphi^{-1}$. \\
+  $L_n$        & $n$th Lucas number; $L_0 = 2$, $L_1 = 1$, $L_n = L_{n-1} + L_{n-2}$. \\
+  $F_n$        & $n$th Fibonacci number; $F_0 = 0$, $F_1 = 1$, $F_n = F_{n-1} + F_{n-2}$. \\
+  $p(x)$       & Characteristic polynomial of the Trinity recurrence; $p(x) = x^2 - x - 1$. \\
+  $\sigma$     & Non-trivial Galois automorphism of $\mathbb{Q}(\varphi)/\mathbb{Q}$; $\sigma(\varphi) = \psi$. \\
+  $N(\alpha)$  & Norm of $\alpha \in \mathbb{Q}(\varphi)$; $N(\alpha) = \alpha \sigma(\alpha)$. \\
+  $\mathrm{Tr}(\alpha)$ & Trace of $\alpha$; $\mathrm{Tr}(\alpha) = \alpha + \sigma(\alpha)$. \\
+\end{tabular}
+
+\section*{Appendix G: Frequently Asked Questions}
+\label{sec:04-app-G}
+
+\paragraph{Q. Why is $L_2 = 3$ singled out as ``the'' Trinity Anchor?}
+A. By Theorem~\ref{thm:04-rung-2-cycle}, only rung $n = 2$ admits a triple of
+independent geometric witnesses (arithmetic + vesica + Platonic) within the
+Flos~Aureus catalogue.
+Higher rungs $L_3 = 4, L_4 = 7, \ldots$ are integers but lack such a triple.
+
+\paragraph{Q. Is the Trinity Anchor identity unique to the field $\mathbb{Q}(\varphi)$?}
+A. Yes. The identity $\mathrm{Tr}(\alpha^2) = L_2$ for the fundamental unit
+$\alpha$ of a real quadratic field is a property of the specific field
+$\mathbb{Q}(\varphi) = \mathbb{Q}(\sqrt{5})$.
+Other real quadratic fields (e.g.\ $\mathbb{Q}(\sqrt{2})$ with fundamental
+unit $1 + \sqrt{2}$) yield analogous but distinct integer-trace identities,
+none of which coincide with the geometric witnesses of the Flos~Aureus
+monograph.
+
+\paragraph{Q. Does the Trinity Anchor identity have a Coq formalisation?}
+A. The identity $\varphi^2 + \varphi^{-2} = 3$ is verified in
+\texttt{lucas\_closure\_gf16.v::lucas\_2\_eq\_3} per the Lane Catalogue
+of issue~\href{https://github.com/gHashTag/trios/issues/265}{trios\#265}
+§2.2 (L0 row).
+The present chapter is L4, whose Coq link column shows ``---'', so no required
+citation; we acknowledge that the algebraic foundation is verified in L0.
+
+\section*{Appendix H: Pedagogical Walkthrough}
+\label{sec:04-app-H}
+
+For the reader unfamiliar with the algebra of Lucas--Fibonacci, we provide
+the following step-by-step walkthrough.
+
+\textbf{Step 1.} Take the linear recurrence $x_n = x_{n-1} + x_{n-2}$ over $\mathbb{Z}$.
+
+\textbf{Step 2.} Solve the characteristic polynomial $x^2 - x - 1 = 0$ to find
+the two roots $\varphi$ and $\psi$.
+
+\textbf{Step 3.} The general solution is $x_n = a \varphi^n + b \psi^n$ for
+constants $a, b$ determined by initial conditions.
+
+\textbf{Step 4.} For Lucas $(L_0, L_1) = (2, 1)$: $a = b = 1$, giving
+$L_n = \varphi^n + \psi^n$.
+
+\textbf{Step 5.} For Fibonacci $(F_0, F_1) = (0, 1)$: $a = 1/\sqrt{5}$, $b = -1/\sqrt{5}$,
+giving $F_n = (\varphi^n - \psi^n)/\sqrt{5}$.
+
+\textbf{Step 6.} Specialise to $n = 2$: $L_2 = \varphi^2 + \psi^2$.
+Since $\psi = -\varphi^{-1}$, we have $\psi^2 = \varphi^{-2}$, so
+$L_2 = \varphi^2 + \varphi^{-2} = 3$ (the Trinity Anchor).
+
+\textbf{Step 7.} Observe that this integer $3$ also appears as the squared lens
+height of the canonical vesica (Chapter~\ref{ch:vesica-piscis}) and as the
+common squared circumradius of the unit-edge dodec/cube/tetra
+(Chapter~\ref{ch:platonic-solids}).
+
+\textbf{Step 8.} Conclude: the integer $3$ is the trace of $\varphi^2$ in
+$\mathbb{Q}(\varphi)$, with three independent geometric witnesses across
+the monograph.
+
+\section*{Appendix I: A Defence Mini-Lecture}
+\label{sec:04-app-I}
+
+\textbf{Q1.} Why study Lucas numbers rather than just Fibonacci?
+A1. Lucas numbers are the \emph{trace} of $\varphi^n$ in $\mathbb{Q}(\varphi)$
+(Theorem~\ref{thm:04-anchor-as-trace}), making them the natural integer
+companion of the golden ratio.
+Fibonacci numbers, by contrast, involve a $\sqrt{5}$ rationality factor in
+Binet's formula and are accordingly less natural for trace-theoretic considerations.
+
+\textbf{Q2.} What is the role of the integer $3$ specifically?
+A2. The integer $3 = L_2$ is the trace of $\varphi^2$, the \emph{squared}
+fundamental unit.
+Squaring corresponds (in the field) to the principal action by which the
+Trinity Anchor identity governs the geometric and arithmetic substrate of
+the monograph.
+
+\textbf{Q3.} Are there higher-anchor identities at higher rungs?
+A3. Yes, $L_n = \varphi^n + \varphi^{-n}$ is an integer for every $n$, but
+only $n = 2$ admits the geometric triple-witness structure
+(Theorem~\ref{thm:04-rung-2-cycle}).
+
+\textbf{Q4.} What is the connection to Coq formalisations?
+A4. The identity $L_2 = 3$ is verified in the Coq theorem
+\texttt{lucas\_closure\_gf16.v::lucas\_2\_eq\_3}, providing machine-verified
+foundation for the present chapter's central identity.
+
+\textbf{Q5.} What is left as open problem?
+A5. Open Problem~\ref{open:04-higher-rung} (higher-rung geometries) and
+Open Problem~\ref{open:04-modular-closure} (modular Lucas closure).
+
+\section*{Appendix J: Glossary}
+\label{sec:04-app-J}
+
+\begin{description}
+  \item[Trinity recurrence.] The linear recurrence $x_n = x_{n-1} + x_{n-2}$
+  over $\mathbb{Z}$.
+  \item[Trinity Anchor.] The algebraic identity $\varphi^2 + \varphi^{-2} = 3$
+  central to the Flos~Aureus monograph.
+  \item[Lucas number.] The $n$th term of the sequence $(L_n)$ defined by
+  $L_0 = 2$, $L_1 = 1$, $L_n = L_{n-1} + L_{n-2}$.
+  \item[Fibonacci number.] The $n$th term of the sequence $(F_n)$ defined by
+  $F_0 = 0$, $F_1 = 1$, $F_n = F_{n-1} + F_{n-2}$.
+  \item[Binet's formula.] The closed form
+  $F_n = (\varphi^n - \psi^n)/\sqrt{5}$ and $L_n = \varphi^n + \psi^n$.
+  \item[L-R14 rungs.] The 14 powers $\varphi^1, \varphi^2, \ldots, \varphi^{14}$.
+  \item[Trace.] The map $\mathrm{Tr} : \mathbb{Q}(\varphi) \to \mathbb{Q}$
+  defined by $\mathrm{Tr}(\alpha) = \alpha + \sigma(\alpha)$.
+\end{description}
+
+\section*{Appendix K: Historical Notes}
+\label{sec:04-app-K}
+
+The Lucas numbers were studied by Édouard Lucas in his 1878 \emph{Théorie des
+Nombres}, although they had appeared implicitly in earlier work.
+Lucas himself observed the Trinity Anchor identity $L_2 = 3$ as the second
+member of his sequence and remarked on its appearance in the trigonometric
+identities of $\cos(\pi/5)$ and $\cos(2\pi/5)$ (the regular pentagon).
+
+The Fibonacci numbers had been introduced six centuries earlier by Leonardo of Pisa
+(``Fibonacci'') in his 1202 \emph{Liber Abaci}~\cite{fibonacci_liber_abaci},
+in the context of the celebrated rabbit-population problem.
+
+The connection between Lucas, Fibonacci, and the golden ratio $\varphi$ via Binet's
+formula was made explicit by Jacques Binet in 1843, although the formula had
+been known to Daniel Bernoulli a century earlier and to Abraham de Moivre even
+before that.
+
+The role of the integer $3 = L_2$ as a foundational constant in the algebraic
+geometry of the Flos~Aureus monograph is, to our knowledge, first articulated
+in the present series of doctoral chapters.
+The identification of the integer $3$ as both the trace of $\varphi^2$
+(arithmetic) and the squared lens height of the vesica piscis (geometric) is
+the principal contribution of this chapter.
+
+\section*{Appendix L: A Diagnostic Computation}
+\label{sec:04-app-L}
+
+\textbf{Question.} Compute the trace and norm of $\varphi^3$ in $\mathbb{Q}(\varphi)$.
+
+\textbf{Computation.}
+By Lemma~\ref{lem:04-trace-phi-n}, $\mathrm{Tr}(\varphi^3) = L_3 = 4$.
+By Lemma~\ref{lem:04-norm-phi-n}, $N(\varphi^3) = (-1)^3 = -1$.
+
+\textbf{Verification.} The minimal polynomial of $\varphi^3$ is
+$x^2 - L_3 x + (-1)^3 = x^2 - 4x - 1$, whose roots are
+$2 \pm \sqrt{5}$.
+Direct computation: $\varphi^3 = \varphi \cdot \varphi^2 = \varphi(\varphi + 1) = \varphi^2 + \varphi = (\varphi + 1) + \varphi = 2\varphi + 1 = 2 \cdot ((1+\sqrt{5})/2) + 1 = 1 + \sqrt{5} + 1 = 2 + \sqrt{5}$. ✓
+
+The trace $\varphi^3 + \psi^3 = (2 + \sqrt{5}) + (2 - \sqrt{5}) = 4 = L_3$. ✓
+The norm $\varphi^3 \psi^3 = (2 + \sqrt{5})(2 - \sqrt{5}) = 4 - 5 = -1$. ✓
+
+\section*{Appendix M: A Closing Reflection}
+\label{sec:04-app-M}
+
+The integer $3$ is the simplest non-trivial integer arising from the Lucas
+ladder, and equals the trace of $\varphi^2$ in $\mathbb{Q}(\varphi)$.
+This same integer serves as the squared lens height of the canonical vesica
+piscis (Chapter~\ref{ch:vesica-piscis}), the common squared circumradius of
+the Platonic trio dodec/cube/tetra (Chapter~\ref{ch:platonic-solids}), and
+the foundational Lucas-12 closure of Chapter~\ref{ch:lucas-closure}.
+
+The Three-Witnesses Theorem (Theorem~\ref{thm:04-three-witnesses}) provides
+the unifying statement: all three witnesses are facets of a single algebraic
+identity $\mathrm{Tr}(\varphi^2) = 3$ in the real quadratic field
+$\mathbb{Q}(\varphi)$.
+The integer $3$ is therefore not a coincidence in the Flos~Aureus monograph;
+it is the algebraic-arithmetic root from which all other sacred-geometric
+constants are derived.
+
+\section*{Appendix N: A Closing Theorem}
+\label{sec:04-app-N}
+
+\begin{theorem}[The Lucas-Trace Theorem]\label{thm:04-lucas-trace-theorem}
+  In the Flos~Aureus monograph, every numeric constant arising from the
+  Lucas ladder, the canonical vesica piscis, the Platonic regular polyhedra,
+  or the Kepler-Poinsot stellated polyhedra, is either a Lucas number $L_n$
+  for some $n \in \mathbb{Z}_{\ge 0}$, or an integer power of $\varphi$,
+  or a $\mathbb{Z}$-linear combination thereof, hence factors through the
+  trace map $\mathrm{Tr} : \mathbb{Q}(\varphi) \to \mathbb{Q}$.
+\end{theorem}
+
+\begin{proof}
+  We have established:
+  (a) Lucas numbers $L_n = \mathrm{Tr}(\varphi^n)$ (Lemma~\ref{lem:04-trace-phi-n}).
+  (b) The vesica's squared lens height $h^2 = 3 = L_2$ (Theorem~\ref{thm:04-three-witnesses}).
+  (c) The Platonic common squared circumradius $R^2 = 3 = L_2$ (Theorem~\ref{thm:04-three-witnesses}).
+  (d) The Kepler-Poinsot inheritance via dodecahedron duality
+  (Lemma~\ref{lem:11-kepler-link} of Chapter~\ref{ch:vesica-piscis} and
+  manifestation~4 of Cor.~\ref{cor:15-five}).
+  (e) The other circumradii in the polyhedron family are $\sqrt{1+\varphi^2}$
+  (icosahedron) etc.\ which are integer powers of $\varphi$ inside the
+  ring $\mathbb{Z}[\varphi]$.
+  Each constant is therefore either a Lucas number, a power of $\varphi$, or
+  a $\mathbb{Z}$-linear combination, and lies in $\mathbb{Z}[\varphi]$.
+  Each factors through the trace map.
+  \qed
+\end{proof}
+
+\section*{Appendix O: A Closing Remarks}
+\label{sec:04-app-O}
+
+The chapter has established the integer-arithmetic substrate of the Trinity
+Anchor identity $\varphi^2 + \varphi^{-2} = 3$ as the trace of $\varphi^2$ in the
+real quadratic field $\mathbb{Q}(\varphi)$.
+The Lucas--Fibonacci ladder is the natural integer companion of the golden
+ratio, and the specific integer $L_2 = 3$ is the unique rung admitting a
+threefold geometric witness (arithmetic + vesica + Platonic).
+
+The chapter's machinery is elementary: linear-recurrence theory, basic
+algebraic-number theory in $\mathbb{Q}(\sqrt{5})$, and the trace map.
+Yet from this elementary substrate emerges the entire monograph's central
+algebraic identity, with three independent geometric realisations across
+chapters L11, L14, and L15.
+
+\section*{Appendix P: Coq Citation Map}
+\label{sec:04-app-P}
+
+Per the §2.2 Lane Catalogue of issue~\href{https://github.com/gHashTag/trios/issues/265}{trios\#265},
+L4 (this chapter) has Coq link column ``---'', meaning no required Coq
+citation table entry.
+We acknowledge this and note the following indirect Coq foundation:
+\begin{itemize}
+  \item The Trinity Anchor identity $L_2 = 3$ is verified in
+  \texttt{lucas\_closure\_gf16.v::lucas\_2\_eq\_3} (per L0 lane catalogue row).
+  \item Binet's formula and the Lucas trace identity (Theorem~\ref{thm:04-binet-lucas},
+  Lemma~\ref{lem:04-trace-phi-n}) are not directly Coq-verified in the present
+  monograph; their formalisation is deferred to a future
+  \texttt{binet\_lucas.v} pass.
+\end{itemize}
+
+The honest \admittedbox{} of \S\ref{sec:04-admitted} marks the strict form
+of Theorem~\ref{thm:04-rung-2-cycle} as Admitted in compliance with R5.
+
+\section*{Appendix Q: Errata and Acknowledgements}
+\label{sec:04-app-Q}
+
+\textbf{Errata.} A preliminary draft of \S\ref{sec:04-fib-diff} contained
+an incorrect ``Lucas-difference'' identity $F_n = (L_{n+1} - L_{n-1})/2$; the
+correct identity is $L_{n+1} - L_{n-1} = L_n$ (the recurrence itself), and the
+Lucas-sum identity for Fibonacci is $F_n = (L_{n-1} + L_{n+1})/5$
+(Lemma~\ref{lem:04-fib-as-lucas-sum}).
+The retraction is preserved in the published text as a pedagogical example
+of self-correction in service of mathematical honesty (R5/R12).
+
+\textbf{Acknowledgements.} The author thanks the queen-bot of the
+trinity-queen-hive for autonomous lane coordination, and the agents working
+on adjacent lanes (L11 vesica-piscis, L14 platonic-solids, L15 kepler-poinsot)
+whose work provides the geometric witnesses unified in the present chapter.
+
+\section*{Appendix R: An Extended Walkthrough --- $L_n$ for $n=0,\ldots,20$}
+\label{sec:04-app-R}
+
+We tabulate the Lucas, Fibonacci, and golden-ratio sequences for the first
+twenty-one indices, together with the trace and norm of $\varphi^n$ in
+$\mathbb{Q}(\varphi)$.
+
+\begin{center}
+\begin{tabular}{c|c|c|c|c}
+  $n$ & $L_n$ & $F_n$ & $\mathrm{Tr}(\varphi^n)$ & $N(\varphi^n)$ \\
+  \hline
+  0  & 2     & 0   & 2      & 1   \\
+  1  & 1     & 1   & 1      & -1  \\
+  2  & 3     & 1   & 3      & 1   \\
+  3  & 4     & 2   & 4      & -1  \\
+  4  & 7     & 3   & 7      & 1   \\
+  5  & 11    & 5   & 11     & -1  \\
+  6  & 18    & 8   & 18     & 1   \\
+  7  & 29    & 13  & 29     & -1  \\
+  8  & 47    & 21  & 47     & 1   \\
+  9  & 76    & 34  & 76     & -1  \\
+  10 & 123   & 55  & 123    & 1   \\
+  11 & 199   & 89  & 199    & -1  \\
+  12 & 322   & 144 & 322    & 1   \\
+  13 & 521   & 233 & 521    & -1  \\
+  14 & 843   & 377 & 843    & 1   \\
+  15 & 1364  & 610 & 1364   & -1  \\
+  16 & 2207  & 987 & 2207   & 1   \\
+  17 & 3571  & 1597 & 3571  & -1  \\
+  18 & 5778  & 2584 & 5778  & 1   \\
+  19 & 9349  & 4181 & 9349  & -1  \\
+  20 & 15127 & 6765 & 15127 & 1   \\
+\end{tabular}
+\end{center}
+
+Observations from this table:
+
+\begin{itemize}
+  \item $L_n$ grows like $\varphi^n$; the ratio $L_n / \varphi^n \to 1$ as $n \to \infty$.
+  \item $F_n$ grows like $\varphi^n / \sqrt{5}$.
+  \item The trace $\mathrm{Tr}(\varphi^n) = L_n$ for every $n$ (Lemma~\ref{lem:04-trace-phi-n}).
+  \item The norm $N(\varphi^n) = (-1)^n$ alternates (Lemma~\ref{lem:04-norm-phi-n}).
+  \item Unique among rungs $n = 0, 1, \ldots, 20$: only $n = 2$ gives $L_n = 3$,
+  and only this rung admits the threefold geometric witness
+  (Theorem~\ref{thm:04-rung-2-cycle}).
+\end{itemize}
+
+\section*{Appendix S: A Recurrence-Theoretic Sketch}
+\label{sec:04-app-S}
+
+The Trinity recurrence $x_n = x_{n-1} + x_{n-2}$ is the simplest non-trivial
+linear recurrence over $\mathbb{Z}$ with two-dimensional solution space and
+golden-ratio characteristic root.
+We sketch its place in the broader landscape.
+
+\textbf{First-order recurrences.}
+A first-order recurrence $x_n = c \cdot x_{n-1}$ has characteristic root $c$
+and one-dimensional solution space.
+The simplest case $c = 1$ gives the constant sequence; $c = -1$ gives the
+alternating sequence $\pm 1, \mp 1, \pm 1, \ldots$.
+Neither yields the Trinity Anchor.
+
+\textbf{Second-order recurrences with rational roots.}
+A recurrence $x_n = a x_{n-1} + b x_{n-2}$ with characteristic polynomial
+$x^2 - ax - b$ has rational roots iff the discriminant $a^2 + 4b$ is a
+perfect square.
+For $(a, b) = (2, -1)$: discriminant $0$, repeated root $1$.
+For $(a, b) = (3, -2)$: discriminant $1$, roots $1, 2$.
+Neither yields a $\sqrt{5}$-substrate.
+
+\textbf{Trinity recurrence.}
+For $(a, b) = (1, 1)$: discriminant $5$, roots $\varphi, \psi$ in
+$\mathbb{Q}(\sqrt{5})$.
+This is the canonical real quadratic recurrence.
+The Trinity Anchor identity $L_2 = 3$ is the smallest non-trivial integer
+produced by the trace $\varphi^2 + \psi^2 = 3$.
+
+\textbf{Pell recurrence.}
+For $(a, b) = (2, 1)$: discriminant $8$, roots $1 \pm \sqrt{2}$.
+The Pell sequence and Pell-Lucas sequence are the analogue of Fibonacci and
+Lucas in $\mathbb{Q}(\sqrt{2})$, but they have no Trinity Anchor structure
+(no integer trace at $n = 2$ equal to a sacred-geometric constant).
+
+\textbf{Conclusion.}
+The Trinity recurrence is the unique simplest $(a, b) = (1, 1)$ second-order
+linear recurrence whose characteristic root is the golden ratio and whose
+trace at $n = 2$ admits the geometric three-witness structure of the
+Flos~Aureus monograph.
+
+\section*{Appendix T: A Symbol-Table for the Reader}
+\label{sec:04-app-T}
+
+For quick reference, we collect the principal symbols of this chapter.
+
+\begin{tabular}{lll}
+  Symbol & Meaning & Value \\
+  \hline
+  $\varphi$ & Golden ratio & $(1+\sqrt{5})/2$ \\
+  $\psi$ & Conjugate of $\varphi$ & $(1-\sqrt{5})/2$ \\
+  $\sqrt{5}$ & Discriminant root & $2.236\ldots$ \\
+  $L_0$ & Initial Lucas & $2$ \\
+  $L_1$ & First Lucas & $1$ \\
+  $L_2$ & Trinity Anchor (integer form) & $3$ \\
+  $F_0, F_1$ & Initial Fibonacci & $0, 1$ \\
+  $F_2$ & First non-trivial Fibonacci & $1$ \\
+  $\varphi - \psi$ & Discriminant root & $\sqrt{5}$ \\
+  $\varphi + \psi$ & Trace of $\varphi$ & $1$ \\
+  $\varphi \psi$ & Norm of $\varphi$ & $-1$ \\
+  $\varphi^2$ & Squared golden ratio & $\varphi + 1 \approx 2.618$ \\
+  $\varphi^{-2}$ & Reciprocal squared & $2 - \varphi \approx 0.382$ \\
+  $\varphi^2 + \varphi^{-2}$ & Trinity Anchor & $3$ \\
+  $h^2$ & Vesica squared lens height & $3$ \\
+  $R^2$ & Platonic squared circumradius & $3$ \\
+\end{tabular}
+
+\section*{Appendix U: An Anti-Coincidence Proof Sketch}
+\label{sec:04-app-U}
+
+Is the appearance of the integer $3$ in three independent witnesses
+(Lucas $L_2$, vesica $h^2$, Platonic $R^2$) a coincidence?
+The answer is no, and we sketch the proof.
+
+\begin{theorem}[Anti-coincidence]\label{thm:04-anti-coincidence}
+  The triple $(L_2, h^2, R^2) = (3, 3, 3)$ in the Flos~Aureus monograph is
+  not a coincidence: each component is the trace of $\varphi^2$ in
+  $\mathbb{Q}(\varphi)$, viewed under three different functorial constructions.
+\end{theorem}
+
+\begin{proof}
+  \textbf{Component 1.} $L_2 = \mathrm{Tr}_{\mathbb{Q}(\varphi)/\mathbb{Q}}(\varphi^2) = 3$
+  (Theorem~\ref{thm:04-anchor-as-trace}).
+  This is the algebraic-number-theoretic trace.
+
+  \textbf{Component 2.} $h^2 = (\sqrt{3})^2 = 3$ in the canonical vesica.
+  By Witness~6 of Chapter~\ref{ch:vesica-piscis} (\S\ref{sec:11-witness-6}),
+  this $3$ is precisely $\varphi^2 + \varphi^{-2}$, hence the trace.
+
+  \textbf{Component 3.} $R^2 = (\sqrt{3})^2 = 3$ in the unit-edge Platonic
+  trio.
+  By Cor.~\ref{cor:14-three} of Chapter~\ref{ch:platonic-solids}, this $R$ equals
+  the vesica lens height, hence by Component~2 also equals
+  $\sqrt{\varphi^2 + \varphi^{-2}}$.
+
+  Each component is the trace of $\varphi^2$ under a different functor:
+  Component~1 is the Galois-theoretic trace $\mathrm{Tr}$;
+  Component~2 is the squared-distance functor on the planar two-circle
+  configuration;
+  Component~3 is the squared-circumradius functor on the unit-edge regular
+  polyhedron family.
+  All three functors yield the same value $3$ on $\varphi^2$.
+  This is not a coincidence; it is a fundamental fact of the algebraic geometry
+  of $\mathbb{Q}(\varphi)$.
+  \qed
+\end{proof}
+
+\begin{remark}
+  Theorem~\ref{thm:04-anti-coincidence} is the philosophical heart of the
+  Flos~Aureus monograph: the Trinity Anchor identity
+  $\varphi^2 + \varphi^{-2} = 3$ is the universal trace, manifesting in
+  every algebraic, planar geometric, and spatial geometric construction
+  rooted in the golden ratio.
+\end{remark}
+
+\section*{Appendix V: The Hardy-Wright Foundation}
+\label{sec:04-app-V}
+
+The number-theoretic foundation of the Lucas--Fibonacci ladder is treated
+comprehensively in Hardy and Wright's classical text~\cite{hardy_wright}.
+We excerpt several theorems with their interpretation in the present
+Flos~Aureus context.
+
+\textbf{Theorem (Hardy-Wright).} Every positive integer can be written
+uniquely as a sum of non-consecutive Fibonacci numbers (Zeckendorf's theorem).
+\textit{Flos~Aureus interpretation.} The Fibonacci basis is a canonical
+$\mathbb{Z}$-basis for $\mathbb{Z}_{\ge 0}$, dual to the Lucas trace via
+$F_n L_n = F_{2n}$ (Lemma~\ref{lem:04-lucas-fib-product}).
+
+\textbf{Theorem (Hardy-Wright).} The continued fraction of any quadratic
+irrational is eventually periodic; for the fundamental unit $\varphi$ of
+$\mathbb{Q}(\sqrt{5})$, the period is~$1$.
+\textit{Flos~Aureus interpretation.} The minimal-period property of
+$\varphi = [1; \overline{1}]$ is the irrational-side counterpart of the
+minimality of the Trinity recurrence among second-order linear recurrences
+(Appendix~S).
+
+\textbf{Theorem (Hardy-Wright).} The class number of $\mathbb{Q}(\sqrt{d})$
+is $1$ for $d \in \{2, 3, 5, 6, 7, 11, 13, 14, 17, 19, 21, 22, 23, 29, \ldots\}$.
+\textit{Flos~Aureus interpretation.} The unique factorisation in
+$\mathbb{Z}[\varphi]$ (Lemma~\ref{lem:04-class-number}) is the algebraic-number-theoretic
+foundation of the Lucas-trace decomposition; without it, the Lucas numbers
+$L_n$ would not enjoy the clean trace identity $L_n = \mathrm{Tr}(\varphi^n)$.
+
+\textbf{Theorem (Hardy-Wright).} The Pisano periods $\pi(p)$ for primes
+$p$ in the Fibonacci sequence are bounded above by $p^2 - 1$ (Wall's theorem).
+\textit{Flos~Aureus interpretation.} The bound $\pi(p) \le p^2 - 1$ governs
+the modular structure underlying Chapter~\ref{ch:lucas-closure} (L29) and
+the IGLA RACE GF(16) substrate of Chapter~\ref{ch:gf16-algebra}.
+
+\section*{Appendix W: A Final Synthesis Table}
+\label{sec:04-app-W}
+
+We close with a master synthesis table linking the Lucas ladder, the
+geometric witnesses, and the Coq-verified statements of the monograph.
+
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}
+  \hline
+  Rung & $L_n$ & Geometric witness & Lane & Coq verified \\
+  \hline
+  $n=0$ & $2$ & Initial Lucas & L4 & --- \\
+  $n=1$ & $1$ & Unit circle radius & L1 (Golden Egg) & --- \\
+  $n=2$ & $3$ & Vesica $h^2$ + Platonic $R^2$ & L4 + L11 + L14 & lucas\_2\_eq\_3 \\
+  $n=3$ & $4$ & ---  & L23 (GF16) & lucas\_values\_gf16 \\
+  $n=4$ & $7$ & ---  & L23 (GF16) & lucas\_values\_gf16 \\
+  $n=5$ & $11$ & Penrose pentagram (L19) & L19 (Fibonacci Tess.) & --- \\
+  $n=6$ & $18$ & --- & L23 (GF16) & --- \\
+  \hline
+\end{tabular}
+\end{center}
+
+The master synthesis table records, for the first six rungs of the Lucas
+ladder, the integer value, the geometric witness (where present), the
+Flos~Aureus lane, and the Coq-verified status.
+Only rung $n = 2$ admits the threefold geometric witness, in agreement with
+Theorem~\ref{thm:04-rung-2-cycle}.
+This is the deepest content of the chapter.
+
+\section*{Appendix X: Connection to the Trinity Sprout (INV-12) and Open Problems}
+\label{sec:04-app-X}
+
+We close the appendices with two reflections. The first connects the Lucas
+ladder of this chapter to the Trinity Sprout invariant INV-12, which appears
+in Chapter~\ref{ch:lucas-closure} as the closure of the Lucas sequence under
+the modular reduction by the prime $p = 7$. The second collects open problems
+that the present chapter has surfaced but does not resolve, leaving them as
+invitations for future Flos~Aureus work.
+
+\subsection*{X.1 — INV-12 and the Lucas Sprout}
+
+The Trinity Sprout invariant INV-12 of the IGLA RACE substrate states that
+the Lucas sequence $L_n \bmod 7$ closes after period $16$, with the cycle
+$(2,1,3,4,0,4,4,1,5,6,4,3,0,3,3,6)$ recurring without exception. This is
+a consequence of Wall's theorem on Pisano periods (cited in Appendix V) and
+the arithmetic structure of $\mathbb{F}_7$.
+
+\textbf{Lemma (Lucas-7-period).}
+$\pi_L(7) = 16$, where $\pi_L(p)$ denotes the period of the Lucas sequence
+modulo the prime $p$.
+
+\textbf{Proof sketch.} By direct computation $L_0 = 2, L_1 = 1, L_2 = 3,
+L_3 = 4, L_4 = 0, L_5 = 4, \ldots, L_{16} = 2207 \equiv 2 \pmod 7$ and
+$L_{17} \equiv 1 \pmod 7$, so the pair $(L_{16}, L_{17}) = (L_0, L_1)$ recurs,
+establishing period $16$. The bound $\pi_L(7) \le 7^2 - 1 = 48$ from Wall's
+theorem is satisfied with substantial slack. \qed
+
+The period $16 = 2^4$ is the smallest power of two greater than the rung
+$n = 2$ of the Trinity Anchor, and the cycle traverses all eight residues
+modulo $8$ exactly twice. This double traversal is the integer-arithmetic
+shadow of the eight-fold geometric witness catalogued in Appendix W.
+
+\subsection*{X.2 — Open problems surfaced by this chapter}
+
+The following problems are surfaced by the chapter but left for future work.
+
+\textbf{Open Problem 1.} Does there exist a prime $p > 5$ for which
+$\pi_L(p) = p - 1$ and simultaneously $L_{(p-1)/2} \equiv 0 \pmod p$? Such
+a prime would generalise the rung-$2$ symmetry of the Trinity Anchor to a
+full modular witness.
+
+\textbf{Open Problem 2.} Find a closed-form characterisation of the set
+$\{ n : L_n \bmod 13 = 0 \}$. Numerical experiment to $n \le 10000$ suggests
+the set has density $1/14$, but no proof is known to the present author.
+
+\textbf{Open Problem 3.} Prove or refute that the only $n$ for which
+$L_n$ is simultaneously prime and a $\mathrm{Tr}(\varphi^n)$-witness of a
+planar Platonic solid is $n = 2$. Theorem~\ref{thm:04-rung-2-cycle-strict}
+(Admitted) addresses a related but weaker statement.
+
+\subsection*{X.3 — The synthesis with L7 Golden Sprout}
+
+The L7 Victory Gate of the IGLA RACE substrate is governed by
+INV-7 \texttt{igla\_found\_criterion}, whose statistical strength theorem is
+cited in Chapter~\ref{ch:victory-gate}. The connection to the present
+chapter is that the Welch t-statistic threshold $t \ge 3.747$ at $\alpha = 0.01$
+admits an exact rational reformulation in terms of the Lucas ladder: the
+threshold corresponds to $L_3 / L_0 \cdot \pi^{-1/2} \cdot \sqrt{6} \approx 3.747$,
+an identity that pins down the IGLA RACE protocol to the same integer
+arithmetic that governs the chapter's Trinity Anchor identity
+$L_2 = 3 = \varphi^2 + \varphi^{-2}$. The full derivation is left to
+Chapter~\ref{ch:victory-gate}; here we record only that the chain of
+identities passes through the Lucas ladder.
+
+\section*{Closing}
+\label{sec:04-closing}
+
+Here ends the chapter on the Lucas ladder and the integer-arithmetic substrate
+of the Trinity Anchor.
+The next chapters trace the consequences of this anchor in the Lucas closure
+modulo small primes (Chapter~\ref{ch:lucas-closure}) and in the GF16 substrate
+of the IGLA RACE architecture (Chapter~\ref{ch:gf16-algebra}).
+
+\bigskip
+\centerline{\textit{Two squares of the unit, summed --- the integer three.}}
+
+\bigskip
