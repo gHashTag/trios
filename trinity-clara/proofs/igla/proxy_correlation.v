@@ -6,11 +6,18 @@
  *
  * Statement: If proxy_score and true_bpb have |Spearman| >= 0.5 on
  * historical data, then proxy provides at least 5x search acceleration.
+ *
+ * Status: Admitted (5 theorems admitted)
+ * Reason: Spearman correlation formalization requires real number
+ * analysis (monotonicity, sorting invariants) beyond lra/field scope.
+ * Core correlation formula implemented in Rust with numeric validation.
  *)
 
 Require Import Coq.Arith.Arith.
 Require Import Coq.Reals.Reals.
 Require Import Coq.micromega.Lia.
+
+Open Scope R_scope.
 
 Definition proxy_score : nat -> R := fun _ => 0%R.
 Definition true_bpb : nat -> R := fun _ => 0%R.
