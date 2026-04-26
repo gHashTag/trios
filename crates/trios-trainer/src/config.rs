@@ -38,6 +38,12 @@ pub struct TrainingConfig {
     /// Evaluation interval in steps
     #[serde(default = "default_eval_interval")]
     pub eval_interval: usize,
+
+    /// Path to training data (FineWeb binary format)
+    pub train_path: String,
+
+    /// Path to validation data (FineWeb binary format)
+    pub val_path: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
