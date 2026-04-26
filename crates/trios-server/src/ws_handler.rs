@@ -37,7 +37,7 @@ pub struct AppState {
     pub zai_api: String,
     /// z.ai API keys (rotated round-robin)
     pub zai_keys: Vec<String>,
-    /// HTTP client for outbound requests
+    /// HTTP client for outbound requests (timeout from TRIOS_REQUEST_TIMEOUT_SECS)
     pub http_client: reqwest::Client,
     /// Round-robin counter for key rotation
     pub zai_key_idx: Arc<AtomicUsize>,
@@ -62,7 +62,6 @@ impl AppState {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(100);
 
-        // Load z.ai credentials from environment
         let zai_api = std::env::var("ZAI_API").unwrap_or_default();
         let mut zai_keys = Vec::new();
         for i in 1..=6 {
@@ -73,9 +72,20 @@ impl AppState {
             }
         }
 
-        info!(".env loaded: zai_api={} keys={}",
+        let timeout_secs: u64 = std::env::var("TRIOS_REQUEST_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(120);
+
+        info!(".env loaded: zai_api={} keys={} timeout={}s",
             if zai_api.is_empty() { "(empty)" } else { &zai_api },
-            zai_keys.len());
+            zai_keys.len(),
+            timeout_secs);
+
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(timeout_secs))
+            .build()
+            .unwrap_or_default();
 
         Self {
             mcp: McpService::new(),
@@ -85,7 +95,7 @@ impl AppState {
             a2a: Arc::new(RwLock::new(A2ARouter::new())),
             zai_api,
             zai_keys,
-            http_client: reqwest::Client::new(),
+            http_client,
             zai_key_idx: Arc::new(AtomicUsize::new(0)),
         }
     }

@@ -65,7 +65,7 @@ pub fn SettingsPanel() -> Element {
             } }
             // API Key section
             { ApiKeySection {} }
-            // MCP URL section
+            // MCP Server URL section (local + public endpoint switcher)
             { McpUrlSection {} }
         }
     }
@@ -73,16 +73,12 @@ pub fn SettingsPanel() -> Element {
 
 // ─── SettingsSection ─────────────────────────────────────────
 
-/// A settings section with title and content.
 #[derive(Props, Clone, PartialEq)]
 pub struct SettingsSectionProps {
-    /// Section title.
     pub title: String,
-    /// Section content.
     pub children: Element,
 }
 
-/// Render a settings section.
 pub fn SettingsSection(props: SettingsSectionProps) -> Element {
     let palette = use_palette();
 
@@ -115,7 +111,6 @@ pub fn SettingsSection(props: SettingsSectionProps) -> Element {
 
 // ─── ApiKeySection ───────────────────────────────────────────
 
-/// API key input section.
 fn ApiKeySection() -> Element {
     let mut settings = use_settings_atom();
     let api_key = settings.read().api_key.clone();
@@ -143,14 +138,62 @@ fn ApiKeySection() -> Element {
 
 // ─── McpUrlSection ───────────────────────────────────────────
 
-/// MCP server URL configuration.
+const URL_LOCAL: &str = "http://localhost:9005";
+const URL_PUBLIC: &str = "https://playras-macbook-pro-1.tail01804b.ts.net";
+
+/// MCP server URL section with Local / Public quick-select buttons.
 fn McpUrlSection() -> Element {
     let mut settings = use_settings_atom();
+    let palette = use_palette();
     let mcp_url = settings.read().mcp_url.clone();
+
+    let is_local = mcp_url == URL_LOCAL || mcp_url.starts_with("http://localhost");
+    let is_public = mcp_url.contains("tail01804b.ts.net");
 
     rsx! {
         SettingsSection {
             title: "MCP Server".to_string(),
+            // Quick-select row
+            div {
+                style: "display: flex; gap: {spacing::SM}; margin-bottom: {spacing::XS};",
+                // Local button
+                button {
+                    style: "
+                        flex: 1;
+                        padding: 6px 0;
+                        border-radius: {radius::MD};
+                        border: 1px solid {if is_local { palette.accent } else { palette.border }};
+                        background: {if is_local { palette.accent } else { palette.surface }};
+                        color: {if is_local { palette.background } else { palette.text }};
+                        font-family: {typography::FONT_FAMILY};
+                        font-size: {typography::SIZE_SM};
+                        cursor: pointer;
+                    ",
+                    onclick: move |_| {
+                        settings.write().mcp_url = URL_LOCAL.to_string();
+                    },
+                    "🖥 Local"
+                }
+                // Public (Funnel) button
+                button {
+                    style: "
+                        flex: 1;
+                        padding: 6px 0;
+                        border-radius: {radius::MD};
+                        border: 1px solid {if is_public { palette.accent } else { palette.border }};
+                        background: {if is_public { palette.accent } else { palette.surface }};
+                        color: {if is_public { palette.background } else { palette.text }};
+                        font-family: {typography::FONT_FAMILY};
+                        font-size: {typography::SIZE_SM};
+                        cursor: pointer;
+                    ",
+                    onclick: move |_| {
+                        settings.write().mcp_url = URL_PUBLIC.to_string();
+                    },
+                    "🌐 Public"
+                }
+            }
+            // Manual URL input
             Input {
                 placeholder: "http://localhost:9005".to_string(),
                 value: mcp_url,
