@@ -295,14 +295,14 @@ impl MuonOptimizer {
             *p *= 1.0 - lr * wd;
         }
 
-        for i in 0..n {
-            self.momentum_buffer[i] = mom * self.momentum_buffer[i] + (1.0 - mom) * gradients[i];
+        for (i, &grad) in gradients.iter().enumerate().take(n) {
+            self.momentum_buffer[i] = mom * self.momentum_buffer[i] + (1.0 - mom) * grad;
         }
 
         let update = self.orthogonalize_update();
 
-        for i in 0..n {
-            params[i] -= lr * update[i];
+        for (p, &u) in params.iter_mut().zip(update.iter()).take(n) {
+            *p -= lr * u;
         }
     }
 
