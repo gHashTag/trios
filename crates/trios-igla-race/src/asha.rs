@@ -150,8 +150,8 @@ pub async fn should_prune(
     if current_bpb <= config.target_bpb {
         return Ok(false);
     }
-    // STUB: simple heuristic - prune if BPB > 2.7 at first rung
-    Ok(current_bpb > 2.7)
+    let threshold = crate::invariants::INV2_BPB_PRUNE_THRESHOLD;
+    Ok(current_bpb > threshold)
 }
 
 /// Handle trial pruning (STUB)
@@ -314,7 +314,7 @@ pub async fn run_worker(
             
             // d. if should_prune(rung, bpb) → break to next trial
             // Mock median check - in reality would query Neon
-            let should_prune = bpb > 3.0; // Simple threshold for now
+            let should_prune = bpb > crate::invariants::INV2_BPB_PRUNE_THRESHOLD;
             
             if should_prune {
                 info!("Prune trial: BPB={}", bpb);

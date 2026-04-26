@@ -1,3 +1,7 @@
+/// L-R14 anchor: BPB target for IGLA RACE victory (1.5).
+/// Must match `hive_automaton::BPB_VICTORY_TARGET`.
+pub const IGLA_TARGET_BPB: f64 = 1.5;
+
 pub mod asha;
 pub mod hive_automaton;
 pub mod invariants;

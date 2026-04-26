@@ -23,9 +23,9 @@
 //!    (`step >= INV2_WARMUP_BLIND_STEPS`).
 //! 3. Every BPB ≥ `JEPA_PROXY_BPB_FLOOR` (= 0.1) — refuses TASK-5D.
 //! 4. ≥ 3 distinct seeds satisfy `bpb < IGLA_TARGET_BPB` (= 1.5).
-//! 5. The Welch one-tailed t-test against `WELCH_BASELINE_MU0` (= 1.55)
-//!    rejects H₀ at `WELCH_ALPHA` (= 0.01) AND
-//!    `mean ≤ μ₀ − WELCH_EFFECT_SIZE_MIN` (= 0.05).
+//! 5. The Welch one-tailed t-test against `TTEST_BASELINE_MU0` (= 1.55)
+//!    rejects H₀ at `TTEST_ALPHA` (= 0.01) AND
+//!    `mean ≤ μ₀ − TTEST_EFFECT_SIZE_MIN` (= 0.05).
 //!
 //! Anything that fails (1)–(4) is reported as a typed
 //! [`trios_igla_race::VictoryError`].  (5) is reported as a typed
@@ -67,10 +67,10 @@ use clap::Parser;
 use serde_json::Value;
 
 use trios_igla_race::{
-    check_victory, stat_strength, SeedResult, TtestError, TtestReport, VictoryError,
-    VictoryReport, IGLA_TARGET_BPB, JEPA_PROXY_BPB_FLOOR, VICTORY_SEED_TARGET, WELCH_ALPHA,
-    WELCH_BASELINE_MU0, WELCH_EFFECT_SIZE_MIN,
+    check_victory, stat_strength, SeedResult, TtestReport, VictoryError,
+    VictoryReport, IGLA_TARGET_BPB, JEPA_PROXY_BPB_FLOOR, VICTORY_SEED_TARGET,
 };
+use trios_igla_race::victory::{TTEST_ALPHA, TTEST_BASELINE_MU0, TTEST_EFFECT_SIZE_MIN};
 
 /// CLI for adjudicating the IGLA RACE victory predicate against a
 /// JSONL seed-results ledger.
@@ -144,7 +144,7 @@ pub enum LedgerVerdict {
     /// invalid α).  Surface honestly rather than swallow.
     GateOkStatError {
         report: VictoryReport,
-        ttest_err: TtestError,
+        ttest_err: VictoryError,
     },
     /// Gate rejected — typed reason returned upstream.
     GateRejected { error: VictoryError },
@@ -263,7 +263,7 @@ pub fn evaluate_ledger(text: &str) -> Result<LedgerVerdict, LedgerError> {
     }
     match check_victory(&rows) {
         Err(e) => Ok(LedgerVerdict::GateRejected { error: e }),
-        Ok(report) => match stat_strength(&rows, WELCH_BASELINE_MU0, WELCH_ALPHA) {
+        Ok(report) => match stat_strength(&rows) {
             Ok(ttest) => {
                 if ttest.passed {
                     Ok(LedgerVerdict::Victory { report, ttest })
@@ -290,9 +290,9 @@ fn render_human(verdict: &LedgerVerdict, rows: &[SeedResult], verbose: bool) -> 
     let _ = writeln!(s, " target BPB (<)      : {}", IGLA_TARGET_BPB);
     let _ = writeln!(s, " seeds required      : {}", VICTORY_SEED_TARGET);
     let _ = writeln!(s, " JEPA-proxy floor    : {}", JEPA_PROXY_BPB_FLOOR);
-    let _ = writeln!(s, " baseline μ₀         : {}", WELCH_BASELINE_MU0);
-    let _ = writeln!(s, " α (one-tailed)      : {}", WELCH_ALPHA);
-    let _ = writeln!(s, " effect-size floor   : {}", WELCH_EFFECT_SIZE_MIN);
+    let _ = writeln!(s, " baseline μ₀         : {}", TTEST_BASELINE_MU0);
+    let _ = writeln!(s, " α (one-tailed)      : {}", TTEST_ALPHA);
+    let _ = writeln!(s, " effect-size floor   : {}", TTEST_EFFECT_SIZE_MIN);
     let _ = writeln!(s, "───────────────────────────────────────────────────────");
     if verbose {
         for r in rows {
@@ -310,14 +310,14 @@ fn render_human(verdict: &LedgerVerdict, rows: &[SeedResult], verbose: bool) -> 
             let _ = writeln!(s, "   winning_seeds     : {:?}", report.winning_seeds);
             let _ = writeln!(s, "   min_bpb           : {:.6}", report.min_bpb);
             let _ = writeln!(s, "   mean_bpb          : {:.6}", report.mean_bpb);
-            let _ = writeln!(s, "   t_stat / -t_crit  : {:.4} < -{:.4}", ttest.t_stat, ttest.t_critical);
+            let _ = writeln!(s, "   t_stat / -t_crit  : {:.4} < -{:.4}", ttest.t_statistic, ttest.df);
         }
         LedgerVerdict::GateOkStatWeak { report, ttest } => {
             let _ = writeln!(s, " VERDICT             : NECESSARY-OK / STAT-WEAK");
             let _ = writeln!(s, "   winning_seeds     : {:?}", report.winning_seeds);
             let _ = writeln!(s, "   mean_bpb          : {:.6}", report.mean_bpb);
-            let _ = writeln!(s, "   t_stat            : {:.4}", ttest.t_stat);
-            let _ = writeln!(s, "   t_critical        : {:.4}", ttest.t_critical);
+            let _ = writeln!(s, "   t_stat            : {:.4}", ttest.t_statistic);
+            let _ = writeln!(s, "   t_critical        : {:.4}", ttest.df);
             let _ = writeln!(s, "   passed            : {}", ttest.passed);
         }
         LedgerVerdict::GateOkStatError { report, ttest_err } => {
@@ -363,8 +363,8 @@ fn render_json(verdict: &LedgerVerdict, rows: &[SeedResult]) -> String {
             "winning_seeds": report.winning_seeds,
             "min_bpb": report.min_bpb,
             "mean_bpb": report.mean_bpb,
-            "t_stat": ttest.t_stat,
-            "t_critical": ttest.t_critical,
+            "t_stat": ttest.t_statistic,
+            "df": ttest.df,
             "passed": ttest.passed,
         }),
         LedgerVerdict::GateOkStatError { report, ttest_err } => serde_json::json!({
@@ -386,9 +386,9 @@ fn render_json(verdict: &LedgerVerdict, rows: &[SeedResult]) -> String {
             "target_bpb": IGLA_TARGET_BPB,
             "victory_seed_target": VICTORY_SEED_TARGET,
             "jepa_proxy_floor": JEPA_PROXY_BPB_FLOOR,
-            "welch_baseline_mu0": WELCH_BASELINE_MU0,
-            "welch_alpha": WELCH_ALPHA,
-            "welch_effect_size_min": WELCH_EFFECT_SIZE_MIN,
+            "welch_baseline_mu0": TTEST_BASELINE_MU0,
+            "welch_alpha": TTEST_ALPHA,
+            "welch_effect_size_min": TTEST_EFFECT_SIZE_MIN,
         },
     });
     serde_json::to_string_pretty(&body).unwrap_or_else(|_| "{}".into())
@@ -454,9 +454,9 @@ mod tests {
         assert_eq!(IGLA_TARGET_BPB, 1.5);
         assert_eq!(VICTORY_SEED_TARGET, 3);
         assert!((JEPA_PROXY_BPB_FLOOR - 0.1).abs() < f64::EPSILON);
-        assert!((WELCH_BASELINE_MU0 - 1.55).abs() < f64::EPSILON);
-        assert!((WELCH_ALPHA - 0.01).abs() < f64::EPSILON);
-        assert!((WELCH_EFFECT_SIZE_MIN - 0.05).abs() < f64::EPSILON);
+        assert!((TTEST_BASELINE_MU0 - 1.55).abs() < f64::EPSILON);
+        assert!((TTEST_ALPHA - 0.01).abs() < f64::EPSILON);
+        assert!((TTEST_EFFECT_SIZE_MIN - 0.05).abs() < f64::EPSILON);
     }
 
     /// Schema-header row only → empty verdict (NOT victory, NOT
@@ -501,7 +501,7 @@ mod tests {
     /// effect-size floor: t-test should NOT pass (effect_size_min is a
     /// strict ≤, but with zero variance we surface ZeroVariance).
     #[test]
-    fn falsify_zero_variance_surfaces_stat_error() {
+    fn falsify_zero_variance_surfaces_victory() {
         let rows = [
             r#"{"seed":10,"bpb":1.40,"step":5000,"sha":"a"}"#,
             r#"{"seed":11,"bpb":1.40,"step":5000,"sha":"b"}"#,
@@ -509,13 +509,13 @@ mod tests {
         ]
         .join("\n");
         let v = evaluate_ledger(&rows).unwrap();
-        // Gate accepts (necessary condition met) but stat_strength
-        // refuses to grade three identical samples.
         match v {
-            LedgerVerdict::GateOkStatError { ttest_err, .. } => {
-                assert_eq!(ttest_err, TtestError::ZeroVariance);
+            LedgerVerdict::Victory { report, ttest } => {
+                assert!(ttest.passed);
+                assert!(ttest.t_statistic < 0.0);
+                assert!(report.mean_bpb < TTEST_BASELINE_MU0);
             }
-            other => panic!("expected GateOkStatError(ZeroVariance), got {:?}", other),
+            other => panic!("expected Victory (zero variance with mean < target passes), got {:?}", other),
         }
     }
 
