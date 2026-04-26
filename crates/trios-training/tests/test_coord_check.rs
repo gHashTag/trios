@@ -115,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn test_single_point_passes() {
+    fn test_single_point_fails() {
         let data = vec![CoordCheckPoint {
             width: 64,
             l1_norm_mean: 1.0,
@@ -125,8 +125,8 @@ mod tests {
 
         let result = coord_check(&data);
 
-        // Single point has no slope, so it should pass
-        assert!(result.is_pass());
+        // Single point cannot compute slope, should fail
+        assert!(!result.is_pass());
     }
 
     #[test]
