@@ -630,7 +630,6 @@ mod tests {
     /// Falsification 8: Welch t-test passes when clearly below baseline.
     #[test]
     fn ttest_passes_when_distribution_clearly_below_baseline() {
-        // Three seeds with mean = 1.40, significantly below baseline 1.55
         let r = vec![
             SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() },
             SeedResult { seed: 43, bpb: 1.39, step: 5000, sha: "b".into() },
@@ -639,6 +638,56 @@ mod tests {
         let report = stat_strength(&r).expect("expected t-test pass");
         assert!(report.passed);
         assert!(report.p_value < TTEST_ALPHA);
-        assert!(report.t_statistic < 0.0); // mean < baseline
+        assert!(report.t_statistic < 0.0);
+    }
+
+    /// L-f4 Gate-final: check_victory on 3-row tail with Gate-final seeds.
+    #[test]
+    fn gate_final_check_victory_on_3_row_tail() {
+        let r = vec![
+            SeedResult { seed: 42, bpb: 1.42, step: 5000, sha: "a".into() },
+            SeedResult { seed: 43, bpb: 1.44, step: 5000, sha: "b".into() },
+            SeedResult { seed: 44, bpb: 1.40, step: 5000, sha: "c".into() },
+        ];
+        let report = check_victory(&r).expect("3 Gate-final seeds below 1.5");
+        assert_eq!(report.winning_seeds, vec![42, 43, 44]);
+        assert!(report.mean_bpb < 1.5);
+    }
+
+    /// L-f4 Gate-final witness: INV-7 rejects when seed set is not 3 distinct.
+    #[test]
+    fn falsify_inv7_rejects_set() {
+        let two = vec![
+            SeedResult { seed: 42, bpb: 1.42, step: 5000, sha: "a".into() },
+            SeedResult { seed: 43, bpb: 1.44, step: 5000, sha: "b".into() },
+        ];
+        assert!(check_victory(&two).is_err(), "2 seeds must be rejected");
+
+        let dup = vec![
+            SeedResult { seed: 42, bpb: 1.42, step: 5000, sha: "a".into() },
+            SeedResult { seed: 42, bpb: 1.44, step: 5000, sha: "b".into() },
+            SeedResult { seed: 43, bpb: 1.40, step: 5000, sha: "c".into() },
+        ];
+        assert!(check_victory(&dup).is_err(), "duplicate seed must be rejected");
+
+        let one_above = vec![
+            SeedResult { seed: 42, bpb: 1.42, step: 5000, sha: "a".into() },
+            SeedResult { seed: 43, bpb: 1.44, step: 5000, sha: "b".into() },
+            SeedResult { seed: 44, bpb: 1.55, step: 5000, sha: "c".into() },
+        ];
+        assert!(check_victory(&one_above).is_err(), "seed with bpb >= 1.5 must be rejected");
+    }
+
+    /// L-f4: stat_strength on Gate-final seed set {42,43,44}.
+    #[test]
+    fn gate_final_stat_strength_on_3_seeds() {
+        let r = vec![
+            SeedResult { seed: 42, bpb: 1.35, step: 81000, sha: "a".into() },
+            SeedResult { seed: 43, bpb: 1.38, step: 81000, sha: "b".into() },
+            SeedResult { seed: 44, bpb: 1.32, step: 81000, sha: "c".into() },
+        ];
+        let report = stat_strength(&r).expect("Gate-final 3-seed stat strength");
+        assert!(report.passed);
+        assert!(report.p_value < 0.01);
     }
 }
