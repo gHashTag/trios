@@ -56,15 +56,15 @@ All emits are triplet-validated: `BPB=<v> @ step=<N> seed=<S> sha=<7c>`.
 
 ## Migration Status
 
-| PR | Status | Description |
-|----|--------|-------------|
-| PR-1 | ✅ THIS | Skeleton crate (empty) |
-| PR-2 | TODO | Migrate model + optimizer + data |
-| PR-3 | TODO | Migrate JEPA + objective |
-| PR-4 | TODO | DELETE dead crates + R1 cleanup |
-| PR-5 | TODO | Railway publish + 3-seed deploy |
+| PR | Status | Description | Owner |
+|----|--------|-------------|--------|
+| PR-1 | ✅ Complete | Skeleton crate (empty) |
+| PR-2 | 🟡 In Progress | Migrate model + optimizer + data + tokenizer |
+| PR-3 | ⬜ Pending | Migrate JEPA + objective + invariants |
+| PR-4 | ⬜ Pending | DELETE dead crates + R1 cleanup |
+| PR-5 | ⬜ Pending | Railway publish + 3-seed deploy |
 
-See issue #321 for full plan.
+See [ROADMAP.md](./ROADMAP.md) for detailed phase breakdown and known issues.
 
 ## Anchor
 

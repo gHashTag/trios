@@ -251,7 +251,56 @@ See [CLAUDE.md](./CLAUDE.md) for full rules. Summary:
 | `TRIONS_WORKING_DIR` | `cwd` | Working directory for git |
 | `TRIONS_LOG_LEVEL` | `info` | Log level |
 
-## Related
+## Training: trios-trainer-igla
+
+**IGLA RACE** training pipeline for pushing language model performance.
+
+[![CI](https://github.com/gHashTag/trios-trainer-igla/actions/workflows/ci.yml/badge.svg)](https://github.com/gHashTag/trios-trainer-igla/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Anchor](https://img.shields.io/badge/anchor-%CF%86%C2%B2%2B%CF%86%E2%81%BB%C2%B2%3D3-black)](https://doi.org/10.5281/zenodo.19227877)
+
+### Quick Start
+
+```bash
+git clone https://github.com/gHashTag/trios-trainer-igla.git
+cd trios-trainer-igla
+cargo run --release --bin trios-train -- \
+    --config configs/champion.toml --seed 43
+```
+
+### ROADMAP
+
+| Phase | Status | Scope |
+|---|---|---|
+| **PR-0** | ✅ done | Skeleton compiles, anchor test passes |
+| **PR-1** | 🟡 next | Migrate model + optimizer + tokenizer |
+| **PR-2** | ⬜ | Migrate JEPA + objective; merge `trios-igla-trainer::jepa_runner` |
+| **PR-3** | ⬜ | Champion-config full run reproduces ≈ 2.2393 ± 0.01 |
+| **PR-4** | ⬜ | DELETE phase in `gHashTag/trios` (consolidation PR) |
+| **PR-5** | ⬜ | Push image to ghcr.io + wire 3-seed Railway deployment |
+
+### Key Features
+
+- **HybridAttn (L-h2)** with INV-13 validation (qk_gain must be φ² or φ³)
+- **Multi-objective loss**: 0.5*NTP + 0.25*JEPA + 0.25*NCA
+- **Muon optimizer** with Newton-Schulz orthogonalization
+- **GF16 (Golden Float)** quantization
+- **Champion baseline**: BPB=2.2393 @ 27K steps
+- **Target BPB**: 1.50 for Gate-2 victory
+
+### Invariants
+
+When built with `--features trios-integration`:
+- **INV-8** (φ-LR band): `lr ∈ [1e-3, 1e-2]`
+- **R8** (Gate-2 floor): step ≥ 4000 to emit ledger row
+- **embargo**: HEAD SHA must not appear in `.embargo`
+
+### Related Training Projects
+
+- [gHashTag/trios-trainer-igla](https://github.com/gHashTag/trios-trainer-igla) — Canonical IGLA training pipeline
+- Local crate: `crates/trios-trainer/` — CPU training foundation
+
+## Related Projects
 
 - [gHashTag/t27](https://github.com/gHashTag/t27) — Trinity math research
 - [gHashTag/BrowserOS](https://github.com/gHashTag/BrowserOS) — Agent that uses trios
