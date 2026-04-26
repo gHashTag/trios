@@ -17,14 +17,6 @@
 //!
 //! This module is owned by L-h2 (Gate-2) → L-f1 (Gate-final extension).
 //!
-//! ## Pre-registration
-//!
-//! This module is authored against the **immutable** Gate-2 pre-registration
-//! comment on [trios#143](https://github.com/gHashTag/trios/issues/143#issuecomment-4320342032)
-//! (lane L-h5 DONE).  Any deviation from the published values below must
-//! appear as a *new* comment on #143 **cited from the deviating commit
-//! before** the data is collected (Rule R5).
-//!
 //! ## Constants (Coq-grounded, L-R14)
 //!
 //! | Constant              | Value                        | Source                                          |
