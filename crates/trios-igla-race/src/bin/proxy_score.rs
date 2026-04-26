@@ -5,8 +5,7 @@
 
 use std::env;
 use std::fs;
-use std::io::{self, BufRead};
-use std::path::PathBuf;
+use std::io;
 use std::process;
 
 use serde::{Deserialize, Serialize};
@@ -58,7 +57,7 @@ struct MetricsOutput {
 }
 
 fn load_config(path: &str) -> ProxyConfig {
-    let file = fs::File::open(path).expect(&format!("Cannot open config: {}", path));
+    let file = fs::File::open(path).unwrap_or_else(|_| panic!("Cannot open config: {}", path));
     let reader = io::BufReader::new(file);
     serde_json::from_reader(reader).expect("Cannot parse config JSON")
 }
@@ -154,7 +153,25 @@ fn main() {
                 inv14_pass,
             }
         }
-        "ensemble" | _ => {
+        "ensemble" => {
+            let synflow = compute_synflow(&config);
+            let gradnorm = compute_gradnorm(&config);
+            let ensemble = compute_ensemble(&config, synflow, gradnorm);
+            let tau = match validate_inv14(&config) {
+                Some(true) => Some(1.0),
+                _ => None,
+            };
+            MetricsOutput {
+                synflow_score: synflow,
+                gradnorm_score: gradnorm,
+                ensemble_score: ensemble,
+                spearman_tau: tau,
+                inv14_pass,
+            }
+        }
+        _ => {
+            // Default to ensemble for unknown metrics
+            eprintln!("Warning: Unknown metric '{}', using ensemble", metric);
             let synflow = compute_synflow(&config);
             let gradnorm = compute_gradnorm(&config);
             let ensemble = compute_ensemble(&config, synflow, gradnorm);

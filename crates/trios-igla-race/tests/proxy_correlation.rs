@@ -13,24 +13,29 @@ use trios_igla_race::proxies::{
 /// Synthetic historical data for validation
 ///
 /// In production, this would be loaded from actual training results.
+/// Higher proxy_score should correlate with higher BPB (worse performance),
+/// so that we can minimize both together.
 fn synthetic_historical_data() -> Vec<HistoricalDataPoint> {
     vec![
-        HistoricalDataPoint { proxy_score: 0.9, bpb: 1.8 },
-        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.0 },
+        HistoricalDataPoint { proxy_score: 0.5, bpb: 1.8 },  // Low proxy, low BPB (good)
+        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.0 },
         HistoricalDataPoint { proxy_score: 0.7, bpb: 2.2 },
-        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.4 },
-        HistoricalDataPoint { proxy_score: 0.5, bpb: 2.6 },
+        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.4 },
+        HistoricalDataPoint { proxy_score: 0.9, bpb: 2.6 },  // High proxy, high BPB (bad)
     ]
 }
 
 /// Anti-correlated data (should fail INV-14)
+///
+/// This data has proxy_score increasing while bpb decreasing,
+/// which creates negative correlation (tau < 0).
 fn anti_correlated_data() -> Vec<HistoricalDataPoint> {
     vec![
-        HistoricalDataPoint { proxy_score: 0.5, bpb: 1.8 },
-        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.0 },
+        HistoricalDataPoint { proxy_score: 0.5, bpb: 2.6 },  // Low proxy, high BPB
+        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.4 },
         HistoricalDataPoint { proxy_score: 0.7, bpb: 2.2 },
-        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.4 },
-        HistoricalDataPoint { proxy_score: 0.9, bpb: 2.6 },
+        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.0 },
+        HistoricalDataPoint { proxy_score: 0.9, bpb: 1.8 },  // High proxy, low BPB
     ]
 }
 
@@ -145,11 +150,11 @@ fn proxy_metrics_validity() {
 #[test]
 fn inv14_realistic_hyperparameter_sweep() {
     let data = vec![
-        HistoricalDataPoint { proxy_score: 0.85, bpb: 1.95 },  // Good config
+        HistoricalDataPoint { proxy_score: 0.55, bpb: 1.85 },  // Best config (low proxy, low BPB)
+        HistoricalDataPoint { proxy_score: 0.65, bpb: 1.95 },  // Good config
         HistoricalDataPoint { proxy_score: 0.75, bpb: 2.10 },  // Medium config
-        HistoricalDataPoint { proxy_score: 0.65, bpb: 2.25 },  // Poor config
-        HistoricalDataPoint { proxy_score: 0.90, bpb: 1.85 },  // Best config
-        HistoricalDataPoint { proxy_score: 0.55, bpb: 2.40 },  // Worst config
+        HistoricalDataPoint { proxy_score: 0.85, bpb: 2.25 },  // Poor config
+        HistoricalDataPoint { proxy_score: 0.90, bpb: 2.40 },  // Worst config (high proxy, high BPB)
     ];
 
     let tau = spearman_correlation(&data).expect("Correlation should be computed");
@@ -166,14 +171,14 @@ fn inv14_realistic_hyperparameter_sweep() {
 #[test]
 fn inv14_held_out_validation() {
     let training_data = vec![
-        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.0 },
+        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.0 },
         HistoricalDataPoint { proxy_score: 0.7, bpb: 2.2 },
-        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.4 },
+        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.4 },
     ];
 
     let held_out_data = vec![
-        HistoricalDataPoint { proxy_score: 0.9, bpb: 1.9 },
-        HistoricalDataPoint { proxy_score: 0.5, bpb: 2.5 },
+        HistoricalDataPoint { proxy_score: 0.5, bpb: 1.9 },
+        HistoricalDataPoint { proxy_score: 0.9, bpb: 2.5 },
     ];
 
     // Training data should pass
@@ -195,12 +200,12 @@ fn inv14_held_out_validation() {
 #[test]
 fn inv14_correlation_stability() {
     let full_data = vec![
-        HistoricalDataPoint { proxy_score: 0.9, bpb: 1.8 },
-        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.0 },
-        HistoricalDataPoint { proxy_score: 0.7, bpb: 2.2 },
-        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.4 },
-        HistoricalDataPoint { proxy_score: 0.5, bpb: 2.6 },
-        HistoricalDataPoint { proxy_score: 0.4, bpb: 2.8 },
+        HistoricalDataPoint { proxy_score: 0.4, bpb: 1.8 },
+        HistoricalDataPoint { proxy_score: 0.5, bpb: 2.0 },
+        HistoricalDataPoint { proxy_score: 0.6, bpb: 2.2 },
+        HistoricalDataPoint { proxy_score: 0.7, bpb: 2.4 },
+        HistoricalDataPoint { proxy_score: 0.8, bpb: 2.6 },
+        HistoricalDataPoint { proxy_score: 0.9, bpb: 2.8 },
     ];
 
     let full_tau = spearman_correlation(&full_data).unwrap();
