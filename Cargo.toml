@@ -6,6 +6,8 @@ members = [
     "crates/trios-ternary",
     "crates/trios-tri",
     "crates/trios-hybrid",
+    "crates/trios-training",
+    "crates/trios-train-cpu",
     "crates/trios-git",
     "crates/trios-server",
     "crates/trios-gb",
@@ -23,12 +25,10 @@ members = [
     "crates/trios-model",
     "crates/trios-llm",
     "crates/trios-sdk",
-    "crates/trios-ca-mask",
     "crates/trios-phi-schedule",
     "crates/trios-trinity-init",
     "crates/trios-fpga",
     "crates/trios-doctor",
-    "crates/trios-doctor/rings/SILVER-RING-DR-04",
     # trios-ext — Ring Architecture (issue #247)
     "crates/trios-ext/rings/SILVER-RING-EXT-00",
     "crates/trios-ext/rings/SILVER-RING-EXT-01",
@@ -40,12 +40,12 @@ members = [
     "crates/trios-ui/rings/UR-07",
     "crates/trios-ui/rings/UR-08",
     "crates/trios-ui/rings/BR-APP",
+    "crates/trios-igla-trainer",
     "crates/trios-igla-race",
     "crates/trios-cli",
     "crates/trios-claude",
     "contrib/anti-ban",
     "contrib/oracle",
-    "crates/trios-operator-smoke",
     "crates/trios-server/xtask",
     "crates/trios-ipc", "crates/tri-tunnel", "crates/tri-cli",
     # IGLA enforcement layer (L-R14)
@@ -56,48 +56,17 @@ members = [
     "crates/trinity-extract",
     # PhD monograph build / audit / bibliography / coq-map / reproduce (Rust-only, R1)
     "crates/trios-phd",
-    "crates/phd-dashboard",
-    # Runtime-witness placeholders for Coq lemmas (L-COQ-SWEEP-13, trios#586/#587)
-    "crates/trios-coq-witness",
     # LT Phase D — page-count gate witness for trios#265 (Rust-only, R1)
     "tools/page_gate",
     "tools/acm_ae_check",
     "tools/citetheorem_audit",
     "tools/merge_order_gate",
     "tools/defense_gate",
-    # tri-mcp vendor (gHashTag/tri-mcp)
-    "vendor/tri-mcp/rings/SR-00",
-    "vendor/tri-mcp/rings/SR-01",
-    "vendor/tri-mcp/rings/SR-02",
-    # CPU N-gram training (IGLA RACE Gate-2)
-    "crates/trios-train-cpu",
-    # Trinity dePIN Mesh (Ch.35 PhD — L-DPC2/L-DPC3)
-    "crates/trios-mesh",
-    "crates/trios-mesh-node",
-    # Trinity Secure Chat (EPIC trinity-fpga#28)
-    "crates/trios-chat",
-    # Trinity Secure Chat — Ring Architecture (Wave-3, trinity-fpga#28)
-    "crates/trios-chat/rings/CR-CHAT-00",
-    "crates/trios-chat/rings/CR-CHAT-01",
-    "crates/trios-chat/rings/CR-CHAT-02",
-    "crates/trios-chat/rings/CR-CHAT-03",
-    "crates/trios-chat/rings/CR-CHAT-04",
-    "crates/trios-chat/rings/CR-CHAT-05",
-    "crates/trios-chat/rings/CR-CHAT-06",
-    "crates/trios-chat/rings/CR-CHAT-07",
-    "crates/trios-chat/rings/CR-CHAT-LAWS",
-    "crates/trios-chat/rings/BR-IO-CHAT-05",
-    "crates/trios-chat/rings/BR-OUTPUT-CHAT",
 ]
 exclude = [
     "crates/trios-ext",
     "crates/trios-ui",
     "crates/trios-a2a",
-    "crates/trios-igla-race-hack",
-    "crates/trios-igla-race-pipeline",
-    "crates/trios-algorithm-arena",
-    "crates/trios-agent-memory",
-    "crates/trios-scarab-types",
 ]
 resolver = "2"
 
@@ -109,16 +78,13 @@ license = "MIT"
 repository = "https://github.com/gHashTag/trios"
 
 [workspace.dependencies]
-tower-http = { version = "0.5", features = ["cors"] }
-base64 = "0.22"
 tokio = { version = "1", features = ["full"] }
-uuid = { version = "1", features = ["v4"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-axum = { version = "0.7", features = ["ws"] }
+axum = "0.7"
 git2 = "0.19"
 async-trait = "0.1"
 tempfile = "3"
@@ -129,8 +95,8 @@ libc = "0.2"
 rand = "0.8"
 clap = { version = "4", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
-dioxus = "0.6"
-dioxus-signals = "0.6"
+dioxus = "0.5"
+dioxus-signals = "0.5"
 console_error_panic_hook = "0.1"
 wasm-bindgen = "0.2"
 web-sys = "0.3"
