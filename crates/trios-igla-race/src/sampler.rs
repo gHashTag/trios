@@ -132,6 +132,8 @@ mod tests {
             nca_grid: INV4_NCA_GRID,
             nca_k_states: INV4_NCA_K_STATES,
             grad_mode: GradientMode::RealMSE,
+            current_step: 0,
+            last_bpb: 0.0,
         }
     }
 

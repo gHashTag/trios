@@ -1,0 +1,31 @@
+[package]
+name = "citetheorem-audit"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "R14 retrofit witness — audit \\citetheorem{INV-N} coverage in docs/phd/chapters/*.tex (trios#265 Phase D §5)"
+license = "MIT OR Apache-2.0"
+
+# R1: Rust only. R3: lands on main. R6: tools/citetheorem_audit is greenfield.
+# Witness contract: exit 0 iff every empirical chapter file in --chapters-dir
+# carries at least MIN_CITETHEOREM_PER_CHAPTER (1) `\citetheorem{INV-N}` calls
+# resolving to an INV id present in --assertions <igla_assertions.json>.
+# Exit codes 80..=83 (disjoint from L7=0..=10, L15=21..=30, L-h4=50..=53,
+# LT=60..=63, LA=70..=74).
+
+[[bin]]
+name = "citetheorem-audit"
+path = "src/main.rs"
+
+[lib]
+name = "citetheorem_audit"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

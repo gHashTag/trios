@@ -209,4 +209,7 @@ fn main() {
     let _ = fs::OpenOptions::new().create(true).append(true)
         .open(&epath).unwrap().write_all(entry.as_bytes());
     println!("Experience: {}", epath);
+
+    // L-R8: stdout must end with BPB=X.XXXX for ASHA worker parsing
+    println!("BPB={:.4}", best_bpb);
 }

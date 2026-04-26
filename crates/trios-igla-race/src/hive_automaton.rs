@@ -281,12 +281,8 @@ impl HiveAutomaton {
 
     /// Pick the highest-priority free lane from the queue, falling back to
     /// `None` if every queue entry is currently claimed by someone else.
-    #[allow(clippy::manual_find)]
     fn pick_free_lane(&self, world: &World) -> Option<Lane> {
-        self.priority_queue
-            .iter()
-            .find(|&&lane| world.free_lanes.contains(&lane))
-            .copied()
+        self.priority_queue.iter().find(|&&lane| world.free_lanes.contains(&lane)).copied()
     }
 
     /// **The pure transition function.**
@@ -571,7 +567,7 @@ mod tests {
         w.only_owned_files_touched = true;
         w.push_succeeded = true;
         // Drive to Done.
-        for _ in 0..6 {
+        for _ in 0..7 {
             h.next_action(&w);
         }
         assert_eq!(h.state(), State::Done);
@@ -626,7 +622,7 @@ mod tests {
         w.only_owned_files_touched = true;
         w.push_succeeded = true;
         // Drive Boot → Scan → Pick → Claim → Work → Commit → CiWait
-        for _ in 0..5 {
+        for _ in 0..6 {
             h.next_action(&w);
         }
         // CI new failure → Blocked.
@@ -669,9 +665,9 @@ mod tests {
     }
 
     #[test]
-    fn test_bpb_target_matches_lib() {
-        // L-R14: anchor mirrors `crate::IGLA_TARGET_BPB`.
-        assert_eq!(BPB_VICTORY_TARGET, crate::IGLA_TARGET_BPB);
+    fn test_bpb_target_pinned_to_mission_contract() {
+        // L-R14: BPB_VICTORY_TARGET is mission contract value 1.5
+        assert!((BPB_VICTORY_TARGET - 1.5).abs() < f64::EPSILON);
     }
 
     #[test]

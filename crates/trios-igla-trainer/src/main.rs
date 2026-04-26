@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use trios_igla_trainer::{AuditLog, Schedule, TrainConfig};
+use trios_igla_trainer::jepa_runner::{run_jepa_training, JepaTrainArgs};
 
 #[derive(Parser)]
 #[command(name = "igla-trainer")]
@@ -31,13 +32,58 @@ struct Args {
 
     #[arg(long, default_value = "main")]
     branch: String,
+
+    #[arg(long, default_value = "ngram")]
+    arch: String,
+
+    #[arg(long, default_value_t = 256)]
+    hidden: usize,
+
+    #[arg(long, default_value_t = 6)]
+    context: usize,
+
+    #[arg(long)]
+    lr: Option<f64>,
 }
 
-fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt().init();
 
     let args = Args::parse();
 
+    // Handle JEPA architecture separately
+    if args.arch == "jepa" {
+        return run_jepa_arch(&args);
+    }
+
+    // Default mock training for other architectures
+    run_mock_training(&args)
+}
+
+fn run_jepa_arch(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    use trios_igla_trainer::jepa_runner::JepaTrainArgs;
+
+    tracing::info!("Starting JEPA training: steps={} hidden={} context={} seed={}",
+        args.steps, args.hidden, args.context, args.seed);
+
+    let jepa_args = JepaTrainArgs {
+        hidden: args.hidden,
+        context: args.context,
+        steps: args.steps as usize,
+        seed: args.seed,
+        exp_id: args.exp_id.clone(),
+    };
+
+    let final_bpb = run_jepa_training(&(), &jepa_args)?;
+    println!("BPB={:.4}", final_bpb);
+
+    // L7: Write experience log
+    write_experience_log(&args.exp_id, &args.model_id, args.seed, &format!("BPB={:.4}", final_bpb))?;
+
+    Ok(())
+}
+
+fn run_mock_training(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let schedule = match args.schedule.as_str() {
         "cosine" => Schedule::Cosine,
         "phi" => Schedule::PhiWarmup,

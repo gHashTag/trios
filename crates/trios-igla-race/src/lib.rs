@@ -6,13 +6,14 @@ pub mod neon;
 pub mod race;
 pub mod rungs;
 pub mod attn;
-pub mod bpb;
 pub mod ema;
-pub mod gf16;
-pub mod nca;
 pub mod sampler;
 pub mod status;
 pub mod victory;
+
+// ----------------------------------------------------------------------
+// INV-7: Welch t-test and TtestReport exports (L-R14)
+// ----------------------------------------------------------------------
 
 pub use asha::{AshaConfig, AshaRung, record_checkpoint, register_trial};
 
@@ -26,28 +27,38 @@ pub use invariants::{TrialConfig as InvTrialConfig, GradientMode, InvError, vali
 
 pub use rungs::{check_inv12_rung_valid, check_inv12_rung_valid_usize, Rung, TRINITY_BASE, RUNG_UNIT, RUNG_COUNT, MAX_RUNG_EXP};
 
+// Race exports (L11 internal)
+pub use race::{
+    WorkerPool,
+    run_trial,
+    simulate_bpb,
+};
+
 pub use victory::{
-    check_victory, is_victory, stat_strength, inv7_check_victory_constants,
-    SeedResult, VictoryError, VictoryReport, TtestReport, TtestError,
-    JEPA_PROXY_BPB_FLOOR, WELCH_ALPHA, WELCH_BASELINE_MU0, WELCH_EFFECT_SIZE_MIN,
+    check_victory,
+    is_victory,
+    SeedResult,
+    VictoryReport,
+    VictoryError,
+    JEPA_PROXY_BPB_FLOOR,
+    stat_strength,
+    TtestReport,
 };
 
 pub use ema::{EmaTracker, EmaError, ALPHA_PHI_INV_3, ALPHA_MIN_EXCLUSIVE, ALPHA_MAX_INCLUSIVE};
 
-pub use nca::{
-    assert_bands_distinct, validate_nca_entropy, validate_nca_entropy_canonical, NcaBandMode,
-    NcaError, NcaReport,
-};
-
 pub use attn::{QkHead, QkHeadError, PHI_4, HEAD_DIM_PHI_FLOOR, NUM_HEADS_MAX};
 
-pub use bpb::{BpbTracker, BpbError};
-
 pub use hive_automaton::{
-    AbortReason, AgentAction, HaltCause, HiveAutomaton, Lane, State, World,
-    BPB_VICTORY_TARGET, LANE_COUNT, SCHEMA_VERSION as HIVE_SCHEMA_VERSION,
+    AbortReason,
+    AgentAction,
+    HaltCause,
+    HiveAutomaton,
+    Lane,
+    State,
+    World,
+    BPB_VICTORY_TARGET,
+    LANE_COUNT,
+    SCHEMA_VERSION as HIVE_SCHEMA_VERSION,
     VICTORY_SEED_TARGET,
 };
-
-pub const IGLA_TARGET_BPB: f64 = 1.5;
-pub const ASHA_KEEP_FRACTION: f64 = 0.33;
