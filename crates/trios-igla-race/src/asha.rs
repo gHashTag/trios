@@ -272,8 +272,8 @@ pub async fn run_worker(
 
             let rung_steps = rung as usize;
             
-            // a. Spawn subprocess: ./target/release/trios-igla-trainer with config args
-            let output = Command::new("./target/release/trios-igla-trainer")
+            // a. Spawn subprocess: external SoT trainer (cargo install --git ...trios-trainer-igla)
+            let output = Command::new("trios-train")
                 .arg("--seed").arg("42") // Fixed seed for now
                 .arg("--steps").arg(rung_steps.to_string())
                 .arg("--hidden").arg(config.hidden.unwrap_or(256).to_string())
