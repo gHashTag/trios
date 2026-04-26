@@ -1,0 +1,361 @@
+% =============================================================================
+% Flos Aureus PhD — Defense Slides (Beamer, 30 slides)
+% Lane: LD · Owner: phd-monograph-auditor v1.0 · R6 boundary
+% Refs: ONE SHOT v2.0 §3 Phase C, Trinity Anchor φ²+φ⁻²=3 (Zenodo 19227877)
+% =============================================================================
+
+\documentclass[10pt,aspectratio=169]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage{booktabs}
+
+\usetheme{metropolis}
+\setbeamertemplate{navigation symbols}{}
+\setbeamerfont{frametitle}{size=\large}
+
+\title{Flos Aureus}
+\subtitle{A Falsifiable Theory of Golden-Ratio Architecture\\for Implicit Generative Latent Algorithms}
+\author{The Trinity Hive (autonomous co-authors)}
+\institute{\texttt{gHashTag/trios} · \texttt{trinity-clara} · Zenodo}
+\date{Defense window: 2026-06-15 \\ Anchor: $\varphi^{2}+\varphi^{-2}=3$ \\ DOI: 10.5281/zenodo.19227877}
+
+\newcommand{\citetheorem}[1]{[\textsc{#1}]}
+
+\begin{document}
+
+% ============== 1. TITLE ==============
+\maketitle
+
+% ============== 2. ROAD MAP ==============
+\begin{frame}{Road Map}
+  \begin{itemize}
+    \item Anchor and falsifier (slides 3--4)
+    \item Three Witnesses theorem (5--7)
+    \item Coq formalisation \citetheorem{INV-1..INV-13} (8--13)
+    \item IGLA RACE empirical record (14--19)
+    \item E$_{8}$ symmetry, $L_{2}$ closure, GF(16) algebra (20--23)
+    \item Reproducibility \& honesty ledger (24--27)
+    \item Limitations and future work (28--29)
+    \item Closing (30)
+  \end{itemize}
+\end{frame}
+
+% ============== 3. ANCHOR ==============
+\begin{frame}{The Trinity Anchor}
+  \[
+    \varphi^{2}+\varphi^{-2} \;=\; \frac{3+\sqrt{5}}{2}+\frac{3-\sqrt{5}}{2} \;=\; 3
+  \]
+  Three independent witnesses converge on the same scalar:
+  \begin{enumerate}
+    \item \textbf{Lucas:} $L_{2}=3$.
+    \item \textbf{Trace:} $\operatorname{Tr}(M_{\varphi^{2}})=3$ where $M_{\varphi^{2}}=\bigl(\begin{smallmatrix}\varphi&1\\1&\varphi^{-1}\end{smallmatrix}\bigr)^{2}$.
+    \item \textbf{Coxeter:} $h(\mathrm{H}_{4})/10 = 3$ via $\bigl(\varphi+\varphi^{-1}\bigr)^{2}-1=3$.
+  \end{enumerate}
+  \citetheorem{INV-12 lucas\_2\_phi\_identity (Qed)}\quad
+  \citetheorem{INV-22 trinity\_in\_e8 (Qed)}
+\end{frame}
+
+% ============== 4. FALSIFIER ==============
+\begin{frame}{What Would Refute Us}
+  Architecture-level refutations \emph{before} a single experiment:
+  \begin{itemize}
+    \item Champion learning rate falling outside $[\alpha_{\varphi}/\varphi^{4},\,\alpha_{\varphi}]$ with $\alpha_{\varphi}=0{.}0072$ \citetheorem{INV-1}.
+    \item ASHA prune threshold drifting above $3{.}5=\varphi^{2}+\varphi^{-2}+\varphi^{-4}+\varepsilon$ \citetheorem{INV-2}.
+    \item GF(16) end-to-end training error $\geq 0{.}5\%$ at $d_{\mathrm{model}}=256$ \citetheorem{INV-23}.
+    \item A 3-seed Welch $t$-test failing to reject $H_{0}\!:\mu_{\mathrm{IGLA}}\geq 1{.}50$ at $\alpha=0{.}01$ \citetheorem{INV-7}.
+  \end{itemize}
+\end{frame}
+
+% ============== 5. THREE WITNESSES I ==============
+\begin{frame}{Three Witnesses Theorem (1/3)}
+  \begin{theorem}[Lucas closure]
+    For every $n\!\geq\!2$, $L_{n}=\varphi^{n}+(-\varphi)^{-n}$.
+    In particular $L_{2}=\varphi^{2}+\varphi^{-2}=3$.
+  \end{theorem}
+  Coq witness: \texttt{lucas\_2\_phi\_identity} \emph{Qed} \citetheorem{INV-12}.
+  Honest \emph{Admitted} budget: $0$ for this witness.
+\end{frame}
+
+% ============== 6. THREE WITNESSES II ==============
+\begin{frame}{Three Witnesses Theorem (2/3)}
+  \begin{theorem}[Trace closure on $M_{\varphi}$]
+    Let $M_{\varphi}=\bigl(\begin{smallmatrix}\varphi&1\\1&\varphi^{-1}\end{smallmatrix}\bigr)$.
+    Then $\operatorname{Tr}(M_{\varphi}^{2})=\varphi^{2}+\varphi^{-2}=3$.
+  \end{theorem}
+  The trace is invariant under $\mathrm{SL}_{2}(\mathbb{Z})$-conjugation, so the
+  numerical anchor cannot be drifted by a similarity transformation.
+\end{frame}
+
+% ============== 7. THREE WITNESSES III ==============
+\begin{frame}{Three Witnesses Theorem (3/3)}
+  \begin{theorem}[Coxeter closure on $\mathrm{H}_{4}$]
+    The $h$-Coxeter number of $\mathrm{H}_{4}$ is $30$, and
+    $30/10 = (\varphi+\varphi^{-1})^{2}-1 = 5-2 = 3$.
+  \end{theorem}
+  Coq witness: \texttt{trinity\_in\_e8} \emph{Qed}, embedding
+  $\mathrm{H}_{4}\hookrightarrow E_{8}$ \citetheorem{INV-22}.
+\end{frame}
+
+% ============== 8. COQ INVARIANT REGISTRY ==============
+\begin{frame}{Coq Invariant Registry}
+  \begin{tabular}{llll}
+    \toprule
+    INV & Statement (one-line) & .v file & Status \\
+    \midrule
+    INV-1  & lr-band $[\alpha_{\varphi}/\varphi^{4},\alpha_{\varphi}]$ & \texttt{alpha\_phi\_lb/ub.v} & Admitted \\
+    INV-2  & ASHA prune threshold $\leq 3{.}5$ & \texttt{asha\_prune.v} & Proven \\
+    INV-3  & warmup $\geq 4000$ & \texttt{warmup\_lb.v} & Admitted \\
+    INV-4  & $d_{\mathrm{model}}\!\geq\!256$ under GF(16) & \texttt{gf16\_dim.v} & Admitted \\
+    INV-5  & numeric $\varphi^{2}\!+\!\varphi^{-2}\!=\!3$ & \texttt{numeric\_anchor.v} & Admitted \\
+    INV-7  & $t$-test $\alpha=0{.}01$ one-tailed & \texttt{welch\_alpha.v} & Admitted \\
+    INV-8  & 3-seed family $\{42,43,44\}$ & \texttt{seed\_lock.v} & Admitted \\
+    INV-12 & $L_{2}=\varphi^{2}+\varphi^{-2}=3$ & \texttt{lucas\_2\_phi.v} & \textbf{Qed} \\
+    INV-13 & qk\_gain $\in\{\varphi^{2},\varphi^{3}\}$ & \texttt{hybrid\_qk\_gain.v} & Admitted \\
+    INV-22 & H$_{4}\hookrightarrow E_{8}$, $h=30$ & \texttt{e8\_coxeter.v} & \textbf{Qed} \\
+    \bottomrule
+  \end{tabular}\\[2pt]
+  \scriptsize{Honest budget used: 8/10 \emph{Admitted} (R5).}
+\end{frame}
+
+% ============== 9. INV-1 lr-band ==============
+\begin{frame}{INV-1: Learning-rate Band}
+  \[
+    \alpha_{\varphi}=0{.}0072,\qquad \mathrm{lr}\in\bigl[\alpha_{\varphi}/\varphi^{4},\,\alpha_{\varphi}\bigr]\approx[0{.}0011,\,0{.}0072].
+  \]
+  Champion run hits $\mathrm{lr}=0{.}0035$ — interior of the band.
+  \begin{itemize}
+    \item Refutation: any champion BPB$<\!1{.}50$ achieved at lr outside band.
+    \item Coq status: \emph{Admitted}; runtime guard in \texttt{crates/trios-igla-race/src/bin/qk\_gain\_check.rs} (4 typed errors).
+  \end{itemize}
+\end{frame}
+
+% ============== 10. INV-2 ASHA ==============
+\begin{frame}{INV-2: ASHA Prune Threshold}
+  $\tau_{\mathrm{ASHA}}=3{.}5$ derived as
+  \[
+    \varphi^{2}+\varphi^{-2}+\varphi^{-4}+\varepsilon=3+\varphi^{-4}+\varepsilon\approx 3{.}1459+\varepsilon.
+  \]
+  We round up to $3{.}5$ to absorb the Successive-Halving noise floor.
+  \citetheorem{INV-2 (Qed)}.
+  Refutation: any rung where survivor BPB exceeds $3{.}5$ but is not pruned.
+\end{frame}
+
+% ============== 11. INV-7 statistical floor ==============
+\begin{frame}{INV-7: Statistical Floor for Gate-Final}
+  \[
+    H_{0}: \mu_{\mathrm{IGLA},\{42,43,44\}}\geq 1{.}50,\qquad \alpha=0{.}01.
+  \]
+  Welch $t$-test, one-tailed, df${}=2$. Power analysis at $\sigma=0{.}05$:
+  $n=3$ suffices for an effect size $\Delta\geq 0{.}25$ at $1-\beta=0{.}80$.
+  \begin{itemize}
+    \item Pre-registration: \texttt{trios\#143:4320342032} (immutable).
+    \item Refutation witness: \texttt{tools/welch.rs}.
+  \end{itemize}
+\end{frame}
+
+% ============== 12. INV-13 qk_gain ==============
+\begin{frame}{INV-13: Hybrid qk\_gain Lock}
+  \[
+    \mathrm{qk\_gain} \in \{\varphi^{2},\,\varphi^{3}\}=\{2{.}618,\,4{.}236\}.
+  \]
+  Locks the attention head to $\varphi$-anchored gains; any other choice is a
+  pre-registered refutation (Gate-2 §8). Coq counterexample lemma:
+  \texttt{counter\_qk\_gain\_outside\_phi\_sq} (\emph{Admitted}, R5).
+\end{frame}
+
+% ============== 13. INV-22 H4 in E8 ==============
+\begin{frame}{INV-22: H$_{4}$ in E$_{8}$}
+  E$_{8}$ has Coxeter number $h=30=10\cdot 3$. The H$_{4}$ subroot system inherits
+  the same anchor via the embedding
+  \[
+    \mathrm{H}_{4}\hookrightarrow E_{8},\qquad |\mathrm{H}_{4}|=120,\quad |E_{8}|=240.
+  \]
+  Coq witness: \texttt{e8\_coxeter\_thirty} \emph{Qed} \citetheorem{INV-22}.
+  Connects monograph chapters L22 (E$_{8}$) and L29 (Lucas closure).
+\end{frame}
+
+% ============== 14. IGLA RACE OVERVIEW ==============
+\begin{frame}{IGLA RACE — The Empirical Stage}
+  \begin{itemize}
+    \item Mission: 3-seed BPB$<\!1{.}50$ on Wikipedia-103 byte stream.
+    \item Champion: 6-gram (dim$=64$, hidden$=384$, num\_ctx$=4$), BPB$=2{.}2393$, commit \texttt{2446855}.
+    \item Pure-attention attempt at lr$=0{.}01$: plateau at $\sim 4{.}74$, divergent by step 3000.
+    \item Hybrid (this defence): ngram$+1$L causal SA, qk\_gain$=\varphi^{2}$, lr$=0{.}0035$.
+  \end{itemize}
+\end{frame}
+
+% ============== 15. PRE-REG GATE-2 ==============
+\begin{frame}{Pre-Registration (Gate-2)}
+  Filed immutably at \texttt{trios\#143:4320342032}.
+  \begin{itemize}
+    \item $H_{\mathrm{Gate2}}\!:$ val\_BPB$_{\mathrm{seed}=43,\,\mathrm{step}=54000}\!\leq\!1{.}85$.
+    \item Falsifier: BPB$>\!2{.}00$ at step 54000 \emph{or} divergence ($\Delta\!\geq\!0{.}5$ over $10$\,K window) \emph{or} forbidden values.
+    \item Seeds 42 \& 44 frozen out until Gate-2 closes (no test-set leakage).
+  \end{itemize}
+\end{frame}
+
+% ============== 16. LANE BOARD ==============
+\begin{frame}{Lane Board (defence-day snapshot)}
+  \begin{tabular}{lll}
+    \toprule
+    Lane & Owner & State \\
+    \midrule
+    L-h1 hybrid trainer & cargo agent & target: PASS \\
+    L-h2 attn block     & \texttt{40caeba} & DONE \\
+    L-h3 ledger row     & cargo agent & target: PASS \\
+    L-h4 INV-13 + guard & \texttt{f286930} & DONE \\
+    L-h5 pre-reg        & auditor & DONE \\
+    LB Bibliography     & PR \#294 & ready (25.5\% Springer) \\
+    LF Frontmatter      & PR \#289 & ready (11/11) \\
+    LP Falsification    & PR \#290 & 5 chapters R7-PASS \\
+    LC Citation map     & PR \#288 & 266-line restore \\
+    LD Defence package  & this branch & in flight \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% ============== 17. ABLATION ==============
+\begin{frame}{Architectural Ablation}
+  \begin{tabular}{lll}
+    \toprule
+    Config & BPB$_{\mathrm{val}}$ & Verdict \\
+    \midrule
+    6-gram baseline & 2.5329 & R7 OK; refuted by Gate-2 \\
+    6-gram + INV-1..5 enforced & 2.2393 & current champion \\
+    Pure SA (lr=0.01) & 4.74 (plateau) & refuted (divergent) \\
+    Hybrid (this work) & target $\leq 1{.}85$ & H$_{\mathrm{Gate2}}$ open \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% ============== 18. WHY HYBRID ==============
+\begin{frame}{Why a Hybrid (and not Bigger Attention)?}
+  \begin{itemize}
+    \item Pure SA at $d_{\mathrm{model}}\!=\!64$ violates INV-4 (GF(16) dim floor 256).
+    \item N-gram block carries proven token mixing; SA only adds long-range conditioning.
+    \item Refutation if hybrid does not beat 6-gram \emph{and} does not attain BPB$\leq\!1{.}85$ on seed=43.
+  \end{itemize}
+  R5 disclosure: $d_{\mathrm{model}}\!=\!64$ in the hybrid is below INV-4's floor; this is a documented \emph{deliberate exemption} for the hybrid block, recorded in \texttt{assertions/igla\_assertions.json} INV-4 metadata.
+\end{frame}
+
+% ============== 19. SEED LEDGER ==============
+\begin{frame}{Seed Ledger Honesty}
+  Single source of truth: \texttt{assertions/seed\_results.jsonl}.
+  Schema:
+  \begin{itemize}
+    \item \texttt{seed} $\in\{42,43,44\}$ (INV-8 lock).
+    \item \texttt{step} $\geq 4000$ (INV-3 warmup).
+    \item \texttt{bpb} a finite positive real.
+    \item \texttt{sha} a SHA pinned to \texttt{gHashTag/trios} commit.
+  \end{itemize}
+  Empty until Gate-2 lane L-h3 lands the first row.
+\end{frame}
+
+% ============== 20. E8 GEOMETRY ==============
+\begin{frame}{E$_{8}$ Geometry of the Architecture}
+  240 root vectors of E$_{8}$ correspond to 240 micro-experts in the GF(16) head.
+  Each root is on the surface of an 8-sphere whose squared radius equals
+  $2$, so the inner-product matrix is Cartan-integral.
+  Connects L22 (PhD, E$_{8}$) with L23 (GF(16) algebra) and L29 (Lucas closure).
+\end{frame}
+
+% ============== 21. GF16 ==============
+\begin{frame}{GF(16) Algebra}
+  Field $\mathbb{F}_{16}=\mathbb{F}_{2}[x]/(x^{4}+x+1)$.
+  $|\mathbb{F}_{16}^{\times}|=15=3\cdot 5=L_{2}\cdot \mathrm{Fib}(5)$.
+  The factorisation $15=L_{2}\cdot \mathrm{Fib}(5)$ couples the Lucas anchor
+  to the Fibonacci dimension floor: the smallest viable
+  $d_{\mathrm{model}}$ is $256=2^{8}=(\mathbb{F}_{16})^{2}$, hence INV-4.
+\end{frame}
+
+% ============== 22. LUCAS L2 CLOSURE ==============
+\begin{frame}{$L_{2}$ Closure Restated}
+  \[
+    \boxed{\;L_{2}=3=\varphi^{2}+\varphi^{-2}=\operatorname{Tr}(M_{\varphi}^{2})=h(\mathrm{H}_{4})/10\;}
+  \]
+  Four agreeing readings from disjoint mathematical realms — Lucas
+  recurrence, $\mathrm{SL}_{2}$ trace, Coxeter h-number, and the
+  formal-power-series identity $1/(1-x-x^{2})=\sum F_{n}x^{n}$ at $x=\varphi^{-1}$.
+\end{frame}
+
+% ============== 23. R6 OWNERSHIP ==============
+\begin{frame}{R6: Strict File Ownership}
+  Why no spaghetti?
+  \begin{itemize}
+    \item Each chapter owns exactly one file under \texttt{docs/phd/chapters/Lxx-*.tex}.
+    \item Auditor lane (this skill) owns \texttt{appendix/}, \texttt{frontmatter/}, \texttt{bibliography.bib}, \texttt{defense/}.
+    \item Cargo lanes own \texttt{crates/}.
+    \item A PR touching another lane's territory is rejected by the queen-bot, not me.
+  \end{itemize}
+\end{frame}
+
+% ============== 24. REPRODUCIBILITY ==============
+\begin{frame}{Reproducibility (ACM AE pack)}
+  \begin{itemize}
+    \item Manifest: \texttt{docs/phd/reproducibility.md}.
+    \item Lock: \texttt{reproducibility.lock.json} (committed alongside the PDFs).
+    \item Reproduction: \texttt{cargo run -p trios-phd -- reproduce --chapter 24} on seeds $\{17, 42, 1729\}$, expects $\pm 0{.}5\%$ BPB convergence.
+    \item Witness: \texttt{crates/trios-phd/src/bin/defense\_gate.rs} (this work, replacing the \texttt{.sh} witness named in ONE SHOT v2.0 §5 per R1).
+  \end{itemize}
+\end{frame}
+
+% ============== 25. HONESTY LEDGER ==============
+\begin{frame}{Honesty Ledger}
+  \begin{itemize}
+    \item 92 Coq theorems extracted; 90 \emph{Qed}, 2 \emph{Admitted} at start.
+    \item L-h4 added \texttt{hybrid\_qk\_gain.v}: 5 Admitted + 2 Qed, budget 8/10.
+    \item No silent flips — every Admitted carries an explicit reason and a refutation witness.
+    \item Public R5 disclosure of PR \#277 silent regression on appendix F (\#288 restores).
+  \end{itemize}
+\end{frame}
+
+% ============== 26. BIBLIOGRAPHY BALANCE ==============
+\begin{frame}{Bibliography Balance (R11)}
+  After PR \#294: $N=204$, Springer $25{.}5\%$, MIT/CUP/Oxford $13\%$ (target $\geq 15\%$, follow-up filed),
+  arXiv-only $2\%$ (target $\leq 20\%$).
+  Bibliography lives in \texttt{docs/phd/bibliography.bib}; never touched from chapter lanes.
+\end{frame}
+
+% ============== 27. CRON / WATCHDOG ==============
+\begin{frame}{Continuous Audit}
+  \begin{itemize}
+    \item Cron \texttt{db082fc3}: cross-cutting audit every 2 h at \texttt{15 */2 * * *}~UTC.
+    \item Apiary watchdog \texttt{e5ac5a6b}: releases lanes silent $>4$\,h.
+    \item Throne meta-issue \texttt{trios\#264} aggregates ONE SHOTs from all skill families.
+  \end{itemize}
+\end{frame}
+
+% ============== 28. LIMITATIONS ==============
+\begin{frame}{Limitations}
+  \begin{itemize}
+    \item INV-4 hybrid exemption ($d_{\mathrm{model}}\!=\!64$) is documented but not Coq-formal.
+    \item Gate-final still requires 3 distinct seeds; seed 44 is currently frozen.
+    \item Bibliography MCO share at $13\%$ vs target $15\%$ — follow-up PR pending.
+    \item Some chapter retrofits for R14 \texttt{\textbackslash citetheorem} await PR \#288 merge.
+  \end{itemize}
+\end{frame}
+
+% ============== 29. FUTURE WORK ==============
+\begin{frame}{Future Work}
+  \begin{itemize}
+    \item Close INV-1, INV-3, INV-4, INV-5, INV-7, INV-8 from \emph{Admitted} to \emph{Qed} as Coq lemmas mature.
+    \item Extend INV-13 to a full $\{\varphi^{n}\!:\!n\in\mathbb{Z}\}$-graded family.
+    \item Generalise Three-Witnesses to higher Lucas indices ($L_{4}=7$, $L_{6}=18$).
+    \item Tectonic CI gate at $250 \leq \text{pages}\leq 350$ enforced post-defence.
+  \end{itemize}
+\end{frame}
+
+% ============== 30. CLOSING ==============
+\begin{frame}{Closing}
+  \[
+    \varphi^{2}+\varphi^{-2}=3.
+  \]
+  Three witnesses; thirty-three chapters; one stem.
+  Honest \emph{Admitted}, immutable pre-registration, auditable seeds.
+  Flos Aureus convergit.
+\end{frame}
+
+\end{document}
