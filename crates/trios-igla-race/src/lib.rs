@@ -44,3 +44,4 @@ pub use hive_automaton::{
 // INV-7: Welch t-test and TtestReport exports (L-R14)
 // ----------------------------------------------------------------------
 pub use hive_automaton::BPB_VICTORY_TARGET as IGLA_TARGET_BPB;
+pub mod victory;

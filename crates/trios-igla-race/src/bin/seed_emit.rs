@@ -38,8 +38,8 @@
 //! INV: (schema only - no invariant dependencies)
 //! Hours: 1
 
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufWriter, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 
 const SEED_RESULTS_PATH: &str = "assertions/seed_results.jsonl";
 
@@ -116,7 +116,7 @@ fn read_existing_rows() -> Vec<SeedRow> {
         }
 
         // Parse JSONL format: {"seed":42,"step":54000,"bpb":2.23,...}
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
             if let Some(map) = value.as_object() {
                 let seed = map.get("seed")
                     .and_then(|v| v.as_u64())
@@ -129,15 +129,17 @@ fn read_existing_rows() -> Vec<SeedRow> {
                     .unwrap_or(0.0);
                 let sha = map.get("sha")
                     .and_then(|v| v.as_str())
-                    .unwrap_or_else(|_| "".to_string());
+                    .unwrap_or("")
+                    .to_string();
                 let timestamp = map.get("timestamp")
                     .and_then(|v| v.as_str())
-                    .unwrap_or_else(|_| "".to_string());
+                    .unwrap_or("")
+                    .to_string();
 
                 if seed > 0 {
                     rows.push(SeedRow {
                         seed,
-                        step,
+                        step: step as usize,
                         bpb,
                         sha,
                         timestamp,
@@ -152,11 +154,13 @@ fn read_existing_rows() -> Vec<SeedRow> {
 
 /// Append new rows to seed_results.jsonl.
 fn append_rows(rows: &[SeedRow]) -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs::OpenOptions;
+
     // Open file in append mode
-    let mut file = File::options()
-        .write(true)
+    let file = OpenOptions::new()
         .append(true)
-        .create(SEED_RESULTS_PATH)?;
+        .create(true)
+        .open(SEED_RESULTS_PATH)?;
 
     let mut writer = BufWriter::new(&file);
 
@@ -238,15 +242,13 @@ fn main() {
 
     // Use git SHA if not provided
     if shas.is_empty() {
-        let output = std::process::Command::new("git")
+        let result = std::process::Command::new("git")
             .arg("rev-parse")
             .arg("HEAD")
-            .output(std::process::Stdio::piped())
-            .spawn();
-        let result = output.wait_with_output();
+            .output();
         if let Ok(sha_output) = result {
-            if let Some(sha_line) = sha_output.lines().next() {
-                shas.push(sha_line.trim().to_string());
+            if let Some(Ok(sha)) = sha_output.stdout.lines().next() {
+                shas.push(sha.trim().to_string());
             }
         }
         if shas.len() < 3 {
@@ -261,17 +263,18 @@ fn main() {
 
     // Validate each set of arguments
     for i in 0..3 {
+        let msg = format!("Invalid row {} (seed={}, step={}, bpb={})", i + 1, seeds[i], steps[i], bpbs[i]);
         validate_row(&SeedRow {
             seed: seeds[i],
             step: steps[i],
             bpb: bpbs[i],
             sha: shas[i].clone(),
-            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
-        }).expect(&format!("Invalid row {} (seed={}, step={}, bpb={})", i + 1, seeds[i], steps[i], bpbs[i]));
+            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        }).expect(&msg);
     }
 
     // Read existing rows
-    let existing_rows = read_existing_rows();
+    let _existing_rows = read_existing_rows();
 
     // Append new rows
     let new_rows: Vec<SeedRow> = vec![
@@ -280,21 +283,21 @@ fn main() {
             step: steps[0],
             bpb: bpbs[0],
             sha: shas[0].clone(),
-            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
+            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         },
         SeedRow {
             seed: seeds[1],
             step: steps[1],
             bpb: bpbs[1],
             sha: shas[1].clone(),
-            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
+            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         },
         SeedRow {
             seed: seeds[2],
             step: steps[2],
             bpb: bpbs[2],
             sha: shas[2].clone(),
-            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
+            timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         },
     ];
 
