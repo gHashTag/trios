@@ -568,7 +568,7 @@ mod tests {
         let mut predictor = JepaPredictor::new(PredictorConfig::with_d_model(64));
         let d = 64;
         let context = vec![0.1f32; d * 4];
-        let target_emb: Vec<f32> = (0..d).map(|i| (i as f32 / d as f32)).collect();
+        let target_emb: Vec<f32> = (0..d).map(|i| i as f32 / d as f32).collect();
         let loss = predictor.forward_backward(&context, &target_emb, 1);
         assert!(loss.is_finite(), "loss must be finite: {}", loss);
         assert!(loss >= 0.0);
