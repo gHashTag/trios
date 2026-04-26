@@ -80,7 +80,6 @@ pub fn run_simple(config: &Config) -> Result<RunResult> {
         let logits = model.forward(&tokens);
 
         // Compute loss (cross-entropy)
-        // Targets are tokens[1..] for next token prediction
         let targets = &tokens[1..];
 
         // Calculate BPB from loss
@@ -92,7 +91,7 @@ pub fn run_simple(config: &Config) -> Result<RunResult> {
 
         // Optimizer step
         let params = model.parameters();
-        let mut params_vec = params;
+        let mut params_vec = params.to_vec();
         optimizer.step(&mut params_vec, &flatten_gradients_simple(&gradients));
 
         // Update model parameters
@@ -281,26 +280,25 @@ mod tests {
     fn test_calculate_bpb() {
         // Perfect compression: BPB = 1.0
         let loss = 1.0_f32; // loss where perplexity = 256 (2^8)
-        let bpb = calculate_bpb(loss, 256);
-        assert!((bpb - 1.0).abs() < 1e-6);
+        let num_tokens = 256; // batch size
 
-        // Typical compression: BPB = 2.0
-        let loss = 2.0_f32; // perplexity = 4 (2^2)
-        let bpb = calculate_bpb(loss, 256);
-        assert!((bpb - 2.0).abs() < 1e-6);
+        let bpb = calculate_bpb(loss, num_tokens);
+
+        // BPB = (log2(256) / log2(2^BPB)) / 8 = 1.0
+        assert!((bpb - 1.0).abs() < 1e-6);
     }
 
     #[test]
     fn test_champion_tolerance() {
         assert!(is_within_champion_tolerance(2.2393)); // true
-        assert!(!is_within_champion_tolerance(2.2292))); // below min
-        assert!(!is_within_champion_tolerance(2.2494))); // above max
+        assert!(!is_within_champion_tolerance(2.2292))); // false (below min)
+        assert!(!is_within_champion_tolerance(2.2494))); // false (above max)
     }
 
     #[test]
     fn test_champion_config_validation() {
-        // This would require loading the actual champion.toml
-        // For now, just test the constants
+        // This would require loading actual champion.toml
+        // For now, just test constants
         assert_eq!(CHAMPION_BPB_TARGET, 2.2393);
         assert_eq!(CHAMPION_BPB_TOLERANCE, 0.01);
         assert_eq!(CHAMPION_MIN_BPB, 2.2293);
