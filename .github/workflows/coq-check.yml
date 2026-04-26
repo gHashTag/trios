@@ -12,12 +12,14 @@ on:
       - 'trinity-clara/proofs/**'
       - 'assertions/igla_assertions.json'
       - 'crates/trios-igla-race/src/invariants.rs'
+      - '.github/workflows/coq-check.yml'
   pull_request:
     branches: [main]
     paths:
       - 'trinity-clara/proofs/**'
       - 'assertions/igla_assertions.json'
       - 'crates/trios-igla-race/src/invariants.rs'
+      - '.github/workflows/coq-check.yml'
 
 jobs:
   coq-invariants:
@@ -94,22 +96,47 @@ jobs:
             echo "⚠️  INV-1 proof file missing — warn only (non-critical path)"
           fi
 
-      - name: Validate assertions/igla_assertions.json
+      - name: Validate assertions/igla_assertions.json (schema + L-R14)
         run: |
-          python3 -c "
-import json, sys
-with open('assertions/igla_assertions.json') as f:
-    data = json.load(f)
-assert len(data['invariants']) == 5, 'Expected 5 invariants'
-for inv in data['invariants']:
-    assert 'id' in inv and 'status' in inv
-    assert inv['status'] in ('Proven', 'Admitted'), f'Invalid status: {inv[\"status\"]}'
-print('✅ igla_assertions.json valid:', len(data[\"invariants\"]), 'invariants')
-"
+          cat > /tmp/validate_assertions.py <<'PYEOF'
+          import json, re, sys
+          with open('assertions/igla_assertions.json') as f:
+              data = json.load(f)
+          # --- Top-level shape ---
+          assert isinstance(data, dict), 'root must be object'
+          assert data.get('trinity_identity') == 'φ² + φ⁻² = 3', 'trinity_identity must be φ² + φ⁻² = 3'
+          assert isinstance(data.get('invariants'), list), 'invariants must be list'
+          assert len(data['invariants']) >= 5, f'Expected >=5 invariants, got {len(data["invariants"])}'
+          # --- Per-invariant required fields ---
+          required = {'id', 'name', 'coq_theorem', 'coq_file', 'status'}
+          seen_ids = set()
+          for inv in data['invariants']:
+              missing = required - set(inv.keys())
+              assert not missing, f'invariant {inv.get("id","?")} missing fields: {missing}'
+              assert inv['status'] in ('Proven', 'Admitted'), f'{inv["id"]}: invalid status {inv["status"]}'
+              assert re.match(r'^INV-[1-9][0-9]?$', inv['id']), f'bad invariant id: {inv["id"]}'
+              seen_ids.add(inv['id'])
+          # --- INV-1..INV-5 must all be present ---
+          for i in range(1, 6):
+              assert f'INV-{i}' in seen_ids, f'INV-{i} missing'
+          # --- Admitted budget honesty ---
+          budget = data.get('_metadata', {}).get('admitted_budget', {})
+          if budget:
+              assert budget.get('used', 0) <= budget.get('max', 4), 'Admitted budget exceeded'
+          print(f'OK igla_assertions.json schema valid: {len(data["invariants"])} invariants, ids={sorted(seen_ids)}')
+          PYEOF
+          python3 /tmp/validate_assertions.py
 
-      - name: Run Rust invariant tests
+      - name: Run Rust invariant tests (BLOCKING gate)
         run: |
-          cargo test -p trios-igla-race invariants -- --nocapture
+          # L-R14: every numeric constant in invariants.rs must trace to JSON.
+          # If this fails the proof↔runtime bridge is broken — block merge.
+          cargo test -p trios-igla-race --lib -- invariants --nocapture
+
+      - name: Run Rust clippy on igla-race (non-blocking, hygiene signal)
+        continue-on-error: true
+        run: |
+          cargo clippy -p trios-igla-race --lib --tests -- -D warnings
 
       - name: Summary
         if: always()
