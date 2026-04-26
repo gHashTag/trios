@@ -78,7 +78,14 @@
 % Renders a red-bordered box around the text. Use whenever a theorem's Coq
 % counterpart in trinity-clara/proofs/igla/*.v is still Admitted; never use
 % to mask Admitted as Proven.
-\newtcolorbox{admittedbox}[1][]{
+% R5-honest visual marker. The tcolorbox environment is named
+% `admittedboxenv` so the convenience macro `\admittedbox{<text>}`
+% below can coexist with it (prior revisions collided: tcolorbox auto-
+% created a same-named token on \newtcolorbox{admittedbox}, which then
+% clashed with the subsequent \newcommand{\admittedbox}). All chapter
+% callsites use the macro form `\admittedbox{...}` only; the renamed
+% environment is an internal implementation detail.
+\newtcolorbox{admittedboxenv}[1][]{
   colback=red!4!white,
   colframe=red!60!black,
   boxrule=0.6pt,
@@ -88,7 +95,7 @@
   title={\bfseries Admitted (Coq status: not Proven \textemdash{} R5)},
   #1
 }
-\newcommand{\admittedbox}[1]{\begin{admittedbox}#1\end{admittedbox}}
+\newcommand{\admittedbox}[1]{\begin{admittedboxenv}#1\end{admittedboxenv}}
 
 % Falsification box (R7) — used by empirical chapters.
 \newtcolorbox{falsificationbox}[1][]{
