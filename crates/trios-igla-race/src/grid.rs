@@ -9,14 +9,16 @@ pub const PHI_SQUARED: f64 = PHI * PHI;
 pub const HIDDEN_BASE: usize = 64;
 
 /// Phi-resonant hidden dimensions: [64, 104, 167, 270, 437]
-/// Extended to k=4 (437) to cover champion 384
 pub fn phi_hidden_dims() -> &'static [usize] {
     &[64, 104, 167, 270, 437]
 }
 
-/// Phi-resonant learning rate scales
+/// Phi-resonant learning rate scales (clamped to INV-1 phi-band [0.002, 0.007])
+/// Values: [0.5, 0.8, 1.3, 1.6, 1.6] — note: max clamped to keep LR ≤ 0.007
 pub fn phi_lr_scales() -> &'static [f64] {
-    &[0.5, 0.8, 1.3, 2.1, 3.4]
+    // Champion LR = 0.004, phi-band = [0.002, 0.007]
+    // Max safe scale = 0.007 / 0.004 = 1.75
+    &[0.5, 0.8, 1.3, 1.6, 1.6]
 }
 
 /// Phi-resonant EMA beta values
@@ -26,12 +28,12 @@ pub fn phi_ema_betas() -> &'static [f64] {
 
 /// Phi-resonant JEPA weights
 pub fn phi_jepa_weights() -> &'static [f64] {
-    &[0.25, 0.5, 0.8, 1.3, 2.1]
+    &[0.25, 0.5, 0.8, 1.3, 1.3]  // Clamped to reasonable range
 }
 
 /// Phi-resonant NCA weights
 pub fn phi_nca_weights() -> &'static [f64] {
-    &[0.1, 0.25, 0.5, 0.8, 1.3]
+    &[0.1, 0.25, 0.5, 0.8, 1.0]
 }
 
 /// Phi-resonant warmup steps
@@ -141,7 +143,8 @@ mod tests {
 
         for &scale in phi_lr_scales() {
             let lr = CHAMPION_LR * scale;
-            assert!((INV1_LR_SAFE_LO..=INV1_LR_SAFE_HI).contains(&lr));
+            assert!((INV1_LR_SAFE_LO..=INV1_LR_SAFE_HI).contains(&lr),
+                "LR scale {} produces lr={} outside phi-band", scale, lr);
         }
     }
 
