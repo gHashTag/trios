@@ -23,7 +23,7 @@ pub fn run_simple(config: &Config) -> Result<RunResult> {
     println!("Steps: {}", config.training.steps);
     println!("LR: {} (INV-8 validated)", config.training.lr);
     println!("Champion target BPB: {}", CHAMPION_BPB_TARGET);
-    println!("Target tolerance: ± {}", CHAMPION_BPB_TOLERANCE);
+    println!("Target tolerance: +/- {}", CHAMPION_BPB_TOLERANCE);
 
     // Load FineWeb dataset
     println!("Loading training data...");
@@ -140,7 +140,7 @@ pub fn run_simple(config: &Config) -> Result<RunResult> {
     println!("Final BPB: {:.4}", final_bpb);
     println!("Best BPB: {:.4}", best_bpb);
     println!("Champion target: {:.4}", CHAMPION_BPB_TARGET);
-    println!("Status: {}", if is_within_champion_tolerance(final_bpb) { "✅ PASS" } else { "❌ FAIL" });
+    println!("Status: {}", if is_within_champion_tolerance(final_bpb) { "PASS" } else { "FAIL" });
 
     Ok(RunResult {
         final_bpb,
@@ -150,7 +150,7 @@ pub fn run_simple(config: &Config) -> Result<RunResult> {
 }
 
 /// Compute cross-entropy loss (simplified for Phase P0)
-fn compute_cross_entropy_loss(logits: &[Vec<f32>], targets: &[usize]) -> f32 {
+fn calculate_cross_entropy_loss(logits: &[Vec<f32>], targets: &[usize]) -> f32 {
     if targets.is_empty() {
         return 0.0;
     }
@@ -186,7 +186,7 @@ fn compute_cross_entropy_loss(logits: &[Vec<f32>], targets: &[usize]) -> f32 {
 fn evaluate_simple(model: &MinimalTransformer, val_dataset: &FineWebDataset, context_len: usize) -> Result<f32> {
     let seq_len = context_len.min(128);
     let n_chunks = val_dataset.len() / seq_len;
-    let chunks_to_eval = n_chunks.min(100); // Limit to 100 chunks for speed
+    let chunks_to_eval = n_chunks.min(100);
 
     let mut total_loss = 0.0;
     let mut total_tokens = 0;
@@ -207,7 +207,7 @@ fn evaluate_simple(model: &MinimalTransformer, val_dataset: &FineWebDataset, con
         let targets = &tokens[1..];
 
         // Compute loss
-        let loss = compute_cross_entropy_loss(&logits, targets);
+        let loss = calculate_cross_entropy_loss(&logits, targets);
         total_loss += loss * targets.len() as f32;
         total_tokens += targets.len();
     }
@@ -279,20 +279,38 @@ mod tests {
     #[test]
     fn test_calculate_bpb() {
         // Perfect compression: BPB = 1.0
-        let loss = 1.0_f32; // loss where perplexity = 256 (2^8)
-        let num_tokens = 256; // batch size
+        let loss = 1.0_f32;
+        let num_tokens = 256;
 
         let bpb = calculate_bpb(loss, num_tokens);
-
-        // BPB = (log2(256) / log2(2^BPB)) / 8 = 1.0
         assert!((bpb - 1.0).abs() < 1e-6);
     }
 
     #[test]
     fn test_champion_tolerance() {
+        // Exact champion BPB
         assert!(is_within_champion_tolerance(2.2393)); // true
-        assert!(!is_within_champion_tolerance(2.2292))); // false (below min)
-        assert!(!is_within_champion_tolerance(2.2494))); // false (above max)
+
+        // Within tolerance (min)
+        assert!(is_within_champion_tolerance(2.2293)); // true
+
+        // Within tolerance (max)
+        assert!(is_within_champion_tolerance(2.2493)); // true
+
+        // Below tolerance (fail)
+        assert!(!is_within_champion_tolerance(2.2292)); // false
+
+        // Above tolerance (fail)
+        assert!(!is_within_champion_tolerance(2.2494)); // false
+    }
+
+    #[test]
+    fn test_champion_constants() {
+        assert_eq!(CHAMPION_BPB_TARGET, 2.2393);
+        assert_eq!(CHAMPION_BPB_TOLERANCE, 0.01);
+        assert_eq!(CHAMPION_MIN_BPB, 2.2293);
+        assert_eq!(CHAMPION_MAX_BPB, 2.2493);
+        assert_eq!(CHAMPION_STEPS, 27_000);
     }
 
     #[test]
@@ -306,3 +324,6 @@ mod tests {
         assert_eq!(CHAMPION_STEPS, 27_000);
     }
 }
+
+}
+
