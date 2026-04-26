@@ -46,6 +46,7 @@
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::doc_overindented_list_items)]
 
 use crate::invariants::{LR_SAFE_MAX, LR_SAFE_MIN, PHI_CUBE, PHI_SQ};
 
@@ -172,7 +173,7 @@ impl HybridAttnConfig {
         }
         if self.d_model == 0
             || self.num_heads == 0
-            || self.d_model % self.num_heads != 0
+            || !self.d_model.is_multiple_of(self.num_heads)
         {
             return Err(HybridAttnError::Shape {
                 d_model: self.d_model,
@@ -256,6 +257,30 @@ impl HybridAttn {
     /// instead of clone-unwrapping internal fields.
     pub fn config(&self) -> &HybridAttnConfig {
         &self.cfg
+    }
+
+    pub fn wq_mut(&mut self) -> &mut [f32] {
+        &mut self.wq
+    }
+
+    pub fn wk_mut(&mut self) -> &mut [f32] {
+        &mut self.wk
+    }
+
+    pub fn wv_mut(&mut self) -> &mut [f32] {
+        &mut self.wv
+    }
+
+    pub fn wo_mut(&mut self) -> &mut [f32] {
+        &mut self.wo
+    }
+
+    pub fn weights_flat_mut(&mut self) -> Vec<&mut [f32]> {
+        vec![&mut self.wq, &mut self.wk, &mut self.wv, &mut self.wo]
+    }
+
+    pub fn total_weights(&self) -> usize {
+        self.wq.len() + self.wk.len() + self.wv.len() + self.wo.len()
     }
 
     /// Re-assert INV-1 + INV-13 + shape at any later point.  This is

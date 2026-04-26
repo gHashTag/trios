@@ -142,6 +142,9 @@ impl HybridModel {
         let lim_o = (6.0f32 / (hidden + VOCAB) as f32).sqrt();
 
         let attn = HybridAttn::new().expect("attn construct with defaults");
+        let d = attn.config().d_model;
+        let lim_down = (2.0f32 / (hidden + d) as f32).sqrt();
+        let lim_up = (2.0f32 / (d + hidden) as f32).sqrt();
 
         let mut m = Self {
             embed: (0..VOCAB * DIM).map(|_| rng() * lim).collect(),
@@ -149,8 +152,10 @@ impl HybridModel {
                 .map(|_| (0..VOCAB * DIM).map(|_| rng() * lim).collect())
                 .collect(),
             proj: (0..hidden * DIM).map(|_| rng() * lim_h).collect(),
-            lm_head: (0..VOCAB * hidden).map(|_| rng() * lim_o).collect(),
             attn,
+            attn_down: (0..d * hidden).map(|_| rng() * lim_down).collect(),
+            attn_up: (0..hidden * d).map(|_| rng() * lim_up).collect(),
+            lm_head: (0..VOCAB * hidden).map(|_| rng() * lim_o).collect(),
             hidden,
         };
 
@@ -204,13 +209,22 @@ impl HybridModel {
             };
         }
 
-        let attn_scale = 0.1f32;
-        if h >= d {
-            let attn_input = hidden[..d * 1].to_vec();
-            if let Ok(attn_out) = self.attn.forward(&attn_input, 1) {
-                for hi in 0..d.min(h) {
-                    hidden[hi] += attn_out[hi] * attn_scale;
+        let mut attn_in = vec![0.0f32; d];
+        for di in 0..d {
+            for hi in 0..h {
+                attn_in[di] += self.attn_down[di * h + hi] * hidden[hi];
+            }
+        }
+
+        if let Ok(attn_out) = self.attn.forward(&attn_in, 1) {
+            let mut attn_up_out = vec![0.0f32; h];
+            for hi in 0..h {
+                for di in 0..d {
+                    attn_up_out[hi] += self.attn_up[hi * d + di] * attn_out[di];
                 }
+            }
+            for hi in 0..h {
+                hidden[hi] += attn_up_out[hi] * 0.1;
             }
         }
 
@@ -247,8 +261,11 @@ fn compute_grads_for_positions(
     g_ctx: &mut [Vec<f32>],
     g_proj: &mut [f32],
     g_head: &mut [f32],
+    g_attn_down: &mut [f32],
+    g_attn_up: &mut [f32],
 ) {
     let h = model.hidden;
+    let d = model.attn.config().d_model;
     for &pos in positions {
         let (combined, ln, hidden, mut logits) = model.forward_position(tokens, pos);
         softmax(&mut logits);
@@ -260,6 +277,26 @@ fn compute_grads_for_positions(
             for hi in 0..h {
                 g_head[vi * h + hi] += grad * hidden[hi];
                 d_hidden[hi] += grad * model.lm_head[vi * h + hi];
+            }
+        }
+
+        let mut d_attn_up_out = vec![0.0f32; h];
+        for hi in 0..h {
+            d_attn_up_out[hi] = d_hidden[hi] * 0.1;
+        }
+
+        let mut d_attn_out = vec![0.0f32; d];
+        for hi in 0..h {
+            for di in 0..d {
+                g_attn_up[hi * d + di] += d_attn_up_out[hi] * 0.0;
+                d_attn_out[di] += d_attn_up_out[hi] * model.attn_up[hi * d + di];
+            }
+        }
+
+        let mut d_attn_in = d_attn_out;
+        for di in 0..d {
+            for hi in 0..h {
+                g_attn_down[di * h + hi] += d_attn_in[di] * hidden[hi];
             }
         }
 
@@ -358,21 +395,30 @@ fn main() {
     };
 
     for &seed in &seeds {
-        eprintln!(
-            "=== Hybrid Train L-f2 (Gate-final) seed={} ===",
-            seed
-        );
-        eprintln!(
-            "steps={} lr={} hidden={} eval_every={} accum={} gf16_floor_step={}",
-            steps, base_lr, hidden, eval_every, accum, gf16_floor_step
-        );
-        eprintln!(
-            "DIM={} NUM_CTX={} NGRAM={} SEQ={} VOCAB={}",
-            DIM, NUM_CTX, NGRAM, SEQ, VOCAB
-        );
+    eprintln!(
+        "=== Hybrid Train (ngram+attn) seed={} ===",
+        seed
+    );
+    eprintln!(
+        "steps={} lr={} hidden={} eval_every={} accum={}",
+        steps, base_lr, hidden, eval_every, accum
+    );
+    eprintln!(
+        "DIM={} NUM_CTX={} NGRAM={} SEQ={} VOCAB={}",
+        DIM, NUM_CTX, NGRAM, SEQ, VOCAB
+    );
+    eprintln!("ctx_weights={:?}", CTX_WEIGHTS);
 
-        let total_params = VOCAB * DIM + NUM_CTX * VOCAB * DIM + hidden * DIM + VOCAB * hidden;
-        eprintln!("params={} ({:.1}K)", total_params, total_params as f64 / 1000.0);
+    let train_data = load_data("data/tiny_shakespeare.txt");
+    let val_data = load_data("data/tiny_shakespeare_val.txt");
+    eprintln!("train={} val={}", train_data.len(), val_data.len());
+
+    let mut model = HybridModel::new(hidden, seed);
+
+    let d = model.attn.config().d_model;
+    let attn_params = d * model.hidden * 2;
+    let total_params = VOCAB * DIM + NUM_CTX * VOCAB * DIM + hidden * DIM + VOCAB * hidden + attn_params;
+    eprintln!("params={} ({:.1}K) attn_d={}", total_params, total_params as f64 / 1000.0, d);
 
         let train_data = load_data("data/tiny_shakespeare.txt");
         let val_data = load_data("data/tiny_shakespeare_val.txt");
@@ -385,8 +431,10 @@ fn main() {
         let mut opt_ctx: Vec<AdamW> = (0..NUM_CTX)
             .map(|_| AdamW::new(VOCAB * DIM, wd))
             .collect();
-        let mut opt_proj = AdamW::new(hidden * DIM, wd);
-        let mut opt_head = AdamW::new(VOCAB * hidden, wd);
+    let mut opt_proj = AdamW::new(hidden * DIM, wd);
+    let mut opt_attn_down = AdamW::new(d * hidden, wd);
+    let mut opt_attn_up = AdamW::new(hidden * d, wd);
+    let mut opt_head = AdamW::new(VOCAB * hidden, wd);
 
         let init_bpb = evaluate(&model, &val_data);
         eprintln!("Initial val_bpb={:.4}", init_bpb);
@@ -405,8 +453,10 @@ fn main() {
             let mut g_ctx: Vec<Vec<f32>> = (0..NUM_CTX)
                 .map(|_| vec![0.0f32; VOCAB * DIM])
                 .collect();
-            let mut g_proj = vec![0.0f32; hidden * DIM];
-            let mut g_head = vec![0.0f32; VOCAB * hidden];
+        let mut g_proj = vec![0.0f32; hidden * DIM];
+        let mut g_head = vec![0.0f32; VOCAB * hidden];
+        let mut g_attn_down = vec![0.0f32; d * hidden];
+        let mut g_attn_up = vec![0.0f32; hidden * d];
 
             for _micro in 0..accum {
                 rng_s = rng_s
@@ -434,15 +484,17 @@ fn main() {
                     positions.push(p);
                 }
 
-                compute_grads_for_positions(
-                    &model,
-                    chunk,
-                    &positions,
-                    &mut g_embed,
-                    &mut g_ctx,
-                    &mut g_proj,
-                    &mut g_head,
-                );
+            compute_grads_for_positions(
+                &model,
+                chunk,
+                &positions,
+                &mut g_embed,
+                &mut g_ctx,
+                &mut g_proj,
+                &mut g_head,
+                &mut g_attn_down,
+                &mut g_attn_up,
+            );
             }
 
             let total_positions = (accum * 8) as f32;
@@ -457,16 +509,24 @@ fn main() {
             for x in g_proj.iter_mut() {
                 *x /= total_positions;
             }
-            for x in g_head.iter_mut() {
-                *x /= total_positions;
-            }
+        for x in g_head.iter_mut() {
+            *x /= total_positions;
+        }
+        for x in g_attn_down.iter_mut() {
+            *x /= total_positions;
+        }
+        for x in g_attn_up.iter_mut() {
+            *x /= total_positions;
+        }
 
             opt_embed.update(&mut model.embed, &g_embed, lr);
             for (ci, oc) in opt_ctx.iter_mut().enumerate() {
                 oc.update(&mut model.ctx[ci], &g_ctx[ci], lr);
             }
-            opt_proj.update(&mut model.proj, &g_proj, lr);
-            opt_head.update(&mut model.lm_head, &g_head, lr);
+        opt_proj.update(&mut model.proj, &g_proj, lr);
+        opt_attn_down.update(&mut model.attn_down, &g_attn_down, lr);
+        opt_attn_up.update(&mut model.attn_up, &g_attn_up, lr);
+        opt_head.update(&mut model.lm_head, &g_head, lr);
 
             if step >= gf16_floor_step && step % eval_every == 0 {
                 gf16_floor(&mut model.embed);
