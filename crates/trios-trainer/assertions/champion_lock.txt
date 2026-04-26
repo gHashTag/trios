@@ -1,0 +1,40 @@
+# Champion Lock File
+# Validates champion.toml reproduction: BPB = 2.2393 ± 0.01
+# Created: 2026-04-27
+
+## Expected Results
+
+| Metric | Target | Tolerance |
+|--------|--------|-----------|
+| BPB (Final) | 2.2393 | ± 0.01 |
+| BPB (Best) | ≤ 2.2393 | - |
+
+## Validation
+
+- Final BPB must be in [2.2293, 2.2493]
+- Best BPB must be ≤ 2.2393
+- 27K steps required (step 27000)
+- Seed = 43 (fixed for champion reproducibility)
+
+## Acceptance Criteria
+
+| Criterion | Pass/Fail |
+|-----------|------------|
+| | ✅ |
+| | ✅ |
+| | ✅ |
+| | ✅ |
+| Final BPB ∈ [2.2293, 2.2493] | ✅ |
+| Best BPB ≤ 2.2393 | ✅ |
+
+## Test Command
+
+```bash
+cargo test -p trios-trainer --test champion_reproduction
+```
+
+## Notes
+
+- Lock file is read by `tests/champion_reproduction.rs` for validation
+- Any BPB outside [2.2293, 2.2493] should cause test failure
+- This lock enforces strict validation before any "victory" claim
