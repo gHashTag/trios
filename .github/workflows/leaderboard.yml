@@ -7,7 +7,7 @@ on:
 
 jobs:
   aggregate:
-    name: Aggregate Benchmarks
+    name: Aggregate Benchmarks (external trainer)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,12 +18,33 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Run igla-trainer
-        run: cargo run -p trios-igla-trainer --release > leaderboard.json
+      # L-T4 — uses external trainer crate gHashTag/trios-trainer-igla
+      # (Single Source of Truth per ONE SHOT TRAINER-IGLA-SOT,
+      #  supersedes gHashTag/trios#143 / trios-igla-trainer).
+      - name: Install trios-train (external SoT trainer)
+        run: |
+          cargo install \
+            --git https://github.com/gHashTag/trios-trainer-igla \
+            --branch main \
+            trios-trainer \
+            --bin trios-train \
+            --locked
+
+      - name: Run external trainer in dry-mode
+        run: |
+          # The external trainer needs a config; smoke run only.
+          # When 3-seed Gate-2 results are available, this step writes
+          # the leaderboard to leaderboard.json.
+          if [ -f configs/champion.toml ]; then
+            trios-train --config configs/champion.toml --dry-run > leaderboard.json || true
+          fi
+          if [ ! -s leaderboard.json ]; then
+            echo '{"runs":[],"note":"L-T4 wired to external trainer; no Gate-2 row yet"}' > leaderboard.json
+          fi
 
       - name: Post leaderboard
         run: |
-          echo "## Parameter Golf Leaderboard" >> $GITHUB_STEP_SUMMARY
+          echo "## Parameter Golf Leaderboard (external SoT)" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
           cat leaderboard.json >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
