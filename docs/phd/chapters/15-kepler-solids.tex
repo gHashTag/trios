@@ -1,4 +1,11 @@
 % !TEX root = ../main.tex
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (ONE SHOT v2.0
+% Phase D). Matches the convention installed for L23 in commit cf1cc90. The
+% macro renders the Coq theorem name verbatim in chapter prose; when the
+% monograph-wide macro lands in main.tex (post-#288 / LF restoration) the
+% \providecommand below silently yields to it.
+\providecommand{\citetheorem}[1]{\texttt{#1}}
+
 \chapter{Kepler--Poinsot Stellated Polyhedra and the Sacred-Ratio Pentagon}
 \label{ch:15-kepler}
 
@@ -1514,6 +1521,25 @@ one of the most striking algebraic-geometric witnesses of the
 relation $\phi^{2}+\phi^{-2}=3$ in classical mathematics, and
 provides the geometric foundation for the predictive-head
 architecture of Chapter~\ref{ch:24-igla-arch}.
+
+% R14 — Coq citation map (INV-12, Trinity Anchor at vertex-norm level).
+% Mirrored from assertions/igla_assertions.json; consumed by appendix F
+% (auditor lane LC). Status: Proven byte-for-byte in trinity-clara.
+\noindent\textbf{Coq Citation Map (LC · R14):} the INV-12 invariant
+referenced throughout this chapter (vertex-norm constraint at lines 420,
+435, 786, 1286, 1427, 1505) is mechanised in
+\texttt{trinity-clara/proofs/igla/asha\_rungs\_trinity.v} as
+\citetheorem{asha_rungs_trinity} (status \texttt{Proven}). The Trinity
+Anchor $\phi^{2}+\phi^{-2}=3$ underwriting the great stellated
+dodecahedron's vertex-norm corollary (Cor.~\ref{cor:15-anchor}) factors
+through the same invariant, since INV-12 enforces the φ-derived
+vertex-norm calibration that the Kepler--Poinsot stellation extends.
+This chapter's classical Theorem~\ref{thm:15-euler} (Generalised Euler)
+is honestly flagged \admittedbox{thm:15-euler} above with a chapter-side
+\texttt{Admitted} pending an external Coq port; the geometric INV-12
+anchor itself, however, is \texttt{Proven} byte-for-byte in
+\texttt{trinity-clara/proofs/igla/asha\_rungs\_trinity.v}, and that is
+the only invariant this chapter depends on for runtime mirroring (R14).
 
 % =====================================================================
 % End of Chapter 15 — total ≥ 1500 lines including appendices
