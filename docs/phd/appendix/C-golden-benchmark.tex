@@ -1,0 +1,115 @@
+% ===================================================================
+% Appendix C — Golden Benchmark
+% Stub scaffold (R6 lane discipline). Body to be filled by L24/L25/L26
+% lane authors who own the empirical benchmark data.
+% Refs: gHashTag/trios#100 · #30 · #63
+% Source of truth (read-only from this lane):
+%   - trinity-clara/benchmarks/
+%   - assertions/seed_results.jsonl (currently empty schema-only on main;
+%     L-h1 / L-V1 / ch24-reproducer lanes write here per R5/R13)
+%   - igla/run_*.json (run output emitted by trios-igla-race)
+% R5 honesty: this stub deliberately contains no benchmark numbers;
+% reading "Corroborated" or "Falsified" requires real seed_results.jsonl
+% rows produced by an honest reproducer, NOT this scaffold.
+% ===================================================================
+
+\chapter{Golden Benchmark}
+\label{app:golden-benchmark}
+
+This appendix consolidates the empirical benchmark record of the
+monograph: \textsc{IGLA} bits-per-byte (BPB) training curves
+(Chapter~\ref{ch:igla-architecture}, \ref{ch:benchmarks}), the
+Vector-Symbolic-Architecture (VSA) capacity benchmarks
+(Chapter~\ref{ch:golden-spiral}, \ref{ch:benchmarks}), and the
+Red-Team / adversarial robustness suite results referenced from
+Chapter~\ref{ch:data-analysis}. The complete data-availability
+manifest lives in Appendix~\ref{app:data-availability}; the present
+appendix is the visualisation and tabular-summary layer.
+
+\section{Scope and source of truth}
+
+The numerical anchor for every figure and table in this appendix is
+the directory \verb|trinity-clara/benchmarks/| together with the
+honest-seed-row file \verb|assertions/seed_results.jsonl|. The
+binding contract is R13 (reproducibility), enforced by
+\verb|cargo run -p trios-phd -- audit --benchmark| and mirrored at
+runtime by the reproducer
+\verb|cargo run -p trios-phd -- reproduce --chapter 24|.
+
+% TODO[L24,L25,L26]: replace this paragraph with the audited
+% claim --- once seed_results.jsonl has \geq 3 honest rows on
+% seeds {17, 42, 1729}, list the champion BPB at 27\,000 steps with
+% mean \pm half-width over the three seeds. Forbid any synthetic seed
+% rows (R5: embargoed SHAs 477e3377, b3ee6a36, 2f6e4c2, 4a158c01,
+% 6393be94, 5950174, 32d1dd3, a7574c3 must auto-reject).
+
+\section{IGLA BPB training curves}
+\label{sec:appC-igla-bpb}
+
+% TODO[L24]: insert Figure C.1 --- log-log plot of BPB versus training
+% step for the champion at lr=0.004 / d=384 / champion-seed=43,
+% commit-pinned to ``2446855''.  Source pgfplots data:
+% trinity-clara/benchmarks/igla_bpb_27k.csv.
+% Acceptance: visible monotone descent below 1.50 by step 27\,000.
+
+\subsection{Falsifier}
+A reproduction of the same configuration that reports BPB
+$\geq 1.50$ on any seed in $\{17,\,42,\,1729\}$ falsifies the
+chapter--24 claim and forces the curve in this appendix to be
+re-drawn or retracted.
+
+\section{VSA capacity benchmarks}
+\label{sec:appC-vsa}
+
+% TODO[L17,L25]: insert Table C.1 with columns
+% [d-model, hold-out capacity, lower-bound 0.8 d/\log d, status].
+% Status \in \{Corroborated, Pending, Falsified\}.
+
+\subsection{Falsifier}
+Capacity below $0.8\,d/\log d$ at $d \geq 256$ falsifies the
+chapter--17 claim recorded in Appendix~\ref{app:falsification},
+row~17.
+
+\section{Red-Team / robustness benchmarks}
+\label{sec:appC-redteam}
+
+% TODO[L26,L28]: insert Table C.2 with columns
+% [attack family, Trinity-anchored model success rate, baseline
+%  success rate, $\Delta$, status]. Cite the ablation chapter
+% ch:ablations and the data-analysis chapter ch:data-analysis.
+
+\subsection{Falsifier}
+Any attack family on which the Trinity-anchored model performs
+\emph{worse} than the baseline by more than the chapter--28 ablation
+budget falsifies the robustness claim of
+Chapter~\ref{ch:data-analysis}.
+
+\section{Audit semantics}
+
+The audit utility
+\verb|cargo run -p trios-phd -- audit --benchmark| iterates over the
+three sections of this appendix and verifies that every table /
+figure references a path under \verb|trinity-clara/benchmarks/| that
+exists at the commit pinned in
+\verb|assertions/seed_results.jsonl|.  A missing path or a numeric
+mismatch beyond the $\pm 0.5\%$ R13 tolerance halts the build with a
+non-zero exit code.
+
+\section{Reading this appendix honestly (R5)}
+
+Until at least three honest seed rows land in
+\verb|assertions/seed_results.jsonl| (presently empty), every numeric
+claim drawn from this appendix must be read as
+\emph{provisional}. The author has deliberately left the scaffold's
+tables and figures empty rather than populate them with placeholder
+numbers; an empty cell is honest, a fabricated cell is not (R5).
+
+% TODO[L24,L25,L26,LA]: once Functional, Reusable, and Available ACM
+% AE badges are achieved (manifest at docs/phd/reproducibility.md),
+% remove this section and replace with a one-paragraph summary of the
+% reproduction harness output.
+
+%% End of Appendix C scaffold.
+%% Hand-off note: the next agent to claim this appendix should post on
+%% trios#265 with `🔒 AGENT <id> CLAIMING: App.C body-fill --- L24/L25/L26 mirror`
+%% and follow phd-chapter-author SKILL.md Steps 2-9.

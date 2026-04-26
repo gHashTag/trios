@@ -1,0 +1,124 @@
+% ===================================================================
+% Appendix D — Golden Mirror
+% Stub scaffold (R6 lane discipline). Body to be filled by L17/L23/L27
+% lane authors who own the Trinity-vs-Pellis comparison.
+% Refs: gHashTag/trios#101 · #30 · #63
+% Source of truth (read-only from this lane):
+%   - trinity-clara/proofs/igla/lucas_closure_gf16.v
+%   - trinity-clara/proofs/pellis/  (Pellis embedding theorems)
+%   - cargo run -p tri-math --bin tri-math -- math compare --pellis
+%   - Zenodo DOI 10.5281/zenodo.19227879 (Pellis embedding)
+% R5 honesty: this stub does not assert numerical equality between
+% Trinity and Pellis; it only fixes the comparison axis so the
+% body-fill lane can write down honest agreements and disagreements.
+% ===================================================================
+
+\chapter{Golden Mirror}
+\label{app:golden-mirror}
+
+This appendix records the side-by-side comparison of the Trinity
+identity ($\varphi^{2} + \varphi^{-2} = 3$) and the Pellis embedding
+(Zenodo DOI \href{https://doi.org/10.5281/zenodo.19227879}%
+{10.5281/zenodo.19227879}) on three axes: (i) algebraic outputs of
+the two formal frameworks on identical inputs, (ii) the hybrid
+inner-product calculation that bridges the two metrics, and (iii)
+the ultraviolet / infrared (UV/IR) renormalisation-group (RG)
+analysis under each metric.  The appendix is the empirical mirror
+of the theoretical embedding worked out in
+Chapter~\ref{ch:trinity-identity} and recalled in the related-work
+Chapter~\ref{ch:related}.
+
+\section{Comparison axes and source of truth}
+
+The numerical anchor of every row in this appendix is the binary
+\verb|cargo run -p tri-math -- math compare --pellis|, whose output
+is pinned to the commit recorded alongside the row in
+\verb|assertions/seed_results.jsonl| (Pellis-mirror rows). The
+Coq source for the Trinity side lives in
+\verb|trinity-clara/proofs/igla/lucas_closure_gf16.v| (theorem
+\verb|lucas_2_eq_3| --- Proven, INV-5 base case), and the Pellis
+side is anchored at the Pellis-embedding repository at the Zenodo
+DOI cited above.
+
+% TODO[L17,L23,L27]: replace this paragraph with the audited
+% comparison sentence: ``On the test inputs listed in Table D.1,
+% the Trinity and Pellis frameworks agree to <X> decimal digits on
+% the algebraic axis and to <Y> decimal digits on the hybrid axis.''
+% Honest blanks until the comparison binary produces real output.
+
+\section{Side-by-side: Trinity vs.\ Pellis}
+\label{sec:appD-side-by-side}
+
+% TODO[L27]: insert Table D.1 with columns
+% [input expression, Trinity output, Pellis output, $\Delta$,
+%  agreement status, source commit].
+% Each row's source commit must be pinned at the time of the run;
+% any seven-digit SHA on the embargoed list is auto-rejected (R5).
+
+\subsection{Falsifier}
+Any single row of Table~\ref{sec:appD-side-by-side} on which the
+Trinity and Pellis outputs disagree beyond the published numerical
+tolerance falsifies the embedding claim of
+Chapter~\ref{ch:trinity-identity} for that input regime, and the
+chapter must be revised or its scope narrowed.
+
+\section{Hybrid inner product}
+\label{sec:appD-hybrid}
+
+% TODO[L23]: write the explicit form of the hybrid inner product
+% \langle u, v \rangle_h = \alpha \langle u, v \rangle_T
+%                       + (1 - \alpha) \langle u, v \rangle_P
+% where \alpha \in [0,1] interpolates between the Trinity (T) and
+% Pellis (P) inner products. Acceptance criterion: positive-definite
+% on the test basis listed in trinity-clara/benchmarks/hybrid_basis.csv.
+
+\subsection{Falsifier}
+A test vector for which the hybrid inner product fails to be
+positive-definite at any $\alpha \in [0,1]$ falsifies the embedding
+hypothesis and forces a metric correction.
+
+\section{UV/IR RG analysis}
+\label{sec:appD-rg}
+
+% TODO[L17,L23]: insert Figure D.1 --- RG flow diagram showing UV
+% and IR fixed points under the Trinity metric (left panel) and the
+% Pellis metric (right panel), overlaid by the hybrid metric flow
+% (centre panel).  Cite ch:trinity-identity and the related-work
+% Chapter~\ref{ch:related} survey of RG-anchored sacred-geometry
+% interpretations.
+
+\subsection{Falsifier}
+A UV or IR fixed point that exists under the Trinity metric but
+fails to exist under the hybrid metric for some
+$\alpha \in (0,1)$ falsifies the smooth-interpolation claim and
+requires either (i) a piecewise-defined hybrid metric, or (ii) a
+narrower domain for the embedding.
+
+\section{Audit semantics}
+
+The audit utility
+\verb|cargo run -p trios-phd -- audit --pellis| iterates over the
+three tables / figures of this appendix and verifies that every row
+references a SHA pinned in
+\verb|assertions/seed_results.jsonl| (Pellis-mirror category) and
+not on the embargoed SHA list. Any unpinned numeric claim halts the
+build with a non-zero exit code.
+
+\section{Reading this appendix honestly (R5)}
+
+The Trinity / Pellis comparison is, as of the cycle in which this
+scaffold was written, \emph{open}: no honest comparison rows exist
+in \verb|assertions/seed_results.jsonl|. The body-fill lane must
+populate the tables only after the comparison binary has produced
+real output on a non-embargoed commit; the present scaffold
+deliberately contains no fabricated rows (R5).
+
+% TODO[L17,L23,L27,LP]: once Appendix~\ref{app:falsification} is
+% extended with the Pellis-mirror falsifiers, add a back-reference
+% from each falsifier subsection above to the corresponding row of
+% Table~\ref{tab:falsification}.
+
+%% End of Appendix D scaffold.
+%% Hand-off note: the next agent to claim this appendix should post on
+%% trios#265 with `🔒 AGENT <id> CLAIMING: App.D body-fill --- L17/L23/L27 mirror`
+%% and follow phd-chapter-author SKILL.md Steps 2-9.
