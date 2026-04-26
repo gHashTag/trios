@@ -1,0 +1,33 @@
+[package]
+name = "defense-gate"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Phase C LD defense-package witness — examiner pack ≥50 §, Q&A ≥30, slides ≥30 (trios#265 §5 row 4)"
+license = "MIT OR Apache-2.0"
+
+# R1: Rust only — replaces the `assertions/witness/defense_gate.sh` named
+# in §5 row 4 of ONE SHOT v2.0. R3: lands on main. R6: tools/defense_gate
+# is greenfield. Witness contract: exit 0 iff
+#   `docs/phd/defense/examiner-pack.tex` has ≥ EXAMINER_MIN_SECTIONS sectioned units
+#   `docs/phd/defense/qa.tex`            has ≥ QA_MIN_PAIRS Q/A blocks
+#   `docs/phd/defense/slides.tex`        has ≥ SLIDES_MIN_FRAMES `\frame{` blocks
+# Exit codes 100..=104 (disjoint from L7=0..=10, L15=21..=30, L-h4=50..=53,
+# LT=60..=63, LA=70..=74, citetheorem_audit=80..=83, merge_order_gate=90..=93).
+
+[[bin]]
+name = "defense-gate"
+path = "src/main.rs"
+
+[lib]
+name = "defense_gate"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
