@@ -493,6 +493,7 @@ fn falsify_hybrid_shape_invalid() {
         seq_len: 8,
         qk_gain: DEFAULT_QK_GAIN,
         lr: DEFAULT_LR,
+        num_attn_layers: 1,
     };
     assert!(cfg.validate().is_err(), "d_model=65, num_heads=4 should be refused");
 
@@ -503,6 +504,7 @@ fn falsify_hybrid_shape_invalid() {
         seq_len: 8,
         qk_gain: DEFAULT_QK_GAIN,
         lr: DEFAULT_LR,
+        num_attn_layers: 1,
     };
     assert!(cfg2.validate().is_err(), "d_model=0 should be refused");
 }

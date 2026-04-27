@@ -98,3 +98,27 @@ mod tests {
         }
     }
 }
+
+fn main() {
+    // Seed emitter CLI
+    // Usage: seed_emit <step> <bpb42> <bpb43> <bpb44> <sha>
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 6 {
+        eprintln!("Usage: {} <step> <bpb42> <bpb43> <bpb44> <sha>", args[0]);
+        std::process::exit(1);
+    }
+
+    let step: usize = args[1].parse().expect("step must be usize");
+    let bpb42: f32 = args[2].parse().expect("bpb42 must be f32");
+    let bpb43: f32 = args[3].parse().expect("bpb43 must be f32");
+    let bpb44: f32 = args[4].parse().expect("bpb44 must be f32");
+    let sha = &args[5];
+
+    let bpbs = [bpb42, bpb43, bpb44];
+    if let Err(e) = emit_gate_final_seeds(step, bpbs, sha) {
+        eprintln!("Error emitting seed results: {}", e);
+        std::process::exit(1);
+    }
+
+    println!("Emitted 3 seed results to {}", SEED_RESULTS_PATH);
+}

@@ -1,0 +1,56 @@
+# Champion Configuration - BPB=2.2393 @ step 27000, seed 43
+# Reference: gHashTag/trios@2446855
+# Anchor: phi^2 + phi^-2 = 3
+
+[model]
+# Architecture matching champion baseline
+d_model = 256
+n_layers = 2
+n_heads = 4
+vocab_size = 32000
+max_seq_len = 1024
+
+[training]
+# INV-1: LR in φ-band [0.002, 0.007] - uses φ^(-4) ≈ 0.1459 scaled
+# INV-8: LR in [1e-3, 1e-2]
+lr = 0.0039
+warmup_steps = 1000
+max_steps = 27000
+batch_size = 32
+seq_len = 512
+grad_clip = 1.0
+
+[optimizer]
+# AdamW with φ-based defaults
+beta1 = 0.618  # φ^(-1)
+beta2 = 0.999
+eps = 1e-8
+weight_decay = 0.01
+
+[data]
+train_path = "/data/fineweb_train.bin"
+val_path = "/data/fineweb_val.bin"
+val_interval = 500
+save_interval = 5000
+
+[output]
+checkpoint_dir = "checkpoints/champion"
+log_interval = 100
+
+[invariants]
+# INV-1: LR in φ-band [0.002, 0.007]
+lr_phi_band_min = 0.002
+lr_phi_band_max = 0.007
+
+# INV-8: LR in [1e-3, 1e-2]
+lr_safe_min = 0.001
+lr_safe_max = 0.01
+
+# INV-13: qk_gain must be φ^2 or φ^3 for hybrid attention
+qk_gain_phi_squared = 2.618033988749895  # φ^2
+qk_gain_phi_cubed = 4.23606797749979    # φ^3
+
+[schedule]
+# Cosine decay with warmup (phi-schedule)
+schedule_type = "cosine"
+min_lr = 1e-5
