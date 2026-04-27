@@ -1,0 +1,113 @@
+name: arch-guard
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  arch-ext-invariant:
+    name: "ARCH-EXT — trios-ext readonly guard"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check trios-ext forbidden changes
+        run: |
+          set -e
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          # Для push в main используем HEAD~1
+          if [ -z "$BASE" ]; then
+            BASE="HEAD~1"
+            HEAD="HEAD"
+          fi
+
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" \
+            | grep '^crates/trios-ext/' || true)
+
+          FORBIDDEN=$(echo "$CHANGED" \
+            | grep -vE '(^crates/trios-ext/src/dom\.rs$|^crates/trios-ext/Cargo\.toml$|^crates/trios-ext/style\.css$|^crates/trios-ext/README\.md$|^crates/trios-ext/TASK\.md$|^crates/trios-ext/AGENTS\.md$)' \
+            | grep -v '^$' || true)
+
+          if [ -n "$FORBIDDEN" ]; then
+            echo "::error::❌ ARCH-EXT VIOLATION — запрещённые файлы изменены:"
+            echo "$FORBIDDEN"
+            echo ""
+            echo "Разрешено менять ТОЛЬКО:"
+            echo "  - crates/trios-ext/src/dom.rs (≤15 строк)"
+            echo "  - crates/trios-ext/Cargo.toml"
+            echo "  - crates/trios-ext/style.css (удаление)"
+            echo ""
+            echo "См. AGENTS.md (корневой) и issue #243."
+            exit 1
+          fi
+
+          echo "✅ ARCH-EXT OK — trios-ext не нарушен"
+
+  arch-ui-oneway:
+    name: "ARCH-UI — trios-ui не импортирует trios-ext"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No imports of trios-ext in trios-ui
+        run: |
+          set -e
+          if [ -d crates/trios-ui ]; then
+            HITS=$(grep -rnE 'use +trios_ext|trios-ext' crates/trios-ui/ || true)
+            if [ -n "$HITS" ]; then
+              echo "::error::❌ ARCH-UI VIOLATION — trios-ui импортирует trios-ext:"
+              echo "$HITS"
+              exit 1
+            fi
+            echo "✅ ARCH-UI OK"
+          else
+            echo "ℹ️ trios-ui не существует ещё — пропускаем"
+          fi
+
+  ring-i5-invariant:
+    name: "I5 — каждое кольцо имеет README+TASK+AGENTS"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check ring docs completeness
+        run: |
+          set -e
+          FAIL=0
+          while IFS= read -r ring; do
+            for f in README.md TASK.md AGENTS.md; do
+              if [ ! -f "$ring/$f" ]; then
+                echo "::error::❌ I5 VIOLATION — $ring/$f отсутствует"
+                FAIL=1
+              fi
+            done
+          done < <(find crates -type d -regex '.*/rings/[A-Z][A-Z]-[A-Z0-9]+$' 2>/dev/null || true)
+          if [ $FAIL -eq 0 ]; then
+            echo "✅ I5 OK — все кольца имеют README+TASK+AGENTS"
+          else
+            exit 1
+          fi
+
+  no-wasm-pack:
+    name: "I15 — no wasm-pack, no handwritten JS"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for wasm-pack usage
+        run: |
+          set -e
+          HITS=$(grep -rn 'wasm-pack' crates/ 2>/dev/null \
+            | grep -vE '(AGENTS\.md|README\.md|TASK\.md|LAWS\.md|#)' || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::❌ wasm-pack запрещён — используй wasm-bindgen-cli"
+            echo "$HITS"
+            exit 1
+          fi
+          echo "✅ I15 OK — no wasm-pack"

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# scripts/pre-commit — ARCH guard (локальный pre-commit hook)
+#
+# Установка (один раз):
+#   cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# Что проверяет:
+#   1. ARCH-EXT — trios-ext readonly (кроме dom.rs, Cargo.toml, style.css)
+#   2. I5 — каждое новое кольцо имеет README+TASK+AGENTS
+
+set -e
+
+echo "🔍 ARCH guard running..."
+
+# ── 1. ARCH-EXT ──────────────────────────────────────────────────────────────
+FORBIDDEN=$(git diff --cached --name-only \
+  | grep '^crates/trios-ext/' \
+  | grep -vE '(^crates/trios-ext/src/dom\.rs$|^crates/trios-ext/Cargo\.toml$|^crates/trios-ext/style\.css$|^crates/trios-ext/(README|TASK|AGENTS)\.md$)' \
+  || true)
+
+if [ -n "$FORBIDDEN" ]; then
+  echo ""
+  echo "❌ ARCH-EXT VIOLATION — запрещённые файлы в коммите:"
+  echo "$FORBIDDEN"
+  echo ""
+  echo "Разрешено менять ТОЛЬКО dom.rs / Cargo.toml / style.css."
+  echo "См. корневой AGENTS.md и issue #243."
+  exit 1
+fi
+
+# ── 2. I5 — новые кольца должны иметь README+TASK+AGENTS ─────────────────────
+for ring in $(git diff --cached --name-only \
+    | grep -oE 'crates/[^/]+/rings/[A-Z][A-Z]-[A-Z0-9]+' \
+    | sort -u); do
+  for f in README.md TASK.md AGENTS.md; do
+    if [ ! -f "$ring/$f" ]; then
+      echo ""
+      echo "❌ I5 VIOLATION: $ring/$f отсутствует"
+      echo "Каждое кольцо обязано содержать README.md + TASK.md + AGENTS.md"
+      exit 1
+    fi
+  done
+done
+
+echo "✅ ARCH guard passed"
