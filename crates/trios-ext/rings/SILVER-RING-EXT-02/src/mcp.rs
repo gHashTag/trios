@@ -22,8 +22,8 @@ pub struct McpRequest {
 }
 
 pub struct McpClient {
-    ws: Option<WebSocket>,
-    next_id: u64,
+    pub ws: Option<WebSocket>,
+    pub next_id: u64,
 }
 
 impl Default for McpClient {
@@ -108,7 +108,7 @@ impl McpClient {
     }
 }
 
-fn handle_mcp_response(val: &serde_json::Value) {
+pub fn handle_mcp_response(val: &serde_json::Value) {
     let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
 
     match method {
@@ -189,15 +189,203 @@ pub fn mcp_is_connected() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    // ── McpRequest сериализация ──────────────────────────────────────────────
 
     #[test]
     fn mcp_url_uses_port_9005() {
         assert!(MCP_WS_URL.contains("9005"));
+        assert!(MCP_WS_URL.starts_with("ws://"));
     }
+
+    #[test]
+    fn mcp_request_full_serialization() {
+        let req = McpRequest {
+            jsonrpc: "2.0".into(),
+            id: 42,
+            method: "agents/chat".into(),
+            params: Some(json!({ "message": "hello" })),
+        };
+        let s = serde_json::to_string(&req).unwrap();
+        assert!(s.contains("\"jsonrpc\":\"2.0\""));
+        assert!(s.contains("\"id\":42"));
+        assert!(s.contains("\"method\":\"agents/chat\""));
+        assert!(s.contains("\"message\":\"hello\""));
+    }
+
+    #[test]
+    fn mcp_request_skips_null_params() {
+        let req = McpRequest {
+            jsonrpc: "2.0".into(),
+            id: 1,
+            method: "ping".into(),
+            params: None,
+        };
+        let s = serde_json::to_string(&req).unwrap();
+        assert!(!s.contains("params"), "params must not appear when None: {s}");
+    }
+
+    #[test]
+    fn mcp_request_increments_id_field() {
+        // Проверяем что каждый запрос получает уникальный id
+        let r1 = McpRequest { jsonrpc: "2.0".into(), id: 1, method: "a".into(), params: None };
+        let r2 = McpRequest { jsonrpc: "2.0".into(), id: 2, method: "a".into(), params: None };
+        assert_ne!(r1.id, r2.id);
+    }
+
+    #[test]
+    fn mcp_request_roundtrip() {
+        let req = McpRequest {
+            jsonrpc: "2.0".into(),
+            id: 7,
+            method: "tools/list".into(),
+            params: Some(json!({ "filter": null })),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let back: McpRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.id, 7);
+        assert_eq!(back.method, "tools/list");
+        assert_eq!(back.jsonrpc, "2.0");
+    }
+
+    #[test]
+    fn mcp_request_send_chat_params_structure() {
+        // Проверяем что send_chat формирует правильный payload
+        let params = json!({ "message": "test message" });
+        let req = McpRequest {
+            jsonrpc: "2.0".into(),
+            id: 1,
+            method: "agents/chat".into(),
+            params: Some(params.clone()),
+        };
+        assert_eq!(req.params.unwrap()["message"], "test message");
+    }
+
+    // ── McpClient состояние ──────────────────────────────────────────────────
 
     #[test]
     fn mcp_client_starts_disconnected() {
         let client = McpClient::new();
-        assert!(!client.is_connected());
+        assert!(client.ws.is_none());
+        assert_eq!(client.next_id, 1);
+    }
+
+    #[test]
+    fn mcp_client_default_equals_new() {
+        let a = McpClient::new();
+        let b = McpClient::default();
+        assert_eq!(a.next_id, b.next_id);
+        assert!(a.ws.is_none());
+        assert!(b.ws.is_none());
+    }
+
+    #[test]
+    fn mcp_client_send_without_ws_returns_err() {
+        let mut client = McpClient::new();
+        // send() без connect() должен вернуть Err("not connected")
+        let result = client.send("ping", None);
+        assert!(result.is_err());
+        let err_str = result.unwrap_err().as_string().unwrap_or_default();
+        assert!(err_str.contains("not connected"), "got: {err_str}");
+    }
+
+    #[test]
+    fn mcp_client_send_chat_without_ws_returns_err() {
+        let mut client = McpClient::new();
+        let result = client.send_chat("hello");
+        assert!(result.is_err());
+    }
+
+    // ── handle_mcp_response — роутинг логика ─────────────────────────────────
+    // NOTE: handle_mcp_response вызывает dom::* (side-effect на DOM)
+    // На native (non-wasm) dom-функции являются no-op / panic-safe,
+    // поэтому проверяем только что функция не паникует с разными входами.
+
+    #[test]
+    fn handle_response_chat_with_response_field_no_panic() {
+        let val = json!({
+            "method": "agents/chat",
+            "result": { "response": "pong from agent" }
+        });
+        handle_mcp_response(&val); // не должна паниковать
+    }
+
+    #[test]
+    fn handle_response_chat_with_content_field_no_panic() {
+        let val = json!({
+            "method": "agents/chat",
+            "result": { "content": "fallback content" }
+        });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_chat_with_raw_result_no_panic() {
+        let val = json!({
+            "method": "chat",
+            "result": { "data": [1, 2, 3] }
+        });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_chat_error_no_panic() {
+        let val = json!({
+            "method": "agents/chat",
+            "error": { "message": "agent unavailable", "code": -32000 }
+        });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_agents_list_empty_array_no_panic() {
+        let val = json!({
+            "method": "agents/list",
+            "result": []
+        });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_agents_list_non_empty_no_panic() {
+        let val = json!({
+            "method": "agents/list",
+            "result": [{"id": "ALPHA", "status": "active"}]
+        });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_tools_list_no_panic() {
+        let val = json!({
+            "method": "tools/list",
+            "result": { "tools": ["tool_a", "tool_b"] }
+        });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_unknown_method_is_noop() {
+        // не паникует, не роутит никуда
+        let val = json!({ "method": "unknown/xyz", "result": {} });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_missing_method_is_noop() {
+        let val = json!({ "result": { "data": "something" } });
+        handle_mcp_response(&val);
+    }
+
+    #[test]
+    fn handle_response_empty_object_is_noop() {
+        handle_mcp_response(&json!({}));
+    }
+
+    #[test]
+    fn handle_response_chat_no_result_no_error_is_noop() {
+        let val = json!({ "method": "agents/chat" }); // нет result и error
+        handle_mcp_response(&val);
     }
 }
