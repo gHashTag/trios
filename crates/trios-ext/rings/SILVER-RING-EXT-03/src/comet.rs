@@ -17,7 +17,7 @@ thread_local! {
 }
 
 pub struct CometBridge {
-    ws: Option<WebSocket>,
+    pub ws: Option<WebSocket>,
 }
 
 impl Default for CometBridge {
@@ -54,9 +54,7 @@ impl CometBridge {
                         Payload::ChatMessage { content, role, .. } => {
                             dom::append_message(role, content);
                         }
-                        Payload::AgentHeartbeat {
-                            agent_id, status, ..
-                        } => {
+                        Payload::AgentHeartbeat { agent_id, status, .. } => {
                             dom::set_agent_list(&format!("{}: {}", agent_id, status));
                         }
                         Payload::AgentConnected { agent_id } => {
@@ -175,6 +173,84 @@ pub fn comet_is_connected() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    // ── CometBridge состояние ────────────────────────────────────────────────
+
     #[test]
-    fn comet_module_compiles() {}
+    fn comet_bridge_new_has_no_ws() {
+        let bridge = CometBridge::new();
+        assert!(bridge.ws.is_none());
+    }
+
+    #[test]
+    fn comet_bridge_default_equals_new() {
+        let a = CometBridge::new();
+        let b = CometBridge::default();
+        assert!(a.ws.is_none());
+        assert!(b.ws.is_none());
+    }
+
+    #[test]
+    fn comet_bridge_is_not_connected_without_ws() {
+        let bridge = CometBridge::new();
+        assert!(!bridge.is_connected());
+    }
+
+    #[test]
+    fn comet_bridge_send_chat_without_ws_returns_err() {
+        let bridge = CometBridge::new();
+        let result = bridge.send_chat("hello", "user");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().as_string().unwrap_or_default();
+        assert!(msg.contains("not connected"), "got: {msg}");
+    }
+
+    #[test]
+    fn comet_bridge_send_chat_empty_message_returns_err() {
+        let bridge = CometBridge::new();
+        assert!(bridge.send_chat("", "user").is_err());
+    }
+
+    #[test]
+    fn comet_bridge_send_chat_various_roles_return_err_without_ws() {
+        let bridge = CometBridge::new();
+        for role in &["user", "assistant", "system", ""] {
+            assert!(
+                bridge.send_chat("test", role).is_err(),
+                "role '{role}' should return err without WS"
+            );
+        }
+    }
+
+    // ── TRIOS_WS_URL константа ───────────────────────────────────────────────
+
+    #[test]
+    fn trios_ws_url_uses_port_9005() {
+        assert!(TRIOS_WS_URL.contains("9005"));
+    }
+
+    #[test]
+    fn trios_ws_url_is_websocket_scheme() {
+        assert!(TRIOS_WS_URL.starts_with("ws://"));
+    }
+
+    #[test]
+    fn trios_ws_url_has_ws_path() {
+        assert!(TRIOS_WS_URL.ends_with("/ws"));
+    }
+
+    // ── Интеграция с types (Envelope → CometBridge) ──────────────────────────
+
+    #[test]
+    fn send_chat_builds_chat_message_envelope() {
+        // Проверяем что Envelope::chat_message корректно строит payload
+        // (send_chat без WS — проверяем только логику построения JSON)
+        use crate::types::Envelope;
+        let env = Envelope::chat_message("bridge", "hello", "user");
+        let json = env.to_json().unwrap();
+        assert!(json.contains("chat:message"));
+        assert!(json.contains("hello"));
+        assert!(json.contains("user"));
+    }
 }
