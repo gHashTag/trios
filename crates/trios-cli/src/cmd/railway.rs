@@ -62,38 +62,28 @@ fn deploy_parallel(seeds: u32, start_seed: u64, dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("🚀 Deploying {} Railway instances...", seeds);
+    println!("🚀 Railway deployment plan for {} seeds ({}-{})...", seeds, start_seed, start_seed + seeds as u64 - 1);
+    println!();
+
+    // Railway CLI requires TTY for interactive prompts - provide manual commands
+    println!("📋 Run these commands in a TTY terminal:");
+    println!();
 
     for i in 0..seeds {
         let seed = start_seed + i as u64;
         let service_name = format!("igla-trainer-seed-{}", seed);
 
-        println!("Deploying {} (seed: {})...", service_name, seed);
-
-        // Railway CLI command
-        let result = std::process::Command::new("railway")
-            .args([
-                "up",
-                "--service",
-                &service_name,
-                "-e",
-                &format!("RAILWAY_SEED={}", seed),
-            ])
-            .status();
-
-        match result {
-            Ok(status) if status.success() => {
-                println!("✅ {} deployed", service_name);
-            }
-            Ok(status) => {
-                eprintln!("❌ {} deployment failed with exit code: {}", service_name, status);
-            }
-            Err(e) => {
-                eprintln!("❌ Failed to run railway CLI: {}", e);
-                eprintln!("   Install Railway CLI: https://docs.railway.app/reference/cli");
-            }
-        }
+        println!("# Seed {}", seed);
+        println!("railway add --service {} --variables \"RAILWAY_SEED={}\"", service_name, seed);
+        println!("railway up --service {}", service_name);
+        println!();
     }
+
+    println!("Or one-liner for all seeds:");
+    println!("for seed in {} {}; do", start_seed, start_seed + seeds as u64 - 1);
+    println!("  railway add --service \"igla-trainer-seed-{{seed}}\" --variables \"RAILWAY_SEED={{seed}}\"");
+    println!("  railway up --service \"igla-trainer-seed-{{seed}}\"");
+    println!("done");
 
     Ok(())
 }
