@@ -127,6 +127,39 @@ bun run src/index.ts --port 9200 --browseros-url http://127.0.0.1:9105/mcp --wor
 | `gitbutler_absorb` | Smart absorb changes into appropriate commits |
 | `gitbutler_pull` | Pull latest changes |
 
+### CLI Wrapper Server (mcp/ — stdio) — 13 Training & Race Tools
+
+TypeScript stdio server wrapping `tri`, `trios-igla`, and `trios-igla-race` CLI tools.
+
+| Category | Tools |
+|----------|-------|
+| **tri CLI** | `tri_railway_deploy`, `tri_railway_status`, `tri_train`, `tri_race_init`, `tri_race_status` |
+| **trios-igla** | `igla_search`, `igla_list`, `igla_gate`, `igla_check`, `igla_triplet` |
+| **trios-igla-race** | `igla_race_start`, `igla_race_status`, `igla_race_best` |
+
+**See [mcp/README.md](./mcp/README.md) for full documentation.**
+
+```bash
+cd mcp
+npm install
+npm run build
+```
+
+Configure in Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "trios": {
+      "command": "node",
+      "args": ["/path/to/trios/mcp/dist/index.js"],
+      "env": {
+        "TRIOS_REPO_ROOT": "/path/to/trios"
+      }
+    }
+  }
+}
+```
+
 ## MCP API Examples
 
 ### Rust Server (port 9005)
@@ -181,6 +214,13 @@ Add as a custom MCP server in BrowserOS settings:
     "trios-server": {
       "url": "http://127.0.0.1:9005/mcp",
       "transport": "streamable-http"
+    },
+    "trios": {
+      "command": "node",
+      "args": ["/path/to/trios/mcp/dist/index.js"],
+      "env": {
+        "TRIOS_REPO_ROOT": "/path/to/trios"
+      }
     }
   }
 }
