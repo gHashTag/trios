@@ -1,0 +1,41 @@
+# P1 Lab Config: AdamW (Control)
+# 12K steps, seed 43 only (lab phase, NOT a Gate-2 row)
+
+[model]
+d_model = 256
+n_layers = 2
+n_heads = 4
+vocab_size = 32000
+max_seq_len = 512
+
+[training]
+lr = 0.0039
+warmup_steps = 500
+max_steps = 12000
+batch_size = 32
+seq_len = 512
+grad_clip = 1.0
+
+[optimizer]
+kind = "adamw"
+beta1 = 0.9
+beta2 = 0.999
+eps = 1e-8
+weight_decay = 0.01
+
+[data]
+train_path = "/data/fineweb_train.bin"
+val_path = "/data/fineweb_val.bin"
+val_interval = 500
+
+[invariants]
+lr_phi_band_min = 0.002
+lr_phi_band_max = 0.007
+lr_safe_min = 0.001
+lr_safe_max = 0.01
+
+[lab]
+phase = "p1"
+purpose = "optimizer_comparison"
+seed = 43
+lab_only = true

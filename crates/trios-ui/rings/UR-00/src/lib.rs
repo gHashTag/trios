@@ -13,7 +13,6 @@
 //! | `McpAtom` | `McpState` | MCP tools & connection status |
 //! | `SettingsAtom` | `Settings` | Theme, API key, preferences |
 
-use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 
@@ -47,6 +46,7 @@ pub enum AgentStatus {
     Offline,
 }
 
+#[allow(clippy::derivable_impls)] // Offline is intentional default, not Idle
 impl Default for AgentStatus {
     fn default() -> Self {
         Self::Offline
@@ -56,7 +56,7 @@ impl Default for AgentStatus {
 // ─── Chat types ──────────────────────────────────────────────
 
 /// Chat state atom.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ChatState {
     /// Chat messages.
     pub messages: Vec<ChatMessage>,
@@ -66,17 +66,6 @@ pub struct ChatState {
     pub is_loading: bool,
     /// Active agent ID for the chat.
     pub active_agent_id: Option<String>,
-}
-
-impl Default for ChatState {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            input: String::new(),
-            is_loading: false,
-            active_agent_id: None,
-        }
-    }
 }
 
 /// A single chat message.
@@ -107,6 +96,7 @@ pub enum MessageRole {
 
 /// MCP state atom.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(clippy::derivable_impls)] // server_url has non-default value
 pub struct McpState {
     /// Available MCP tools.
     pub tools: Vec<McpTool>,
@@ -141,6 +131,7 @@ pub struct McpTool {
 
 /// Settings atom.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(clippy::derivable_impls)] // mcp_url has non-default value
 pub struct Settings {
     /// Active theme.
     pub theme: Theme,
@@ -178,13 +169,13 @@ pub enum Theme {
 static AGENTS_ATOM: RwLock<Vec<Agent>> = RwLock::new(Vec::new());
 
 /// Global chat state atom. Use `use_chat_atom()` to access.
-static CHAT_ATOM: RwLock<ChatState>> = RwLock::new(ChatState::default());
+static CHAT_ATOM: std::sync::OnceLock<RwLock<ChatState>> = std::sync::OnceLock::new();
 
 /// Global MCP state atom. Use `use_mcp_atom()` to access.
-static MCP_ATOM: RwLock<McpState>> = RwLock::new(McpState::default());
+static MCP_ATOM: std::sync::OnceLock<RwLock<McpState>> = std::sync::OnceLock::new();
 
 /// Global settings atom. Use `use_settings_atom()` to access.
-static SETTINGS_ATOM: RwLock<Settings>> = RwLock::new(Settings::default());
+static SETTINGS_ATOM: std::sync::OnceLock<RwLock<Settings>> = std::sync::OnceLock::new();
 
 // ─── Atom accessors (Jotai-style hooks) ─────────────────────
 
@@ -198,7 +189,7 @@ static SETTINGS_ATOM: RwLock<Settings>> = RwLock::new(Settings::default());
 /// }
 /// ```
 pub fn use_agents_atom() -> Vec<Agent> {
-    AGENTS_ATOM.read().clone()
+    AGENTS_ATOM.read().unwrap().clone()
 }
 
 /// Set the global agents atom.
@@ -208,30 +199,33 @@ pub fn set_agents(agents: Vec<Agent>) {
 
 /// Access the global chat state atom.
 pub fn use_chat_atom() -> ChatState {
-    CHAT_ATOM.read().clone()
+    CHAT_ATOM.get_or_init(|| RwLock::new(ChatState::default())).read().unwrap().clone()
 }
 
 /// Set the global chat state atom.
 pub fn set_chat(state: ChatState) {
-    *CHAT_ATOM.write().unwrap() = state;
+    let chat_atom = CHAT_ATOM.get_or_init(|| RwLock::new(ChatState::default()));
+    *chat_atom.write().unwrap() = state;
 }
 
 /// Access the global MCP state atom.
 pub fn use_mcp_atom() -> McpState {
-    MCP_ATOM.read().clone()
+    MCP_ATOM.get_or_init(|| RwLock::new(McpState::default())).read().unwrap().clone()
 }
 
 /// Set the global MCP state atom.
 pub fn set_mcp(state: McpState) {
-    *MCP_ATOM.write().unwrap() = state;
+    let mcp_atom = MCP_ATOM.get_or_init(|| RwLock::new(McpState::default()));
+    *mcp_atom.write().unwrap() = state;
 }
 
 /// Access the global settings atom.
 pub fn use_settings_atom() -> Settings {
-    SETTINGS_ATOM.read().clone()
+    SETTINGS_ATOM.get_or_init(|| RwLock::new(Settings::default())).read().unwrap().clone()
 }
 
 /// Set the global settings atom.
 pub fn set_settings(settings: Settings) {
-    *SETTINGS_ATOM.write().unwrap() = settings;
+    let settings_atom = SETTINGS_ATOM.get_or_init(|| RwLock::new(Settings::default()));
+    *settings_atom.write().unwrap() = settings;
 }

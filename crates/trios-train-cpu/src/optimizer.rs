@@ -457,11 +457,15 @@ fn newton_schulz_cubic(m: &[f32], rows: usize, cols: usize) -> Vec<f32> {
 
 /// Unified optimizer handle for R12 experiment runner and future sweeps
 ///
-/// Allows switching between AdamW and Muon without code duplication.
-/// Both variants expose the same step()/reset() interface.
+/// Allows switching between AdamW, Muon, and Muon+Cwd without code duplication.
+/// All variants expose the same step()/reset() interface.
 pub enum OptimizerKind {
     AdamW(AdamWCpu),
     Muon(MuonOptimizer),
+    MuonCwd {
+        muon: MuonOptimizer,
+        cwd_lambda: f32,
+    },
 }
 
 impl OptimizerKind {
@@ -469,6 +473,13 @@ impl OptimizerKind {
         match self {
             OptimizerKind::AdamW(opt) => opt.step(params, grads),
             OptimizerKind::Muon(opt) => opt.step(params, grads),
+            OptimizerKind::MuonCwd { muon, cwd_lambda } => {
+                // Apply cautious weight decay before Muon step
+                for p in params.iter_mut() {
+                    *p *= 1.0 - *cwd_lambda;
+                }
+                muon.step(params, grads);
+            }
         }
     }
 
@@ -476,6 +487,7 @@ impl OptimizerKind {
         match self {
             OptimizerKind::AdamW(opt) => opt.reset(),
             OptimizerKind::Muon(opt) => opt.reset(),
+            OptimizerKind::MuonCwd { muon, .. } => muon.reset(),
         }
     }
 }
@@ -743,5 +755,88 @@ mod tests {
         assert!((opt.ns_a - 1.5).abs() < 1e-4);
         assert!((opt.ns_b - (-0.5)).abs() < 1e-4);
         assert!((opt.ns_c - 0.0).abs() < 1e-4);
+    }
+
+    /// P1 Lab gate: ortho_invariant test
+    ///
+    /// CI gate: cargo test --release optimizer::muon::ortho_invariant -- --exact
+    /// Assert post-NS update ||W^T W - I||_F <= 1e-3
+    #[test]
+    fn ortho_invariant() {
+        use std::f32::consts::PI;
+
+        let rows = 8;
+        let cols = 8;
+        let n = rows * cols;
+
+        // Create a random-ish matrix
+        let mut w: Vec<f32> = (0..n)
+            .map(|i| ((i as f32) * 0.1 + 0.5).sin())
+            .collect();
+
+        // Apply Newton-Schulz orthogonalization
+        let ns_a = 3.4445;
+        let ns_b = -4.7750;
+        let ns_c = 2.0315;
+        let ns_steps = 7; // Polar-Express constants
+
+        for _ in 0..ns_steps {
+            w = newton_schulz_5(&w, rows, cols, ns_a, ns_b, ns_c);
+        }
+
+        // Compute W^T W
+        let mut wt_w = vec![0.0f32; cols * cols];
+        for i in 0..cols {
+            for j in 0..cols {
+                let mut s = 0.0f32;
+                for k in 0..rows {
+                    s += w[k * cols + i] * w[k * cols + j];
+                }
+                wt_w[i * cols + j] = s;
+            }
+        }
+
+        // Compute ||W^T W - I||_F (Frobenius norm)
+        let mut frob_diff = 0.0f32;
+        for i in 0..cols {
+            for j in 0..cols {
+                let expected = if i == j { 1.0f32 } else { 0.0f32 };
+                let diff = wt_w[i * cols + j] - expected;
+                frob_diff += diff * diff;
+            }
+        }
+        frob_diff = frob_diff.sqrt();
+
+        // P1 gate: must be <= 1e-3
+        assert!(
+            frob_diff <= 1e-3,
+            "Post-NS orthogonalization violation: ||W^T W - I||_F = {}, threshold = 1e-3",
+            frob_diff
+        );
+    }
+
+    #[test]
+    fn test_optimizer_kind_muon_cwd() {
+        let n = 4;
+        let mut params = vec![1.0f32; n];
+        let grads = vec![0.1f32; n];
+
+        let mut opt = OptimizerKind::MuonCwd {
+            muon: MuonOptimizer::new(n, 0.02, 0.95, 0.01),
+            cwd_lambda: 0.01,
+        };
+
+        let initial = params[0];
+        opt.step(&mut params, &grads);
+
+        // Params should decrease (gradient descent + weight decay)
+        assert!(params[0] < initial);
+
+        // CWD effect: params should be more decayed than without CWD
+        let mut params_no_cwd = vec![1.0f32; n];
+        let mut opt_no_cwd = OptimizerKind::Muon(MuonOptimizer::new(n, 0.02, 0.95, 0.01));
+        opt_no_cwd.step(&mut params_no_cwd, &grads);
+
+        assert!(params[0] < params_no_cwd[0], "CWD should apply additional decay");
     }
 }

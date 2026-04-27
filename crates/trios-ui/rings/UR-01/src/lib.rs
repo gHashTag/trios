@@ -130,7 +130,7 @@ pub mod radius {
 /// ```
 pub fn use_palette() -> &'static ColorPalette {
     let settings = use_settings_atom();
-    match settings.read().theme {
+    match settings.theme {
         Theme::Dark => &DARK_PALETTE,
         Theme::Light => &LIGHT_PALETTE,
     }
@@ -138,10 +138,14 @@ pub fn use_palette() -> &'static ColorPalette {
 
 /// Toggle between dark and light theme.
 pub fn toggle_theme() {
-    let mut settings = use_settings_atom();
-    let current = settings.read().theme.clone();
-    settings.write().theme = match current {
+    let settings = use_settings_atom();
+    let new_theme = match settings.theme {
         Theme::Dark => Theme::Light,
         Theme::Light => Theme::Dark,
     };
+    use trios_ui_ur00::set_settings;
+    set_settings(trios_ui_ur00::Settings {
+        theme: new_theme,
+        ..settings
+    });
 }

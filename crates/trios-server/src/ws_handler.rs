@@ -25,6 +25,7 @@ pub enum BusEvent {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct AppState {
     pub mcp: McpService,
     pub agents: Arc<Mutex<Vec<AgentState>>>,
@@ -97,6 +98,7 @@ impl AppState {
     }
 
     /// Pick next key via round-robin
+    #[allow(dead_code)]
     pub fn next_zai_key(&self) -> Option<&str> {
         if self.zai_keys.is_empty() { return None; }
         let idx = self.zai_key_idx.fetch_add(1, Ordering::Relaxed) % self.zai_keys.len();
