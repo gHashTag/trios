@@ -199,6 +199,59 @@ This is the strongest possible answer to *"did you cherry-pick φ"*: a published
 
 ---
 
+## 7b. Optimizer compatibility scope (boundary condition for INV-8)
+
+The `α_φ` derivation in §2 supplies a *value*; INV-8 (`lr_phi_band`) supplies a *band* in which `lr` is provably gradient-decreasing. Both rest on a hidden assumption that has now become explicit:
+
+> **Adam-family second-moment scaling.** The `lr_phi_band` proof in [`proofs/igla/lr_convergence.v`](https://github.com/gHashTag/trinity-clara/blob/main/proofs/igla/lr_convergence.v) treats per-parameter updates as `m̂ / √v̂`, i.e. the second-moment normalisation used by AdamW (and any optimiser whose update map is row-stationary in the second moment).
+
+Under optimisers that violate this assumption, INV-8 does **not** automatically transfer:
+
+| Optimiser family | Update structure | INV-8 transfer |
+|---|---|---|
+| **AdamW** (and AdaFactor, Lion-AdamW hybrids) | `m̂ / √v̂` second moment | ✅ direct |
+| **SGD-momentum** | `μ · v + g` (no second moment) | ⚠️ requires re-derive (different stationary point) |
+| **Muon / Newton–Schulz orthogonalised** | `NS(SGD-momentum)` — spectral-norm projection | ❌ does not transfer; new Coq theorem required |
+| **Shampoo / Kronecker-factored** | full-matrix preconditioner | ❌ does not transfer; row-stationarity broken |
+
+Why Muon is the most informative case: spectral-norm projection homogenises the update across all singular values into a band `[1, 1+ε]`. The φ-derived band over learning rate then no longer interacts with a row-stationary second moment; it interacts with a uniform spectral envelope. The **value** `α_φ = (5−√5)/2` does not change — but the **theorem** that connects it to `lr` does, because the optimisation geometry has changed.
+
+### Empirical confirmation (this race)
+
+A local A/B run against AdamW reproduced the boundary in the wrong direction:
+
+```
+P1 AdamW  control     h=828, 12K, seed=43  →  BPB = 2.48
+P1 Muon NS-1          h=828, 12K, seed=43  →  BPB = 2.59   (+0.11 worse)
+```
+
+This is consistent with INV-8 not transferring: when the lr is held at the AdamW-derived value but the dynamics are switched to Muon, the lr is no longer at the band's interior — it is outside. The +0.11 BPB regression is the visible symptom of an INV-8 violation that Coq cannot detect (the theorem still compiles; it is simply not the theorem the run obeyed).
+
+### Statement (proposed Phase 4 theorem `INV-12`)
+
+```coq
+(* proofs/igla/lr_convergence_spectral.v — Phase 4 *)
+Theorem lr_phi_band_spectral : forall lr,
+  lr ∈ [α_φ_spectral / σ_max^k₁, α_φ_spectral / σ_max^k₂] →
+  bpb_decreases_along_spectral_gradient lr.
+Admitted.  (* derivation pending; depends on Pellis-style cancellation
+              or A_5 character normalisation, see §5 *)
+```
+
+Until `INV-12` lands, the operational rule is:
+
+> **Operational rule.** `lr_phi_band` (INV-8) is enforced **only** for optimisers in the Adam-family second-moment class. Every other optimiser used in IGLA must either supply a re-derived band (a sibling theorem `INV-12+`) or be flagged as "INV-8-misaligned" in the ledger so its results are not aggregated into the φ-anchored quorum.
+
+### Why this strengthens, not weakens, the φ programme
+
+1. **Demarcation, not retreat.** Showing the boundary makes the φ result a falsifiable scientific claim, not a ML folk-heuristic.
+2. **DARPA narrative.** *"We tested Muon, locally falsified it for our regime, and identified the missing Coq theorem."* — concrete demonstration that the framework knows when it does and does not apply.
+3. **Phase 4 backlog item.** `INV-12 lr_phi_band_spectral` becomes a publishable next paper — the bridge between Adam-family and spectral-norm optimisation under φ-anchored hyperparameters.
+
+Decision-trail reference: race [issue trios#143 RISK-ENG comment](https://github.com/gHashTag/trios/issues/143#issuecomment-4329525532) (2026-04-27).
+
+---
+
 ## 7. Map: paper section ↔ IGLA artifact
 
 | Companion paper § | IGLA artifact | Coq theorem |
@@ -209,6 +262,7 @@ This is the strongest possible answer to *"did you cherry-pick φ"*: a published
 | §5 A₅ mechanism | `scale_A5` in GF16 | `INV-11` (proposed) |
 | §6 Pellis polynomial / Hybrid H1 | `phi_pellis_lr` scheduler (lane L6) | (numerical only) |
 | §7 Look-elsewhere | `scripts/igla_lookelsewhere_test.rs` | `look_elsewhere_p_lt_001` (Phase 4) |
+| §7b Optimizer scope | RISK-ENG note in #143 | `INV-12 lr_phi_band_spectral` (Phase 4) |
 
 ---
 
