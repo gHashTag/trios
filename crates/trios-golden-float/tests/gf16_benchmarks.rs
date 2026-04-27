@@ -26,7 +26,7 @@
 
 #![cfg(test)]
 
-use trios_golden_float::{GF16, hybrid};
+use trios_golden_float::GF16;
 
 // ============================================================================
 // BENCH-001: Quantization Error Tests
@@ -393,6 +393,7 @@ fn gf16_bit_representation() {
     {
         assert_eq!(zero.to_bits(), 0u16, "Zero should be 0 bits");
     }
+    let _ = zero; // suppress unused warning when zig_lib feature is off
 }
 
 /// Test GF16 range and special values.
@@ -705,7 +706,7 @@ fn gf16_from_bits() {
     let gf16 = GF16::from_f32(original);
     let bits = gf16.to_bits();
     let reconstructed = GF16::from_bits(bits);
-    let recovered = reconstructed.to_f32();
+    let _recovered = reconstructed.to_f32();
 
     assert_eq!(bits, reconstructed.to_bits(), "Bits should roundtrip");
 }

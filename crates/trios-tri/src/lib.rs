@@ -56,18 +56,18 @@
 //! - [`qat`] — Quantization-Aware Training foundation (STE, learnable scale)
 //! - [`ffn`] — Layer-specific quantization (gate, up, down)
 
-// Public modules
-pub mod arith;
-pub mod matrix;
-pub mod core_compat;
-pub mod qat;
+// Public modules (stubs — implementations pending)
+// pub mod arith;
+// pub mod matrix;
+// pub mod core_compat;
+// pub mod qat;
 
-// Re-exports for convenience
-pub use arith::{dot_product, l1_distance, count_nonzero as vec_count_nonzero, count_zero as vec_count_zero};
-pub use matrix::TernaryMatrix;
-pub use core_compat::{is_ternary_format, hardware_cost, supports_ternary, default_precision};
-pub use core_compat::{ternary_memory_bytes, ternary_compression_ratio, ternary_compression_vs_gf16};
-pub use qat::{TernarySTE, LearnableScale, QatConfig};
+// Re-exports for convenience (uncomment when modules are implemented)
+// pub use arith::{dot_product, l1_distance, count_nonzero as vec_count_nonzero, count_zero as vec_count_zero};
+// pub use matrix::TernaryMatrix;
+// pub use core_compat::{is_ternary_format, hardware_cost, supports_ternary, default_precision};
+// pub use core_compat::{ternary_memory_bytes, ternary_compression_ratio, ternary_compression_vs_gf16};
+// pub use qat::{TernarySTE, LearnableScale, QatConfig};
 
 // ==============================================================================
 // TERNARY VALUE TYPE

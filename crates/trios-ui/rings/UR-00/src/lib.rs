@@ -171,46 +171,21 @@ pub enum Theme {
     Light,
 }
 
-// ─── Global Signal atoms (Jotai-style) ──────────────────────
+// ─── Global Signal atoms (Dioxus 0.5 GlobalSignal) ──────────
+//
+// In Dioxus 0.5, GlobalSignal is accessed directly in components:
+//   let agents = AGENTS_ATOM;
+//   rsx! { {agents.len()} agents loaded }
+//
 
-/// Global agents atom. Use `use_agents_atom()` to access.
-static AGENTS_ATOM: GlobalSignal<Vec<Agent>> = Signal::new(Vec::new());
+/// Global agents atom.
+pub static AGENTS_ATOM: GlobalSignal<Vec<Agent>> = Signal::global(Vec::new);
 
-/// Global chat state atom. Use `use_chat_atom()` to access.
-static CHAT_ATOM: GlobalSignal<ChatState> = Signal::new(ChatState::default());
+/// Global chat state atom.
+pub static CHAT_ATOM: GlobalSignal<ChatState> = Signal::global(ChatState::default);
 
-/// Global MCP state atom. Use `use_mcp_atom()` to access.
-static MCP_ATOM: GlobalSignal<McpState> = Signal::new(McpState::default());
+/// Global MCP state atom.
+pub static MCP_ATOM: GlobalSignal<McpState> = Signal::global(McpState::default);
 
-/// Global settings atom. Use `use_settings_atom()` to access.
-static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::new(Settings::default());
-
-// ─── Atom accessors (Jotai-style hooks) ─────────────────────
-
-/// Access the global agents atom.
-///
-/// # Example
-/// ```rust,ignore
-/// fn MyComponent() -> Element {
-///     let agents = use_agents_atom();
-///     rsx! { {agents.len()} agents loaded }
-/// }
-/// ```
-pub fn use_agents_atom() -> Signal<Vec<Agent>> {
-    AGENTS_ATOM
-}
-
-/// Access the global chat state atom.
-pub fn use_chat_atom() -> Signal<ChatState> {
-    CHAT_ATOM
-}
-
-/// Access the global MCP state atom.
-pub fn use_mcp_atom() -> Signal<McpState> {
-    MCP_ATOM
-}
-
-/// Access the global settings atom.
-pub fn use_settings_atom() -> Signal<Settings> {
-    SETTINGS_ATOM
-}
+/// Global settings atom.
+pub static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::global(Settings::default);
