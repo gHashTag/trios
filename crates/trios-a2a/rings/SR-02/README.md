@@ -1,22 +1,49 @@
-# trios-a2a / SR-02
+# RING — SR-02 (trios-a2a)
 
-> **Anchor:** `phi^2 + phi^-2 = 3 · TRINITY · O(1) FOREVER`
-> **Ring:** `SR-02` of `trios-a2a`
-> **Mandate (I5):** every ring carries README + TASK + AGENTS — see [AGENTS.md](https://github.com/gHashTag/trios/blob/main/AGENTS.md#i5).
+## Identity
+
+| Field | Value |
+|-------|-------|
+| Metal | 🥈 Silver |
+| Package | trios-a2a-sr02 |
+| Sealed | No |
 
 ## Purpose
 
-Documentation stub satisfying the **I5 invariant** enforced by [`arch-guard.yml`](https://github.com/gHashTag/trios/blob/main/.github/workflows/arch-guard.yml).
-The functional contract for this ring lives in its source files (`src/lib.rs`) and is exported through the parent crate facade. This stub exists so the constitutional CI gate guarding [EPIC #446](https://github.com/gHashTag/trios/issues/446) (Ring-Pattern Refactor) can pass while the canonical narrative is being written by the ring owner.
+Registry + MCP tools ring. Provides in-memory storage of agents, tasks, and messages.
+Exposes MCP-compatible tool definitions that trios-server registers as callable tools.
 
-## Status
+## Why the registry is Silver, not Bronze
 
-- Source: present
-- Tests: see crate-level `cargo test -p trios-a2a`
-- Owner-authored README: TODO (ticket: backfill prose under EPIC #446)
+BR-OUTPUT (Bronze) is output-only — it assembles and routes, but doesn't store state.
+The registry is stateful business logic: it mutates, queries, and enforces invariants.
+Putting storage in Silver keeps Bronze purely orchestration.
 
-## See also
+## API Surface (pub)
 
-- [`AGENTS.md`](./AGENTS.md) — agent-scope rules for this ring
-- [`TASK.md`](./TASK.md) — current task ledger
-- [`LAWS.md`](https://github.com/gHashTag/trios/blob/main/LAWS.md) — constitutional layer
+| Type / fn | Role |
+|-----------|------|
+| `A2ARegistry` | In-memory store: agents, tasks, messages |
+| `SharedRegistry` | `Arc<Mutex<A2ARegistry>>` — thread-safe wrapper |
+| `shared_registry()` | Constructor for SharedRegistry |
+| `mcp_tool_definitions()` | Returns Vec<Value> of MCP tool schemas |
+
+## MCP Tools exposed
+
+- `a2a_list_agents` — list all registered agents
+- `a2a_send` — send direct message
+- `a2a_broadcast` — broadcast to all agents
+- `a2a_assign_task` — create + assign task
+
+## Dependencies
+
+- SR-00 (AgentId, AgentCard)
+- SR-01 (A2AMessage, Task, TaskState)
+- `serde_json`, `chrono`
+
+## Laws
+
+- R1: No imports from BR-OUTPUT
+- L6: Pure Rust only
+- L24: No WebSocket — registry is in-memory, transport is trios-server's responsibility
+- `Arc<Mutex<>>` for thread safety — no async locks

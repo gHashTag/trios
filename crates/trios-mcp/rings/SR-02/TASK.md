@@ -1,16 +1,7 @@
-# trios-mcp / SR-02 — TASK
+# TASK.md — SR-02
 
-> **Anchor:** `phi^2 + phi^-2 = 3 · TRINITY · O(1) FOREVER`
+## Current
+- [ ] See source code for implemented features
 
-## Open
-
-- [ ] Backfill canonical TASK ledger for ring `SR-02` (owner: TBD).
-
-## Done
-
-- [x] I5-stub created to unblock [EPIC #446](https://github.com/gHashTag/trios/issues/446) CI guards.
-
-## R-rules touched (per LAWS.md)
-
-- L12 (spec before impl): stub-level only — full spec deferred to ring owner.
-- I5: README + TASK + AGENTS all present.
+## Next
+- [ ] Document public API

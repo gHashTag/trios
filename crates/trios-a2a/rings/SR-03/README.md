@@ -1,22 +1,48 @@
-# trios-a2a / SR-03
+# RING — SR-03 (trios-a2a)
 
-> **Anchor:** `phi^2 + phi^-2 = 3 · TRINITY · O(1) FOREVER`
-> **Ring:** `SR-03` of `trios-a2a`
-> **Mandate (I5):** every ring carries README + TASK + AGENTS — see [AGENTS.md](https://github.com/gHashTag/trios/blob/main/AGENTS.md#i5).
+## Identity
+
+| Field | Value |
+|-------|-------|
+| Metal | 🥈 Silver |
+| Package | trios-a2a-sr03 |
+| Sealed | No |
 
 ## Purpose
 
-Documentation stub satisfying the **I5 invariant** enforced by [`arch-guard.yml`](https://github.com/gHashTag/trios/blob/main/.github/workflows/arch-guard.yml).
-The functional contract for this ring lives in its source files (`src/lib.rs`) and is exported through the parent crate facade. This stub exists so the constitutional CI gate guarding [EPIC #446](https://github.com/gHashTag/trios/issues/446) (Ring-Pattern Refactor) can pass while the canonical narrative is being written by the ring owner.
+**BrowserOS A2A Agent** — серверная сторона управления браузером.
 
-## Status
+Этот ring определяет:
+- `BrowserCommand` — MCP команда агенту в браузере
+- `BrowserResult` — результат выполнения команды
+- `BrowserCommandType` — все 12 поддерживаемых операций
+- MCP tool definitions для регистрации в trios-server
+- `BrowserCommandQueue` — очередь команд ожидающих выполнения
 
-- Source: present
-- Tests: see crate-level `cargo test -p trios-a2a`
-- Owner-authored README: TODO (ticket: backfill prose under EPIC #446)
+## Место в архитектуре
 
-## See also
+```
+trios-server (SR-02 registry)
+    ↓ a2a_browser_command({tool, params})
+    ↓ → BrowserCommandQueue (SR-03)
 
-- [`AGENTS.md`](./AGENTS.md) — agent-scope rules for this ring
-- [`TASK.md`](./TASK.md) — current task ledger
-- [`LAWS.md`](https://github.com/gHashTag/trios/blob/main/LAWS.md) — constitutional layer
+Chrome Extension (EXT-02, WASM)
+    ↓ GET /mcp/browser-commands  (poll 2s)
+    ↓ ← Vec<BrowserCommand>
+    ↓ dispatch → DOM executor (EXT-02/EXT-03)
+    ↓ POST /mcp/browser-result
+    ↓ → BrowserResult → SR-03 queue update
+```
+
+## Почему отдельный ring, не расширение SR-02
+
+SR-02 — общий A2A registry и MCP tools для агентов.
+SR-03 — специализированный domain: браузерные команды, очередь,
+deduplication, TTL. Разделение по Single Responsibility (R1).
+
+## Laws
+
+- R1: только browser domain типы и очередь
+- Нет зависимостей кроме SR-00, SR-01
+- Нет tokio/async — чистые sync типы
+- Нет WASM — это серверный ring (native Rust)

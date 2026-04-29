@@ -1,5 +1,13 @@
-# UR-07 — Settings
+# UR-07 — WebSocket API Client
 
-See [RING.md](RING.md) for architecture docs,
-[TASK.md](TASK.md) for current tasks,
-[AGENTS.md](AGENTS.md) for agent instructions.
+## Purpose
+WebSocket client that connects to trios-server on `ws://localhost:9005/ws`.
+Provides `ApiClient` with methods for chat, agent listing, and tool listing.
+
+## Dependencies
+- None (standalone ring)
+
+## Ring Rules
+- R1: Only ring that touches raw WebSocket API
+- R2: All server communication goes through this ring
+- R3: Callbacks are `FnMut` to allow Dioxus Signal mutation

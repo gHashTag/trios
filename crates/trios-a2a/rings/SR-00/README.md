@@ -1,22 +1,40 @@
-# trios-a2a / SR-00
+# RING — SR-00 (trios-a2a)
 
-> **Anchor:** `phi^2 + phi^-2 = 3 · TRINITY · O(1) FOREVER`
-> **Ring:** `SR-00` of `trios-a2a`
-> **Mandate (I5):** every ring carries README + TASK + AGENTS — see [AGENTS.md](https://github.com/gHashTag/trios/blob/main/AGENTS.md#i5).
+## Identity
+
+| Field | Value |
+|-------|-------|
+| Metal | 🥈 Silver |
+| Package | trios-a2a-sr00 |
+| Sealed | No |
 
 ## Purpose
 
-Documentation stub satisfying the **I5 invariant** enforced by [`arch-guard.yml`](https://github.com/gHashTag/trios/blob/main/.github/workflows/arch-guard.yml).
-The functional contract for this ring lives in its source files (`src/lib.rs`) and is exported through the parent crate facade. This stub exists so the constitutional CI gate guarding [EPIC #446](https://github.com/gHashTag/trios/issues/446) (Ring-Pattern Refactor) can pass while the canonical narrative is being written by the ring owner.
+Agent identity ring. Defines the fundamental types that every A2A participant needs:
+who an agent is, what it can do, and whether it is available.
 
-## Status
+## Why SR-00 is the bottom of the graph
 
-- Source: present
-- Tests: see crate-level `cargo test -p trios-a2a`
-- Owner-authored README: TODO (ticket: backfill prose under EPIC #446)
+Every other ring (SR-01, SR-02, BR-OUTPUT) depends on `AgentId`.
+If SR-00 had any dependencies itself, it would create circular risk.
+Keeping it dependency-free guarantees that the entire type graph compiles
+in a single pass and can be embedded in any future crate.
 
-## See also
+## API Surface (pub)
 
-- [`AGENTS.md`](./AGENTS.md) — agent-scope rules for this ring
-- [`TASK.md`](./TASK.md) — current task ledger
-- [`LAWS.md`](https://github.com/gHashTag/trios/blob/main/LAWS.md) — constitutional layer
+| Type | Role |
+|------|------|
+| `AgentId(String)` | Unique agent identifier — newtype for safety |
+| `AgentCard` | Identity + capabilities + status |
+| `Capability` | Enum: Codegen, FileSystem, Git, Shell, LLM, Orchestrator, Custom |
+| `AgentStatus` | Enum: Idle, Busy, Offline, Error |
+
+## Dependencies
+
+- `serde` (derive only)
+
+## Laws
+
+- R1: No imports from SR-01, SR-02, BR-OUTPUT
+- L6: Pure Rust only
+- No I/O, no subprocess, no async
