@@ -1,8 +1,12 @@
-# UR-05 Tasks
+# UR-05 Task
 
-## Current
-- [ ] AgentCard: add click handler to select agent
-- [ ] AgentList: filter by status (all/active/idle)
+## Objective
+Implement responsive sidebar layout with collapse/expand.
 
-## Done
-- [x] Basic AgentList/AgentCard components
+## Status
+Blocked by Dioxus 0.6 component API migration.
+
+## Acceptance
+- [ ] SidebarLayout component renders
+- [ ] Collapse/expand toggle works
+- [ ] Responsive breakpoint at 768px

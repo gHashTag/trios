@@ -1,20 +1,21 @@
-# UR-05 — Agent UI
+# UR-05 Ring Spec
 
-## Purpose
-Agent list and agent card components for Trinity sidebar.
+## Component: SidebarLayout
 
-## Exported Components
-- `AgentList()` — scrollable list of agent cards
-- `AgentCard(props: AgentCardProps)` — single agent status card
+### Props
+- `collapsed: bool` (default false)
+- `width: u32` (default 280px)
 
-## Exported Types
-- `AgentCardProps` — props struct for agent card
+### Behavior
+- Renders collapsible sidebar with main content area
+- Sidebar can be toggled via button or keyboard shortcut (Cmd+B)
+- Responsive: auto-collapses below 768px viewport
+- Animation: slide transition (200ms ease)
 
-## Dependencies
-- UR-00 (agent state atoms)
-- UR-01 (theme/palette tokens)
-- UR-02 (Button, Badge primitives)
+### Dependencies
+- UR-00: GlobalSignal API
 
-## Constraints
-- No direct API calls — state flows through UR-00 atoms
-- No CSS hardcoding — use UR-01 design tokens only
+### Tests
+- Renders with sidebar open by default
+- Toggles collapsed state
+- Auto-collapses on narrow viewport

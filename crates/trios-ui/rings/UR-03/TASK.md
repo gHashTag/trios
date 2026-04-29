@@ -1,9 +1,12 @@
-# UR-03 Tasks
+# UR-03 Task
 
-## Current
-- [ ] Sidebar: collapsible with animation
-- [ ] Tabs: keyboard navigation (arrow keys)
-- [ ] Panel: resizable split view
+## Objective
+Wire global theme signal to CSS custom properties for dark/light mode.
 
-## Done
-- [x] Basic Sidebar/Tabs/Panel layout components
+## Status
+Blocked by Dioxus 0.6 GlobalSignal API migration.
+
+## Acceptance
+- [ ] `use_theme()` returns reactive `Signal<Theme>`
+- [ ] CSS vars update on toggle
+- [ ] Persisted to localStorage
