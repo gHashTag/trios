@@ -61,7 +61,7 @@ impl ScheduleFreeState {
     /// y_t = (1 - beta1) * z_t + beta1 * x_t
     pub fn interpolate(&self, x: &[f32], z: &[f32], beta1: f64) -> Vec<f32> {
         x.iter().zip(z.iter())
-            .map(|(&xi, &zi)| (1.0 - beta1) * zi + beta1 * xi)
+            .map(|(&xi, &zi)| ((1.0 - beta1) * zi as f64 + beta1 * xi as f64) as f32)
             .collect()
     }
 }

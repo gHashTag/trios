@@ -277,7 +277,7 @@ mod tests {
         let scale = mup_weight_scale(256, 1024, ParamGroup::Attention, &mup);
 
         // Should be scaled by sqrt(lr_mult)
-        let expected = (2.0 / 1280.0).sqrt() * (mup.attn_mult.sqrt());
+        let expected = (2.0_f64 / 1280.0_f64).sqrt() * (mup.attn_mult.sqrt());
         assert!((scale - expected).abs() < 1e-6);
     }
 }
