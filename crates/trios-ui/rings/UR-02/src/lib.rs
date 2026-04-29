@@ -31,7 +31,7 @@ impl Default for ButtonVariant {
 #[derive(Props, Clone, PartialEq)]
 pub struct ButtonProps {
     /// Button label.
-    pub children: String,
+    pub children: Element,
     /// Button variant.
     #[props(default = ButtonVariant::Primary)]
     pub variant: ButtonVariant,
@@ -175,7 +175,7 @@ impl Default for BadgeVariant {
 #[derive(Props, Clone, PartialEq)]
 pub struct BadgeProps {
     /// Badge label.
-    pub children: String,
+    pub children: Element,
     /// Badge variant.
     #[props(default = BadgeVariant::Default)]
     pub variant: BadgeVariant,

@@ -128,11 +128,12 @@ pub mod radius {
 ///     }
 /// }
 /// ```
-pub fn use_palette() -> &'static ColorPalette {
+pub fn use_palette() -> ColorPalette {
     let settings = use_settings_atom();
-    match settings.read().theme {
-        Theme::Dark => &DARK_PALETTE,
-        Theme::Light => &LIGHT_PALETTE,
+    let theme = settings.read().theme.clone();
+    match theme {
+        Theme::Dark => DARK_PALETTE,
+        Theme::Light => LIGHT_PALETTE,
     }
 }
 
