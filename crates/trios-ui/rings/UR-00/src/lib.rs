@@ -174,16 +174,16 @@ pub enum Theme {
 // ─── Global Signal atoms (Jotai-style) ──────────────────────
 
 /// Global agents atom. Use `use_agents_atom()` to access.
-static AGENTS_ATOM: GlobalSignal<Vec<Agent>> = Signal::new(Vec::new());
+static AGENTS_ATOM: GlobalSignal<Vec<Agent>> = GlobalSignal::new(Vec::new);
 
 /// Global chat state atom. Use `use_chat_atom()` to access.
-static CHAT_ATOM: GlobalSignal<ChatState> = Signal::new(ChatState::default());
+static CHAT_ATOM: GlobalSignal<ChatState> = GlobalSignal::new(ChatState::default);
 
 /// Global MCP state atom. Use `use_mcp_atom()` to access.
-static MCP_ATOM: GlobalSignal<McpState> = Signal::new(McpState::default());
+static MCP_ATOM: GlobalSignal<McpState> = GlobalSignal::new(McpState::default);
 
 /// Global settings atom. Use `use_settings_atom()` to access.
-static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::new(Settings::default());
+static SETTINGS_ATOM: GlobalSignal<Settings> = GlobalSignal::new(Settings::default);
 
 // ─── Atom accessors (Jotai-style hooks) ─────────────────────
 
@@ -197,20 +197,20 @@ static SETTINGS_ATOM: GlobalSignal<Settings> = Signal::new(Settings::default());
 /// }
 /// ```
 pub fn use_agents_atom() -> Signal<Vec<Agent>> {
-    AGENTS_ATOM
+    AGENTS_ATOM.signal()
 }
 
 /// Access the global chat state atom.
 pub fn use_chat_atom() -> Signal<ChatState> {
-    CHAT_ATOM
+    CHAT_ATOM.signal()
 }
 
 /// Access the global MCP state atom.
 pub fn use_mcp_atom() -> Signal<McpState> {
-    MCP_ATOM
+    MCP_ATOM.signal()
 }
 
 /// Access the global settings atom.
 pub fn use_settings_atom() -> Signal<Settings> {
-    SETTINGS_ATOM
+    SETTINGS_ATOM.signal()
 }
