@@ -1,8 +1,12 @@
-# UR-06 Tasks
+# UR-06 Task
 
-## Current
-- [ ] McpToolCard: add invoke button with loading state
-- [ ] McpPanel: group tools by server name
+## Objective
+Implement toast notification system with auto-dismiss.
 
-## Done
-- [x] Basic McpPanel/McpToolCard components
+## Status
+Blocked by Dioxus 0.6 component API migration.
+
+## Acceptance
+- [ ] ToastProvider wraps app
+- [ ] Shows success/error/warning/info
+- [ ] Auto-dismisses and stacks

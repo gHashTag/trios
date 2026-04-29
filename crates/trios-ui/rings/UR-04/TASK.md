@@ -1,9 +1,12 @@
-# UR-04 Tasks
+# UR-04 Task
 
-## Current
-- [ ] ChatPanel: wire scroll-to-bottom on new message
-- [ ] ChatInputBar: handle Enter key, disable on empty input
-- [ ] ChatBubble: markdown rendering for assistant messages
+## Objective
+Implement theme toggle component with localStorage persistence.
 
-## Done
-- [x] Basic ChatPanel/ChatBubble/ChatInputBar components
+## Status
+Blocked by UR-00 GlobalSignal migration (Dioxus 0.6).
+
+## Acceptance
+- [ ] ThemeToggle component renders
+- [ ] Cycles Light/Dark/System
+- [ ] Persists to localStorage

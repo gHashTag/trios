@@ -1,18 +1,21 @@
-# UR-04 — Chat UI
+# UR-04 Ring Spec
 
-## Purpose
-Chat panel component for Trinity sidebar: message list with bubbles and input bar.
+## Component: ThemeToggle
 
-## Exported Components
-- `ChatPanel()` — full chat panel with message history and input
-- `ChatBubble()` — single message bubble (role-styled)
-- `ChatInputBar()` — text input with send button
+### Props
+- `initial: Theme` (Light | Dark | System)
 
-## Dependencies
-- UR-00 (chat state atoms)
-- UR-01 (theme/palette tokens)
-- UR-02 (Button, Input primitives)
+### Behavior
+- Renders button with sun/moon icon
+- On click: cycles Light -> Dark -> System -> Light
+- Updates `GlobalSignal<Theme>` via `use_theme()`
+- Persists selection to localStorage key `trios-theme`
 
-## Constraints
-- No direct API calls — state flows through UR-00 atoms
-- No CSS hardcoding — use UR-01 design tokens only
+### Dependencies
+- UR-00: GlobalSignal API (Dioxus 0.6)
+- UR-03: Theme signal wiring
+
+### Tests
+- Renders default theme
+- Cycles through themes on click
+- Persists to localStorage

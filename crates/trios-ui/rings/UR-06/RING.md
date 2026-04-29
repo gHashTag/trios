@@ -1,20 +1,27 @@
-# UR-06 — MCP Panel
+# UR-06 Ring Spec
 
-## Purpose
-MCP tools panel for Trinity sidebar: displays available MCP tools and their status.
+## Component: ToastProvider
 
-## Exported Components
-- `McpPanel()` — full tools panel with tool cards
-- `McpToolCard(props: McpToolCardProps)` — single MCP tool card
+### Props
+- `max_visible: u32` (default 3)
+- `duration_ms: u32` (default 5000)
 
-## Exported Types
-- `McpToolCardProps` — props struct for tool card
+### Behavior
+- Global toast provider wrapping app
+- Shows success/error/warning/info toasts
+- Stacks up to max_visible, auto-dismisses after duration
+- Manual dismiss via close button
+- Animates in from top-right, slides out on dismiss
 
-## Dependencies
-- UR-00 (MCP state atoms)
-- UR-01 (theme/palette tokens)
-- UR-02 (Button, Badge primitives)
+### API
+```rust
+fn show_toast(level: ToastLevel, message: String)
+```
 
-## Constraints
-- No direct API calls — state flows through UR-00 atoms
-- No CSS hardcoding — use UR-01 design tokens only
+### Dependencies
+- UR-00: GlobalSignal API
+
+### Tests
+- Shows toast on trigger
+- Auto-dismisses after duration
+- Stacks multiple toasts
