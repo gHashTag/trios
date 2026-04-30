@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>GOLDEN SUNFLOWERS · SSOT Dashboard</title>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<style>
+body{font-family:-apple-system,sans-serif;max-width:1100px;margin:2em auto;padding:0 1em;color:#222;background:#fffbe8}
+h1{color:#b8860b}h2{color:#8b6914;margin-top:2em}
+table{border-collapse:collapse;width:100%}td,th{padding:6px 10px;border-bottom:1px solid #ddd;text-align:left}
+th{background:#f6e7a4}
+.btn{background:#b8860b;color:#fff;padding:8px 16px;border:none;border-radius:4px;cursor:pointer;text-decoration:none;display:inline-block}
+code{background:#f0e8c0;padding:2px 5px;border-radius:3px}
+</style></head>
+<body>
+<h1>🌻 GOLDEN SUNFLOWERS — SSOT Dashboard</h1>
+<p>Anchor: <code>φ² + φ⁻² = 3</code> · Trinity Coq Home: <a href="https://github.com/gHashTag/t27/pull/569">t27#569</a> · Master: <a href="https://github.com/gHashTag/trios/issues/372">trios#372</a></p>
+<p>
+  <a class="btn" href="/api/chapters">Chapters JSON</a>
+  <a class="btn" href="/api/seeds">Seeds</a>
+  <a class="btn" href="/api/theorems">Theorems</a>
+  <a class="btn" href="/api/oneshots">ONE SHOTs</a>
+  <a class="btn" href="/api/status">Live status</a>
+  <a class="btn" href="/api/available">Available</a>
+  <a class="btn" href="/pdf/full">📕 Download full PhD PDF</a>
+  <button class="btn" hx-post="/compile/all" hx-target="#compile-out">Recompile PhD</button>
+</p>
+<pre id="compile-out"></pre>
+<h2>Endpoints</h2>
+<table>
+<tr><th>Method</th><th>Path</th><th>Description</th></tr>
+<tr><td>GET</td><td>/api/chapters</td><td>34+ PhD chapters</td></tr>
+<tr><td>GET</td><td>/api/oneshot/:ch</td><td>Get directive for chapter</td></tr>
+<tr><td>POST</td><td>/claim/:ch</td><td>Atomic claim {agent}</td></tr>
+<tr><td>POST</td><td>/heartbeat/:id</td><td>Progress update {agent,status,message,progress_pct}</td></tr>
+<tr><td>POST</td><td>/complete/:id</td><td>Mark done {agent,pr_url}</td></tr>
+<tr><td>POST</td><td>/compile/:ch</td><td>Compile single chapter</td></tr>
+<tr><td>POST</td><td>/compile/all</td><td>Compile full PhD</td></tr>
+<tr><td>GET</td><td>/pdf/:ch</td><td>Single chapter PDF</td></tr>
+<tr><td>GET</td><td>/pdf/full</td><td>Full PhD PDF</td></tr>
+<tr><td>GET</td><td>/tex/:ch</td><td>Single chapter LaTeX</td></tr>
+<tr><td>GET</td><td>/tex/full</td><td>Master LaTeX</td></tr>
+</table>
+</body></html>
