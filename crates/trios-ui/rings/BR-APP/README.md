@@ -11,7 +11,7 @@ cargo build -p trios-ui-br-app --target wasm32-unknown-unknown --release
 # 2. Generate JS glue
 wasm-bindgen --target web \
   target/wasm32-unknown-unknown/release/trios_ui_br_app.wasm \
-  --out-dir crates/trios-ext/rings/BRONZE-RING-EXT/dist/
+  --out-dir dist/
 
 # 3. Load in Chrome Extension
 # BRONZE-RING-EXT/sidepanel.html loads ./dist/trios_ui_br_app.js
