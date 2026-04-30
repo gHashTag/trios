@@ -1,15 +1,19 @@
-Require Import Reals.Reals.
-Open Scope R_scope.
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-Definition phi : R := (sqrt(5) - 2)%R.
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-Definition dl_lower : R := (ln(2) / PI)%R.
+     gHashTag/t27/proofs/canonical/sacred/DLBounds.v
+       (logical path: Trinity.Canonical.Sacred.DLBounds)
 
-Definition dl_upper : R := (ln(3) / PI)%R.
+   Bundle:        SAC-DL
+   Title:         Sacred geometry / gravity DL bounds
+   PhD chapter:   Ch.29 Sacred V (DL)
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
 
-Theorem gamma_phi_within_dl_bounds : dl_lower < phi < dl_upper.
-Proof.
-  (* Numerical verification: *)
-  (* dl_lower ≈ 0.2206, phi = √5 - 2 ≈ 0.2361, dl_upper ≈ 0.3497 *)
-  compute.
-Qed.
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Sacred Require Export DLBounds.

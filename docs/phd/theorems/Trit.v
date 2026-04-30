@@ -1,31 +1,19 @@
-(** T27 formal layer — ternary carrier (maps to AXIOM-K1 semantic kernel, not process laws K5/K6). *)
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-Inductive trit : Set :=
-  | Neg
-  | Zero
-  | Pos.
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-Lemma trit_exhaustive (t : trit) : t = Neg \/ t = Zero \/ t = Pos.
-Proof. destruct t; auto. Qed.
+     gHashTag/t27/proofs/canonical/kernel/Trit.v
+       (logical path: Trinity.Canonical.Kernel.Trit)
 
-(** Kleene-style strong conjunction on {Neg, Zero, Pos} (not full balanced-ternary positional add). *)
-Definition trit_mul (a b : trit) : trit :=
-  match a, b with
-  | Zero, _ => Zero
-  | _, Zero => Zero
-  | Pos, Pos => Pos
-  | Neg, Neg => Pos
-  | Pos, Neg => Neg
-  | Neg, Pos => Neg
-  end.
+   Bundle:        KER-5
+   Title:         Trit kernel {-1,0,+1}
+   PhD chapter:   Ch.27 TRI27 (Trit)
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
 
-(** Placeholder addition with carry; refine against specs/math balanced-ternary when linked. *)
-Definition trit_add (a b : trit) : trit * trit :=
-  match a, b with
-  | Zero, x => (Zero, x)
-  | x, Zero => (Zero, x)
-  | Pos, Neg => (Zero, Zero)
-  | Neg, Pos => (Zero, Zero)
-  | Pos, Pos => (Pos, Neg)
-  | Neg, Neg => (Neg, Pos)
-  end.
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Kernel Require Export Trit.

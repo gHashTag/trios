@@ -1,24 +1,19 @@
-(** Minimal expression calculus — placeholder for denotational / RT story (AXIOM-K3 direction). *)
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-Require Import T27.Kernel.Trit.
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-Definition env : Type := nat -> option trit.
+     gHashTag/t27/proofs/canonical/kernel/Semantics.v
+       (logical path: Trinity.Canonical.Kernel.Semantics)
 
-Inductive expr : Set :=
-  | ELit : trit -> expr
-  | EVar : nat -> expr.
+   Bundle:        KER-4
+   Title:         TRI-27 ISA semantics
+   PhD chapter:   Ch.27 TRI27 DSL
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
 
-Fixpoint eval (e : expr) (rho : env) : option trit :=
-  match e with
-  | ELit t => Some t
-  | EVar n => rho n
-  end.
-
-Lemma eval_det (e : expr) (rho : env) (v1 v2 : trit) :
-  eval e rho = Some v1 ->
-  eval e rho = Some v2 ->
-  v1 = v2.
-Proof.
-  intros H1 H2.
-  congruence.
-Qed.
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Kernel Require Export Semantics.

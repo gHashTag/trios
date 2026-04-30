@@ -1,10 +1,19 @@
-(** THEOREM-K2 direction — numeric format ordering via phi-distance; stub until formats are formalized. *)
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-Require Import Reals.
-Open Scope R_scope.
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-(** Placeholder distance on reals; replace with format-indexed definitions from specs/numeric. *)
-Definition phi_distance_stub (x y : R) : R := Rabs (x - y).
+     gHashTag/t27/proofs/canonical/kernel/PhiDistance.v
+       (logical path: Trinity.Canonical.Kernel.PhiDistance)
 
-Lemma phi_distance_nonneg (x y : R) : 0 <= phi_distance_stub x y.
-Proof. apply Rabs_pos. Qed.
+   Bundle:        KER-7
+   Title:         phi-distance (continuity, nonneg)
+   PhD chapter:   Ch.5 phi-distance
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
+
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Kernel Require Export PhiDistance.

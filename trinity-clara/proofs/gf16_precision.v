@@ -1,38 +1,19 @@
-(** INV-3: gf16_safe_domain
-    Source: trinity-clara / Lucas closure — φ²ⁿ + φ⁻²ⁿ ∈ ℤ
-    Claim: GF16 arithmetic error < φ⁻⁶ when d_model ≥ 256.
-    If d_model < 256 with GF16 → +3.21 BPB penalty (L-R9). *)
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-Require Import Coq.Reals.Reals.
-Require Import Coq.micromega.Lra.
-Require Import Coq.Arith.Arith.
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-Open Scope R_scope.
+     gHashTag/t27/proofs/canonical/igla/INV3_Gf16Precision.v
+       (logical path: Trinity.Canonical.Igla.INV3_Gf16Precision)
 
-(** φ⁻⁶ ≈ 0.0557 — safe error bound from Lucas closure *)
-Definition phi_inv6 : R := 0.0557.
-Definition d_model_min : nat := 256.
+   Bundle:        INV-3
+   Title:         GF16 Safe Domain
+   PhD chapter:   Ch.6 GoldenFloat / Ch.9 GF vs MXFP4
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
 
-(** GF16 error model: error decreases with d_model.
-    Axiom: for d_model ≥ 256, the quantisation error is bounded by φ⁻⁶.
-    This follows from the 6:9 bit split (φ-optimal partition of 15 bits). *)
-Axiom gf16_error_bound :
-  forall (d : nat) (err : R),
-    (d >= d_model_min)%nat ->
-    0 <= err ->
-    err < phi_inv6.
-
-(** INV-3 theorem: GF16 is safe when d_model ≥ 256 *)
-Theorem gf16_safe_domain :
-  forall (d : nat) (err : R),
-    (d >= d_model_min)%nat ->
-    0 <= err ->
-    err < phi_inv6.
-Proof.
-  intros d err Hd Herr.
-  exact (gf16_error_bound d err Hd Herr).
-Qed.
-
-(** Falsification: d_model=192 with GF16 MUST produce error ≥ φ⁻⁶.
-    Empirical: BENCH shows +3.21 BPB for d_model=128. *)
-Definition gf16_unsafe (d : nat) : Prop := (d < d_model_min)%nat.
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Igla Require Export INV3_Gf16Precision.
