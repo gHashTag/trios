@@ -62,7 +62,7 @@ crates/trios-ext/
 │       └── claude.rs   — claude_dispatch() в ProseMirror
 ├── extension/
 │   ├── manifest.json   — MV3, content_scripts, CSP
-│   └── dist/           — wasm-pack output (НЕ КОММИТИТЬ .wasm вручную)
+│   └── dist/           — cargo build artifacts (НЕ КОММИТИТЬ .wasm вручную)
 └── xtask/              — build helpers
 ```
 
@@ -85,7 +85,7 @@ crates/trios-ext/
 # Обязательно
 cargo clippy --all-targets -p trios-ext  # 0 warnings
 cargo test -p trios-ext                  # все тесты зелёные
-wasm-pack build --target web             # сборка проходит
+cargo build -p trios-ext --target wasm32-unknown-unknown --release  # сборка проходит
 
 # Проверка инвариантов
 grep -r "WebSocket" crates/trios-ext/src/  # должно быть пусто
