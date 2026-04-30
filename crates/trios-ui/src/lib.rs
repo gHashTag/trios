@@ -30,7 +30,7 @@ pub use trios_ui_ur08::*;
 
 /// Mount the full TRIOS application.
 ///
-/// This is the main entry point called by `trios-ext` via `trios_ui::mount_app()`.
+/// This is the main entry point called by the Chrome Extension via `trios_ui::mount_app()`.
 /// It delegates to UR-08 (App Shell) which wires all atoms and components.
 pub fn mount_app() {
     trios_ui_ur08::mount_app();
