@@ -1,32 +1,19 @@
-(*
-  ICA-D1 fix (2026-05-14): rename local `phi` to `gamma_phi` to avoid
-  collision with the canonical golden ratio.
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-  RATIONALE
-  ---------
-  The Trinity S3AI anchor is `phi^2 + phi^-2 = 3`, which requires
-  `phi := (1 + sqrt 5) / 2 ≈ 1.618` (see CorePhi.v, Phi.v, etc.).
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-  The CP-violating phase used in this file equals `sqrt 5 - 2 ≈ 0.236`,
-  which is NOT the golden ratio. To prevent R7 ANCHOR drift, we rename
-  the local symbol to `gamma_phi`, matching the naming used in
-  `sacred/gamma_phi3.v`.
+     gHashTag/t27/proofs/canonical/sacred/DLBounds.v
+       (logical path: Trinity.Canonical.Sacred.DLBounds)
 
-  The physics (γφ bounded by Dirichlet L-function bounds) is unchanged.
-*)
+   Bundle:        SAC-DL
+   Title:         Sacred geometry / gravity DL bounds
+   PhD chapter:   Ch.29 Sacred V (DL)
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
 
-Require Import Reals.Reals.
-Open Scope R_scope.
-
-(* CP-violating phase γφ (gamma-phi), NOT the golden ratio. *)
-Definition gamma_phi : R := sqrt(5) - 2.
-
-Definition dl_lower : R := ln(2) / PI.
-Definition dl_upper : R := ln(3) / PI.
-
-Theorem gamma_phi_within_dl_bounds : dl_lower < gamma_phi < dl_upper.
-Proof.
-  (* Numerical verification via interval arithmetic *)
-  (* dl_lower ≈ 0.2206, gamma_phi ≈ 0.2361, dl_upper ≈ 0.3497 *)
-  compute.
-Qed.
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Sacred Require Export DLBounds.
