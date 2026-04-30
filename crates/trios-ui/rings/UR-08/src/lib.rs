@@ -137,7 +137,7 @@ fn render_route(route: Route) -> Element {
 /// Mount the full TRIOS application.
 ///
 /// This is the primary entry point called by the root `trios-ui` crate
-/// and by `trios-ext` via `trios_ui::mount_app()`.
+/// and by the Chrome Extension via `trios_ui::mount_app()`.
 pub fn mount_app() {
     let _dom = VirtualDom::new(AppShell);
     // In a real WASM build, this would use dioxus::web::launch_cfg
