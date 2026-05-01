@@ -1,8 +1,19 @@
-(** THEOREM-K3 direction — codegen idempotency; needs abstract Spec/Code types from t27c model. *)
+(* SPDX-License-Identifier: Apache-2.0 *)
+(* ================================================================
+   STUB — MOVED TO CANONICAL HOME
 
-Parameter spec : Type.
-Parameter code : Type.
-Parameter t27c_gen : spec -> code.
+   This file has been moved to the Trinity Coq Canonical SSOT.
+   The full proof now lives at:
 
-Lemma gen_idempotent (s : spec) : t27c_gen s = t27c_gen s.
-Proof. reflexivity. Qed.
+     gHashTag/t27/proofs/canonical/kernel/GenIdempotency.v
+       (logical path: Trinity.Canonical.Kernel.GenIdempotency)
+
+   Bundle:        KER-6
+   Title:         Idempotency law
+   PhD chapter:   Ch.10 Coq L1 (idempotency)
+   Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
+   Anchor:        phi^2 + phi^-2 = 3
+   ================================================================ *)
+
+(* Re-export so downstream files keep working without code changes. *)
+From Trinity.Canonical.Kernel Require Export GenIdempotency.
