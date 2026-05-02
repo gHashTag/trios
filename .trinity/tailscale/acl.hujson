@@ -1,0 +1,98 @@
+// Trinity Tailscale ACL — anti-collision policy for EPIC #446 ring-refactor.
+// Anchor: phi^2 + phi^-2 = 3
+// Reference: gHashTag/trios#236 ONE-SHOT v2.0 §STEP 6 collision handling, AGENTS.md I-SCOPE.
+//
+// Tags carve the tailnet into 7 disjoint codename domains. Every node advertises
+// exactly one tag; agents can talk to LEAD, but never directly to a sibling.
+// LEAD orchestrator polls all agents through but-server :7777 over tailscale0.
+{
+  "tagOwners": {
+    "tag:trinity-lead":     ["autogroup:admin"],
+    "tag:trinity-alpha":    ["autogroup:admin"],
+    "tag:trinity-beta":     ["autogroup:admin"],
+    "tag:trinity-gamma":    ["autogroup:admin"],
+    "tag:trinity-delta":    ["autogroup:admin"],
+    "tag:trinity-epsilon":  ["autogroup:admin"],
+    "tag:trinity-zeta":     ["autogroup:admin"],
+  },
+
+  // ACL rules are evaluated top-to-bottom; first match wins.
+  "acls": [
+    // 1) LEAD sees everything on the orchestrator port (7777 = but-server MCP bridge).
+    {
+      "action": "accept",
+      "src":    ["tag:trinity-lead"],
+      "dst":    [
+        "tag:trinity-alpha:7777",
+        "tag:trinity-beta:7777",
+        "tag:trinity-gamma:7777",
+        "tag:trinity-delta:7777",
+        "tag:trinity-epsilon:7777",
+        "tag:trinity-zeta:7777",
+      ],
+    },
+
+    // 2) Agents may report up to LEAD on its dashboard port (8080).
+    {
+      "action": "accept",
+      "src": [
+        "tag:trinity-alpha",
+        "tag:trinity-beta",
+        "tag:trinity-gamma",
+        "tag:trinity-delta",
+        "tag:trinity-epsilon",
+        "tag:trinity-zeta",
+      ],
+      "dst": ["tag:trinity-lead:8080"],
+    },
+
+    // 3) Agents MUST NOT talk to each other (anti-collision is network-enforced).
+    //    No rule below grants this — default-deny applies.
+
+    // 4) Operator (you, signed in to Tailscale) can SSH any node (admin lane).
+    {
+      "action": "accept",
+      "src":    ["autogroup:admin"],
+      "dst":    ["*:*"],
+    },
+  ],
+
+  // 5) Allow the operator to SSH into agent nodes for break-glass debugging.
+  "ssh": [
+    {
+      "action": "accept",
+      "src":    ["autogroup:admin"],
+      "dst":    [
+        "tag:trinity-lead",
+        "tag:trinity-alpha",
+        "tag:trinity-beta",
+        "tag:trinity-gamma",
+        "tag:trinity-delta",
+        "tag:trinity-epsilon",
+        "tag:trinity-zeta",
+      ],
+      "users":  ["root", "autogroup:nonroot"],
+    },
+  ],
+
+  // 6) Test the policy is internally consistent.
+  "tests": [
+    {
+      "src": "tag:trinity-lead",
+      "accept": [
+        "tag:trinity-alpha:7777",
+        "tag:trinity-zeta:7777",
+      ],
+    },
+    {
+      // Sibling-to-sibling MUST be denied.
+      "src": "tag:trinity-alpha",
+      "deny": [
+        "tag:trinity-beta:7777",
+        "tag:trinity-gamma:7777",
+      ],
+      // Agent → LEAD dashboard MUST be allowed.
+      "accept": ["tag:trinity-lead:8080"],
+    },
+  ],
+}
