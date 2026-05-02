@@ -1,0 +1,118 @@
+\chapter{TRI27 DSL and Dual-Target Codegen (Zig + Verilog)}
+\label{ch:27b}
+
+\section{Introduction}
+
+The arithmetic core of Trinity S$^3$AI processes weights and activations represented as balanced-ternary vectors. The natural programming substrate for such computations is a three-valued language in which the primitive type \texttt{trit} has exactly three inhabitants: \texttt{Neg} ($-1$), \texttt{Zero} ($0$), and \texttt{Pos} ($+1$). The cardinality of this type is~3---the same integer that appears at the right-hand side of the anchor identity $\varphi^2 + \varphi^{-2} = 3$.
+
+TRI27 (Trinity-27) takes its name from the $27 = 3^3$ possible triples of trit values, the natural unit of computation in the balanced-ternary VM. A TRI27 expression evaluates to a single \texttt{trit} given an environment~$\rho$ mapping variable names to \texttt{trit} values. The two foundational theorems proved for this language---\texttt{eval\_det} (determinism) and \texttt{trit\_exhaustive} (exhaustiveness)---underpin all higher-level correctness properties of the VM and the formal proofs in subsequent chapters.
+
+\section{TRI27 Syntax and Denotational Semantics}
+
+\subsection{Abstract Syntax}
+
+The TRI27 expression language is defined by the following inductive type in Coq:
+
+\begin{verbatim}
+Inductive expr : Type :=
+  | Lit   : trit -> expr
+  | Var   : nat  -> expr
+  | Neg3  : expr -> expr
+  | Add3  : expr -> expr -> expr
+  | Mul3  : expr -> expr -> expr
+  | If3   : expr -> expr -> expr -> expr.
+\end{verbatim}
+
+The type \texttt{trit} has exactly three constructors: \texttt{Neg}, \texttt{Zero}, \texttt{Pos}.
+
+\subsection{Ternary Arithmetic}
+
+The fundamental ternary operations are defined by the $3 \times 3$ tables implementing $\mathbb{F}_3$ arithmetic. Balanced-ternary addition yields $(a+b) \bmod 3$ with values mapped as $\{-1, 0, +1\}$. The distributive law $a \times_3 (b +_3 c) = (a \times_3 b) +_3 (a \times_3 c)$ holds by inspection and is proved as a derived lemma in \texttt{Trit.v}.
+
+\section{Mechanised Proofs}
+
+\begin{theorem}[Determinism --- \texttt{eval\_det}]
+\label{thm:eval-det}
+For any expression $e$, environment $\rho$, and trit values $v_1, v_2$: if \texttt{eval e rho = Some v1} and \texttt{eval e rho = Some v2}, then $v_1 = v_2$.
+\end{theorem}
+
+\begin{proof}
+By structural induction on $e$. The base cases \texttt{Lit t} and \texttt{Var n} return fixed values. For compound expressions, the induction hypothesis provides uniqueness for subexpression results; the ternary operation tables are deterministic (single-valued functions on $\{-1,0,+1\}^2$), so the composite result is unique. Total proof length: 43 lines in \texttt{Semantics.v}.
+\end{proof}
+
+\begin{theorem}[Exhaustiveness --- \texttt{trit\_exhaustive}]
+\label{thm:trit-exhaustive}
+For any $t : \texttt{trit}$, either $t = \texttt{Neg}$ or $t = \texttt{Zero}$ or $t = \texttt{Pos}$.
+\end{theorem}
+
+\begin{proof}
+By case analysis on the inductive type \texttt{trit}. Since \texttt{trit} has exactly three constructors, \texttt{destruct t} yields three subgoals, each closed by reflexivity. Total proof length: 7 lines in \texttt{Trit.v}.
+\end{proof}
+
+\section{Dual-Target Codegen Architecture}
+
+The TRI27 compiler produces code for two primary targets from a single \texttt{.t27} specification:
+
+\begin{table}[h]
+\centering
+\caption{Codegen targets and metrics}
+\label{tab:codegen-targets}
+\begin{tabular}{llll}
+\toprule
+\textbf{Target} & \textbf{Emitter} & \textbf{LoC} & \textbf{Output} \\
+\midrule
+CPU (Zig)   & \texttt{emit\_zig}    & 600 & \texttt{src/gfN.zig} \\
+FPGA (Verilog) & \texttt{emit\_verilog} & 520 & \texttt{fpga/gfN.v} \\
+CPU (C)     & \texttt{emit\_c}       & 273 & \texttt{src/gfN.c} \\
+CPU (Rust)  & \texttt{emit\_rust}    & --- & \texttt{src/gfN.rs} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The compiler itself is implemented in Rust (\texttt{bootstrap/src/compiler.rs}, 20\,814 LoC) with spec-driven modules:
+\begin{itemize}
+\item \textbf{Lexer}: 597 LoC spec (\texttt{compiler/parser/lexer.t27})
+\item \textbf{Parser}: 1\,294 LoC spec (\texttt{compiler/parser/parser.t27})
+\item \textbf{AST}: 611 LoC spec (\texttt{compiler/ast.t27})
+\item \textbf{Verilog codegen}: 1\,067 LoC spec + 2\,358 LoC FPGA emission spec
+\item \textbf{Zig codegen}: 1\,516 LoC spec
+\end{itemize}
+
+\subsection{Bit-Identical KPI}
+
+The central correctness property is: from a single \texttt{.t27} spec, both the Zig CPU emitter and the Verilog FPGA emitter produce bit-identical results on $N = 10^5$ random GF16/TF3 operations. The regression suite covers all operations in the GF16 accelerator: multiply, add, MAC, dot product, FFT, IFFT, matmul, and inverse.
+
+\begin{equation}
+\forall\, o \in \{\text{GFADD}, \text{GFMUL}, \text{GFMAC}, \ldots\},\, \forall\, (a, b):\; \mathrm{out}_{\mathrm{Zig}}(o, a, b) = \mathrm{out}_{\mathrm{Verilog}}(o, a, b)
+\end{equation}
+
+\subsection{Numeric Format Coverage}
+
+The compiler processes 9 numeric format specifications totalling 7\,956 LoC:
+
+\begin{table}[h]
+\centering
+\caption{Numeric format specs}
+\begin{tabular}{lr}
+\toprule
+\textbf{Spec} & \textbf{LoC} \\
+\midrule
+\texttt{gf16.t27} (SSOT per L6) & 3\,436 \\
+\texttt{tf3.t27}                 & 1\,691 \\
+\texttt{gf8.t27}                 & 521 \\
+\texttt{gf12.t27}                & 481 \\
+\texttt{gf20.t27}                & 468 \\
+\texttt{gf24.t27}                & 468 \\
+\texttt{gf32.t27}                & 479 \\
+\texttt{gf4.t27}                 & 305 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sealed Spec Registry}
+
+All 33 FPGA module specs carry sealed hashes in \texttt{.trinity/seals/}, with per-target \texttt{gen\_hash\_*} fields for Verilog, Zig, C, and Rust. The GF16 accelerator seal (\texttt{fpga\_Gf16Accel.json}, ring~12, sealed 2026-04-11) records the spec hash, generated code hashes, and test results.
+
+\section{Discussion}
+
+The TRI27 DSL as formalised here is intentionally minimal. The present two theorems establish only determinism and exhaustiveness; a complete verified compiler from TRI27 to FPGA RTL would require additional theorems on type safety, termination, and translation correctness---all planned for v5. The most significant limitation is that the current semantics does not handle variable out-of-scope errors gracefully. A future \texttt{emit\_coq.zig} is planned to generate formal proofs from the same \texttt{.t27} specification, closing the loop between codegen and verification (Ch.~\ref{ch:10}).

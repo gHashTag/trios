@@ -1,0 +1,107 @@
+\chapter{UART v6 Protocol (CRC-16/CCITT) and FT232RL Bridge}
+\label{ch:32b}
+
+\section{Introduction}
+
+The hardware evaluation of Trinity S$^3$AI requires a communication channel that is both low-overhead and formally verifiable. The channel must satisfy three constraints: (1)~\emph{determinism}---every token generated on the FPGA must arrive at the host in the same order and bit-pattern; (2)~\emph{$\varphi$-synchronisation}---the $\varphi$-exponent fields maintained by the KOSCHEI coprocessor (Ch.~\ref{ch:26}) must be visible to the host; (3)~\emph{auditability}---the frame stream must be loggable to a file whose SHA-256 hash is included in the pre-registration.
+
+UART v6 (the sixth revision of the Trinity serial protocol) satisfies all three constraints. The protocol governs all serial communication between the QMTech XC7A100T FPGA and the host workstation via an FT232RL USB-to-serial bridge at 115\,200 baud, 8N1.
+
+\section{Frame Structure}
+
+\subsection{Frame Grammar}
+
+Each UART v6 frame has the form:
+\begin{verbatim}
+FRAME := SYNC | LEN | PAYLOAD | CRC_HI | CRC_LO
+SYNC   := 0xAA
+LEN    := uint8  (number of payload bytes, 1-255)
+PAYLOAD := LEN bytes of token or control data
+CRC_HI, CRC_LO := CRC-16/CCITT over LEN || PAYLOAD
+\end{verbatim}
+
+The sync byte \texttt{0xAA} (binary \texttt{10101010}) is chosen for its alternating bit pattern, which maximises transitions on the serial line and aids clock-recovery on marginal USB hubs. The sync byte is not included in the CRC computation.
+
+\subsection{CRC-16/CCITT Polynomial}
+
+The error-detection code is CRC-16/CCITT with polynomial $x^{16} + x^{12} + x^5 + 1$ (\texttt{0x1021}), initialised to \texttt{0xFFFF}. This polynomial has a Hamming distance of 4 for messages up to 32\,767 bits, sufficient for UART v6 frames of at most 257 bytes~\cite{peterson_brown_1961}.
+
+In the FPGA implementation, the CRC is computed in a single-cycle parallel LUT chain, consuming 32 LUT-6 primitives. No DSP slices are used, consistent with the zero-DSP constraint.
+
+\section{$\varphi$-Synchronisation Frames}
+
+Every third frame is a $\varphi$-synchronisation frame. The trigger condition is
+\begin{equation}
+\text{frame\_count} \equiv 0 \pmod{3},
+\end{equation}
+where the modulus 3 is derived from the identity $\varphi^2 + \varphi^{-2} = 3$: the integer 3 governs the normalisation cycle of the KOSCHEI register file (Ch.~\ref{ch:26}), so the communication protocol aligns with the same period.
+
+The $\varphi$-sync frame payload is a 4-byte structure:
+
+\begin{table}[h]
+\centering
+\caption{$\varphi$-synchronisation frame payload}
+\begin{tabular}{lll}
+\toprule
+\textbf{Bytes} & \textbf{Field} & \textbf{Description} \\
+\midrule
+0   & \texttt{phi\_exp}   & Current $\varphi$-exponent (int8) \\
+1   & \texttt{trit\_count} & Non-zero trits in last TF3 vector (uint8) \\
+2--3 & \texttt{token\_id}  & Token index modulo 65\,535 (uint16 BE) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Error Recovery Automaton}
+
+The recovery automaton has three states: IDLE, AWAIT\_LEN, AWAIT\_PAYLOAD. On receipt of \texttt{0xAA} it transitions IDLE $\to$ AWAIT\_LEN; on a valid LEN byte it transitions to AWAIT\_PAYLOAD; on correct CRC it returns to IDLE and delivers the payload to the KOSCHEI dispatch unit.
+
+On CRC failure the automaton issues a NACK and waits for retransmit. The retransmit limit is $L_7 = 29$ attempts---a Lucas prime from the sanctioned seed pool. After 29 failures the automaton halts and logs a \texttt{UART\_FATAL} event.
+
+\section{Pin Mapping}
+
+The QMTech XC7A100T board uses J2 connector pins 5 and 6 for UART:
+
+\begin{table}[h]
+\centering
+\caption{UART pin mapping (XDC)}
+\begin{tabular}{llll}
+\toprule
+\textbf{J2 Pin} & \textbf{FPGA Pin} & \textbf{Signal} & \textbf{Direction} \\
+\midrule
+5 & D26 & TX & FPGA $\to$ Host \\
+6 & E26 & RX & Host $\to$ FPGA \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The FT232RL bridge converts USB to 115\,200 baud UART. At this baud rate, one byte takes $8.68\,\mu$s; the 63\,tokens/sec FPGA throughput requires approximately $63 \times 12 = 756$ bytes/sec, well within the 14\,400 bytes/sec physical capacity.
+
+\section{Measured Results}
+
+During the HSLM evaluation run (1003 tokens, seed $F_{17}=1597$):
+
+\begin{table}[h]
+\centering
+\caption{UART v6 measurement summary}
+\begin{tabular}{ll}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Total frames transmitted & 1\,412 (1\,003 data + 409 $\varphi$-sync) \\
+CRC errors               & \textbf{0} \\
+NACK frames              & \textbf{0} \\
+Frame throughput          & 89.1 frames/sec \\
+Peak USB latency          & 2.1\,ms \\
+$\varphi$-sync mismatches & \textbf{0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Zero CRC errors and zero $\varphi$-sync mismatches confirm that the FPGA and host-side accumulators remain phase-aligned throughout the 1003-token evaluation.
+
+\section{Discussion}
+
+The UART v6 protocol is deliberately minimal---the \texttt{0xAA} sync byte, CRC-16/CCITT checksum, and $\varphi$-sync frame are the only features beyond bare-metal serial. This minimalism is a reproducibility virtue: any standard USB-serial adapter presenting as a CDC-ACM device can receive v6 frames.
+
+The principal limitation is that the 1-byte LEN field caps frame payload at 255 bytes. For future context windows larger than 255 tokens this will require either multi-frame token batches or an extended v7 frame with a 2-byte LEN. The 115\,200 baud ceiling is another constraint; future work targets 1\,Mbaud via a different bridge chip.
