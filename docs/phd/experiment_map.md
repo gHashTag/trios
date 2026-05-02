@@ -21,9 +21,10 @@
 | Metric | Value | R-rule |
 |---|---|---|
 | Lanes closed in IGLA RACE | **13 / 13** | n/a |
-| Coq invariants registered | 8 (INV-1, 2, 3, 4, 5, 7, 8, 12) | R14 |
-| Coq invariants **Proven** (`Qed.`) | 3 (INV-2, INV-12, partial INV-7) | R5 |
+| Coq invariants registered | 8 + 3 wip (INV-1–8, 12 + INV-13/14/15 scaffold) | R14 |
+| Coq invariants **Proven** (`Qed.`) | 3 (INV-2, INV-6, INV-12) | R5 |
 | Coq invariants **Admitted** | 5 (INV-1, 3, 4, 5, 8) | R5 |
+| Coq invariants **wip** (scaffold only) | 3 (INV-13/14/15 — KG-memory, no `.v` files yet) | R5 |
 | INVs cited verbatim in any chapter | **0 / 8** | **R14 FAIL** |
 | Empirical chapters needing §Falsification (R7) | 12 (Ch.8, 9, 17, 18, 20–22, 24–26, 28, 29) | R7 |
 | Champion BPB (live ledger) | 2.5329, 1 / 3 seeds | R5 |
@@ -51,8 +52,11 @@
 | BPB-T2-04 | QK-Gain φ² | attn.rs | (INV-9 TODO) | `qk_gain_phi_sq` | TODO | n/a | Ch. 22, Ch. 24 | Yes | ❌ |
 | BPB-T2-07b | GF16 d_model = 384 | gf16.rs | INV-3 | `gf16_safe_domain` | Admitted | gf16_precision.v | Ch. 23, Ch. 26 | Yes | ❌ |
 | FINAL | 3-seed champion sweep (Apr 29–30) | `bin/champion_run.rs` | INV-7 | `victory_implies_distinct_clean` | Admitted (witnesses) | igla_found_criterion.v | Ch. 24, 25, 26, 28, 29 | Yes | ❌ |
+| GOLD-IV | Agent Memory · KG-substrate (anti-amnesia) | [`crates/trios-agent-memory/`](https://github.com/gHashTag/trios/tree/main/crates/trios-agent-memory) | INV-13 / INV-14 / INV-15 | `kg_remember_idempotent` / `kg_recall_budget_bounded` / `kg_supersede_history_monotone` | **wip** (no `.v` file yet; admitted_budget=5/5 LOCKED) | (placeholder) | App. K agent memory ([§ K.1–K.7](appendix/K-agent-memory.tex)) | Theory | ❌ |
 
 Legend: ✅ = found in chapter source; ❌ = R14 FAIL — theorem name not present in any `*.tex` (verbatim grep at audit time).
+
+**App. K (Agent Memory) added by #465.** Three new INV candidates (13/14/15) born `wip` per INV-13 policy; no Coq files created. SR-MEM-00 (#449) and SR-MEM-01 (#453) already enforce INV-13/14 at the trait/test level.
 
 ## 3. Theorem ⇒ chapters (reverse view)
 

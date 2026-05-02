@@ -1,0 +1,162 @@
+% ===================================================================
+% Appendix K — Agent Memory (KG-memory → GOLD IV)
+% Scaffold only — no Coq proofs, no Admitted lemmas (admitted_budget=5/5
+% LOCKED per INV-13 policy).
+% Closes #465 (was App.G — clash with CLARA Mirror, renamed to App.K
+% to avoid `D-golden-mirror.tex` collision in `appendix/`).
+% Anchor: phi^2 + phi^-2 = 3, Zenodo DOI 10.5281/zenodo.19227877
+% ===================================================================
+
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (#464).
+\providecommand{\citetheorem}[1]{\texttt{#1}}
+\providecommand{\citeWIP}[1]{\texttt{#1}~\textit{(WIP/Admitted)}}
+
+\chapter{Agent Memory — KG-Substrate for the Long-Horizon Agent Loop}
+\label{app:agent-memory}
+
+\section{G.1 Motivation}
+\label{sec:K1-motivation}
+
+Every result in this monograph rests on a single execution loop:
+\verb|LEAD| reads the current state of the IGLA RACE, picks an action,
+emits a heartbeat, and waits for the next tick. As the loop runs across
+days, weeks, and now an EPIC \#446 of fifty-plus pull requests, the
+implicit short-term cache the loop relies on becomes unsound: facts are
+forgotten, constraints are silently relaxed, and the same mistakes
+recur (cf.\ \texttt{.trinity/experience/} log of pre-INV-7 champion
+claims). The Agent Memory layer is the durable, queryable substrate
+that prevents this anti-amnesia failure mode from compounding.
+
+We declare GOLD IV's mission as the \emph{anti-amnesia foundation}: a
+memory whose contents can be cited verbatim by the loop's next step,
+not summarised, paraphrased, or selectively forgotten.
+
+\section{G.2 Substrate}
+\label{sec:K2-substrate}
+
+The substrate is a knowledge-graph store backed by two existing
+repositories:
+
+\begin{itemize}
+  \item \texttt{zig-knowledge-graph} — graph store with O(1) hot-path
+        triple-write. Zig kernel; FFI exposed to Rust.
+  \item \texttt{trios-kg} — Rust crate wrapping the Zig kernel with
+        typed bindings (\verb|KgClient::{remember, recall, supersede,
+        tombstone}|). The trait surface is the boundary the loop sees;
+        the kernel is replaceable.
+\end{itemize}
+
+The first ring of GOLD IV — \verb|SR-MEM-00 memory-types| (closed in
+\#449) — pins the wire format. The second — \verb|SR-MEM-01 kg-client-
+adapter| (closed in \#453) — adds retry and a circuit breaker around
+the trait, so transient kernel failures do not propagate as forgetting.
+
+\section{G.3 Public API surface}
+\label{sec:K3-api}
+
+The substrate exposes four operations, all returning \verb|Future<()>|
+or \verb|Future<Vec<Triple>>|:
+
+\begin{verbatim}
+trait KgBackend {
+    fn remember_triple(&mut self, t: &Triple)        -> ...;
+    fn recall_by_pattern(&self, p: &Pattern, b: u32) -> ...;
+    fn supersede(&mut self, old: &Triple, new: &Triple) -> ...;
+    fn tombstone(&mut self, t: &Triple)              -> ...;
+}
+\end{verbatim}
+
+\verb|recall_by_pattern| is the only read path the loop is permitted
+to use: it carries an explicit budget \verb|b| so a single tick cannot
+read the entire store. \verb|supersede| is the only edit primitive
+that is monotone with respect to history (the old triple is preserved
+for \verb|recall|; only its visibility is flipped).
+
+\section{G.4 INV candidates (born wip, not Proven)}
+\label{sec:K4-inv-candidates}
+
+Per the INV-13 policy (``born Proven or axiom-approach''), this PR
+does \emph{not} introduce any new \verb|Admitted.| in
+\texttt{trinity-clara/proofs/igla/}. Three candidate invariants are
+sketched here for future formalisation; their status in
+\verb|assertions/igla_assertions.json| is \verb|wip|, never
+\verb|Proven|:
+
+\begin{itemize}
+  \item \textbf{INV-13: \texttt{kg\_remember\_idempotent}} — replaying
+        \verb|remember_triple(t)| any number of times yields a state
+        observationally equal to a single application.
+  \item \textbf{INV-14: \texttt{kg\_recall\_budget\_bounded}} —
+        \verb|recall_by_pattern(p, b)| returns at most \verb|b| triples,
+        regardless of how many match.
+  \item \textbf{INV-15: \texttt{kg\_supersede\_history\_monotone}} —
+        for any \verb|(old, new)| pair, \verb|recall| with a
+        history-aware predicate still returns \verb|old|.
+\end{itemize}
+
+These names match the convention used by INV-1\ldots INV-12 already
+present in \texttt{assertions/igla\_assertions.json}.
+
+\section{G.5 Coq theorem placeholders}
+\label{sec:K5-coq-placeholders}
+
+The names below are placeholders only; no \verb|.v| file is created or
+modified by this PR.
+
+\begin{itemize}
+  \item \verb|kg_remember_idempotent| (placeholder for INV-13)
+  \item \verb|kg_recall_budget_bounded| (placeholder for INV-14)
+  \item \verb|kg_supersede_history_monotone| (placeholder for INV-15)
+\end{itemize}
+
+If and when these are written, the chapter will switch from
+\verb|\citeWIP{...}| to \verb|\citetheorem{...}| at exactly the
+mention sites in \S\ref{sec:K4-inv-candidates}.
+
+\section{G.6 Falsifiers (sketch)}
+\label{sec:K6-falsifiers}
+
+The Popper-razor witnesses for the candidate INVs follow the L7 pattern
+established in \S 24 (cf.\ \verb|crates/trios-igla-race-pipeline/|
+\verb|rings/BR-OUTPUT/tests/victory_falsifiers.rs|). Each is a Rust
+test named \verb|falsify_<predicate>|; the file is reserved at
+\verb|crates/trios-agent-memory/rings/BR-OUTPUT/tests/| but is empty
+until the GOLD IV ring lands.
+
+\begin{itemize}
+  \item \texttt{falsify\_remember\_not\_idempotent} — should reject any
+        backend whose state diverges between one and two applications
+        of \verb|remember_triple|.
+  \item \texttt{falsify\_recall\_exceeds\_budget} — should reject a
+        backend that returns more rows than the budget allows.
+  \item \texttt{falsify\_supersede\_loses\_history} — should reject a
+        backend whose \verb|recall| no longer surfaces the old triple
+        after \verb|supersede|.
+\end{itemize}
+
+\section{G.7 References}
+\label{sec:K7-refs}
+
+\begin{itemize}
+  \item EPIC \#446 — Ring-Pattern Refactor.
+  \item GOLD IV ring (future): \verb|crates/trios-agent-memory/|.
+  \item \texttt{zig-knowledge-graph} — graph kernel (Zig).
+  \item \texttt{trios-kg} — Rust bindings + typed surface.
+  \item Existing rings under GOLD IV:
+        \begin{itemize}
+          \item SR-MEM-00 \texttt{memory-types} — \#449 (closed).
+          \item SR-MEM-01 \texttt{kg-client-adapter} — \#453 (closed,
+                INV-14 \verb|recall_by_pattern| budget already
+                enforced at the trait level).
+        \end{itemize}
+  \item Future rings (open):
+        \begin{itemize}
+          \item BR-OUTPUT \texttt{AgentMemory} assembler — \#461.
+          \item SR-MEM-05 \texttt{episodic-bridge} — \#455.
+        \end{itemize}
+\end{itemize}
+
+\bigskip
+\noindent\textit{Anchor:} $\varphi^{2}+\varphi^{-2}=3$ — Trinity Identity.
+\noindent\textit{Status:} scaffold complete; no Coq, no Admitted, no
+production wiring; reachable to GOLD IV ring once \#461 lands.
