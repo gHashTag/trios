@@ -19,3 +19,10 @@ pub use trios_igla_race_pipeline_sr_04::{
     AshaRung, Gardener, GardenerAction, GardenerDecision, GardenerErr, GardenerSink,
     InvariantStatus, ARCHITECTURAL_FLOOR_BPB, DEFAULT_RUNGS, WARMUP_STEPS,
 };
+pub use trios_igla_race_pipeline_br_output::{
+    check_victory, is_victory, stat_strength, IglaRacePipeline, MockedTrainer, PerSeedSummary,
+    PipelineCfg, PipelineErr, RunSummary, SeedResult, Sinks, TrainerBackend, TtestReport,
+    VictoryError, VictoryReport, BPB_VICTORY_TARGET, INV2_WARMUP_BLIND_STEPS,
+    JEPA_PROXY_BPB_FLOOR, TTEST_ALPHA, TTEST_BASELINE_MU0, TTEST_EFFECT_SIZE_MIN,
+    VICTORY_SEED_TARGET,
+};
