@@ -1,0 +1,9 @@
+{
+  "issue": "wave-5-debt-#459-followup",
+  "agent": "DELTA",
+  "soul": "Loop-Locksmith",
+  "ts": "2026-05-02T11:48:00Z",
+  "R1": {"title": "Move bins from internal pub mod paths to ring crates", "desc": "ledger_check.rs / seed_emit.rs / qk_gain_check.rs / honey_audit.rs / main.rs still depend on internal modules (asha, neon, status, invariants, victory). Migrate them to import from trios-igla-race-pipeline ring crates so trios-igla-race can shrink further.", "files": ["crates/trios-igla-race/src/bin/", "crates/trios-igla-race/src/main.rs"], "SP": 5, "why": "After this, src/lib.rs can drop most pub mod declarations and become re-exports-only of the pipeline crate"},
+  "R2": {"title": "Doctor lint pass over trios-igla-race", "desc": "Run SILVER-RING-DR-04 RuleEngine over trios-igla-race to confirm R-RING-FACADE-001 + R-RING-DEP-002 in CI", "files": ["crates/trios-doctor/rings/SILVER-RING-DR-04/"], "SP": 2, "why": "Closes the lint feedback loop"},
+  "R3": {"title": "Delete internal pub mod once bins migrate", "desc": "Once R1 lands, drop the 12 pub mod declarations from src/lib.rs entirely; facade becomes <= 10 LoC re-exports of pipeline crates", "files": ["crates/trios-igla-race/src/lib.rs"], "SP": 1, "why": "Maximally clean facade; aligns with EPIC #446 ring-pattern goal"}
+}
