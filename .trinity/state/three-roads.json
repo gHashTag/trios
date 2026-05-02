@@ -1,0 +1,27 @@
+{
+  "issue": 459,
+  "agent": "DELTA",
+  "soul": "Loop-Locksmith",
+  "ts": "2026-05-02T11:10:00Z",
+  "R1": {
+    "title": "BR-IO concrete TrainerBackend over SR-02 PythonRunner",
+    "desc": "Wire real GPU trainer once SR-02 (#454) merges; replaces MockedTrainer in production",
+    "files": ["crates/trios-igla-race-pipeline/rings/BR-IO/"],
+    "SP": 5,
+    "why": "P0 path to Gate-2 BPB<1.85; assembler is ready, only trainer impl missing"
+  },
+  "R2": {
+    "title": "Sqlx BpbSink + GardenerSink adapters",
+    "desc": "Concrete Neon-backed sinks replacing VecBpbSink/VecGardenerSink",
+    "files": ["crates/trios-igla-race-pipeline/rings/BR-IO/"],
+    "SP": 3,
+    "why": "Production durability; integration test already proves trait wiring"
+  },
+  "R3": {
+    "title": "Shrink trios-igla-race/src/lib.rs to <=50 LoC",
+    "desc": "Port internal modules (asha, invariants, hive_automaton, neon, race, rungs, attn, ema, sampler, status, victory) into pipeline-side rings; remove module declarations from facade; switch 4 bins to use new paths",
+    "files": ["crates/trios-igla-race/src/lib.rs", "crates/trios-igla-race/src/bin/*"],
+    "SP": 8,
+    "why": "Final R-RING-FACADE-001 alignment promised by #459 acceptance; deferred from this PR for R5-honest scope"
+  }
+}
