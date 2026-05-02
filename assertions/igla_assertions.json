@@ -140,7 +140,8 @@
     "invariant_count": 9,
     "last_updated": "2026-04-25T16:50:00Z",
     "last_updated_by": "perplexity-computer-l13",
-    "scaffold_inv_13_15_added": "#465 App.K Agent Memory scaffold (status=wip; admitted_budget=5/5 LOCKED; no Coq files created)"
+    "scaffold_inv_13_15_added": "#465 App.K Agent Memory scaffold (status=wip; admitted_budget=5/5 LOCKED; no Coq files created)",
+    "inv_6_hybrid_qk_gain_added": "#441 Phase-5 scaffold via PR #490 (status=wip; 3 axioms recorded; admitted_budget=5/5 LOCKED preserved)"
   },
   "trinity_identity": "\u03c6\u00b2 + \u03c6\u207b\u00b2 = 3",
   "nca_loss_weight": 0.25,
@@ -347,6 +348,31 @@
         "ema_decay_lower": 0.996,
         "ema_decay_upper": 1.0
       }
+    },
+    {
+      "id": "INV-6-HybridQkGain",
+      "name": "hybrid_qk_gain_phi_bound",
+      "coq_theorem": "inv6_hybrid_qk_gain_from_axiom",
+      "coq_file": "docs/phd/theorems/igla/INV6_HybridQkGain.v",
+      "status": "wip",
+      "axioms_used": [
+        "hybrid_gain_phi_bound",
+        "gain_baseline_nonneg",
+        "gain_hybrid_nonneg"
+      ],
+      "description": "Hybrid-QK attention gain is phi-bounded from below: gain_hybrid(k) >= gain_baseline(k) * phi^(-1). Phase-5 #441 entity. Distinct from the existing Proven INV-6 ema_decay_valid \u2014 the id suffix '-HybridQkGain' disambiguates the collision until Phase-5 settles on a final number.",
+      "note": "CIRCULAR: theorem inv6_hybrid_qk_gain_from_axiom restates the axiom hybrid_gain_phi_bound (proof body is `exact (axiom k)`). The functional invariant is postulated, not derived. Phase-5 #441 closure replaces the axiom with a sqrt_le_compat derivation per the strategy in the issue body; until then, status remains `wip`. admitted_budget=5/5 LOCKED untouched (axioms != Admitted, but axioms_used is recorded explicitly).",
+      "phase": "5-scaffold-only",
+      "issue_ref": "https://github.com/gHashTag/trios/issues/441",
+      "scaffold_pr": "https://github.com/gHashTag/trios/pull/490",
+      "follow_up_pr": "TBD \u2014 must replace Axiom hybrid_gain_phi_bound with derivation",
+      "trinity_link": "Connects to architectural floor proof (arch_floor_bpb = 2 + phi^(-2)) per #441 corollary",
+      "runtime_check": {
+        "action": "warn",
+        "message": "INV-6-HybridQkGain: hybrid_gain_phi_bound is an axiom, not a derived theorem"
+      },
+      "runtime_target": "crates/trios-igla-race/src/bin/qk_gain_check.rs (Rust guard already binding)",
+      "naming_collision": "id 'INV-6' already taken by ema_decay_valid (Proven). Issue #441 titled this work 'INV-6 HybridQkGain' but it is a separate entity; the suffix preserves both."
     },
     {
       "id": "INV-7",
