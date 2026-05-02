@@ -7,7 +7,7 @@
 use dioxus::prelude::*;
 use trios_ui_ur00::{use_mcp_atom, McpTool};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
-use trios_ui_ur02::{Badge, BadgeVariant, Button, ButtonVariant};
+use trios_ui_ur02::{badge, BadgeVariant, button, ButtonVariant};
 
 // ─── McpPanel ────────────────────────────────────────────────
 
