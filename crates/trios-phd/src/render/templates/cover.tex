@@ -1,20 +1,52 @@
-% cover.tex — full-bleed front cover for the TRINITY S³AI / GoldenSunflowers
-% PhD monograph. Uses cover_v4.png at A4 page size with no margins, no
-% header, no footer, no page number visible (page-counter starts at 1, but
-% the empty pagestyle suppresses the number on this page).
+% cover.tex — front cover for the TRINITY S³AI / GoldenSunflowers PhD
+% monograph. Composition (top → bottom, all centred):
+%   1. cover_v4_top.png — "Golden Sunflowers" title + Vogel-spiral artwork
+%      (PNG with the original embedded formula cropped off)
+%   2. \(\varphi^2 + \varphi^{-2} = 3\) — typeset by LaTeX so the size is
+%      controllable (20 % smaller than the image-burnt version)
+%   3. "Trinity S³AI on the φ²+φ⁻²=3 Substrate" — italic subtitle
+%   4. "PhD Dissertation — v5.1 / Dmitrii Vasilev / 2026" — footer
 \documentclass[a4paper]{article}
-\usepackage[a4paper,margin=0in,paperwidth=210mm,paperheight=297mm]{geometry}
+\usepackage[a4paper,margin=2cm,paperwidth=210mm,paperheight=297mm]{geometry}
 \usepackage{graphicx}
-\usepackage{tikz}
 \usepackage{fontspec}
 \setmainfont{DejaVu Serif}
+\usepackage{amsmath}
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
 
 \begin{document}
-\begin{tikzpicture}[remember picture, overlay]
-  \node[anchor=center, inner sep=0pt] at (current page.center) {%
-    \includegraphics[width=\paperwidth, height=\paperheight, keepaspectratio=false]{$COVER_PATH$}%
-  };
-\end{tikzpicture}
+% Vertical centering: equal \vfill above and below the centered block.
+\null\vfill
+\begin{center}
+% --- top: title + sunflower (PNG, no embedded formula) ---
+% Image is sized so that title + sunflower + formula + subtitle + footer
+% all fit comfortably on a single A4 page without overflowing the
+% bottom margin.
+\includegraphics[width=0.65\textwidth,keepaspectratio]{$COVER_PATH$}
+
+\vspace{1.5em}
+
+% --- formula: 20 % smaller than the previous cover.
+% Previous cover used 72 pt; operator asked for −20 % → ≈ 58 pt.
+% Display style keeps exponent/subscript proportions correct; the
+% surrounding \vspace values stay the same so the overall composition
+% still reads as balanced.
+{\fontsize{58pt}{70pt}\selectfont
+  $\displaystyle \varphi^{2} + \varphi^{-2} = 3$\par}
+
+\vspace{0.8em}
+
+% --- italic subtitle ---
+{\large\itshape Trinity\,S\textsuperscript{3}AI on the
+  $\varphi^{2}+\varphi^{-2}=3$\,Substrate\par}
+
+\vspace{2.5em}
+
+% --- footer ---
+{\small PhD Dissertation \textemdash{} v5.1
+  \quad/\quad Dmitrii Vasilev
+  \quad/\quad 2026\par}
+\end{center}
+\vfill
 \end{document}

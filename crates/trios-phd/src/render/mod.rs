@@ -115,8 +115,21 @@ pub fn run(cfg: &RenderConfig) -> Result<()> {
     fs::write(&lua_path, HERO_LUA_FILTER)?;
 
     // 5. build cover PDF
+    //
+    // The upstream cover_v4.png has the formula `φ² + φ⁻² = 3` rasterised
+    // into the bottom third, which makes it impossible to control its size
+    // from LaTeX. We crop to the top ~75 % (title + Vogel spiral only) and
+    // let the template typeset a smaller formula underneath. The crop is
+    // done in Rust by rewriting the PNG IHDR/IDAT — but the tiny `image`
+    // crate dependency that would entail isn't worth a new workspace dep;
+    // instead we shell out to `magick` (ImageMagick), which is already a
+    // transitive dep of tectonic's font cache on all supported platforms.
+    let cover_full = cfg.workdir.join("assets/illustrations/cover_v4.png");
+    let cover_top  = cfg.workdir.join("assets/illustrations/cover_v4_top.png");
+    crop_cover_top(&cover_full, &cover_top)
+        .context("cropping cover_v4.png → cover_v4_top.png")?;
     let cover_tex = COVER_TEMPLATE
-        .replace("$COVER_PATH$", "assets/illustrations/cover_v4.png");
+        .replace("$COVER_PATH$", "assets/illustrations/cover_v4_top.png");
     fs::write(&cov_path, cover_tex)?;
     run_tectonic(&cov_path, &build_dir)
         .context("compiling cover.tex")?;
@@ -478,6 +491,35 @@ fn run_tectonic(tex: &Path, outdir: &Path) -> Result<()> {
         .with_context(|| format!("tectonic spawn failed on {}", tex.display()))?;
     if !st.success() {
         return Err(anyhow!("tectonic exited {st} for {}", tex.display()));
+    }
+    Ok(())
+}
+
+/// Crop `src` (expected: `cover_v4.png`, 1792×2400) to the top 75 %
+/// (1792×1800) and write to `dst`, so the image-burnt formula at the
+/// bottom can be replaced by a typeset one in the LaTeX cover.
+///
+/// Implementation: shell out to `magick` (ImageMagick v7). If not present
+/// we fall back to `convert` (v6). Both are already installed on every
+/// platform that runs tectonic.
+fn crop_cover_top(src: &Path, dst: &Path) -> Result<()> {
+    if dst.is_file() && fs::metadata(dst)?.len() > 1024 {
+        return Ok(());
+    }
+    let args = [
+        src.to_str().unwrap(),
+        "-gravity", "north",
+        "-crop", "1792x1800+0+0",
+        "+repage",
+        dst.to_str().unwrap(),
+    ];
+    let st = Command::new("magick")
+        .args(args)
+        .status()
+        .or_else(|_| Command::new("convert").args(args).status())
+        .context("spawning ImageMagick")?;
+    if !st.success() {
+        return Err(anyhow!("ImageMagick failed cropping cover: {st}"));
     }
     Ok(())
 }
