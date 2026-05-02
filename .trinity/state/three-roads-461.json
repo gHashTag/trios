@@ -1,0 +1,43 @@
+{
+  "issue": 461,
+  "epic": 446,
+  "ring": "GOLD IV / BR-OUTPUT (real-wiring follow-up)",
+  "crate": "trios-agent-memory-br-output",
+  "soul": "Loop-Locksmith",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "preceding_pr": "#495 (scaffold) — KgAgentMemory was an in-memory stub",
+  "depends_on_merged": ["SR-MEM-00 (#449/PR ?)", "SR-MEM-01 (#453/PR ?)", "SR-MEM-05 (#455/PR #497)"],
+  "blocks": ["anti-amnesia rollout to all agents (when concrete PgKgBackend ships in BR-IO)"],
+  "three_roads": {
+    "road_a_full_real_wire": {
+      "name": "Replace stub with KgAgentMemory<B: KgBackend> generic delegating to SR-MEM-01 KgAdapter",
+      "scope": "Re-export Triple, TripleId, Provenance, AgentRole, MemoryKind, ForgetPolicy from SR-MEM-00; introduce KgAgentMemory<B: KgBackend> wrapping KgAdapter<B>; recall -> recall_by_pattern with composite-subject filter, remember -> remember_triple (returns Vec<TripleId>, idempotent on SHA-256), forget -> KgAdapter::tombstone via recall+delete loop (GDPR / TTL flavours), reflect -> recall + summary stub citing SR-MEM-03 follow-up. Integration test confirms SHA-256-equal triples on remember+recall roundtrip.",
+      "cost": "MED — ring becomes generic <B>, public API surface expands, async-trait still works",
+      "risk": "LOW — same SR-MEM-01 KgBackend trait pattern; in-memory MockKg in tests preserves offline build; no runtime I/O dragged in",
+      "verdict": "CHOSEN — issue AC explicitly says 'Default implementation KgAgentMemory wires SR-MEM-01 + SR-MEM-05'; this is the actual real-wiring."
+    },
+    "road_b_keep_stub_add_thin_facade": {
+      "name": "Keep in-memory stub, add a thin AgentMemoryFacade<B: KgBackend> alongside",
+      "scope": "Two structs side-by-side; users pick stub for tests, facade for production",
+      "cost": "HIGH — doubles the surface, encourages the stub to drift forever",
+      "risk": "MED — two public impls of one trait dilute the contract",
+      "verdict": "REJECTED — issue AC says ONE Default implementation; dual-impl is scope creep"
+    },
+    "road_c_minimal_remember_only": {
+      "name": "Wire only remember(); leave recall/forget/reflect as stubs",
+      "scope": "Smallest possible diff",
+      "cost": "LOW",
+      "risk": "HIGH — fails the integration test in #461 AC ('remember -> recall produces SHA-256-equal triples')",
+      "verdict": "REJECTED — does not satisfy the AC integration test"
+    }
+  },
+  "chosen": "road_a_full_real_wire",
+  "honest_disclosure_r5": [
+    "KgAgentMemory becomes generic over B: KgBackend so callers pass an in-memory MockKg in tests, the concrete PgKgBackend (sqlx + tokio_postgres) in production.",
+    "The concrete PgKgBackend (live Postgres adapter) ships in a sibling BR-IO ring as planned — same precedent as SR-MEM-01's KgClient deferment and SR-MEM-05's PgListener deferment.",
+    "Bridge::seed_replay integration is exposed as an optional helper KgAgentMemory::warm_start(&Bridge, lookback) so callers that ship the Bridge can use it; reflect() does NOT pull a Bridge dep into BR-OUTPUT (Bridge needs L+H source generics that BR-OUTPUT does not have access to without locking the trait into too many type parameters).",
+    "HyDE expansion (recall) → SR-MEM-02 follow-up; supersede dedup (reflect) → SR-MEM-03; GDPR audit log (forget) → SR-MEM-04; vector search → SR-MEM-06. All four marked TODO with linked sub-issue numbers in source comments per #461 AC.",
+    "Integration test uses MockKg with full SHA-256 idempotency check from SR-MEM-00 TripleId."
+  ],
+  "rules_honored": ["R1", "R5-honest", "R-RING-DEP-002 (Bronze-tier deps: SR-MEM-00/01/05 + async-trait + serde + uuid + chrono + sha2 via re-export)", "R-L6-PURE-007", "L1", "L13", "L14"]
+}
