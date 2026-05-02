@@ -13,3 +13,6 @@ pub use trios_algorithm_arena_sr_alg_03::{
     VerifierOutcome, COQ_THEOREM_ID, EMBARGO_DAYS, ENTRY_PATH, FIBONACCI_SEEDS,
     TARGET_VAL_BPB,
 };
+pub use trios_algorithm_arena_br_output::{
+    AlgorithmArena, ArenaError, BpbRow, BpbRowId, MockedTrainer, RunBackend, TrainerBackend,
+};
