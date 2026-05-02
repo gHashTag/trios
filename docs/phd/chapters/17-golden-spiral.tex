@@ -8,6 +8,14 @@
 %                       R14 (Coq citation table)
 % R7 N/A — THEORY chapter per lane catalogue.
 
+
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (#464).
+% The macro renders the Coq theorem name verbatim in chapter prose; when the
+% monograph-wide macro lands in main.tex the \providecommand silently yields.
+\providecommand{\citetheorem}[1]{\texttt{#1}}
+% Companion macro for Admitted theorems (per #464 acceptance criteria).
+\providecommand{\citeWIP}[1]{\texttt{#1}~\textit{(WIP/Admitted)}}
+
 \chapter{The Golden Spiral and the GF16 Substrate}
 \label{ch:17-golden-spiral}
 
@@ -1489,7 +1497,7 @@ production value $\eta_{\mathrm{lr}}=0.005025=\phi^{-11}$ sits at
 the spiral midpoint of the window.
 
 \emph{Cross-reference.} The non-touch rule on this window is
-enforced by INV-12 in \verb|assertions/igla_assertions.json| and
+enforced by INV-12 in \verb|assertions/igla_assertions.json| and \citetheorem{asha_rungs_trinity}~(Proven)
 the corresponding test
 \verb|test_lr_phi_tempered_window| in
 \verb|crates/trios-igla-race/src/victory.rs|. The spiral basis
