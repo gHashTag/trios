@@ -1,0 +1,26 @@
+[package]
+name = "trios-agent-memory-sr-mem-01"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "SR-MEM-01 — kg-client-adapter: retry + circuit-breaker over trios-kg KgClient"
+publish = false
+
+[dependencies]
+trios-agent-memory-sr-mem-00 = { path = "../SR-MEM-00" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = "1.0"
+tracing = "0.1"
+# tokio is pulled in for async + sleep; we intentionally do NOT pull trios-kg
+# here at the ring boundary. SR-MEM-01 takes a `KgClientLike` trait object so
+# the concrete trios-kg crate is only linked in an adapter / integration test.
+# This keeps R-RING-DEP-002 honest and avoids pulling the full reqwest/TLS
+# surface into every GOLD IV downstream.
+tokio = { version = "1", features = ["macros", "rt", "time", "sync"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util", "time", "sync"] }
+uuid = { workspace = true }
+chrono = { workspace = true }
