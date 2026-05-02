@@ -1,0 +1,43 @@
+{
+  "issue": 458,
+  "epic": 446,
+  "ring": "GOLD I / SR-05",
+  "crate": "trios-igla-race-pipeline-sr-05",
+  "soul": "Loop-Locksmith",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "depends_on": ["SR-00 (issue 448)", "SR-01 (issue 450)", "SR-03 (issue 451)", "SR-04 (issue 456)"],
+  "blocks": ["BR-OUTPUT(GOLD I) full railway wiring (currently SR-04 + lib.rs only)"],
+  "three_roads": {
+    "road_a_full_git_dep": {
+      "name": "Full git dep on trios-railway-audit + reqwest GraphQL client",
+      "scope": "Pull trios-railway-audit = { git = 'https://github.com/gHashTag/trios-railway', rev = <sha> } + reqwest with rustls-tls, implement live GraphQL deploys, real Railway API mutations",
+      "cost": "HIGH — adds reqwest/rustls/git-fetch to build matrix; CI offline-build will break; SR-05 Silver-tier dep allowance violated",
+      "risk": "BREAKER — git fetch on cargo build is brittle (pinned-sha needs maintaining), reqwest pulls 50+ transitive crates into the Silver tier, no Railway test project in CI to smoke against",
+      "verdict": "REJECTED — same R-RING-DEP-002 reasoning that kept trios_kg out of SR-MEM-01 silver"
+    },
+    "road_b_trait_contract": {
+      "name": "RailwayApi trait + observe-only deploy state machine (matches every other Silver ring's precedent)",
+      "scope": "Define RailwayApi trait (deploy/audit/fleet_snapshot verbs), DeployerMode enum (Observe vs Apply), DeployReceipt + AuditReport + FleetSnapshot types, R7 audit triplet formatter, in-memory mock backends for tests, concrete reqwest+sqlx adapter ships in sibling BR-IO ring",
+      "cost": "LOW — same shape as SR-MEM-01 KgBackend, SR-03 BpbSink, SR-04 GardenerSink, SR-MEM-05 LessonsSource",
+      "risk": "LOW — proven 5x, observe-only default + DEPLOYER_MODE env gate is exactly what the issue AC specifies, tests cover every clause",
+      "verdict": "CHOSEN — Silver-tier compliant, full RailwayDeployer state machine + R7 audit triplet implemented for real, concrete network adapter deferred to BR-IO with R5 disclosure"
+    },
+    "road_c_types_only": {
+      "name": "Pure type definitions, no state machine",
+      "scope": "Just struct DeployReceipt / AuditReport / FleetSnapshot with serde, defer all logic to BR-IO",
+      "cost": "MED — leaves the ring's contract empty; downstream BR-IO would have to redefine the deploy state machine",
+      "risk": "MED — issue AC explicitly requires RailwayDeployer::deploy/audit/fleet_snapshot as a public API surface; types-only doesn't satisfy that",
+      "verdict": "REJECTED — does not deliver the public API surface the issue AC names"
+    }
+  },
+  "chosen": "road_b_trait_contract",
+  "honest_disclosure_r5": [
+    "This ring ships RailwayApi trait + RailwayDeployer state machine + R7 audit triplet formatter.",
+    "DEPLOYER_MODE=observe is the default; DEPLOYER_MODE=apply requires the env var explicitly per issue AC.",
+    "The concrete reqwest GraphQL client and sqlx audit-log writer ship in a sibling BR-IO ring (same precedent as trios_kg::KgClient for SR-MEM-01).",
+    "trios-railway-audit is NOT pulled as git dep here — its types/contract are mirrored in this ring (small surface) so cargo build stays offline-friendly.",
+    "Smoke against a Railway dev project AC requires RAILWAY_TOKEN_TEST CI secret + the BR-IO adapter PR; deferred honestly.",
+    "L1 (no .sh) audited inside this ring tree at scaffold time."
+  ],
+  "rules_honored": ["R1", "R5-honest", "R-RING-DEP-002", "R-L6-PURE-007", "L1", "L13", "L14", "I5", "R-L1-ECHO-006"]
+}
