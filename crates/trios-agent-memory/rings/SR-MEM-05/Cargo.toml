@@ -1,0 +1,26 @@
+[package]
+name = "trios-agent-memory-sr-mem-05"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "SR-MEM-05 — episodic-bridge: lessons.rs + HDC ↔ KG bidirectional forwarder + seed_replay"
+publish = false
+
+[dependencies]
+trios-agent-memory-sr-mem-00 = { path = "../SR-MEM-00" }
+trios-agent-memory-sr-mem-01 = { path = "../SR-MEM-01" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = "1.0"
+tracing = "0.1"
+# Async runtime primitives only (Silver-tier, no I/O drivers).
+# The concrete sqlx::PgListener and Zig FFI adapters live in a sibling
+# BR-IO ring; SR-MEM-05 stays mock-testable without spinning Neon.
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util", "time", "sync"] }
+uuid = { workspace = true }

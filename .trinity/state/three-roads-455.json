@@ -1,0 +1,42 @@
+{
+  "issue": 455,
+  "epic": 446,
+  "ring": "GOLD IV / SR-MEM-05",
+  "crate": "trios-agent-memory-sr-mem-05",
+  "soul": "Loop-Locksmith",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "depends_on": ["SR-MEM-00 (issue 449)", "SR-MEM-01 (issue 453)"],
+  "blocks": ["BR-OUTPUT(GOLD IV) full wiring (currently stub)"],
+  "three_roads": {
+    "road_a_full_wire": {
+      "name": "Full live wiring: Neon NOTIFY listener + sqlx + zig FFI",
+      "scope": "Spawn tokio task with sqlx::PgListener subscribed to LISTEN lessons_channel, FFI bindings to streaming_memory.zig exports, end-to-end live forward + reverse seed_replay against dev Neon DB",
+      "cost": "HIGH — pulls sqlx/runtime/native-tls into Silver tier (R-RING-DEP-002 violation), Zig FFI not yet stabilised, no dev Neon URL in CI",
+      "risk": "BREAKER — adds runtime I/O surface to Silver ring; will break R-RING-DEP-002 doctor rule; no integration test infra to verify NOTIFY plumbing",
+      "verdict": "REJECTED — violates Silver-tier purity; ZigFFI is not ready (issue's own AC marks 'TODO if Zig FFI not yet ready'); cannot smoke-test against Neon dev DB from sandbox"
+    },
+    "road_b_trait_contract": {
+      "name": "Trait-contract ring (matches SR-MEM-01 / SR-04 precedent)",
+      "scope": "Define LessonsSource + HdcReplaySource traits, Bridge<L,H,K: KgBackend> generic over them, in-memory mocks in tests, seed_replay reverse-direction implemented in pure Silver Rust against KgBackend recall_by_pattern, BR-IO ring (sibling) gets the concrete sqlx PgListener + Zig FFI shim later",
+      "cost": "LOW — same pattern as SR-MEM-01 KgBackend, SR-03 BpbSink, SR-04 GardenerSink; deps stay serde + tokio + thiserror + tracing + SR-MEM-00 + SR-MEM-01",
+      "risk": "LOW — proven pattern, all 8 prior rings ship this way, R5-honest disclosure of what's deferred to BR-IO",
+      "verdict": "CHOSEN — Silver-tier compliant, mirror of SR-MEM-01 architecture, full bidirectional contract + tests + reverse seed_replay implemented for real (not stubbed)"
+    },
+    "road_c_minimal_seed_only": {
+      "name": "seed_replay only, defer forwarder to next ring",
+      "scope": "Implement only the reverse direction (Bridge::seed_replay over KgBackend recall) and ship lessons-forwarder + HDC-forwarder as TODO",
+      "cost": "MED — leaves half the ring's contract unfulfilled, would burn another sub-issue",
+      "risk": "MED — issue AC explicitly lists Bridge::start subscribing to NOTIFY as required; partial impl invites scope creep",
+      "verdict": "REJECTED — issue AC requires the full bidirectional contract; we can ship the contract honestly even if the live BR-IO adapter is a sibling concern"
+    }
+  },
+  "chosen": "road_b_trait_contract",
+  "honest_disclosure_r5": [
+    "This ring ships the LessonsSource + HdcReplaySource traits + Bridge state machine.",
+    "The concrete sqlx PgListener + Zig FFI adapters are a sibling BR-IO ring concern (same precedent as trios_kg::KgClient sitting in BR-IO for SR-MEM-01).",
+    "seed_replay is implemented for real against any KgBackend (already exists in SR-MEM-01).",
+    "The forwarder side is implemented for real against any LessonsSource / HdcReplaySource that yields events; mock backends in tests prove the wiring.",
+    "Smoke against Neon dev DB cannot be run from this sandbox (no NEON_DATABASE_URL in CI) — issue's smoke-test AC is deferred to the BR-IO adapter PR with NEON_TEST_URL secret."
+  ],
+  "rules_honored": ["R1", "R5-honest", "R-RING-DEP-002", "R-L6-PURE-007", "L1", "L13", "L14", "I5"]
+}
