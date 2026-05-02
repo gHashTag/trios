@@ -2,18 +2,19 @@
 name = "trios-agent-memory-br-output"
 version = "0.1.0"
 edition = "2021"
-description = "BR-OUTPUT: AgentMemory assembler ring — GOLD IV (closes #461)"
+description = "BR-OUTPUT: AgentMemory assembler ring — GOLD IV (real-wired to SR-MEM-01 + SR-MEM-05; closes #461 follow-up)"
 
 [dependencies]
 async-trait = "0.1"
-
-# TODO: wire after #455 merged
-# trios-agent-memory-sr-mem-01 = { path = "../SR-MEM-01" }
-# trios-agent-memory-sr-mem-05 = { path = "../SR-MEM-05" }
+trios-agent-memory-sr-mem-00 = { path = "../SR-MEM-00" }
+trios-agent-memory-sr-mem-01 = { path = "../SR-MEM-01" }
+trios-agent-memory-sr-mem-05 = { path = "../SR-MEM-05" }
+chrono = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 # Bronze-tier R-RING-DEP-002: tokio is DEV-only; runtime async is a
-# BR-IO concern (not BR-OUTPUT). Matches the precedent set by
-# trios-igla-race-pipeline/rings/BR-OUTPUT and
-# trios-algorithm-arena/rings/BR-OUTPUT.
-tokio = { version = "1", features = ["rt", "macros"] }
+# BR-IO concern (not BR-OUTPUT). Concrete PgKgBackend (sqlx) ships in
+# the sibling BR-IO ring. Mocks below stay in-memory so tests run
+# without any I/O.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
