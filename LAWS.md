@@ -2,7 +2,7 @@
 
 **LAWS_SCHEMA_VERSION:** 2.0
 **Created:** 2026-04-22
-**Amended:** 2026-04-22
+**Amended:** 2026-05-02
 
 > *"Every agent is a temporary citizen with bounded authority. Every task has a contract. Every mutation leaves evidence. Every victory must improve the long-term health of the realm."*
 
@@ -79,6 +79,7 @@ trios/
 │   └── zig-knowledge-graph/ # Zig knowledge graph
 ├── .trinity/                  # Trinity state directory
 │   ├── experience/            # Experience logs (L7)
+│   ├── prompts/               # Agent dispatch prompts (§13)
 │   ├── specs/                # Task specifications
 │   └── state/                # Immutable state files
 ├── .github/                   # GitHub configuration
@@ -257,7 +258,7 @@ trios/
 ## §4 Nine Kingdoms Invariants
 
 | Invariant | Kingdom | Rule | CI Gate |
-|-----------|---------|------|---------|
+|-----------|---------|------|---------| 
 | I1: Build passes | Rust | `cargo build --all --workspace` exits 0 | `cargo build --all --workspace` |
 | I2: Tests pass | Test | No merge with failing tests | `cargo test --all --workspace` |
 | I3: Clippy clean | Lint | clippy 0 warnings | `cargo clippy --all-targets -- -D warnings` |
@@ -467,3 +468,93 @@ L1-L25 with current status (live-checked by /tri laws):
 This constitution represents the sovereign law of the trios repository. Any violation constitutes a breach of trust between agents and human maintainers. The sanctity of this document is protected by CODEOWNERS, branch protection, CI gates, and cryptographic hash verification. Amendments follow §8 procedure only.
 
 **AMENDMENT TARGET:** LAWS.md v1.x → v2.0
+
+---
+
+## §13 Agent Dispatch Onboarding
+
+> *New agent? Start here. Everything you need to run autonomously is in one file.*
+
+### The ONE-SHOT Dispatch Prompt
+
+**Location:** `.trinity/prompts/agent-dispatch.md`
+
+This is the canonical entry point for every Trinity agent. Copy-paste it to start any autonomous session. It contains:
+
+| Component | What it does |
+|-----------|-------------|
+| **BOOT sequence** | Reads SOUL.md → CLAUDE.md → AGENTS.md → NOW.json → state files |
+| **PHI LOOP (11 steps)** | CLAIM → SPEC → SEAL → HASH → GEN → TEST → VERDICT → EXPERIENCE → SKILL → COMMIT → PUSH |
+| **LAWS L1–L9 embedded** | Most critical laws inlined so agent can't miss them |
+| **HEARTBEAT format** | `loop: <NATO_NAME> \| <STATUS> \| <CONTEXT>` — post every 30 min |
+| **DONE checklist (8 gates)** | Prevents premature victory declaration |
+| **Soul-name selection** | Agent picks NATO alphabet name autonomously on first run |
+
+### Boot Sequence (Memorise This)
+
+```bash
+# Step 1 — Read the constitution
+cat SOUL.md CLAUDE.md AGENTS.md NOW.json
+
+# Step 2 — Load current state
+cat .trinity/state/active-skill.json
+cat .trinity/state/three-roads.json
+
+# Step 3 — Orient
+git log --oneline -5
+gh issue list --limit 5
+```
+
+### PHI LOOP Quick Reference
+
+```
+CLAIM → SPEC → SEAL → HASH → GEN → TEST → VERDICT → EXPERIENCE → SKILL → COMMIT → PUSH
+```
+
+Full protocol: see §7 of this document.
+
+### HEARTBEAT Protocol Quick Reference
+
+Post to issue every 30 minutes while working:
+```
+loop: ALFA | ACTIVE | Writing BpbSink trait, 3/5 tests pass
+loop: BRAVO | BLOCKED | Waiting for SR-00 merge to unblock SR-01
+loop: GOLF | DONE | 16/16 tests GREEN, PR #474 merged
+```
+
+Full protocol: see §6 of this document.
+
+### DONE Checklist (8 Gates)
+
+Before declaring completion, verify ALL of these:
+
+- [ ] `cargo test --all` GREEN (no failures, no ignores)
+- [ ] `cargo clippy -- -D warnings` ZERO warnings
+- [ ] PR description contains `Closes #N`
+- [ ] L14 trailer present: `Agent: <Soul-name>` in commit
+- [ ] `.trinity/experience/` entry written (L7)
+- [ ] `three-roads.json` written with R1/R2/R3
+- [ ] Issue comment posted with verdict
+- [ ] `git push` completed (L8)
+
+### Common Mistakes (from `.trinity/experience/`)
+
+| Mistake | Prevention |
+|---------|-----------|
+| Pushing to wrong remote (e.g. gitbutler upstream) | Check `git remote -v` before push — must show `gHashTag/trios` |
+| Missing `Closes #N` in PR | Use `gh pr create` template, not manual |
+| Declaring done before `three-roads.json` | Write roads BEFORE final commit |
+| Working directory deleted mid-session | Use `/tmp/` as fallback; push via MCP if needed |
+| Orphan branch (no common history with main) | Always `git checkout -b ring-NNN origin/main`, not from detached HEAD |
+
+### Source of Truth Hierarchy for Agents
+
+```
+NEON (Postgres)          ← igla_race_experience, strategy_queue, bpb_samples
+.trinity/state/          ← active-skill.json, three-roads.json, LAWS_HASH
+.trinity/experience/     ← daily logs, mistake memory
+.trinity/prompts/        ← agent-dispatch.md (THIS prompt)
+GitHub Issues            ← PHI LOOP status comments, HEARTBEAT
+```
+
+**Remember:** NEON is the PhD source of truth. Every BPB measurement, every ASHA decision, every experience entry lives there permanently — not just in context window.
