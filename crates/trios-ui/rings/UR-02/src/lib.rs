@@ -47,14 +47,10 @@ pub struct ButtonProps {
 /// # Example
 /// ```rust,ignore
 /// rsx! {
-///     Button {
+///     button {
 ///         children: "Click me".to_string(),
 ///         variant: ButtonVariant::Primary,
 ///         onclick: move |_| { /* action */ },
-///     }
-/// }
-/// ```
-pub fn Button(props: ButtonProps) -> Element {
     let palette = use_palette();
     let (bg, color, border) = match props.variant {
         ButtonVariant::Primary => (palette.primary, palette.background, "none"),
@@ -111,7 +107,7 @@ pub struct InputProps {
 }
 
 /// Text input component.
-pub fn Input(props: InputProps) -> Element {
+pub fn Inputprops: InputProps) -> Element {
     let palette = use_palette();
     let font = if props.mono {
         typography::FONT_MONO
@@ -182,7 +178,7 @@ pub struct BadgeProps {
 }
 
 /// Small badge/tag component.
-pub fn Badge(props: BadgeProps) -> Element {
+pub fn Badgeprops: BadgeProps) -> Element {
     let palette = use_palette();
     let (bg, color) = match props.variant {
         BadgeVariant::Default => (palette.surface, palette.text),

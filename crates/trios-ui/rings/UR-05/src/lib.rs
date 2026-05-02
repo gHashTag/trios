@@ -6,7 +6,7 @@
 use dioxus::prelude::*;
 use trios_ui_ur00::{use_agents_atom, use_chat_atom, Agent, AgentStatus};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
-use trios_ui_ur02::{Badge, BadgeVariant};
+use trios_ui_ur02::{badge, BadgeVariant};
 
 // ─── AgentList ───────────────────────────────────────────────
 
