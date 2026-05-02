@@ -139,7 +139,20 @@ function Pandoc(doc)
   -- end
   local _ = looks_like_caption  -- intentionally unused now; kept for future
 
-  table.insert(doc.blocks, 1, hero_block)
+  -- Place the hero image *immediately after* the chapter heading, not at
+  -- the very top of the document. Walk the blocks looking for the first
+  -- top-level Header (level 1 — i.e. `# Ch.NN — Title` from body_md, which
+  -- pandoc converts to a \section* under our template). The hero is
+  -- inserted right after that header. If no such header exists (some
+  -- chapters skip it), fall back to the very first block.
+  local insert_at = 1
+  for i, b in ipairs(doc.blocks) do
+    if b.t == "Header" and b.level == 1 then
+      insert_at = i + 1
+      break
+    end
+  end
+  table.insert(doc.blocks, insert_at, hero_block)
 
   return doc
 end
