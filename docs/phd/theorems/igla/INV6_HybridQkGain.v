@@ -90,8 +90,21 @@ Qed.
 (* SECTION 3: Main Invariant Theorem                                     *)
 (* ==================================================================== *)
 
-(* Theorem INV6: Hybrid Qk Gain is phi-bounded from below *)
-Theorem inv6_hybrid_qk_gain :
+(* Theorem INV6 (CIRCULAR): Hybrid Qk Gain is phi-bounded from below.   *)
+(*                                                                       *)
+(* HONEST DISCLOSURE (R5):                                               *)
+(*   The proof body is `exact (hybrid_gain_phi_bound k)` — i.e. this     *)
+(*   theorem restates the homonymous Axiom from Section 1. The Qed       *)
+(*   tells us nothing beyond what Axiom already postulates. The naming   *)
+(*   suffix `_from_axiom` documents this in-source so reviewers cannot   *)
+(*   mistake it for a derived result.                                    *)
+(*                                                                       *)
+(*   Phase-5 #441 closure replaces `Axiom hybrid_gain_phi_bound` with a  *)
+(*   real derivation from `gain(d) = sqrt(d) / sqrt(d_model_min)` via    *)
+(*   `Coq.Reals.sqrt_le_compat` plus INV-3 `d >= d_model_min`. Until     *)
+(*   that follow-up PR lands, status remains `wip` in                    *)
+(*   `assertions/igla_assertions.json::INV-6-HybridQkGain`.              *)
+Theorem inv6_hybrid_qk_gain_from_axiom :
   forall k : nat,
     gain_hybrid k >= gain_baseline k * (/ phi).
 Proof.
@@ -175,7 +188,14 @@ Qed.
 (* Export / Certification                                                *)
 (* ==================================================================== *)
 
-(* All core invariants verified — no admits remain *)
+(* HONEST DISCLOSURE (R5):                                               *)
+(*   `inv6_theorems_certified` is satisfied modulo the three Section 1   *)
+(*   axioms (`hybrid_gain_phi_bound`, `gain_baseline_nonneg`,            *)
+(*   `gain_hybrid_nonneg`). No `Admitted.` remains, but the central      *)
+(*   bound is postulated rather than derived. Phase-5 #441 closure       *)
+(*   replaces the bound axiom with a derivation; until then the catalog *)
+(*   tracks status=wip in `assertions/igla_assertions.json`              *)
+(*   under id `INV-6-HybridQkGain`.                                      *)
 Definition inv6_theorems_certified : Prop :=
   (forall k, gain_hybrid k >= gain_baseline k * (/ phi)) /\
   (forall k, gain_baseline k > 0 -> gain_hybrid k > 0) /\
