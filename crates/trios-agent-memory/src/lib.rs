@@ -7,3 +7,6 @@
 //! L-RING-FACADE-001: this file MUST NOT contain business logic.
 
 pub use trios_agent_memory_sr_mem_00::*;
+pub use trios_agent_memory_sr_mem_01::{
+    AdapterConfig, AdapterErr, KgAdapter, KgBackend, RecallPattern,
+};
