@@ -1,55 +1,79 @@
-// Trinity Tailscale ACL — anti-collision policy for EPIC #446 ring-refactor.
-// Anchor: phi^2 + phi^-2 = 3
-// Reference: gHashTag/trios#236 ONE-SHOT v2.0 §STEP 6 collision handling, AGENTS.md I-SCOPE.
+// Trinity Tailscale ACL — 27-Coptic-agent anti-collision policy for EPIC #446.
+// Anchor: phi^2 + phi^-2 = 3   (27 = 3^3 = phi^6 - phi^4 + 1, Lucas)
+// Reference: gHashTag/trios#236 ONE-SHOT v2.0, AGENTS.md I-SCOPE,
+//             27-Coptic grid (Coptic letter ↔ agent domain).
 //
-// Tags carve the tailnet into 7 disjoint codename domains. Every node advertises
-// exactly one tag; agents can talk to LEAD, but never directly to a sibling.
-// LEAD orchestrator polls all agents through but-server :7777 over tailscale0.
+// 27 tags carve the tailnet into 27 disjoint codename domains.
+// Each node advertises exactly one tag. Sibling-to-sibling traffic is
+// default-denied. OMEGA (LEAD) is the only agent that may reach others
+// on :7777 (the but-server MCP bridge, L24-compliant).
 {
   "tagOwners": {
-    "tag:trinity-lead":     ["autogroup:admin"],
+    // Greek-letter agents (24)
     "tag:trinity-alpha":    ["autogroup:admin"],
     "tag:trinity-beta":     ["autogroup:admin"],
     "tag:trinity-gamma":    ["autogroup:admin"],
     "tag:trinity-delta":    ["autogroup:admin"],
     "tag:trinity-epsilon":  ["autogroup:admin"],
     "tag:trinity-zeta":     ["autogroup:admin"],
+    "tag:trinity-eta":      ["autogroup:admin"],
+    "tag:trinity-theta":    ["autogroup:admin"],
+    "tag:trinity-iota":     ["autogroup:admin"],
+    "tag:trinity-kappa":    ["autogroup:admin"],
+    "tag:trinity-lambda":   ["autogroup:admin"],
+    "tag:trinity-mu":       ["autogroup:admin"],
+    "tag:trinity-nu":       ["autogroup:admin"],
+    "tag:trinity-xi":       ["autogroup:admin"],
+    "tag:trinity-omicron":  ["autogroup:admin"],
+    "tag:trinity-pi":       ["autogroup:admin"],
+    "tag:trinity-koppa":    ["autogroup:admin"],
+    "tag:trinity-rho":      ["autogroup:admin"],
+    "tag:trinity-sigma":    ["autogroup:admin"],
+    "tag:trinity-tau":      ["autogroup:admin"],
+    "tag:trinity-upsilon":  ["autogroup:admin"],
+    "tag:trinity-phi":      ["autogroup:admin"],
+    "tag:trinity-khi":      ["autogroup:admin"],
+    "tag:trinity-psi":      ["autogroup:admin"],
+    // Lead orchestrator
+    "tag:trinity-omega":    ["autogroup:admin"],
+    // Coptic-only letters (2)
+    "tag:trinity-sampi":    ["autogroup:admin"],
+    "tag:trinity-sho":      ["autogroup:admin"],
+  },
+
+  // Convenience group: every non-LEAD agent.
+  "groups": {
+    "group:trinity-agents": [
+      "tag:trinity-alpha",   "tag:trinity-beta",    "tag:trinity-gamma",   "tag:trinity-delta",
+      "tag:trinity-epsilon", "tag:trinity-zeta",    "tag:trinity-eta",     "tag:trinity-theta",
+      "tag:trinity-iota",    "tag:trinity-kappa",   "tag:trinity-lambda",  "tag:trinity-mu",
+      "tag:trinity-nu",      "tag:trinity-xi",      "tag:trinity-omicron", "tag:trinity-pi",
+      "tag:trinity-koppa",   "tag:trinity-rho",     "tag:trinity-sigma",   "tag:trinity-tau",
+      "tag:trinity-upsilon", "tag:trinity-phi",     "tag:trinity-khi",     "tag:trinity-psi",
+      "tag:trinity-sampi",   "tag:trinity-sho",
+    ],
   },
 
   // ACL rules are evaluated top-to-bottom; first match wins.
   "acls": [
-    // 1) LEAD sees everything on the orchestrator port (7777 = but-server MCP bridge).
+    // 1) OMEGA (LEAD) sees every agent on :7777 (but-server MCP bridge).
     {
       "action": "accept",
-      "src":    ["tag:trinity-lead"],
-      "dst":    [
-        "tag:trinity-alpha:7777",
-        "tag:trinity-beta:7777",
-        "tag:trinity-gamma:7777",
-        "tag:trinity-delta:7777",
-        "tag:trinity-epsilon:7777",
-        "tag:trinity-zeta:7777",
-      ],
+      "src":    ["tag:trinity-omega"],
+      "dst":    ["group:trinity-agents:7777"],
     },
 
-    // 2) Agents may report up to LEAD on its dashboard port (8080).
+    // 2) Every agent reports up to OMEGA on :8080 (dashboard ingest).
     {
       "action": "accept",
-      "src": [
-        "tag:trinity-alpha",
-        "tag:trinity-beta",
-        "tag:trinity-gamma",
-        "tag:trinity-delta",
-        "tag:trinity-epsilon",
-        "tag:trinity-zeta",
-      ],
-      "dst": ["tag:trinity-lead:8080"],
+      "src":    ["group:trinity-agents"],
+      "dst":    ["tag:trinity-omega:8080"],
     },
 
-    // 3) Agents MUST NOT talk to each other (anti-collision is network-enforced).
-    //    No rule below grants this — default-deny applies.
+    // 3) Sibling-to-sibling = default-deny.
+    //    No accept rule grants this — the platform's default-deny applies.
 
-    // 4) Operator (you, signed in to Tailscale) can SSH any node (admin lane).
+    // 4) Operator (you, signed in to Tailscale) admin lane.
     {
       "action": "accept",
       "src":    ["autogroup:admin"],
@@ -57,31 +81,25 @@
     },
   ],
 
-  // 5) Allow the operator to SSH into agent nodes for break-glass debugging.
+  // 5) SSH break-glass for the operator only.
   "ssh": [
     {
       "action": "accept",
       "src":    ["autogroup:admin"],
-      "dst":    [
-        "tag:trinity-lead",
-        "tag:trinity-alpha",
-        "tag:trinity-beta",
-        "tag:trinity-gamma",
-        "tag:trinity-delta",
-        "tag:trinity-epsilon",
-        "tag:trinity-zeta",
-      ],
+      "dst":    ["tag:trinity-omega", "group:trinity-agents"],
       "users":  ["root", "autogroup:nonroot"],
     },
   ],
 
-  // 6) Test the policy is internally consistent.
+  // 6) Self-tests verify the policy is internally consistent.
   "tests": [
     {
-      "src": "tag:trinity-lead",
+      "src": "tag:trinity-omega",
       "accept": [
         "tag:trinity-alpha:7777",
         "tag:trinity-zeta:7777",
+        "tag:trinity-sampi:7777",
+        "tag:trinity-sho:7777",
       ],
     },
     {
@@ -89,10 +107,16 @@
       "src": "tag:trinity-alpha",
       "deny": [
         "tag:trinity-beta:7777",
-        "tag:trinity-gamma:7777",
+        "tag:trinity-sampi:7777",
+        "tag:trinity-sho:7777",
       ],
-      // Agent → LEAD dashboard MUST be allowed.
-      "accept": ["tag:trinity-lead:8080"],
+      "accept": ["tag:trinity-omega:8080"],
+    },
+    {
+      // Even SHO (last) may reach OMEGA but NOT siblings.
+      "src": "tag:trinity-sho",
+      "deny": ["tag:trinity-sampi:7777"],
+      "accept": ["tag:trinity-omega:8080"],
     },
   ],
 }
