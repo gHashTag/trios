@@ -5,17 +5,17 @@
 //! that touches the dissertation is a Rust subcommand of this binary.
 //!
 //! Subcommands:
-//!   - `audit`     — structural sanity (chapter count, bib count, frontmatter,
-//!                   appendices, missing files); exit non-zero on violations.
-//!   - `biblio`    — count `bibliography.bib` entries and verify R11 floor (≥150).
-//!   - `coq-map`   — render the Coq → PhD theorem citation table (R14) into
-//!                   `appendix/F-coq-citation-map.tex` from a JSON manifest.
+//!   - `audit` — structural sanity (chapter count, bib count, frontmatter,
+//!     appendices, missing files); exit non-zero on violations.
+//!   - `biblio` — count `bibliography.bib` entries and verify R11 floor (≥150).
+//!   - `coq-map` — render the Coq → PhD theorem citation table (R14) into
+//!     `appendix/F-coq-citation-map.tex` from a JSON manifest.
 //!   - `reproduce` — emit the reproducibility manifest (build env, git SHA,
-//!                   constants pinned).
-//!   - `compile`   — invoke the system `tectonic` binary on `main.tex`. The
-//!                   `tectonic` Rust crate itself depends on native harfbuzz/
-//!                   freetype, so we shell out via `std::process::Command`,
-//!                   which keeps the workspace Rust-only (no `.sh` files).
+//!     constants pinned).
+//!   - `compile` — invoke the system `tectonic` binary on `main.tex`. The
+//!     `tectonic` Rust crate itself depends on native harfbuzz/freetype, so
+//!     we shell out via `std::process::Command`, which keeps the workspace
+//!     Rust-only (no `.sh` files).
 //!
 //! All numeric anchors (R4 / L-R14) come from
 //! `assertions/igla_assertions.json`. This binary never hard-codes a numeric
@@ -242,7 +242,7 @@ struct ConstantsPinned {
 }
 
 fn reproduce(phd_root: &Path, out: Option<PathBuf>) -> Result<()> {
-    let phi = 1.6180339887498949_f64;
+    let phi = 1.618_033_988_749_895_f64;
     let manifest = ReproManifest {
         anchor: TRINITY_ANCHOR,
         rustc: capture("rustc", &["--version"]).unwrap_or_else(|_| "unknown".into()),
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_trinity_anchor_constant() {
-        let phi = 1.6180339887498949_f64;
+        let phi = 1.618_033_988_749_895_f64;
         assert!((phi * phi + 1.0 / (phi * phi) - 3.0).abs() < 1e-12);
     }
 
@@ -495,7 +495,7 @@ mod tests {
     fn test_constants_pinned_match_assertions() {
         // L-R14: every numeric constant in the manifest must equal the
         // canonical assertion value. Mirrors `assertions/igla_assertions.json`.
-        let phi = 1.6180339887498949_f64;
+        let phi = 1.618_033_988_749_895_f64;
         let c = ConstantsPinned {
             phi,
             prune_threshold: 3.5,
