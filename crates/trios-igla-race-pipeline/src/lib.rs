@@ -15,3 +15,7 @@ pub use trios_igla_race_pipeline_sr_03::{
     BpbSink, BpbWriter, EmaPhiBand, WriteErr,
     PHI_BAND_ALPHA, PHI_BAND_HIGH, PHI_BAND_LOW, SCHEMA_SQL,
 };
+pub use trios_igla_race_pipeline_sr_04::{
+    AshaRung, Gardener, GardenerAction, GardenerDecision, GardenerErr, GardenerSink,
+    InvariantStatus, ARCHITECTURAL_FLOOR_BPB, DEFAULT_RUNGS, WARMUP_STEPS,
+};
