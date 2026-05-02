@@ -10,3 +10,6 @@ pub use trios_agent_memory_sr_mem_00::*;
 pub use trios_agent_memory_sr_mem_01::{
     AdapterConfig, AdapterErr, KgAdapter, KgBackend, RecallPattern,
 };
+pub use trios_agent_memory_br_output::{
+    AgentMemory, Context, Fact, ForgetPolicy, KgAgentMemory, Provenance, Reflection,
+};
