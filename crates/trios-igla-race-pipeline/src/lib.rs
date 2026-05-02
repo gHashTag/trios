@@ -8,3 +8,7 @@
 //! re-exports.
 
 pub use trios_igla_race_pipeline_sr_00::*;
+pub use trios_igla_race_pipeline_sr_03::{
+    BpbSink, BpbWriter, EmaPhiBand, WriteErr,
+    PHI_BAND_ALPHA, PHI_BAND_HIGH, PHI_BAND_LOW, SCHEMA_SQL,
+};
