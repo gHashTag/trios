@@ -57,12 +57,14 @@ pub fn ChatPanel() -> Element {
 
 /// Props for a single chat message bubble.
 #[derive(Props, Clone, PartialEq)]
+#[component]
 pub struct ChatBubbleProps {
     /// The message to render.
     pub message: ChatMessage,
 }
 
-/// Render a single chat message.
+/// Render a single chat message bubble.
+#[component]
 pub fn ChatBubble(props: ChatBubbleProps) -> Element {
     let palette = use_palette();
     let msg = &props.message;
