@@ -59,7 +59,7 @@ Proof.
     exact phi_pos.
   - (* 1/phi < 1 because phi > 1 *)
     (* From CorePhi: 1.618 < phi, so phi > 1, so 1/phi < 1 *)
-    rwrite <- Rinv_1.
+    rewrite <- Rinv_1.
     apply Rinv_lt_contravar.
     + lra.
     + pose proof phi_between_1_618_and_1_619 as [Hlo _].
