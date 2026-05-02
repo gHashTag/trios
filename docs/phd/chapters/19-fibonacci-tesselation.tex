@@ -5,6 +5,14 @@
 % Skill: phd-chapter-author v1.0
 % =====================================================================
 
+
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (#464).
+% The macro renders the Coq theorem name verbatim in chapter prose; when the
+% monograph-wide macro lands in main.tex the \providecommand silently yields.
+\providecommand{\citetheorem}[1]{\texttt{#1}}
+% Companion macro for Admitted theorems (per #464 acceptance criteria).
+\providecommand{\citeWIP}[1]{\texttt{#1}~\textit{(WIP/Admitted)}}
+
 \chapter{Fibonacci Tesselation: φ-Quasicrystal Tilings of the Plane}\label{ch:19}
 
 \section{Introduction}\label{sec:19:intro}
@@ -27,7 +35,7 @@ The reader who has accepted the Trinity Identity $\varphi^{2} + \varphi^{-2} = 3
 
 \paragraph{Strand III --- Computational.} We mirror the algebraic and geometric content in a Coq witness file (`fib_tess.v`, currently `Admitted` in places) and in a Rust runtime (`fib_tess.rs`) that generates the tiling on demand for visualisation and reproducibility certificates.
 
-The three strands converge on the \textbf{Fibonacci Tesselation Closure Theorem} (\cref{thm:19:tesselation-closure}), which states that the proportion of fat-to-thin tiles in the limit is exactly $\varphi$, mechanically anchored to invariant `INV-12` in `assertions/igla_assertions.json`.
+The three strands converge on the \textbf{Fibonacci Tesselation Closure Theorem} (\cref{thm:19:tesselation-closure}), which states that the proportion of fat-to-thin tiles in the limit is exactly $\varphi$, mechanically anchored to invariant `INV-12` in `assertions/igla_assertions.json`~\citetheorem{asha_rungs_trinity}~(Proven).
 
 \subsection{Citations}\label{ssec:19:cites}
 

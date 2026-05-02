@@ -15,6 +15,14 @@
 % Falsifiability (R7): §\ref{sec:26-falsification} states the refutation criterion;
 %   §\ref{sec:26-corroboration} records the corroboration history.
 
+
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (#464).
+% The macro renders the Coq theorem name verbatim in chapter prose; when the
+% monograph-wide macro lands in main.tex the \providecommand silently yields.
+\providecommand{\citetheorem}[1]{\texttt{#1}}
+% Companion macro for Admitted theorems (per #464 acceptance criteria).
+\providecommand{\citeWIP}[1]{\texttt{#1}~\textit{(WIP/Admitted)}}
+
 \chapter{Data Analysis: GF16 Floor and Trinity Empirics}
 \label{ch:26-data}
 
@@ -305,7 +313,7 @@ hyper-parameters fixed at the champion configuration
 $(\mathrm{lr}=0.004,$ ASHA $\mathrm{prune}=3.5,$ NCA band
 $[\phi,\phi^2])$. Each run consumed exactly $T = 16\,000$ optimisation
 steps, with the first $4\,000$ classified as \emph{warmup} per
-\textsc{INV-2} (Chapter~\ref{ch:19-asha}). Reported error is the median
+\textsc{INV-2} (Chapter~\ref{ch:19-asha})~\citetheorem{champion_survives_pruning}~(Proven). Reported error is the median
 test loss in nats per token, divided by $\ln 2 \cdot 8$ to obtain BPB.
 
 \begin{table}[H]

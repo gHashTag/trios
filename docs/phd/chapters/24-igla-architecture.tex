@@ -1,3 +1,11 @@
+
+% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (#464).
+% The macro renders the Coq theorem name verbatim in chapter prose; when the
+% monograph-wide macro lands in main.tex the \providecommand silently yields.
+\providecommand{\citetheorem}[1]{\texttt{#1}}
+% Companion macro for Admitted theorems (per #464 acceptance criteria).
+\providecommand{\citeWIP}[1]{\texttt{#1}~\textit{(WIP/Admitted)}}
+
 \chapter{IGLA Architecture — Golden-Initialized Learning}
 \label{ch:24}
 % Lane: A
@@ -760,7 +768,7 @@ adversarial ablations against the champion configuration.
 
 \begin{enumerate}
 \item \textbf{Ablation A — restore the old \(\rho_{\text{prune}}=2.65\) of
-J-001/J-002.} The ASHA bound INV-2 fires at the first rung; no seed
+J-001/J-002.} The ASHA bound INV-2 fires at the first rung; no seed \citetheorem{champion_survives_pruning}~(Proven)
 survives to step \(4000\); \(P_{2}\) fails before \(P_{4}\) is even
 evaluated. \emph{Result:} \verb|VictoryError::BeforeWarmup| on every seed.
 \item \textbf{Ablation B — set \(d_{\text{model}} = 192 < 256\).} The GF16
