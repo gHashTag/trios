@@ -1,0 +1,135 @@
+% chapter.template.tex — pandoc LaTeX template for a single PhD chapter
+% Renders a chapter from ssot.chapters.body_md so that:
+%   • the first image (hero) is always the first content block
+%   • the hero is rendered at 100% of \textwidth
+%   • aspect ratio is preserved
+%   • the figure is non-floating ([H]) so it stays at the very top
+%
+% Compile via:
+%   pandoc Ch.1.md \
+%     --template=chapter.template.tex \
+%     --lua-filter=filters/force-fullwidth-hero.lua \
+%     -o Ch.1.tex
+%   tectonic Ch.1.tex
+\documentclass[11pt,a4paper]{article}
+
+% ---------- geometry ----------
+\usepackage[a4paper,margin=2cm]{geometry}
+
+% ---------- graphics + non-floating figures ----------
+\usepackage{graphicx}
+\usepackage{float}                  % gives us [H]
+\usepackage{caption}
+% Use the same main font (fontspec default) for captions. We only request
+% small italics via the inline \caption* call from the Lua filter, not via
+% \captionsetup, because pandoc Highlighting/microtype interactions can
+% otherwise force \fontspec onto a math-only family that lacks Greek glyphs.
+\captionsetup{labelformat=empty}
+
+% ---------- color (must come before hyperref) ----------
+\usepackage[table,dvipsnames]{xcolor}
+
+% ---------- tables ----------
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{calc}
+% pandoc emits \real{0.42} etc. inside table column specs
+\usepackage{etoolbox}
+\providecommand{\real}[1]{#1}
+
+% ---------- code blocks (pandoc Shaded/Highlighting) ----------
+\usepackage{fancyvrb}
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+% pandoc Highlighting macros (no syntax highlighting, just verbatim)
+\newcommand{\VERB}{\Verb}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% pandoc syntax-highlighting macros: declare them all as identity so we don't
+% need a real highlighter pass. The compile target is body fidelity, not
+% colourised code.
+\newcommand{\AlertTok}[1]{#1}
+\newcommand{\AnnotationTok}[1]{#1}
+\newcommand{\AttributeTok}[1]{#1}
+\newcommand{\BaseNTok}[1]{#1}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{#1}
+\newcommand{\CommentTok}[1]{#1}
+\newcommand{\CommentVarTok}[1]{#1}
+\newcommand{\ConstantTok}[1]{#1}
+\newcommand{\ControlFlowTok}[1]{#1}
+\newcommand{\DataTypeTok}[1]{#1}
+\newcommand{\DecValTok}[1]{#1}
+\newcommand{\DocumentationTok}[1]{#1}
+\newcommand{\ErrorTok}[1]{#1}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{#1}
+\newcommand{\FunctionTok}[1]{#1}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{#1}
+\newcommand{\KeywordTok}[1]{#1}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{#1}
+\newcommand{\OtherTok}[1]{#1}
+\newcommand{\PreprocessorTok}[1]{#1}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{#1}
+\newcommand{\SpecialStringTok}[1]{#1}
+\newcommand{\StringTok}[1]{#1}
+\newcommand{\VariableTok}[1]{#1}
+\newcommand{\VerbatimStringTok}[1]{#1}
+\newcommand{\WarningTok}[1]{#1}
+
+% ---------- math ----------
+\usepackage{amsmath,amssymb}
+
+% ---------- typography ----------
+% tectonic uses XeTeX. We pick TeX Gyre Pagella for the main font because
+% (a) it ships with tectonic's standard font bundle, (b) its italic
+% variant carries Greek letters (φ, α, λ …), and (c) its math
+% companion (TeX Gyre Pagella Math) covers the dissertation's symbol set.
+% NB: Latin Modern Italic on tectonic 0.16.x lacks Greek glyphs, which
+% causes φ → ` ` (replacement char) inside *italic* spans.
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\usepackage{microtype}
+
+% suppress section numbering — chapter slug already encodes the number
+\setcounter{secnumdepth}{0}
+
+% ---------- links ----------
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor={black!70!blue},
+  urlcolor={black!50!blue},
+  citecolor={black!60!green}
+}
+
+% ---------- pandoc plumbing ----------
+% \tightlist is emitted by pandoc; declare it as no-op to avoid undefined-cs errors.
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% pandoc 3.x sometimes emits \pandocbounded{...} around figures; declare it as identity.
+\providecommand{\pandocbounded}[1]{#1}
+
+% Lua filter (force-fullwidth-hero.lua) marks the first image with
+% width=100\%. Pandoc translates that into
+%   \includegraphics[width=1.00000\linewidth,height=...]{...}
+% inside a figure environment. We force [H] placement so the hero stays
+% at the top and never floats away.
+
+% Force pandoc-generated figure environment to use [H] placement so the
+% hero never floats away from the chapter top.
+% No need to patch \figure: the lua filter emits the hero as a raw
+% [H] figure already. Other figures in the body keep pandoc defaults.
+
+\begin{document}
+
+$body$
+
+\end{document}
