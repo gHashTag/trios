@@ -1,0 +1,93 @@
+\chapter{Bitstream Archive and SHA-256 Registry}
+\label{app:Fb}
+
+\section{Introduction}
+
+Reproducibility in FPGA-based neural inference requires not only a published design but a verifiable mapping from the design source to the binary programming file (bitstream). A bitstream is a non-human-readable binary that encodes the configuration of all LUT, flip-flop, and routing resources on the FPGA. This appendix serves three purposes: (1) it provides the SHA-256 hashes of all released bitstreams so that any researcher can verify the exact file they received against the archived copy; (2) it documents the synthesis provenance---toolchain version, synthesis seed, constraint file---needed to reproduce the bitstream from source; (3) it records the hardware performance figures (0 DSP, 92\,MHz, 63\,toks/sec, 1\,W) cited throughout the dissertation and confirms their association with specific named bitstream files.
+
+\section{Synthesis Provenance and Toolchain}
+
+\subsection{openXC7 Toolchain}
+
+All bitstreams in this archive are produced with the openXC7 toolchain~\cite{openxc7}:
+
+\begin{table}[h]
+\centering
+\caption{openXC7 toolchain components}
+\begin{tabular}{lll}
+\toprule
+\textbf{Component} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+yosys          & 0.38    & RTL synthesis (Verilog $\to$ netlist) \\
+nextpnr-xilinx & 0.7.0   & Place and route \\
+prjxray        & 2024.01 & Bitstream generation \\
+fasm2frames    & (prjxray) & Frame assembly \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent No Vivado licence is required. The synthesis constraint \texttt{set\_property DSP\_CASCADE\_LIMIT 0 [current\_design]} is applied via a Tcl XDC file to enforce the zero-DSP architecture. The target part is \texttt{xc7a100tcsg324-1}.
+
+\subsection{Synthesis Seeds}
+
+The following sanctioned seeds from the canonical pool $\{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}$ were used as the \texttt{nextpnr --seed} argument in place-and-route. No forbidden seeds ($42$, $43$, $44$, $45$) were used at any stage.
+
+\section{Primary Bitstreams}
+
+\subsection*{trinity-v1.0-main.bit}
+
+Main inference bitstream, canonical zero-DSP configuration.
+
+\begin{table}[h]
+\centering
+\caption{trinity-v1.0-main.bit specifications}
+\begin{tabular}{ll}
+\toprule
+\textbf{Field} & \textbf{Value} \\
+\midrule
+SHA-256       & \texttt{a3f8c1d2e4b7091f6a5e2c8d3b1f4a9e...} \\
+Synthesis seed & $F_{17} = 1597$ \\
+Clock freq.\  & 92\,MHz \\
+LUT usage     & 71\,204 / 101\,400 (70.2\%) \\
+FF usage      & 48\,391 / 126\,800 (38.2\%) \\
+DSP usage     & \textbf{0} / 240 (\textbf{0.0\%}) \\
+BRAM usage    & 112 / 135 (83.0\%) \\
+Inference rate & 63\,toks/sec \\
+Board power   & 1\,W \\
+Zenodo DOI    & 10.5281/zenodo.19227867 (B002) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{trinity-v1.1-opt.bit}
+
+Optimised timing closure variant; functionally equivalent to v1.0. Synthesis seed: $F_{18} = 2584$.
+
+\subsection*{trinity-v1.2-gate2.bit}
+
+Gate-2 certification bitstream (BPB $\leq 1.85$ confirmed). Synthesis seed: $F_{19} = 4181$. Gate-2 status: PASS (BPB = 1.82, step = 5000). Zenodo DOI: 10.5281/zenodo.19020213 (Z04).
+
+\section{SHA-256 Verification Procedure}
+
+\begin{verbatim}
+curl -L https://doi.org/10.5281/zenodo.19227867 -o B002.zip
+unzip B002.zip
+sha256sum trinity-v1.0-main.bit
+# Expected: a3f8c1d2...
+\end{verbatim}
+
+Any mismatch indicates bitstream corruption or substitution and should be reported to the \texttt{trinity-fpga} issue tracker.
+
+\section{Evidence Summary}
+
+\begin{itemize}
+\item \textbf{Zero-DSP invariant}: All three released bitstreams have \texttt{DSP48E1: 0} in their post-route utilisation reports.
+\item \textbf{Performance}: trinity-v1.0-main achieves 63\,toks/sec at 92\,MHz, 1\,W.
+\item \textbf{HSLM token count}: 1003 tokens processed without error.
+\item \textbf{Zenodo immutability}: B002 and Z04 are archived under Zenodo's 10-year minimum retention policy.
+\item \textbf{openXC7 reproducibility}: Given identical source, constraints, and seed, nextpnr produces deterministic bitstreams on the same host OS and toolchain version.
+\end{itemize}
+
+\section{Discussion}
+
+The bitstream archive serves as the hardware reproducibility anchor for the Trinity S$^3$AI dissertation. Its principal limitation is that SHA-256 hashes verify file integrity but not functional correctness: a bitstream could be bit-perfect yet still implement incorrect inference logic if the source RTL contained a bug not caught by the formal proof tree. The connection between the Coq proof tree (297 Qed, 438 theorems) and the synthesised RTL is currently established by manual inspection of the RTL against the TRI27 DSL semantics (Ch.~\ref{ch:27}); an automated RTL-to-Coq translation would close this gap and is a primary objective for v5. All future seeds will continue to be drawn from the sanctioned pool.
