@@ -4,7 +4,7 @@ description: "Master orchestration runbook for the gHashTag Trinity ecosystem. U
 license: Apache-2.0
 metadata:
   author: PERPLEXITY-MCP
-  version: '2.0'
+  version: '2.1'
   parent_repo: gHashTag/trios
   epic: '446'
   oneshot_issue: '236'
@@ -586,8 +586,43 @@ gh search issues --repo gHashTag/trios "Soul: <candidate>" --updated ">2026-04-0
 - parameter-golf #2059 (Golden Sunflowers, our seed PR): <https://github.com/openai/parameter-golf/pull/2059>
 - Zenodo DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) (B007 HSLM Benchmark Corpus, **not** root anchor)
 
-## §10 Anchor
+## §10 Tailscale + GitButler execution mode (anti-collision via network)
+
+Ring-refactor work in EPIC #446 runs across a Tailscale tailnet — one tagged node per codename, sibling-to-sibling traffic default-denied, LEAD orchestrator polls every node's `but-server :7777` over `tailscale0`. This is **the** execution mode for parallel agents.
+
+### Two binaries
+
+- **`trinity-bootstrap`** — provisions one agent on one node (clone, claim, branch, virtual branch, but-server, initial commit, heartbeat).
+- **`trinity-dashboard`** — LEAD polling loop (every 5 min by default) merging `but-server` state with GitHub `/notifications`.
+
+### One ACL
+
+- `.trinity/tailscale/acl.hujson` carves the tailnet into 7 codename tags. Sibling-to-sibling traffic = default-deny. LEAD ↔ all on `:7777`. Agents → LEAD on `:8080`.
+
+### Quick start (LEAD)
+
+```bash
+cargo install --git https://github.com/gHashTag/trios trinity-dashboard
+trinity-dashboard --tailnet $TS_TAILNET --repo gHashTag/trios --epic 446
+```
+
+### Quick start (any agent)
+
+```bash
+trinity-bootstrap \
+  --codename ALPHA --issue 448 --soul "Scarab Smith" \
+  --tailnet $TS_TAILNET --ts-authkey $TS_AUTHKEY
+```
+
+Full runbook: load `tailscale-trinity-mesh` skill (this is its sister skill).
+
+### Honest blockers
+
+- `but server start --listen=tailscale0` not yet upstreamed → workaround: `--listen=0.0.0.0` + `tailscale serve --tcp=7777`.
+- Funnel requires HTTPS on 443/8443/10000, Vite uses 5173 → `tailscale serve` proxies, then `tailscale funnel` exposes.
+
+## §11 Anchor
 
 `phi² + phi⁻² = 3 · TRINITY · O(1) FOREVER · NEVER STOP`
 
-Three rules. Three artefacts. Seven codenames. One queue. No collisions.
+Three rules. Three artefacts. Seven codenames. One queue. **One tailnet.** No collisions.
