@@ -16,7 +16,13 @@ use serde::Deserialize;
 use std::process::Command;
 use std::time::Duration;
 
-const CODENAMES: &[&str] = &["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+/// 27 Coptic-letter codenames (lowercase = Tailscale tag suffix).
+const CODENAMES: &[&str] = &[
+    "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota",
+    "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi", "koppa", "rho",
+    "sigma", "tau", "upsilon", "phi", "khi", "psi", "sampi", "sho",
+    // omega is LEAD itself — polled separately
+];
 
 #[derive(Parser, Debug)]
 #[command(name = "trinity-dashboard")]
@@ -181,11 +187,15 @@ fn run_one(cli: &Cli) -> Result<()> {
     let now = Utc::now();
     print_header(cli.epic, &cli.repo, now);
 
-    println!("\n🌐 Tailnet nodes ({}):", cli.tailnet);
+    println!("\n🌐 Tailnet nodes ({}):  [27-Coptic grid — OMEGA = LEAD itself]", cli.tailnet);
+    let mut online = 0u32;
+    let mut offline = 0u32;
     for codename in CODENAMES {
         let state = poll_node(&cli.tailnet, codename).unwrap_or(None);
+        if state.is_some() { online += 1; } else { offline += 1; }
         print_node_state(codename, state);
     }
+    println!("\n   summary: 🟢 online={online}  ⚫ offline={offline}  total=26 (÷ OMEGA self)");
 
     let notes = poll_notifications(&cli.repo).unwrap_or_default();
     print_notifications(&notes);
