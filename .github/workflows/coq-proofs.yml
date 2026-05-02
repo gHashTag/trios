@@ -13,12 +13,14 @@ on:
     branches: [main]
     paths:
       - 'trinity-clara/proofs/**'
+      - 'docs/phd/theorems/**'
       # invariants.rs migrated to gHashTag/trios-trainer-igla per L-T1+L-T3
       - '.github/workflows/coq-proofs.yml'
   pull_request:
     branches: [main]
     paths:
       - 'trinity-clara/proofs/**'
+      - 'docs/phd/theorems/**'
 
 concurrency:
   group: coq-${{ github.ref }}
@@ -64,6 +66,23 @@ jobs:
             echo "=== INV-2: ASHA bound ==="
             coqc trinity-clara/proofs/igla/igla_asha_bound.v
             echo "✅ INV-2 OK: asha_champion_survives"
+
+            # --- docs/phd/theorems/igla/* via _CoqProject -------------
+            # Added for INV-6-HybridQkGain (#441, PR #490) and future
+            # IGLA_* theorems under docs/phd/theorems/igla/.  Respects
+            # the local _CoqProject's -R trinity Trinity / -R igla IGLA
+            # layout so CorePhi, AlphaPhi, FormulaEval can be imported.
+            echo "=== docs/phd/theorems/igla/* (Trinity anchor files) ==="
+            if [ -f docs/phd/theorems/igla/_CoqProject ]; then
+              cd docs/phd/theorems
+              # coq_makefile + make-all respects _CoqProject's load paths
+              coq_makefile -f igla/_CoqProject -o igla/Makefile
+              make -f igla/Makefile all
+              cd -
+              echo "✅ docs/phd/theorems/igla/* OK"
+            else
+              echo "(no _CoqProject under docs/phd/theorems/igla — skipped)"
+            fi
 
             echo "=== ALL PROOFS VERIFIED ==="
 
