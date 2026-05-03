@@ -27,7 +27,7 @@
 //! - **State** lives in `A2A_ATOM` (UR-00 GlobalSignal) — reactive Dioxus signals
 
 use dioxus::prelude::*;
-use trios_ui_ur00::{A2AMessage, AgentProfile, A2AState, use_a2a_atom};
+use trios_ui_ur00::{A2AMessage, AgentProfile, A2AState, A2A_ATOM, use_a2a_atom};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
 
 // ─── Social Panel ────────────────────────────────────────────
@@ -123,7 +123,7 @@ fn SocialHeader() -> Element {
 fn PresenceBar() -> Element {
     let palette = use_palette();
     let a2a = use_a2a_atom();
-    let mut filter = use_signal(|| None::<String>);
+    let mut filter: Signal<Option<String>> = use_signal(|| None);
 
     let profiles = [
         AgentProfile::human(),
@@ -154,8 +154,8 @@ fn PresenceBar() -> Element {
                     let is_filtered = filter.read().as_ref() == Some(&name);
                     let border = if is_filtered { color.clone() } else { palette.border.to_string() };
 
-                    let name_click = name.clone();
-                    let name_cmp = name.clone();
+                    let click_name = name.clone();
+                    let cmp_name = name.clone();
 
                     rsx! {
                         div {
@@ -173,7 +173,11 @@ fn PresenceBar() -> Element {
                             ",
                             onclick: move |_| {
                                 let current = filter.read().clone();
-                                let new_filter = if current.as_ref() == Some(&name_click) { None } else { Some(name_click.clone()) };
+                                let new_filter = if current.as_ref() == Some(&click_name) {
+                                    None
+                                } else {
+                                    Some(click_name.clone())
+                                };
                                 filter.set(new_filter);
                             },
 
@@ -353,7 +357,13 @@ fn InterruptBar() -> Element {
                     text-align: center;
                 ",
                 onclick: move |_| {
-                    a2a_action_interrupt();
+                    // Write to global signal directly (no hook needed in closure)
+                    A2A_ATOM.write().interrupt_active = true;
+                    let conv_id = A2A_ATOM.read().conversation_id.clone();
+                    let body = format!(
+                        "{{\"role\":\"human\",\"agentName\":\"HumanOverlord\",\"reason\":\"⛔ Human veto — STOP all agents\",\"scope\":\"all_agents\",\"priority\":\"P0\"}}"
+                    );
+                    js_a2a_post("/interrupt", &body);
                 },
                 if interrupt_active { "⛔ ACTIVE" } else { "⛔ INTERRUPT" }
             }
@@ -373,7 +383,14 @@ fn InterruptBar() -> Element {
                     text-align: center;
                 ",
                 onclick: move |_| {
-                    a2a_action_resume();
+                    A2A_ATOM.write().interrupt_active = false;
+                    js_a2a_delete("/interrupt");
+                    let conv_id = A2A_ATOM.read().conversation_id.clone();
+                    let body = format!(
+                        "{{\"type\":\"chat\",\"role\":\"human\",\"agentName\":\"HumanOverlord\",\"content\":\"✅ Resume — all agents may continue.\",\"conversationId\":\"{}\"}}",
+                        conv_id
+                    );
+                    js_a2a_post("/messages", &body);
                 },
                 "✅ RESUME"
             }
@@ -420,7 +437,29 @@ fn HumanInput() -> Element {
                 },
                 onkeydown: move |e: KeyboardEvent| {
                     if e.key() == Key::Enter && !input_text.read().is_empty() {
-                        a2a_action_send(input_text);
+                        let text = input_text.read().clone();
+                        let conv_id = A2A_ATOM.read().conversation_id.clone();
+                        let now = now_ms();
+
+                        // Optimistic local update
+                        let msg = A2AMessage {
+                            id: format!("local-{now}"),
+                            msg_type: "chat".to_string(),
+                            role: "human".to_string(),
+                            agent_name: "HumanOverlord".to_string(),
+                            content: text.clone(),
+                            conversation_id: conv_id.clone(),
+                            timestamp: now,
+                        };
+                        A2A_ATOM.write().messages.push(msg);
+                        input_text.set(String::new());
+
+                        // POST to bridge
+                        let body = format!(
+                            "{{\"type\":\"chat\",\"role\":\"human\",\"agentName\":\"HumanOverlord\",\"content\":\"{}\",\"conversationId\":\"{}\"}}",
+                            text, conv_id
+                        );
+                        js_a2a_post("/messages", &body);
                     }
                 },
             }
@@ -440,83 +479,33 @@ fn HumanInput() -> Element {
                 ",
                 disabled: is_empty,
                 onclick: move |_| {
-                    a2a_action_send(input_text);
+                    let text = input_text.read().clone();
+                    if text.is_empty() { return; }
+                    let conv_id = A2A_ATOM.read().conversation_id.clone();
+                    let now = now_ms();
+
+                    let msg = A2AMessage {
+                        id: format!("local-{now}"),
+                        msg_type: "chat".to_string(),
+                        role: "human".to_string(),
+                        agent_name: "HumanOverlord".to_string(),
+                        content: text.clone(),
+                        conversation_id: conv_id.clone(),
+                        timestamp: now,
+                    };
+                    A2A_ATOM.write().messages.push(msg);
+                    input_text.set(String::new());
+
+                    let body = format!(
+                        "{{\"type\":\"chat\",\"role\":\"human\",\"agentName\":\"HumanOverlord\",\"content\":\"{}\",\"conversationId\":\"{}\"}}",
+                        text, conv_id
+                    );
+                    js_a2a_post("/messages", &body);
                 },
                 "↵"
             }
         }
     }
-}
-
-// ─── A2A Actions (JS interop) ────────────────────────────────
-//
-// These call JS functions defined in BR-APP index.html.
-// The JS side does fetch() to the HITL-A2A HTTP Bridge.
-// This keeps the Rust UI pure — no web_sys dependency in ring code.
-
-fn a2a_action_send(mut input: Signal<String>) {
-    let text = input.read().clone();
-    if text.is_empty() { return; }
-
-    let mut a2a = use_a2a_atom();
-    let conv_id = a2a.read().conversation_id.clone();
-
-    // Optimistic local update
-    let msg = A2AMessage {
-        id: format!("local-{}", js_now()),
-        msg_type: "chat".to_string(),
-        role: "human".to_string(),
-        agent_name: "HumanOverlord".to_string(),
-        content: text.clone(),
-        conversation_id: conv_id.clone(),
-        timestamp: js_now(),
-    };
-    a2a.write().messages.push(msg);
-    input.set(String::new());
-
-    // POST to bridge via JS interop
-    let body = serde_json::json!({
-        "type": "chat",
-        "role": "human",
-        "agentName": "HumanOverlord",
-        "content": text,
-        "conversationId": conv_id,
-    }).to_string();
-    js_a2a_post("/messages", &body);
-}
-
-fn a2a_action_interrupt() {
-    let mut a2a = use_a2a_atom();
-    a2a.write().interrupt_active = true;
-
-    let body = serde_json::json!({
-        "role": "human",
-        "agentName": "HumanOverlord",
-        "reason": "⛔ Human veto — STOP all agents",
-        "scope": "all_agents",
-        "priority": "P0"
-    }).to_string();
-    js_a2a_post("/interrupt", &body);
-}
-
-fn a2a_action_resume() {
-    let mut a2a = use_a2a_atom();
-    a2a.write().interrupt_active = false;
-
-    let conv_id = a2a.read().conversation_id.clone();
-
-    // Clear interrupt
-    js_a2a_delete("/interrupt");
-
-    // Send resume message
-    let body = serde_json::json!({
-        "type": "chat",
-        "role": "human",
-        "agentName": "HumanOverlord",
-        "content": "✅ Resume — all agents may continue.",
-        "conversationId": conv_id,
-    }).to_string();
-    js_a2a_post("/messages", &body);
 }
 
 // ─── JS Interop stubs ────────────────────────────────────────
@@ -528,10 +517,10 @@ fn js_a2a_post(path: &str, body: &str) {
     #[cfg(target_arch = "wasm32")]
     {
         let _ = (path, body);
-        // In WASM, use wasm_bindgen to call JS:
-        // wasm_bindgen::JsValue::from_str(&format!(
-        //     "window.__a2a_post && window.__a2a_post('{}', '{}')", path, body
-        // ));
+        // TODO: wire up via wasm_bindgen or web_sys::window()
+        // web_sys::window().unwrap()
+        //     .eval(&format!("window.__a2a_post && window.__a2a_post('{}', '{}')", path, body))
+        //     .ok();
     }
     #[cfg(not(target_arch = "wasm32"))]
     let _ = (path, body);
@@ -545,8 +534,8 @@ fn js_a2a_delete(path: &str) {
     let _ = path;
 }
 
-/// Get current time in epoch ms via JS.
-fn js_now() -> u64 {
+/// Get current time in epoch ms.
+fn now_ms() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
         js_sys::Date::now() as u64

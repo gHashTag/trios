@@ -1,0 +1,195 @@
+//! UR-04 — Chat UI
+//!
+//! Chat interface: message list, input bar, and message bubbles.
+//! Reads/writes the `ChatAtom` from UR-00.
+
+use dioxus::prelude::*;
+use trios_ui_ur00::{use_chat_atom, ChatMessage, MessageRole};
+use trios_ui_ur01::{use_palette, radius, spacing, typography};
+
+// ─── ChatPanel ───────────────────────────────────────────────
+
+/// Full chat panel with messages and input.
+pub fn ChatPanel() -> Element {
+    let palette = use_palette();
+    let chat = use_chat_atom();
+
+    rsx! {
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                background: {palette.background};
+            ",
+            // Messages area
+            div {
+                style: "
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: {spacing::MD};
+                    display: flex;
+                    flex-direction: column;
+                    gap: {spacing::SM};
+                ",
+                for msg in chat.read().messages.iter() {
+                    { ChatBubble { key: "{msg.id}", message: msg.clone() } }
+                }
+                if chat.read().is_loading {
+                    div {
+                        style: "
+                            color: {palette.text_muted};
+                            font-size: {typography::SIZE_SM};
+                            padding: {spacing::SM};
+                            font-family: {typography::FONT_FAMILY};
+                        ",
+                        "● ● ●"
+                    }
+                }
+            }
+            // Input bar
+            { ChatInputBar {} }
+        }
+    }
+}
+
+// ─── ChatBubble ──────────────────────────────────────────────
+
+/// Props for a single chat message bubble.
+#[derive(Props, Clone, PartialEq)]
+pub struct ChatBubbleProps {
+    /// The message to render.
+    pub message: ChatMessage,
+}
+
+/// Render a single chat message.
+#[component]
+pub fn ChatBubble(props: ChatBubbleProps) -> Element {
+    let palette = use_palette();
+    let msg = &props.message;
+    let (bg, align) = match msg.role {
+        MessageRole::User => (palette.surface, "flex-end"),
+        MessageRole::Assistant => (palette.primary, "flex-start"),
+        MessageRole::System => (palette.surface, "center"),
+    };
+    let text_color = match msg.role {
+        MessageRole::Assistant => palette.background,
+        _ => palette.text,
+    };
+    let font = match msg.role {
+        MessageRole::System => typography::FONT_MONO,
+        _ => typography::FONT_FAMILY,
+    };
+
+    rsx! {
+        div {
+            style: "
+                display: flex;
+                justify-content: {align};
+                max-width: 80%;
+            ",
+            div {
+                style: "
+                    background: {bg};
+                    color: {text_color};
+                    border-radius: {radius::LG};
+                    padding: {spacing::SM} {spacing::MD};
+                    font-family: {font};
+                    font-size: {typography::SIZE_MD};
+                    line-height: 1.5;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                ",
+                {msg.content.clone()}
+            }
+        }
+    }
+}
+
+// ─── ChatInputBar ────────────────────────────────────────────
+
+/// Chat input bar with send button.
+pub fn ChatInputBar() -> Element {
+    let palette = use_palette();
+    let mut chat = use_chat_atom();
+    let mut input_text = use_signal(String::new);
+
+    let current_input = input_text.read().clone();
+    let is_empty = current_input.is_empty();
+
+    rsx! {
+        div {
+            style: "
+                display: flex;
+                gap: {spacing::SM};
+                padding: {spacing::SM} {spacing::MD};
+                border-top: 1px solid {palette.border};
+                background: {palette.surface};
+            ",
+            input {
+                style: "
+                    flex: 1;
+                    background: {palette.background};
+                    color: {palette.text};
+                    border: 1px solid {palette.border};
+                    border-radius: {radius::MD};
+                    padding: {spacing::SM} {spacing::MD};
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_MD};
+                    outline: none;
+                ",
+                r#type: "text",
+                placeholder: "Type a message...",
+                value: "{current_input}",
+                oninput: move |e: Event<FormData>| {
+                    input_text.set(e.data.value());
+                },
+                onkeydown: move |e: KeyboardEvent| {
+                    if e.key() == Key::Enter && !input_text.read().is_empty() {
+                        send_message(input_text, chat);
+                    }
+                },
+            }
+            button {
+                style: "
+                    background: {palette.primary};
+                    color: {palette.background};
+                    border: none;
+                    border-radius: {radius::MD};
+                    padding: {spacing::SM} {spacing::LG};
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_MD};
+                    cursor: pointer;
+                    opacity: {if is_empty { "0.5" } else { "1.0" }};
+                ",
+                disabled: is_empty,
+                onclick: move |_| {
+                    send_message(input_text, chat);
+                },
+                "Send"
+            }
+        }
+    }
+}
+
+fn send_message(mut input: Signal<String>, mut chat: Signal<trios_ui_ur00::ChatState>) {
+    let text = input.read().clone();
+    if text.is_empty() {
+        return;
+    }
+    let msg = ChatMessage {
+        id: format!("msg-{}", chat.read().messages.len()),
+        role: MessageRole::User,
+        content: text,
+        timestamp: chrono_now_iso(),
+    };
+    chat.write().messages.push(msg);
+    input.set(String::new());
+}
+
+/// Simple ISO timestamp (no dependency on chrono).
+fn chrono_now_iso() -> String {
+    // In WASM we can't use std::time easily, so we use a simple counter.
+    // A real impl would use js_sys::Date.
+    "2026-01-01T00:00:00Z".to_string()
+}
