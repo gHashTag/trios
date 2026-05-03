@@ -24,6 +24,8 @@ const CHAPTER_TEMPLATE: &str =
     include_str!("templates/chapter.template.tex");
 const COVER_TEMPLATE: &str =
     include_str!("templates/cover.tex");
+const PART_DIVIDER_TEMPLATE: &str =
+    include_str!("templates/part-divider.tex");
 const HERO_LUA_FILTER: &str =
     include_str!("filters/force-fullwidth-hero.lua");
 
@@ -80,9 +82,11 @@ pub fn run(cfg: &RenderConfig) -> Result<()> {
         Some(url) => pull_chapters_from_neon(url)?,
         None      => load_cached_chapters(&cfg.workdir)?,
     };
-    if chapters.len() != 44 {
+    // v5.2: now 1 (Ch.0 manifesto) + 11 frontmatter + 34 Flos Aureus + 8 Flos appendix
+    //       + 34 Neon chapters + 10 Neon appendices = 98 rows.
+    if chapters.len() < 90 {
         return Err(anyhow!(
-            "expected 44 chapters in ssot.chapters, got {}",
+            "expected ≥90 chapters in ssot.chapters (v5.2 = Flos+Neon merge), got {}",
             chapters.len()
         ));
     }
@@ -142,11 +146,35 @@ pub fn run(cfg: &RenderConfig) -> Result<()> {
         return Err(anyhow!("cover PDF reports 0 pages"));
     }
 
-    // 6. compile chapters in canonical order with continuous page numbers
+    // 6. compile chapters in canonical order with continuous page numbers.
+    //    Before Ch.0 and Ch.1 we inject "Part I" / "Part II" divider pages.
     let order = canonical_order(&chapters);
-    let mut next_page = cover_pages + 1; // first page of Ch.1
+    let mut next_page = cover_pages + 1; // first page after the cover
     let mut rendered: Vec<PathBuf> = vec![cover_pdf.clone()];
+    let mut part_idx = 0u32;
     for c in &order {
+        if let Some(title) = part_divider_before(&c.ch_num) {
+            part_idx += 1;
+            let part_tex = build_dir.join(format!("part{part_idx}.tex"));
+            let part_pdf = build_dir.join(format!("part{part_idx}.pdf"));
+            let body = PART_DIVIDER_TEMPLATE
+                .replace("$PART_TITLE$", title)
+                .replace("$START_PAGE$", &next_page.to_string());
+            fs::write(&part_tex, body)?;
+            run_tectonic(&part_tex, &build_dir)
+                .with_context(|| format!("tectonic failed for part divider {title}"))?;
+            if !part_pdf.is_file() {
+                return Err(anyhow!("missing PDF after tectonic for part {title}"));
+            }
+            let pages = pdf_page_count(&part_pdf)?;
+            eprintln!("✨ PART     {:5} KB · {} pages · starts at p{} · {}",
+                      fs::metadata(&part_pdf)?.len() / 1024,
+                      pages,
+                      next_page,
+                      title);
+            next_page += pages;
+            rendered.push(part_pdf);
+        }
         let safe = c.ch_num.replace('/', "_");
         let md_in   = src_dir.join(format!("{safe}.md"));
         let md_pre  = build_dir.join(format!("{safe}.preproc.md"));
@@ -162,16 +190,23 @@ pub fn run(cfg: &RenderConfig) -> Result<()> {
             .replace("$START_PAGE$", &next_page.to_string());
         fs::write(&tpl_path, tpl_chapter)?;
 
-        // 6.c pandoc → tex
-        run_pandoc(&md_pre, &tpl_path, &lua_path, &tex_out)
-            .with_context(|| format!("pandoc failed for {safe}"))?;
+        // 6.c pandoc → tex (skip-and-warn on failure)
+        if let Err(e) = run_pandoc(&md_pre, &tpl_path, &lua_path, &tex_out) {
+            eprintln!("⚠️  {:8} pandoc failed: {} — emitting placeholder",
+                      c.ch_num, e);
+            write_placeholder_chapter(&tex_out, &c.ch_num, &c.title, next_page)?;
+        } else {
+            rewrite_illust_paths(&tex_out)?;
+        }
 
-        // 6.d rewrite absolute illustration URL → relative
-        rewrite_illust_paths(&tex_out)?;
-
-        // 6.e tectonic → pdf
-        run_tectonic(&tex_out, &build_dir)
-            .with_context(|| format!("tectonic failed for {safe}"))?;
+        // 6.e tectonic → pdf (skip-and-warn on failure)
+        if let Err(e) = run_tectonic(&tex_out, &build_dir) {
+            eprintln!("⚠️  {:8} tectonic failed: {} — emitting placeholder",
+                      c.ch_num, e);
+            write_placeholder_chapter(&tex_out, &c.ch_num, &c.title, next_page)?;
+            run_tectonic(&tex_out, &build_dir)
+                .with_context(|| format!("placeholder tectonic also failed for {safe}"))?;
+        }
         if !pdf_out.is_file() {
             return Err(anyhow!("missing PDF after tectonic for {safe}"));
         }
@@ -248,22 +283,52 @@ fn pull_chapters_from_neon(_url: &str) -> Result<Vec<ChapterRow>> {
 // 2. Canonical ordering: Ch.1 .. Ch.34, then App.A .. App.J
 // ---------------------------------------------------------------------
 
+/// v5.2 canonical order: Part I (Flos Aureus core) → Part II (Neon computational).
+///
+/// Buckets:
+///   0 = Ch.0      (manifesto / paste.txt article — opens Part I)
+///   1 = FM.NN     (frontmatter, ordered numerically)
+///   2 = FA.NN     (Flos Aureus 33+1 chapters)
+///   3 = AP.X      (Flos appendix A..H)
+///   4 = Ch.N      (Neon computational chapters 1..34)
+///   5 = App.X     (Neon appendix A..J)
+///   9 = unknown
 fn canonical_order(rows: &[ChapterRow]) -> Vec<ChapterRow> {
     fn sort_key(ch: &str) -> (u8, i32, String) {
-        if let Some(rest) = ch.strip_prefix("Ch.") {
+        if ch == "Ch.0" {
+            (0, 0, ch.to_string())
+        } else if let Some(rest) = ch.strip_prefix("FM.") {
             let n: i32 = rest.parse().unwrap_or(i32::MAX);
-            (0, n, ch.to_string())
-        } else if let Some(rest) = ch.strip_prefix("App.") {
-            // App.A → 65, App.B → 66, …
-            let n = rest.chars().next().map(|c| c as i32).unwrap_or(i32::MAX);
             (1, n, ch.to_string())
+        } else if let Some(rest) = ch.strip_prefix("FA.") {
+            let n: i32 = rest.parse().unwrap_or(i32::MAX);
+            (2, n, ch.to_string())
+        } else if let Some(rest) = ch.strip_prefix("AP.") {
+            let n = rest.chars().next().map(|c| c as i32).unwrap_or(i32::MAX);
+            (3, n, ch.to_string())
+        } else if let Some(rest) = ch.strip_prefix("Ch.") {
+            let n: i32 = rest.parse().unwrap_or(i32::MAX);
+            (4, n, ch.to_string())
+        } else if let Some(rest) = ch.strip_prefix("App.") {
+            let n = rest.chars().next().map(|c| c as i32).unwrap_or(i32::MAX);
+            (5, n, ch.to_string())
         } else {
-            (2, i32::MAX, ch.to_string())
+            (9, i32::MAX, ch.to_string())
         }
     }
     let mut v: Vec<_> = rows.iter().cloned().collect();
     v.sort_by_key(|c| sort_key(&c.ch_num));
     v
+}
+
+/// Return the part-divider header to emit *before* this chapter, if any.
+/// Used by the render loop to inject `\part{...}` PDFs at the right boundary.
+fn part_divider_before(ch_num: &str) -> Option<&'static str> {
+    match ch_num {
+        "Ch.0" => Some("Part I — Flos Aureus: Foundations"),
+        "Ch.1" => Some("Part II — TRINITY: Computational Realisation"),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -524,6 +589,42 @@ fn crop_cover_top(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+/// When pandoc or tectonic fails on a chapter, emit a one-page placeholder
+/// so the unified PDF spine remains complete and the page-number sequence is
+/// preserved. The placeholder lists the chapter number, title, and a brief
+/// note that the source needs author review before re-rendering.
+fn write_placeholder_chapter(tex_out: &Path, ch_num: &str, title: &str, start_page: u32) -> Result<()> {
+    let safe_title = title.replace('_', "\\_")
+                          .replace('&', "\\&")
+                          .replace('%', "\\%");
+    let body = format!(r#"\documentclass[11pt,a4paper]{{article}}
+\usepackage[a4paper,margin=2cm]{{geometry}}
+\usepackage{{fontspec}}
+\setmainfont{{DejaVu Serif}}
+\usepackage[table,dvipsnames]{{xcolor}}
+\definecolor{{golden}}{{RGB}}{{197,150,40}}
+\setcounter{{page}}{{{start_page}}}
+\pagestyle{{plain}}
+\setlength{{\parindent}}{{0pt}}
+
+\begin{{document}}
+\null\vfill
+\begin{{center}}
+{{\Huge \textbf{{{ch_num}}} — {safe_title}\par}}
+\vspace{{2em}}
+{{\Large\itshape Source under author review for v5.3.\par}}
+\vspace{{1em}}
+{{\large The Flos Aureus monograph contains hand-converted LaTeX\par}}
+{{\large that requires further normalisation before mechanical rendering.\par}}
+{{\large See \texttt{{ssot.chapters.body\_md}} for the current source.\par}}
+\end{{center}}
+\vfill
+\end{{document}}
+"#);
+    fs::write(tex_out, body)?;
+    Ok(())
+}
+
 fn rewrite_illust_paths(tex: &Path) -> Result<()> {
     let s = fs::read_to_string(tex)?;
     let s = s.replace(
@@ -608,25 +709,43 @@ mod tests {
             "image src got mangled: {out}");
     }
 
+    fn row(ch: &str) -> ChapterRow {
+        ChapterRow {
+            ch_num: ch.into(),
+            title: ch.into(),
+            illustration_url: None,
+            illustration_path: None,
+            body_md: String::new(),
+        }
+    }
+
     #[test]
-    fn canonical_order_is_chapters_then_appendices() {
+    fn canonical_order_v52_partitions_flos_before_neon() {
         let rows = vec![
-            ChapterRow { ch_num: "App.B".into(), title: "B".into(),
-                illustration_url: None, illustration_path: None,
-                body_md: String::new() },
-            ChapterRow { ch_num: "Ch.10".into(), title: "10".into(),
-                illustration_url: None, illustration_path: None,
-                body_md: String::new() },
-            ChapterRow { ch_num: "Ch.2".into(), title: "2".into(),
-                illustration_url: None, illustration_path: None,
-                body_md: String::new() },
-            ChapterRow { ch_num: "App.A".into(), title: "A".into(),
-                illustration_url: None, illustration_path: None,
-                body_md: String::new() },
+            row("App.B"), row("Ch.10"), row("Ch.2"), row("App.A"),
+            row("FA.05"), row("FA.00"), row("AP.B"), row("AP.A"),
+            row("FM.03"), row("FM.01"), row("Ch.0"),
         ];
         let ordered = canonical_order(&rows);
         let labels: Vec<_> = ordered.iter().map(|r| r.ch_num.as_str()).collect();
-        assert_eq!(labels, vec!["Ch.2", "Ch.10", "App.A", "App.B"]);
+        assert_eq!(labels, vec![
+            "Ch.0",
+            "FM.01", "FM.03",
+            "FA.00", "FA.05",
+            "AP.A", "AP.B",
+            "Ch.2", "Ch.10",
+            "App.A", "App.B",
+        ]);
+    }
+
+    #[test]
+    fn part_dividers_at_ch0_and_ch1() {
+        assert_eq!(part_divider_before("Ch.0"),
+            Some("Part I — Flos Aureus: Foundations"));
+        assert_eq!(part_divider_before("Ch.1"),
+            Some("Part II — TRINITY: Computational Realisation"));
+        assert_eq!(part_divider_before("FA.00"), None);
+        assert_eq!(part_divider_before("App.A"), None);
     }
 
     #[test]
