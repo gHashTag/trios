@@ -15,7 +15,7 @@
     "https://api.z.ai/*"
   ],
   "background": {
-    "service_worker": "dist/bg-sw.js"
+    "service_worker": "sw.js"
   },
   "action": {
     "default_title": "Trinity Agent Bridge",
@@ -35,13 +35,8 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://github.com/*/issues/*", "https://github.com/*/pull/*"],
-      "js": ["dist/trios_ext.js", "dist/github-bootstrap.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://claude.ai/*"],
-      "js": ["dist/trios_ext.js", "dist/claude-bootstrap.js"],
+      "matches": ["https://github.com/*/issues/*", "https://github.com/*/pull/*", "https://claude.ai/*"],
+      "js": ["dist/trios_ext_ring_ex00.js"],
       "run_at": "document_idle"
     }
   ],
@@ -50,7 +45,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["dist/trios_ext_bg.wasm"],
+      "resources": ["dist/trios_ext_ring_ex00_bg.wasm"],
       "matches": ["https://github.com/*", "https://claude.ai/*"]
     }
   ]
