@@ -5,7 +5,7 @@
 
 use dioxus::prelude::*;
 use trios_ui_ur00::use_settings_atom;
-use trios_ui_ur01::{use_palette, radius, spacing, typography};
+use trios_ui_ur01::{use_palette, ColorPalette, radius, spacing, typography};
 
 // ─── Sidebar ─────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
     }
 }
 
-fn render_nav_item(idx: usize, item: &NavItem, props: &SidebarProps, palette: &trios_ui_ur01::ColorPalette) -> Element {
+fn render_nav_item(idx: usize, item: &NavItem, props: &SidebarProps, palette: ColorPalette) -> Element {
     let bg = if item.active { palette.primary } else { "transparent" };
     let color = if item.active { palette.background } else { palette.text };
     let on_select = props.on_select.clone();
@@ -128,7 +128,7 @@ pub fn Tabs(props: TabsProps) -> Element {
     }
 }
 
-fn render_tab(tab: &Tab, props: &TabsProps, palette: &trios_ui_ur01::ColorPalette) -> Element {
+fn render_tab(tab: &Tab, props: &TabsProps, palette: ColorPalette) -> Element {
     let active = tab.id == props.active_id;
     let border_bottom = if active {
         format!("2px solid {}", palette.primary)

@@ -58,7 +58,7 @@ impl Route {
 pub fn AppShell() -> Element {
     let palette = use_palette();
     let mut active_route = use_signal(|| Route::Chat);
-    let settings = use_settings_atom();
+    let _settings = use_settings_atom();
 
     let nav_items: Vec<NavItem> = Route::all()
         .iter()
@@ -139,9 +139,7 @@ fn render_route(route: Route) -> Element {
 /// This is the primary entry point called by the root `trios-ui` crate
 /// and by `trios-ext` via `trios_ui::mount_app()`.
 pub fn mount_app() {
-    let cfg = dioxus::Config::new();
-    let dom = VirtualDom::new(AppShell);
+    let _dom = VirtualDom::new(AppShell);
     // In a real WASM build, this would use dioxus::web::launch_cfg
     // For now, we just ensure the VirtualDom is created successfully.
-    log::info!("Trinity UI mounted (Dioxus VirtualDom created)");
 }
