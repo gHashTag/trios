@@ -6,12 +6,11 @@
 use dioxus::prelude::*;
 use trios_ui_ur00::{use_agents_atom, use_chat_atom, Agent, AgentStatus};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
-use trios_ui_ur02::{badge, BadgeVariant};
+use trios_ui_ur02::{Badge, BadgeVariant};
 
 // ─── AgentList ───────────────────────────────────────────────
 
 /// Full agent list panel.
-#[component]
 pub fn AgentList() -> Element {
     let palette = use_palette();
     let agents = use_agents_atom();
@@ -66,7 +65,7 @@ pub struct AgentCardProps {
 }
 
 /// Render a single agent card with status badge.
-#[component]
+
 pub fn AgentCard(props: AgentCardProps) -> Element {
     let palette = use_palette();
     let agent = &props.agent;
