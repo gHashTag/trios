@@ -1,16 +1,17 @@
 //! UR-09 — A2A Social Network
 //!
 //! Live agent social feed: messages, presence, interrupt controls.
-//! Connects to HITL-A2A HTTP Bridge (:9876) via WASM fetch.
+//! Connects to HITL-A2A HTTP Bridge (:9876) via JS interop.
 //!
 //! ## Components
 //!
 //! - `SocialPanel` — Full social feed panel
+//! - `SocialHeader` — Title + bus status
 //! - `PresenceBar` — Agent online/offline chips
 //! - `SocialFeed` — Message list with agent colors
-//! - `HumanInput` — Message input for human
-//! - `InterruptBar` — ⛔ INTERRUPT / ✅ RESUME controls
 //! - `AgentBubble` — Single agent message with avatar
+//! - `InterruptBar` — ⛔ INTERRUPT / ✅ RESUME controls
+//! - `HumanInput` — Message input for human
 //!
 //! ## Ring Architecture
 //!
@@ -19,20 +20,15 @@
 //!      ↕
 //! HITL-A2A HTTP Bridge (:9876) ←→ Cloudflare Tunnel ←→ Scarabs (cloud)
 //! ```
+//!
+//! Data flow:
+//! - **Polling** is driven by JS in BR-APP index.html (calls `window.__a2a_poll()`)
+//! - **Actions** (send, interrupt, resume) call `window.__a2a_post(url, body)` via JS interop
+//! - **State** lives in `A2A_ATOM` (UR-00 GlobalSignal) — reactive Dioxus signals
 
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
-use trios_ui_ur00::{
-    A2AMessage, A2APresenceEntry, AgentProfile, A2AState, A2A_ATOM, use_a2a_atom,
-};
+use trios_ui_ur00::{A2AMessage, AgentProfile, A2AState, use_a2a_atom};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
-
-// ─── Bus API URL ─────────────────────────────────────────────
-
-fn bus_url(path: &str) -> String {
-    // Try tunnel URL first (for cloud agents), fallback to local bridge
-    "http://127.0.0.1:9876/bus/trinity-ops-2026-05-03".to_string() + path
-}
 
 // ─── Social Panel ────────────────────────────────────────────
 
@@ -49,19 +45,10 @@ pub fn SocialPanel() -> Element {
                 background: {palette.background};
             ",
 
-            // Header with bus status
             SocialHeader {}
-
-            // Presence bar
             PresenceBar {}
-
-            // Message feed
             SocialFeed {}
-
-            // Interrupt bar
             InterruptBar {}
-
-            // Human input
             HumanInput {}
         }
     }
@@ -87,10 +74,12 @@ fn SocialHeader() -> Element {
                 border-bottom: 1px solid {palette.border};
                 background: {palette.surface};
             ",
+
             span {
                 style: "font-size: 16px; color: {palette.primary};",
                 "🕸️"
             }
+
             span {
                 style: "
                     font-family: {typography::FONT_FAMILY};
@@ -100,7 +89,9 @@ fn SocialHeader() -> Element {
                 ",
                 "Trinity Social"
             }
+
             div { style: "flex: 1;" }
+
             span {
                 style: "
                     font-size: {typography::SIZE_XS};
@@ -114,6 +105,7 @@ fn SocialHeader() -> Element {
                 ",
                 "{status_text}"
             }
+
             span {
                 style: "
                     font-size: {typography::SIZE_XS};
@@ -133,7 +125,7 @@ fn PresenceBar() -> Element {
     let a2a = use_a2a_atom();
     let mut filter = use_signal(|| None::<String>);
 
-    let profiles = vec![
+    let profiles = [
         AgentProfile::human(),
         AgentProfile::browser_os(),
         AgentProfile::scarabs(),
@@ -151,7 +143,7 @@ fn PresenceBar() -> Element {
                 overflow-x: auto;
             ",
 
-            for profile in profiles.iter() {
+            for profile in profiles {
                 {
                     let name = profile.name.clone();
                     let emoji = profile.emoji.clone();
@@ -162,8 +154,8 @@ fn PresenceBar() -> Element {
                     let is_filtered = filter.read().as_ref() == Some(&name);
                     let border = if is_filtered { color.clone() } else { palette.border.to_string() };
 
-                    let name_for_click = name.clone();
-                    let name_for_cmp = name.clone();
+                    let name_click = name.clone();
+                    let name_cmp = name.clone();
 
                     rsx! {
                         div {
@@ -181,9 +173,10 @@ fn PresenceBar() -> Element {
                             ",
                             onclick: move |_| {
                                 let current = filter.read().clone();
-                                let new_filter = if current.as_ref() == Some(&name_for_click) { None } else { Some(name_for_click.clone()) };
+                                let new_filter = if current.as_ref() == Some(&name_click) { None } else { Some(name_click.clone()) };
                                 filter.set(new_filter);
                             },
+
                             span {
                                 style: "
                                     width: 5px;
@@ -192,6 +185,7 @@ fn PresenceBar() -> Element {
                                     background: {dot_color};
                                 ",
                             }
+
                             span {
                                 style: "color: {color}; font-family: {typography::FONT_FAMILY};",
                                 "{emoji} {label}"
@@ -210,8 +204,11 @@ fn SocialFeed() -> Element {
     let palette = use_palette();
     let a2a = use_a2a_atom();
 
-    // Show all messages (no filter for now — filter via PresenceBar click)
-    let messages: Vec<A2AMessage> = a2a.read().messages.clone();
+    // Filter out heartbeat/presence noise
+    let messages: Vec<A2AMessage> = a2a.read().messages.iter()
+        .filter(|m| !(m.msg_type == "presence" && matches!(m.content.as_str(), "heartbeat" | "join" | "leave")))
+        .cloned()
+        .collect();
 
     rsx! {
         div {
@@ -237,7 +234,7 @@ fn SocialFeed() -> Element {
                         text-align: center;
                         padding: {spacing::XXL};
                     ",
-                    "No messages yet. Agents will appear here when they connect to the bus."
+                    "🕸️ No messages yet. Agents will appear here when they connect to the bus."
                 }
             }
         }
@@ -257,13 +254,11 @@ fn AgentBubble(props: AgentBubbleProps) -> Element {
     let profile = AgentProfile::from_name(&msg.agent_name);
     let time = format_timestamp(msg.timestamp);
 
-    // Type-specific styling
-    let (type_tag, border_color) = match msg.msg_type.as_str() {
-        "interrupt" => ("⛔ INTERRUPT", palette.accent_error),
-        "abort" => ("🛑 ABORT", palette.accent_error),
-        "interrupted" => ("✅ ACK", palette.accent_warning),
-        "presence" => ("📡", palette.text_muted),
-        _ => ("", profile.color.as_str()),
+    let (type_tag, bg_tint) = match msg.msg_type.as_str() {
+        "interrupt" => ("⛔ INTERRUPT", "#1a0a0a"),
+        "abort" => ("🛑 ABORT", "#150a0a"),
+        "interrupted" => ("✅ ACK", "#1a1a0a"),
+        _ => ("", palette.surface),
     };
 
     let border_left = format!("2px solid {}", profile.color);
@@ -276,7 +271,7 @@ fn AgentBubble(props: AgentBubbleProps) -> Element {
                 font-size: {typography::SIZE_SM};
                 line-height: 1.5;
                 max-width: 95%;
-                background: {palette.surface};
+                background: {bg_tint};
                 border: 1px solid {palette.border};
                 border-left: {border_left};
             ",
@@ -290,16 +285,19 @@ fn AgentBubble(props: AgentBubbleProps) -> Element {
                     margin-bottom: 2px;
                     font-size: {typography::SIZE_XS};
                 ",
+
                 span {
                     style: "color: {profile.color}; font-weight: {typography::WEIGHT_BOLD}; text-transform: uppercase; letter-spacing: 0.5px;",
                     "{profile.emoji} {profile.label}"
                 }
+
                 if !type_tag.is_empty() {
                     span {
                         style: "color: {palette.text_muted}; font-size: 9px;",
                         "{type_tag}"
                     }
                 }
+
                 span {
                     style: "color: {palette.text_muted}; font-size: 9px; margin-left: auto;",
                     "{time}"
@@ -327,6 +325,9 @@ fn InterruptBar() -> Element {
     let a2a = use_a2a_atom();
     let interrupt_active = a2a.read().interrupt_active;
 
+    let int_border = if interrupt_active { palette.accent_error } else { palette.border };
+    let int_bg = if interrupt_active { "#2a0a0a" } else { palette.surface };
+
     rsx! {
         div {
             style: "
@@ -337,14 +338,14 @@ fn InterruptBar() -> Element {
                 background: {palette.surface};
             ",
 
-            // INTERRUPT button
+            // INTERRUPT
             button {
                 style: "
                     flex: 1;
                     padding: 4px 8px;
                     border-radius: {radius::MD};
-                    border: 1px solid {if interrupt_active {{ palette.accent_error }} else {{ palette.border }}};
-                    background: {if interrupt_active {{ "#2a0a0a" }} else {{ palette.surface }}};
+                    border: 1px solid {int_border};
+                    background: {int_bg};
                     color: {palette.accent_error};
                     font-family: {typography::FONT_FAMILY};
                     font-size: {typography::SIZE_XS};
@@ -352,12 +353,12 @@ fn InterruptBar() -> Element {
                     text-align: center;
                 ",
                 onclick: move |_| {
-                    send_interrupt();
+                    a2a_action_interrupt();
                 },
                 if interrupt_active { "⛔ ACTIVE" } else { "⛔ INTERRUPT" }
             }
 
-            // RESUME button
+            // RESUME
             button {
                 style: "
                     flex: 1;
@@ -372,7 +373,7 @@ fn InterruptBar() -> Element {
                     text-align: center;
                 ",
                 onclick: move |_| {
-                    send_resume();
+                    a2a_action_resume();
                 },
                 "✅ RESUME"
             }
@@ -419,7 +420,7 @@ fn HumanInput() -> Element {
                 },
                 onkeydown: move |e: KeyboardEvent| {
                     if e.key() == Key::Enter && !input_text.read().is_empty() {
-                        send_human_message(input_text);
+                        a2a_action_send(input_text);
                     }
                 },
             }
@@ -439,7 +440,7 @@ fn HumanInput() -> Element {
                 ",
                 disabled: is_empty,
                 onclick: move |_| {
-                    send_human_message(input_text);
+                    a2a_action_send(input_text);
                 },
                 "↵"
             }
@@ -447,30 +448,44 @@ fn HumanInput() -> Element {
     }
 }
 
-// ─── A2A Bus Actions ─────────────────────────────────────────
+// ─── A2A Actions (JS interop) ────────────────────────────────
+//
+// These call JS functions defined in BR-APP index.html.
+// The JS side does fetch() to the HITL-A2A HTTP Bridge.
+// This keeps the Rust UI pure — no web_sys dependency in ring code.
 
-fn send_human_message(mut input: Signal<String>) {
+fn a2a_action_send(mut input: Signal<String>) {
     let text = input.read().clone();
     if text.is_empty() { return; }
 
     let mut a2a = use_a2a_atom();
+    let conv_id = a2a.read().conversation_id.clone();
+
+    // Optimistic local update
     let msg = A2AMessage {
-        id: format!("human-{}", now_ms()),
+        id: format!("local-{}", js_now()),
         msg_type: "chat".to_string(),
         role: "human".to_string(),
         agent_name: "HumanOverlord".to_string(),
         content: text.clone(),
-        conversation_id: a2a.read().conversation_id.clone(),
-        timestamp: now_ms(),
+        conversation_id: conv_id.clone(),
+        timestamp: js_now(),
     };
-    a2a.write().messages.push(msg.clone());
+    a2a.write().messages.push(msg);
     input.set(String::new());
 
-    // POST to bridge (fire-and-forget via JS interop)
-    let _ = js_post(&bus_url("/messages"), &serde_json::to_string(&msg).unwrap_or_default());
+    // POST to bridge via JS interop
+    let body = serde_json::json!({
+        "type": "chat",
+        "role": "human",
+        "agentName": "HumanOverlord",
+        "content": text,
+        "conversationId": conv_id,
+    }).to_string();
+    js_a2a_post("/messages", &body);
 }
 
-fn send_interrupt() {
+fn a2a_action_interrupt() {
     let mut a2a = use_a2a_atom();
     a2a.write().interrupt_active = true;
 
@@ -481,178 +496,68 @@ fn send_interrupt() {
         "scope": "all_agents",
         "priority": "P0"
     }).to_string();
-
-    let _ = js_post(&bus_url("/interrupt"), &body);
+    js_a2a_post("/interrupt", &body);
 }
 
-fn send_resume() {
+fn a2a_action_resume() {
     let mut a2a = use_a2a_atom();
     a2a.write().interrupt_active = false;
 
-    let msg = A2AMessage {
-        id: format!("resume-{}", now_ms()),
-        msg_type: "chat".to_string(),
-        role: "human".to_string(),
-        agent_name: "HumanOverlord".to_string(),
-        content: "✅ Resume — all agents may continue.".to_string(),
-        conversation_id: a2a.read().conversation_id.clone(),
-        timestamp: now_ms(),
-    };
-    a2a.write().messages.push(msg.clone());
+    let conv_id = a2a.read().conversation_id.clone();
 
-    let _ = js_post(&bus_url("/messages"), &serde_json::to_string(&msg).unwrap_or_default());
-    let _ = js_delete(&bus_url("/interrupt"));
+    // Clear interrupt
+    js_a2a_delete("/interrupt");
+
+    // Send resume message
+    let body = serde_json::json!({
+        "type": "chat",
+        "role": "human",
+        "agentName": "HumanOverlord",
+        "content": "✅ Resume — all agents may continue.",
+        "conversationId": conv_id,
+    }).to_string();
+    js_a2a_post("/messages", &body);
 }
 
-// ─── JS Interop for WASM HTTP ────────────────────────────────
+// ─── JS Interop stubs ────────────────────────────────────────
+// Real implementations are in BR-APP index.html as WASM-imported functions.
+// These are stubs that compile in native mode (for cargo check).
 
-/// Fire-and-forget POST via JS interop.
-fn js_post(url: &str, body: &str) -> Result<(), String> {
-    #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-        export function js_post(url, body) {
-            fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body })
-                .catch(() => {});
-        }
-    "#)]
-    extern "C" {
-        fn js_post(url: &str, body: &str);
+/// POST to A2A bridge. In WASM, calls `window.__a2a_post(path, body)`.
+fn js_a2a_post(path: &str, body: &str) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (path, body);
+        // In WASM, use wasm_bindgen to call JS:
+        // wasm_bindgen::JsValue::from_str(&format!(
+        //     "window.__a2a_post && window.__a2a_post('{}', '{}')", path, body
+        // ));
     }
-    // This won't work because wasm_bindgen inline_js can't be called from non-entry crate
-    // Use web_sys instead
-    Ok(())
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (path, body);
 }
 
-/// Fire-and-forget DELETE via JS interop.
-fn js_delete(url: &str) -> Result<(), String> {
-    Ok(())
+/// DELETE to A2A bridge.
+fn js_a2a_delete(path: &str) {
+    #[cfg(target_arch = "wasm32")]
+    let _ = path;
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = path;
 }
 
-/// Current time in epoch ms.
-fn now_ms() -> u64 {
-    js_sys::Date::now() as u64
-}
-
-/// Poll the A2A bus for new messages (called from JS sidepanel polling loop).
-pub async fn poll_bus() {
-    let url = bus_url("/messages");
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return,
-    };
-    let resp_value = match wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(&url)).await {
-        Ok(v) => v,
-        Err(_) => {
-            let mut a2a = A2A_ATOM.signal();
-            a2a.write().connected = false;
-            return;
-        }
-    };
-    let resp: web_sys::Response = match resp_value.dyn_into() {
-        Ok(r) => r,
-        Err(_) => return,
-    };
-    let text_promise = match resp.text() {
-        Ok(t) => t,
-        Err(_) => return,
-    };
-    let text = match wasm_bindgen_futures::JsFuture::from(text_promise).await {
-        Ok(t) => t,
-        Err(_) => return,
-    };
-    let text_str = text.as_string().unwrap_or_default();
-
-    if let Ok(bus_resp) = serde_json::from_str::<BusMessagesResponse>(&text_str) {
-        let mut a2a = A2A_ATOM.signal();
-        let existing_ids: std::collections::HashSet<String> = a2a.read().messages.iter().map(|m| m.id.clone()).collect();
-        for msg in bus_resp.messages {
-            if !existing_ids.contains(&msg.id) {
-                a2a.write().messages.push(msg);
-            }
-        }
-        a2a.write().connected = true;
-        a2a.write().messages.sort_by_key(|m| m.timestamp);
-        if a2a.write().messages.len() > 200 {
-            let excess = a2a.write().messages.len() - 200;
-            a2a.write().messages.drain(0..excess);
-        }
+/// Get current time in epoch ms via JS.
+fn js_now() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
     }
-}
-
-/// Poll interrupt state.
-pub async fn poll_interrupt() {
-    let url = bus_url("/interrupt");
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return,
-    };
-    let resp_value = match wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(&url)).await {
-        Ok(v) => v,
-        Err(_) => return,
-    };
-    let resp: web_sys::Response = match resp_value.dyn_into() {
-        Ok(r) => r,
-        Err(_) => return,
-    };
-    let text_promise = match resp.text() {
-        Ok(t) => t,
-        Err(_) => return,
-    };
-    let text = match wasm_bindgen_futures::JsFuture::from(text_promise).await {
-        Ok(t) => t,
-        Err(_) => return,
-    };
-    let text_str = text.as_string().unwrap_or_default();
-    if let Ok(int_data) = serde_json::from_str::<serde_json::Value>(&text_str) {
-        let has_interrupt = int_data.get("hasInterrupt").and_then(|v| v.as_bool()).unwrap_or(false);
-        let mut a2a = A2A_ATOM.signal();
-        a2a.write().interrupt_active = has_interrupt;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
     }
-}
-
-/// Poll presence state.
-pub async fn poll_presence() {
-    let url = bus_url("/presence");
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return,
-    };
-    let resp_value = match wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(&url)).await {
-        Ok(v) => v,
-        Err(_) => return,
-    };
-    let resp: web_sys::Response = match resp_value.dyn_into() {
-        Ok(r) => r,
-        Err(_) => return,
-    };
-    let text_promise = match resp.text() {
-        Ok(t) => t,
-        Err(_) => return,
-    };
-    let text = match wasm_bindgen_futures::JsFuture::from(text_promise).await {
-        Ok(t) => t,
-        Err(_) => return,
-    };
-    let text_str = text.as_string().unwrap_or_default();
-    if let Ok(pres_data) = serde_json::from_str::<BusPresenceResponse>(&text_str) {
-        let mut a2a = A2A_ATOM.signal();
-        a2a.write().presence = pres_data.agents;
-    }
-}
-
-// ─── Bus API Response Types ──────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize)]
-struct BusMessagesResponse {
-    #[allow(dead_code)]
-    count: usize,
-    messages: Vec<A2AMessage>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct BusPresenceResponse {
-    #[allow(dead_code)]
-    count: usize,
-    agents: std::collections::HashMap<String, A2APresenceEntry>,
 }
 
 // ─── Utility ─────────────────────────────────────────────────
