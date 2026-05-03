@@ -188,7 +188,7 @@ impl A2AState {
     /// Check if an agent is online (seen within 120s).
     pub fn is_agent_online(&self, name: &str) -> bool {
         self.presence.get(name).map_or(false, |e| {
-            let now = js_sys::Date::now() as u64;
+            let now = now_ms();
             now.saturating_sub(e.last_seen) < 120_000
         })
     }
@@ -264,6 +264,23 @@ impl AgentProfile {
             "phi-t27" => Self::phi_t27(),
             _ => Self { name: name.into(), emoji: "❓".into(), label: name.into(), color: "#666".into(), desc: String::new() },
         }
+    }
+}
+
+// ─── Utility ─────────────────────────────────────────────────
+
+/// Get current time in epoch ms. Uses js_sys in WASM, std in native.
+fn now_ms() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
     }
 }
 

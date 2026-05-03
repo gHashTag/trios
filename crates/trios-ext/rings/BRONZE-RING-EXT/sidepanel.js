@@ -298,9 +298,15 @@ function renderTab() {
 }
 
 function renderSocialFeed(container) {
-  const msgs = state.activeFilter
+  let msgs = state.activeFilter
     ? state.messages.filter(m => m.agentName === state.activeFilter)
     : state.messages;
+
+  // Filter out heartbeat/presence noise — keep only meaningful messages
+  msgs = msgs.filter(m => {
+    if (m.type === 'presence' && (m.content === 'heartbeat' || m.content === 'join' || m.content === 'leave')) return false;
+    return true;
+  });
 
   if (msgs.length === 0) {
     container.innerHTML = '<div class="empty">🕸️ No messages yet.<br>Agents will appear here when they connect to the bus.</div>';
