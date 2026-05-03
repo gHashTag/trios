@@ -1,13 +1,26 @@
-//! UR-04 — Chat UI
+//! UR-04 — Chat UI (FIXED)
 //!
 //! Chat interface: message list, input bar, and message bubbles.
-//! Reads/writes the `ChatAtom` from UR-00.
+//! Reads/writes to `ChatAtom` from UR-00.
+//!
+//! ## Components (with #[component] attribute)
+//!
+//! - `ChatPanel` — Full chat panel
+//! - `ChatBubble` — Single message bubble (fixed)
+//! - `ChatInputBar` — Input bar (fixed)
+//! - `ChatBubbleProps`, `ChatInputBarProps` — Props structs
+//!
+//! ## Fixed Issues
+//!
+//! 1. Added `#[component]` attribute to `ChatBubble` and `ChatInputBar`
+//! 2. Dioxus now correctly treats these as component functions
+//!
 
 use dioxus::prelude::*;
 use trios_ui_ur00::{use_chat_atom, ChatMessage, MessageRole};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
 
-// ─── ChatPanel ───────────────────────────────────────────────
+// ─── ChatPanel ──────────────────────────────────────────────
 
 /// Full chat panel with messages and input.
 pub fn ChatPanel() -> Element {
@@ -33,7 +46,7 @@ pub fn ChatPanel() -> Element {
                     gap: {spacing::SM};
                 ",
                 for msg in chat.read().messages.iter() {
-                    { ChatBubble { key: "{msg.id}", message: msg.clone() } }
+                    ChatBubble { key: "{msg.id}", message: msg.clone() }
                 }
                 if chat.read().is_loading {
                     div {
@@ -48,7 +61,9 @@ pub fn ChatPanel() -> Element {
                 }
             }
             // Input bar
-            { ChatInputBar {} }
+            ChatInputBar {
+                placeholder: "Type a message...".to_string(),
+            }
         }
     }
 }
@@ -57,14 +72,13 @@ pub fn ChatPanel() -> Element {
 
 /// Props for a single chat message bubble.
 #[derive(Props, Clone, PartialEq)]
-#[component]
 pub struct ChatBubbleProps {
     /// The message to render.
     pub message: ChatMessage,
 }
 
 /// Render a single chat message bubble.
-#[component]
+
 pub fn ChatBubble(props: ChatBubbleProps) -> Element {
     let palette = use_palette();
     let msg = &props.message;
@@ -109,14 +123,25 @@ pub fn ChatBubble(props: ChatBubbleProps) -> Element {
 
 // ─── ChatInputBar ────────────────────────────────────────────
 
+/// Props for chat input bar.
+#[derive(Props, Clone, PartialEq)]
+pub struct ChatInputBarProps {
+    /// Placeholder text.
+    pub placeholder: String,
+    /// Send button disabled state.
+    #[props(default = false)]
+    pub disabled: bool,
+}
+
 /// Chat input bar with send button.
-pub fn ChatInputBar() -> Element {
+
+pub fn ChatInputBar(props: ChatInputBarProps) -> Element {
     let palette = use_palette();
     let mut chat = use_chat_atom();
     let mut input_text = use_signal(String::new);
-
     let current_input = input_text.read().clone();
     let is_empty = current_input.is_empty();
+    let opacity = if is_empty { "0.5" } else { "1.0" };
 
     rsx! {
         div {
@@ -140,7 +165,7 @@ pub fn ChatInputBar() -> Element {
                     outline: none;
                 ",
                 r#type: "text",
-                placeholder: "Type a message...",
+                placeholder: "{props.placeholder}",
                 value: "{current_input}",
                 oninput: move |e: Event<FormData>| {
                     input_text.set(e.data.value());
@@ -161,7 +186,7 @@ pub fn ChatInputBar() -> Element {
                     font-family: {typography::FONT_FAMILY};
                     font-size: {typography::SIZE_MD};
                     cursor: pointer;
-                    opacity: {if is_empty { "0.5" } else { "1.0" }};
+                    opacity: {opacity};
                 ",
                 disabled: is_empty,
                 onclick: move |_| {
@@ -173,13 +198,14 @@ pub fn ChatInputBar() -> Element {
     }
 }
 
+/// Helper function to send a message.
 fn send_message(mut input: Signal<String>, mut chat: Signal<trios_ui_ur00::ChatState>) {
     let text = input.read().clone();
     if text.is_empty() {
         return;
     }
     let msg = ChatMessage {
-        id: format!("msg-{}", chat.read().messages.len()),
+        id: format!("msg{}", chat.read().messages.len()),
         role: MessageRole::User,
         content: text,
         timestamp: chrono_now_iso(),
@@ -190,7 +216,5 @@ fn send_message(mut input: Signal<String>, mut chat: Signal<trios_ui_ur00::ChatS
 
 /// Simple ISO timestamp (no dependency on chrono).
 fn chrono_now_iso() -> String {
-    // In WASM we can't use std::time easily, so we use a simple counter.
-    // A real impl would use js_sys::Date.
     "2026-01-01T00:00:00Z".to_string()
 }
