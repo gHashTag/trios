@@ -14,6 +14,8 @@ use trios_ui_ur03::{NavItem, Sidebar};
 /// Available app routes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Route {
+    /// Social feed (A2A agent chat).
+    Social,
     /// Chat panel.
     Chat,
     /// Agent list.
@@ -28,6 +30,7 @@ impl Route {
     /// Get the navigation label.
     pub fn label(&self) -> &'static str {
         match self {
+            Route::Social => "Social",
             Route::Chat => "Chat",
             Route::Agents => "Agents",
             Route::Mcp => "MCP",
@@ -38,6 +41,7 @@ impl Route {
     /// Get the navigation icon.
     pub fn icon(&self) -> &'static str {
         match self {
+            Route::Social => "🕸️",
             Route::Chat => "💬",
             Route::Agents => "🤖",
             Route::Mcp => "🔌",
@@ -47,7 +51,7 @@ impl Route {
 
     /// All routes in sidebar order.
     pub fn all() -> Vec<Route> {
-        vec![Route::Chat, Route::Agents, Route::Mcp, Route::Settings]
+        vec![Route::Social, Route::Chat, Route::Agents, Route::Mcp, Route::Settings]
     }
 }
 
@@ -57,8 +61,8 @@ impl Route {
 /// Renders sidebar + content area based on active route.
 pub fn AppShell() -> Element {
     let palette = use_palette();
-    let mut active_route = use_signal(|| Route::Chat);
-    let settings = use_settings_atom();
+    let mut active_route = use_signal(|| Route::Social);
+    let _settings = use_settings_atom();
 
     let nav_items: Vec<NavItem> = Route::all()
         .iter()
@@ -125,6 +129,7 @@ pub fn AppShell() -> Element {
 /// Render the content for a given route.
 fn render_route(route: Route) -> Element {
     match route {
+        Route::Social => rsx! { trios_ui_ur09::SocialPanel {} },
         Route::Chat => rsx! { trios_ui_ur04::ChatPanel {} },
         Route::Agents => rsx! { trios_ui_ur05::AgentList {} },
         Route::Mcp => rsx! { trios_ui_ur06::McpPanel {} },
@@ -139,9 +144,7 @@ fn render_route(route: Route) -> Element {
 /// This is the primary entry point called by the root `trios-ui` crate
 /// and by `trios-ext` via `trios_ui::mount_app()`.
 pub fn mount_app() {
-    let cfg = dioxus::Config::new();
-    let dom = VirtualDom::new(AppShell);
+    let _dom = VirtualDom::new(AppShell);
     // In a real WASM build, this would use dioxus::web::launch_cfg
     // For now, we just ensure the VirtualDom is created successfully.
-    log::info!("Trinity UI mounted (Dioxus VirtualDom created)");
 }

@@ -42,31 +42,46 @@ pub fn SettingsPanel() -> Element {
                 "⚙ Settings"
             }
             // Theme section
-            { SettingsSection {
-                title: "Appearance".to_string(),
-                children: rsx! {
-                    div {
-                        style: "display: flex; align-items: center; justify-content: space-between;",
-                        span {
-                            style: "
-                                font-family: {typography::FONT_FAMILY};
-                                font-size: {typography::SIZE_MD};
-                                color: {palette.text};
-                            ",
-                            "Theme: {theme_label}"
-                        }
-                        Button {
-                            children: "Toggle Theme".to_string(),
-                            variant: ButtonVariant::Secondary,
-                            onclick: move |_| { toggle_theme(); },
-                        }
+            div {
+                style: "
+                    display: flex;
+                    flex-direction: column;
+                    gap: {spacing::SM};
+                    background: {palette.surface};
+                    border: 1px solid {palette.border};
+                    border-radius: {radius::LG};
+                    padding: {spacing::MD};
+                ",
+                div {
+                    style: "
+                        font-family: {typography::FONT_FAMILY};
+                        font-size: {typography::SIZE_SM};
+                        font-weight: {typography::WEIGHT_BOLD};
+                        color: {palette.text_muted};
+                    ",
+                    "Appearance"
+                }
+                div {
+                    style: "display: flex; align-items: center; justify-content: space-between;",
+                    span {
+                        style: "
+                            font-family: {typography::FONT_FAMILY};
+                            font-size: {typography::SIZE_MD};
+                            color: {palette.text};
+                        ",
+                        "Theme: {theme_label}"
                     }
-                },
-            } }
+                    Button {
+                        variant: ButtonVariant::Secondary,
+                        onclick: move |_| { toggle_theme(); },
+                        "Toggle Theme"
+                    }
+                }
+            }
             // API Key section
-            { ApiKeySection {} }
+            ApiKeySection {}
             // MCP Server URL section (local + public endpoint switcher)
-            { McpUrlSection {} }
+            McpUrlSection {}
         }
     }
 }
@@ -113,6 +128,7 @@ pub fn SettingsSection(props: SettingsSectionProps) -> Element {
 
 fn ApiKeySection() -> Element {
     let mut settings = use_settings_atom();
+    let palette = use_palette();
     let api_key = settings.read().api_key.clone();
     let masked = if api_key.is_empty() {
         String::new()
@@ -121,8 +137,25 @@ fn ApiKeySection() -> Element {
     };
 
     rsx! {
-        SettingsSection {
-            title: "API Key".to_string(),
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                gap: {spacing::SM};
+                background: {palette.surface};
+                border: 1px solid {palette.border};
+                border-radius: {radius::LG};
+                padding: {spacing::MD};
+            ",
+            div {
+                style: "
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_SM};
+                    font-weight: {typography::WEIGHT_BOLD};
+                    color: {palette.text_muted};
+                ",
+                "API Key"
+            }
             Input {
                 placeholder: "Enter z.ai API key...".to_string(),
                 value: masked,
@@ -150,9 +183,37 @@ fn McpUrlSection() -> Element {
     let is_local = mcp_url == URL_LOCAL || mcp_url.starts_with("http://localhost");
     let is_public = mcp_url.contains("tail01804b.ts.net");
 
+    let (local_border, local_bg, local_color) = if is_local {
+        (palette.primary, palette.primary, palette.background)
+    } else {
+        (palette.border, palette.surface, palette.text)
+    };
+    let (public_border, public_bg, public_color) = if is_public {
+        (palette.primary, palette.primary, palette.background)
+    } else {
+        (palette.border, palette.surface, palette.text)
+    };
+
     rsx! {
-        SettingsSection {
-            title: "MCP Server".to_string(),
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                gap: {spacing::SM};
+                background: {palette.surface};
+                border: 1px solid {palette.border};
+                border-radius: {radius::LG};
+                padding: {spacing::MD};
+            ",
+            div {
+                style: "
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_SM};
+                    font-weight: {typography::WEIGHT_BOLD};
+                    color: {palette.text_muted};
+                ",
+                "MCP Server"
+            }
             // Quick-select row
             div {
                 style: "display: flex; gap: {spacing::SM}; margin-bottom: {spacing::XS};",
@@ -162,9 +223,9 @@ fn McpUrlSection() -> Element {
                         flex: 1;
                         padding: 6px 0;
                         border-radius: {radius::MD};
-                        border: 1px solid {if is_local { palette.accent } else { palette.border }};
-                        background: {if is_local { palette.accent } else { palette.surface }};
-                        color: {if is_local { palette.background } else { palette.text }};
+                        border: 1px solid {local_border};
+                        background: {local_bg};
+                        color: {local_color};
                         font-family: {typography::FONT_FAMILY};
                         font-size: {typography::SIZE_SM};
                         cursor: pointer;
@@ -180,9 +241,9 @@ fn McpUrlSection() -> Element {
                         flex: 1;
                         padding: 6px 0;
                         border-radius: {radius::MD};
-                        border: 1px solid {if is_public { palette.accent } else { palette.border }};
-                        background: {if is_public { palette.accent } else { palette.surface }};
-                        color: {if is_public { palette.background } else { palette.text }};
+                        border: 1px solid {public_border};
+                        background: {public_bg};
+                        color: {public_color};
                         font-family: {typography::FONT_FAMILY};
                         font-size: {typography::SIZE_SM};
                         cursor: pointer;
