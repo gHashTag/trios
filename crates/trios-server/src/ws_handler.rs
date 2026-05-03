@@ -22,6 +22,27 @@ pub enum BusEvent {
     AgentConnected { agent_id: String },
     AgentDisconnected { agent_id: String },
     A2AMessage { from: String, to: Option<String>, content: Value },
+    /// Queen → Doctor: an order to perform an action.
+    /// Mirrors `.trinity/queen/actions.json` action ids (e.g. "doctor scan", "doctor heal").
+    /// Constitutional anchor: AGENTS.md AGENT T 6-phase cycle, phase ASSIGN.
+    QueenOrder {
+        order_id: String,
+        action: String,
+        target_agent: String,
+        params: Value,
+        ts: i64,
+    },
+    /// Doctor → Queen: report on order completion.
+    /// Mirrors trios-doctor `WorkspaceCheck`/`CheckStatus` output.
+    /// Constitutional anchor: AGENTS.md AGENT T 6-phase cycle, phase VERDICT.
+    DoctorReport {
+        order_id: String,
+        agent_id: String,
+        status: String,
+        summary: String,
+        diagnosis: Value,
+        ts: i64,
+    },
 }
 
 #[derive(Clone)]
@@ -219,6 +240,16 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         "a2a/assign_task"     => mcp_endpoints::a2a::assign_task(state, req.params).await,
         "a2a/task_status"     => mcp_endpoints::a2a::task_status(state, req.params).await,
         "a2a/update_task"     => mcp_endpoints::a2a::update_task(state, req.params).await,
+        // ─────────────────────────────────────────────────────────────────────
+        // Queen ↔ Doctor autonomous loop (issue: bee/queen-doctor-autoloop)
+        //   queen/order  : Queen publishes a QueenOrder onto the bus.
+        //                  Params: { action, target_agent, params? }
+        //   doctor/report: Doctor publishes a DoctorReport onto the bus.
+        //                  Params: { order_id, agent_id, status, summary, diagnosis }
+        // Both methods are append-only broadcasts (constitutional L21).
+        // ─────────────────────────────────────────────────────────────────────
+        "queen/order"         => queen_order_publish(state, req.params).await,
+        "doctor/report"       => doctor_report_publish(state, req.params).await,
         _ => json!({"error": format!("unknown method: {}", req.method)}),
     };
 
@@ -228,6 +259,86 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
 async fn tools_list(state: &AppState) -> Value {
     let list = state.mcp.list_tools();
     serde_json::to_value(list.tools).unwrap_or(json!({"error": "serialize failed"}))
+}
+
+/// Helper: current unix timestamp in seconds.
+fn epoch_secs_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Publish a `BusEvent::QueenOrder` onto the broadcast bus.
+/// Consumed by Doctor loop subscribers via `/ws` socket.
+pub async fn queen_order_publish(state: &AppState, params: Option<Value>) -> Value {
+    let p = params.unwrap_or(json!({}));
+    let action = p.get("action").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    if action.is_empty() {
+        return json!({"error": "missing field: action"});
+    }
+    let target_agent = p
+        .get("target_agent")
+        .and_then(|v| v.as_str())
+        .unwrap_or("doctor")
+        .to_string();
+    let inner_params = p.get("params").cloned().unwrap_or(json!({}));
+    let order_id = uuid::Uuid::new_v4().to_string();
+    let ts = epoch_secs_now();
+
+    let event = BusEvent::QueenOrder {
+        order_id: order_id.clone(),
+        action: action.clone(),
+        target_agent: target_agent.clone(),
+        params: inner_params,
+        ts,
+    };
+    state.broadcast_event(event);
+
+    json!({
+        "ok": true,
+        "order_id": order_id,
+        "action": action,
+        "target_agent": target_agent,
+        "ts": ts,
+    })
+}
+
+/// Publish a `BusEvent::DoctorReport` onto the broadcast bus.
+/// Consumed by Queen loop subscribers via `/operator` socket.
+pub async fn doctor_report_publish(state: &AppState, params: Option<Value>) -> Value {
+    let p = params.unwrap_or(json!({}));
+    let order_id = p.get("order_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    if order_id.is_empty() {
+        return json!({"error": "missing field: order_id"});
+    }
+    let agent_id = p
+        .get("agent_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("doctor")
+        .to_string();
+    let status = p.get("status").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+    let summary = p.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let diagnosis = p.get("diagnosis").cloned().unwrap_or(json!({}));
+    let ts = epoch_secs_now();
+
+    let event = BusEvent::DoctorReport {
+        order_id: order_id.clone(),
+        agent_id: agent_id.clone(),
+        status: status.clone(),
+        summary,
+        diagnosis,
+        ts,
+    };
+    state.broadcast_event(event);
+
+    json!({
+        "ok": true,
+        "order_id": order_id,
+        "agent_id": agent_id,
+        "status": status,
+        "ts": ts,
+    })
 }
 
 async fn tools_call(state: &AppState, params: Option<Value>) -> Value {
@@ -383,6 +494,91 @@ mod tests {
         let result = mcp_endpoints::a2a::broadcast(&state, Some(params)).await;
         assert_eq!(result["ok"], true);
         assert_eq!(result["recipients"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_queen_order_publish_broadcasts_event() {
+        let state = AppState::new();
+        let mut rx = state.event_tx.subscribe();
+
+        let params = json!({
+            "action": "doctor scan",
+            "target_agent": "doctor",
+            "params": {"reason": "unit-test"}
+        });
+        let result = queen_order_publish(&state, Some(params)).await;
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["action"], "doctor scan");
+        assert_eq!(result["target_agent"], "doctor");
+        let order_id = result["order_id"].as_str().unwrap().to_string();
+        assert!(!order_id.is_empty());
+
+        let received = tokio::time::timeout(
+            tokio::time::Duration::from_millis(100),
+            rx.recv(),
+        )
+        .await
+        .expect("queen order broadcast should arrive within 100ms")
+        .expect("broadcast channel should not be closed");
+
+        match received {
+            BusEvent::QueenOrder { order_id: oid, action, target_agent, .. } => {
+                assert_eq!(oid, order_id);
+                assert_eq!(action, "doctor scan");
+                assert_eq!(target_agent, "doctor");
+            }
+            other => panic!("expected BusEvent::QueenOrder, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_queen_order_publish_rejects_missing_action() {
+        let state = AppState::new();
+        let result = queen_order_publish(&state, Some(json!({}))).await;
+        assert!(result.get("error").is_some(), "expected error field, got {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_doctor_report_publish_broadcasts_event() {
+        let state = AppState::new();
+        let mut rx = state.event_tx.subscribe();
+
+        let params = json!({
+            "order_id": "test-order-123",
+            "agent_id": "doctor",
+            "status": "green",
+            "summary": "workspace clean",
+            "diagnosis": {"checks": []}
+        });
+        let result = doctor_report_publish(&state, Some(params)).await;
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["order_id"], "test-order-123");
+        assert_eq!(result["status"], "green");
+
+        let received = tokio::time::timeout(
+            tokio::time::Duration::from_millis(100),
+            rx.recv(),
+        )
+        .await
+        .expect("doctor report broadcast should arrive within 100ms")
+        .expect("broadcast channel should not be closed");
+
+        match received {
+            BusEvent::DoctorReport { order_id, agent_id, status, summary, .. } => {
+                assert_eq!(order_id, "test-order-123");
+                assert_eq!(agent_id, "doctor");
+                assert_eq!(status, "green");
+                assert_eq!(summary, "workspace clean");
+            }
+            other => panic!("expected BusEvent::DoctorReport, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_doctor_report_publish_rejects_missing_order_id() {
+        let state = AppState::new();
+        let result = doctor_report_publish(&state, Some(json!({"status": "green"}))).await;
+        assert!(result.get("error").is_some(), "expected error field, got {:?}", result);
     }
 
     #[tokio::test]
