@@ -7,12 +7,11 @@
 use dioxus::prelude::*;
 use trios_ui_ur00::{use_mcp_atom, McpTool};
 use trios_ui_ur01::{use_palette, radius, spacing, typography};
-use trios_ui_ur02::{badge, BadgeVariant, button, ButtonVariant};
+use trios_ui_ur02::{Badge, BadgeVariant};
 
 // ─── McpPanel ────────────────────────────────────────────────
 
 /// Full MCP tools panel.
-#[component]
 pub fn McpPanel() -> Element {
     let palette = use_palette();
     let mcp = use_mcp_atom();
@@ -48,7 +47,7 @@ pub fn McpPanel() -> Element {
                 }
                 Badge {
                     variant: if connected { BadgeVariant::Success } else { BadgeVariant::Error },
-                    {if connected { "connected" } else { "disconnected" }}
+                    if connected { "connected" } else { "disconnected" }
                 }
             }
             // Server URL
@@ -90,7 +89,7 @@ pub struct McpToolCardProps {
 }
 
 /// Render a single MCP tool with name, description, and execute button.
-#[component]
+
 pub fn McpToolCard(props: McpToolCardProps) -> Element {
     let palette = use_palette();
     let tool = &props.tool;
