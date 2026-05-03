@@ -28,6 +28,8 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+mod render;
+
 const TRINITY_ANCHOR: &str = "phi^2 + phi^-2 = 3";
 const R11_BIB_FLOOR: usize = 150;
 const R3_CHAPTER_MIN_LINES: usize = 1500; // R3 long-form floor (warn-only here).
@@ -67,6 +69,21 @@ enum Cmd {
     },
     /// Compile `main.tex` via the system `tectonic` binary.
     Compile,
+    /// v5.1 render pipeline — pull `ssot.chapters` from Neon, preprocess
+    /// `body_md`, build cover + 44 chapters with continuous page numbers,
+    /// concatenate to `monograph.pdf`. R1-honest replacement for the
+    /// previous `docs/phd-pipeline-v5/{render,compile_all}.sh` scripts.
+    Render {
+        /// Workdir for intermediate + final artefacts.
+        /// Defaults to `<phd_root>/render-out`.
+        #[arg(long)]
+        workdir: Option<PathBuf>,
+        /// Neon connection string. If absent, the renderer falls back to
+        /// `<workdir>/chapters.json` (created on the previous run) or to
+        /// the `NEON_URL` environment variable.
+        #[arg(long)]
+        neon_url: Option<String>,
+    },
 }
 
 // -------------------------------------------------------------------------
@@ -356,6 +373,14 @@ fn main() -> ExitCode {
         Cmd::CoqMap { check } => coq_map(&cli.phd_root, *check),
         Cmd::Reproduce { out } => reproduce(&cli.phd_root, out.clone()),
         Cmd::Compile => compile(&cli.phd_root),
+        Cmd::Render { workdir, neon_url } => {
+            let wd = workdir.clone().unwrap_or_else(||
+                cli.phd_root.join("render-out"));
+            let url = neon_url.clone()
+                .or_else(|| std::env::var("NEON_URL").ok());
+            let cfg = render::RenderConfig::new(wd, url);
+            render::run(&cfg)
+        }
     };
     match r {
         Ok(()) => ExitCode::SUCCESS,

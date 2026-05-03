@@ -146,6 +146,28 @@ cargo clippy --all-targets -- -D warnings || exit 1
 - UI ring-план (UR-00..UR-08 + BR-APP): **issue #243**
 - LAWS.md (I1–I20): **issue #235**
 - Эталон: `crates/trios-a2a/` (8 SR-rings + BR-OUTPUT, 84 tests)
+- PhD render lane (Flos Aureus + Neon): **`docs/phd/skills/phd-pipeline-v5/SKILL.md`**
+- PhD skill catalogue: **`docs/phd/skills/README.md`**
+
+---
+
+## 📚 PhD lane — quick pointer for agents
+
+When the operator asks to **render the PhD monograph**, rebuild the unified
+PDF, update a Flos Aureus chapter (`FA.NN`), fix the cover, work with
+Part I / Part II dividers, or touch `crates/trios-phd/src/render/` —
+**load this skill first**:
+
+```
+docs/phd/skills/phd-pipeline-v5/SKILL.md
+```
+
+It covers: Neon SoT schema (`ssot.chapters`), the 6-bucket canonical
+order, the chunked-CTE write technique for >25 KB bodies, the
+fault-tolerant render loop, the cover-as-sealed-asset rule (commit
+`8c3adb1`), and the full anomaly→corrective-action catalogue.
+
+Constitutional anchor: \( \varphi^{2} + \varphi^{-2} = 3 \).
 
 ---
 
