@@ -1,0 +1,116 @@
+% App.I — XDC Pin Map QMTech XC7A100T / XC7A200T
+% φ² + φ⁻² = 3 · Trinity S³AI
+% Author: Dmitrii Vasilev (ORCID 0009-0008-4294-6159)
+
+\chapter*{Appendix I: XDC Pin Map — QMTech XC7A100T/200T}
+\addcontentsline{toc}{chapter}{Appendix I: XDC Pin Map}
+\label{app:xdc-pin-map}
+
+\textbf{Anchor invariant:} \(\varphi^2 + \varphi^{-2} = 3\).
+
+\section*{I.1 Board Overview}
+
+The QMTech XC7A100T Starter Kit (actual device: XC7A200T, see Appendix~F)
+exposes FPGA I/O through a 2×40-pin expansion header (P1/P2) and an on-board
+50~MHz oscillator. The following XDC constraints were validated against the
+schematic revision~2.1 and confirmed functional via UART loopback test
+(Chapter~\ref{ch:32}).
+
+\section*{I.2 Clock}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Signal} & \textbf{FPGA Pin} & \textbf{Standard} & \textbf{Note} \\
+\midrule
+clk\_50mhz & U18 & LVCMOS33 & On-board oscillator \\
+\bottomrule
+\end{tabular}
+\caption{Clock constraint.}
+\end{table}
+
+\begin{verbatim}
+create_clock -period 20.000 -name clk50 [get_ports clk_50mhz]
+set_property PACKAGE_PIN U18 [get_ports clk_50mhz]
+set_property IOSTANDARD LVCMOS33 [get_ports clk_50mhz]
+\end{verbatim}
+
+\section*{I.3 UART (P1 Header)}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lllll}
+\toprule
+\textbf{Signal} & \textbf{Pin} & \textbf{Header} & \textbf{Std} & \textbf{Dir} \\
+\midrule
+uart\_tx & D20 & P1-11 & LVCMOS33 & Out \\
+uart\_rx & E19 & P1-13 & LVCMOS33 & In \\
+\bottomrule
+\end{tabular}
+\caption{UART pins, validated via \texttt{picocom -b 115200 /dev/cu.usbserial-10}.}
+\end{table}
+
+\section*{I.4 LED}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Signal} & \textbf{Pin} & \textbf{Std} & \textbf{Note} \\
+\midrule
+led[0] & R14 & LVCMOS33 & Active HIGH \\
+led[1] & P14 & LVCMOS33 & Active HIGH \\
+led[2] & N16 & LVCMOS33 & Active HIGH \\
+led[3] & M16 & LVCMOS33 & Active HIGH \\
+\bottomrule
+\end{tabular}
+\caption{On-board LEDs.}
+\end{table}
+
+\section*{I.5 JTAG WiFi Bridge (ESP32 → FPGA)}
+
+The JTAG signals are brought out via P2 header to the ESP32 XVC bridge.
+Pinout confirmed functional (IDCODE~\texttt{0x13631093}, STAT~\texttt{0x401079FC}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lllll}
+\toprule
+\textbf{JTAG} & \textbf{ESP32 GPIO} & \textbf{P2 Pin} & \textbf{FPGA Pin} & \textbf{Wire} \\
+\midrule
+TMS & IO18 & P2-3 & — & Yellow \\
+TCK & IO19 & P2-5 & — & Blue \\
+TDI & IO23 & P2-7 & — & Green \\
+TDO & IO35 & P2-9 & — & White \\
+GND & GND & P2-2 & — & Black \\
+\bottomrule
+\end{tabular}
+\caption{JTAG wiring. IO35 on ESP32 is input-only — correct for TDO (FPGA output).}
+\end{table}
+
+\section*{I.6 Full XDC Listing}
+
+\begin{verbatim}
+## Clock
+set_property PACKAGE_PIN U18 [get_ports clk_50mhz]
+set_property IOSTANDARD LVCMOS33 [get_ports clk_50mhz]
+create_clock -period 20.000 -name clk50 [get_ports clk_50mhz]
+
+## UART
+set_property PACKAGE_PIN D20 [get_ports uart_tx]
+set_property IOSTANDARD LVCMOS33 [get_ports uart_tx]
+set_property PACKAGE_PIN E19 [get_ports uart_rx]
+set_property IOSTANDARD LVCMOS33 [get_ports uart_rx]
+
+## LEDs
+set_property PACKAGE_PIN R14 [get_ports {led[0]}]
+set_property PACKAGE_PIN P14 [get_ports {led[1]}]
+set_property PACKAGE_PIN N16 [get_ports {led[2]}]
+set_property PACKAGE_PIN M16 [get_ports {led[3]}]
+set_property IOSTANDARD LVCMOS33 [get_ports led]
+
+## Timing false paths (async outputs)
+set_false_path -to [get_ports uart_tx]
+set_false_path -to [get_ports led]
+\end{verbatim}

@@ -1,0 +1,116 @@
+% App.F — FPGA Bitstream + SHA-256
+% φ² + φ⁻² = 3 · Trinity S³AI
+% Author: Dmitrii Vasilev (ORCID 0009-0008-4294-6159)
+
+\chapter*{Appendix F: FPGA Bitstream Archive}
+\addcontentsline{toc}{chapter}{Appendix F: FPGA Bitstream Archive}
+\label{app:fpga-bitstream}
+
+\section*{F.1 Overview}
+
+This appendix documents the hardware artefacts produced during the Trinity S\textsuperscript{3}AI
+FPGA validation campaign (2026-05-05). The bitstream implements the\emph{Period-Locked Monitor}
+core (Chapter~\ref{ch:plm}) and the φ-numeric coprocessor primitives described in
+Chapters~\ref{ch:28}--\ref{ch:34}.
+
+\textbf{Anchor invariant:} \(\varphi^2 + \varphi^{-2} = 3\).
+
+\section*{F.2 Target Device}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Field} & \textbf{Value} \\
+\midrule
+Board & QMTech XC7A100T Starter Kit \\
+Actual device & XC7A200T (IDCODE \texttt{0x13631093}) \\
+Manufacturer & Xilinx (JEDEC \texttt{0x049}) \\
+Version & Silicon revision 1 \\
+Package & FGG484 \\
+Speedgrade & --2 \\
+\bottomrule
+\end{tabular}
+\caption{FPGA device identification. Board is marked XC7A100T but JTAG IDCODE
+corresponds to XC7A200T v1. The design (83~LUT, 27~FF) fits either device;\, no
+resynthesis required.}
+\end{table}
+
+\textbf{IDCODE parsing} (IEEE~1149.1):
+\begin{itemize}
+  \item Bits 0: \texttt{1} (required by standard)
+  \item Bits 1--11: \texttt{0x049} — Xilinx manufacturer
+  \item Bits 12--27: \texttt{0x3631} — XC7A200T part
+  \item Bits 28--31: \texttt{0x1} — silicon revision 1
+\end{itemize}
+
+\section*{F.3 Bitstream Integrity}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Field} & \textbf{Value} \\
+\midrule
+Filename & \texttt{design.bit} \\
+SHA-256 & \texttt{8536e265...d77352b} \\
+Tool & Vivado 2023.2 \\
+Strategy & Default (Flow\_PerfOptimized\_high) \\
+LUT utilization & 83 / 128,000 (0.06\%) \\
+FF utilization & 27 / 256,000 (0.01\%) \\
+BRAM & 0 \\
+DSP & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Bitstream file metadata. Full SHA-256 stored in
+\texttt{trinity-fpga/bitstream/design.bit.sha256}.}
+\end{table}
+
+\section*{F.4 Configuration Status Register (STAT)}
+
+After successful programming via ESP32 XVC WiFi bridge
+(Section~\ref{sec:xvc-bridge}), the STAT register was read using
+\texttt{openFPGALoader --read-register STAT}:
+
+\begin{verbatim}
+Raw STAT register: 0x401079FC
+
+CRC Error     : No CRC error       ✓
+Part Secured  : 0                  ✓
+MMCM Lock     : 1                  ✓
+DCI Match     : 1                  ✓
+EOS           : 1 (End of Startup) ✓
+GWE           : 1 (Global Wr En)   ✓
+GHIGH_B       : 1                  ✓
+Done          : 1                  ✓
+DEC Error     : 0                  ✓
+ID Error      : 0                  ✓
+\end{verbatim}
+
+All flags nominal. The device entered operational state without errors,
+confirming bitstream integrity and correct CRC check by the FPGA configuration
+logic.
+
+\section*{F.5 Programming Method}
+
+The bitstream was loaded via a custom ESP32-based Xilinx Virtual Cable (XVC)
+server operating over 802.11 WiFi (IP~\texttt{192.168.1.30}, port~2542).
+Full details in Appendix~J and Chapter~\ref{ch:33}.
+
+\begin{verbatim}
+openFPGALoader --cable xvc-client \
+  --ip 192.168.1.30 --port 2542 \
+  --bitstream design.bit
+\end{verbatim}
+
+\section*{F.6 Reproducibility}
+
+The complete firmware, XDC constraints, and bitstream are archived in
+\texttt{gHashTag/trinity-fpga} (Apache~2.0). To reproduce:
+
+\begin{enumerate}
+  \item Flash ESP32 with \texttt{firmware/xvc-esp32/xvc-esp32.ino}
+  \item Connect 5-wire JTAG harness per Appendix~I
+  \item Run \texttt{openFPGALoader} command above
+  \item Verify STAT\,=\,\texttt{0x401079FC}
+\end{enumerate}
