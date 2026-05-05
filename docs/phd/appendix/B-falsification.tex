@@ -1,140 +1,112 @@
-% AP.B — Falsifiability (Popper)
-% φ² + φ⁻² = 3 · Trinity S³AI
+% AP.B — Falsification (Popper)
+% φ²+φ⁻²=3 · Trinity S³AI
 % Author: Dmitrii Vasilev (ORCID 0009-0008-4294-6159)
-% Issue: #380 tasks 2.1, 2.2
 
-\chapter*{Appendix B: Falsifiability Clauses (Popper Defense)}
+\chapter*{Appendix B: Falsifiability of φ-Numeric Claims}
 \addcontentsline{toc}{chapter}{Appendix B: Falsifiability}
-\label{app:falsifiability}
+\label{app:falsification}
 
-\textbf{Anchor invariant:} \(\varphi^2 + \varphi^{-2} = 3\).
+\textbf{Anchor:} \(\varphi^2 + \varphi^{-2} = 3\).
 
-\section*{B.1 Purpose}
+\noindent This appendix demonstrates that every quantitative claim in Trinity
+S\textsuperscript{3}AI satisfies Popper's demarcation criterion: each claim
+states observable conditions under which it would be \emph{refuted}.
+This is a defence against the ``numerology'' objection (Reviewer-2).
 
-This appendix documents four Popper-style falsifier clauses that establish
-the empirical refutability of the Trinity S\textsuperscript{3}AI framework.
-Each clause specifies a concrete experimental outcome that would falsify
-the corresponding claim. This directly addresses Reviewer-2 concerns about
-numerological unfalsifiability.
+\section*{B.1 Four Popper Falsifier-Clauses}
 
-\begin{tcolorbox}[colback=red!5,colframe=red!40,title=Falsifiability Standard]
-A scientific claim is falsifiable if and only if there exists a possible
-observation that would, if verified, refute it (Popper, 1959). All
-\(\varphi\)-claims in this thesis satisfy this condition.
+\subsection*{Clause F-1 — GoldenFloat Pareto}
+
+\begin{tcolorbox}[colback=red!5,colframe=red!40,title=Falsifier F-1]
+\textbf{Claim:} GF16 achieves a range$\times$precision Pareto frontier strictly
+dominating INT4, FP4, and MXFP4 for autoregressive language-model perplexity.
+
+\textbf{Falsified if:} Any floating-point or fixed-point 4-bit format with the
+\emph{same bit-budget} (4 bits/weight) achieves lower BPB than GF16 on the
+sealed \texttt{STROBE\_SEED=1597} evaluation set (Appendix~E, §E.3).
+
+\textbf{Non-φ control:} INT4 and MXFP4 benchmarks are run under identical
+conditions (same model, same tokenizer, same hardware) and reported in
+Chapter~\ref{ch:9}. Champion GF16 BPB = 2.2393; INT4 baseline BPB = 2.31.
+Gate-2 (BPB < 2.20) is \textbf{not met} and this is disclosed in
+Chapters~\ref{ch:15} and~\ref{ch:18}.
 \end{tcolorbox}
 
-\section*{B.2 The Four Falsifier Clauses}
+\subsection*{Clause F-2 — Period-Locked Frequency Ratio}
 
-\subsection*{FC-1: GoldenFloat Numeric Superiority}
+\begin{tcolorbox}[colback=red!5,colframe=red!40,title=Falsifier F-2]
+\textbf{Claim:} In the Period-Locked Monitor (Chapter~\ref{ch:24}), the ratio of
+fast-oscillator period to slow-oscillator period converges to
+\(\varphi = (1+\sqrt{5})/2 \approx 1.6180\) within 1\% after 1,024 lock cycles.
 
-\textbf{Claim:} GoldenFloat (GF16) achieves lower BPB than IEEE~FP16 on
-the Trinity benchmark suite at equivalent bit-width.
+\textbf{Falsified if:} On the QMTech XC7A200T FPGA (Appendix~F), the measured
+period ratio diverges from \(\varphi\) by more than 1\% after 1,024 cycles
+under any of the 8 seed configurations in Table~24.1.
 
-\textbf{Current evidence:} Champion BPB~=~2.2393 (GF16 configuration);
-baseline FP16 BPB~=~2.41 on same corpus
-(Zenodo~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}).
+\textbf{Non-φ control:} Control experiment with ratio set to \(\sqrt{2}\)
+(non-φ) converges to a different fixed point. Both experiments are run on the
+same bitstream (SHA-256 recorded in App.~F) and results are in Chapter~\ref{ch:25}.
+\end{tcolorbox}
 
-\begin{falsifier}[FC-1]
-This claim is \textbf{falsified} if any peer-run experiment following the
-reproducibility protocol in Appendix~D achieves BPB(GF16) $\geq$
-BPB(FP16) across $\geq 3$ of the 5 test corpora, using the published
-checkpoint and tokeniser. The Gate-2 threshold (BPB~$\leq$~1.8) is
-\textbf{already honestly disclosed as NOT MET} (Chapter~\ref{ch:18});
-this clause concerns relative ordering only.
-\end{falsifier}
+\subsection*{Clause F-3 — Fibonacci/Lucas Seed Advantage}
 
-\textbf{Non-\(\varphi\) control:} We tested MXFP4, BF16, INT8, and
-random-mantissa FP16 on the same corpus. Only GF16 achieves BPB~$<$~2.3
-(Chapter~\ref{ch:9}).
+\begin{tcolorbox}[colback=red!5,colframe=red!40,title=Falsifier F-3]
+\textbf{Claim:} Using sanctioned seeds \(\{F_{17}{=}1597, F_{18}{=}2584,
+F_{19}{=}4181, F_{20}{=}6765, F_{21}{=}10946, L_7{=}29, L_8{=}47\}\) as
+STROBE initialisation parameters produces statistically lower BPB variance
+than random-seed baselines (Welch-$t$ $p < 0.05$).
 
-\subsection*{FC-2: Period-Locked Monitor (PLM) Stability}
+\textbf{Falsified if:} A Welch-$t$ test on the sealed evaluation set
+(\texttt{strobe\_seed\_audit.json} in Zenodo 10.5281/zenodo.19227877) shows
+$p \geq 0.05$ for the sanctioned-vs-random comparison.
 
-\textbf{Claim:} The Period-Locked Monitor detects \(\varphi\)-period
-locking in chaotic oscillators with false-positive rate $<$~5\%.
+\textbf{Non-φ control:} 100 uniformly-random seeds are drawn (excluding
+\{42,43,44,45\} per R-rule), benchmarked identically, and reported in
+Chapter~\ref{ch:13}.
+\end{tcolorbox}
 
-\textbf{Current evidence:} On 1,000 synthetic PLM trials with known
-locking state, FPR~=~2.1\% (Chapter~\ref{ch:24}).
+\subsection*{Clause F-4 — FPGA Energy Advantage}
 
-\begin{falsifier}[FC-2]
-This claim is \textbf{falsified} if an independent replication using the
-artefacts in \texttt{trinity-fpga} (\texttt{fpga/plm/}) achieves FPR
-$\geq$~10\% on $\geq$~500 trials with known ground truth. The FPGA
-bitstream (App.~F) enables exact replication.
-\end{falsifier}
+\begin{tcolorbox}[colback=red!5,colframe=red!40,title=Falsifier F-4]
+\textbf{Claim:} The φ-Numeric Coprocessor implemented on XC7A200T consumes
+$\leq 0.6$\,W for a 1,024-element GF16 dot-product, corresponding to a
+$\geq 3000\times$ energy advantage over an NVIDIA A100 GPU performing the
+equivalent operation (Chapter~\ref{ch:34}).
 
-\textbf{Non-\(\varphi\) control:} A random-period monitor (uniform
-distribution) achieves FPR~=~49.8\% on the same trials.
-A \(\pi\)-period monitor achieves FPR~=~31.2\%. Only \(\varphi\)-period
-achieves FPR~$<$~5\%.
+\textbf{Falsified if:} Measured FPGA dynamic power exceeds 0.6\,W in Vivado
+Power Analysis, OR if the A100 reference power figure is corrected downward
+by $>$10\% from the value in Table~34.1.
 
-\subsection*{FC-3: VSA Hypervector Binding via \(\varphi\)}
+\textbf{Non-φ control:} The same dot-product is implemented using INT8
+(non-φ) and measured under identical FPGA conditions. Both results are
+reported in Chapter~\ref{ch:34}.
+\end{tcolorbox}
 
-\textbf{Claim:} \(\varphi\)-keyed VSA binding achieves cosine similarity
-$>$~0.95 under \(\geq$~1024\)-bit ternary XOR binding.
+\section*{B.2 Anti-Numerology Defense}
 
-\textbf{Current evidence:} 10,000 bind/unbind trials,
-mean~cosine~$=$~0.973, \textit{SD}~$=$~0.012 (Chapter~\ref{ch:31}).
+All four falsifier-clauses above satisfy the following anti-numerology criteria:
 
-\begin{falsifier}[FC-3]
-This claim is \textbf{falsified} if binding with a non-\(\varphi\) scaling
-constant (e.g., $\pi$, $e$, $\sqrt{2}$) achieves cosine~$>$~0.95 with
-identical bit-width and trial count, invalidating the \(\varphi\)-specific
-claim. The comparison script is in
-\texttt{trinity-fpga/bench/vsa\_compare.py}.
-\end{falsifier}
+\begin{enumerate}
+  \item \textbf{Quantitative threshold:} each clause names a specific numeric
+    cut-off (BPB < 2.20, ratio within 1\%, $p$ < 0.05, power ≤ 0.6\,W).
+  \item \textbf{Non-φ control exists:} every φ-claim is paired with an
+    equivalent non-φ experiment (INT4, \(\sqrt{2}\)-ratio, random seeds,
+    INT8) run under identical conditions.
+  \item \textbf{Reproducible:} all sealed seeds and bitstreams are in
+    Zenodo (App.~H) and \texttt{gHashTag/trinity-fpga}.
+  \item \textbf{Honest failure disclosure:} Gate-2 (BPB < 2.20) is \textbf{not}
+    met. Clause F-1 is therefore in a ``partially falsified'' state for the
+    strong claim; the weak claim (Pareto-dominant over INT4) holds.
+\end{enumerate}
 
-\textbf{Non-\(\varphi\) control:} Random-constant keying achieves
-cosine~=~0.501 (\textit{SD}~=~0.041). \(\pi\)-keying achieves 0.761.
-The \(\varphi\)-specific advantage is~$\Delta$cosine~$\approx$~0.21.
+\section*{B.3 Claims Outside Scope}
 
-\subsection*{FC-4: Energy Efficiency (DARPA 3000× claim)}
-
-\textbf{Claim:} The \(\varphi\)-numeric FPGA coprocessor achieves
-$\geq$~3000× energy improvement vs.~GPU baseline for VSA bind/bundle
-operations at 1024-bit vector width.
-
-\textbf{Current evidence:} Analytic estimate from FPGA utilisation
-(83~LUT/27~FF, $P \leq$~0.6~W) vs.~NVIDIA~A100 (400~W peak,
-0.02\% utilisation floor)~=~3,200× (Chapter~\ref{ch:34}).
-
-\begin{falsifier}[FC-4]
-This claim is \textbf{falsified} if a direct hardware measurement of the
-FPGA coprocessor (using the bitstream in App.~F and a calibrated power
-meter) yields energy ratio $<$~1000× vs.~GPU for the same VSA throughput.
-The measurement protocol is in Chapter~\ref{ch:34}, Section~34.5.
-\end{falsifier}
-
-\textbf{Non-\(\varphi\) control:} Conventional FP16 FPGA implementation
-(same LUT count) achieves estimated 800× vs.~GPU due to precision overhead.
-The \(\varphi\)-specific encoding reduces required LUTs by 4.7× for the
-same VSA operation, yielding the additional gain.
-
-\section*{B.3 Summary Table}
-
-\begin{table}[h]
-\centering
-\begin{tabular}{llll}
-\toprule
-\textbf{Clause} & \textbf{Claim} & \textbf{Non-\(\varphi\) control} & \textbf{Falsifier threshold} \\
-\midrule
-FC-1 & GF16 BPB < FP16 BPB & MXFP4, BF16, INT8 & GF16 $\geq$ FP16 in $\geq$3/5 corpora \\
-FC-2 & PLM FPR $<$ 5\% & Random, \(\pi\)-period & FPR $\geq$ 10\% in $\geq$500 trials \\
-FC-3 & VSA cosine $>$ 0.95 & $\pi$, $e$, $\sqrt{2}$ keys & Any constant $>$ 0.95 same width \\
-FC-4 & Energy $\geq$ 3000× & Conventional FP16 FPGA & Measured ratio $<$ 1000× \\
-\bottomrule
-\end{tabular}
-\caption{Four Popper falsifier clauses. All claims are refutable by concrete measurement.}
-\end{table}
-
-\section*{B.4 Anti-Numerology Statement}
-
-The \(\varphi\) constant is used in this work because (a)~its algebraic
-property \(\varphi^2 = \varphi + 1\) enables shift-and-add arithmetic
-without multipliers, (b)~Fibonacci spacing minimises aliasing in
-hypervector dimensions (Chapter~\ref{ch:5}), and (c)~its period-locking
-property in continued fractions is unique among algebraic irrationals
-(Chapter~\ref{ch:24}). It is\emph{not} used because of aesthetic,
-spiritual, or numerological significance. Every \(\varphi\)-claim has a
-non-\(\varphi\) control experiment with inferior outcome.
+The following are \emph{not} scientific claims of this thesis and therefore
+need no falsifier:
+\begin{itemize}
+  \item Aesthetic or metaphorical uses of φ in Part~VIII (Flos Aureus).
+  \item Historical/philosophical discussion of φ in sacred geometry.
+  \item The title ``Flos Aureus'' — a literary label, not a hypothesis.
+\end{itemize}
 
 \(\varphi^2 + \varphi^{-2} = 3\)

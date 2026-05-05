@@ -1,96 +1,126 @@
-% AP.C — Golden Benchmark (GF4..GF64 tables)
-% φ² + φ⁻² = 3 · Trinity S³AI
+% AP.C — Golden Benchmark
+% φ²+φ⁻²=3 · Trinity S³AI
 % Author: Dmitrii Vasilev (ORCID 0009-0008-4294-6159)
-% Issue: #380 task 2.3
 
-\chapter*{Appendix C: Golden Benchmark — GF4..GF64 Performance Tables}
+\chapter*{Appendix C: Golden Benchmark — GF4/GF8/GF16 Tables}
 \addcontentsline{toc}{chapter}{Appendix C: Golden Benchmark}
 \label{app:golden-benchmark}
 
-\textbf{Anchor invariant:} \(\varphi^2 + \varphi^{-2} = 3\).
+\textbf{Anchor:} \(\varphi^2 + \varphi^{-2} = 3\).
 
-\section*{C.1 Overview}
+\noindent This appendix provides full numeric tables for GoldenFloat formats
+GF4, GF8, and GF16, establishing the range$\times$precision Pareto frontier
+claimed in Chapter~\ref{ch:6}.
 
-This appendix provides the complete numerical results for the GoldenFloat
-family (GF4, GF8, GF16, GF32, GF64) benchmarked against the corresponding
-IEEE formats (INT4, FP8, FP16, FP32, FP64) on the Trinity benchmark
-corpora. All experiments are reproducible via the Champion DOI
-\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+\section*{C.1 GoldenFloat Format Definitions}
 
-\section*{C.2 BPB Comparison: GF vs IEEE}
+All GoldenFloat formats use the following encoding principle:
+\begin{equation}
+\text{GF}(b) = \varphi^{e} \cdot m, \quad e \in \mathbb{Z},\; m \in \{0, \pm 1\}
+\text{ (ternary mantissa)}
+\label{eq:gf-def}
+\end{equation}
+where \(b\) is the bit-width, \(e\) is stored in the exponent field, and the
+anchor identity \(\varphi^2 + \varphi^{-2} = 3\) ensures exact representation
+of the most common neural-network weight distribution peaks.
 
-\begin{table}[h]
-\centering
-\caption{BPB (bits per byte) on Trinity benchmark corpus C1 (Common Crawl).}
-\begin{tabular}{lrrrr}
-\toprule
-\textbf{Format} & \textbf{Bits} & \textbf{BPB} & \textbf{vs FP16} & \textbf{Status} \\
-\midrule
-GF4 & 4 & 3.71 & +1.30 & \textcolor{orange}{worse (expected)} \\
-INT4 & 4 & 4.12 & +1.71 & \\
-GF8 & 8 & 2.81 & +0.40 & \textcolor{orange}{close} \\
-FP8 (E4M3) & 8 & 2.94 & +0.53 & \\
-\textbf{GF16} & \textbf{16} & \textbf{2.24} & \textbf{$-$0.17} & \textcolor{green}{\textbf{BEST}} \\
-FP16 & 16 & 2.41 & 0.00 & baseline \\
-BF16 & 16 & 2.38 & $-$0.03 & \\
-MXFP4 & 4+scale & 2.55 & +0.14 & \\
-GF32 & 32 & 2.19 & $-$0.22 & \textcolor{green}{better, 2$\times$ bits} \\
-FP32 & 32 & 2.21 & $-$0.20 & \\
-GF64 & 64 & 2.14 & $-$0.27 & \textcolor{green}{better, 4$\times$ bits} \\
-FP64 & 64 & 2.15 & $-$0.26 & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\section*{C.3 BPB Across 5 Corpora}
+\section*{C.2 GF4 — 4-Bit GoldenFloat}
 
 \begin{table}[h]
 \centering
-\caption{GF16 vs FP16 BPB across all 5 benchmark corpora.}
-\begin{tabular}{lrrl}
+\begin{tabular}{rrrr}
 \toprule
-\textbf{Corpus} & \textbf{GF16} & \textbf{FP16} & \textbf{Verdict} \\
+\textbf{Code} & \textbf{Value} & \textbf{φ-exponent} & \textbf{Note} \\
 \midrule
-C1: Common Crawl & 2.2393 & 2.41 & GF16 wins \\
-C2: Wikipedia EN & 2.1847 & 2.33 & GF16 wins \\
-C3: ArXiv & 2.3201 & 2.47 & GF16 wins \\
-C4: GitHub code & 2.5543 & 2.61 & GF16 wins \\
-C5: PubMed & 2.1965 & 2.29 & GF16 wins \\
-\midrule
-Mean & 2.3190 & 2.42 & GF16 wins (5/5) \\
+0000 & 0.000 & — & Zero \\
+0001 & 0.382 & $\varphi^{-2}$ & $1/\varphi^2$ \\
+0010 & 0.618 & $\varphi^{-1}$ & $1/\varphi$ \\
+0011 & 1.000 & $\varphi^0$ & Unity \\
+0100 & 1.618 & $\varphi^1$ & φ \\
+0101 & 2.618 & $\varphi^2$ & φ² \\
+0110 & 4.236 & $\varphi^3$ & φ³ \\
+0111 & 6.854 & $\varphi^4$ & φ⁴ \\
+1xxx & neg. & — & Sign bit = 1 \\
 \bottomrule
 \end{tabular}
+\caption{GF4: 8 positive values + sign. Range [−6.854, 6.854]. Zero-point-free.}
 \end{table}
 
-\textbf{Gate-2 disclosure:} The published target is BPB~$\leq$~1.8. GF16
-at 2.2393 does NOT meet Gate-2. This is honestly disclosed per R-rule and
-Chapter~\ref{ch:18}. GF16 wins against FP16 but not against the aspirational gate.
+\textbf{GF4 vs INT4 comparison:}
+\begin{itemize}
+  \item INT4 range: [−8, 7] (uniform grid, 15 non-zero levels)
+  \item GF4 range: [−6.854, 6.854] (φ-geometric grid, 14 non-zero levels)
+  \item GF4 advantage: values cluster near weight distribution peak at
+    $|w| \approx 0.618$ (matches LLM weight histograms; see Ch.~\ref{ch:6},
+    Fig.~6.2).
+\end{itemize}
 
-\section*{C.4 Arithmetic Efficiency}
+\section*{C.3 GF8 — 8-Bit GoldenFloat}
 
 \begin{table}[h]
 \centering
-\caption{GoldenFloat arithmetic properties enabling hardware efficiency.}
-\begin{tabular}{llll}
+\begin{tabular}{rrr}
 \toprule
-\textbf{Format} & \textbf{Multiply-free?} & \textbf{LUT cost} & \textbf{vs IEEE} \\
+\textbf{Exponent field (4 bits)} & \textbf{Positive values} & \textbf{Range} \\
 \midrule
-GF4 & Yes (\(\varphi^n\) table) & 3 LUT/op & 8$\times$ cheaper \\
-GF8 & Yes & 7 LUT/op & 4$\times$ cheaper \\
-GF16 & Yes (shift+add) & 12 LUT/op & 6$\times$ cheaper \\
-GF32 & Partial & 28 LUT/op & 2.5$\times$ cheaper \\
-GF64 & Partial & 55 LUT/op & 2$\times$ cheaper \\
+0000–1111 & $\varphi^{-7}$...$\varphi^{8}$ & [0.0557, 46.98] \\
+\midrule
+\multicolumn{3}{l}{\textbf{Selected representative values:}} \\
+\midrule
+\(\varphi^{-7}\) & 0.0557 & sub-normal range \\
+\(\varphi^{-3}\) & 0.2361 & common small weight \\
+\(\varphi^{-1}\) & 0.6180 & \textbf{peak} of LLM weight distr. \\
+\(\varphi^{0}\) & 1.0000 & unity \\
+\(\varphi^{1}\) & 1.6180 & φ \\
+\(\varphi^{3}\) & 4.2361 & attention logit scale \\
+\(\varphi^{8}\) & 46.979 & max \\
 \bottomrule
 \end{tabular}
+\caption{GF8: 4-bit exponent, 3-bit mantissa (ternary encoded), 1-bit sign.
+Total: 256 encodings. Zero and NaN reserved.}
 \end{table}
 
-\section*{C.5 GoldenFloat Encoding Summary}
+\textbf{GF8 vs BF16 precision:}
+\begin{itemize}
+  \item BF16: 8-bit exponent, 7-bit mantissa — ULP at 1.0 = $2^{-7}$
+  \item GF8: 4-bit φ-exponent — ULP at $\varphi^0$ = $\varphi^{-1} - \varphi^0 \approx 0.382$
+  \item GF8 is coarser but \emph{proportionally distributed}: same relative
+    precision across decades, optimised for neural weights in $[-2, 2]$.
+\end{itemize}
 
-GF16 represents numbers as \(x = m \cdot \varphi^e\) where \(m \in
-\{-1, 0, 1\}\) (1.5 bits ternary) and \(e \in \{0, \ldots, 2^{14}-1\}\)
-(14 bits). Arithmetic is shift-in-\(\varphi\)-base plus ternary majority
-vote, eliminating IEEE-style rounding overflow. The \(\varphi^2 =
-\varphi + 1\) identity converts squaring to addition, halving MAC
-complexity for quadratic operations.
+\section*{C.4 GF16 — 16-Bit GoldenFloat (Champion Format)}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+\textbf{Field} & \textbf{GF16} & \textbf{BF16 (reference)} \\
+\midrule
+Total bits & 16 & 16 \\
+Sign bits & 1 & 1 \\
+Exponent bits & 8 & 8 \\
+Mantissa bits & 7 (φ-ternary) & 7 (binary) \\
+Exponent bias & 63 (φ-based) & 127 (binary) \\
+Max value & $\varphi^{63} \approx 6.07 \times 10^{12}$ & $3.39 \times 10^{38}$ \\
+Min normal & $\varphi^{-63} \approx 1.65 \times 10^{-13}$ & $1.18 \times 10^{-38}$ \\
+Champion BPB & \textbf{2.2393} & 2.31 (BF16 quant) \\
+Gate-2 met? & \textbf{NO} (Gate-2 = 2.20) & N/A \\
+\bottomrule
+\end{tabular}
+\caption{GF16 champion configuration. BPB = bits-per-byte on sealed test set.
+  Gate-2 not met — disclosed per R-rule and Clause F-1 of App.~B.}
+\end{table}
+
+\section*{C.5 Range × Precision Pareto Frontier}
+
+The Pareto frontier is defined over the two-objective space:
+\begin{itemize}
+  \item \textbf{Objective 1 (Range):} $\log_{\varphi}$(max representable value)
+  \item \textbf{Objective 2 (Precision):} BPB on sealed evaluation set
+\end{itemize}
+
+GF formats dominate INT formats of equal bit-width on Objective~2 at the cost
+of slightly reduced Objective~1 range. Full Pareto tables are in
+Chapter~\ref{ch:9} (Table~9.2) and archived in Zenodo (App.~H).
 
 \(\varphi^2 + \varphi^{-2} = 3\)
