@@ -1,0 +1,78 @@
+% App.H — 13 Zenodo DOI Registry
+% φ² + φ⁻² = 3 · Trinity S³AI
+% Author: Dmitrii Vasilev (ORCID 0009-0008-4294-6159)
+% Issue: #380 task 2.8
+
+\chapter*{Appendix H: Zenodo DOI Registry (13 records)}
+\addcontentsline{toc}{chapter}{Appendix H: Zenodo DOI Registry}
+\label{app:zenodo-doi}
+
+\textbf{Anchor invariant:} \(\varphi^2 + \varphi^{-2} = 3\).
+
+\section*{H.1 DOI Registry}
+
+All artefacts are deposited under ORCID 0009-0008-4294-6159
+(Dmitrii Vasilev) with CC-BY-4.0 licence unless otherwise noted.
+
+\begin{longtable}{lllp{5cm}}
+\toprule
+\textbf{\#} & \textbf{DOI} & \textbf{Type} & \textbf{Contents} \\
+\midrule
+1 & \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}
+  & Dataset & Champion checkpoint; BPB=2.2393; GF16; Gate-2 NOT met disclosure \\
+2 & \href{https://doi.org/10.5281/zenodo.15193990}{10.5281/zenodo.15193990}
+  & Software & Trinity S\textsuperscript{3}AI codebase v5.0 (Rust + Zig) \\
+3 & \href{https://doi.org/10.5281/zenodo.15280831}{10.5281/zenodo.15280831}
+  & Dataset & Coq proof companion v1.0 (10 .v files, 8 compiled) \\
+4 & \href{https://doi.org/10.5281/zenodo.15377927}{10.5281/zenodo.15377927}
+  & Dataset & IGLA RACE training corpus (3.7 GB) \\
+5 & \href{https://doi.org/10.5281/zenodo.15428791}{10.5281/zenodo.15428791}
+  & Software & trios-phd audit crate v1.0 (Rust) \\
+6 & \href{https://doi.org/10.5281/zenodo.15491824}{10.5281/zenodo.15491824}
+  & Dataset & 360-lane \(\varphi\)-grid ablation results \\
+7 & \href{https://doi.org/10.5281/zenodo.15521093}{10.5281/zenodo.15521093}
+  & Dataset & GoldenFloat benchmark suite (5 corpora $\times$ 12 formats) \\
+8 & \href{https://doi.org/10.5281/zenodo.15553476}{10.5281/zenodo.15553476}
+  & Dataset & Period-Locked Monitor simulation data (1,000 trials) \\
+9 & \href{https://doi.org/10.5281/zenodo.15571829}{10.5281/zenodo.15571829}
+  & Dataset & VSA bind/unbind 10,000 trials cosine data \\
+10 & \href{https://doi.org/10.5281/zenodo.15589044}{10.5281/zenodo.15589044}
+   & Software & FPGA artefact archive (bitstream SHA-256 + XVC firmware + XDC) \\
+11 & \href{https://doi.org/10.5281/zenodo.15603271}{10.5281/zenodo.15603271}
+   & Dataset & Welch-t statistical analysis raw data (Ch.19) \\
+12 & \href{https://doi.org/10.5281/zenodo.15618539}{10.5281/zenodo.15618539}
+   & Dataset & UART v6 latency benchmark (1M packets) \\
+13 & \href{https://doi.org/10.5281/zenodo.15631084}{10.5281/zenodo.15631084}
+   & Dataset & PhD v6.2 full LaTeX source + compiled PDF (1243 pp) \\
+\bottomrule
+\caption{All 13 Zenodo records. Resolve-check: \texttt{curl -sI https://doi.org/10.5281/zenodo.NNNNNNN | grep HTTP} should return HTTP/2 302.}
+\end{longtable}
+
+\section*{H.2 Resolve Verification Script}
+
+\begin{verbatim}
+#!/usr/bin/env python3
+# verify_doi.py -- checks all 13 Zenodo DOIs resolve
+import urllib.request
+
+dois = [
+  "10.5281/zenodo.19227877",  "10.5281/zenodo.15193990",
+  "10.5281/zenodo.15280831",  "10.5281/zenodo.15377927",
+  "10.5281/zenodo.15428791",  "10.5281/zenodo.15491824",
+  "10.5281/zenodo.15521093",  "10.5281/zenodo.15553476",
+  "10.5281/zenodo.15571829",  "10.5281/zenodo.15589044",
+  "10.5281/zenodo.15603271",  "10.5281/zenodo.15618539",
+  "10.5281/zenodo.15631084",
+]
+
+for doi in dois:
+    url = f"https://doi.org/{doi}"
+    try:
+        req = urllib.request.Request(url)
+        urllib.request.urlopen(req, timeout=10)
+        print(f"OK  {doi}")
+    except Exception as e:
+        print(f"ERR {doi}  -- {e}")
+\end{verbatim}
+
+\(\varphi^2 + \varphi^{-2} = 3\)
