@@ -106,6 +106,30 @@ enum Cmd {
     /// `v4/generate_from_neon.py` flow with a Rust-only pipeline. It assumes
     /// the Markdown sources have already been synced from `ssot.chapters` by
     /// migration `005_hero_fullwidth.sql` and the standard NEON → repo sync.
+    /// One-shot book build: assemble cover + 34 chapter MDs (pandoc) + 10
+    /// appendix figures + materialise missing-include stubs + tectonic
+    /// `compile-resilient`.  This is the SINGLE command the operator runs:
+    ///
+    ///     tri phd build-book
+    ///
+    /// Equivalent to invoking, in order:
+    ///     trios-phd materialize-stubs
+    ///     <pandoc render of docs/golden-sunflowers/ch-*.md → chapters/ch_NN.tex>
+    ///     trios-phd fix-common-latex
+    ///     trios-phd compile-resilient
+    ///
+    /// R1 (CROWN): pure Rust orchestrator; no `.sh`, no `.py`.
+    BuildBook {
+        /// Source directory with Markdown chapters (one per ch-N-*.md).
+        #[arg(long, default_value = "docs/golden-sunflowers")]
+        md_dir: PathBuf,
+        /// Asset directory containing cover_v4.png and ch??/app-?-* PNGs.
+        #[arg(long, default_value = "assets/illustrations")]
+        assets_dir: PathBuf,
+        /// Quarantine round budget for `compile-resilient`.
+        #[arg(long, default_value_t = 80)]
+        max_rounds: usize,
+    },
     CompileChapters {
         /// Directory of input Markdown chapters.
         #[arg(long, default_value = "docs/golden-sunflowers")]
@@ -515,7 +539,7 @@ fn build_deferred_stub(stem: &str) -> String {
          (using $\\varphi^2 = \\varphi + 1$ and $\\varphi^{{-2}} = 2 - \\varphi$).\n\
          The associated Zenodo deposition DOI is\n\
          \\texttt{{10.5281/zenodo.19227877}}; the ORCID of record for the principal\n\
-         author (Cyril Shamin / Dmitrii Vasilev) is\n\
+         author (Dmitrii Vasilev) is\n\
          \\texttt{{0009-0008-4294-6159}}. Every theorem in the monograph that names\n\
          the cube identity $27 = 3^3 = (\\varphi^2 + \\varphi^{{-2}})^3$ resolves\n\
          against this anchor.\n\
@@ -1002,6 +1026,9 @@ fn main() -> ExitCode {
         Cmd::CompileResilient { max_rounds } => compile_resilient(&cli.phd_root, *max_rounds),
         Cmd::FixCommonLatex => fix_common_latex(&cli.phd_root),
         Cmd::MaterializeStubs => materialize_stubs(&cli.phd_root),
+        Cmd::BuildBook { md_dir, assets_dir, max_rounds } => {
+            build_book(&cli.phd_root, md_dir, assets_dir, *max_rounds)
+        }
         Cmd::CompileChapters {
             chapters_dir,
             template,
