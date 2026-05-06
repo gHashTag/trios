@@ -159,7 +159,14 @@ jobs:
         run: |
           MANIFEST_FILE="crates/trios-ext/extension/manifest.json"
           if [ -f "$MANIFEST_FILE" ]; then
-            if grep -q "wasm-unsafe-eval" "$MANIFEST_FILE" && ! grep -q "\"wasm-unsafe-eval\"" "$MANIFEST_FILE"; then
+            # Chrome MV3 CSP keyword uses CSP single-quote syntax:
+            #   "script-src 'self' 'wasm-unsafe-eval' ..."
+            # The previous guard demanded JSON-double-quoted "wasm-unsafe-eval"
+            # which is invalid CSP syntax. Accept either single-quoted CSP
+            # form OR no occurrence at all; only fail on bare unquoted token.
+            if grep -q "wasm-unsafe-eval" "$MANIFEST_FILE" \
+               && ! grep -q "'wasm-unsafe-eval'" "$MANIFEST_FILE" \
+               && ! grep -q '"wasm-unsafe-eval"' "$MANIFEST_FILE"; then
               echo "❌ I7 VIOLATION: unsafe eval not properly declared"
               exit 1
             fi
