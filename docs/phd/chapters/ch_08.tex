@@ -10,6 +10,41 @@
 \caption*{Figure — Ch.8: TF3/TF9 Sparse Ternary MatMul.}
 \end{figure}
 
+\begin{quote}
+\itshape
+``Programs must be written for people to read, and only incidentally
+for machines to execute.''\\
+\hfill --- Harold Abelson \& Gerald Sussman, \emph{SICP}, 1985.
+\end{quote}
+
+\section*{Three values, one machine}
+
+A matrix multiplication is one of the most boring inner loops in
+computing. It moves numbers, multiplies pairs, and adds the products.
+It is also, on a modern accelerator, almost the only thing that
+matters: a transformer of any reasonable size spends well over
+\emph{ninety percent} of its energy on matrix multiplication. If you
+want a model that runs at one watt, the place to start is to make the
+matrix multiply cheaper.
+
+The TF3 and TF9 formats described in this chapter make it cheaper by
+shrinking the alphabet. Each weight is no longer a 16-bit float; it is
+a single trit, drawn from \(\{-1, 0, +1\}\). The multiplication
+\(w \cdot x\) is then either ``negate'', ``zero'', or ``copy'' --- three
+branches, no multiplier. The accumulation is integer, exact, and free
+of the rounding modes that haunt floating-point inference.
+
+The price for this simplicity is paid by the algebra. A naive ternary
+quantiser destroys the variance of the activations and the model
+fails. The fix --- the part that this chapter is about --- is to
+rescale by an integer power of \(\varphi\) at the boundary of every
+layer, exploiting the closure property licensed by Chapter~3. The
+resulting attention gain is admissible if and only if it equals
+\(\varphi^{k}\) for \(k \in \{2, 3\}\), a result that we machine-check
+in Coq under \texttt{INV6\_HybridQkGain.v}. The remainder of the
+chapter spells out the algebraic structure, the proof, and the
+empirical evidence that TF3/TF9 reaches Gate-2 (BPB \(\le 1.85\)).
+
 \section{Abstract}\label{abstract}
 
 This chapter introduces the TF3 and TF9 matrix-multiplication formats that form the arithmetic core of the Trinity S³AI inference engine. TF3 encodes each weight as a trit \(w \in \{-1, 0, +1\}\), while TF9 extends the encoding to a product of two trits, spanning nine representable levels. Both formats admit a closed-form admissibility criterion for query-key attention gain rooted in the identity \(\varphi^2 + \varphi^{-2} = 3\): the gain is admissible if and only if it equals \(\varphi^k\) for \(k \in \{2, 3\}\), a result certified by two \emph{Qed} Coq theorems in \texttt{INV6\_HybridQkGain.v}. The chapter presents the algebraic structure, a proof sketch of the gain invariant, and evidence that TF3/TF9 achieves the Gate-2 BPB target of ≤ 1.85.

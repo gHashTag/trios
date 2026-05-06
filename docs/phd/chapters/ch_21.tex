@@ -10,6 +10,33 @@
 \caption*{Figure — Ch.21: IGLA RACE (Multi-Agent Fleet).}
 \end{figure}
 
+\begin{quote}
+\itshape
+``Many runners, one finish line. The discipline is in the line, not
+in the runners.''\\
+\hfill --- Trinity Operations Handbook, internal note, 2025.
+\end{quote}
+
+\section*{The race format, in one paragraph}
+
+IGLA RACE is the multi-agent training tournament that selects the
+champion configuration of this dissertation. Imagine forty
+independent training agents, each a process on a Railway worker, each
+with a different learning rate, a different seed, a different
+GF\(_{16}\) bias. They are launched simultaneously. They write their
+BPB curves, every twenty steps, into a shared PostgreSQL table. They
+do not communicate. They do not negotiate. They simply run, and the
+first agent to satisfy a strict, machine-checked victory criterion
+--- BPB \(<\) 1.85 at step \(\ge\) 4000 with at least three
+sanctioned seeds --- is declared the champion. The criterion lives
+in Coq, in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v},
+and a small chorus of refutation theorems prove that no degenerate
+shortcut --- too few seeds, too few steps, proxy-only wins --- can be
+mistaken for a genuine victory. The champion that emerges, with
+learning rate 0.004, GF\(_{16}\) PHI\_BIAS = 60, and the seed triple
+\((1597, 2584, 4181)\), is the configuration whose BPB curve all
+later chapters analyse.
+
 \section{Abstract}\label{abstract}
 
 IGLA RACE is a multi-agent benchmarking protocol in which a fleet of independent training agents compete to satisfy the formally verified victory criterion: BPB \(< 1.85\) (Gate-2) or BPB \(< 1.5\) (Gate-3), achieved with at least three distinct sanctioned seeds, at training step \(\geq 4000\). The criterion is formalised in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v} with 28 Coq theorems under invariant INV-7; six refutation theorems prove that degenerate configurations (too few seeds, insufficient steps, proxy-only wins) cannot be mistaken for a genuine victory. The protocol is grounded in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\), which supplies the Gate thresholds via the spectral constant \(\alpha_\varphi\). The champion configuration --- lr \(= 0.004\), GF16 PHI\_BIAS=60, seed triple \((1597, 2584, 4181)\) --- achieves mean BPB \(= 1.830\) at step 5000, satisfying Gate-2.

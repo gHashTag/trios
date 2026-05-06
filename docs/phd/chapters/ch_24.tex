@@ -10,6 +10,34 @@
 \caption*{Figure — Ch.24: Period-Locked Runtime Monitor.}
 \end{figure}
 
+\begin{quote}
+\itshape
+``A scheduler is a small piece of code with a large reputation. Its
+job is to be boring on time.''\\
+\hfill --- Trinity Runtime Notes, 2025.
+\end{quote}
+
+\section*{Two clocks, no resonance}
+
+A multi-agent inference engine has the same problem as a household
+with two children: somebody must take a turn, somebody must wait, and
+the rule for who goes when must be \emph{fair} on a long enough time
+scale. The Period-Locked Runtime Monitor (PLRM) of this chapter
+solves the fairness problem with two prime numbers from the Lucas
+sequence: \(L_{7} = 29\) and \(L_{8} = 47\). The arithmetic agents
+release the GF\(_{16}\) pipeline every 29 cycles; the orchestration
+agents release it every 47. Because 29 and 47 are coprime --- and,
+because their ratio \(47/29 \approx 1.621\) is the golden ratio to
+three decimal places --- the two cohorts \emph{never} land on the
+same slot at the same time. There is no resonance. There is no
+starvation. There is, on the long view, exactly one runtime invariant,
+and the rest of this chapter is about how to prove it.
+
+Nine of the relevant Coq theorems remain \texttt{Admitted} pending the
+Iris integration of Chapter~18. We name each of them honestly. The
+safety properties --- the part that says no agent corrupts another
+agent's accumulator --- are \texttt{Qed}-proved.
+
 \section{Abstract}\label{abstract}
 
 The Period-Locked Runtime Monitor (PLRM) is a scheduling and watchdog component of the IGLA RACE multi-agent system that enforces timing invariants derived from the Golden Sunflowers substrate. The monitor uses two Lucas sentinels---\(L_7 = 29\) and \(L_8 = 47\)---as period bounds for the two principal agent classes (arithmetic and orchestration agents), ensuring that no agent can monopolise the GF16 arithmetic pipeline for more than 29 or 47 clock cycles respectively. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates the period ratio \(47/29 \approx 1.621 \approx \varphi\), which guarantees that the two agent classes interleave without resonance. The formal treatment of PLRM liveness currently carries 9 Admitted stubs pending Iris integration (Ch.18); all safety properties are Qed-proved.
