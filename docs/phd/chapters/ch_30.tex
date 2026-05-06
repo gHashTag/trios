@@ -10,6 +10,21 @@
 \caption*{Figure — Ch.30: Trinity SAI: Vector Symbolic Architecture and Associative Recall.}
 \end{figure}
 
+\begin{quote}\itshape
+``The art of doing mathematics consists in finding that special case which contains all the germs of generality.''
+\upshape --- John Horton Conway, attributed
+\end{quote}
+
+\section*{Binding without forgetting}
+
+Imagine a librarian who can shelve a thousand books in a second, retrieve any one by describing it in a single sentence, and never confuse two books even when their titles differ by a single word. No such human exists. But in 6765 dimensions---the Fibonacci number \(F_{20}\)---random ternary vectors behave almost exactly this way. Two vectors chosen at random from \(\{-1, 0, +1\}^{6765}\) have an expected inner product of zero; their angle is, with overwhelming probability, almost exactly 90 degrees. Pack a thousand such vectors into a memory, and each one remains recoverable from a noisy query. This is the miracle of high-dimensional geometry that Vector Symbolic Architectures exploit, and it is the third pillar of Trinity S\textsuperscript{3}AI.
+
+Conway's insight---that a single special case can carry all the seeds of generality---captures something important about the VSA design here. The ``special case'' is the ternary alphabet \(\{-1, 0, +1\}\), which at first glance seems impoverished compared with floating-point. But the identity \(\varphi^2 + \varphi^{-2} = 3\) reveals why three symbols suffice: the two extreme symbols (\(-1\) and \(+1\)) contribute a squared sum equal to the normalisation constant 3, which is exactly the number of exponent bands in the GoldenFloat substrate. The special case \emph{is} the general case. Binding in this representation is ternary XOR---a mod-3 addition---implementable in a single LUT per dimension. Retrieval is a ternary inner product normalised to \([-1, +1]\).
+
+The dimension \(D = F_{20} = 6765\) was not chosen arbitrarily. It is the largest Fibonacci number below \(2^{13} = 8192\) that fits within one BRAM tile cluster on the XC7A100T (6765 words at 2 bytes each = 13.26 KB). The Lucas pair \(L_7 = 29\) and \(L_8 = 47\) appears in the scheduler time-slots allocated to VSA binding and retrieval operations within the IGLA RACE runtime. These are not decorative numerology; they are engineering choices whose justification traces back to the same \(\varphi\)-arithmetic that governs the rest of the system.
+
+The rest of this chapter defines the ternary VSA operations formally, proves the binding-error bound \(< 1/\sqrt{D} \approx 0.0121\), describes the Associative Recall memory layout in BRAM, and reports measured throughput of 63 tokens per second at 92 MHz on hardware.
+
 \section{Abstract}\label{abstract}
 
 Trinity SAI (Structured Artificial Intelligence) integrates a Vector Symbolic Architecture (VSA) over ternary hypervectors with an Associative Recall (AR) memory that enables one-shot binding and retrieval within the GoldenFloat arithmetic substrate. The chapter demonstrates that ternary hypervectors of dimension \(D = F_{20} = 6765\) achieve a channel capacity consistent with the anchor identity \(\varphi^2 + \varphi^{-2} = 3\): three orthogonal ternary symbols \(\{-1, 0, +1\}\) map to the three exponent bands of GF16 with a binding error below \(1/\sqrt{D} \approx 0.0121\). The IGLA RACE runtime (Ch.24) hosts the VSA+AR agents under the period-locked scheduler. Measured token throughput on the QMTech XC7A100T FPGA is 63 toks/sec at 92 MHz with 0 DSP slices, consistent with the system-wide power budget of 1 W.

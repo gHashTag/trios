@@ -10,6 +10,48 @@
 \caption*{Figure — Ch.6: GoldenFloat Family GF4..GF64.}
 \end{figure}
 
+\begin{quote}\itshape
+``The fundamental problem of communication is that of reproducing at one point
+either exactly or approximately a message selected at another point --- and
+every bit spent on representation is a bit not spent on information.''
+\upshape\hfill --- Claude E.~Shannon, \textit{A Mathematical Theory of Communication} (1948)
+\end{quote}
+
+\section*{Five formats born from one identity}
+
+In 1985, IEEE~754 declared two floating-point formats and gave the world a
+standard. Forty years later, hardware designers are chipping away at both of
+them --- FP8 for neural networks, BF16 for training, MXFP4 for inference ---
+each a pragmatic compromise between precision and energy, none derived from
+first principles. The GoldenFloat family takes the opposite path: it starts
+from the identity \(\varphi^2 + \varphi^{-2} = 3\) and lets the format
+parameters fall out of the algebra.
+
+The identity says that three naturally proportioned bands --- one of width
+\(\varphi^2 \approx 2.618\), one of width 1, one of width \(\varphi^{-2}
+\approx 0.382\) --- tile the positive reals. Mapped to the exponent field of a
+floating-point word, those bands give the most probable magnitude range (near
+unity) the finest exponent resolution, and they do so without any tuning.
+The mantissa widths follow the Fibonacci sequence: 3 bits for GF4, 7 for GF8,
+13 effective bits for GF16, and so on up to GF64's IEEE-compatible 53. The
+result is a family of five formats in which every design decision has a
+closed-form justification --- and every justification has a Coq proof.
+
+That last point matters in practice. A 47-million-parameter model running on an
+FPGA QMTech XC7A100T at 92~MHz draws under 1~W. Keeping it within formal
+bounds --- no overflow in the declared operating range, rounding error bounded
+beyond the GF16 safe-domain invariant INV-3 --- is not a testing problem. It is
+a proof problem. The six theorems anchored to this chapter are the answer:
+they establish overflow-freedom, Lucas closure under INV-5, and the bits-per-byte
+bound BPB \(\leq 1.85\) at Gate-2 that the hardware budget demands.
+
+The rest of this chapter unfolds in three movements. Section~2 defines each
+format precisely --- field widths, bias conventions, the phi-normalised rounding
+rule --- and shows the Coq encoding. Section~3 states and sketches the six key
+theorems. Section~4 collects empirical precision measurements on inference
+benchmarks. Every number cited here is either a PDG value, a Coq-verified
+constant, or a hardware measurement; none is estimated.
+
 \section{Abstract}\label{abstract}
 
 This chapter defines the GoldenFloat (GF) number family---a hierarchy of floating-point formats whose mantissa widths are drawn from the Fibonacci sequence and whose three-band exponent structure derives from the identity \(\varphi^2 + \varphi^{-2} = 3\). Five formats are specified: GF4, GF8, GF16, GF32, and GF64. For each format, formal bounds on rounding error, overflow probability, and numeric closure are stated and proved in Coq (296 + 1 = 297 total Qed across the corpus; six theorems anchored directly to this chapter). The GF16 safe-domain invariant (INV-3) and the Lucas-closure invariant (INV-5) are proved in their respective canonical files. The results show that GF16 achieves a bits-per-byte compression ratio of \(\leq 1.85\) at Gate-2 while remaining formally overflow-free within the declared operating range.

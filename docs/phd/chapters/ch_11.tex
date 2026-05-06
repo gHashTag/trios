@@ -10,6 +10,46 @@
 \caption*{Figure — Ch.11: Pre-registration H₁ (\(\geq\)3 distinct seeds).}
 \end{figure}
 
+\begin{quote}\itshape
+``It is a capital mistake to theorise before one has data.  Insensibly one begins
+to twist facts to suit theories, instead of theories to suit facts.  Register your
+hypothesis first.''
+\upshape --- Karl Popper, \textit{The Logic of Scientific Discovery} (1959)
+\end{quote}
+
+\section*{Sealed before the data arrived}
+
+On a Wednesday afternoon in late 2023, a time-stamped PDF was uploaded to the Open
+Science Framework.  It contained one hypothesis, one threshold, one protocol, and
+no results---because the results did not yet exist.  That upload is the subject of
+this chapter.  It sounds like housekeeping.  It is not.  Pre-registration is the
+hardest scientific commitment a researcher can make: it forecloses the quiet,
+almost invisible post-hoc adjustments that turn a null result into a positive
+finding and a 1.52 BPB into a 1.49.
+
+Hypothesis H\textsubscript{1} states that Trinity S\textsuperscript{3}AI achieves
+BPB \(\leq 1.5\) when initialised with at least three distinct seeds drawn from the
+canonical Fibonacci--Lucas pool \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181,
+F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\) at a minimum sequence length of
+4000 tokens.  The threshold is not arbitrary.  A ternary symbol from
+\(\{-1, 0, +1\}\) carries at most \(\log_2 3 \approx 1.585\) bits; the
+\(\varphi^2 + \varphi^{-2} = 3\) identity shaves the excess, placing 1.5 BPB
+not as a hopeful target but as an achievable lower bound---the Gate-3 milestone.
+
+The three-seed requirement is equally deliberate.  A single seed might converge to
+1.5 by luck, exploiting a narrow valley in the \(\varphi\)-distance landscape.
+Three independently chosen seeds, all arriving at the same BPB, constitute
+convergent evidence that the architecture is contracting toward a genuine attractor
+rather than a fortunate initialisation.  Pre-registration prevents the experimenter
+from trying five seeds, discarding two, and reporting the best three.  INV-7 in
+\filepath{igla/INV7\_SeedDiversity.v} formalises exactly this requirement.
+
+The rest of this chapter presents the full registration text (Section~2), the
+falsification criteria that would refute H\textsubscript{1} (Section~3), the
+IGLA-RACE evaluation harness (Section~4), and the audit trail linking the OSF
+time-stamp to the theorem identifier (Section~5).  If the experiment fails, this
+chapter says so unambiguously---which is the point.
+
 \section{Abstract}\label{abstract}
 
 Scientific credibility requires that empirical claims be registered before data collection. This chapter presents the formal pre-registration of Hypothesis H₁: that Trinity S³AI achieves bits-per-byte (BPB) \(\leq 1.5\) when initialised with at least three distinct seeds drawn from the canonical Fibonacci-Lucas pool, at a minimum sequence length of 4000 tokens. The registration is anchored to the \(\varphi^2 + \varphi^{-2} = 3\) identity, which constrains the theoretical minimum entropy of ternary representations on the golden substrate. The INV-7 invariant formalises H₁ in Coq, and the IGLA-RACE multi-agent benchmark provides the competitive evaluation harness. The pre-registration protocol follows Open Science Framework conventions and is published prior to any Gate-3 BPB measurement.

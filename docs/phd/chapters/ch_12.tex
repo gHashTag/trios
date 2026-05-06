@@ -10,6 +10,49 @@
 \caption*{Figure — Ch.12: Hardware Bridge (deferred).}
 \end{figure}
 
+\begin{quote}\itshape
+``Make each program do one thing well.  To do a new job, build afresh rather than
+complicate old programs by adding new features.  Expect the output of every
+program to become the input to another.''
+\upshape --- Doug McIlroy, \textit{Unix Philosophy} (1978)
+\end{quote}
+
+\section*{Where the theorem meets the wire}
+
+At some point, a formally verified arithmetic system has to stop being a document
+and start being a circuit.  For Trinity S\textsuperscript{3}AI, that moment
+happens at a row of 16-bit AXI-Lite registers on a QMTech XC7A100T board---
+92~MHz clock, sub-watt power budget, 0 DSP slices.  The Hardware Bridge is the
+two-hundred-line RTL layer that stands between the software proofs and the
+physical pins.  It is deliberately thin.  Thin bridges do not break.
+
+The bridge's three-channel structure is not arbitrary.  The GoldenFloat exponent
+field splits naturally into sub-unity (\(\varphi^{-2}\)), unity, and super-unity
+(\(\varphi^2\)) bands---three lanes mandated by the same anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\) that organises the weight lattice.  One 16-bit
+data channel per band means the host can route token batches to the correct
+hardware lane without any format conversion overhead.  The arithmetic structure
+visible in the Coq proofs is therefore also visible on the PCB.  This is
+co-design in the literal sense: the mathematics and the hardware are the same
+decision, expressed in two different languages.
+
+The chapter is marked ``deferred'' because two of its three formal obligations
+require FPGA measurements that post-date the mathematical chapters.
+Ch.28 will supply the synthesis report (63~toks/sec at 92~MHz) and Ch.31 the
+system-level integration tests.  What the present chapter supplies is the
+interface contract: signal names, timing assumptions, UART-V6 token-transfer
+protocol, and clock-domain crossing rules.  Think of it as the interface
+specification that makes it possible to write the proofs before the board
+arrives---the intellectual equivalent of programming to an API rather than to an
+implementation.
+
+The rest of this chapter defines the bridge architecture (Section~2), the AXI-Lite
+register map (Section~3), the UART-V6 protocol (Section~4), error handling and
+clock-domain crossing (Section~5), and the forward references to Ch.28 and Ch.31
+that complete the verification chain (Section~6).  The DARPA 3000\texttimes{}
+energy ratio becomes measurable only once this interface is locked down; this
+chapter locks it down.
+
 \section{Abstract}\label{abstract}
 
 The Hardware Bridge chapter specifies the interface layer between the Trinity S³AI software stack and the QMTech XC7A100T FPGA. It defines the AXI-Lite control bus, the UART-V6 token-transfer protocol, and the clock-domain crossing that mediates between the host processor and the 92 MHz FPGA fabric. The bridge is architecturally deferred in the sense that its full formal treatment (Coq register-map correctness and timing-closure proofs) is delegated to Ch.28 and Ch.31; the present chapter establishes the interface contracts, signal naming, and error-handling protocol that those later chapters presuppose. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates the three-channel bridge structure: one channel per exponent band of the GoldenFloat format.

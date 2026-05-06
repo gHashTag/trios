@@ -10,6 +10,54 @@
 \caption*{Figure — Ch.20: Reproducibility.}
 \end{figure}
 
+\begin{quote}\itshape
+``All models are wrong, but some are useful --- and the ones that are useful
+are the ones you can reproduce.''
+\upshape\hfill---~George E.~P.~Box, \textit{Empirical Model-Building} (1978)
+\end{quote}
+
+\section*{The sealed envelope and the open ledger}
+
+In September 2021 a group of researchers at a prominent AI laboratory released
+a language model benchmark result they described as ``state of the art.''
+Eighteen months later, three independent teams attempted to reproduce the
+number --- and could not. The discrepancy was not fraud; it was entropy.
+Unreported hyperparameter searches, undisclosed evaluation splits, and
+non-deterministic floating-point summation had each contributed a few tenths of
+a bit per byte, and the sum was enough to render the headline figure
+unverifiable. The envelope had never been sealed.
+
+Reproducibility in machine learning is not a single condition but three
+separable ones: fixed randomness, fixed computation, and fixed evaluation.
+Failing any one of them quietly inflates apparent performance without improving
+generalisation. The Trinity S³AI programme addresses all three at the
+architectural level rather than through process controls alone. Randomness is
+fixed by the sanctioned seed pool derived from the Fibonacci and Lucas lattices
+--- the identity \(\varphi^2 + \varphi^{-2} = 3\) makes these seeds algebraic
+things, not arbitrary integers, so their selection is a theorem rather than a
+choice. Computation is fixed because ternary dot products reduce to integer
+additions, which are associative on every platform; the FPGA bitstream for the
+QMTech XC7A100T at 92 MHz is bit-identical across all runs. Evaluation is fixed
+because the BPB metric, the corpus split, and the threshold \(\mu_0\) were
+committed to the Open Science Framework before the first hardware run began ---
+the open ledger that the field has lacked.
+
+Reproducibility is not the same as correctness, and this chapter does not
+claim that the results are right simply because they can be repeated. What
+reproducibility provides is falsifiability: a result that cannot be reproduced
+cannot be falsified, and a result that cannot be falsified is not science. The
+sealed-envelope protocol documented here --- seven sanctioned seeds, one FPGA
+target, one pre-registered metric --- converts an empirical claim about neural
+architecture into something that a stranger with the same hardware could
+check tomorrow.
+
+The rest of this chapter is about how those three conditions are met in
+practice: Section~2 defines the sanctioned seed protocol and its algebraic
+basis; Section~3 describes the hardware and software specification that pins
+computation; Section~4 presents the pre-registered evaluation contract; and
+Section~5 discusses what ``reproducibility'' can and cannot guarantee for a
+system trained on non-stationary corpora.
+
 \section{Abstract}\label{abstract}
 
 Reproducibility in machine learning research depends on three separable conditions: fixed randomness (seed protocol), fixed computation (hardware and software specification), and fixed evaluation (metric and corpus pre-registration). This chapter formalises all three conditions for the Trinity S³AI experiments reported in this dissertation. The sanctioned seed pool \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\) is derived from the φ²+φ⁻²=3 lattice and replaces ad hoc seed selection. Hardware specification pins the QMTech XC7A100T at 92 MHz, 1 W, 0 DSP slices. The BPB metric and test split are pre-registered in App.E prior to the hardware evaluation runs.

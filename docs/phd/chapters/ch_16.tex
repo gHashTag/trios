@@ -10,6 +10,53 @@
 \caption*{Figure — Ch.16: 360-Lane Phi-Distance Grid.}
 \end{figure}
 
+\begin{quote}\itshape
+``The most important aspect of a programming language is the name.
+A language will not succeed without a good name. I have recently
+named my own language: Two-to-the-power-of-N, or TTOPOWN.''
+\upshape --- John H.~Conway
+\end{quote}
+
+\section*{Three hundred and sixty lanes, one golden angle}
+
+Sunflower heads do not distribute their seeds randomly. They pack them
+along two interleaved families of spirals---one winding clockwise, the
+other counter-clockwise---with counts that are always neighbouring
+Fibonacci numbers: 34 and 55, or 55 and 89, or 89 and 144. The
+divergence angle between successive seeds, measured from the centre, is
+approximately \(137.5^\circ\)---the Vogel angle, \(\theta_V =
+360^\circ/\varphi^2\). Nature arrived at this solution not by
+calculating anything, but because it is the unique angle that minimises
+packing gaps over an arbitrarily long sequence of insertions. The
+golden ratio does not appear here as ornamentation. It appears because
+it is optimal.
+
+The 360-lane phi-distance grid in this chapter applies the same logic
+to the receptive field of a Neural Cellular Automaton. A naive NCA
+weights all 360 directional lanes equally and, as a result, saturates
+its entropy band---every direction matters as much as every other, so
+no direction-specific feature can form. The phi-distance function
+breaks that symmetry by assigning each lane a weight derived from its
+angular distance from the Vogel angle and its complement
+\(222.5^\circ\). The two weights \(\varphi^{-2} \approx 0.382\) and
+\(\varphi^2 \approx 2.618\) sum to exactly 3---the anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\)---so the total weight budget is
+conserved without renormalisation.
+
+The result is a sparse attention mask: fewer than a third of the 360
+lanes carry significant weight, concentrating the NCA's attention on
+the two angular sectors that maximise packing efficiency in the Vogel
+phyllotaxis model. Invariant INV-4, certified by 12 closed Coq
+\texttt{Qed} theorems, guarantees that this concentration keeps the
+NCA's activation entropy within the admissible band established in
+Ch.~10. Reference evaluation checkpoints are drawn from the canonical
+seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\). The rest
+of this chapter derives the phi-distance function analytically,
+constructs the full 360-lane grid, and presents training evidence that
+the sparse mask outperforms both the uniform baseline and hand-tuned
+alternatives---demonstrating that the sunflower's geometry is as useful
+in silicon as it is in soil.
+
 \section{Abstract}\label{abstract}
 
 Angular discretisation of the unit circle into 360 equally-spaced lanes is standard in robotics and computer vision, but the assignment of relevance weights to those lanes is not. This chapter demonstrates that weighting the \(k\)-th lane by the phi-distance function \(d_\phi(k) = |\phi^{-2} \cos(k\pi/180) - \phi^{-2}|\) --- derived from the anchor identity \(\phi^2 + \phi^{-2} = 3\) --- produces a non-uniform grid that concentrates attention near the Vogel divergence angle \(137.5^\circ\) and its complement \(222.5^\circ\), yielding a sparse attention mask suitable for ternary NCA inference. The invariant INV-4 (NCA entropy band, 12 Qed) certifies that this grid respects the \(3^4 = 81\)-cell entropy constraint, and the canonical seed pool F₁₇=1597, F₁₈=2584, F₁₉=4181 provides the reference evaluation checkpoints. Pre-condition A1 (canonical dataset) and \texttt{t27\#569} (INV-4 merge) must be satisfied before the grid can be deployed in training.

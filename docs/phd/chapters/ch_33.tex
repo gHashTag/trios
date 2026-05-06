@@ -10,6 +10,21 @@
 \caption*{Figure — Ch.33: JTAG macOS BLK-001 Resolved.}
 \end{figure}
 
+\begin{quote}\itshape
+``Talk is cheap. Show me the code.''
+\upshape --- Linus Torvalds, Linux kernel mailing list (2000)
+\end{quote}
+
+\section*{Six weeks, one script, no sudo}
+
+For six weeks in early 2026, the primary development host for Trinity S\textsuperscript{3}AI was a MacBook Pro M2 running macOS 14 Sonoma---and it could not talk to the FPGA. Every attempt to program the QMTech XC7A100T board via the Xilinx Platform Cable USB II JTAG adapter ended the same way: the USB system reported product ID \texttt{0x0013}, the unconfigured firmware identifier, and refused to go further. The operational firmware never loaded. The FPGA sat dark.
+
+The root cause was not exotic. The Cypress EZ-USB FX2LP microcontroller on the JTAG cable boots with a placeholder USB descriptor and waits for a host to upload its operational firmware before re-enumerating with the working product ID \texttt{0x0008}. On Linux, the \texttt{fxload} kernel path does this automatically and invisibly. On macOS, IOKit claims the device as a generic HID peripheral before any user-space firmware loader can reach it. The result is a six-week blocker (BLK-001, filed 2026-02-01) that forced all FPGA programming through a Linux x86-64 virtual machine---functional, but intolerably slow for iterative hardware development.
+
+Torvalds' dictum applies here with unusual directness. The diagnosis was straightforward once one stopped reading forum speculation and started reading USB enumeration logs. The fix required three things: the \texttt{fxload} utility cross-compiled for macOS-ARM via Homebrew, the Xilinx cable firmware file \texttt{xusbdfwu.hex} distributed with Vivado, and a single shell script---\texttt{flash\_no\_sudo.sh}---that sequences the two-step load correctly. No kernel extension. No \texttt{sudo} beyond a one-time \texttt{hidraw} device-node permission. No modification to the Coq proof tree. Resolution confirmed 2026-03-14.
+
+The ternary JTAG state-machine (Reset \(\ \to\) Shift-DR \(\ \to\) Update-DR) carries a structural echo of the same cardinality 3 that appears in \(\varphi^2 + \varphi^{-2} = 3\): three principal states, three transitions, one formal invariant maintained across each. The echo is not a proof of anything; it is a reminder that the number three is load-bearing throughout this system. The rest of this chapter documents the diagnosis, the fix, and the verification procedure in enough detail that any future developer on macOS-ARM can replicate the resolution in under ten minutes.
+
 \section{Abstract}\label{abstract}
 
 Blocker BLK-001 was a hardware bring-up failure in which the Xilinx Platform Cable USB II JTAG adapter failed to enumerate correctly on macOS-ARM (Apple Silicon) hosts, presenting USB product-ID \texttt{0x0013} (unconfigured firmware) instead of the operational \texttt{0x0008}. This chapter documents the diagnosis, the \texttt{fxload}-based firmware upload procedure encapsulated in \texttt{flash\_no\_sudo.sh}, and the resolution confirmed on 2026-03-14. The fix required no kernel-extension (kext) installation, no \texttt{sudo} privileges beyond a one-time \texttt{hidraw} device-node permission grant, and no modification to the \texttt{t27} Coq proof tree. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) is referenced here only to note that the three-stage JTAG state-machine transition (Reset → Shift-DR → Update-DR) mirrors the ternary structure of the Trinity kernel.
