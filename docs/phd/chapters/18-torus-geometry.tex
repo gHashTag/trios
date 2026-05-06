@@ -374,3 +374,34 @@ https://arxiv.org/abs/2401.06118
 Quantization of Large Language Models With
 Guarantees. arXiv:2307.13304.
 https://arxiv.org/abs/2307.13304
+
+\section{Falsification}
+\label{sec:falsification:ch18}
+
+\paragraph{Pre-registered claim (R7).}
+The torus-embedded $\varphi$-distance grid produces a measurable separation
+between champion and saturation lanes. The anchor identity
+$\varphi^2 + \varphi^{-2} = 3$ enforces that the toroidal mode count
+collapses to three principal harmonics; any deviation refutes the geometry.
+
+\begin{itemize}
+    \item \textbf{Accept band}: dominant harmonic energy concentration
+          $\eta_3 \in [0.95,\,1.00]$ on the first three Fourier modes of
+          the lane occupancy vector.
+    \item \textbf{Reject band}: $\eta_3 < 0.90$ \emph{or} a fourth-mode
+          coefficient exceeding $0.05$ in absolute value.
+\end{itemize}
+
+\paragraph{Refutation predicate.}
+The torus claim is falsified if the lane-spectrum decomposition over the
+360-lane grid (Ch.~17) shows $\eta_3 < 0.90$ for any seed in the sanctioned
+pool, or if a non-trivial fourth Fourier coefficient appears at amplitude
+$> 0.05$. Ledger row in \texttt{ssot.one\_shots} carries
+\verb@{"accept_band":[0.95,1.00], "reject_band":"eta3<0.90 OR |c4|>0.05", "metric":"eta_3"}@.
+
+\paragraph{Linkage.}
+The Limitations subsection (this chapter) enumerates assumptions that, if
+violated, force the reject branch. Appendix~B records the pre-registered
+threshold; Coq lemma \texttt{Trinity.Geometry.TorusModeCount} (three Qed)
+formally bounds the spectral support, leaving harmonic concentration as the
+empirical falsification target.

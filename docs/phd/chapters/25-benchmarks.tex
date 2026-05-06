@@ -352,3 +352,35 @@ Ledger. CYC-1 obligation.
 Ratio.} Broadway Books. §8 (Fibonacci and
 phyllotaxis).
 
+\section{Falsification}
+\label{sec:falsification:ch25}
+
+\paragraph{Pre-registered claim (R7).}
+The $\varphi$-period benchmark suite exhibits a Gate-2 BPB threshold at
+$\le 1.85$ for the M4 (2.7B) configuration and a Gate-3 threshold at
+$\le 1.5$ for M5--M6, both anchored by $\varphi^2 + \varphi^{-2} = 3$.
+The benchmark protocol is invalid if measured BPB lies outside the
+pre-registered envelope.
+
+\begin{itemize}
+    \item \textbf{Accept band (Gate-2)}: $\mathrm{BPB} \in [1.78,\,1.85]$
+          on M4 with PHI\_BIAS $= 60$, training step $\ge 4000$,
+          three sanctioned seeds.
+    \item \textbf{Reject band}: $\mathrm{BPB} > 1.90$ \emph{or}
+          a non-monotone backward step at champion learning rate
+          $\mathrm{lr} = 0.004$.
+\end{itemize}
+
+\paragraph{Refutation predicate.}
+The benchmark is falsified if any reproduction with the sanctioned seed
+pool $\{1597,2584,4181,6765,10946,29,47\}$ yields $\mathrm{BPB} > 1.90$ at
+M4 step $\ge 4000$, or if the INV-1 monotonicity invariant is violated.
+Ledger row in \texttt{ssot.one\_shots} carries
+\verb@{"accept_band":[1.78,1.85], "reject_band":">1.90 OR !INV1", "metric":"BPB_M4_step4000"}@.
+
+\paragraph{Linkage.}
+INV-1 (\texttt{Trinity.Canonical.Igla.INV1\_BpbMonotoneBackward}, nine Qed)
+formally guards the monotonicity dimension. Appendix~B catalogues the
+pre-registered Gate-2 / Gate-3 thresholds, and Appendix~G provides the data
+availability statement under which these measurements are reproducible.
+The empirical band remains the open falsifiable obligation.

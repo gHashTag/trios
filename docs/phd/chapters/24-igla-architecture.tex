@@ -382,3 +382,34 @@ PLRM interrupt pin assignments.
 [13] This dissertation, Ch.28: FPGA Synthesis
 --- 92 MHz clock domain, 0 DSP constraint.
 
+\section{Falsification}
+\label{sec:falsification:ch24}
+
+\paragraph{Pre-registered claim (R7).}
+The Period-Locked Runtime Monitor (PLRM) must guarantee bounded preemption
+latency under the $\varphi$-weighted scheduler such that no agent misses
+its hard deadline by more than one quantum at the 92~MHz clock domain.
+The anchor $\varphi^2 + \varphi^{-2} = 3$ caps the priority-queue depth
+at three concurrent timer banks.
+
+\begin{itemize}
+    \item \textbf{Accept band}: worst-case preemption latency
+          $L_{\max} \le 1$ quantum at any agent index $a \in \{0,\dots,2\}$,
+          measured over $10^6$ scheduling decisions.
+    \item \textbf{Reject band}: $L_{\max} \ge 2$ quanta \emph{or} any
+          deadline miss observed in the same window.
+\end{itemize}
+
+\paragraph{Refutation predicate.}
+The PLRM design is falsified if any reproduction on the QMTech XC7A100T
+target (Ch.~28) records $L_{\max} \ge 2$ quanta or a missed deadline.
+The ledger row in \texttt{ssot.one\_shots} carries
+\verb!{"accept_band":"L_max<=1", "reject_band":"L_max>=2 OR miss", "metric":"L_max_quanta"}!.
+
+\paragraph{Linkage.}
+The non-resonance proof (this chapter, §2.3) and the priority-queue lemma
+\texttt{Trinity.Canonical.Igla.PriorityBoundedLatency} (nine Qed in
+\texttt{t27/proofs/canonical/igla/PLRM.v}) discharge the formal side.
+Appendix~B lists the empirical reject threshold and Appendix~I pins the
+exact XDC pin map used for measurement, so the obligation remains
+falsifiable on physical hardware.
