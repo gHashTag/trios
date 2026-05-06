@@ -82,9 +82,9 @@
 % Universal margin / line-breaking discipline (fixes 95% of Overfull \hbox).
 \usepackage{microtype}
 \sloppy
-\emergencystretch=3em
+\emergencystretch=6em
 \hyphenpenalty=50
-\tolerance=2000
+\tolerance=9999
 \hbadness=10000
 \setlength{\parskip}{0.4em}
 \setlength{\parindent}{0pt}
@@ -170,11 +170,20 @@
 \Urlmuskip=0mu plus 1mu
 % Permit hyphenation/breaking inside \texttt strings (snake_case, hex, slugs)
 % so they don't shoot past the right margin.
+% Allow hyphenation inside monospace (\texttt) fonts so long paths break.
+\usepackage[htt]{hyphenat}
 \AtBeginDocument{%
   \let\OldTexttt\texttt%
   \protected\def\texttt#1{\OldTexttt{\hspace{0pt}#1\hspace{0pt}}}%
 }
+% Aggressive sloppy + huge emergencystretch keeps long \texttt or URLs from
+% running into the right margin even when no good break point exists.
 \sloppy
+\emergencystretch=6em
+\tolerance=9999
+\hbadness=10000
+\vbadness=10000
+\hfuzz=4pt
 % Allow images to scale down if they declare an oversized width.
 \setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
 \definecolor{golden}{RGB}{212,175,55}
