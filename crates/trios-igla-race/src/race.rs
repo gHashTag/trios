@@ -221,6 +221,47 @@ pub fn simulate_bpb(lr: f64, rung_step: u32, seed: u64) -> f64 {
     (base + penalty + noise).max(0.0)
 }
 
+// ─── Path A · L-FH3 — Real forward bridge dispatcher (gated) ─────────────
+//
+// `simulate_bpb_v2` is the dispatch point that #143 / #446 callers should
+// use going forward. When `TRIOS_USE_REAL_BPB=1`, it spawns the production
+// `cpu_train` binary via `crate::real_forward::forward_real_bpb` with the
+// chosen `TrainerFormat`. Otherwise it falls back BIT-EXACTLY to the legacy
+// `simulate_bpb` formula above so all 16 existing race tests stay green.
+//
+// Hook marker (A1 watchdog): the call to `f32::from_bits` lives inside the
+// body of `forward_real_bpb` (real_forward.rs), not here.
+//
+// On error from the bridge (binary missing, child crash, parse failure) we
+// return `f64::NAN` — `run_trial`'s pipeline already treats NAN as a
+// non-victory, non-prune sentinel (the `<` comparison fails for NaN), which
+// is the right semantics for a "trial could not be evaluated".
+//
+// Pre-registration: docs/preregistration/forward_hook_bridge_v1.md
+// One-shot: ssot.one_shots.OS-001-forward-hook-bridge-v1 (pre-registered)
+pub fn simulate_bpb_v2(lr: f64, rung_step: u32, seed: u64, use_gf16: bool) -> f64 {
+    if !crate::real_forward::is_real_bpb_enabled() {
+        // Bit-exact legacy path. Identical bytes out for identical inputs.
+        let _ = use_gf16; // intentionally unused on legacy path; semantics preserved.
+        return simulate_bpb(lr, rung_step, seed);
+    }
+
+    use crate::real_forward::{forward_real_bpb, TrainerFormat};
+    let fmt = if use_gf16 {
+        TrainerFormat::Gf16
+    } else {
+        TrainerFormat::F32
+    };
+    // For L-FH3 we pass `steps = rung_step` and let the trainer pick its own
+    // LR from its built-in champion config. The bridge contract is BPB-out,
+    // not full hyperparameter passthrough (extension tracked as L-FH7).
+    let _ = lr;
+    match forward_real_bpb(seed, fmt, rung_step) {
+        Ok(bpb) => bpb,
+        Err(_) => f64::NAN,
+    }
+}
+
 /// Deterministic [0, 1) value from `(seed, rung)`. Avoids pulling rand for
 /// the simulator so tests are fully reproducible without an RNG argument.
 fn deterministic_unit(seed: u64, rung: u32) -> f64 {
@@ -285,7 +326,10 @@ pub fn run_trial(
     let mut status = TrialStatus::Completed;
 
     for (_rung, step) in iter_rungs() {
-        let bpb = simulate_bpb(cfg.lr, step, seed);
+        // Path A · L-FH3 dispatch. With TRIOS_USE_REAL_BPB unset → bit-exact
+        // identical to legacy `simulate_bpb(cfg.lr, step, seed)` (verified by
+        // `tests::test_v2_default_matches_legacy`).
+        let bpb = simulate_bpb_v2(cfg.lr, step, seed, cfg.use_gf16);
         last_step = step;
         last_bpb = bpb;
 
@@ -647,5 +691,36 @@ mod tests {
             (0.002..=0.007).contains(&INV1_CHAMPION_LR),
             "champion LR must live in the φ-safe band"
         );
+    }
+
+    /// L-FH3 bit-exact preservation gate (OS-001-forward-hook-bridge-v1).
+    ///
+    /// `simulate_bpb_v2` MUST default to the legacy analytic path when
+    /// `TRIOS_USE_REAL_BPB` is not set — for any (lr, step, seed, gf16) tuple,
+    /// the IEEE-754 f64 bit pattern must equal the legacy `simulate_bpb`.
+    /// This guards against accidental drift while the real `cpu_train`
+    /// hook is still gated behind the env flag.
+    #[test]
+    fn test_v2_default_matches_legacy() {
+        std::env::remove_var("TRIOS_USE_REAL_BPB");
+        for (lr, step, seed) in [
+            (0.005f64, 1_000u32, 42u64),
+            (0.0035, 9_000, 43),
+            (0.007, 20_000, 44),
+        ] {
+            let v1 = simulate_bpb(lr, step, seed);
+            let v2_f32 = simulate_bpb_v2(lr, step, seed, false);
+            let v2_gf16 = simulate_bpb_v2(lr, step, seed, true);
+            assert_eq!(
+                v1.to_bits(),
+                v2_f32.to_bits(),
+                "v2(f32 path, default) must be bit-identical to legacy simulate_bpb"
+            );
+            assert_eq!(
+                v1.to_bits(),
+                v2_gf16.to_bits(),
+                "v2(gf16 path, default) must be bit-identical to legacy simulate_bpb"
+            );
+        }
     }
 }

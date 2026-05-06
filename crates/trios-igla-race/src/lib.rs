@@ -17,6 +17,7 @@ pub mod invariants;
 pub mod lessons;
 pub mod neon;
 pub mod race;
+pub mod real_forward;
 pub mod rungs;
 pub mod sampler;
 pub mod status;
