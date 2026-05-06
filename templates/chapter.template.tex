@@ -1,0 +1,47 @@
+% =============================================================================
+% PhD Monograph v5 — Per-chapter Pandoc template
+% Forces the chapter "hero" illustration to render as the very first block,
+% spanning the full text width with preserved aspect ratio.
+%
+% Used by: scripts/compile_chapter.sh
+%          POST /compile/all?version=v5&force_hero_fullwidth=true
+% Pairs with: filters/force-fullwidth-hero.lua
+% Refs: ssot.chapters.illustration_url, body_md hero prefix migration 005.
+% =============================================================================
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}        % [H] placement specifier
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{fontspec}     % requires xelatex / lualatex / tectonic
+
+% Hero figure: ALWAYS full text-width, ALWAYS at the start of the chapter.
+% #1 = path or URL of the image (resolved before pandoc invocation)
+% #2 = optional caption text (rendered in italic, no figure number)
+\newcommand{\chapterhero}[2]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth,keepaspectratio]{#1}%
+    \ifx\\#2\\\else\caption*{\textit{#2}}\fi
+  \end{figure}%
+  \vspace{0.5em}%
+}
+
+\begin{document}
+
+% First block of every chapter is the hero image (injected by the Lua filter
+% from the leading Markdown image of body_md).
+$if(hero-image)$
+\chapterhero{$hero-image$}{$hero-caption$}
+$endif$
+
+$if(title)$
+\section*{$title$}
+$endif$
+
+$body$
+
+\end{document}
