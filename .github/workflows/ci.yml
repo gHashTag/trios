@@ -63,8 +63,18 @@ jobs:
 
       - name: cargo test (L4 law)
         run: |
-          # Skip trios-ext due to nested workspace issue (see no-js.yml for trios-ext checks)
-          cargo test --all --exclude trios-ext
+          # Skip trios-ext rings (wasm-bindgen tests cannot run on native CI;
+          # see no-js.yml for trios-ext-specific checks). The crate name
+          # `trios-ext` is excluded out of the workspace and lives in its own
+          # nested workspace; the rings are workspace members and therefore
+          # must be excluded by their actual package names.
+          cargo test --all \
+            --exclude trios-ext \
+            --exclude trios-ext-ring-ex00 \
+            --exclude trios-ext-ring-ex01 \
+            --exclude trios-ext-ring-ex02 \
+            --exclude trios-ext-ring-ex03 \
+            --exclude trios-ext-bronze-xtask
 
       - name: cargo build release
         run: cargo build --release -p trios-server
