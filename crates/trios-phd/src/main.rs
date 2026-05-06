@@ -67,6 +67,31 @@ enum Cmd {
     },
     /// Compile `main.tex` via the system `tectonic` binary.
     Compile,
+    /// PhD v5 — compile every Markdown chapter in `docs/golden-sunflowers/`
+    /// to a per-chapter PDF using `pandoc` + the v5 hero-fullwidth template
+    /// and Lua filter.
+    ///
+    /// R1 (CROWN): no `.py`, no `.sh` — this subcommand replaces the legacy
+    /// `v4/generate_from_neon.py` flow with a Rust-only pipeline. It assumes
+    /// the Markdown sources have already been synced from `ssot.chapters` by
+    /// migration `005_hero_fullwidth.sql` and the standard NEON → repo sync.
+    CompileChapters {
+        /// Directory of input Markdown chapters.
+        #[arg(long, default_value = "docs/golden-sunflowers")]
+        chapters_dir: PathBuf,
+        /// Pandoc LaTeX template (chapter-level).
+        #[arg(long, default_value = "templates/chapter.template.tex")]
+        template: PathBuf,
+        /// Lua filter that promotes the first image to block #1 / 100% width.
+        #[arg(long, default_value = "filters/force-fullwidth-hero.lua")]
+        lua_filter: PathBuf,
+        /// Output directory for `.tex` and `.pdf` artefacts.
+        #[arg(long, default_value = "docs/golden-sunflowers/pdf")]
+        out_dir: PathBuf,
+        /// Skip tectonic; only emit `.tex` (faster smoke test).
+        #[arg(long)]
+        tex_only: bool,
+    },
 }
 
 // -------------------------------------------------------------------------
@@ -301,6 +326,133 @@ fn compile(phd_root: &Path) -> Result<()> {
 }
 
 // -------------------------------------------------------------------------
+// COMPILE-CHAPTERS (PhD v5 — Markdown → TeX → PDF, per chapter)
+// -------------------------------------------------------------------------
+
+fn compile_chapters(
+    chapters_dir: &Path,
+    template: &Path,
+    lua_filter: &Path,
+    out_dir: &Path,
+    tex_only: bool,
+) -> Result<()> {
+    if !chapters_dir.is_dir() {
+        return Err(anyhow!(
+            "chapters_dir not found: {}",
+            chapters_dir.display()
+        ));
+    }
+    if !template.is_file() {
+        return Err(anyhow!("template not found: {}", template.display()));
+    }
+    if !lua_filter.is_file() {
+        return Err(anyhow!("lua filter not found: {}", lua_filter.display()));
+    }
+    std::fs::create_dir_all(out_dir)
+        .with_context(|| format!("creating out_dir {}", out_dir.display()))?;
+
+    // Collect every *.md directly under chapters_dir, deterministic order.
+    let mut sources: Vec<PathBuf> = std::fs::read_dir(chapters_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("md"))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n != "README.md")
+                .unwrap_or(false)
+        })
+        .collect();
+    sources.sort();
+
+    if sources.is_empty() {
+        return Err(anyhow!(
+            "no chapter Markdown files in {}",
+            chapters_dir.display()
+        ));
+    }
+
+    let mut ok = 0usize;
+    let mut failed: Vec<(String, String)> = Vec::new();
+    for src in &sources {
+        let stem = src
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("chapter");
+        let tex_out = out_dir.join(format!("{stem}.tex"));
+        let pdf_out = out_dir.join(format!("{stem}.pdf"));
+
+        // Step 1: pandoc Markdown -> LaTeX with v5 template + Lua filter.
+        let pandoc_status = std::process::Command::new("pandoc")
+            .arg(src)
+            .arg("--from=markdown")
+            .arg("--to=latex")
+            .arg("--standalone")
+            .arg(format!("--template={}", template.display()))
+            .arg(format!("--lua-filter={}", lua_filter.display()))
+            .arg("-o")
+            .arg(&tex_out)
+            .status()
+            .with_context(|| {
+                "failed to spawn `pandoc` — install it (https://pandoc.org/installing.html)"
+            })?;
+        if !pandoc_status.success() {
+            failed.push((stem.to_string(), format!("pandoc {pandoc_status}")));
+            continue;
+        }
+
+        if tex_only {
+            ok += 1;
+            continue;
+        }
+
+        // Step 2: tectonic LaTeX -> PDF, writing alongside the .tex.
+        let tectonic_status = std::process::Command::new("tectonic")
+            .arg("--keep-logs")
+            .arg("--outdir")
+            .arg(out_dir)
+            .arg(&tex_out)
+            .status()
+            .with_context(|| {
+                "failed to spawn `tectonic` — install via `cargo install tectonic`"
+            })?;
+        if !tectonic_status.success() {
+            failed.push((stem.to_string(), format!("tectonic {tectonic_status}")));
+            continue;
+        }
+        if !pdf_out.is_file() {
+            failed.push((stem.to_string(), "pdf not produced".to_string()));
+            continue;
+        }
+        ok += 1;
+    }
+
+    println!(
+        "{}",
+        serde_json::json!({
+            "anchor": TRINITY_ANCHOR,
+            "version": "v5",
+            "hero_fullwidth": true,
+            "chapters_total": sources.len(),
+            "chapters_ok": ok,
+            "chapters_failed": failed.len(),
+            "out_dir": out_dir.display().to_string(),
+            "tex_only": tex_only,
+            "failures": failed.iter().map(|(s,e)| serde_json::json!({"chapter": s, "error": e})).collect::<Vec<_>>(),
+        })
+    );
+
+    if !failed.is_empty() {
+        return Err(anyhow!(
+            "v5 compile-chapters: {} of {} chapters failed",
+            failed.len(),
+            sources.len()
+        ));
+    }
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
 // HELPERS
 // -------------------------------------------------------------------------
 
@@ -356,6 +508,13 @@ fn main() -> ExitCode {
         Cmd::CoqMap { check } => coq_map(&cli.phd_root, *check),
         Cmd::Reproduce { out } => reproduce(&cli.phd_root, out.clone()),
         Cmd::Compile => compile(&cli.phd_root),
+        Cmd::CompileChapters {
+            chapters_dir,
+            template,
+            lua_filter,
+            out_dir,
+            tex_only,
+        } => compile_chapters(chapters_dir, template, lua_filter, out_dir, *tex_only),
     };
     match r {
         Ok(()) => ExitCode::SUCCESS,
@@ -527,6 +686,76 @@ mod tests {
         // R7: lr ∉ [0.002, 0.007] is forbidden.
         let lr_bad = 0.01_f64;
         assert!(!(lr_bad >= 0.002 && lr_bad <= 0.007));
+    }
+
+    #[test]
+    fn test_compile_chapters_rejects_missing_template() {
+        let d = tempfile::tempdir().unwrap();
+        let chapters = d.path().join("chapters");
+        std::fs::create_dir_all(&chapters).unwrap();
+        std::fs::write(chapters.join("ch-1.md"), "![hero](x.png)\n\n# t\n").unwrap();
+        let out = d.path().join("out");
+        let err = compile_chapters(
+            &chapters,
+            &d.path().join("missing.tex"),
+            &d.path().join("missing.lua"),
+            &out,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("template not found"));
+    }
+
+    #[test]
+    fn test_compile_chapters_rejects_missing_lua_filter() {
+        let d = tempfile::tempdir().unwrap();
+        let chapters = d.path().join("chapters");
+        std::fs::create_dir_all(&chapters).unwrap();
+        let template = d.path().join("chapter.template.tex");
+        std::fs::write(&template, "\\documentclass{article}\\begin{document}$body$\\end{document}\n").unwrap();
+        std::fs::write(chapters.join("ch-1.md"), "![hero](x.png)\n\n# t\n").unwrap();
+        let out = d.path().join("out");
+        let err = compile_chapters(
+            &chapters,
+            &template,
+            &d.path().join("missing.lua"),
+            &out,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("lua filter not found"));
+    }
+
+    #[test]
+    fn test_compile_chapters_rejects_empty_dir() {
+        let d = tempfile::tempdir().unwrap();
+        let chapters = d.path().join("chapters");
+        std::fs::create_dir_all(&chapters).unwrap();
+        let template = d.path().join("chapter.template.tex");
+        let lua = d.path().join("force-fullwidth-hero.lua");
+        std::fs::write(&template, "\\documentclass{article}\\begin{document}$body$\\end{document}\n").unwrap();
+        std::fs::write(&lua, "function Pandoc(d) return d end\n").unwrap();
+        let out = d.path().join("out");
+        let err = compile_chapters(&chapters, &template, &lua, &out, true).unwrap_err();
+        assert!(format!("{err}").contains("no chapter Markdown files"));
+    }
+
+    #[test]
+    fn test_compile_chapters_skips_readme() {
+        // Validate that README.md is filtered out and only real chapters are
+        // collected. We can't run pandoc/tectonic in unit tests, so we check
+        // the listing logic by faking a chapters dir with only a README.
+        let d = tempfile::tempdir().unwrap();
+        let chapters = d.path().join("chapters");
+        std::fs::create_dir_all(&chapters).unwrap();
+        std::fs::write(chapters.join("README.md"), "# readme\n").unwrap();
+        let template = d.path().join("chapter.template.tex");
+        let lua = d.path().join("force-fullwidth-hero.lua");
+        std::fs::write(&template, "x").unwrap();
+        std::fs::write(&lua, "x").unwrap();
+        let out = d.path().join("out");
+        let err = compile_chapters(&chapters, &template, &lua, &out, true).unwrap_err();
+        assert!(format!("{err}").contains("no chapter Markdown files"));
     }
 
     #[test]
