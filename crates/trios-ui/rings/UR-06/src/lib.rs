@@ -12,6 +12,7 @@ use trios_ui_ur02::{Badge, BadgeVariant, Button, ButtonVariant};
 // ─── McpPanel ────────────────────────────────────────────────
 
 /// Full MCP tools panel.
+#[component]
 pub fn McpPanel() -> Element {
     let palette = use_palette();
     let mcp = use_mcp_atom();
@@ -46,8 +47,8 @@ pub fn McpPanel() -> Element {
                     "MCP Tools ({tools_count})"
                 }
                 Badge {
-                    children: if connected { "connected".to_string() } else { "disconnected".to_string() },
                     variant: if connected { BadgeVariant::Success } else { BadgeVariant::Error },
+                    {if connected { "connected" } else { "disconnected" }}
                 }
             }
             // Server URL
@@ -61,7 +62,7 @@ pub fn McpPanel() -> Element {
             }
             // Tool list
             for tool in mcp.read().tools.iter() {
-                { McpToolCard { key: "{tool.name}", tool: tool.clone() } }
+                McpToolCard { key: "{tool.name}", tool: tool.clone() }
             }
             if !connected {
                 div {
@@ -89,6 +90,7 @@ pub struct McpToolCardProps {
 }
 
 /// Render a single MCP tool with name, description, and execute button.
+#[component]
 pub fn McpToolCard(props: McpToolCardProps) -> Element {
     let palette = use_palette();
     let tool = &props.tool;

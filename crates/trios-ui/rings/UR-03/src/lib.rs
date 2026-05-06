@@ -50,7 +50,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                 overflow: hidden;
             ",
             for (idx, item) in props.items.iter().enumerate() {
-                { render_nav_item(idx, item, &props, palette) }
+                { render_nav_item(idx, item, &props, &palette) }
             }
         }
     }
@@ -122,7 +122,7 @@ pub fn Tabs(props: TabsProps) -> Element {
                 gap: 0;
             ",
             for tab in props.tabs.iter() {
-                { render_tab(tab, &props, palette) }
+                { render_tab(tab, &props, &palette) }
             }
         }
     }

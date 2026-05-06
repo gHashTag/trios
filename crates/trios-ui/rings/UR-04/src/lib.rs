@@ -10,6 +10,7 @@ use trios_ui_ur01::{use_palette, radius, spacing, typography};
 // ─── ChatPanel ───────────────────────────────────────────────
 
 /// Full chat panel with messages and input.
+#[component]
 pub fn ChatPanel() -> Element {
     let palette = use_palette();
     let chat = use_chat_atom();
@@ -33,7 +34,7 @@ pub fn ChatPanel() -> Element {
                     gap: {spacing::SM};
                 ",
                 for msg in chat.read().messages.iter() {
-                    { ChatBubble { key: "{msg.id}", message: msg.clone() } }
+                    ChatBubble { key: "{msg.id}", message: msg.clone() }
                 }
                 if chat.read().is_loading {
                     div {
@@ -48,7 +49,7 @@ pub fn ChatPanel() -> Element {
                 }
             }
             // Input bar
-            { ChatInputBar {} }
+            ChatInputBar {}
         }
     }
 }
@@ -63,6 +64,7 @@ pub struct ChatBubbleProps {
 }
 
 /// Render a single chat message.
+#[component]
 pub fn ChatBubble(props: ChatBubbleProps) -> Element {
     let palette = use_palette();
     let msg = &props.message;
@@ -108,6 +110,7 @@ pub fn ChatBubble(props: ChatBubbleProps) -> Element {
 // ─── ChatInputBar ────────────────────────────────────────────
 
 /// Chat input bar with send button.
+#[component]
 pub fn ChatInputBar() -> Element {
     let palette = use_palette();
     let mut chat = use_chat_atom();
@@ -115,6 +118,7 @@ pub fn ChatInputBar() -> Element {
 
     let current_input = input_text.read().clone();
     let is_empty = current_input.is_empty();
+    let opacity_val = if is_empty { "0.5" } else { "1.0" };
 
     rsx! {
         div {
@@ -159,7 +163,7 @@ pub fn ChatInputBar() -> Element {
                     font-family: {typography::FONT_FAMILY};
                     font-size: {typography::SIZE_MD};
                     cursor: pointer;
-                    opacity: {if is_empty { "0.5" } else { "1.0" }};
+                    opacity: {opacity_val};
                 ",
                 disabled: is_empty,
                 onclick: move |_| {

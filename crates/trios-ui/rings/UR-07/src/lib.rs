@@ -12,6 +12,7 @@ use trios_ui_ur02::{Button, ButtonVariant, Input};
 // ─── SettingsPanel ───────────────────────────────────────────
 
 /// Full settings panel.
+#[component]
 pub fn SettingsPanel() -> Element {
     let palette = use_palette();
     let settings = use_settings_atom();
@@ -19,6 +20,7 @@ pub fn SettingsPanel() -> Element {
         Theme::Dark => "🌙 Dark",
         Theme::Light => "☀️ Light",
     };
+    let theme_label_owned = theme_label.to_string();
 
     rsx! {
         div {
@@ -42,31 +44,29 @@ pub fn SettingsPanel() -> Element {
                 "⚙ Settings"
             }
             // Theme section
-            { SettingsSection {
+            SettingsSection {
                 title: "Appearance".to_string(),
-                children: rsx! {
-                    div {
-                        style: "display: flex; align-items: center; justify-content: space-between;",
-                        span {
-                            style: "
-                                font-family: {typography::FONT_FAMILY};
-                                font-size: {typography::SIZE_MD};
-                                color: {palette.text};
-                            ",
-                            "Theme: {theme_label}"
-                        }
-                        Button {
-                            children: "Toggle Theme".to_string(),
-                            variant: ButtonVariant::Secondary,
-                            onclick: move |_| { toggle_theme(); },
-                        }
+                div {
+                    style: "display: flex; align-items: center; justify-content: space-between;",
+                    span {
+                        style: "
+                            font-family: {typography::FONT_FAMILY};
+                            font-size: {typography::SIZE_MD};
+                            color: {palette.text};
+                        ",
+                        "Theme: {theme_label_owned}"
                     }
-                },
-            } }
+                    Button {
+                        variant: ButtonVariant::Secondary,
+                        onclick: move |_| { toggle_theme(); },
+                        "Toggle Theme"
+                    }
+                }
+            }
             // API Key section
-            { ApiKeySection {} }
+            ApiKeySection {}
             // MCP Server URL section (local + public endpoint switcher)
-            { McpUrlSection {} }
+            McpUrlSection {}
         }
     }
 }
@@ -79,6 +79,7 @@ pub struct SettingsSectionProps {
     pub children: Element,
 }
 
+#[component]
 pub fn SettingsSection(props: SettingsSectionProps) -> Element {
     let palette = use_palette();
 
@@ -111,6 +112,7 @@ pub fn SettingsSection(props: SettingsSectionProps) -> Element {
 
 // ─── ApiKeySection ───────────────────────────────────────────
 
+#[component]
 fn ApiKeySection() -> Element {
     let mut settings = use_settings_atom();
     let api_key = settings.read().api_key.clone();
@@ -142,6 +144,7 @@ const URL_LOCAL: &str = "http://localhost:9005";
 const URL_PUBLIC: &str = "https://playras-macbook-pro-1.tail01804b.ts.net";
 
 /// MCP server URL section with Local / Public quick-select buttons.
+#[component]
 fn McpUrlSection() -> Element {
     let mut settings = use_settings_atom();
     let palette = use_palette();
@@ -149,6 +152,13 @@ fn McpUrlSection() -> Element {
 
     let is_local = mcp_url == URL_LOCAL || mcp_url.starts_with("http://localhost");
     let is_public = mcp_url.contains("tail01804b.ts.net");
+
+    let local_border = if is_local { palette.primary } else { palette.border };
+    let local_bg = if is_local { palette.primary } else { palette.surface };
+    let local_color = if is_local { palette.background } else { palette.text };
+    let public_border = if is_public { palette.primary } else { palette.border };
+    let public_bg = if is_public { palette.primary } else { palette.surface };
+    let public_color = if is_public { palette.background } else { palette.text };
 
     rsx! {
         SettingsSection {
@@ -162,9 +172,9 @@ fn McpUrlSection() -> Element {
                         flex: 1;
                         padding: 6px 0;
                         border-radius: {radius::MD};
-                        border: 1px solid {if is_local { palette.accent } else { palette.border }};
-                        background: {if is_local { palette.accent } else { palette.surface }};
-                        color: {if is_local { palette.background } else { palette.text }};
+                        border: 1px solid {local_border};
+                        background: {local_bg};
+                        color: {local_color};
                         font-family: {typography::FONT_FAMILY};
                         font-size: {typography::SIZE_SM};
                         cursor: pointer;
@@ -180,9 +190,9 @@ fn McpUrlSection() -> Element {
                         flex: 1;
                         padding: 6px 0;
                         border-radius: {radius::MD};
-                        border: 1px solid {if is_public { palette.accent } else { palette.border }};
-                        background: {if is_public { palette.accent } else { palette.surface }};
-                        color: {if is_public { palette.background } else { palette.text }};
+                        border: 1px solid {public_border};
+                        background: {public_bg};
+                        color: {public_color};
                         font-family: {typography::FONT_FAMILY};
                         font-size: {typography::SIZE_SM};
                         cursor: pointer;

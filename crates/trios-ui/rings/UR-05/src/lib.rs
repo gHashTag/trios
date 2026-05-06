@@ -11,6 +11,7 @@ use trios_ui_ur02::{Badge, BadgeVariant};
 // ─── AgentList ───────────────────────────────────────────────
 
 /// Full agent list panel.
+#[component]
 pub fn AgentList() -> Element {
     let palette = use_palette();
     let agents = use_agents_atom();
@@ -37,7 +38,7 @@ pub fn AgentList() -> Element {
                 "Agents ({agents.read().len()})"
             },
             for agent in agents.read().iter() {
-                { AgentCard { key: "{agent.id}", agent: agent.clone() } }
+                AgentCard { key: "{agent.id}", agent: agent.clone() }
             }
             if agents.read().is_empty() {
                 div {
@@ -65,6 +66,7 @@ pub struct AgentCardProps {
 }
 
 /// Render a single agent card with status badge.
+#[component]
 pub fn AgentCard(props: AgentCardProps) -> Element {
     let palette = use_palette();
     let agent = &props.agent;
@@ -116,8 +118,8 @@ pub fn AgentCard(props: AgentCardProps) -> Element {
             }
             // Right: status badge
             Badge {
-                children: badge_text,
                 variant: badge_variant,
+                {badge_text}
             }
         }
     }
