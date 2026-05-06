@@ -22,6 +22,22 @@ fn test_cli_help() {
 
 #[test]
 fn test_status_command() {
+    // The `status` subcommand shells out to the Tailscale CLI to query the
+    // tailnet. On CI runners (Linux, no Tailscale), the binary is missing
+    // and the command exits non-zero before reaching any Rust assertions.
+    // Skip gracefully when Tailscale is not present (matches the
+    // test_tailscale_cli_path policy below).
+    let macos_cli = std::path::Path::new("/Applications/Tailscale.app/Contents/MacOS/Tailscale");
+    let linux_cli_present = Command::new("which")
+        .arg("tailscale")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !macos_cli.exists() && !linux_cli_present {
+        eprintln!("test_status_command: Tailscale CLI not installed, skipping");
+        return;
+    }
+
     let output = Command::new("cargo")
         .args(["run", "-p", "tri-tunnel", "--", "status"])
         .output()
