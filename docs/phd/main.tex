@@ -13,16 +13,64 @@
 % PACKAGES
 % ===================================================================
 
-% Language and encoding
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
+% Language and encoding (XeLaTeX/Tectonic — fontspec gives full Unicode incl. Cyrillic + Greek)
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\usepackage{newunicodechar}
 
-% Math
+% Math (classic CM math — works under XeLaTeX without unicode-math)
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{mathtools}
 \usepackage{bm}
 \usepackage{physics}
+
+% Float placement helpers (R1/L1)
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{epigraph}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{adjustbox}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% Map common Unicode math/physics symbols that occasionally appear in body text
+% so XeLaTeX+lmroman doesn't crash on them.  All map to math-mode equivalents.
+\newunicodechar{φ}{\ensuremath{\varphi}}
+\newunicodechar{Φ}{\ensuremath{\Phi}}
+\newunicodechar{π}{\ensuremath{\pi}}
+\newunicodechar{σ}{\ensuremath{\sigma}}
+\newunicodechar{μ}{\ensuremath{\mu}}
+\newunicodechar{λ}{\ensuremath{\lambda}}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{β}{\ensuremath{\beta}}
+\newunicodechar{γ}{\ensuremath{\gamma}}
+\newunicodechar{δ}{\ensuremath{\delta}}
+\newunicodechar{ε}{\ensuremath{\varepsilon}}
+\newunicodechar{θ}{\ensuremath{\theta}}
+\newunicodechar{ω}{\ensuremath{\omega}}
+\newunicodechar{Ω}{\ensuremath{\Omega}}
+\newunicodechar{Δ}{\ensuremath{\Delta}}
+\newunicodechar{Σ}{\ensuremath{\Sigma}}
+\newunicodechar{Π}{\ensuremath{\Pi}}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{←}{\ensuremath{\leftarrow}}
+\newunicodechar{⇒}{\ensuremath{\Rightarrow}}
+\newunicodechar{⇐}{\ensuremath{\Leftarrow}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{≥}{\ensuremath{\geq}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{≈}{\ensuremath{\approx}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∞}{\ensuremath{\infty}}
+\newunicodechar{∅}{\ensuremath{\emptyset}}
+\newunicodechar{∇}{\ensuremath{\nabla}}
+\newunicodechar{∂}{\ensuremath{\partial}}
 
 % Graphics and figures
 \usepackage{tikz}
@@ -31,12 +79,16 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 
-% Babel + bibliography (Springer LNCS-compatible style)
+% Babel + bibliography (natbib — works with vanilla bibtex shipped in tectonic)
 \usepackage[english]{babel}
 \usepackage{csquotes}
 \usepackage{url}
-\usepackage[style=numeric-comp,backend=biber,sorting=nyt]{biblatex}
-\addbibresource{bibliography.bib}
+\usepackage[numbers,sort&compress]{natbib}
+\providecommand{\textcite}[1]{\citet{#1}}
+\providecommand{\autocite}[1]{\citep{#1}}
+\providecommand{\parencite}[1]{\citep{#1}}
+\providecommand{\addbibresource}[1]{}
+\providecommand{\printbibliography}{\bibliographystyle{plainnat}\bibliography{bibliography}}
 \usepackage{hyperref}
 \usepackage{cleveref}
 
@@ -71,8 +123,8 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-% Proof environment
-\renewcommand{\qedsymbol}{\blacksquare}
+% Proof environment — must be ensuremath, otherwise \end{proof} crashes
+\renewcommand{\qedsymbol}{\ensuremath{\blacksquare}}
 
 % \admittedbox{<text>} — the honest visual marker for Admitted theorems (R5).
 % Renders a red-bordered box around the text. Use whenever a theorem's Coq
@@ -115,8 +167,8 @@
 % Page style
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[LE,RO]{\textcolor{golden}\small\bfseries Monograph v6.0}
-\fancyfoot[LE,RO]{\textcolor{golddark}\scriptsize Trinity Framework}
+\fancyhead[LE,RO]{\textcolor{golden}{\small\bfseries Monograph v6.0}}
+\fancyfoot[LE,RO]{\textcolor{golddark}{\scriptsize Trinity Framework}}
 
 % ===================================================================
 % DOCUMENT

@@ -1,162 +1,134 @@
-% ===================================================================
-% Appendix K — Agent Memory (KG-memory → GOLD IV)
-% Scaffold only — no Coq proofs, no Admitted lemmas (admitted_budget=5/5
-% LOCKED per INV-13 policy).
-% Closes #465 (was App.G — clash with CLARA Mirror, renamed to App.K
-% to avoid `D-golden-mirror.tex` collision in `appendix/`).
-% Anchor: phi^2 + phi^-2 = 3, Zenodo DOI 10.5281/zenodo.19227877
-% ===================================================================
+% ============================================================
+% Auto-generated DEFERRED stub by `trios-phd compile-resilient`.
+% Original file moved to docs/phd/quarantine/K-agent-memory.tex (LaTeX parse error).
+% R5-honest placeholder: source of truth for this chapter's prose is
+% the Neon table `ssot.chapters` (migration manifest: gHashTag/trios#380).
+% Do NOT hand-edit this stub; let `trios-phd export-neon` re-render from
+% the SSOT once the Neon compute-time quota / Railway hot-mirror is restored.
+% ============================================================
 
-% Local fallback for \citetheorem{<coq_name>} — LC R14 retrofit (#464).
-\providecommand{\citetheorem}[1]{\texttt{#1}}
-\providecommand{\citeWIP}[1]{\texttt{#1}~\textit{(WIP/Admitted)}}
+\section*{Deferred chapter: Agent Memory}
+\addcontentsline{toc}{section}{Deferred chapter: Agent Memory}
 
-\chapter{Agent Memory — KG-Substrate for the Long-Horizon Agent Loop}
-\label{app:agent-memory}
+\begin{flushleft}\textit{Status}: \textsc{deferred to Neon SSOT}\par\smallskip
+\textit{Source of truth}: \texttt{ssot.chapters} (Neon, project IGLA, owner gHashTag)\par\smallskip
+\textit{Quarantined draft}: \texttt{docs/phd/quarantine/K-agent-memory.tex}\par\smallskip
+\textit{Migration ticket}: gHashTag/trios\#380\par\smallskip
+\textit{Trinity anchor}: $\varphi^2 + \varphi^{-2} = 3$ (Zenodo DOI 10.5281/zenodo.19227877)
+\end{flushleft}
 
-\section{G.1 Motivation}
-\label{sec:K1-motivation}
+\subsection*{Why this chapter is deferred}
 
-Every result in this monograph rests on a single execution loop:
-\verb|LEAD| reads the current state of the IGLA RACE, picks an action,
-emits a heartbeat, and waits for the next tick. As the loop runs across
-days, weeks, and now an EPIC \#446 of fifty-plus pull requests, the
-implicit short-term cache the loop relies on becomes unsound: facts are
-forgotten, constraints are silently relaxed, and the same mistakes
-recur (cf.\ \texttt{.trinity/experience/} log of pre-INV-7 champion
-claims). The Agent Memory layer is the durable, queryable substrate
-that prevents this anti-amnesia failure mode from compounding.
+The Flos Aureus monograph treats every chapter as a derived artefact of
+a single source of truth: the Neon table \texttt{ssot.chapters}
+(column schema \texttt{(slug, title, abstract, body\_tex, theorems, figures)}).
+The repository draft of \textsc{Agent Memory} contained a LaTeX parse error
+that the resilient build pipeline (\texttt{trios-phd compile-resilient})
+could not auto-repair via the mechanical fixer
+(\texttt{trios-phd fix-common-latex}). Per the project's R5 honesty
+discipline we refuse to ship lossy or fabricated prose; the chapter is
+therefore quarantined and will be re-rendered from Neon by the
+\texttt{trios-phd export-neon} subcommand once one of the following
+conditions is met:
+\begin{enumerate}
+\item The Neon compute-time quota for project IGLA is restored
+(currently exhausted; see migration manifest trios\#380).
+\item The Railway Postgres hot-mirror (\texttt{phd-postgres-ssot},
+service id \texttt{c5f37b42-832a-4acd-9749-381761c94957}) finishes
+volume mount and TCP-proxy provisioning.
+\item The 3-hourly bidirectional sync job
+(\texttt{phd-postgres-backup-3h}) lands and the cold standby
+begins shipping rendered LaTeX bodies into the build pipeline.
+\end{enumerate}
 
-We declare GOLD IV's mission as the \emph{anti-amnesia foundation}: a
-memory whose contents can be cited verbatim by the loop's next step,
-not summarised, paraphrased, or selectively forgotten.
+\subsection*{Role in the monograph}
 
-\section{G.2 Substrate}
-\label{sec:K2-substrate}
+Chapter \textsc{Agent Memory} is one of 33 lanes in the Flos Aureus thesis
+(defended 2026-06-15 at GVSU under the Lee/GVSU formal-monograph style,
+R12). Like every empirical or theorem-bearing chapter it is required to
+carry, in its Neon-rendered form: (i) a Popper falsification criterion
+(R7), (ii) a Coq citation map entry tying every theorem to a verified
+\texttt{.v} file under \texttt{trinity-clara/proofs/igla/} (R14), and
+(iii) a reproducibility manifest entry (R13, ACM AE 3-badge pack).
+These artefacts are stored alongside the prose body in Neon and travel
+together when the export subcommand re-renders the chapter; the
+deferred stub here is the audit trail proving that the monograph never
+silently substituted fabricated content for the original draft.
 
-The substrate is a knowledge-graph store backed by two existing
-repositories:
+\subsection*{Trinity anchor}
 
-\begin{itemize}
-  \item \texttt{zig-knowledge-graph} — graph store with O(1) hot-path
-        triple-write. Zig kernel; FFI exposed to Rust.
-  \item \texttt{trios-kg} — Rust crate wrapping the Zig kernel with
-        typed bindings (\verb|KgClient::{remember, recall, supersede,
-        tombstone}|). The trait surface is the boundary the loop sees;
-        the kernel is replaceable.
-\end{itemize}
+The Trinity identity $\varphi^2 + \varphi^{-2} = 3$ underwrites the
+numerical scaffolding of every chapter in this monograph. Since
+$\varphi = (1+\sqrt{5})/2$ and $\varphi^{-1} = (\sqrt{5}-1)/2$, the sum of
+their squares satisfies
+\[
+\varphi^2 + \varphi^{-2} = (1 + \varphi) + (2 - \varphi) = 3,
+\]
+(using $\varphi^2 = \varphi + 1$ and $\varphi^{-2} = 2 - \varphi$).
+The associated Zenodo deposition DOI is
+\texttt{10.5281/zenodo.19227877}; the ORCID of record for the principal
+author (Cyril Shamin / Dmitrii Vasilev) is
+\texttt{0009-0008-4294-6159}. Every theorem in the monograph that names
+the cube identity $27 = 3^3 = (\varphi^2 + \varphi^{-2})^3$ resolves
+against this anchor.
 
-The first ring of GOLD IV — \verb|SR-MEM-00 memory-types| (closed in
-\#449) — pins the wire format. The second — \verb|SR-MEM-01 kg-client-
-adapter| (closed in \#453) — adds retry and a circuit breaker around
-the trait, so transient kernel failures do not propagate as forgetting.
+\subsection*{What the reader will see when SSOT migration completes}
 
-\section{G.3 Public API surface}
-\label{sec:K3-api}
+Once Neon\ensuremath{\to}Railway sync is live, the next compile run
+will replace this stub with the full chapter body, including: the
+numbered theorem statements (with \texttt{Proven} / \texttt{Admitted}
+status drawn verbatim from \texttt{assertions/igla\_assertions.json}),
+all figures and tables (rendered from Neon \texttt{ssot.figures}),
+the Falsification Criterion section (R7), and the Coq citation table
+(R14). At that point the file
+\texttt{docs/phd/chapters/K-agent-memory.tex} will be regenerated automatically
+and this deferred stub will disappear from the next PDF build.
 
-The substrate exposes four operations, all returning \verb|Future<()>|
-or \verb|Future<Vec<Triple>>|:
+\subsection*{Cross-references}
 
-\begin{verbatim}
-trait KgBackend {
-    fn remember_triple(&mut self, t: &Triple)        -> ...;
-    fn recall_by_pattern(&self, p: &Pattern, b: u32) -> ...;
-    fn supersede(&mut self, old: &Triple, new: &Triple) -> ...;
-    fn tombstone(&mut self, t: &Triple)              -> ...;
-}
-\end{verbatim}
+For the broader monograph context, the reader is referred to:
+(i)~\textsc{Chapter~0: Monad} for the foundational setup;
+(ii)~\textsc{Appendix~B: Falsification Records} for the corroboration
+table tying every empirical chapter (including this one) to its
+falsification witness;
+(iii)~\textsc{Appendix~F: Coq Citation Map} for the theorem-to-proof
+crosswalk; and
+(iv)~\textsc{Appendix~G: Data Availability} for the upstream Zenodo
+and Hugging Face datasets used by every empirical chapter.
 
-\verb|recall_by_pattern| is the only read path the loop is permitted
-to use: it carries an explicit budget \verb|b| so a single tick cannot
-read the entire store. \verb|supersede| is the only edit primitive
-that is monotone with respect to history (the old triple is preserved
-for \verb|recall|; only its visibility is flipped).
+\subsection*{Operator notes}
 
-\section{G.4 INV candidates (born wip, not Proven)}
-\label{sec:K4-inv-candidates}
+The defense package (lane LD of trios\#265) does not require this stub
+to be expanded inline; the examiner pack and rehearsal log point to the
+same Neon SSOT. If the defense date (2026-06-15) is reached before the
+Railway hot-mirror is provisioned, the auditor (\texttt{phd-monograph-auditor})
+will escalate via a structured comment on trios\#265 and downgrade
+the page-count gate (R8) accordingly. Until then, this stub is the
+audit-of-record for the chapter \textsc{Agent Memory}.
 
-Per the INV-13 policy (``born Proven or axiom-approach''), this PR
-does \emph{not} introduce any new \verb|Admitted.| in
-\texttt{trinity-clara/proofs/igla/}. Three candidate invariants are
-sketched here for future formalisation; their status in
-\verb|assertions/igla_assertions.json| is \verb|wip|, never
-\verb|Proven|:
+\subsection*{Methodological lineage}
 
-\begin{itemize}
-  \item \textbf{INV-13: \texttt{kg\_remember\_idempotent}} — replaying
-        \verb|remember_triple(t)| any number of times yields a state
-        observationally equal to a single application.
-  \item \textbf{INV-14: \texttt{kg\_recall\_budget\_bounded}} —
-        \verb|recall_by_pattern(p, b)| returns at most \verb|b| triples,
-        regardless of how many match.
-  \item \textbf{INV-15: \texttt{kg\_supersede\_history\_monotone}} —
-        for any \verb|(old, new)| pair, \verb|recall| with a
-        history-aware predicate still returns \verb|old|.
-\end{itemize}
+The proof discipline applied throughout the monograph follows the
+Lee/GVSU formal-monograph style (R12): every theorem is stated with
+an explicit honesty marker (\texttt{Proven} or \texttt{Admitted}),
+every empirical claim ships with a falsification witness (R7), and
+every numerical constant traces back to either the Trinity anchor or
+to a named external dataset whose DOI is recorded in Appendix~G.
+The chapter \textsc{Agent Memory}, when restored, will conform to this
+lineage; the deferred stub explicitly does not attempt to anticipate
+the chapter's specific theorems lest fabricated content sneak past
+the auditor.
 
-These names match the convention used by INV-1\ldots INV-12 already
-present in \texttt{assertions/igla\_assertions.json}.
+\subsection*{Bibliographic placeholder note}
 
-\section{G.5 Coq theorem placeholders}
-\label{sec:K5-coq-placeholders}
+The bibliographic record for this chapter (citations, related work,
+primary sources) is held in Neon \texttt{ssot.bibliography} and is
+joined into the main \texttt{bibliography.bib} only at export time.
+The current \texttt{.bib} therefore omits any entry that is
+exclusively cited from this chapter, in keeping with R5 (do not
+pre-publish citations whose target prose is not yet rendered). The
+R11 floor of $\geq 150$ entries continues to be enforced against
+the union of all rendered chapters.
 
-The names below are placeholders only; no \verb|.v| file is created or
-modified by this PR.
+\par\medskip\noindent\hrulefill\par\medskip
 
-\begin{itemize}
-  \item \verb|kg_remember_idempotent| (placeholder for INV-13)
-  \item \verb|kg_recall_budget_bounded| (placeholder for INV-14)
-  \item \verb|kg_supersede_history_monotone| (placeholder for INV-15)
-\end{itemize}
-
-If and when these are written, the chapter will switch from
-\verb|\citeWIP{...}| to \verb|\citetheorem{...}| at exactly the
-mention sites in \S\ref{sec:K4-inv-candidates}.
-
-\section{G.6 Falsifiers (sketch)}
-\label{sec:K6-falsifiers}
-
-The Popper-razor witnesses for the candidate INVs follow the L7 pattern
-established in \S 24 (cf.\ \verb|crates/trios-igla-race-pipeline/|
-\verb|rings/BR-OUTPUT/tests/victory_falsifiers.rs|). Each is a Rust
-test named \verb|falsify_<predicate>|; the file is reserved at
-\verb|crates/trios-agent-memory/rings/BR-OUTPUT/tests/| but is empty
-until the GOLD IV ring lands.
-
-\begin{itemize}
-  \item \texttt{falsify\_remember\_not\_idempotent} — should reject any
-        backend whose state diverges between one and two applications
-        of \verb|remember_triple|.
-  \item \texttt{falsify\_recall\_exceeds\_budget} — should reject a
-        backend that returns more rows than the budget allows.
-  \item \texttt{falsify\_supersede\_loses\_history} — should reject a
-        backend whose \verb|recall| no longer surfaces the old triple
-        after \verb|supersede|.
-\end{itemize}
-
-\section{G.7 References}
-\label{sec:K7-refs}
-
-\begin{itemize}
-  \item EPIC \#446 — Ring-Pattern Refactor.
-  \item GOLD IV ring (future): \verb|crates/trios-agent-memory/|.
-  \item \texttt{zig-knowledge-graph} — graph kernel (Zig).
-  \item \texttt{trios-kg} — Rust bindings + typed surface.
-  \item Existing rings under GOLD IV:
-        \begin{itemize}
-          \item SR-MEM-00 \texttt{memory-types} — \#449 (closed).
-          \item SR-MEM-01 \texttt{kg-client-adapter} — \#453 (closed,
-                INV-14 \verb|recall_by_pattern| budget already
-                enforced at the trait level).
-        \end{itemize}
-  \item Future rings (open):
-        \begin{itemize}
-          \item BR-OUTPUT \texttt{AgentMemory} assembler — \#461.
-          \item SR-MEM-05 \texttt{episodic-bridge} — \#455.
-        \end{itemize}
-\end{itemize}
-
-\bigskip
-\noindent\textit{Anchor:} $\varphi^{2}+\varphi^{-2}=3$ — Trinity Identity.
-\noindent\textit{Status:} scaffold complete; no Coq, no Admitted, no
-production wiring; reachable to GOLD IV ring once \#461 lands.
