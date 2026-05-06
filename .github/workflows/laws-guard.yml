@@ -35,7 +35,9 @@ jobs:
 
       - name: Check schema version
         run: |
-          if ! grep -q "LAWS_SCHEMA_VERSION: 2.0" LAWS.md; then
+          # LAWS.md formats the schema version as bold markdown:
+          # `**LAWS_SCHEMA_VERSION:** 2.0`. Tolerate optional asterisks.
+          if ! grep -qE 'LAWS_SCHEMA_VERSION:?\*?\*?[[:space:]]*2\.0' LAWS.md; then
             echo "❌ BREACH: LAWS_SCHEMA_VERSION missing or not 2.0"
             exit 1
           fi
