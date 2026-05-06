@@ -59,7 +59,7 @@ For GF64 the mantissa width is 52 hidden-bit-plus-53 stored bits, preserving IEE
 
 \subsection{2.2 Coq Encoding}\label{coq-encoding}
 
-The Coq development in \texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v} encodes GF64 using the \texttt{Flocq} library's \texttt{Binary.binary\_float} type {[}4{]}. The mantissa parameter is \texttt{prec\ =\ 53} and the exponent parameter is \texttt{emax\ =\ 1024}, matching IEEE binary64. Two canonical constants are defined:
+The Coq development in \filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v} encodes GF64 using the \texttt{Flocq} library's \texttt{Binary.binary\_float} type {[}4{]}. The mantissa parameter is \texttt{prec\ =\ 53} and the exponent parameter is \texttt{emax\ =\ 1024}, matching IEEE binary64. Two canonical constants are defined:
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -87,7 +87,7 @@ The invariant INV-5 (Lucas closure) states that for any \(n\) representable in G
 
 \emph{Proof sketch.} Unfold \texttt{bounded} to two arithmetic inequalities: (a) \texttt{phi\_mantissa\ \textless{}\ 2\^{}53} and (b) \texttt{phi\_exponent\ +\ 53\ ≤\ 1025}. Both are discharged by \texttt{native\_compute}. Qed. {[}gHashTag/trios\#385{]}
 
-\textbf{Theorem 3.2} (\texttt{phi\_sq\_f64\_eq\_phi\_plus\_one\_f64}). \emph{In GF64 arithmetic, \(\varphi^2 = \varphi + 1\).}
+\textbf{Theorem 3.2} (\filepath{phi\_sq\_f64\_eq\_phi\_plus\_one\_f64}). \emph{In GF64 arithmetic, \(\varphi^2 = \varphi + 1\).}
 
 \[\texttt{phi\_sq\_f64} = \texttt{phi\_plus\_one\_f64}\]
 
@@ -97,7 +97,7 @@ The invariant INV-5 (Lucas closure) states that for any \(n\) representable in G
 
 \[\texttt{Rabs}\ (\texttt{B2R64}\ \texttt{phi\_sq\_f64} - \texttt{B2R64}\ \texttt{phi\_plus\_one\_f64}) < \texttt{PHI\_F64\_TOLERANCE}\]
 
-\emph{Proof sketch.} By \texttt{phi\_sq\_f64\_eq\_phi\_plus\_one\_f64}, both arguments to \texttt{Rabs} are the same real value; the difference is 0, which is strictly less than any positive tolerance. Positivity of the tolerance follows from \texttt{PHI\_F64\_TOLERANCE\_pos}. Qed.
+\emph{Proof sketch.} By \filepath{phi\_sq\_f64\_eq\_phi\_plus\_one\_f64}, both arguments to \texttt{Rabs} are the same real value; the difference is 0, which is strictly less than any positive tolerance. Positivity of the tolerance follows from \filepath{PHI\_F64\_TOLERANCE\_pos}. Qed.
 
 \textbf{Proposition 3.4} (INV-3: GF16 safe domain). \emph{For all values \(x\) in the GF16 operating range, \(|x| \leq \varphi^{L_7}\) where \(L_7=29\).}
 
@@ -132,7 +132,7 @@ FP32 (oracle) & 1.68 & 0 & No \\
 
 The GF16 BPB of 1.83 is within the Gate-2 target of \(\leq 1.85\) {[}6{]}. No overflow events were observed across all 1003 tokens for any GoldenFloat format, consistent with the formal proof of INV-3 {[}10{]}. The GF64 identity contract (\texttt{phi\_identity\_contract}) was validated numerically: the measured residual was \(0.0\), matching the proof.
 
-Tolerance constants: \texttt{phi\_tolerance} \(= 2^{-51}\) (half ULP for GF64), confirmed positive by \texttt{phi\_tolerance\_positive} and \texttt{PHI\_F64\_TOLERANCE\_pos}. Both theorems were verified by \texttt{native\_compute} in under 0.3 s on a standard workstation.
+Tolerance constants: \texttt{phi\_tolerance} \(= 2^{-51}\) (half ULP for GF64), confirmed positive by \texttt{phi\_tolerance\_positive} and \filepath{PHI\_F64\_TOLERANCE\_pos}. Both theorems were verified by \texttt{native\_compute} in under 0.3 s on a standard workstation.
 
 Seed pool reference: the Fibonacci indices \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\) bound the token-count ranges used in GF16 accumulator design; \(F_{20}=6765\) and \(F_{21}=10946\) define the maximum vocabulary size tested. Lucas sentinels \(L_7=29\) and \(L_8=47\) appear as exponent-field upper bounds in INV-3 and the period-locked monitor (Ch.24).
 
@@ -140,17 +140,17 @@ Seed pool reference: the Fibonacci indices \(F_{17}=1597\), \(F_{18}=2584\), \(F
 
 \begin{itemize}
 \item
-  \texttt{phi\_f64\_bounded} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The GF64 phi constant satisfies the IEEE binary64 bounded predicate: \texttt{bounded\ 53\ 1024\ phi\_mantissa\ phi\_exponent\ =\ true}.
+  \texttt{phi\_f64\_bounded} (\filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The GF64 phi constant satisfies the IEEE binary64 bounded predicate: \texttt{bounded\ 53\ 1024\ phi\_mantissa\ phi\_exponent\ =\ true}.
 \item
-  \texttt{one\_f64\_bounded} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The GF64 one constant satisfies the bounded predicate: \texttt{bounded\ 53\ 1024\ one\_mantissa\ one\_exponent\ =\ true}.
+  \texttt{one\_f64\_bounded} (\filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The GF64 one constant satisfies the bounded predicate: \texttt{bounded\ 53\ 1024\ one\_mantissa\ one\_exponent\ =\ true}.
 \item
-  \texttt{phi\_sq\_f64\_eq\_phi\_plus\_one\_f64} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- In GF64, \(\varphi^2 = \varphi + 1\) holds as an exact bit-pattern equality.
+  \filepath{phi\_sq\_f64\_eq\_phi\_plus\_one\_f64} (\filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- In GF64, \(\varphi^2 = \varphi + 1\) holds as an exact bit-pattern equality.
 \item
-  \texttt{phi\_identity\_contract} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The residual \(|\mathrm{B2R64}(\varphi^2) - \mathrm{B2R64}(\varphi+1)|\) is strictly below \texttt{PHI\_F64\_TOLERANCE}.
+  \texttt{phi\_identity\_contract} (\filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The residual \(|\mathrm{B2R64}(\varphi^2) - \mathrm{B2R64}(\varphi+1)|\) is strictly below \texttt{PHI\_F64\_TOLERANCE}.
 \item
-  \texttt{phi\_tolerance\_positive} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The phi tolerance constant is strictly positive: \texttt{0\ \textless{}\ phi\_tolerance}.
+  \texttt{phi\_tolerance\_positive} (\filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The phi tolerance constant is strictly positive: \texttt{0\ \textless{}\ phi\_tolerance}.
 \item
-  \texttt{PHI\_F64\_TOLERANCE\_pos} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The macro tolerance constant is strictly positive: \texttt{0\ \textless{}\ PHI\_F64\_TOLERANCE}.
+  \filepath{PHI\_F64\_TOLERANCE\_pos} (\filepath{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The macro tolerance constant is strictly positive: \texttt{0\ \textless{}\ PHI\_F64\_TOLERANCE}.
 \end{itemize}
 
 \section{6. Sealed Seeds}\label{sealed-seeds}
@@ -192,11 +192,11 @@ Future work includes GF128 (sub-1-bit effective width via block-floating-point a
 
 {[}8{]} Zenodo DOI bundle Z05, 10.5281/zenodo.19020215 --- phi-RoPE Attention dataset.
 
-{[}9{]} \texttt{gHashTag/trios\#385} --- Ch.6 one-shot issue, comment 4351384702.
+{[}9{]} \filepath{gHashTag/trios\#385} --- Ch.6 one-shot issue, comment 4351384702.
 
-{[}10{]} \texttt{gHashTag/t27/proofs/canonical/igla/INV3\_Gf16Precision.v} --- INV-3 Coq source.
+{[}10{]} \filepath{gHashTag/t27/proofs/canonical/igla/INV3\_Gf16Precision.v} --- INV-3 Coq source.
 
-{[}11{]} \texttt{gHashTag/t27/proofs/canonical/igla/INV5\_LucasClosureGf16.v} --- INV-5 Lucas closure Coq source.
+{[}11{]} \filepath{gHashTag/t27/proofs/canonical/igla/INV5\_LucasClosureGf16.v} --- INV-5 Lucas closure Coq source.
 
 {[}12{]} Vogel, H. (1979). A better way to construct the sunflower head. \emph{Mathematical Biosciences}, 44(3--4), 179--189. \url{https://doi.org/10.1016/0025-5564}(79)90080-4
 

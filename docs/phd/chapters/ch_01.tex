@@ -22,7 +22,7 @@ The compression of natural language to below two bits per byte has long served a
 
 \[\varphi^2 + \varphi^{-2} = 3\]
 
-constrains weight quantisation to a three-valued palette derived from integer multiples of \(\varphi\)-powers, enabling exact integer arithmetic on FPGA fabric without DSP blocks. This constraint is not merely aesthetic: it propagates through every layer of the stack, from the Coq-verified kernel invariants in \texttt{t27/proofs/canonical/} to the physical power measurements on bench hardware.
+constrains weight quantisation to a three-valued palette derived from integer multiples of \(\varphi\)-powers, enabling exact integer arithmetic on FPGA fabric without DSP blocks. This constraint is not merely aesthetic: it propagates through every layer of the stack, from the Coq-verified kernel invariants in \filepath{t27/proofs/canonical/} to the physical power measurements on bench hardware.
 
 Trinity S³AI is named for the three inseparable components it welds together. The S³ superscript abbreviates Symbolic, Statistical, and Silicon, reflecting that no single component can deliver sub-bit compression alone. The programme targets two compression gates: BPB \(\leq 1.85\) (Gate-2) for deployment readiness and BPB \(\leq 1.5\) (Gate-3) for long-range research, with an energy efficiency target of \(3000\times\) the DARPA low-power baseline. This dissertation presents the theoretical foundations, empirical validation, and formal proofs that together constitute the first complete realisation of the S³AI vision.
 
@@ -36,7 +36,7 @@ The golden ratio \(\varphi = (1+\sqrt{5})/2 \approx 1.6180\) satisfies the minim
 
 This derivation, trivial in real arithmetic, becomes load-bearing when interpreted as a quantisation constraint: a weight tensor whose entries are drawn from \(\{-\varphi^{-1}, 0, +\varphi^{-1}\}\) scaled by \(\varphi^{k}\) for integer \(k\) satisfies an exact closure property under dot-product accumulation {[}2{]}. Specifically, if \(\mathbf{w}, \mathbf{x} \in \{-1, 0, +1\}^n\) (ternary integer vectors), then \(\langle \mathbf{w}, \mathbf{x} \rangle \in \mathbb{Z}\), and the \(\varphi\)-scaling can be absorbed into a post-accumulation shift without rounding error. This property is the arithmetical heart of the STROBE tokeniser (Ch.13) and the MXFP4 weight packing scheme (Ch.22).
 
-The Symbolic component consists of 438 theorems across 65 Coq proof files in \texttt{t27/proofs/canonical/}, of which 297 carry a closed \texttt{Qed} terminator as of the dissertation submission date {[}3{]}. Key invariant families include the kernel embedding theorems (\texttt{kernel/}), the ASHA pruning bound (\texttt{igla/INV2\_IglaAshaBound.v}), and the phyllotaxis divergence angle derivation (\texttt{flower/}). These theorems collectively certify that the algebraic constraints claimed in training and inference code are not merely asserted but proved.
+The Symbolic component consists of 438 theorems across 65 Coq proof files in \filepath{t27/proofs/canonical/}, of which 297 carry a closed \texttt{Qed} terminator as of the dissertation submission date {[}3{]}. Key invariant families include the kernel embedding theorems (\filepath{kernel/}), the ASHA pruning bound (\filepath{igla/INV2\_IglaAshaBound.v}), and the phyllotaxis divergence angle derivation (\filepath{flower/}). These theorems collectively certify that the algebraic constraints claimed in training and inference code are not merely asserted but proved.
 
 The Statistical component is a transformer-class language model whose attention mechanism has been reformulated in terms of \(\varphi\)-periodic basis functions (Ch.25). The model is trained on a Fibonacci-indexed sampling schedule with sanctioned seeds \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\) and Lucas seeds \(L_7=29\), \(L_8=47\), chosen to ensure that batch-size and epoch-length sequences lie on Fibonacci-indexed grid points and thus respect the \(\varphi\)-periodicity of the weight manifold {[}4{]}.
 
@@ -78,7 +78,7 @@ The primary limitation of Ch.1 as an introduction is that it asserts connections
 
 {[}2{]} This dissertation, Ch.22 --- MXFP4 Weight Packing and \(\varphi\)-Scaled Arithmetic.
 
-{[}3{]} \texttt{gHashTag/t27/proofs/canonical/} --- Coq census, 65 \texttt{.v} files, 297 \texttt{Qed}, 438 theorems total. \url{https://github.com/gHashTag/t27/tree/feat/canonical-coq-home/proofs/canonical/}
+{[}3{]} \filepath{gHashTag/t27/proofs/canonical/} --- Coq census, 65 \texttt{.v} files, 297 \texttt{Qed}, 438 theorems total. \url{https://github.com/gHashTag/t27/tree/feat/canonical-coq-home/proofs/canonical/}
 
 {[}4{]} This dissertation, Ch.13 --- STROBE Sealed Seeds. Sanctioned seed protocol: \(F_{17}\)--\(F_{21}\), \(L_7\), \(L_8\).
 
@@ -98,5 +98,5 @@ The primary limitation of Ch.1 as an introduction is that it asserts connections
 
 {[}12{]} This dissertation, Ch.19 --- Statistical Analysis (Welch-\(t\)).
 
-{[}13{]} \texttt{gHashTag/trios\#382} --- Ch.1 scope definition. \url{https://github.com/gHashTag/trios/issues/382}
+{[}13{]} \filepath{gHashTag/trios\#382} --- Ch.1 scope definition. \url{https://github.com/gHashTag/trios/issues/382}
 

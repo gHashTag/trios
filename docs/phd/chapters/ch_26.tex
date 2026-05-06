@@ -73,7 +73,7 @@ The 7-bit opcode space allows 128 instructions; the seven φ-numeric opcodes occ
 TF3_ADD RD, RA, RB
 \end{verbatim}
 
-Computes \(r_D \leftarrow r_A + r_B\) where both sources are trit-encoded. The operation proceeds in three steps: (i) extract trit sign bits from \texttt{trit\_mask}; (ii) perform sign-extended addition on \texttt{payload}; (iii) set \texttt{φ\_exp(RD)\ =\ max(φ\_exp(RA),\ φ\_exp(RB))} with carry-propagation correction.
+Computes \(r_D \leftarrow r_A + r_B\) where both sources are trit-encoded. The operation proceeds in three steps: (i) extract trit sign bits from \texttt{trit\_mask}; (ii) perform sign-extended addition on \texttt{payload}; (iii) set \filepath{φ\_exp(RD)\ =\ max(φ\_exp(RA),\ φ\_exp(RB))} with carry-propagation correction.
 
 The correctness of the \texttt{φ\_exp} update is certified by \textbf{Lemma phi\_add\_exp} in \texttt{Trinity.Canonical.Kernel.Phi} (status: Qed). The full kernel module contains 16 Qed lemmas covering all arithmetic boundary cases {[}1{]}.
 
@@ -109,7 +109,7 @@ Computes \(r_D \leftarrow r_A \odot r_B\) (unbinding is self-inverse in ternary 
 VSA_BUNDLE RD, RA, RB
 \end{verbatim}
 
-Computes the majority-vote superposition \(r_D \leftarrow \text{sign}(r_A + r_B)\), clamped to \(\{-1, 0, +1\}\). For two operands this reduces to \(r_D = r_A\) if \(r_A = r_B\), and \(r_D = 0\) if \(r_A = -r_B\). The bundle of \(n\) vectors with \(n \geq 3\) is computed by iterating this instruction; the Coq proof of information-theoretic capacity scaling is in \texttt{Trinity.Canonical.Kernel.Semantics}, Theorem \texttt{bundle\_capacity\_phi\_bound} (status: Qed) {[}4{]}.
+Computes the majority-vote superposition \(r_D \leftarrow \text{sign}(r_A + r_B)\), clamped to \(\{-1, 0, +1\}\). For two operands this reduces to \(r_D = r_A\) if \(r_A = r_B\), and \(r_D = 0\) if \(r_A = -r_B\). The bundle of \(n\) vectors with \(n \geq 3\) is computed by iterating this instruction; the Coq proof of information-theoretic capacity scaling is in \texttt{Trinity.Canonical.Kernel.Semantics}, Theorem \filepath{bundle\_capacity\_phi\_bound} (status: Qed) {[}4{]}.
 
 \subsection{3.6 GF16\_QUANT --- Galois Field 16 Quantisation}\label{gf16_quant-galois-field-16-quantisation}
 
@@ -167,12 +167,12 @@ No Coq theorems are anchored directly to this chapter; the ISA semantics are cer
 \item
   \texttt{Trinity.Canonical.Kernel.Trit} --- trit algebra lemmas for \texttt{TF3\_ADD}, \texttt{TF3\_MUL}, \texttt{VSA\_BIND}.
 \item
-  \texttt{Trinity.Canonical.Kernel.Semantics} --- operational semantics and \texttt{bundle\_capacity\_phi\_bound} (Qed) for \texttt{VSA\_BUNDLE}, \texttt{VSA\_UNBIND}.
+  \texttt{Trinity.Canonical.Kernel.Semantics} --- operational semantics and \filepath{bundle\_capacity\_phi\_bound} (Qed) for \texttt{VSA\_BUNDLE}, \texttt{VSA\_UNBIND}.
 \item
   \texttt{Trinity.Canonical.Kernel.FlowerE8Embedding} --- binding invertibility for \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}.
 \end{itemize}
 
-All five modules reside in \texttt{gHashTag/t27/proofs/canonical/} and contribute to the 297 Qed census {[}8{]}.
+All five modules reside in \filepath{gHashTag/t27/proofs/canonical/} and contribute to the 297 Qed census {[}8{]}.
 
 \section{6. Sealed Seeds}\label{sealed-seeds}
 
@@ -186,21 +186,21 @@ A current limitation is that \texttt{PHI\_ROPE} supports only power-of-two conte
 
 \section{References}\label{references}
 
-{[}1{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.Phi} --- 16 Qed. \texttt{gHashTag/t27/proofs/canonical/}. GitHub.
+{[}1{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.Phi} --- 16 Qed. \filepath{gHashTag/t27/proofs/canonical/}. GitHub.
 
 {[}2{]} GOLDEN SUNFLOWERS dissertation. Ch.28 --- FPGA Implementation on QMTech XC7A100T. This volume.
 
-{[}3{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.FlowerE8Embedding}. \texttt{gHashTag/t27/proofs/canonical/}.
+{[}3{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.FlowerE8Embedding}. \filepath{gHashTag/t27/proofs/canonical/}.
 
-{[}4{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.Semantics}. \texttt{gHashTag/t27/proofs/canonical/}.
+{[}4{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.Semantics}. \filepath{gHashTag/t27/proofs/canonical/}.
 
-{[}5{]} Trinity Canonical Coq Home. \texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v} --- ASHA threshold 3.5.
+{[}5{]} Trinity Canonical Coq Home. \filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v} --- ASHA threshold 3.5.
 
 {[}6{]} Vogel, H. (1979). A better way to construct the sunflower head. \emph{Mathematical Biosciences}, 44(3--4), 179--189.
 
-{[}7{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.PhiFloat} --- 6 Qed. \texttt{gHashTag/t27/proofs/canonical/}.
+{[}7{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.PhiFloat} --- 6 Qed. \filepath{gHashTag/t27/proofs/canonical/}.
 
-{[}8{]} Trinity Canonical Coq Home. Proof census: 297 Qed, 438 total. \texttt{gHashTag/t27/proofs/canonical/}.
+{[}8{]} Trinity Canonical Coq Home. Proof census: 297 Qed, 438 total. \filepath{gHashTag/t27/proofs/canonical/}.
 
 {[}9{]} Kanerva, P. (2009). Hyperdimensional computing. \emph{Cognitive Computation}, 1(2), 139--159.
 

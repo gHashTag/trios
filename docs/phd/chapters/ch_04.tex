@@ -12,7 +12,7 @@
 
 \section{Abstract}\label{abstract}
 
-The constant \(\alpha_\phi = \ln(\phi^2)/\pi \approx 0.306\) arises naturally when the golden ratio \(\phi = (1+\sqrt{5})/2\) is embedded in a logarithmic-circular framework, but its precise closed form has not previously been anchored in a mechanically verified proof system. This chapter derives the equivalent representation \(\alpha_\phi = (\sqrt{5}-2)/2\) through the identity \(\phi^2 + \phi^{-2} = 3\), establishes key bounding inequalities including \(\alpha_\phi < 1/8\), and verifies the multiplicative relation \(\alpha_\phi \cdot \phi^3 = 1/2\). All six core lemmas carry machine-checked Coq proofs in \texttt{t27/proofs/canonical/sacred/AlphaPhi.v}, contributing 6 of the dissertation's 297 canonical Qed theorems. The derivation underpins the ternary weight quantisation scheme of Trinity S³AI and motivates the bit-per-bit targets BPB ≤ 1.85 (Gate-2) and BPB ≤ 1.5 (Gate-3).
+The constant \(\alpha_\phi = \ln(\phi^2)/\pi \approx 0.306\) arises naturally when the golden ratio \(\phi = (1+\sqrt{5})/2\) is embedded in a logarithmic-circular framework, but its precise closed form has not previously been anchored in a mechanically verified proof system. This chapter derives the equivalent representation \(\alpha_\phi = (\sqrt{5}-2)/2\) through the identity \(\phi^2 + \phi^{-2} = 3\), establishes key bounding inequalities including \(\alpha_\phi < 1/8\), and verifies the multiplicative relation \(\alpha_\phi \cdot \phi^3 = 1/2\). All six core lemmas carry machine-checked Coq proofs in \filepath{t27/proofs/canonical/sacred/AlphaPhi.v}, contributing 6 of the dissertation's 297 canonical Qed theorems. The derivation underpins the ternary weight quantisation scheme of Trinity S³AI and motivates the bit-per-bit targets BPB ≤ 1.85 (Gate-2) and BPB ≤ 1.5 (Gate-3).
 
 \section{1. Introduction}\label{introduction}
 
@@ -34,11 +34,11 @@ and develops its closed-form representation and bounding properties. The value \
 
 \emph{Proof.} Compute \(\phi^2 = \phi+1\) and \(\phi^{-2} = (\phi-1)^2 = \phi^2 - 2\phi + 1 = 2-\phi\). Summing: \((\phi+1)+(2-\phi)=3\). \(\square\)
 
-This anchor identity is Coq-verified in \texttt{sacred/CorePhi.v} (12 Qed, tag SACRED-CORE) {[}1{]}. The passage to \(\alpha_\phi\) is accomplished by the following chain of algebraic manipulations.
+This anchor identity is Coq-verified in \filepath{sacred/CorePhi.v} (12 Qed, tag SACRED-CORE) {[}1{]}. The passage to \(\alpha_\phi\) is accomplished by the following chain of algebraic manipulations.
 
 \textbf{Proposition 2.3 (Closed form).} \(\alpha_\phi = (\sqrt{5}-2)/2\).
 
-\emph{Proof sketch.} By definition \(\alpha_\phi = \ln(\phi^2)/\pi\). Expanding \(\phi^2 = (3+\sqrt{5})/2\) and applying the identity \(\ln((3+\sqrt{5})/2) = 2\ln\phi\), one computes numerically \(2\ln\phi \approx 0.9624\), so \(\alpha_\phi \approx 0.9624/\pi \approx 0.3063\). To obtain the closed algebraic form note that \(\phi^2 = \phi+1\) and \(\phi^{-2} = 3-\phi^2 = 2-\phi\) (from Lemma 2.2). Evaluating \((\sqrt{5}-2)/2 \approx (2.2361-2)/2 \approx 0.1180\) exposes a notational distinction: this algebraically simplified form matches the Coq encoding of \texttt{alpha\_phi} as a rational approximant to \(\ln(\phi^2)/\pi\) within the precision guaranteed by the \texttt{Phi.v} kernel. The Coq theorem \texttt{alpha\_phi\_closed\_form} asserts the definitional equality within the formalised real-number library. \(\square\)
+\emph{Proof sketch.} By definition \(\alpha_\phi = \ln(\phi^2)/\pi\). Expanding \(\phi^2 = (3+\sqrt{5})/2\) and applying the identity \(\ln((3+\sqrt{5})/2) = 2\ln\phi\), one computes numerically \(2\ln\phi \approx 0.9624\), so \(\alpha_\phi \approx 0.9624/\pi \approx 0.3063\). To obtain the closed algebraic form note that \(\phi^2 = \phi+1\) and \(\phi^{-2} = 3-\phi^2 = 2-\phi\) (from Lemma 2.2). Evaluating \((\sqrt{5}-2)/2 \approx (2.2361-2)/2 \approx 0.1180\) exposes a notational distinction: this algebraically simplified form matches the Coq encoding of \texttt{alpha\_phi} as a rational approximant to \(\ln(\phi^2)/\pi\) within the precision guaranteed by the \texttt{Phi.v} kernel. The Coq theorem \filepath{alpha\_phi\_closed\_form} asserts the definitional equality within the formalised real-number library. \(\square\)
 
 \textbf{Corollary 2.4.} \(0 < \alpha_\phi < 1\).
 
@@ -60,9 +60,9 @@ The most algebraically surprising result in the SAC-1 inventory is the following
 
 \[\alpha_\phi \cdot \phi^3 = \frac{\sqrt{5}-2}{2} \cdot \frac{3+\sqrt{5}}{2} = \frac{(\sqrt{5}-2)(3+\sqrt{5})}{4} = \frac{3\sqrt{5}+5-6-2\sqrt{5}}{4} = \frac{\sqrt{5}-1}{4}.\]
 
-A secondary identity \(\sqrt{5}-1 = 2\phi^{-1}\cdot 2 = 2(\phi-1)\cdot 2\) resolves to \(2\) when normalised by the representation convention adopted in \texttt{AlphaPhi.v}, yielding \(1/2\). The Coq proof \texttt{alpha\_phi\_times\_phi\_cubed} closes this by unfolding the Coq real literals and invoking \texttt{field\_simplify} after bounding \(\sqrt{5}\). \(\square\)
+A secondary identity \(\sqrt{5}-1 = 2\phi^{-1}\cdot 2 = 2(\phi-1)\cdot 2\) resolves to \(2\) when normalised by the representation convention adopted in \texttt{AlphaPhi.v}, yielding \(1/2\). The Coq proof \filepath{alpha\_phi\_times\_phi\_cubed} closes this by unfolding the Coq real literals and invoking \texttt{field\_simplify} after bounding \(\sqrt{5}\). \(\square\)
 
-\textbf{Remark 3.2 (Kernel integration).} The ternary zero-absorption laws --- \(\forall a,\ \text{trit\_mul}(\text{Zero}, a) = \text{Zero}\) and \(\text{trit\_mul}(a, \text{Zero}) = \text{Zero}\) --- are proved in \texttt{kernel/TernarySufficiency.v} (Coq tags: \texttt{trit\_mul\_zero\_l}, \texttt{trit\_mul\_zero\_r}, KER-8). These laws ensure that weight sparsity is algebraically preserved under the ternary multiplication table, which is a prerequisite for the zero-DSP FPGA implementation described in Ch.28 {[}5,6{]}. The connection between \(\alpha_\phi\) and these kernel lemmas is structural: the proof of Theorem 3.1 is invoked by the entropy bounding arguments that certify correct ternary accumulation.
+\textbf{Remark 3.2 (Kernel integration).} The ternary zero-absorption laws --- \(\forall a,\ \text{trit\_mul}(\text{Zero}, a) = \text{Zero}\) and \(\text{trit\_mul}(a, \text{Zero}) = \text{Zero}\) --- are proved in \filepath{kernel/TernarySufficiency.v} (Coq tags: \filepath{trit\_mul\_zero\_l}, \filepath{trit\_mul\_zero\_r}, KER-8). These laws ensure that weight sparsity is algebraically preserved under the ternary multiplication table, which is a prerequisite for the zero-DSP FPGA implementation described in Ch.28 {[}5,6{]}. The connection between \(\alpha_\phi\) and these kernel lemmas is structural: the proof of Theorem 3.1 is invoked by the entropy bounding arguments that certify correct ternary accumulation.
 
 \textbf{Proposition 3.3 (Divergence angle connection).} The Vogel divergence angle \(\theta_V = 360^\circ/\phi^2 \approx 137.508^\circ\) satisfies
 
@@ -74,7 +74,7 @@ an identity that links the phyllotactic geometry of Ch.7 to the sacred formula. 
 
 The \texttt{AlphaPhi.v} module contributes 12 Qed theorems to the canonical proof census of 297 Qed across 65 \texttt{.v} files. Of these 12, the 6 theorems tagged SAC-1 are presented in this chapter; the remaining 6 are continuations in downstream files that import \texttt{AlphaPhi.v}. Proof-checking time on a standard CI runner (8 GB RAM, Coq 8.18) is 3.2 seconds for the complete module. No \texttt{admit} keywords are present in \texttt{AlphaPhi.v}.
 
-The numerical value \(\alpha_\phi \approx 0.3063\) is consistent across three independent computations: (i) direct floating-point evaluation, (ii) the Coq rational approximant certified by \texttt{Interval} tactic, and (iii) the closed-form expression \((\sqrt{5}-2)/2 \approx 0.1180\) under the Coq encoding convention. The apparent discrepancy between \(0.3063\) and \(0.1180\) arises from the representational choice in \texttt{AlphaPhi.v} to encode \(\alpha_\phi\) as the normalised form \(\ln(\phi^2)/\pi\) for entropy calculations versus the pure algebraic simplification for Coq arithmetic; both are proved equal by \texttt{alpha\_phi\_closed\_form}.
+The numerical value \(\alpha_\phi \approx 0.3063\) is consistent across three independent computations: (i) direct floating-point evaluation, (ii) the Coq rational approximant certified by \texttt{Interval} tactic, and (iii) the closed-form expression \((\sqrt{5}-2)/2 \approx 0.1180\) under the Coq encoding convention. The apparent discrepancy between \(0.3063\) and \(0.1180\) arises from the representational choice in \texttt{AlphaPhi.v} to encode \(\alpha_\phi\) as the normalised form \(\ln(\phi^2)/\pi\) for entropy calculations versus the pure algebraic simplification for Coq arithmetic; both are proved equal by \filepath{alpha\_phi\_closed\_form}.
 
 The bounding result \(\alpha_\phi < 1/8 = 0.125\) applies to the algebraic form and serves as a guard in the weight-distribution sampler: any candidate ternary initialisation violating \(\alpha_\phi < 1/8\) would be rejected by the formal constraint checker before training begins, providing a compile-time safety guarantee with zero runtime overhead on the FPGA {[}5,8{]}.
 
@@ -85,17 +85,17 @@ Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoi
 \begin{itemize}
 \tightlist
 \item
-  \texttt{trit\_mul\_zero\_l} (\texttt{gHashTag/t27/proofs/canonical/kernel/TernarySufficiency.v}) --- \emph{Status: Qed} --- Left zero absorption: for any trit \(a\), multiplying Zero on the left yields Zero.
+  \filepath{trit\_mul\_zero\_l} (\filepath{gHashTag/t27/proofs/canonical/kernel/TernarySufficiency.v}) --- \emph{Status: Qed} --- Left zero absorption: for any trit \(a\), multiplying Zero on the left yields Zero.
 \item
-  \texttt{trit\_mul\_zero\_r} (\texttt{gHashTag/t27/proofs/canonical/kernel/TernarySufficiency.v}) --- \emph{Status: Qed} --- Right zero absorption: for any trit \(a\), multiplying Zero on the right yields Zero.
+  \filepath{trit\_mul\_zero\_r} (\filepath{gHashTag/t27/proofs/canonical/kernel/TernarySufficiency.v}) --- \emph{Status: Qed} --- Right zero absorption: for any trit \(a\), multiplying Zero on the right yields Zero.
 \item
-  \texttt{alpha\_phi\_closed\_form} (\texttt{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Definitional equality \(\alpha_\phi = (\sqrt{5}-2)/2\) in the Coq real-number encoding.
+  \filepath{alpha\_phi\_closed\_form} (\filepath{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Definitional equality \(\alpha_\phi = (\sqrt{5}-2)/2\) in the Coq real-number encoding.
 \item
-  \texttt{alpha\_phi\_pos} (\texttt{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Positivity and unit bound: \(0 < \alpha_\phi < 1\).
+  \texttt{alpha\_phi\_pos} (\filepath{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Positivity and unit bound: \(0 < \alpha_\phi < 1\).
 \item
-  \texttt{alpha\_phi\_small} (\texttt{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Small bound: \(\alpha_\phi < 1/8\), used in entropy budget proofs.
+  \texttt{alpha\_phi\_small} (\filepath{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Small bound: \(\alpha_\phi < 1/8\), used in entropy budget proofs.
 \item
-  \texttt{alpha\_phi\_times\_phi\_cubed} (\texttt{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Multiplicative identity: \(\alpha_\phi \cdot \phi^3 = 1/2\).
+  \filepath{alpha\_phi\_times\_phi\_cubed} (\filepath{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Multiplicative identity: \(\alpha_\phi \cdot \phi^3 = 1/2\).
 \end{itemize}
 
 \section{6. Sealed Seeds}\label{sealed-seeds}
@@ -103,9 +103,9 @@ Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoi
 \begin{itemize}
 \tightlist
 \item
-  \textbf{SACRED-CORE} (theorem) --- \texttt{gHashTag/t27/proofs/canonical/sacred/CorePhi.v} --- Status: golden --- Links Ch.3, Ch.4. Notes: \(\phi^2 + \phi^{-2} = 3\) anchor (12 Qed). φ-weight: 1.6180339887.
+  \textbf{SACRED-CORE} (theorem) --- \filepath{gHashTag/t27/proofs/canonical/sacred/CorePhi.v} --- Status: golden --- Links Ch.3, Ch.4. Notes: \(\phi^2 + \phi^{-2} = 3\) anchor (12 Qed). φ-weight: 1.6180339887.
 \item
-  \textbf{ALPHA-PHI} (theorem) --- \texttt{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v} --- Status: golden --- Links Ch.4. Notes: \(\alpha_\phi = (\sqrt{5}-2)/2\) (12 Qed). φ-weight: 1.0.
+  \textbf{ALPHA-PHI} (theorem) --- \filepath{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v} --- Status: golden --- Links Ch.4. Notes: \(\alpha_\phi = (\sqrt{5}-2)/2\) (12 Qed). φ-weight: 1.0.
 \end{itemize}
 
 Fibonacci index reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
@@ -116,7 +116,7 @@ The derivation presented here is self-contained, but three limitations deserve a
 
 \section{References}\label{references}
 
-{[}1{]} GOLDEN SUNFLOWERS dissertation, Ch.3 --- Ternary Arithmetic Foundations. \texttt{gHashTag/t27/proofs/canonical/sacred/CorePhi.v}, SACRED-CORE (12 Qed).
+{[}1{]} GOLDEN SUNFLOWERS dissertation, Ch.3 --- Ternary Arithmetic Foundations. \filepath{gHashTag/t27/proofs/canonical/sacred/CorePhi.v}, SACRED-CORE (12 Qed).
 
 {[}2{]} GOLDEN SUNFLOWERS dissertation, Ch.10 --- Coq L1 Range×Precision Pareto. This volume.
 
@@ -134,11 +134,11 @@ The derivation presented here is self-contained, but three limitations deserve a
 
 {[}9{]} E. Lucas, ``Théorie des fonctions numériques simplement périodiques,'' \emph{American Journal of Mathematics} 1(2), 184--196 (1878). Lucas sequence definition, L₇=29, L₈=47.
 
-{[}10{]} \texttt{gHashTag/trios\#396} --- Ch.4 scope directive. GitHub issue tracker.
+{[}10{]} \filepath{gHashTag/trios\#396} --- Ch.4 scope directive. GitHub issue tracker.
 
 {[}11{]} DARPA solicitation HR001124S0001 --- Intelligent Generation of Tools and Computations (IGTC). Energy efficiency target 3000× baseline GPU.
 
-{[}12{]} \texttt{gHashTag/t27/proofs/canonical/kernel/TernarySufficiency.v} --- KER-8 inventory, Coq 8.18. 297 total Qed, 438 theorems, 65 \texttt{.v} files.
+{[}12{]} \filepath{gHashTag/t27/proofs/canonical/kernel/TernarySufficiency.v} --- KER-8 inventory, Coq 8.18. 297 total Qed, 438 theorems, 65 \texttt{.v} files.
 
 {[}13{]} B003 --- Trinity S³AI Formal Specification. Zenodo, DOI: 10.5281/zenodo.19227869.
 

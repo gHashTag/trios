@@ -110,7 +110,7 @@ ACTIVE.
 Encoding}\label{coq-encoding}
 
 The PLRM is formalised in
-\texttt{t27/proofs/canonical/} as a
+\filepath{t27/proofs/canonical/} as a
 state-transition system over a discrete time
 domain \(\mathbb{N}\). The safety property is
 encoded as:
@@ -288,7 +288,7 @@ in the Golden Ledger.
 (The scheduling safety theorem
 \texttt{plrm\_mutual\_exclusion} (SCH-1) and its
 supporting lemmas SCH-2 through SCH-5 reside in
-\texttt{t27/proofs/canonical/}; SCH-3 through
+\filepath{t27/proofs/canonical/}; SCH-3 through
 SCH-5 carry Admitted status pending Iris
 integration as detailed in Ch.18.)
 
@@ -333,7 +333,7 @@ pool).
 
 \section{References}\label{references}
 
-[1] \texttt{gHashTag/trios\#418} --- Ch.24
+[1] \filepath{gHashTag/trios\#418} --- Ch.24
 Period-Locked Runtime Monitor scope issue.
 
 [2] Lucas, E. (1878). Théorie des fonctions
@@ -346,7 +346,7 @@ Concurrent Separation Logic. \emph{Journal of
 Functional Programming}, 28, e20.
 \url{https://doi.org/10.1017/S0956796818000151}
 
-[4] \texttt{gHashTag/t27/proofs/canonical/}
+[4] \filepath{gHashTag/t27/proofs/canonical/}
 --- SCH-1 through SCH-5 scheduling theorems. Coq
 canonical archive.
 
@@ -403,13 +403,19 @@ at three concurrent timer banks.
 \paragraph{Refutation predicate.}
 The PLRM design is falsified if any reproduction on the QMTech XC7A100T
 target (Ch.~28) records $L_{\max} \ge 2$ quanta or a missed deadline.
-The ledger row in \texttt{ssot.one\_shots} carries
-\verb!{"accept_band":"L_max<=1", "reject_band":"L_max>=2 OR miss", "metric":"L_max_quanta"}!.
+The ledger row in \texttt{ssot.one\_shots} carries the JSON predicate
+\begin{quote}\footnotesize
+\begin{verbatim}
+{"accept_band":"L_max<=1",
+ "reject_band":"L_max>=2 OR miss",
+ "metric":"L_max_quanta"}
+\end{verbatim}
+\end{quote}
 
 \paragraph{Linkage.}
 The non-resonance proof (this chapter, §2.3) and the priority-queue lemma
 \texttt{Trinity.Canonical.Igla.PriorityBoundedLatency} (nine Qed in
-\texttt{t27/proofs/canonical/igla/PLRM.v}) discharge the formal side.
+\filepath{t27/proofs/canonical/igla/PLRM.v}) discharge the formal side.
 Appendix~B lists the empirical reject threshold and Appendix~I pins the
 exact XDC pin map used for measurement, so the obligation remains
 falsifiable on physical hardware.

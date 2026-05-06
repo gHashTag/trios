@@ -119,7 +119,7 @@ evaluates to \texttt{false}. \(\square\)
 
 \textbf{Invariant INV-12 (Throughput threshold).}
 Predicate
-\texttt{inv12\_holds\ r\_thr\ =\ (r\_thr\ ≤\ max\_throughput)}
+\filepath{inv12\_holds\ r\_thr\ =\ (r\_thr\ ≤\ max\_throughput)}
 where \texttt{max\_throughput\ =\ 1003\ \#\ 1}
 (1003 tokens/sec, the HSLM benchmark from Ch.28).
 A threshold of 2000 tokens/sec is infeasible.
@@ -136,7 +136,10 @@ Proof: \(2000 > 1003\). \(\square\)
 composite invariant checks all three
 sub-invariants simultaneously:
 
-\[\texttt{composite\_invariant\_holds}(r, n, r_\text{thr}) = \texttt{inv2\_holds}(r)\ \&\&\ \texttt{inv3\_holds}(n)\ \&\&\ \texttt{inv12\_holds}(r_\text{thr}).\]
+\begin{align*}
+\texttt{composite\_invariant\_holds}(r, n, r_\text{thr}) =\ &\texttt{inv2\_holds}(r)\ \&\&\ \texttt{inv3\_holds}(n) \\
+&\&\&\ \texttt{inv12\_holds}(r_\text{thr}).
+\end{align*}
 
 \textbf{Theorem 2.6 (Composite falsification
 witness).}
@@ -161,7 +164,7 @@ witness demonstrates that the canonical
 \textbf{Theorem 3.1 (Valid configuration).}
 \texttt{composite\_invariant\_holds\ (35\ \#\ 10)\ 256\ (1000\ \#\ 1)\ =\ true}.
 \emph{Coq theorem
-\texttt{valid\_config\_satisfies\_composite}.}
+\filepath{valid\_config\_satisfies\_composite}.}
 
 Proof: (i) \(35/10 = 3.5 \geq \text{min\_rate}\)
 (corrected per the \texttt{max\_workers\ =\ 256}
@@ -283,38 +286,38 @@ Assertions}\label{qed-assertions}
 \tightlist
 \item
   \texttt{inv2\_falsification\_witness}
-  (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
+  (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
   --- \emph{Status: Qed} ---
   \texttt{inv2\_holds\ (265\ \#\ 100)\ =\ false}:
   configurations below the 63 toks/sec inference
   floor are rejected.
 \item
   \texttt{inv3\_falsification\_witness}
-  (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
+  (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
   --- \emph{Status: Qed} ---
   \texttt{inv3\_holds\ 255\ =\ false}: worker
   counts above the ceiling are rejected.
 \item
   \texttt{inv12\_falsification\_witness}
-  (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
+  (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
   --- \emph{Status: Qed} ---
   \texttt{inv12\_holds\ (2000\ \#\ 1)\ =\ false}:
   throughput thresholds above 1003 toks/sec are
   rejected.
 \item
   \texttt{witness\_composite\_inv}
-  (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
+  (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
   --- \emph{Status: Qed} --- Composite invariant
   rejects the \((2.65, 128, 2000)\) configuration.
 \item
-  \texttt{valid\_config\_satisfies\_composite}
-  (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
+  \filepath{valid\_config\_satisfies\_composite}
+  (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
   --- \emph{Status: Qed} --- Composite invariant
   accepts the canonical \((3.5, 256, 1000)\)
   configuration.
 \item
   \texttt{victory\_not\_yet}
-  (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
+  (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v})
   --- \emph{Status: Qed} ---
   \texttt{victory\_achieved\ 2\ =\ false}: two
   gates passed, Gate-3 pending.
@@ -326,7 +329,7 @@ Assertions}\label{qed-assertions}
 \tightlist
 \item
   \textbf{INV-8} (invariant) ---
-  \texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}
+  \filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}
   --- Status: golden --- Links Ch.22. Notes:
   Worker pool 10 Qed. φ-weight: 0.618033988768953.
 \end{itemize}
@@ -368,12 +371,12 @@ Ternary Arithmetic Foundations. This volume.
 [2] GOLDEN SUNFLOWERS dissertation, Ch.10 ---
 Coq L1 Range$\times$Precision Pareto. This volume.
 
-[3] \texttt{gHashTag/trios\#408} --- Ch.22
+[3] \filepath{gHashTag/trios\#408} --- Ch.22
 scope directive and Railway/Trios orchestration
 spec. GitHub issue tracker.
 
 [4]
-\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}
+\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}
 --- INV-8 worker pool composite (10 Qed).
 
 [5] GOLDEN SUNFLOWERS dissertation, Ch.28 ---
@@ -397,7 +400,7 @@ numériques simplement périodiques,''
 184--196 (1878). F₂₀=6765.
 
 [11]
-\texttt{gHashTag/t27/proofs/canonical/igla/INV1\_BpbMonotoneBackward.v}
+\filepath{gHashTag/t27/proofs/canonical/igla/INV1\_BpbMonotoneBackward.v}
 --- INV-1 BPB monotone backward.
 
 [12] B007 --- Railway/Trios Orchestration

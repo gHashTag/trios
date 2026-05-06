@@ -19,7 +19,7 @@
 \title{Flos Aureus}
 \subtitle{A Falsifiable Theory of Golden-Ratio Architecture\\for Implicit Generative Latent Algorithms}
 \author{The Trinity Hive (autonomous co-authors)}
-\institute{\texttt{gHashTag/trios} · \texttt{trinity-clara} · Zenodo}
+\institute{\filepath{gHashTag/trios} · \texttt{trinity-clara} · Zenodo}
 \date{Defense window: 2026-06-15 \\ Anchor: $\varphi^{2}+\varphi^{-2}=3$ \\ DOI: 10.5281/zenodo.19227877}
 
 \newcommand{\citetheorem}[1]{[\textsc{#1}]}
@@ -75,7 +75,7 @@
     For every $n\!\geq\!2$, $L_{n}=\varphi^{n}+(-\varphi)^{-n}$.
     In particular $L_{2}=\varphi^{2}+\varphi^{-2}=3$.
   \end{theorem}
-  Coq witness: \texttt{lucas\_2\_phi\_identity} \emph{Qed} \citetheorem{INV-12}.
+  Coq witness: \filepath{lucas\_2\_phi\_identity} \emph{Qed} \citetheorem{INV-12}.
   Honest \emph{Admitted} budget: $0$ for this witness.
 \end{frame}
 
@@ -105,7 +105,7 @@
     \toprule
     INV & Statement (one-line) & .v file & Status \\
     \midrule
-    INV-1  & lr-band $[\alpha_{\varphi}/\varphi^{4},\alpha_{\varphi}]$ & \texttt{alpha\_phi\_lb/ub.v} & Admitted \\
+    INV-1  & lr-band $[\alpha_{\varphi}/\varphi^{4},\alpha_{\varphi}]$ & \filepath{alpha\_phi\_lb/ub.v} & Admitted \\
     INV-2  & ASHA prune threshold $\leq 3{.}5$ & \texttt{asha\_prune.v} & Proven \\
     INV-3  & warmup $\geq 4000$ & \texttt{warmup\_lb.v} & Admitted \\
     INV-4  & $d_{\mathrm{model}}\!\geq\!256$ under GF(16) & \texttt{gf16\_dim.v} & Admitted \\
@@ -128,7 +128,7 @@
   Champion run hits $\mathrm{lr}=0{.}0035$ — interior of the band.
   \begin{itemize}
     \item Refutation: any champion BPB$<\!1{.}50$ achieved at lr outside band.
-    \item Coq status: \emph{Admitted}; runtime guard in \texttt{crates/trios-igla-race/src/bin/qk\_gain\_check.rs} (4 typed errors).
+    \item Coq status: \emph{Admitted}; runtime guard in \filepath{crates/trios-igla-race/src/bin/qk\_gain\_check.rs} (4 typed errors).
   \end{itemize}
 \end{frame}
 
@@ -152,7 +152,7 @@
   $n=3$ suffices for an effect size $\Delta\geq 0{.}25$ at $1-\beta=0{.}80$.
   \begin{itemize}
     \item Pre-registration: \texttt{trios\#143:4320342032} (immutable).
-    \item Refutation witness: \texttt{tools/welch.rs}.
+    \item Refutation witness: \filepath{tools/welch.rs}.
   \end{itemize}
 \end{frame}
 
@@ -163,7 +163,7 @@
   \]
   Locks the attention head to $\varphi$-anchored gains; any other choice is a
   pre-registered refutation (Gate-2 §8). Coq counterexample lemma:
-  \texttt{counter\_qk\_gain\_outside\_phi\_sq} (\emph{Admitted}, R5).
+  \filepath{counter\_qk\_gain\_outside\_phi\_sq} (\emph{Admitted}, R5).
 \end{frame}
 
 % ============== 13. INV-22 H4 in E8 ==============
@@ -238,18 +238,18 @@
     \item N-gram block carries proven token mixing; SA only adds long-range conditioning.
     \item Refutation if hybrid does not beat 6-gram \emph{and} does not attain BPB$\leq\!1{.}85$ on seed=43.
   \end{itemize}
-  R5 disclosure: $d_{\mathrm{model}}\!=\!64$ in the hybrid is below INV-4's floor; this is a documented \emph{deliberate exemption} for the hybrid block, recorded in \texttt{assertions/igla\_assertions.json} INV-4 metadata.
+  R5 disclosure: $d_{\mathrm{model}}\!=\!64$ in the hybrid is below INV-4's floor; this is a documented \emph{deliberate exemption} for the hybrid block, recorded in \filepath{assertions/igla\_assertions.json} INV-4 metadata.
 \end{frame}
 
 % ============== 19. SEED LEDGER ==============
 \begin{frame}{Seed Ledger Honesty}
-  Single source of truth: \texttt{assertions/seed\_results.jsonl}.
+  Single source of truth: \filepath{assertions/seed\_results.jsonl}.
   Schema:
   \begin{itemize}
     \item \texttt{seed} $\in\{42,43,44\}$ (INV-8 lock).
     \item \texttt{step} $\geq 4000$ (INV-3 warmup).
     \item \texttt{bpb} a finite positive real.
-    \item \texttt{sha} a SHA pinned to \texttt{gHashTag/trios} commit.
+    \item \texttt{sha} a SHA pinned to \filepath{gHashTag/trios} commit.
   \end{itemize}
   Empty until Gate-2 lane L-h3 lands the first row.
 \end{frame}
@@ -285,9 +285,9 @@
 \begin{frame}{R6: Strict File Ownership}
   Why no spaghetti?
   \begin{itemize}
-    \item Each chapter owns exactly one file under \texttt{docs/phd/chapters/Lxx-*.tex}.
-    \item Auditor lane (this skill) owns \texttt{appendix/}, \texttt{frontmatter/}, \texttt{bibliography.bib}, \texttt{defense/}.
-    \item Cargo lanes own \texttt{crates/}.
+    \item Each chapter owns exactly one file under \filepath{docs/phd/chapters/Lxx-*.tex}.
+    \item Auditor lane (this skill) owns \filepath{appendix/}, \filepath{frontmatter/}, \texttt{bibliography.bib}, \filepath{defense/}.
+    \item Cargo lanes own \filepath{crates/}.
     \item A PR touching another lane's territory is rejected by the queen-bot, not me.
   \end{itemize}
 \end{frame}
@@ -295,10 +295,10 @@
 % ============== 24. REPRODUCIBILITY ==============
 \begin{frame}{Reproducibility (ACM AE pack)}
   \begin{itemize}
-    \item Manifest: \texttt{docs/phd/reproducibility.md}.
+    \item Manifest: \filepath{docs/phd/reproducibility.md}.
     \item Lock: \texttt{reproducibility.lock.json} (committed alongside the PDFs).
     \item Reproduction: \texttt{cargo run -p trios-phd -- reproduce --chapter 24} on seeds $\{17, 42, 1729\}$, expects $\pm 0{.}5\%$ BPB convergence.
-    \item Witness: \texttt{crates/trios-phd/src/bin/defense\_gate.rs} (this work, replacing the \texttt{.sh} witness named in ONE SHOT v2.0 §5 per R1).
+    \item Witness: \filepath{crates/trios-phd/src/bin/defense\_gate.rs} (this work, replacing the \texttt{.sh} witness named in ONE SHOT v2.0 §5 per R1).
   \end{itemize}
 \end{frame}
 
@@ -316,13 +316,13 @@
 \begin{frame}{Bibliography Balance (R11)}
   After PR \#294: $N=204$, Springer $25{.}5\%$, MIT/CUP/Oxford $13\%$ (target $\geq 15\%$, follow-up filed),
   arXiv-only $2\%$ (target $\leq 20\%$).
-  Bibliography lives in \texttt{docs/phd/bibliography.bib}; never touched from chapter lanes.
+  Bibliography lives in \filepath{docs/phd/bibliography.bib}; never touched from chapter lanes.
 \end{frame}
 
 % ============== 27. CRON / WATCHDOG ==============
 \begin{frame}{Continuous Audit}
   \begin{itemize}
-    \item Cron \texttt{db082fc3}: cross-cutting audit every 2 h at \texttt{15 */2 * * *}~UTC.
+    \item Cron \texttt{db082fc3}: cross-cutting audit every 2 h at \filepath{15 */2 * * *}~UTC.
     \item Apiary watchdog \texttt{e5ac5a6b}: releases lanes silent $>4$\,h.
     \item Throne meta-issue \texttt{trios\#264} aggregates ONE SHOTs from all skill families.
   \end{itemize}

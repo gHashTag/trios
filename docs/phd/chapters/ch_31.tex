@@ -12,7 +12,7 @@
 
 \section{Abstract}\label{abstract}
 
-This chapter presents the complete empirical characterisation of the TRINITY S³AI inference engine on a QMTech XC7A100T FPGA (Xilinx Artix-7 100T). The headline results are: 1003 tokens generated in a single HSLM (High-Speed Language-Model) simulation-verified run, 63 tokens/sec sustained throughput at 92 MHz clock frequency, 0 DSP slices, 5.8\% LUT utilisation (of 19.6\% available for routing), 9.8\% BRAM utilisation (of 52\% available), and measured wall power of 0.94--1.07 W. The CLARA Red Team exercise achieved 100\% robustness across all 297 adversarial prompt categories. The 297 closed Coq theorems in \texttt{t27/proofs/canonical/} provide a formal seal over the arithmetic correctness of the accelerator. The \(\varphi^2 + \varphi^{-2} = 3\) identity underlies the zero-DSP integer multiply-accumulate design that makes this efficiency possible.
+This chapter presents the complete empirical characterisation of the TRINITY S³AI inference engine on a QMTech XC7A100T FPGA (Xilinx Artix-7 100T). The headline results are: 1003 tokens generated in a single HSLM (High-Speed Language-Model) simulation-verified run, 63 tokens/sec sustained throughput at 92 MHz clock frequency, 0 DSP slices, 5.8\% LUT utilisation (of 19.6\% available for routing), 9.8\% BRAM utilisation (of 52\% available), and measured wall power of 0.94--1.07 W. The CLARA Red Team exercise achieved 100\% robustness across all 297 adversarial prompt categories. The 297 closed Coq theorems in \filepath{t27/proofs/canonical/} provide a formal seal over the arithmetic correctness of the accelerator. The \(\varphi^2 + \varphi^{-2} = 3\) identity underlies the zero-DSP integer multiply-accumulate design that makes this efficiency possible.
 
 \section{1. Introduction}\label{introduction}
 
@@ -34,7 +34,7 @@ The FPGA accelerator implements a three-stage pipeline: (i) token embedding look
 
 \section{3. Formal Seal: 297 Coq Theorems}\label{formal-seal-297-coq-theorems}
 
-The accelerator RTL was generated from a Coq-extracted OCaml reference, ensuring that the implemented arithmetic is a direct realisation of the formally verified specification. The seal consists of 297 closed \texttt{Qed} theorems across 65 \texttt{.v} files in \texttt{t27/proofs/canonical/}, organised into the following families:
+The accelerator RTL was generated from a Coq-extracted OCaml reference, ensuring that the implemented arithmetic is a direct realisation of the formally verified specification. The seal consists of 297 closed \texttt{Qed} theorems across 65 \texttt{.v} files in \filepath{t27/proofs/canonical/}, organised into the following families:
 
 \begin{longtable}[]{@{}llll@{}}
 \toprule\noalign{}
@@ -52,7 +52,7 @@ misc/ & 17 & 20 & 69 \\
 \textbf{Total} & \textbf{65} & \textbf{297} & \textbf{141} \\
 \end{longtable}
 
-The \texttt{hw/} family (8 files, 35 \texttt{Qed}) directly certifies the TMAC unit: theorems prove that the 8-cycle pipeline is semantically equivalent to the sequential specification, that overflow cannot occur for 8-bit activations and weight counts \(\leq 256\), and that the ternary encoding/decoding round-trips are lossless {[}4{]}.
+The \filepath{hw/} family (8 files, 35 \texttt{Qed}) directly certifies the TMAC unit: theorems prove that the 8-cycle pipeline is semantically equivalent to the sequential specification, that overflow cannot occur for 8-bit activations and weight counts \(\leq 256\), and that the ternary encoding/decoding round-trips are lossless {[}4{]}.
 
 \textbf{CLARA Red Team.} The CLARA (Controlled Language Adversarial Robustness Assessment) Red Team exercise tested 297 adversarial prompt categories against the FPGA inference engine. All 297 categories were handled without hardware exceptions, silent wrong outputs, or timing violations, yielding a 100\% robustness score. The correspondence between the 297 Red Team categories and the 297 closed \texttt{Qed} theorems is intentional: each theorem certifies an invariant that corresponds to one adversarial category {[}5{]}.
 
@@ -93,7 +93,7 @@ The \(\varphi^2 + \varphi^{-2} = 3\) identity directly accounts for the DSP elim
 
 \section{5. Qed Assertions}\label{qed-assertions}
 
-No Coq theorems are anchored exclusively to this chapter; the 297-theorem seal is a corpus-level result reported here for completeness. The \texttt{hw/} family theorems are catalogued in App.F.
+No Coq theorems are anchored exclusively to this chapter; the 297-theorem seal is a corpus-level result reported here for completeness. The \filepath{hw/} family theorems are catalogued in App.F.
 
 \section{6. Sealed Seeds}\label{sealed-seeds}
 
@@ -117,7 +117,7 @@ The principal limitation of the current hardware realisation is that 92 MHz is b
 
 {[}3{]} Xilinx (AMD). \emph{Vivado Design Suite User Guide: Implementation}, UG904 (v2024.1). MMCM configuration.
 
-{[}4{]} \texttt{gHashTag/t27/proofs/canonical/hw/} --- 8 files, 35 \texttt{Qed} TMAC correctness theorems. \url{https://github.com/gHashTag/t27/tree/feat/canonical-coq-home/proofs/canonical/}
+{[}4{]} \filepath{gHashTag/t27/proofs/canonical/hw/} --- 8 files, 35 \texttt{Qed} TMAC correctness theorems. \url{https://github.com/gHashTag/t27/tree/feat/canonical-coq-home/proofs/canonical/}
 
 {[}5{]} CLARA Red Team Protocol v1.2, internal report, 2025. Archived in Zenodo bundle B004. \url{https://doi.org/10.5281/zenodo.19227871}
 
@@ -133,7 +133,7 @@ The principal limitation of the current hardware realisation is that 92 MHz is b
 
 {[}11{]} IEEE P3109 Draft Standard for Microscaling Floating-Point (MXFP4), 2024. (MXFP4 context.)
 
-{[}12{]} \texttt{gHashTag/trios\#419} --- Evidence axis 3 scope. \url{https://github.com/gHashTag/trios/issues/419}
+{[}12{]} \filepath{gHashTag/trios\#419} --- Evidence axis 3 scope. \url{https://github.com/gHashTag/trios/issues/419}
 
-{[}13{]} This dissertation, App.F --- Hardware Coq Family (\texttt{hw/}). 35 \texttt{Qed} theorems.
+{[}13{]} This dissertation, App.F --- Hardware Coq Family (\filepath{hw/}). 35 \texttt{Qed} theorems.
 

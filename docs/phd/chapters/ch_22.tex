@@ -38,7 +38,7 @@ Proof: \(265/100 = 2.65 < 63\), so the \texttt{inv2\_holds} predicate evaluates 
 
 Proof: \(255 > 128\), so \texttt{inv3\_holds\ 255} evaluates to \texttt{false}. \(\square\)
 
-\textbf{Invariant INV-12 (Throughput threshold).} Predicate \texttt{inv12\_holds\ r\_thr\ =\ (r\_thr\ ≤\ max\_throughput)} where \texttt{max\_throughput\ =\ 1003\ \#\ 1} (1003 tokens/sec, the HSLM benchmark from Ch.28). A threshold of 2000 tokens/sec is infeasible.
+\textbf{Invariant INV-12 (Throughput threshold).} Predicate \filepath{inv12\_holds\ r\_thr\ =\ (r\_thr\ ≤\ max\_throughput)} where \texttt{max\_throughput\ =\ 1003\ \#\ 1} (1003 tokens/sec, the HSLM benchmark from Ch.28). A threshold of 2000 tokens/sec is infeasible.
 
 \textbf{Theorem 2.4 (inv12 falsification witness).} \texttt{inv12\_holds\ (2000\ \#\ 1)\ =\ false}. \emph{Coq theorem \texttt{inv12\_falsification\_witness}.}
 
@@ -46,7 +46,10 @@ Proof: \(2000 > 1003\). \(\square\)
 
 \textbf{Definition 2.5 (Composite invariant).} The composite invariant checks all three sub-invariants simultaneously:
 
-\[\texttt{composite\_invariant\_holds}(r, n, r_\text{thr}) = \texttt{inv2\_holds}(r)\ \&\&\ \texttt{inv3\_holds}(n)\ \&\&\ \texttt{inv12\_holds}(r_\text{thr}).\]
+\begin{align*}
+\texttt{composite\_invariant\_holds}(r, n, r_\text{thr}) =\ &\texttt{inv2\_holds}(r)\ \&\&\ \texttt{inv3\_holds}(n) \\
+&\&\&\ \texttt{inv12\_holds}(r_\text{thr}).
+\end{align*}
 
 \textbf{Theorem 2.6 (Composite falsification witness).} \texttt{composite\_invariant\_holds\ (265\ \#\ 100)\ 128\ (2000\ \#\ 1)\ =\ false}. \emph{Coq theorem \texttt{witness\_composite\_inv}.}
 
@@ -56,7 +59,7 @@ Proof: \texttt{inv2\_holds\ (265\ \#\ 100)\ =\ false}, so the conjunction is \te
 
 The falsification witnesses of Section 2 demonstrate that the invariant system correctly rejects unsafe configurations. The satisfaction witness demonstrates that the canonical \(\phi\)-scaled configuration is accepted.
 
-\textbf{Theorem 3.1 (Valid configuration).} \texttt{composite\_invariant\_holds\ (35\ \#\ 10)\ 256\ (1000\ \#\ 1)\ =\ true}. \emph{Coq theorem \texttt{valid\_config\_satisfies\_composite}.}
+\textbf{Theorem 3.1 (Valid configuration).} \texttt{composite\_invariant\_holds\ (35\ \#\ 10)\ 256\ (1000\ \#\ 1)\ =\ true}. \emph{Coq theorem \filepath{valid\_config\_satisfies\_composite}.}
 
 Proof: (i) \(35/10 = 3.5 \geq \text{min\_rate}\) (corrected per the \texttt{max\_workers\ =\ 256} variant of the invariant used here; the \texttt{inv2} floor is the 63-toks/sec FPGA rate but at this proof site the configuration represents a CPU-assisted deployment where \(\text{min\_rate} = 3.5\)); (ii) \(256 \leq 256\) (\texttt{max\_workers} is 256 in the composite file); (iii) \(1000 \leq 1003\). All three hold. \(\square\)
 
@@ -113,17 +116,17 @@ Coq proof compilation for \texttt{INV8\_WorkerPoolComposite.v}: 2.1 seconds on C
 \begin{itemize}
 \tightlist
 \item
-  \texttt{inv2\_falsification\_witness} (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{inv2\_holds\ (265\ \#\ 100)\ =\ false}: configurations below the 63 toks/sec inference floor are rejected.
+  \texttt{inv2\_falsification\_witness} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{inv2\_holds\ (265\ \#\ 100)\ =\ false}: configurations below the 63 toks/sec inference floor are rejected.
 \item
-  \texttt{inv3\_falsification\_witness} (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{inv3\_holds\ 255\ =\ false}: worker counts above the ceiling are rejected.
+  \texttt{inv3\_falsification\_witness} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{inv3\_holds\ 255\ =\ false}: worker counts above the ceiling are rejected.
 \item
-  \texttt{inv12\_falsification\_witness} (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{inv12\_holds\ (2000\ \#\ 1)\ =\ false}: throughput thresholds above 1003 toks/sec are rejected.
+  \texttt{inv12\_falsification\_witness} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{inv12\_holds\ (2000\ \#\ 1)\ =\ false}: throughput thresholds above 1003 toks/sec are rejected.
 \item
-  \texttt{witness\_composite\_inv} (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- Composite invariant rejects the \((2.65, 128, 2000)\) configuration.
+  \texttt{witness\_composite\_inv} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- Composite invariant rejects the \((2.65, 128, 2000)\) configuration.
 \item
-  \texttt{valid\_config\_satisfies\_composite} (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- Composite invariant accepts the canonical \((3.5, 256, 1000)\) configuration.
+  \filepath{valid\_config\_satisfies\_composite} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- Composite invariant accepts the canonical \((3.5, 256, 1000)\) configuration.
 \item
-  \texttt{victory\_not\_yet} (\texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{victory\_achieved\ 2\ =\ false}: two gates passed, Gate-3 pending.
+  \texttt{victory\_not\_yet} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{victory\_achieved\ 2\ =\ false}: two gates passed, Gate-3 pending.
 \end{itemize}
 
 \section{6. Sealed Seeds}\label{sealed-seeds}
@@ -131,7 +134,7 @@ Coq proof compilation for \texttt{INV8\_WorkerPoolComposite.v}: 2.1 seconds on C
 \begin{itemize}
 \tightlist
 \item
-  \textbf{INV-8} (invariant) --- \texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v} --- Status: golden --- Links Ch.22. Notes: Worker pool 10 Qed. φ-weight: 0.618033988768953.
+  \textbf{INV-8} (invariant) --- \filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v} --- Status: golden --- Links Ch.22. Notes: Worker pool 10 Qed. φ-weight: 0.618033988768953.
 \end{itemize}
 
 Fibonacci/Lucas reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
@@ -146,9 +149,9 @@ The primary limitation of the INV-8 composite invariant is that it checks config
 
 {[}2{]} GOLDEN SUNFLOWERS dissertation, Ch.10 --- Coq L1 Range×Precision Pareto. This volume.
 
-{[}3{]} \texttt{gHashTag/trios\#408} --- Ch.22 scope directive and Railway/Trios orchestration spec. GitHub issue tracker.
+{[}3{]} \filepath{gHashTag/trios\#408} --- Ch.22 scope directive and Railway/Trios orchestration spec. GitHub issue tracker.
 
-{[}4{]} \texttt{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v} --- INV-8 worker pool composite (10 Qed).
+{[}4{]} \filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v} --- INV-8 worker pool composite (10 Qed).
 
 {[}5{]} GOLDEN SUNFLOWERS dissertation, Ch.28 --- QMTech XC7A100T FPGA. This volume.
 
@@ -162,7 +165,7 @@ The primary limitation of the INV-8 composite invariant is that it checks config
 
 {[}10{]} E. Lucas, ``Théorie des fonctions numériques simplement périodiques,'' \emph{American Journal of Mathematics} 1(2), 184--196 (1878). F₂₀=6765.
 
-{[}11{]} \texttt{gHashTag/t27/proofs/canonical/igla/INV1\_BpbMonotoneBackward.v} --- INV-1 BPB monotone backward.
+{[}11{]} \filepath{gHashTag/t27/proofs/canonical/igla/INV1\_BpbMonotoneBackward.v} --- INV-1 BPB monotone backward.
 
 {[}12{]} B007 --- Railway/Trios Orchestration Formal Spec. Zenodo, DOI: 10.5281/zenodo.19227877.
 

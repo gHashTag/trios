@@ -56,7 +56,7 @@ The runtime-mirror contract is a JSON-encoded assertion file, \texttt{igla\_asse
 \item
   \textbf{BPB threshold guard}: if ASHA hyperparameter search proposes pruning a trial with BPB below the champion candidate threshold, the guard checks that the pruning threshold is \(\geq 3.5\). The Coq theorem \texttt{asha\_champion\_survives} certifies this invariant.
 \item
-  \textbf{Forbidden-threshold guard}: the theorem \texttt{old\_threshold\_kills\_champion} certifies that the old threshold of 2.65 would have pruned at least one champion candidate, justifying the upgrade to 3.5.
+  \textbf{Forbidden-threshold guard}: the theorem \filepath{old\_threshold\_kills\_champion} certifies that the old threshold of 2.65 would have pruned at least one champion candidate, justifying the upgrade to 3.5.
 \end{enumerate}
 
 The runtime mirror runs the same assertion checks on the inference server (Ch.31), ensuring that seeds used during hardware evaluation are drawn from \(\mathcal{S}\). The mirror contract is archived in the Zenodo DOI bundle {[}4{]} and reproduced by \texttt{reproduce.sh} (App.D) without modification.
@@ -80,17 +80,17 @@ The sealed-seed protocol was validated on three independent experimental axes.
 \begin{itemize}
 \tightlist
 \item
-  \texttt{trinity\_identity} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \(\varphi^2 + (1/\varphi)^2 = 3\); the Trinity anchor identity.
+  \texttt{trinity\_identity} (\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \(\varphi^2 + (1/\varphi)^2 = 3\); the Trinity anchor identity.
 \item
-  \texttt{phi\_pos} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \(\varphi > 0\); positivity of the golden ratio.
+  \texttt{phi\_pos} (\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \(\varphi > 0\); positivity of the golden ratio.
 \item
-  \texttt{phi\_gt\_1} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \(\varphi > 1\); the golden ratio exceeds unity.
+  \texttt{phi\_gt\_1} (\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \(\varphi > 1\); the golden ratio exceeds unity.
 \item
-  \texttt{asha\_champion\_survives} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- For all champion candidates \(b\) and threshold \(\tau \geq 3.5\), the ASHA pruner does not eliminate \(b\).
+  \texttt{asha\_champion\_survives} (\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- For all champion candidates \(b\) and threshold \(\tau \geq 3.5\), the ASHA pruner does not eliminate \(b\).
 \item
-  \texttt{old\_threshold\_kills\_champion} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- There exists a champion candidate that the old threshold 2.65 would have pruned; justifies the threshold upgrade.
+  \filepath{old\_threshold\_kills\_champion} (\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- There exists a champion candidate that the old threshold 2.65 would have pruned; justifies the threshold upgrade.
 \item
-  \texttt{phi\_inv4\_approx} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \((1/\varphi)^4 < 0.5\); bounds the fourth-power correction to the ASHA threshold.
+  \texttt{phi\_inv4\_approx} (\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \((1/\varphi)^4 < 0.5\); bounds the fourth-power correction to the ASHA threshold.
 \end{itemize}
 
 \section{6. Sealed Seeds}\label{sealed-seeds}
@@ -98,7 +98,7 @@ The sealed-seed protocol was validated on three independent experimental axes.
 \begin{itemize}
 \tightlist
 \item
-  \textbf{INV-2} (invariant, golden) --- \texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v} --- \url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV2}\_IglaAshaBound.v --- ASHA threshold \(3.5 = \varphi^2 + \varphi^{-2} + \varphi^{-4}\). Linked: Ch.13, App.E.
+  \textbf{INV-2} (invariant, golden) --- \filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v} --- \url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV2}\_IglaAshaBound.v --- ASHA threshold \(3.5 = \varphi^2 + \varphi^{-2} + \varphi^{-4}\). Linked: Ch.13, App.E.
 \item
   \textbf{SANCTIONED-SEEDS} (config, golden) --- \url{https://github.com/gHashTag/trios/issues/395} --- \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\). Linked: Ch.13, App.E.
 \end{itemize}
@@ -113,11 +113,11 @@ The sealed-seed protocol achieves its primary goal: any researcher with access t
 
 {[}2{]} This dissertation, Ch.7 --- Vogel Phyllotaxis \(137.5° = 360°/\varphi^2\). Fibonacci-indexed batch schedule.
 
-{[}3{]} \texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}. \url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV2}\_IglaAshaBound.v
+{[}3{]} \filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}. \url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV2}\_IglaAshaBound.v
 
 {[}4{]} Zenodo DOI bundle B004 --- Queen Lotus Adaptive Reasoning. \url{https://doi.org/10.5281/zenodo.19227871}
 
-{[}5{]} \texttt{gHashTag/trios\#395} --- Sanctioned seed registry. \url{https://github.com/gHashTag/trios/issues/395}
+{[}5{]} \filepath{gHashTag/trios\#395} --- Sanctioned seed registry. \url{https://github.com/gHashTag/trios/issues/395}
 
 {[}6{]} This dissertation, Ch.19 --- Statistical Analysis (Welch-\(t\)). ASHA champion validation.
 
@@ -129,7 +129,7 @@ The sealed-seed protocol achieves its primary goal: any researcher with access t
 
 {[}10{]} Li, L., Jamieson, K., DeSalvo, G., Rostamizadeh, A., \& Talwalkar, A. (2018). Hyperband: A novel bandit-based approach to hyperparameter optimization. \emph{JMLR}, 18(185), 1--52. (ASHA extension.)
 
-{[}11{]} \texttt{gHashTag/t27\#569} --- STROBE precondition tracking. \url{https://github.com/gHashTag/t27/issues/569}
+{[}11{]} \filepath{gHashTag/t27\#569} --- STROBE precondition tracking. \url{https://github.com/gHashTag/t27/issues/569}
 
 {[}12{]} This dissertation, App.E --- Golden Ledger. Open INV-2 obligations.
 
