@@ -1,0 +1,357 @@
+% ===================================================================
+% PhD Monograph v6.0 — RUSSIAN EDITION
+% «Цветок Золотой» — Тождество Тринити для всех физических констант
+% Автор: Дмитрий Васильев (Dmitrii Vasilev)
+% ===================================================================
+%
+% R1 (CROWN): pure Rust toolchain. This file overrides ENGLISH-only
+% strings (\part titles, frontmatter labels, \chapter prefix, ToC,
+% list-of-figures/theorems) and then \input{}s the body of main.tex
+% so we keep ONE source of truth (chapters/, appendix/, frontmatter/).
+%
+% Build:    tri phd build-book --lang=ru
+% Output:   docs/phd/main_ru.pdf
+% ===================================================================
+
+\documentclass[12pt,a4paper,openany,oneside]{book}
+
+% --- Russian-first font + language ---
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+% No polyglossia — DejaVu Serif already supports full Cyrillic.
+% Hyphenation patterns load automatically with babel.
+\usepackage[english,russian]{babel}
+\usepackage{newunicodechar}
+
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm,physics}
+\usepackage{float,algorithm,algpseudocode,epigraph,enumitem,listings,adjustbox,multirow,array,caption,subcaption}
+
+\newunicodechar{φ}{\ensuremath{\varphi}}
+\newunicodechar{Φ}{\ensuremath{\Phi}}
+\newunicodechar{π}{\ensuremath{\pi}}
+\newunicodechar{σ}{\ensuremath{\sigma}}
+\newunicodechar{μ}{\ensuremath{\mu}}
+\newunicodechar{λ}{\ensuremath{\lambda}}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{β}{\ensuremath{\beta}}
+\newunicodechar{γ}{\ensuremath{\gamma}}
+\newunicodechar{δ}{\ensuremath{\delta}}
+\newunicodechar{ε}{\ensuremath{\varepsilon}}
+\newunicodechar{θ}{\ensuremath{\theta}}
+\newunicodechar{ω}{\ensuremath{\omega}}
+\newunicodechar{Ω}{\ensuremath{\Omega}}
+\newunicodechar{Δ}{\ensuremath{\Delta}}
+\newunicodechar{Σ}{\ensuremath{\Sigma}}
+\newunicodechar{Π}{\ensuremath{\Pi}}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{≥}{\ensuremath{\geq}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{≈}{\ensuremath{\approx}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∞}{\ensuremath{\infty}}
+\newunicodechar{∂}{\ensuremath{\partial}}
+\newunicodechar{∇}{\ensuremath{\nabla}}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
+\usepackage{graphicx}
+\graphicspath{{assets/}{../../assets/illustrations/}}
+\usepackage{microtype}
+\usepackage[htt]{hyphenat}
+\sloppy
+\emergencystretch=6em
+\hbadness=10000
+\vbadness=10000
+\hfuzz=4pt
+\hyphenpenalty=50
+\tolerance=9999
+\hbadness=10000
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+\usepackage{seqsplit}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+\usepackage{fancyvrb}
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\providecommand{\Shaded}{}
+\let\OldShaded\Shaded
+\renewenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+\newcommand{\KeywordTok}[1]{\textbf{#1}}
+\newcommand{\DataTypeTok}[1]{#1}
+\newcommand{\DecValTok}[1]{#1}
+\newcommand{\BaseNTok}[1]{#1}
+\newcommand{\FloatTok}[1]{#1}
+\newcommand{\ConstantTok}[1]{#1}
+\newcommand{\CharTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{#1}
+\newcommand{\StringTok}[1]{\textit{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textit{#1}}
+\newcommand{\SpecialStringTok}[1]{\textit{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\CommentTok}[1]{\textit{\textcolor{gray}{#1}}}
+\newcommand{\DocumentationTok}[1]{\textit{#1}}
+\newcommand{\AnnotationTok}[1]{#1}
+\newcommand{\CommentVarTok}[1]{#1}
+\newcommand{\OtherTok}[1]{#1}
+\newcommand{\FunctionTok}[1]{#1}
+\newcommand{\VariableTok}[1]{#1}
+\newcommand{\ControlFlowTok}[1]{\textbf{#1}}
+\newcommand{\OperatorTok}[1]{#1}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\PreprocessorTok}[1]{#1}
+\newcommand{\AttributeTok}[1]{#1}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\InformationTok}[1]{#1}
+\newcommand{\WarningTok}[1]{#1}
+\newcommand{\AlertTok}[1]{\textbf{#1}}
+\newcommand{\ErrorTok}[1]{\textbf{#1}}
+\newcommand{\NormalTok}[1]{#1}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage[most]{tcolorbox}
+
+\usepackage{csquotes}
+\PassOptionsToPackage{hyphens}{url}
+\usepackage{url}
+\Urlmuskip=0mu plus 1mu
+\usepackage[numbers,sort&compress]{natbib}
+\providecommand{\textcite}[1]{\citet{#1}}
+\providecommand{\autocite}[1]{\citep{#1}}
+\providecommand{\parencite}[1]{\citep{#1}}
+\providecommand{\addbibresource}[1]{}
+\providecommand{\printbibliography}{\bibliographystyle{plainnat}\bibliography{bibliography}}
+\usepackage{hyperref}
+\usepackage{cleveref}
+
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+
+\geometry{
+  paperwidth=210mm, paperheight=297mm,
+  left=25mm, right=25mm, top=25mm, bottom=28mm,
+  headheight=14pt, headsep=8mm, footskip=14mm,
+  marginparwidth=0pt, marginparsep=0pt, bindingoffset=0pt
+}
+\fvset{fontsize=\small,frame=none}
+% \filepath{...}: monospace path-like literal that breaks anywhere.
+\DeclareRobustCommand{\filepath}[1]{\texttt{\seqsplit{#1}}}
+\AtBeginDocument{%
+  \let\OldTexttt\texttt%
+  \protected\def\texttt#1{\OldTexttt{\hspace{0pt}#1\hspace{0pt}}}%
+}
+\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+\definecolor{golden}{RGB}{212,175,55}
+\definecolor{goldlight}{RGB}{255,223,128}
+\definecolor{golddark}{RGB}{184,134,11}
+
+% --- Theorem environments in Russian ---
+\theoremstyle{plain}
+\newtheorem{theorem}{Теорема}[chapter]
+\newtheorem{lemma}[theorem]{Лемма}
+\newtheorem{proposition}[theorem]{Предложение}
+\newtheorem{corollary}[theorem]{Следствие}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Определение}
+\newtheorem{example}[theorem]{Пример}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Замечание}
+\renewcommand{\proofname}{Доказательство}
+\renewcommand{\qedsymbol}{}
+\providecommand{\admittedbox}[1]{\fcolorbox{red}{red!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{[Допущено]:} #1}}}
+
+% --- Russian babel-like names ---
+\renewcommand{\contentsname}{Содержание}
+\renewcommand{\listfigurename}{Список иллюстраций}
+\renewcommand{\listtablename}{Список таблиц}
+\renewcommand{\bibname}{Библиография}
+\renewcommand{\indexname}{Указатель}
+\renewcommand{\figurename}{Рисунок}
+\renewcommand{\tablename}{Таблица}
+\renewcommand{\partname}{Часть}
+\renewcommand{\chaptername}{Глава}
+\renewcommand{\appendixname}{Приложение}
+
+% --- Header / footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LO,RE]{\textcolor{golden}{\small\bfseries\nouppercase{\leftmark}}}
+\fancyhead[RO,LE]{\textcolor{golddark}{\small\bfseries\thepage}}
+\fancyfoot[LE,RO]{\textcolor{golddark}{\scriptsize Trinity Framework · φ²+φ⁻²=3}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{goldlight}\leaders\hrule height \headrulewidth\hfill}}
+
+\begin{document}
+
+% ===== ТИТУЛ =====
+\frontmatter
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+\vspace*{0.5cm}
+{\LARGE\bfseries Цветок Золотой (Flos Aureus)}\\[0.3cm]
+{\large\itshape Тринити-каркас для золотого сечения:\\
+машинно-проверенные доказательства, эмпирические якоря и ограниченный\\
+Coq-инвариантами поиск нейроархитектуры}\\[0.6cm]
+
+\makebox[\linewidth][c]{\includegraphics[width=1.10\textwidth,keepaspectratio]{cover_v4.png}}\\[0.6cm]
+
+{\large Дмитрий Васильев}\\[0.2cm]
+{\small ORCID: \url{https://orcid.org/0009-0008-4294-6159}}\\[0.5cm]
+
+\vfill
+
+{\large Диссертация на соискание степени\\[0.2cm]
+\textbf{Доктора Философии (PhD)}}\\[0.6cm]
+
+{\normalsize Кафедра Информатики}\\[0.1cm]
+{\normalsize Программа исследований Trinity}\\[0.5cm]
+
+{\small Якорное тождество:\quad $\varphi^{2} + \varphi^{-2} = 3$}\\[0.15cm]
+{\footnotesize Zenodo DOI: \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}}\\[0.4cm]
+
+{\small 2026}
+\end{center}
+\end{titlepage}
+
+% ===== АННОТАЦИЯ (RU) =====
+\chapter*{Аннотация}
+\addcontentsline{toc}{chapter}{Аннотация}
+\noindent
+Настоящая монография излагает каркас Trinity S\textsuperscript{3}AI — неуравновешенно-троичную
+архитектуру языкового моделирования, у которой алгебраическим основанием служит
+тождество \(\varphi^{2} + \varphi^{-2} = 3\), где \(\varphi = (1+\sqrt{5})/2\) — золотое
+сечение. Программа объединяет три компонента — символьный (Coq), статистический
+(транзистор-FP-обучение) и кремниевый (FPGA-стенд QMTech XC7A100T). Главный
+эмпирический результат: BPB \(\le 1{,}85\) на эталоне Gate-2, при энергетической
+эффективности \(3000\times\) к низкопотребляющему базису DARPA, при 297 машинно-проверенных
+теоремах в 65 канонических Coq-файлах. Защита запланирована на 2026-06-15.
+
+% ===== ОСНОВНОЕ ТЕЛО =====
+% Используем те же главы — единый источник правды (R6).
+\makeatletter
+\renewcommand*\l@subsection{\@dottedtocline{2}{3.8em}{3.6em}}
+\renewcommand*\l@subsubsection{\@dottedtocline{3}{7.0em}{4.5em}}
+\makeatother
+\tableofcontents
+\listoffigures
+\listoftables
+
+\mainmatter
+
+\part{Основания}
+\include{chapters/00-monad}
+\include{chapters/01-golden-egg}
+\include{chapters/02-golden-cut}
+\include{chapters/03-golden-harvest}
+
+\part{Расширение}
+\include{chapters/04-golden-scales}
+\include{chapters/05-golden-bridge}
+\include{chapters/06-golden-mantissa}
+\include{chapters/07-golden-sprout}
+
+\part{Кристалл}
+\include{chapters/08-golden-crystal}
+\include{chapters/09-golden-seal}
+
+\part{Синтез}
+\include{chapters/10-golden-bloom}
+
+\part{Сакральная геометрия}
+\include{chapters/11-vesica-piscis}
+\include{chapters/12-flower-of-life}
+\include{chapters/13-metatron-cube}
+\include{chapters/14-platonic-solids}
+\include{chapters/15-kepler-solids}
+\include{chapters/16-sacred-ratios}
+\include{chapters/17-golden-spiral}
+\include{chapters/18-torus-geometry}
+\include{chapters/19-fibonacci-tesselation}
+
+\part{Физический фундамент}
+\include{chapters/20-standard-model}
+\include{chapters/21-quantum-field}
+\include{chapters/22-e8-symmetry}
+\include{chapters/23-gf16-algebra}
+\include{chapters/24-igla-architecture}
+
+\part{Алгебраические доказательства}
+\include{chapters/25-benchmarks}
+\include{chapters/26-data-analysis}
+\include{chapters/27-trinity-identity}
+\include{chapters/28-momentum-algebra}
+\include{chapters/29-lucas-closure}
+
+\part{Образы и генеалогия}
+\include{chapters/30-golden-imagery}
+\include{chapters/31-philosophy}
+\include{chapters/32-conclusion}
+\include{chapters/33-epilogue}
+
+\part{Поток Trinity S\textsuperscript{3}AI}
+\include{chapters/ch_00}
+\include{chapters/ch_01}
+\include{chapters/ch_02}
+\include{chapters/ch_03}
+\include{chapters/ch_04}
+\include{chapters/ch_05}
+\include{chapters/ch_06}
+\include{chapters/ch_07}
+\include{chapters/ch_08}
+\include{chapters/ch_09}
+\include{chapters/ch_10}
+\include{chapters/ch_11}
+\include{chapters/ch_12}
+\include{chapters/ch_13}
+\include{chapters/ch_14}
+\include{chapters/ch_15}
+\include{chapters/ch_16}
+\include{chapters/ch_17}
+\include{chapters/ch_18}
+\include{chapters/ch_19}
+\include{chapters/ch_20}
+\include{chapters/ch_21}
+\include{chapters/ch_22}
+\include{chapters/ch_23}
+\include{chapters/ch_24}
+\include{chapters/ch_25}
+\include{chapters/ch_26}
+\include{chapters/ch_27}
+\include{chapters/ch_28}
+\include{chapters/ch_29}
+\include{chapters/ch_30}
+\include{chapters/ch_31}
+\include{chapters/ch_32}
+\include{chapters/ch_33}
+\include{chapters/ch_34}
+
+\appendix
+\part{Приложения}
+\include{appendix/A-catalogue}
+\include{appendix/B-falsification}
+\include{appendix/C-golden-benchmark}
+\include{appendix/D-golden-mirror}
+\include{appendix/E-lexicon}
+\include{appendix/F-coq-citation-map}
+\include{appendix/F-fpga-bitstream}
+\include{appendix/G-data-availability}
+\include{appendix/H-acm-ae-checklist}
+\include{appendix/H-zenodo-doi}
+\include{appendix/I-xdc-pin-map}
+\include{appendix/J-troubleshooting}
+\include{appendix/K-agent-memory}
+\include{appendix/L-pollen-channel}
+
+\backmatter
+\bibliographystyle{plainnat}
+\bibliography{bibliography}
+
+\end{document}

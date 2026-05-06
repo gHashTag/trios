@@ -3,7 +3,7 @@
 % Generated via the thmtools package (\listoftheorems).
 % Monograph: Flos Aureus: A Theorem-Guided Architecture Search
 %            through the Trinity Identity φ²+φ⁻²=3
-% Author:    Кирилл Шамин (Cyril Shamin)
+% Author:    Дмитрий Васильев (Dmitrii Vasilev)
 % Institute: University of Reading / gHashTag Open Doctorate
 % ===================================================================
 %
@@ -48,4 +48,21 @@ Appendix~F (Coq citation map).
 
 \bigskip
 
-\listoftheorems[ignoreall, show={theorem,lemma,corollary,proposition}]
+% Widen the numberline box for List-of-Theorems entries.
+% Default \numberline width is 1.5em which is enough only for one-digit
+% chapter.theorem indices; two-digit sub-numbers like 21.20, 30.18 collide
+% with the entry label producing '21.20Theorem' instead of '21.20  Theorem'.
+\makeatletter
+\renewcommand*\l@theorem[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\renewcommand*\l@lemma[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\renewcommand*\l@corollary[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\renewcommand*\l@proposition[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\renewcommand*\l@definition[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\renewcommand*\l@example[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\renewcommand*\l@remark[2]{\@dottedtocline{0}{0pt}{4.5em}{#1}{#2}}%
+\makeatother
+
+% Belt-and-suspenders: also widen \numberline locally inside the LoT
+% via thmtools' numwidth parameter so even hostile preamble hooks lose.
+\listoftheorems[ignoreall, show={theorem,lemma,corollary,proposition},
+                numwidth=4.5em]

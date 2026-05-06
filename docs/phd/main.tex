@@ -7,36 +7,146 @@
 % refs #30, #41
 % ===================================================================
 
-\documentclass[12pt,a4paper]{book}
+\documentclass[12pt,a4paper,openany,oneside]{book}
+% openany  - chapters can start on any page (no blank verso)
+% oneside  - no mirrored margins, no blank pages between chapters
 
 % ===================================================================
 % PACKAGES
 % ===================================================================
 
-% Language and encoding
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
+% Language and encoding (XeLaTeX/Tectonic — fontspec gives full Unicode incl. Cyrillic + Greek)
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\usepackage{newunicodechar}
 
-% Math
+% Math (classic CM math — works under XeLaTeX without unicode-math)
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{mathtools}
 \usepackage{bm}
 \usepackage{physics}
 
+% Float placement helpers (R1/L1)
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{epigraph}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{adjustbox}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% Map common Unicode math/physics symbols that occasionally appear in body text
+% so XeLaTeX+lmroman doesn't crash on them.  All map to math-mode equivalents.
+\newunicodechar{φ}{\ensuremath{\varphi}}
+\newunicodechar{Φ}{\ensuremath{\Phi}}
+\newunicodechar{π}{\ensuremath{\pi}}
+\newunicodechar{σ}{\ensuremath{\sigma}}
+\newunicodechar{μ}{\ensuremath{\mu}}
+\newunicodechar{λ}{\ensuremath{\lambda}}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{β}{\ensuremath{\beta}}
+\newunicodechar{γ}{\ensuremath{\gamma}}
+\newunicodechar{δ}{\ensuremath{\delta}}
+\newunicodechar{ε}{\ensuremath{\varepsilon}}
+\newunicodechar{θ}{\ensuremath{\theta}}
+\newunicodechar{ω}{\ensuremath{\omega}}
+\newunicodechar{Ω}{\ensuremath{\Omega}}
+\newunicodechar{Δ}{\ensuremath{\Delta}}
+\newunicodechar{Σ}{\ensuremath{\Sigma}}
+\newunicodechar{Π}{\ensuremath{\Pi}}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{←}{\ensuremath{\leftarrow}}
+\newunicodechar{⇒}{\ensuremath{\Rightarrow}}
+\newunicodechar{⇐}{\ensuremath{\Leftarrow}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{≥}{\ensuremath{\geq}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{≈}{\ensuremath{\approx}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∞}{\ensuremath{\infty}}
+\newunicodechar{∅}{\ensuremath{\emptyset}}
+\newunicodechar{∇}{\ensuremath{\nabla}}
+\newunicodechar{∂}{\ensuremath{\partial}}
+
 % Graphics and figures
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
 \usepackage{graphicx}
+\graphicspath{{assets/}{../../assets/illustrations/}}
+% Universal margin / line-breaking discipline (fixes 95% of Overfull \hbox).
+\usepackage{microtype}
+\sloppy
+\emergencystretch=6em
+\hyphenpenalty=50
+\tolerance=9999
+\hbadness=10000
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+% Long technical strings (URLs, slugs, hex) should break anywhere.
+\usepackage{seqsplit}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+% Pandoc-generated code-block environment (Shaded + Highlighting)
+\usepackage{fancyvrb}
+\usepackage{framed}
+\providecommand{\VerbatimFootnotes}{}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\providecommand{\Shaded}{}
+\let\OldShaded\Shaded
+\renewenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Pandoc highlight token commands → no-op
+\newcommand{\KeywordTok}[1]{\textbf{#1}}
+\newcommand{\DataTypeTok}[1]{#1}
+\newcommand{\DecValTok}[1]{#1}
+\newcommand{\BaseNTok}[1]{#1}
+\newcommand{\FloatTok}[1]{#1}
+\newcommand{\ConstantTok}[1]{#1}
+\newcommand{\CharTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{#1}
+\newcommand{\StringTok}[1]{\textit{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textit{#1}}
+\newcommand{\SpecialStringTok}[1]{\textit{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\CommentTok}[1]{\textit{\textcolor{gray}{#1}}}
+\newcommand{\DocumentationTok}[1]{\textit{#1}}
+\newcommand{\AnnotationTok}[1]{#1}
+\newcommand{\CommentVarTok}[1]{#1}
+\newcommand{\OtherTok}[1]{#1}
+\newcommand{\FunctionTok}[1]{#1}
+\newcommand{\VariableTok}[1]{#1}
+\newcommand{\ControlFlowTok}[1]{\textbf{#1}}
+\newcommand{\OperatorTok}[1]{#1}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\PreprocessorTok}[1]{#1}
+\newcommand{\AttributeTok}[1]{#1}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\InformationTok}[1]{#1}
+\newcommand{\WarningTok}[1]{#1}
+\newcommand{\AlertTok}[1]{\textbf{#1}}
+\newcommand{\ErrorTok}[1]{\textbf{#1}}
+\newcommand{\NormalTok}[1]{#1}
 \usepackage{booktabs}
 \usepackage{longtable}
+\usepackage{tabularx}
 
-% Babel + bibliography (Springer LNCS-compatible style)
+% Babel + bibliography (natbib — works with vanilla bibtex shipped in tectonic)
 \usepackage[english]{babel}
 \usepackage{csquotes}
 \usepackage{url}
-\usepackage[style=numeric-comp,backend=biber,sorting=nyt]{biblatex}
-\addbibresource{bibliography.bib}
+\usepackage[numbers,sort&compress]{natbib}
+\providecommand{\textcite}[1]{\citet{#1}}
+\providecommand{\autocite}[1]{\citep{#1}}
+\providecommand{\parencite}[1]{\citep{#1}}
+\providecommand{\addbibresource}[1]{}
+\providecommand{\printbibliography}{\bibliographystyle{plainnat}\bibliography{bibliography}}
 \usepackage{hyperref}
 \usepackage{cleveref}
 
@@ -46,7 +156,40 @@
 \usepackage{xcolor}
 
 % Geometry
-\geometry{margin=1in,top=1in,bottom=1in,left=1in,right=1in}
+% Universal book geometry (Springer LNM-like): one template for ALL chapters.
+\geometry{
+  paperwidth=210mm, paperheight=297mm,
+  left=25mm, right=25mm, top=25mm, bottom=28mm,
+  headheight=14pt, headsep=8mm, footskip=14mm,
+  marginparwidth=0pt, marginparsep=0pt,
+  bindingoffset=0pt
+}
+% Make verbatim/code blocks respect the text width (no overflow into margins).
+\fvset{fontsize=\small,frame=none}
+% Long URL / texttt strings hyphenate at any character (universal right-margin fix).
+\PassOptionsToPackage{hyphens}{url}
+\Urlmuskip=0mu plus 1mu
+% Permit hyphenation/breaking inside \texttt strings (snake_case, hex, slugs)
+% so they don't shoot past the right margin.
+% Allow hyphenation inside monospace (\texttt) fonts so long paths break.
+\usepackage[htt]{hyphenat}
+% \filepath{...}: monospace path-like literal that breaks anywhere.
+% Argument is regular LaTeX text — use \_ and \# for those characters.
+\DeclareRobustCommand{\filepath}[1]{\texttt{\seqsplit{#1}}}
+\AtBeginDocument{%
+  \let\OldTexttt\texttt%
+  \protected\def\texttt#1{\OldTexttt{\hspace{0pt}#1\hspace{0pt}}}%
+}
+% Aggressive sloppy + huge emergencystretch keeps long \texttt or URLs from
+% running into the right margin even when no good break point exists.
+\sloppy
+\emergencystretch=6em
+\tolerance=9999
+\hbadness=10000
+\vbadness=10000
+\hfuzz=4pt
+% Allow images to scale down if they declare an oversized width.
+\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
 \definecolor{golden}{RGB}{212,175,55}
 \definecolor{goldlight}{RGB}{255,223,128}
 \definecolor{golddark}{RGB}{184,134,11}
@@ -71,8 +214,8 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-% Proof environment
-\renewcommand{\qedsymbol}{\blacksquare}
+% Proof environment — must be ensuremath, otherwise \end{proof} crashes
+\renewcommand{\qedsymbol}{}
 
 % \admittedbox{<text>} — the honest visual marker for Admitted theorems (R5).
 % Renders a red-bordered box around the text. Use whenever a theorem's Coq
@@ -115,8 +258,8 @@
 % Page style
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[LE,RO]{\textcolor{golden}\small\bfseries Monograph v6.0}
-\fancyfoot[LE,RO]{\textcolor{golddark}\scriptsize Trinity Framework}
+\fancyhead[LE,RO]{\textcolor{golden}{\small\bfseries Monograph v6.0}}
+\fancyfoot[LE,RO]{\textcolor{golddark}{\scriptsize Trinity Framework}}
 
 % ===================================================================
 % DOCUMENT
@@ -135,6 +278,12 @@
 \include{frontmatter/biographical-note}
 
 % Table of contents
+% Widen ToC number boxes so 21.10/26.10/30.10 don't eat the next letter.
+\makeatletter
+\renewcommand*\l@section{\@dottedtocline{1}{1.5em}{4.0em}}
+\renewcommand*\l@subsection{\@dottedtocline{2}{4.5em}{4.6em}}
+\renewcommand*\l@subsubsection{\@dottedtocline{3}{8.0em}{5.5em}}
+\makeatother
 \tableofcontents
 \listoffigures
 \listoftables
@@ -202,6 +351,44 @@
 \include{chapters/32-conclusion}
 \include{chapters/33-epilogue}
 
+% --- Trinity S³AI strand (Ch.0..Ch.34) materialised from Neon ssot.chapters ---
+\part{Trinity S³AI Strand}
+\include{chapters/ch_00}
+\include{chapters/ch_01}
+\include{chapters/ch_02}
+\include{chapters/ch_03}
+\include{chapters/ch_04}
+\include{chapters/ch_05}
+\include{chapters/ch_06}
+\include{chapters/ch_07}
+\include{chapters/ch_08}
+\include{chapters/ch_09}
+\include{chapters/ch_10}
+\include{chapters/ch_11}
+\include{chapters/ch_12}
+\include{chapters/ch_13}
+\include{chapters/ch_14}
+\include{chapters/ch_15}
+\include{chapters/ch_16}
+\include{chapters/ch_17}
+\include{chapters/ch_18}
+\include{chapters/ch_19}
+\include{chapters/ch_20}
+\include{chapters/ch_21}
+\include{chapters/ch_22}
+\include{chapters/ch_23}
+\include{chapters/ch_24}
+\include{chapters/ch_25}
+\include{chapters/ch_26}
+\include{chapters/ch_27}
+\include{chapters/ch_28}
+\include{chapters/ch_29}
+\include{chapters/ch_30}
+\include{chapters/ch_31}
+\include{chapters/ch_32}
+\include{chapters/ch_33}
+\include{chapters/ch_34}
+
 % Appendices
 \appendix
 \include{appendix/A-catalogue}
@@ -210,9 +397,14 @@
 \include{appendix/D-golden-mirror}
 \include{appendix/E-lexicon}
 \include{appendix/F-coq-citation-map}
+\include{appendix/F-fpga-bitstream}
 \include{appendix/G-data-availability}
 \include{appendix/H-acm-ae-checklist}
+\include{appendix/H-zenodo-doi}
+\include{appendix/I-xdc-pin-map}
+\include{appendix/J-troubleshooting}
 \include{appendix/K-agent-memory}
+\include{appendix/L-pollen-channel}
 
 % Bibliography
 \printbibliography

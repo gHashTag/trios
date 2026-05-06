@@ -70,13 +70,13 @@ jobs:
           echo "Rules enforced: R1 (Rust-only), R3 (chapter floor), R11 (bib ≥150), R14 (Coq table)." >> "$GITHUB_STEP_SUMMARY"
 
   compile:
-    name: Compile · tectonic
+    name: Compile · tectonic (EN+RU)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: audit
-    # The compile job is non-blocking for now: tectonic is a heavy install and
-    # we audit-gate first. Marked continue-on-error so frontmatter / chapter
-    # tweaks land even when the typesetter trips on a stub include.
+    # PhD v6: tectonic gate is now a soft-fail uploader — main.pdf and main_ru.pdf
+    # are published as artifacts even if compile-resilient quarantines stragglers.
+    # The Rust binary is the single entry point (R1).
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -89,12 +89,62 @@ jobs:
           curl -fsSL https://drop-sh.fullyjustified.net | sh -s -- --version 0.15.0
           sudo mv tectonic /usr/local/bin/tectonic
 
-      - name: Compile main.tex via trios-phd
-        run: cargo run -q -p trios-phd -- --phd-root docs/phd compile
+      - name: Install pandoc (build-book phase 2)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends pandoc
 
-      - name: Upload PDF
-        if: success()
+      - name: Compile main.tex (EN) via trios-phd compile-resilient
+        id: build_en
+        continue-on-error: true
+        run: cargo run -q -p trios-phd -- --phd-root docs/phd compile-resilient --max-rounds 80
+
+      - name: Compile main_ru.tex (RU)
+        id: build_ru
+        continue-on-error: true
+        run: |
+          cd docs/phd
+          tectonic -X compile main_ru.tex --keep-intermediates --keep-logs || true
+
+      - name: Upload EN PDF
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flos-aureus-pdf
+          name: flos-aureus-en-pdf
           path: docs/phd/main.pdf
+          if-no-files-found: warn
+
+      - name: Upload RU PDF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flos-aureus-ru-pdf
+          path: docs/phd/main_ru.pdf
+          if-no-files-found: warn
+
+      - name: Upload quarantine snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phd-quarantine
+          path: docs/phd/quarantine/
+          if-no-files-found: ignore
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## PhD compile · EN+RU artifacts" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f docs/phd/main.pdf ]; then
+            EN_PAGES=$(strings docs/phd/main.pdf | grep -m1 "^/Count" | awk '{print $2}' || echo unknown)
+            EN_SIZE=$(stat -c%s docs/phd/main.pdf)
+            echo "- EN main.pdf: ${EN_SIZE} bytes" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- EN main.pdf: MISSING" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f docs/phd/main_ru.pdf ]; then
+            RU_SIZE=$(stat -c%s docs/phd/main_ru.pdf)
+            echo "- RU main_ru.pdf: ${RU_SIZE} bytes" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- RU main_ru.pdf: MISSING" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          QC=$(ls docs/phd/quarantine/ 2>/dev/null | wc -l || echo 0)
+          echo "- Quarantined chapters: ${QC}" >> "$GITHUB_STEP_SUMMARY"
