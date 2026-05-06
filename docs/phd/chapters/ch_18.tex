@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-18-limitations.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{Limitations}
-\addcontentsline{toc}{section}{Limitations}
-
+\chapter{Limitations}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch18-limitations.png}
 \caption*{Figure — Ch.18: Limitations.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 No formal system is complete without an honest accounting of its boundaries. This chapter catalogs the principal limitations of the Trinity S³AI / GOLDEN SUNFLOWERS framework across four dimensions: (i) the 41 \texttt{Admitted} proof stubs remaining in the Coq corpus, (ii) the GF16 compression gap relative to competitors at Gate-3, (iii) hardware constraints inherited from the QMTech XC7A100T platform, and (iv) scope limitations of the IGLA RACE runtime. A 23-entry state-of-the-art comparison table (the CLARA-SOA snapshot) contextualises these weaknesses against competing systems. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) provides the mathematical frame for quantifying the precision budget: the three exponent bands leave specific residual error terms that are bounded but not yet closed by formal proof. The primary mitigation path is the Coq.Interval upgrade lane described in Section 3.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 The GOLDEN SUNFLOWERS dissertation rests on two pillars: a formally verified arithmetic substrate and an empirically measured hardware deployment. Both pillars exhibit honest gaps that must be reported before the work can be considered complete in either a scientific or an engineering sense {[}1{]}. The present chapter fulfils the R5 honesty obligation of the Trinity S³AI constitution: every claim made in earlier chapters must be traceable to either a Qed theorem or a measured datum, and any claim lacking that trace must be listed here.
 
@@ -24,7 +22,7 @@ The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) is central to the error ana
 
 Section 2 presents the CLARA-SOA comparison table. Section 3 describes the Coq.Interval upgrade lane. Section 4 details hardware and runtime limitations.
 
-\subsection{2. State-of-the-Art Comparison (CLARA-SOA Snapshot)}\label{state-of-the-art-comparison-clara-soa-snapshot}
+\section{2. State-of-the-Art Comparison (CLARA-SOA Snapshot)}\label{state-of-the-art-comparison-clara-soa-snapshot}
 
 The following table reflects the CLARA-SOA-COMPARISON.md snapshot taken during the Gate-2 evaluation period. Twenty-three competing systems are compared on five axes: BPB on the HSLM benchmark, formal verification depth, hardware energy per token, number of DSP macros required, and open reproducibility.
 
@@ -83,7 +81,7 @@ Reproducible
 
 \textbf{Summary.} Trinity S³AI GF16 achieves BPB 1.83, placing it 11th out of 23 on raw compression at Gate-2. No competitor provides machine-checked formal proofs. On the energy-per-token axis, this work (15.9 mJ) is competitive but not best-in-class; MXFP4 (8.2 mJ) and AWQ (10.1 mJ) achieve lower energy at the cost of DSP macros and absent formal guarantees. The Gate-3 BPB target of \(\leq 1.5\) would place Trinity S³AI first in this table; achieving it requires closing the GF16 sub-unity and super-unity precision gaps documented in Section 3.
 
-\subsection{3. Coq.Interval Upgrade Lane}\label{coq.interval-upgrade-lane}
+\section{3. Coq.Interval Upgrade Lane}\label{coq.interval-upgrade-lane}
 
 Of the 438 theorem statements in the Coq corpus, 297 carry \texttt{Qed} status and 41 carry \texttt{Admitted} status; the remainder are \texttt{Defined} (computationally transparent) or \texttt{Lemma}-level obligations folded into larger proofs {[}1,25{]}.
 
@@ -99,7 +97,7 @@ The 41 Admitted stubs cluster into four groups:
 
 The Coq.Interval {[}27{]} library provides certified interval arithmetic that can discharge Groups A and B automatically by evaluating rational enclosures of \(\varphi^{\pm 2}\). Migration to \texttt{Coq.Interval} is estimated at 4--6 person-weeks. Groups C and D require manual proof effort: approximately 2 weeks for Group C (one inductive lemma) and 6--8 weeks for Group D (Iris integration).
 
-\subsection{4. Hardware and Runtime Limitations}\label{hardware-and-runtime-limitations}
+\section{4. Hardware and Runtime Limitations}\label{hardware-and-runtime-limitations}
 
 \textbf{FPGA resource ceiling.} The XC7A100T contains 101440 LUTs and 135200 FFs. The current GF16 inference pipeline occupies 12400 LUTs (12.2\%) and 9800 FFs (7.2\%), leaving ample headroom. However, scaling to GF32 would require approximately 52000 LUTs (51.3\%), approaching the routing-congestion threshold. GF64 is not feasible on this device without external SRAM.
 
@@ -109,21 +107,21 @@ The Coq.Interval {[}27{]} library provides certified interval arithmetic that ca
 
 \textbf{41 Admitted stubs and the scope of formal guarantees.} The formal guarantee that no overflow occurs in the GF16 pipeline (INV-3) is Qed-proved for the unity band only. The sub-unity and super-unity bands carry \texttt{Admitted} overflow-freedom claims. Users relying on the formal guarantee for safety-critical deployments should treat the non-unity bands as unverified until Groups A and B are closed.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 This chapter occupies the most uncomfortable position in a dissertation: it quantifies the distance between what was claimed and what was proved. The primary tension is between the BPB 1.83 result (Gate-2, achieved) and the BPB \(\leq 1.5\) target (Gate-3, pending). Bridging that gap requires completing the GF16 quantisation pipeline and closing Groups A--B in the Coq corpus. The timeline is realistic: Groups A--B can be automated via Coq.Interval in under 6 weeks; Groups C--D require manual effort but are well-scoped.
 
 The CLARA-SOA table reveals a systematic gap: competing quantisation systems achieve better BPB than Trinity S³AI at Gate-2 but none provide formal verification. The dissertation's unique contribution is the combination of formal proof and hardware realisation; the BPB gap is a deferral, not a failure. Future work should pursue the Coq.Interval migration (Section 3), the PCIe interface upgrade (Ch.12), and the GF32 path (Ch.6 Discussion) in parallel. This chapter links directly to Ch.6 (GoldenFloat format design), Ch.24 (scheduler liveness), and App.A (executive summary of the 297/438 proof census).
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} \texttt{gHashTag/t27/proofs/canonical/} --- Coq canonical proof archive; 65 \texttt{.v} files, 297 Qed, 41 Admitted, 438 total.
 

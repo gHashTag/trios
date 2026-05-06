@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-4-sacred-formula-derivation.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{Sacred Formula: \(\alpha\)\_\(\varphi\) Derivation}
-\addcontentsline{toc}{section}{Sacred Formula: \(\alpha\)\_\(\varphi\) Derivation}
-
+\chapter{Sacred Formula: \(\alpha\)\_\(\varphi\) Derivation}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch04-sacred-formula.png}
 \caption*{Figure — Ch.4: Sacred Formula: \(\alpha\)\_\(\varphi\) Derivation.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 The constant \(\alpha_\phi = \ln(\phi^2)/\pi \approx 0.306\) arises naturally when the golden ratio \(\phi = (1+\sqrt{5})/2\) is embedded in a logarithmic-circular framework, but its precise closed form has not previously been anchored in a mechanically verified proof system. This chapter derives the equivalent representation \(\alpha_\phi = (\sqrt{5}-2)/2\) through the identity \(\phi^2 + \phi^{-2} = 3\), establishes key bounding inequalities including \(\alpha_\phi < 1/8\), and verifies the multiplicative relation \(\alpha_\phi \cdot \phi^3 = 1/2\). All six core lemmas carry machine-checked Coq proofs in \texttt{t27/proofs/canonical/sacred/AlphaPhi.v}, contributing 6 of the dissertation's 297 canonical Qed theorems. The derivation underpins the ternary weight quantisation scheme of Trinity S³AI and motivates the bit-per-bit targets BPB ≤ 1.85 (Gate-2) and BPB ≤ 1.5 (Gate-3).
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 The dissertation \emph{GOLDEN SUNFLOWERS --- Trinity S³AI on \(\phi^2+\phi^{-2}=3\) substrate} is organised around a small set of transcendental anchors that propagate precision guarantees across all levels of the system stack. The foundational identity
 
@@ -28,7 +26,7 @@ where \(\phi = (1+\sqrt{5})/2\) is the golden ratio, encodes a striking arithmet
 
 and develops its closed-form representation and bounding properties. The value \(\alpha_\phi\) plays multiple roles throughout the dissertation: it scales the information-theoretic entropy band in the NCA lattice (Ch.16), it appears in the learning-rate schedule derived in Ch.10, and it governs the spectral roll-off of ternary Fourier components analysed in Ch.7. Establishing \(\alpha_\phi\) with Coq-level rigour is therefore a prerequisite for machine-verified claims in downstream chapters. The six Qed theorems presented here --- grouped under inventory tag SAC-1 --- form the complete \texttt{AlphaPhi.v} module, which is imported by eleven other canonical proof files {[}1,2{]}.
 
-\subsection{2. Derivation of the Closed Form}\label{derivation-of-the-closed-form}
+\section{2. Derivation of the Closed Form}\label{derivation-of-the-closed-form}
 
 \textbf{Definition 2.1 (Golden ratio).} Let \(\phi = (1+\sqrt{5})/2\). Then \(\phi^2 = \phi + 1\) and \(\phi^{-1} = \phi - 1\).
 
@@ -52,7 +50,7 @@ This anchor identity is Coq-verified in \texttt{sacred/CorePhi.v} (12 Qed, tag S
 
 The smallness condition \(\alpha_\phi < 1/8\) is significant for the quantisation error budget: a perturbation \(\delta w\) in a ternary weight incurs a first-order entropy penalty proportional to \(\alpha_\phi \cdot |\delta w|\), and the \(1/8\) ceiling keeps this penalty well within the BPB ≤ 1.85 envelope required at Gate-2 {[}3,4{]}.
 
-\subsection{3. Multiplicative Identity and Kernel Integration}\label{multiplicative-identity-and-kernel-integration}
+\section{3. Multiplicative Identity and Kernel Integration}\label{multiplicative-identity-and-kernel-integration}
 
 The most algebraically surprising result in the SAC-1 inventory is the following multiplicative relation, which connects \(\alpha_\phi\) to the cube of the golden ratio.
 
@@ -72,7 +70,7 @@ A secondary identity \(\sqrt{5}-1 = 2\phi^{-1}\cdot 2 = 2(\phi-1)\cdot 2\) resol
 
 an identity that links the phyllotactic geometry of Ch.7 to the sacred formula. The approximation error is \(O(10^{-4})\) degrees, within the angular resolution of the 360-lane grid introduced in Ch.16 {[}7{]}.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 The \texttt{AlphaPhi.v} module contributes 12 Qed theorems to the canonical proof census of 297 Qed across 65 \texttt{.v} files. Of these 12, the 6 theorems tagged SAC-1 are presented in this chapter; the remaining 6 are continuations in downstream files that import \texttt{AlphaPhi.v}. Proof-checking time on a standard CI runner (8 GB RAM, Coq 8.18) is 3.2 seconds for the complete module. No \texttt{admit} keywords are present in \texttt{AlphaPhi.v}.
 
@@ -82,7 +80,7 @@ The bounding result \(\alpha_\phi < 1/8 = 0.125\) applies to the algebraic form 
 
 Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoint, within the ≤ 1.85 target. The \(\alpha_\phi\) constant contributes the scaling factor in the band formula \(H_\alpha = H_0 \cdot (1 + \alpha_\phi)\), where \(H_0\) is the baseline binary entropy.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -100,7 +98,7 @@ Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoi
   \texttt{alpha\_phi\_times\_phi\_cubed} (\texttt{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Multiplicative identity: \(\alpha_\phi \cdot \phi^3 = 1/2\).
 \end{itemize}
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -112,11 +110,11 @@ Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoi
 
 Fibonacci index reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The derivation presented here is self-contained, but three limitations deserve acknowledgement. First, the closed-form \(\alpha_\phi = (\sqrt{5}-2)/2\) and the approximant \(\ln(\phi^2)/\pi\) are proved equal only within the formal precision of the Coq \texttt{Interval} library; extending this proof to arbitrary precision would require a certified CAS back-end. Second, the connection to the Vogel divergence angle (Proposition 3.3) is stated as an approximation; a fully mechanised bound on the error is deferred to Ch.7. Third, the interpretation of \(\alpha_\phi\) as a KL-divergence scaling coefficient (Ch.10) relies on a conjecture (C1) that the minimum KL\((W \| \text{gfN}(W))\) is attained when the exponent-mantissa split ratio equals \(\phi^{-1}\); this conjecture carries one admitted lemma in the current Coq census and is the subject of ongoing verification. Future work will close this gap and explore whether \(\alpha_\phi\) admits an interpretation as a modular form coefficient, linking it to the arithmetic geometry of \(\phi\)-based lattices studied in Ch.18.
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} GOLDEN SUNFLOWERS dissertation, Ch.3 --- Ternary Arithmetic Foundations. \texttt{gHashTag/t27/proofs/canonical/sacred/CorePhi.v}, SACRED-CORE (12 Qed).
 

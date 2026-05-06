@@ -1,16 +1,16 @@
-\chapter{Kepler Solids: BPB Benchmark --- Neon Write}
+\chapter{Kepler Solids: BPB Benchmark --- Railway PostgreSQL Write}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch15-bpb-benchmark.png}
-\caption*{Figure --- Kepler Solids: BPB Benchmark --- Neon Write.}
+\caption*{Figure --- Kepler Solids: BPB Benchmark --- Railway PostgreSQL Write.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 This chapter documents the bits-per-byte (BPB)
 benchmark protocol for Trinity S³AI and the
-complementary Neon write-back mechanism that
+complementary Railway PostgreSQL write-back mechanism that
 persists training trajectories for audit. The
 formally verified invariant INV-1
 (\texttt{Trinity.Canonical.Igla.INV1\_BpbMonotoneBackward},
@@ -28,7 +28,7 @@ derived from the spectral parameter
 for the M4 (2.7B) model with GF16 PHI\_BIAS=60
 weights.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Bits per byte (BPB) is the primary accuracy metric
 for language modelling in this dissertation. It is
@@ -62,18 +62,17 @@ across training runs that use distinct random
 seeds from the sanctioned pool
 \(\{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}\)
 [5]. Second, results must be written to a
-persistent, auditable store --- here the Neon
-PostgreSQL database --- so that the IGLA RACE
+persistent, auditable store --- here the Railway PostgreSQL database --- so that the IGLA RACE
 (Ch.21 [6]) can compare runs across agents in
 real time. INV-1 provides the formal guarantee
 that the training dynamics driving BPB downward
 are well-behaved under the champion learning rate.
 
-\subsection{2. BPB Protocol and Monotone Backward
+\section{2. BPB Protocol and Monotone Backward
 Invariant
 (INV-1)}\label{bpb-protocol-and-monotone-backward-invariant-inv-1}
 
-\subsubsection{2.1 Evaluation
+\subsection{2.1 Evaluation
 Protocol}\label{evaluation-protocol}
 
 BPB is computed on the WikiText-103 test split
@@ -96,10 +95,10 @@ spread is reported as a 95\% confidence interval
 computed over the three runs. Seeds outside the
 sanctioned pool --- specifically the forbidden
 values \(42\), \(43\), \(44\), \(45\) --- are
-never used; the Neon ingestion script rejects any
+never used; the Railway PostgreSQL ingestion script rejects any
 run metadata row containing those seed values.
 
-\subsubsection{2.2 INV-1: BPB Monotone
+\subsection{2.2 INV-1: BPB Monotone
 Backward}\label{inv-1-bpb-monotone-backward}
 
 \textbf{Invariant INV-1}
@@ -141,7 +140,7 @@ curvature bound is in turn controlled by INV-3
 (GF16 precision bounds) and the spectral identity
 \(\varphi^2 + \varphi^{-2} = 3\) [1, 2].
 
-\subsubsection{2.3 Warmup Gate}\label{warmup-gate}
+\subsection{2.3 Warmup Gate}\label{warmup-gate}
 
 INV-1 applies only for \(t \geq t_0 = 100\).
 Before that, the learning rate ramp can cause
@@ -153,13 +152,13 @@ criterion. The victory criterion requires step
 \(\geq 4000\) and BPB \(< 1.5\) (Gate-3) or BPB
 \(< 1.85\) (Gate-2) [6].
 
-\subsection{3. Neon Write-Back
+\section{3. Railway PostgreSQL Write-Back
 Architecture}\label{neon-write-back-architecture}
 
-\subsubsection{3.1 Database
+\subsection{3.1 Database
 Schema}\label{database-schema}
 
-The Neon PostgreSQL instance (project
+The Railway PostgreSQL instance (project
 \texttt{golden-sunflowers-bench}, region
 \texttt{eu-central-1}) stores training telemetry
 in the following schema:
@@ -188,7 +187,7 @@ seeds never enter the audit trail. The
 required for victory evaluation is applied at
 query time by the IGLA RACE agent (Ch.21).
 
-\subsubsection{3.2 Write-Back
+\subsection{3.2 Write-Back
 Protocol}\label{write-back-protocol}
 
 At every evaluation checkpoint (every 500 steps),
@@ -218,7 +217,7 @@ The write is idempotent: if the
 clause is used. This ensures the Golden Ledger
 audit is not corrupted by duplicate entries.
 
-\subsubsection{3.3 Gate
+\subsection{3.3 Gate
 Evaluation}\label{gate-evaluation}
 
 After each write, the bench agent evaluates the
@@ -232,7 +231,7 @@ The three-seed requirement in (2--3) mirrors the
 formal \texttt{victory\_three\_seeds} predicate in
 INV-7 (Ch.21 [6]).
 
-\subsection{4. Results /
+\section{4. Results /
 Evidence}\label{results-evidence}
 
 \textbf{BPB trajectory (M4, 2.7B, GF16
@@ -287,11 +286,11 @@ empirically validates INV-1 at the \(10^{-4}\)
 tolerance, tighter than the formal
 \(\varepsilon_{\text{float}}\) bound.
 
-\textbf{Neon write throughput:} 2,347 rows
+\textbf{Railway PostgreSQL write throughput:} 2,347 rows
 inserted across 5 training runs with 0 write
 failures and 0 seed-constraint violations.
 
-\subsection{5. Qed
+\section{5. Qed
 Assertions}\label{qed-assertions}
 
 No Coq theorems are directly anchored to this
@@ -302,7 +301,7 @@ chapter's output files. The relevant obligations
 \texttt{t27/proofs/canonical/}. The champion lr
 \(= 0.004\) is certified by INV-1.
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -314,9 +313,9 @@ chapter's output files. The relevant obligations
   monotone backward, lr=0.004 (9 Qed).
 \end{itemize}
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
-The BPB benchmark protocol and Neon write-back
+The BPB benchmark protocol and Railway PostgreSQL write-back
 described here provide the empirical backbone for
 Chapters 9, 21, 28, and 34. A limitation is that
 the current Gate-3 threshold (BPB \(\leq 1.5\))
@@ -329,13 +328,13 @@ extended to lr schedules with restarts, which
 could transiently violate the invariant during the
 restart phase. Future work will formalise a weaker
 version of INV-1 that tolerates bounded restarts.
-The Neon schema is also limited to a single
+The Railway PostgreSQL schema is also limited to a single
 project instance; a distributed multi-region setup
 would be needed for the IGLA RACE fleet described
 in Ch.21 to operate at sub-second polling
 intervals.
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 [1] \emph{Golden Sunflowers} dissertation,
 Ch.3 --- Trinity Identity
@@ -380,6 +379,6 @@ Journal} 27 (1948), 379--423.
 [12] Loshchilov, I. and Hutter, F. ``Decoupled
 Weight Decay Regularization.'' \emph{ICLR 2019}.
 
-[13] Neon Database documentation.
-https://neon.tech/docs
+[13] Railway PostgreSQL documentation.
+https://docs.railway.com/guides/postgresql
 

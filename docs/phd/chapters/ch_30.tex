@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-30-trinity-sai-vsa-ar.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{Trinity SAI: Vector Symbolic Architecture and Associative Recall}
-\addcontentsline{toc}{section}{Trinity SAI: Vector Symbolic Architecture and Associative Recall}
-
+\chapter{Trinity SAI: Vector Symbolic Architecture and Associative Recall}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch30-trinity-sai.png}
 \caption*{Figure — Ch.30: Trinity SAI: Vector Symbolic Architecture and Associative Recall.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 Trinity SAI (Structured Artificial Intelligence) integrates a Vector Symbolic Architecture (VSA) over ternary hypervectors with an Associative Recall (AR) memory that enables one-shot binding and retrieval within the GoldenFloat arithmetic substrate. The chapter demonstrates that ternary hypervectors of dimension \(D = F_{20} = 6765\) achieve a channel capacity consistent with the anchor identity \(\varphi^2 + \varphi^{-2} = 3\): three orthogonal ternary symbols \(\{-1, 0, +1\}\) map to the three exponent bands of GF16 with a binding error below \(1/\sqrt{D} \approx 0.0121\). The IGLA RACE runtime (Ch.24) hosts the VSA+AR agents under the period-locked scheduler. Measured token throughput on the QMTech XC7A100T FPGA is 63 toks/sec at 92 MHz with 0 DSP slices, consistent with the system-wide power budget of 1 W.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 The third pillar of the Trinity S³AI architecture is the symbolic layer. The first pillar is the GoldenFloat arithmetic substrate (Ch.6); the second is the IGLA RACE runtime and its formal scheduler (Ch.24); the third is a compositional reasoning capability that allows the system to bind token identities, positional encodings, and role labels into compact hypervectors that can be stored, retrieved, and decoded without gradient descent {[}1,2{]}.
 
@@ -28,9 +26,9 @@ Specifically, the sub-unity band (\(\hat E < B\)) maps to \(-1\), the unity band
 
 The dimension \(D = F_{20} = 6765\) is chosen as the largest Fibonacci number below \(2^{13} = 8192\) that fits within the GF16 weight-cache BRAM on the XC7A100T (6765 × 2 bytes = 13.26 KB per hypervector, fitting within one BRAM tile cluster). The \(\varphi\)-weight of the VSA component in the IGLA RACE agent pool is \(\varphi^{-1} \approx 0.618\), reflecting its role as a secondary (not primary) inference pathway.
 
-\subsection{2. Ternary VSA over the GoldenFloat Substrate}\label{ternary-vsa-over-the-goldenfloat-substrate}
+\section{2. Ternary VSA over the GoldenFloat Substrate}\label{ternary-vsa-over-the-goldenfloat-substrate}
 
-\subsubsection{2.1 Hypervector Definition}\label{hypervector-definition}
+\subsection{2.1 Hypervector Definition}\label{hypervector-definition}
 
 \textbf{Definition 2.1 (Ternary hypervector).} A ternary hypervector of dimension \(D\) is a vector \(\mathbf{v} \in \{-1, 0, +1\}^D\). The \emph{density} of \(\mathbf{v}\) is \(\rho(\mathbf{v}) = |\{i : v_i \neq 0\}| / D\).
 
@@ -42,7 +40,7 @@ For Trinity SAI, the canonical density is \(\rho^* = \varphi^{-2} \approx 0.382\
 
 \emph{Proof sketch.} Component-wise: \((u_i + v_i - u_i) \bmod 3 = v_i \bmod 3 = v_i\) for each \(i\). Qed.
 
-\subsubsection{2.2 Associative Recall Memory}\label{associative-recall-memory}
+\subsection{2.2 Associative Recall Memory}\label{associative-recall-memory}
 
 The AR memory is a content-addressable store of \(M\) hypervectors \(\{\mathbf{c}_1, \ldots, \mathbf{c}_M\}\). Given a query \(\mathbf{q}\), the recall operation returns:
 
@@ -54,11 +52,11 @@ where \(\langle \cdot, \cdot \rangle\) is the ternary inner product (integer-val
 
 The bound is effectively zero for these parameters: the recall is reliable with overwhelming probability {[}3{]}.
 
-\subsubsection{2.3 GoldenFloat Encoding of Hypervectors}\label{goldenfloat-encoding-of-hypervectors}
+\subsection{2.3 GoldenFloat Encoding of Hypervectors}\label{goldenfloat-encoding-of-hypervectors}
 
 Each component \(v_i \in \{-1, 0, +1\}\) is stored in GF16 as the canonical constants \texttt{neg\_one\_f16}, \texttt{zero\_f16}, \texttt{pos\_one\_f16}. These constants are within the unity exponent band (\(\hat E = B\)), so they benefit from the finest GF16 resolution and are covered by the INV-3 safe-domain proof (Ch.6) {[}5{]}. The inner product \(\langle \mathbf{q}, \mathbf{c}_j \rangle = \sum_i q_i c_{ji}\) is computed as a GF16 multiply-accumulate (MAC) over \(D = 6765\) terms; the accumulator width is 24 bits to prevent overflow at \(D \cdot \varphi^2 \approx 6765 \cdot 2.618 = 17711 = F_{22}\), a Fibonacci number, confirming the natural fit of the design.
 
-\subsection{3. Phi-Rotary Position Encoding (phi-RoPE) in VSA Context}\label{phi-rotary-position-encoding-phi-rope-in-vsa-context}
+\section{3. Phi-Rotary Position Encoding (phi-RoPE) in VSA Context}\label{phi-rotary-position-encoding-phi-rope-in-vsa-context}
 
 The phi-RoPE encoding (Zenodo Z05 {[}6{]}) assigns to token position \(p\) the angle \(\theta_p = p \cdot 2\pi \cdot \varphi^{-2}\), the golden-angle variant of the standard RoPE rotation. In the VSA context, position encoding is implemented as:
 
@@ -72,7 +70,7 @@ where \(\mathbf{r}\) is a fixed random ternary rotation hypervector and \(\mathb
 
 \emph{Proof sketch.} The ternary inner product of two independently rotated hypervectors of density \(\rho^*\) is a sum of \(D \rho^{*2}\) non-zero i.i.d. terms with mean zero and variance \(\rho^{*2}\). By Hoeffding's inequality with radius \(\sqrt{D}\) and \(D = 6765\): the tail probability is at most \(2\exp(-2D \cdot D^{-1} / (4\rho^{*2})) = 2\exp(-1/(2\rho^{*2})) \approx 2\exp(-3.42) < e^{-2}\). Qed.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 The Trinity SAI VSA+AR module was evaluated on the HSLM 1003-token benchmark using the IGLA RACE runtime on the QMTech XC7A100T FPGA:
 
@@ -105,13 +103,13 @@ The zero-DSP, 1 W, 63 toks/sec figures are consistent with the system-wide hardw
 
 The phi-weight update law (Ch.24) was validated: the VSA agent's weight \(w_{\text{VSA}}(t)\) remained within \([\varphi^{-2}, \varphi^2] = [0.382, 2.618]\) throughout all 1003 steps, with a time-average of \(\bar w = 0.994 \approx 1\), indicating that the VSA agent was scheduled at near-unity frequency---consistent with its role as the primary symbolic reasoning pathway.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
 (The VSA binding self-inverse property (Proposition 2.3) is a straightforward algebraic identity and does not require machine checking. The phi-RoPE orthogonality theorem (Theorem 3.1) is proved by hand using Hoeffding's inequality; a Coq mechanisation via \texttt{Coq.Reals} is planned as part of the Iris/Coq.Interval upgrade lane described in Ch.18.)
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -121,13 +119,13 @@ No Coq theorems are anchored to this chapter; obligations are tracked in the Gol
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The Trinity SAI VSA+AR component extends the GOLDEN SUNFLOWERS framework from pure neural-network inference into compositional symbolic reasoning. Its integration with the GoldenFloat arithmetic substrate is seamless at the level of number format (ternary \(\{-1,0,+1\}\) maps to GF16 unity-band constants) and at the level of scheduling (VSA agents participate in the period-locked monitor with period \(L_8 = 47\)). The primary limitation is that the Coq mechanisation of VSA properties lags the hardware implementation; the binding self-inverse property (Proposition 2.3) is trivially provable but has not been encoded in the canonical Coq files.
 
 A second limitation is the AR memory capacity of \(M = L_8 = 47\) hypervectors, constrained by the BRAM budget of the XC7A100T. Scaling to \(M = F_{18} = 2584\) would require an external SRAM interface or migration to a larger FPGA (e.g., XC7A200T). Future work will also investigate composing the VSA layer with the phi-RoPE attention mechanism (Z05) to enable position-aware associative recall---a capability not present in standard VSA systems. This chapter connects to Ch.24 (PLRM agent scheduling), Ch.6 (GoldenFloat format for hypervector storage), Ch.28 (hardware throughput), and App.H (Zenodo DOI registry for the B007 anchor).
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} Kanerva, P. (2009). Hyperdimensional Computing: An Introduction to Computing in Distributed Representation with High-Dimensional Random Vectors. \emph{Cognitive Computation}, 1(2), 139--159. https://doi.org/10.1007/s12559-009-9009-8
 

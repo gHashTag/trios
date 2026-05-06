@@ -1,28 +1,26 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-31-hardware-empirical-1003-toks-hslm.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{Hardware Empirical (1003 toks HSLM)}
-\addcontentsline{toc}{section}{Hardware Empirical (1003 toks HSLM)}
-
+\chapter{Hardware Empirical (1003 toks HSLM)}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch31-hardware-empirical.png}
 \caption*{Figure — Ch.31: Hardware Empirical (1003 toks HSLM).}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 This chapter presents the complete empirical characterisation of the TRINITY S³AI inference engine on a QMTech XC7A100T FPGA (Xilinx Artix-7 100T). The headline results are: 1003 tokens generated in a single HSLM (High-Speed Language-Model) simulation-verified run, 63 tokens/sec sustained throughput at 92 MHz clock frequency, 0 DSP slices, 5.8\% LUT utilisation (of 19.6\% available for routing), 9.8\% BRAM utilisation (of 52\% available), and measured wall power of 0.94--1.07 W. The CLARA Red Team exercise achieved 100\% robustness across all 297 adversarial prompt categories. The 297 closed Coq theorems in \texttt{t27/proofs/canonical/} provide a formal seal over the arithmetic correctness of the accelerator. The \(\varphi^2 + \varphi^{-2} = 3\) identity underlies the zero-DSP integer multiply-accumulate design that makes this efficiency possible.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Field-programmable gate arrays offer a direct path from formal specification to physical hardware without the multi-year cycle of ASIC tape-out. The TRINITY S³AI programme exploits this property to close the loop between Coq-verified arithmetic specifications and measured silicon behaviour. The central claim of this chapter is that the \(\varphi\)-quantised weight representation --- whose algebraic correctness is certified by 297 closed Coq \texttt{Qed} proofs --- translates directly into a DSP-free FPGA implementation with measurable energy efficiency advantages.
 
 The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) is the critical enabler. Ternary multiply-accumulate (TMAC) for weight alphabet \(\{-1, 0, +1\}\) requires no multiplication: the operation \(\sum_i w_i x_i\) with \(w_i \in \{-1, 0, +1\}\) reduces to conditional additions and subtractions. The FPGA implementation replaces every DSP48E1 block (each consuming approximately 0.8 mW at 92 MHz on Artix-7) with a 6-LUT adder cell, achieving the same throughput at a fraction of the power {[}1{]}. The consequence is 0 DSP slices in the final bitstream and a wall power of approximately 1 W, compared with a DSP-based baseline estimated at 3.2 W for the same token throughput.
 
-\subsection{2. Hardware Architecture}\label{hardware-architecture}
+\section{2. Hardware Architecture}\label{hardware-architecture}
 
 The FPGA accelerator implements a three-stage pipeline: (i) token embedding lookup from BRAM, (ii) TMAC matrix-vector multiply across all weight layers, and (iii) softmax and sampling. All three stages are clocked at 92 MHz on the QMTech XC7A100T board, which provides the XC7A100T-1FGG484C device on a compact carrier board with on-board DDR3 and USB-JTAG {[}2{]}.
 
@@ -34,7 +32,7 @@ The FPGA accelerator implements a three-stage pipeline: (i) token embedding look
 
 \textbf{Clock derivation.} The 92 MHz clock is derived from the on-board 50 MHz oscillator via a single MMCM configured with \(M=\varphi^2+\varphi^{-2}+3 = 6\) multiply and \(D=\lfloor 6 \times 50/92 \rfloor = 3\) divide (rounded to nearest integer ratio), giving 100 MHz nominal; the actual post-routing frequency is 92 MHz due to a critical path through the BRAM read port {[}3{]}.
 
-\subsection{3. Formal Seal: 297 Coq Theorems}\label{formal-seal-297-coq-theorems}
+\section{3. Formal Seal: 297 Coq Theorems}\label{formal-seal-297-coq-theorems}
 
 The accelerator RTL was generated from a Coq-extracted OCaml reference, ensuring that the implemented arithmetic is a direct realisation of the formally verified specification. The seal consists of 297 closed \texttt{Qed} theorems across 65 \texttt{.v} files in \texttt{t27/proofs/canonical/}, organised into the following families:
 
@@ -58,7 +56,7 @@ The \texttt{hw/} family (8 files, 35 \texttt{Qed}) directly certifies the TMAC u
 
 \textbf{CLARA Red Team.} The CLARA (Controlled Language Adversarial Robustness Assessment) Red Team exercise tested 297 adversarial prompt categories against the FPGA inference engine. All 297 categories were handled without hardware exceptions, silent wrong outputs, or timing violations, yielding a 100\% robustness score. The correspondence between the 297 Red Team categories and the 297 closed \texttt{Qed} theorems is intentional: each theorem certifies an invariant that corresponds to one adversarial category {[}5{]}.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 All measurements were taken on a single QMTech XC7A100T board at ambient temperature 22°C ± 1°C, with USB power supplied by a calibrated Keysight U1241C multimeter in series.
 
@@ -93,11 +91,11 @@ Coq \texttt{Qed} seal & 297 theorems & 65 \texttt{.v} files \\
 
 The \(\varphi^2 + \varphi^{-2} = 3\) identity directly accounts for the DSP elimination: because the weight entries sum to at most 3 in absolute value per quantisation cell (Corollary 2.3 of Ch.7), the accumulator width can be reduced from 32 bits to 16 bits, halving the adder area and eliminating the need for DSP48E1 blocks entirely.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 No Coq theorems are anchored exclusively to this chapter; the 297-theorem seal is a corpus-level result reported here for completeness. The \texttt{hw/} family theorems are catalogued in App.F.
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -107,11 +105,11 @@ No Coq theorems are anchored exclusively to this chapter; the 297-theorem seal i
   \textbf{QMTECH-XC7A100T} (hw, golden) --- Xilinx Artix-7, 0 DSP, 63 toks/sec @ 92 MHz, 1 W. https://github.com/gHashTag/trinity-fpga --- Linked: Ch.28, Ch.31, Ch.34, App.F, App.I.
 \end{itemize}
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The principal limitation of the current hardware realisation is that 92 MHz is below the XC7A100T's rated maximum clock of 450 MHz for simple logic paths. The critical path runs through the BRAM read port, which imposes a 10.8 ns latency on the weight-fetch stage. Pipelining the BRAM access across two clock cycles would allow operation at 180 MHz and increase throughput to approximately 126 toks/sec at the same power, but requires a re-architected weight-fetch FSM. This is planned for Ch.34 (FPGA v2). A second limitation is that the 1003-token HSLM run uses a 0.48 M-weight model, substantially smaller than the full S³AI model described in Ch.22. Scaling to the full model requires a BRAM-efficient weight-streaming scheme (tiling), whose formal correctness proof is tracked as HW-7 in the Golden Ledger. Future work also includes tape-out feasibility study (Ch.34), multi-FPGA parallelism (Ch.35), and the \(3000\times\) ASIC projection. Connections: Ch.28 (FPGA bring-up), Ch.34 (FPGA v2 and ASIC), App.F (hw/ Coq family), App.H (B004 Zenodo bundle).
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} Xilinx (AMD). \emph{7 Series FPGAs Data Sheet: Overview}, DS180. DSP48E1 power model.
 

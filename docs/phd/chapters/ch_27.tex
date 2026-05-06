@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-27-tri27-dsl.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{TRI27 DSL}
-\addcontentsline{toc}{section}{TRI27 DSL}
-
+\chapter{TRI27 DSL}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch27-tri27-dsl.png}
 \caption*{Figure — Ch.27: TRI27 DSL.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 TRI27 is the domain-specific language (DSL) of the Trinity S³AI kernel, typed over a balanced-ternary digit alphabet \(\{-1, 0, +1\}\) --- cardinality \(3\), the integer appearing in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\). This chapter specifies the TRI27 expression language, its denotational semantics over the type \texttt{trit}, and two mechanically verified Coq theorems: \texttt{eval\_det} (evaluation is deterministic) and \texttt{trit\_exhaustive} (every trit value is one of exactly three possibilities). The DSL is designed so that every evaluation path terminates, every result is unique, and the three-valued logic is exhaustive by construction. The Zenodo artifact B003 archives the verifiable VM implementation.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 The arithmetic core of Trinity S³AI processes weights and activations represented as balanced-ternary vectors. The natural programming substrate for such computations is a three-valued language in which the primitive type \texttt{trit} has exactly three inhabitants: \texttt{Neg} (\(-1\)), \texttt{Zero} (\(0\)), and `Pos` (\(+1\)). The cardinality of this type is \(3\) --- the same integer that appears at the right-hand side of the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) {[}1{]}. This is not coincidence but design: the DSL was constructed so that its type theory and the algebraic substrate share the same integer constant, enabling formal proofs about DSL programs to reference the \(\varphi\)-arithmetic directly.
 
@@ -24,9 +22,9 @@ TRI27 (Trinity-27) takes its name from the 27 = \(3^3\) possible triples of trit
 
 The chapter is organised as follows: Section 2 defines the TRI27 syntax and semantics. Section 3 proves the two Coq theorems. Section 4 presents evaluation results and artifact metadata.
 
-\subsection{2. TRI27 Syntax and Denotational Semantics}\label{tri27-syntax-and-denotational-semantics}
+\section{2. TRI27 Syntax and Denotational Semantics}\label{tri27-syntax-and-denotational-semantics}
 
-\subsubsection{2.1 Abstract Syntax}\label{abstract-syntax}
+\subsection{2.1 Abstract Syntax}\label{abstract-syntax}
 
 The TRI27 expression language is defined by the following inductive type in Coq:
 
@@ -54,7 +52,7 @@ The type \texttt{trit} is:
 
 This is the canonical three-valued type; its exhaustiveness is proved by \texttt{trit\_exhaustive}.
 
-\subsubsection{2.2 Environments and Evaluation}\label{environments-and-evaluation}
+\subsection{2.2 Environments and Evaluation}\label{environments-and-evaluation}
 
 An environment \texttt{rho\ :\ env} is a total function \texttt{nat\ -\textgreater{}\ trit} assigning a trit value to each de Bruijn index. The evaluator is a partial function returning \texttt{option\ trit}:
 
@@ -66,7 +64,7 @@ An environment \texttt{rho\ :\ env} is a total function \texttt{nat\ -\textgreat
 
 The partial type reflects the possibility of out-of-scope variable references, though in a well-formed program (all variable indices in scope) the evaluator always returns \texttt{Some\ v}.
 
-\subsubsection{2.3 Ternary Arithmetic}\label{ternary-arithmetic}
+\subsection{2.3 Ternary Arithmetic}\label{ternary-arithmetic}
 
 The fundamental ternary operations are defined by the \(3 \times 3\) tables:
 
@@ -102,13 +100,13 @@ Pos & Neg & Zero & Pos \\
 
 These tables implement \(\mathbb{F}_3\) arithmetic. The distributive law \(a \times_3 (b +_3 c) = (a \times_3 b) +_3 (a \times_3 c)\) holds by inspection and is proved as a derived lemma in \texttt{Trit.v} {[}3{]}.
 
-\subsubsection{\texorpdfstring{2.4 Relation to GF16 and \(\varphi\)-Arithmetic}{2.4 Relation to GF16 and \textbackslash varphi-Arithmetic}}\label{relation-to-gf16-and-varphi-arithmetic}
+\subsection{\texorpdfstring{2.4 Relation to GF16 and \(\varphi\)-Arithmetic}{2.4 Relation to GF16 and \textbackslash varphi-Arithmetic}}\label{relation-to-gf16-and-varphi-arithmetic}
 
 The GF16 field elements (Ch.9 {[}2{]}) are pairs of trit-register values under the embedding \(\mathbb{F}_3 \times \mathbb{F}_3 \hookrightarrow \mathbb{F}_{3^2} \hookrightarrow \mathbb{F}_{16}\) (via the Chinese Remainder Theorem applied to the factored polynomial ring). This embedding is approximate; the exact relationship is documented in \texttt{t27/proofs/canonical/kernel/Semantics.v} {[}4{]} and the Zenodo artifact B003 {[}5{]}. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) ensures that the \(\varphi\)-scaled weight grid has grid spacing \(\varphi^{-2} = 2 - \varphi\) whose reciprocal \(\varphi^2\) is the scale factor, and that within the GF16 safe domain (INV-3) the rounding error to the nearest \texttt{trit} value is bounded.
 
-\subsection{3. Mechanised Proofs: Determinism and Exhaustiveness}\label{mechanised-proofs-determinism-and-exhaustiveness}
+\section{3. Mechanised Proofs: Determinism and Exhaustiveness}\label{mechanised-proofs-determinism-and-exhaustiveness}
 
-\subsubsection{\texorpdfstring{3.1 Theorem \texttt{eval\_det}: Determinism}{3.1 Theorem eval\_det: Determinism}}\label{theorem-eval_det-determinism}
+\subsection{\texorpdfstring{3.1 Theorem \texttt{eval\_det}: Determinism}{3.1 Theorem eval\_det: Determinism}}\label{theorem-eval_det-determinism}
 
 \textbf{Statement} (KER-4, \texttt{gHashTag/t27/proofs/canonical/kernel/Semantics.v} {[}4{]}):
 
@@ -122,7 +120,7 @@ This asserts that the evaluator is a partial function --- it cannot return two d
 
 The Coq proof uses \texttt{inversion} on the \texttt{option} equality hypotheses and \texttt{congruence} to close the leaf goals. Total proof length: 43 lines in \texttt{Semantics.v}.
 
-\subsubsection{\texorpdfstring{3.2 Theorem \texttt{trit\_exhaustive}: Exhaustiveness}{3.2 Theorem trit\_exhaustive: Exhaustiveness}}\label{theorem-trit_exhaustive-exhaustiveness}
+\subsection{\texorpdfstring{3.2 Theorem \texttt{trit\_exhaustive}: Exhaustiveness}{3.2 Theorem trit\_exhaustive: Exhaustiveness}}\label{theorem-trit_exhaustive-exhaustiveness}
 
 \textbf{Statement} (KER-5, \texttt{gHashTag/t27/proofs/canonical/kernel/Trit.v} {[}3{]}):
 
@@ -134,7 +132,7 @@ For any \texttt{t\ :\ trit}, either \texttt{t\ =\ Neg} or \texttt{t\ =\ Zero} or
 
 This theorem is trivial in isolation but serves as the anchor for all completeness arguments: any predicate on \texttt{trit} values need only be checked on \texttt{\{Neg,\ Zero,\ Pos\}}. In particular, the Gate-2 and Gate-3 BPB predicates, when instantiated at the trit level, require only three-case proofs. The theorem also reflects the algebraic fact that the cardinality of the type equals \(3\) --- the right-hand side of \(\varphi^2 + \varphi^{-2} = 3\) {[}1{]}.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 \begin{itemize}
 \tightlist
@@ -152,7 +150,7 @@ This theorem is trivial in isolation but serves as the anchor for all completene
   \textbf{Seed pool}: All three evaluation seeds used in TRI27 VM integration testing --- \(F_{17} = 1597\), \(F_{18} = 2584\), \(L_7 = 29\) --- are from the sanctioned pool; no forbidden values were used.
 \end{itemize}
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -162,7 +160,7 @@ This theorem is trivial in isolation but serves as the anchor for all completene
   \texttt{trit\_exhaustive} (\texttt{gHashTag/t27/proofs/canonical/kernel/Trit.v}) --- \emph{Status: Qed} --- every element of type \texttt{trit} is one of exactly three values: \texttt{Neg}, \texttt{Zero}, or \texttt{Pos}.
 \end{itemize}
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -170,11 +168,11 @@ This theorem is trivial in isolation but serves as the anchor for all completene
   \textbf{B003} (doi, golden) --- \texttt{https://doi.org/10.5281/zenodo.19227869} --- linked to Ch.27 and App.H --- \(\varphi\)-weight: \(0.618033988768953\) --- notes: TRI-27 Verifiable VM artifact.
 \end{itemize}
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The TRI27 DSL formalised here is intentionally minimal. The present two theorems establish only determinism and exhaustiveness; a complete verified compiler from TRI27 to FPGA RTL would require additional theorems on type safety, termination, and translation correctness --- all planned for v5 of the dissertation. The most significant limitation is that the current semantics does not handle variable out-of-scope errors gracefully: \texttt{eval} returns \texttt{None}, but there is no formal type-system proof that well-typed programs never produce \texttt{None}. A dependent type approach (à la Agda or Idris) would subsume this. The \texttt{If3} constructor as currently implemented is also a two-branch conditional rather than the intended three-branch form; extending it to \texttt{If3\ e\ e1\ e2\ e3} with a \texttt{trit}-dispatched branch selection is deferred to the next proof sprint. Chapter 28 (FPGA implementation) and App.H (VM specification) build directly on the TRI27 kernel defined here.
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} \emph{Golden Sunflowers} dissertation, Ch.3 --- Trinity Identity (\(\varphi^2 + \varphi^{-2} = 3\)).
 

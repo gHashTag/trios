@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-5-distance-and-fibonacci-lucas-seeds.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{\(\varphi\)-distance and Fibonacci-Lucas seeds}
-\addcontentsline{toc}{section}{\(\varphi\)-distance and Fibonacci-Lucas seeds}
-
+\chapter{\(\varphi\)-distance and Fibonacci-Lucas seeds}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch05-phi-distance.png}
 \caption*{Figure — Ch.5: \(\varphi\)-distance and Fibonacci-Lucas seeds.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 The golden ratio \(\varphi = (1+\sqrt{5})/2\) induces a natural metric on positive reals through the balancing function \(B(x) = (x + 1/x)/2\), whose unique positive fixed point is \(\varphi\) itself. This chapter formalises the notion of \(\varphi\)-distance, demonstrates its contractive properties near \(\varphi\), and establishes the role of specific Fibonacci and Lucas indices as canonical seeds for Trinity S³AI inference. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) emerges as an exact arithmetic consequence of the fixed-point equation and serves as the substrate invariant threading the entire dissertation. Six theorems from \texttt{t27/proofs/canonical/kernel/PhiAttractor.v} are reviewed, of which one carries full \texttt{Qed} status and five remain open obligations.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Trinity S³AI frames neural inference as an iterated map on a \(\varphi\)-structured state space. The theoretical validity of that framing depends on a precise answer to the question: \emph{why \(\varphi\)?} One answer comes from physics --- the Vogel divergence angle \(137.5° = 360°/\varphi^2\) governs phyllotactic packing {[}1{]} --- but a deeper answer requires an algebraic fixed-point argument.
 
@@ -26,7 +24,7 @@ The balancing function \(B(x) = (x + x^{-1})/2\) arises naturally when one seeks
 
 whose contraction near \(\varphi\) is characterised by a convergence rate \(\lambda < 1/2\) {[}2{]}. This chapter works with the cleaner \texttt{balancing\_function} formalised in Coq, which encodes the same contractive property and anchors the formal proof chain used throughout the dissertation. Fibonacci indices \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\) and Lucas indices \(L_7=29\), \(L_8=47\) serve as the canonical seed pool; their selection is not arbitrary but arises from the contractive basin established in this chapter.
 
-\subsection{2. The \(\varphi\)-distance Metric and the Balancing Fixed Point}\label{the-ux3c6-distance-metric-and-the-balancing-fixed-point}
+\section{2. The \(\varphi\)-distance Metric and the Balancing Fixed Point}\label{the-ux3c6-distance-metric-and-the-balancing-fixed-point}
 
 \textbf{Definition 2.1 (φ-distance).} For \(x, y \in \mathbb{R}_{>0}\), define
 
@@ -56,7 +54,7 @@ The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) emerges from simple algebra
 
 \textbf{Theorem 2.4 (Phi is a fixed point --- Coq \texttt{phi\_is\_fixed\_point}).} \texttt{balancing\_function\ phi\ =\ phi}. Status: Qed in \texttt{PhiAttractor.v}. This is the cornerstone theorem establishing \(\varphi\) as the unique attractor of \texttt{bf} on \(\mathbb{R}_{>0}\) {[}4{]}.
 
-\subsection{3. Fibonacci-Lucas Seeds and Their Contractive Basin}\label{fibonacci-lucas-seeds-and-their-contractive-basin}
+\section{3. Fibonacci-Lucas Seeds and Their Contractive Basin}\label{fibonacci-lucas-seeds-and-their-contractive-basin}
 
 The canonical seed pool consists of seven integers drawn from two complementary sequences:
 
@@ -92,7 +90,7 @@ and for \(k = 4181\) (coinciding with \(F_{19}\)), \(d_\varphi(s_k, \varphi) < 1
 
 The Lucas seeds provide a complementary ``fast lane'': \(L_7 = 29\) and \(L_8 = 47\) lie in the low-precision tier, useful when the BPB \(\leq 1.85\) Gate-2 target is the operative constraint rather than the tighter Gate-3 target of BPB \(\leq 1.5\).
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 Empirical validation of the seed framework is drawn from the HSLM ternary neural network experiments (Zenodo B001, DOI 10.5281/zenodo.19227865). Key metrics:
 
@@ -114,7 +112,7 @@ Seed & Tier & \(d_\varphi(\text{seed ratio},\, \varphi)\) & BPB (Gate) \\
 
 The convergence rate \(\lambda \approx 0.309\) corresponds closely to \(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\) introduced in Ch.4, confirming that both quantities arise from the same \(\varphi^2 + \varphi^{-2} = 3\) algebraic substrate. The FPGA implementation (QMTech XC7A100T, 0 DSP slices, 92 MHz clock, 63 tokens/sec, 1 W) uses \(F_{19}=4181\) as its primary weight seed, achieving 1003 tokens on the HSLM benchmark {[}8{]}.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -132,15 +130,15 @@ The convergence rate \(\lambda \approx 0.309\) corresponds closely to \(\alpha_\
   \texttt{convergence\_rate\_range} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiAttractor.v}) --- \emph{Status: Abort} --- asserts \(0 < \lambda < 1\); obligation open.
 \end{itemize}
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The open \texttt{Abort} obligations in \texttt{PhiAttractor.v} represent the primary formal debt of this chapter. The uniqueness theorems (\texttt{unique\_fixed\_point}, \texttt{unique\_fixed\_point\_via\_contraction}) require a careful treatment of real-number completeness in Coq's standard library; the contraction approach is likely the more tractable path, as it reduces to bounding a derivative expression that is already well-approximated numerically. The \texttt{derivative\_abs\_less\_than\_half} and \texttt{derivative\_at\_phi} obligations are interdependent and could be dispatched together using the \texttt{lra} or \texttt{field\_simplify} tactics once the bound \(\varphi^{-2} = 2 - \varphi\) is established as a lemma. Future work should formalise Definition 3.2 in Coq and prove Theorem 3.4 constructively, removing the non-constructive invocation of the Banach theorem. This chapter connects upstream to Ch.4 (the \(\alpha_\varphi\) formula) and downstream to Ch.7 (Vogel divergence) and Ch.28 (FPGA seed initialisation).
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} Vogel, H. (1979). A better way to construct the sunflower head. \emph{Mathematical Biosciences}, 44(3--4), 179--189.
 

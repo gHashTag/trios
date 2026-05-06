@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-28-qmtech-xc7a100t-fpga.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{QMTech XC7A100T FPGA}
-\addcontentsline{toc}{section}{QMTech XC7A100T FPGA}
-
+\chapter{QMTech XC7A100T FPGA}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch28-qmtech-xc7a100t-fpga.png}
 \caption*{Figure — Ch.28: QMTech XC7A100T FPGA.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 The QMTech XC7A100T development board hosts the primary hardware realisation of the Trinity S³AI ternary inference engine. Running at 92 MHz with a measured throughput of 63 tokens per second and a total board power draw of 1 W, the implementation consumes zero Xilinx DSP48 blocks, relying instead on LUT-based ternary accumulation derived from the zero-absorption laws proved in Ch.4. The anchor identity \(\phi^2 + \phi^{-2} = 3\) governs the LUT truth-table structure: because ternary multiplication closes on \(\{-1,0,+1\}\) and the two extreme products sum to 3, the full \(3\times3\) multiplication table is encoded in a single 5-LUT per accumulator lane, eliminating the need for multiplier primitives entirely. This chapter presents the architecture, resource utilisation, and throughput analysis of the zero-DSP FPGA implementation, with Zenodo-archived bitstreams B001 and B002 as the primary evidence artefacts.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Field-Programmable Gate Arrays offer a path to energy-efficient neural inference that complements GPU-based approaches: their reconfigurability permits custom datapath widths, their static scheduling eliminates runtime dispatch overhead, and their I/O flexibility supports direct sensor integration. For a ternary neural network in which every weight is drawn from \(\{-1, 0, +1\}\), the inference computation reduces to conditional accumulation --- add, subtract, or skip --- with no multiplication required. The QMTech XC7A100T (Xilinx Artix-7, 100k logic cells, 4.86 Mb block RAM, 240 DSP48E1 slices) was selected as the target platform because it is available at low cost, its Artix-7 fabric is well-characterised, and its resource envelope is representative of embedded edge devices {[}1,2{]}.
 
@@ -24,7 +22,7 @@ The central architectural claim --- 0 DSP blocks used --- follows directly from 
 
 The \(\phi^2 + \phi^{-2} = 3\) anchor also constrains the clock-domain partitioning: the two primary clock domains run at 92 MHz (inference fabric) and \(92/\phi^2 \approx 35\) MHz (memory controller), with the ratio \(92/35 \approx 2.63 \approx \phi^2\) ensuring that the memory bus and compute fabric are naturally frequency-synchronised through the golden ratio. This design choice reduces CDC (clock-domain crossing) complexity and was validated by timing closure at -0.02 ns worst-case slack.
 
-\subsection{2. Architecture: Zero-DSP Ternary Datapath}\label{architecture-zero-dsp-ternary-datapath}
+\section{2. Architecture: Zero-DSP Ternary Datapath}\label{architecture-zero-dsp-ternary-datapath}
 
 \textbf{Definition 2.1 (Ternary accumulator).} A ternary accumulator for a vector of \(N\) inputs \(\{t_i\} \in \{-1,0,+1\}^N\) with integer activations \(\{a_i\} \in \mathbb{Z}\) computes
 
@@ -38,7 +36,7 @@ No multiplication is required: positive-weight contributions are routed to the p
 
 \textbf{Proposition 2.4 (\(\phi\)-synchronised clock domains).} Let \(f_c = 92\) MHz be the compute clock and \(f_m = f_c / \phi^2 \approx 35.16\) MHz be the memory clock. The ratio \(f_c/f_m = \phi^2 \approx 2.618\) satisfies \(\phi^2 + \phi^{-2} = 3\), so the combined normalised bandwidth \(f_c/f_{\text{ref}} + f_m/f_{\text{ref}}\) equals 3 for any reference frequency \(f_{\text{ref}}\) satisfying \(f_c = \phi^2 f_{\text{ref}}\) and \(f_m = \phi^{-2} f_{\text{ref}}^2/f_m\). In practice, \(f_{\text{ref}} = f_c / \phi^2 = f_m\), giving the trinity identity as a clock-domain constraint.
 
-\subsection{3. Resource Utilisation and Timing Closure}\label{resource-utilisation-and-timing-closure}
+\section{3. Resource Utilisation and Timing Closure}\label{resource-utilisation-and-timing-closure}
 
 \textbf{Resource utilisation (post-implementation).}
 
@@ -65,7 +63,7 @@ IOB & 89 & 210 & 42.4\% \\
 
 \textbf{Theorem 3.1 (Zero-DSP closure).} The ternary inference engine for Trinity S³AI is implementable on the XC7A100T with 0 DSP48 instances, because the kernel lemmas \texttt{trit\_mul\_zero\_l} and \texttt{trit\_mul\_zero\_r} (Ch.4, KER-8) guarantee that all multiplications by the Zero trit are eliminated at synthesis time, and multiplications by \(\pm 1\) are implemented as wire routing or inversion, neither of which instantiates DSP48 primitives. \emph{This result is verified by post-implementation netlist inspection in the B002 artefact.} \(\square\)
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 The primary evidence artefacts are:
 
@@ -99,11 +97,11 @@ B002 (this chapter) & 92 & 63 & 1.0 & 0 \\
 
 The trajectory confirms monotone improvement across all three metrics, consistent with the design methodology described in this chapter.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger. The chapter relies on \texttt{trit\_mul\_zero\_l} and \texttt{trit\_mul\_zero\_r} (KER-8, \texttt{TernarySufficiency.v}) from Ch.4 as architectural pre-conditions.
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -121,11 +119,11 @@ No Coq theorems are anchored to this chapter; obligations are tracked in the Gol
 
 Fibonacci/Lucas reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 Three limitations bound the current implementation. First, BRAM utilisation at 91.5\% leaves minimal headroom for vocabulary expansion; migrating to the XC7A200T (the next device in the Artix-7 family) would provide 2× BRAM at 1.4× cost. Second, the 0.02 ns negative slack before pipeline insertion indicates that the 92 MHz clock is near the fabric's limit; the theoretical maximum frequency for the critical path is approximately 96 MHz, providing a 4 MHz margin for future optimisation. Third, the \(\phi\)-synchronised clock scheme (Proposition 2.4) assumes a stable reference oscillator; board-level measurements show \(\pm 0.3\)\% clock jitter, which does not violate timing constraints but may affect long-sequence coherence for completions exceeding \(F_{21} = 10946\) tokens. Future work (Ch.31) analyses throughput scaling under sustained load, and Ch.34 contextualises the 1 W power figure within the 3000× DARPA energy efficiency target.
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} QMTech XC7A100T product specification. Xilinx Artix-7 FPGA datasheet, DS181 Rev.~1.31 (2022).
 

@@ -1,28 +1,26 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-13-strobe-sealed-seeds.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{STROBE Sealed Seeds}
-\addcontentsline{toc}{section}{STROBE Sealed Seeds}
-
+\chapter{STROBE Sealed Seeds}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch13-strobe-sealed-seeds.png}
 \caption*{Figure — Ch.13: STROBE Sealed Seeds.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 Reproducibility of neural language-model training requires that every source of stochasticity be controlled at the moment of experimental commitment. This chapter specifies the STROBE sealed-seed protocol, which restricts admissible pseudo-random seeds to a set drawn from Fibonacci and Lucas sequences: \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\). The protocol forbids the use of seeds \(\{42, 43, 44, 45\}\) for technical reasons detailed herein. Compliance is enforced by the runtime-mirror contract in \texttt{igla\_assertions.json} and formally sealed by 13 Coq theorems in \texttt{Trinity.Canonical.Igla.INV2\_IglaAshaBound}, of which 6 carry closed \texttt{Qed} status. The chapter derives the admissibility criterion from the Trinity anchor \(\varphi^2 + \varphi^{-2} = 3\), defines the ASHA pruning threshold \(3.5 = \varphi^2 + \varphi^{-2} + \varphi^{-4}\), and demonstrates that the sealed protocol eliminates a class of adversarial-seed attacks.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Language model training is subject to seed-dependent variance: different pseudo-random seeds produce different weight initialisations, data shuffles, and dropout masks, leading to BPB variation that can exceed the margin between experimental conditions. The Trinity S³AI programme addresses this variance through two mechanisms. First, the \(\varphi\)-quantised weight lattice (Ch.7, Ch.22) restricts the continuous space of initialisations to a countable set, reducing seed sensitivity. Second, the STROBE sealed-seed protocol prohibits the use of seeds whose Fibonacci-index position violates the closure property of the \(\varphi^2 + \varphi^{-2} = 3\) identity.
 
 The forbidden seeds \(\{42, 43, 44, 45\}\) fall in the range where the modular residue of the seed modulo \(F_9 = 34\) creates a phase mismatch with the Fibonacci-indexed batch schedule. Specifically, \(42 \equiv 8 \pmod{34}\), \(43 \equiv 9 \pmod{34}\), \(44 \equiv 10 \pmod{34}\), and \(45 \equiv 11 \pmod{34}\), all of which land in the forbidden residue class \([8, 11]\) identified empirically to produce anomalous gradient variance spikes at training step \(F_{13}=233\). The sanctioned seeds avoid this residue class by construction: \(1597 \equiv 0 \pmod{34}\), and all higher Fibonacci numbers satisfy \(F_k \equiv 0 \pmod{F_9}\) for \(k \geq 9\) {[}1{]}. The Lucas seeds \(L_7 = 29\) and \(L_8 = 47\) are coprime to \(F_9\) and fall outside the forbidden residue class.
 
-\subsection{2. The STROBE Seed Admissibility Criterion}\label{the-strobe-seed-admissibility-criterion}
+\section{2. The STROBE Seed Admissibility Criterion}\label{the-strobe-seed-admissibility-criterion}
 
 \textbf{Definition 2.1 (Fibonacci seed admissibility).} A positive integer \(s\) is Fibonacci-admissible if there exists \(k \geq 17\) such that \(s = F_k\), where \(F_k\) is the \(k\)-th Fibonacci number. The admissible Fibonacci seeds are:
 
@@ -46,7 +44,7 @@ The admissibility criterion is motivated by the golden-ratio periodicity of the 
 
 \emph{Proof.} \(\varphi^{-4} = (\varphi^{-2})^2 = (2-\varphi)^2 = 4 - 4\varphi + \varphi^2 = 4 - 4\varphi + \varphi + 1 = 5 - 3\varphi \approx 0.0557\). Then \(\varphi^2 + \varphi^{-2} + \varphi^{-4} = 3 + \varphi^{-4}\). Numerically: \(3 + (5 - 3\varphi) = 8 - 3\varphi \approx 8 - 4.854 = 3.146\). The exact rational approximation to \(\tau = 3.5\) is obtained by rounding \(\varphi^{-4}\) to 0.5, consistent with the Coq lemma \texttt{phi\_inv4\_approx} which proves \(\varphi^{-4} < 0.5\), establishing \(\tau \leq 3.5\). The INV-2 notes state \(\tau = \varphi^2 + \varphi^{-2} + \varphi^{-4}\) as the design target; the rounded value 3.5 is used in practice {[}3{]}. \(\square\)
 
-\subsection{\texorpdfstring{3. The Runtime-Mirror Contract and \texttt{igla\_assertions.json}}{3. The Runtime-Mirror Contract and igla\_assertions.json}}\label{the-runtime-mirror-contract-and-igla_assertions.json}
+\section{\texorpdfstring{3. The Runtime-Mirror Contract and \texttt{igla\_assertions.json}}{3. The Runtime-Mirror Contract and igla\_assertions.json}}\label{the-runtime-mirror-contract-and-igla_assertions.json}
 
 The runtime-mirror contract is a JSON-encoded assertion file, \texttt{igla\_assertions.json}, that is loaded by the training harness before any pseudo-random state is initialised. The contract enforces the following invariants at runtime:
 
@@ -67,7 +65,7 @@ The runtime mirror runs the same assertion checks on the inference server (Ch.31
 
 \emph{Proof sketch.} The initialisation maps seed \(s\) to weight tensor \(W_s\) via \(W_s[i,j] = \text{round}_{\varphi}(G(s, i, j))\), where \(G(s, \cdot, \cdot)\) is a Gaussian generator seeded by \(s\) and \(\text{round}_\varphi\) rounds to the nearest element of \(\{-\varphi^{-1}, 0, \varphi^{-1}\}\). Since \(G(s, \cdot, \cdot) \neq G(s', \cdot, \cdot)\) for \(s \neq s'\) (pseudo-random generator injectivity on \(\{s \in \mathcal{S}\}\), verified by exhaustive check over all 21 pairs), and since the rounding function is a surjection, \(W_s \neq W_{s'}\) with probability 1. \(\square\)
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 The sealed-seed protocol was validated on three independent experimental axes.
 
@@ -77,7 +75,7 @@ The sealed-seed protocol was validated on three independent experimental axes.
 
 \textbf{Axis 3 --- ASHA threshold validation.} The Welch \(t\)-test reported in Ch.19 used seeds \(F_{17}=1597\), \(F_{18}=2584\), and \(F_{19}=4181\) as the three independent replicates (minimum \(n \geq 3\) per the directive). All three replicates achieved BPB \(\leq 1.85\) at Gate-2, with the champion trial (seed \(F_{19}\)) achieving BPB = 1.82. The ASHA pruner with threshold 3.5 retained all three champions and pruned 14 of 17 sub-threshold trials, consistent with the Coq certificate for \texttt{asha\_champion\_survives}.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -95,7 +93,7 @@ The sealed-seed protocol was validated on three independent experimental axes.
   \texttt{phi\_inv4\_approx} (\texttt{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}) --- \emph{Status: Qed} --- \((1/\varphi)^4 < 0.5\); bounds the fourth-power correction to the ASHA threshold.
 \end{itemize}
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -105,11 +103,11 @@ The sealed-seed protocol was validated on three independent experimental axes.
   \textbf{SANCTIONED-SEEDS} (config, golden) --- https://github.com/gHashTag/trios/issues/395 --- \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\). Linked: Ch.13, App.E.
 \end{itemize}
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The sealed-seed protocol achieves its primary goal: any researcher with access to the Zenodo archive can reproduce every reported BPB figure using a single command and any sanctioned seed. The limitation of the current protocol is that it does not cover distributed training with multiple workers, where each worker requires an independent seed. A natural extension --- assigning worker \(w\) seed \(F_{17+w}\) --- is consistent with the admissibility criterion and planned for the multi-node experiments in Ch.36 (future work). A second limitation is that the forbidden-seed exclusion was determined empirically on a single architecture; it is possible that other architectures exhibit gradient spikes at different Fibonacci-indexed steps. The residue-class analysis in §1 provides a theoretical basis for the exclusion but does not constitute a proof. Closing the corresponding Coq obligation (filed as INV-2-ext in the Golden Ledger) would resolve this. The STROBE protocol connects directly to Ch.19 (statistical testing), Ch.31 (hardware evaluation), and App.D (reproducibility scripts).
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} Wall, D. D. (1960). Fibonacci primitive roots and the period of the Fibonacci sequence modulo a prime. \emph{Fibonacci Quarterly}, 17(4), 366--372.
 

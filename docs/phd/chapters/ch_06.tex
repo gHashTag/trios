@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-6-goldenfloat-family-gf4-gf64.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{GoldenFloat Family GF4..GF64}
-\addcontentsline{toc}{section}{GoldenFloat Family GF4..GF64}
-
+\chapter{GoldenFloat Family GF4..GF64}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch06-goldenfloat-family.png}
 \caption*{Figure — Ch.6: GoldenFloat Family GF4..GF64.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 This chapter defines the GoldenFloat (GF) number family---a hierarchy of floating-point formats whose mantissa widths are drawn from the Fibonacci sequence and whose three-band exponent structure derives from the identity \(\varphi^2 + \varphi^{-2} = 3\). Five formats are specified: GF4, GF8, GF16, GF32, and GF64. For each format, formal bounds on rounding error, overflow probability, and numeric closure are stated and proved in Coq (296 + 1 = 297 total Qed across the corpus; six theorems anchored directly to this chapter). The GF16 safe-domain invariant (INV-3) and the Lucas-closure invariant (INV-5) are proved in their respective canonical files. The results show that GF16 achieves a bits-per-byte compression ratio of \(\leq 1.85\) at Gate-2 while remaining formally overflow-free within the declared operating range.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Floating-point arithmetic in neural-network inference has evolved from FP32 through FP16, BF16, and now sub-8-bit formats such as MXFP4 {[}1{]}. Each step reduces memory bandwidth and arithmetic energy but introduces new sources of error that are difficult to bound analytically. The Trinity S³AI system takes a different approach: rather than empirically tuning a fixed-width format, it derives format parameters algebraically from the golden ratio \(\varphi = (1+\sqrt{5})/2\) via the anchor identity
 
@@ -26,9 +24,9 @@ The three terms of this identity---\(\varphi^2 \approx 2.618\), \(1\), and \(\va
 
 The anchor identity drives the chapter throughout. Section 2 gives the formal definitions and the Coq encoding. Section 3 presents the key theorems and their proof sketches. Section 4 collects empirical precision measurements.
 
-\subsection{2. GoldenFloat Format Definitions}\label{goldenfloat-format-definitions}
+\section{2. GoldenFloat Format Definitions}\label{goldenfloat-format-definitions}
 
-\subsubsection{2.1 Preliminaries}\label{preliminaries}
+\subsection{2.1 Preliminaries}\label{preliminaries}
 
 Let \(\varphi = (1+\sqrt{5})/2\) and \(\hat\varphi = \varphi^{-1} = \varphi - 1 = (\sqrt{5}-1)/2\). The identity
 
@@ -59,7 +57,7 @@ GF64 & 11 & 52 & (IEEE compat.) & 64 \\
 
 For GF64 the mantissa width is 52 hidden-bit-plus-53 stored bits, preserving IEEE 754 binary64 bit-pattern compatibility {[}3{]}. The novel content lies in the rounding mode: GoldenFloat uses \emph{phi-round-to-nearest}, in which ties are broken toward the mantissa value whose Fibonacci representation is shortest.
 
-\subsubsection{2.2 Coq Encoding}\label{coq-encoding}
+\subsection{2.2 Coq Encoding}\label{coq-encoding}
 
 The Coq development in \texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v} encodes GF64 using the \texttt{Flocq} library's \texttt{Binary.binary\_float} type {[}4{]}. The mantissa parameter is \texttt{prec\ =\ 53} and the exponent parameter is \texttt{emax\ =\ 1024}, matching IEEE binary64. Two canonical constants are defined:
 
@@ -73,7 +71,7 @@ The Coq development in \texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v} 
 
 The bounded predicate \texttt{bounded\ prec\ emax\ m\ e} checks that \(m < 2^{\mathtt{prec}}\) and \(e + \mathtt{prec} \leq \mathtt{emax} + 1\). Theorem \texttt{phi\_f64\_bounded} establishes this for the phi constant.
 
-\subsubsection{2.3 Lucas Closure on GF16}\label{lucas-closure-on-gf16}
+\subsection{2.3 Lucas Closure on GF16}\label{lucas-closure-on-gf16}
 
 A key algebraic property of the GoldenFloat substrate is that \(\varphi^{2n} + \varphi^{-2n}\) is a Lucas number \(L_{2n}\) for all \(n \geq 0\) {[}5{]}. In particular:
 
@@ -81,7 +79,7 @@ A key algebraic property of the GoldenFloat substrate is that \(\varphi^{2n} + \
 
 The invariant INV-5 (Lucas closure) states that for any \(n\) representable in GF16, the expression \(\varphi^{2n}+\varphi^{-2n}\) maps to an integer under the GF16 rounding scheme. This is proved in \texttt{INV5\_LucasClosureGf16.v} (10 Qed lemmas) and ensures that accumulator values in the ternary arithmetic unit never drift into fractional Lucas residuals.
 
-\subsection{3. Key Theorems and Proof Sketches}\label{key-theorems-and-proof-sketches}
+\section{3. Key Theorems and Proof Sketches}\label{key-theorems-and-proof-sketches}
 
 \textbf{Theorem 3.1} (\texttt{phi\_f64\_bounded}). \emph{The GF64 representation of \(\varphi\) is within the IEEE binary64 bounded range.}
 
@@ -113,7 +111,7 @@ Proved in \texttt{INV5\_LucasClosureGf16.v} (10 Qed lemmas). This guarantees int
 
 This follows from the fact that \(\varphi^{-2}+1+\varphi^{-2} = 3/\varphi^2 \cdot \varphi^2 = 3/3 \cdot 3\)---no, more precisely, the three exponent bands tile \((-\infty,\infty)\) exhaustively by construction.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 GF16 was evaluated on the HSLM benchmark (1003 tokens, drawn from the GOLDEN SUNFLOWERS test corpus). The following measurements were collected using the Trinity S³AI inference pipeline at Gate-2:
 
@@ -138,7 +136,7 @@ Tolerance constants: \texttt{phi\_tolerance} \(= 2^{-51}\) (half ULP for GF64), 
 
 Seed pool reference: the Fibonacci indices \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\) bound the token-count ranges used in GF16 accumulator design; \(F_{20}=6765\) and \(F_{21}=10946\) define the maximum vocabulary size tested. Lucas sentinels \(L_7=29\) and \(L_8=47\) appear as exponent-field upper bounds in INV-3 and the period-locked monitor (Ch.24).
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 \begin{itemize}
 \item
@@ -155,7 +153,7 @@ Seed pool reference: the Fibonacci indices \(F_{17}=1597\), \(F_{18}=2584\), \(F
   \texttt{PHI\_F64\_TOLERANCE\_pos} (\texttt{gHashTag/t27/proofs/canonical/kernel/PhiFloat.v}) --- \emph{Status: Qed} --- The macro tolerance constant is strictly positive: \texttt{0\ \textless{}\ PHI\_F64\_TOLERANCE}.
 \end{itemize}
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \item
@@ -170,13 +168,13 @@ Seed pool reference: the Fibonacci indices \(F_{17}=1597\), \(F_{18}=2584\), \(F
   \textbf{LUCAS-CLOSURE} (\texttt{theorem}) --- 10 Qed lemmas --- \href{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV5_LucasClosureGf16.v}{INV5\_LucasClosureGf16.v} --- \emph{Status: golden} --- Linked: Ch.6.
 \end{itemize}
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The GoldenFloat family demonstrates that choosing arithmetic parameters from an algebraically motivated structure---specifically the identity \(\varphi^2+\varphi^{-2}=3\)---enables both a formal proof strategy and a hardware realisation strategy to proceed in parallel. The primary limitation of the current GF16 design is that the three-band exponent partition was sized for transformer weight matrices drawn from approximately Gaussian distributions; inputs with heavy-tailed distributions (e.g., certain embedding layers) may exceed the INV-3 safe domain and trigger saturation clipping. The Coq.Interval upgrade lane (Ch.18) will address this by providing interval-arithmetic proofs over empirically measured weight distributions rather than worst-case bounds.
 
 Future work includes GF128 (sub-1-bit effective width via block-floating-point aggregation of \(F_{21}=10946\) weights per tile), and extension of the Lucas-closure invariant from GF16 to GF32. This chapter connects directly to Ch.9 (GF16 quantisation pipeline), Ch.24 (period-locked monitor using \(L_7=29\) and \(L_8=47\) as scheduling sentinels), and Ch.28 (FPGA synthesis of the GF16 MAC unit with 0 DSP slices).
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} Rouhani, B. D. et al.~(2023). \emph{Microscaling Data Formats for Deep Learning}. IEEE MXFP4 draft, arXiv:2310.10537. https://arxiv.org/abs/2310.10537
 

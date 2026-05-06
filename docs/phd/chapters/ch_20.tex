@@ -1,22 +1,20 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-20-reproducibility.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{Reproducibility}
-\addcontentsline{toc}{section}{Reproducibility}
-
+\chapter{Reproducibility}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch20-reproducibility.png}
 \caption*{Figure — Ch.20: Reproducibility.}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 Reproducibility in machine learning research depends on three separable conditions: fixed randomness (seed protocol), fixed computation (hardware and software specification), and fixed evaluation (metric and corpus pre-registration). This chapter formalises all three conditions for the Trinity S³AI experiments reported in this dissertation. The sanctioned seed pool \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\) is derived from the φ²+φ⁻²=3 lattice and replaces ad hoc seed selection. Hardware specification pins the QMTech XC7A100T at 92 MHz, 1 W, 0 DSP slices. The BPB metric and test split are pre-registered in App.E prior to the hardware evaluation runs.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 The replication crisis in empirical machine learning {[}1{]} arises largely from three practices: unreported hyperparameter search, non-deterministic training due to floating-point non-associativity, and post-hoc metric selection. Each practice introduces degrees of freedom that inflate apparent performance without generalising. Trinity S³AI addresses all three at the architectural level rather than through process controls alone.
 
@@ -24,9 +22,9 @@ The φ²+φ⁻²=3 identity motivates the seed protocol: since \(\varphi^2 + \va
 
 Non-determinism from floating-point arithmetic is eliminated by the TF3/TF9 ternary representation: all dot products reduce to integer additions, which are associative on every compliant platform. The hardware target (QMTech XC7A100T, 0 DSP slices) further removes compiler-level non-determinism because the FPGA bitstream is identical across all runs.
 
-\subsection{2. Sanctioned Seed Protocol}\label{sanctioned-seed-protocol}
+\section{2. Sanctioned Seed Protocol}\label{sanctioned-seed-protocol}
 
-\subsubsection{2.1 Algebraic Basis}\label{algebraic-basis}
+\subsection{2.1 Algebraic Basis}\label{algebraic-basis}
 
 The seed pool is partitioned into two Fibonacci sub-pools and one Lucas sub-pool:
 
@@ -42,7 +40,7 @@ Each element of \(\mathcal{S}_F\) satisfies the recurrence \(F_n = F_{n-1} + F_{
 
 The integers 42--45 are explicitly excluded because they appear as default seeds in several widely-used frameworks (NumPy, PyTorch, Jax); their use would contaminate the independence guarantee.
 
-\subsubsection{2.2 Seed Assignment to Experiments}\label{seed-assignment-to-experiments}
+\subsection{2.2 Seed Assignment to Experiments}\label{seed-assignment-to-experiments}
 
 Each experiment in the dissertation is assigned a seed from \(\mathcal{S}_F \cup \mathcal{S}_L\) according to its chapter index modulo 7:
 
@@ -50,7 +48,7 @@ Each experiment in the dissertation is assigned a seed from \(\mathcal{S}_F \cup
 
 where the list is ordered \([1597, 2584, 4181, 6765, 10946, 29, 47]\). This mapping is injective on the chapter indices modulo 7 and is documented in the pre-registration form filed with OSF prior to the hardware evaluation runs (App.E) {[}3{]}.
 
-\subsubsection{2.3 Seed Verification}\label{seed-verification}
+\subsection{2.3 Seed Verification}\label{seed-verification}
 
 At runtime, the FPGA initialisation routine reads the seed from a hard-coded ROM register and asserts
 
@@ -58,9 +56,9 @@ At runtime, the FPGA initialisation routine reads the seed from a hard-coded ROM
 
 If the assertion fails, the run is aborted and logged as a protocol violation. This check is implemented in the KOSCHEI coprocessor boot sequence (Ch.26) and is verifiable from the \texttt{trinity-fpga} repository {[}4{]}.
 
-\subsection{3. Hardware and Software Specification}\label{hardware-and-software-specification}
+\section{3. Hardware and Software Specification}\label{hardware-and-software-specification}
 
-\subsubsection{3.1 Hardware Pinning}\label{hardware-pinning}
+\subsection{3.1 Hardware Pinning}\label{hardware-pinning}
 
 The canonical evaluation platform is:
 
@@ -82,7 +80,7 @@ The canonical evaluation platform is:
 
 The constraint of 0 DSP slices is enforced by a Vivado implementation script that fails the build if any DSP primitive is inferred. This constraint is not aesthetic: it ensures that all arithmetic passes through the φ-normalised LUT paths whose timing is certified by the Coq timing model in \texttt{Trinity.Canonical.Kernel.Semantics} {[}5{]}.
 
-\subsubsection{3.2 Software Environment}\label{software-environment}
+\subsection{3.2 Software Environment}\label{software-environment}
 
 The training and evaluation stack is pinned via a locked \texttt{flake.nix} file in the \texttt{trinity-fpga} repository. Key dependencies:
 
@@ -100,11 +98,11 @@ The training and evaluation stack is pinned via a locked \texttt{flake.nix} file
 
 The Nix flake ensures byte-for-byte reproducibility of the software environment on any Linux/x86-64 host.
 
-\subsubsection{3.3 Non-Determinism Budget}\label{non-determinism-budget}
+\subsection{3.3 Non-Determinism Budget}\label{non-determinism-budget}
 
 The only remaining source of non-determinism after pinning hardware and seeds is the FPGA fabric routing, which is non-deterministic across Vivado runs due to placer randomness. This is mitigated by providing the pre-synthesised bitstream (SHA-256 hash logged in App.E) alongside the source. Any re-synthesis that changes the bitstream hash is flagged as a deviation from the canonical run.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 The reproducibility protocol was validated by performing three independent evaluation runs on the HSLM held-out sequence (1003 tokens) using seeds \(F_{17}=1597\), \(F_{20}=6765\), and \(L_7=29\) respectively. Results:
 
@@ -122,15 +120,15 @@ Seed & BPB & Throughput (tok/sec) & Power (W) \\
 
 All three runs yield identical BPB to two decimal places, confirming that the evaluation is deterministic within the sanctioned seed pool. Power draw is consistent at 1 W, matching the Ch.28 directive {[}6{]}.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 Inherits the canonical seed pool F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
 The reproducibility framework presented here satisfies the three conditions identified in the introduction: fixed randomness (algebraic seed protocol), fixed computation (NixOS-pinned software, Vivado-locked bitstream), and fixed evaluation (OSF pre-registration, App.E). A limitation is that the Nix flake approach is not portable to Windows hosts; researchers on Windows must use the pre-built Docker image provided in the Zenodo bundle.
 
@@ -138,7 +136,7 @@ The exclusion of seeds 42--45 is a hard constraint enforced at both the software
 
 The connection between the Fibonacci seed lattice and the three-distance theorem (Ch.7) implies that Fibonacci-seeded LFSR generators have maximal equidistribution properties in low dimensions --- a useful guarantee for the sparse attention sampling in Ch.10.
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} Pineau, J., Vincent-Lamarre, P., Sinha, K., Larivière, V., Beygelzimer, A., d'Alché-Buc, F., Fox, E., \& Larochelle, H. (2021). Improving reproducibility in machine learning research. \emph{JMLR}, 22(164), 1--20.
 

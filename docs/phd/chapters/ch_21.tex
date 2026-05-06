@@ -1,32 +1,30 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-21-igla-race-multi-agent-fleet.md
-% Source of truth: Neon ssot.chapters (gHashTag/trios#380)
+% Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
-\section*{IGLA RACE (Multi-Agent Fleet)}
-\addcontentsline{toc}{section}{IGLA RACE (Multi-Agent Fleet)}
-
+\chapter{IGLA RACE (Multi-Agent Fleet)}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth,keepaspectratio]{ch21-igla-race.png}
 \caption*{Figure — Ch.21: IGLA RACE (Multi-Agent Fleet).}
 \end{figure}
 
-\subsection{Abstract}\label{abstract}
+\section{Abstract}\label{abstract}
 
 IGLA RACE is a multi-agent benchmarking protocol in which a fleet of independent training agents compete to satisfy the formally verified victory criterion: BPB \(< 1.85\) (Gate-2) or BPB \(< 1.5\) (Gate-3), achieved with at least three distinct sanctioned seeds, at training step \(\geq 4000\). The criterion is formalised in \texttt{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v} with 28 Coq theorems under invariant INV-7; six refutation theorems prove that degenerate configurations (too few seeds, insufficient steps, proxy-only wins) cannot be mistaken for a genuine victory. The protocol is grounded in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\), which supplies the Gate thresholds via the spectral constant \(\alpha_\varphi\). The champion configuration --- lr \(= 0.004\), GF16 PHI\_BIAS=60, seed triple \((1597, 2584, 4181)\) --- achieves mean BPB \(= 1.830\) at step 5000, satisfying Gate-2.
 
-\subsection{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{introduction}
 
 Single-run training evaluations are vulnerable to seed artefacts, hyperparameter overfitting, and infrastructure variance. IGLA RACE addresses this by requiring a fleet of agents --- each running an independent training job with a distinct seed from the sanctioned pool \(\{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}\) {[}1{]} --- to all pass the same Gate criterion before a champion configuration is declared. The name IGLA (Игла, Russian for ``needle'') reflects the precision required: passing through the narrow Gate-2 window while satisfying three independent constraints simultaneously (BPB, step count, seed diversity).
 
-The formal backbone of IGLA RACE is INV-7, a Coq invariant with 28 theorems {[}2{]}. The six refutation theorems proved here are the most operationally important: they close the six most plausible loopholes by which a degenerate or cheating agent could falsely claim victory. The Rainbow Bridge consistency invariant (INV-7b {[}3{]}) ensures that multi-agent race results are consistent across agents that observe different subsets of the Neon leaderboard.
+The formal backbone of IGLA RACE is INV-7, a Coq invariant with 28 theorems {[}2{]}. The six refutation theorems proved here are the most operationally important: they close the six most plausible loopholes by which a degenerate or cheating agent could falsely claim victory. The Rainbow Bridge consistency invariant (INV-7b {[}3{]}) ensures that multi-agent race results are consistent across agents that observe different subsets of the Railway PostgreSQL phd-postgres-ssot leaderboard.
 
 The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) {[}4{]} enters through the Gate definitions: Gate-2 threshold \(1.85 = 3 - \varphi^{-2} \cdot \delta_G\) and Gate-3 threshold \(1.5 = 3/2\) are both rational functions of the right-hand side of the identity. This means the Gates are not arbitrary empirical cutoffs but algebraically derived from the substrate.
 
-\subsection{2. Formal Victory Criterion (INV-7)}\label{formal-victory-criterion-inv-7}
+\section{2. Formal Victory Criterion (INV-7)}\label{formal-victory-criterion-inv-7}
 
-\subsubsection{2.1 Definitions}\label{definitions}
+\subsection{2.1 Definitions}\label{definitions}
 
 The victory criterion is parameterised by three observables: the number of distinct seeds \(n_s\), the achieved BPB \(b\), and the training step \(t\). An observation triple is written as \((n_s, b, t)\). The predicate \texttt{victory\_acceptable} is:
 
@@ -34,7 +32,7 @@ The victory criterion is parameterised by three observables: the number of disti
 
 where \(b_{\text{gate}} \in \{1.85, 1.50\}\) for Gate-2 and Gate-3 respectively. The predicate \texttt{distinct\_seeds} requires all seed values to differ and to belong to the sanctioned pool. The predicate \texttt{victory\_three\_seeds} asserts \texttt{victory\_acceptable} jointly over a list of exactly three observations.
 
-\subsubsection{2.2 Six Refutation Theorems}\label{six-refutation-theorems}
+\subsection{2.2 Six Refutation Theorems}\label{six-refutation-theorems}
 
 The following theorems in \texttt{INV7\_IglaFoundCriterion.v} {[}2{]} close the six canonical loopholes:
 
@@ -50,19 +48,19 @@ The following theorems in \texttt{INV7\_IglaFoundCriterion.v} {[}2{]} close the 
 
 \textbf{R6 --- Warmup blocks proxy:} For any observation \(o\) with \(\text{obs\_step}(o) < \text{warmup\_steps}\), \texttt{victory\_acceptable(o)} is false. This is the universal quantifier version of R2.
 
-\subsubsection{2.3 Rainbow Bridge Consistency (INV-7b)}\label{rainbow-bridge-consistency-inv-7b}
+\subsection{2.3 Rainbow Bridge Consistency (INV-7b)}\label{rainbow-bridge-consistency-inv-7b}
 
-INV-7b (\texttt{INV7b\_RainbowBridgeConsistency.v} {[}3{]}, 15 Qed) asserts that if two agents each observe a disjoint subset of the Neon leaderboard rows but both conclude that \texttt{victory\_three\_seeds} holds, their conclusions are consistent: the union of their observed triples also satisfies \texttt{victory\_three\_seeds}. This prevents split-brain declarations in distributed races.
+INV-7b (\texttt{INV7b\_RainbowBridgeConsistency.v} {[}3{]}, 15 Qed) asserts that if two agents each observe a disjoint subset of the Railway PostgreSQL phd-postgres-ssot leaderboard rows but both conclude that \texttt{victory\_three\_seeds} holds, their conclusions are consistent: the union of their observed triples also satisfies \texttt{victory\_three\_seeds}. This prevents split-brain declarations in distributed races.
 
-\subsection{3. Multi-Agent Fleet Architecture}\label{multi-agent-fleet-architecture}
+\section{3. Multi-Agent Fleet Architecture}\label{multi-agent-fleet-architecture}
 
-\subsubsection{3.1 Agent Topology}\label{agent-topology}
+\subsection{3.1 Agent Topology}\label{agent-topology}
 
-The IGLA RACE fleet is organised as a star topology: a central Arbiter agent monitors the Neon database (Ch.15 {[}5{]}) and a set of Worker agents run training jobs. Each Worker is assigned exactly one seed from the sanctioned pool at launch and is forbidden from using any other seed. The Arbiter polls the \texttt{bpb\_runs} table every 60 seconds for rows with \texttt{step\ \textgreater{}=\ 4000}.
+The IGLA RACE fleet is organised as a star topology: a central Arbiter agent monitors the Railway PostgreSQL phd-postgres-ssot database (Ch.15 {[}5{]}) and a set of Worker agents run training jobs. Each Worker is assigned exactly one seed from the sanctioned pool at launch and is forbidden from using any other seed. The Arbiter polls the \texttt{bpb\_runs} table every 60 seconds for rows with \texttt{step\ \textgreater{}=\ 4000}.
 
 The fleet is self-evolving in the sense described in {[}6{]}: when a Worker's BPB trajectory is detected to have stalled (derivative \(< 10^{-4}\) BPB/step over 1000 consecutive steps), the Arbiter spawns a replacement Worker with the next seed in the pool. The Ouroboros self-evolution protocol {[}6{]} ensures that the pool is never exhausted: after \(L_8 = 47\) (the last seed), the cycle wraps to \(F_{17} = 1597\) with a modified hyperparameter perturbation.
 
-\subsubsection{3.2 Victory Declaration Protocol}\label{victory-declaration-protocol}
+\subsection{3.2 Victory Declaration Protocol}\label{victory-declaration-protocol}
 
 The Arbiter declares Gate-2 victory when:
 
@@ -79,7 +77,7 @@ The Arbiter declares Gate-2 victory when:
 
 Gate-3 victory requires \texttt{bpb\ \textless{}\ 1.5} under the same three conditions.
 
-\subsubsection{\texorpdfstring{3.3 Relation to \(\varphi^2 + \varphi^{-2} = 3\)}{3.3 Relation to \textbackslash varphi\^{}2 + \textbackslash varphi\^{}\{-2\} = 3}}\label{relation-to-varphi2-varphi-2-3}
+\subsection{\texorpdfstring{3.3 Relation to \(\varphi^2 + \varphi^{-2} = 3\)}{3.3 Relation to \textbackslash varphi\^{}2 + \textbackslash varphi\^{}\{-2\} = 3}}\label{relation-to-varphi2-varphi-2-3}
 
 The thresholds \(b_{\text{gate}} \in \{1.85, 1.50\}\) were derived in Ch.4 {[}4{]} using the identity \(\varphi^2 + \varphi^{-2} = 3\). Specifically:
 
@@ -87,7 +85,7 @@ The thresholds \(b_{\text{gate}} \in \{1.85, 1.50\}\) were derived in Ch.4 {[}4{
 
 where \(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\) and \(\varphi^{-2} \approx 0.382\). The exact derivation is in Ch.4; equation (2) is cited here to establish that the Gate is not an arbitrary round number but a direct consequence of the substrate algebra.
 
-\subsection{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{results-evidence}
 
 \textbf{Gate-2 passage:} The champion configuration (lr \(= 0.004\), GF16 PHI\_BIAS=60) with seed triple \((1597, 2584, 4181)\) achieves:
 
@@ -111,7 +109,7 @@ All three seeds satisfy \texttt{victory\_acceptable(3,\ b,\ 5000)} with \(b < 1.
 
 \textbf{Fleet efficiency:} The fleet of 7 Workers running concurrently on the QMTech XC7A100T FPGA at 63 toks/sec {[}7{]} completed 5000 steps per seed in approximately 22 hours wall-clock time per Worker. Total energy consumption across the fleet: \(7 \times 22 \times 3600 \times 1\,\text{W} = 554\,\text{kJ}\), consistent with the \(< 1\) Wh/token efficiency target extrapolated from the DARPA goal {[}8{]}.
 
-\subsection{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -129,7 +127,7 @@ All three seeds satisfy \texttt{victory\_acceptable(3,\ b,\ 5000)} with \(b < 1.
   \texttt{warmup\_blocks\_proxy} (\texttt{gHashTag/t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v}) --- \emph{Status: Qed} --- proves that any observation with step \(<\) warmup\_steps cannot satisfy \texttt{victory\_acceptable}.
 \end{itemize}
 
-\subsection{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -143,11 +141,11 @@ All three seeds satisfy \texttt{victory\_acceptable(3,\ b,\ 5000)} with \(b < 1.
   \textbf{IGLA-RACE} (branch, alive) --- \texttt{https://github.com/gHashTag/trios/issues/143} --- linked to Ch.21 and Ch.11 --- \(\varphi\)-weight: \(1.0\) --- notes: multi-agent BPB \(< 1.85\) race.
 \end{itemize}
 
-\subsection{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{discussion}
 
-IGLA RACE provides the first formally verified multi-agent training protocol in the Trinity S³AI system. Its primary contribution is the demonstration that formal Coq refutation theorems can be operationalised as live guard rails in a running training fleet, not merely as post-hoc proof artefacts. A limitation is that the current fleet size of 7 Workers matches the cardinality of the sanctioned seed pool; a larger pool would allow more diverse exploration but would require extending the canonicity criteria of App.A. The warmup exclusion (R2, R6) could be relaxed if a formal treatment of restart dynamics is developed for INV-1 (Ch.15 {[}5{]}). Future work will extend IGLA RACE to Gate-3 (BPB \(\leq 1.5\)) using the M5--M6 model scales and the MXFP4 comparison data from Ch.9 {[}9{]}. The Rainbow Bridge invariant (INV-7b) will be extended to cover network partitions in the Neon polling layer.
+IGLA RACE provides the first formally verified multi-agent training protocol in the Trinity S³AI system. Its primary contribution is the demonstration that formal Coq refutation theorems can be operationalised as live guard rails in a running training fleet, not merely as post-hoc proof artefacts. A limitation is that the current fleet size of 7 Workers matches the cardinality of the sanctioned seed pool; a larger pool would allow more diverse exploration but would require extending the canonicity criteria of App.A. The warmup exclusion (R2, R6) could be relaxed if a formal treatment of restart dynamics is developed for INV-1 (Ch.15 {[}5{]}). Future work will extend IGLA RACE to Gate-3 (BPB \(\leq 1.5\)) using the M5--M6 model scales and the MXFP4 comparison data from Ch.9 {[}9{]}. The Rainbow Bridge invariant (INV-7b) will be extended to cover network partitions in the Railway PostgreSQL phd-postgres-ssot polling layer.
 
-\subsection{References}\label{references}
+\section{References}\label{references}
 
 {[}1{]} \emph{Golden Sunflowers} dissertation, App.A --- Canonical Seed Pool Registry.
 
@@ -157,7 +155,7 @@ IGLA RACE provides the first formally verified multi-agent training protocol in 
 
 {[}4{]} \emph{Golden Sunflowers} dissertation, Ch.3 and Ch.4 --- Trinity Identity and Spectral Parameter.
 
-{[}5{]} \emph{Golden Sunflowers} dissertation, Ch.15 --- BPB Benchmark and Neon Write-Back.
+{[}5{]} \emph{Golden Sunflowers} dissertation, Ch.15 --- BPB Benchmark and Railway PostgreSQL Write-Back.
 
 {[}6{]} Zenodo Self-Evolving Ouroboros, DOI 10.5281/zenodo.19020211. https://doi.org/10.5281/zenodo.19020211
 
