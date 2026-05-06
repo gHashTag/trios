@@ -23,8 +23,10 @@ pipeline. The goal: every chapter's hero illustration is rendered as the
   first standalone Markdown image to position 1, forces `width=100%`,
   adds the `.hero-fullwidth` class, and exposes `hero-image` /
   `hero-caption` template vars.
-- `scripts/compile_chapter.sh` — invokes pandoc + tectonic with the
-  template and filter wired in.
+- `crates/trios-phd` subcommand `compile-chapters` — Rust-only driver
+  that invokes pandoc + tectonic with the template and filter wired in
+  (R1 CROWN-compliant, replaces the legacy `v4/generate_from_neon.py`
+  flow). Run with `cargo run -p trios-phd -- compile-chapters`.
 - `migrations/005_hero_fullwidth.sql` — idempotent normalization of every
   `ssot.chapters.body_md` so it begins with the canonical hero line:
   ```
