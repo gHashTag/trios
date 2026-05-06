@@ -14,7 +14,7 @@
 | Глав всего | 69 | — | OK |
 | Глав с иллюстрациями | **69 / 69** | универсальный стиль | ✅ |
 | Полностью написанных глав (≥ 1500 строк) | **3** | R3 ≥1500 строк | ❌ дописать 66 |
-| Deferred-stubs (Neon-pending) | 21 | R5 honest | ⚠️ ждут Neon |
+| Deferred-stubs (Railway-pending) | 21 | R5 honest | ⚠️ ждут Railway phd-postgres-ssot |
 | Реальные но «тонкие» главы | 45 | R3 не выполнен | ⚠️ дописать |
 | Приложения | 14 | — | OK |
 | Приложения с иллюстрациями | 9 / 14 | — | ⚠️ нет 5 |
@@ -43,7 +43,7 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
 | F — FPGA Bitstream | `F-fpga-bitstream.tex` | требуется новая (макет bitstream-архива) |
 | H — Zenodo DOI | `H-zenodo-doi.tex` | `app-h-zenodo-doi-registry.png` (есть в репо, не подключена) |
 | K — Agent Memory | `K-agent-memory.tex` | требуется новая (схема памяти 27-агентного улья) |
-| L — Pollen Channel | `L-pollen-channel.tex` | требуется новая (Pollen-канал ↔ Neon flow) |
+| L — Pollen Channel | `L-pollen-channel.tex` | требуется новая (Pollen-канал ↔ Railway flow) |
 
 **Действие:** 2 иллюстрации (C, H) уже лежат в `assets/illustrations/` — нужно только подключить через `\includegraphics`. 3 иллюстрации (F, K, L) нужно сгенерировать.
 
@@ -61,7 +61,7 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
 
 ### 3.2 ⚠️ Реальная проза, но ниже R3-floor — 45 глав
 
-Эти главы содержат настоящий текст (1500-2400 слов из Neon), но **меньше 1500 строк** LaTeX. Самые слабые:
+Эти главы содержат настоящий текст (1500-2400 слов из Railway phd-postgres-ssot), но **меньше 1500 строк** LaTeX. Самые слабые:
 
 | Файл | Строк | Слов |
 |---|---|---|
@@ -74,7 +74,7 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
 
 **Действие R3:** растянуть каждую до ≥1500 строк/≥1500 слов добавлением: (a) формальных доказательств, (b) Coq-цитат, (c) Falsification §, (d) Rule-of-Three Brain/Throne/Proof.
 
-### 3.3 ⚠️ Deferred-stubs (ждут Neon) — 21 глава
+### 3.3 ⚠️ Deferred-stubs (ждут Railway phd-postgres-ssot) — 21 глава
 
 ```
 02-golden-cut         11-vesica-piscis     22-e8-symmetry
@@ -88,7 +88,7 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
                                            33-epilogue
 ```
 
-Все 21 — честные R5-плейсхолдеры на 117 строк. Источник правды: `ssot.chapters` (Neon, project IGLA). Будут заменены `tri phd export-neon` как только Neon compute-time quota восстановится или Railway hot-mirror `c5f37b42-832a-4acd-9749-381761c94957` поднимется.
+Все 21 — честные R5-плейсхолдеры на 117 строк. Источник правды: `ssot.chapters` (Railway phd-postgres-ssot, project IGLA). Будут заменены `tri phd export-railway` как только Railway phd-postgres-ssot quota восстановится или hot-mirror `c5f37b42-832a-4acd-9749-381761c94957` поднимется.
 
 ---
 
@@ -104,7 +104,7 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
 
 | Приоритет | Задача | Lane |
 |---|---|---|
-| P0 | Поднять Neon или Railway hot-mirror → импорт 21 deferred-stub в реальные главы | LN |
+| P0 | Поднять Railway phd-postgres-ssot hot-mirror → импорт 21 deferred-stub в реальные главы | LN |
 | P0 | Дописать 45 «тонких» глав до R3 floor | L1..L45 |
 | P1 | Подключить иллюстрации в C, H | LF |
 | P1 | Сгенерировать 3 новые иллюстрации (F, K, L) | LF |
