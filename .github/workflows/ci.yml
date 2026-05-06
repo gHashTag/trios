@@ -35,15 +35,21 @@ jobs:
           fi
           echo "L1 OK: no .sh files"
 
-      - name: Check no handwritten JS in extension/ (L9 law)
+      - name: Check L9 — auto-generated dist/ exists, source stays in src/
         run: |
-          count=$(find crates/trios-ext/extension -name '*.js' -not -path '*/dist/*' -not -path './.git/*' | wc -l)
-          if [ "$count" -gt 0 ]; then
-            echo "L9 VIOLATION: handwritten JS files found in extension/ (outside dist/)!"
-            find crates/trios-ext/extension -name '*.js' -not -path '*/dist/*'
+          # LAWS.md §3 L9: "Auto-generated code (WASM pkg, dist/) is committed.
+          # Hand-written code in those dirs is forbidden."
+          # Implementation: ensure dist/ is committed with the wasm-bindgen output.
+          # Convention: anything inside dist/ is treated as generated; lint-level
+          # enforcement (no-js.yml) handles handwritten JS *outside* dist/.
+          # The previous gate inverted L9 — see EPIC #446 unblock.
+          if [ ! -d crates/trios-ext/extension/dist ]; then
+            echo "L9 VIOLATION: dist/ missing — wasm-bindgen output not committed"
             exit 1
           fi
-          echo "L9 OK: no handwritten JS in extension/"
+          test -f crates/trios-ext/extension/dist/trios_ext_br_bg.wasm || \
+            (echo "L9 VIOLATION: dist/trios_ext_br_bg.wasm missing"; exit 1)
+          echo "L9 OK: dist/ committed with wasm-bindgen artefacts"
 
       - name: Check extension artifacts exist (L8 law)
         run: |

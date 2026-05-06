@@ -41,14 +41,19 @@ jobs:
           fi
           echo "✅ LAWS_SCHEMA_VERSION: 2.0"
 
-      - name: Check all 13 sections present (§0-§12)
+      - name: Check at least 13 sections present (§0-§12 + optional appendices)
         run: |
+          # LAWS.md evolves additively — new appendix sections (e.g. §13 Agent
+          # Dispatch Onboarding) MAY be appended per the §8 amendment procedure
+          # WITHOUT invalidating the 13-core-sections invariant. This gate
+          # enforces the floor (≥13) rather than a rigid equality so that merged
+          # appendices do not break CI. EPIC #446 unblock.
           SECTIONS=$(grep -cE "^## §[0-9]+" LAWS.md || echo "0")
-          if [ "$SECTIONS" -ne 13 ]; then
-            echo "❌ BREACH: Expected 13 sections (§0-§12), found $SECTIONS"
+          if [ "$SECTIONS" -lt 13 ]; then
+            echo "❌ BREACH: Expected ≥13 sections, found $SECTIONS"
             exit 1
           fi
-          echo "✅ All 13 sections present"
+          echo "✅ $SECTIONS sections present (≥13 core)"
 
       - name: L1: No .sh files
         run: |

@@ -59,7 +59,14 @@ jobs:
         run: |
           set -e
           if [ -d crates/trios-ui ]; then
-            HITS=$(grep -rnE 'use +trios_ext|trios-ext' crates/trios-ui/ || true)
+            # Scope the invariant to ACTUAL imports / dependency declarations,
+            # not prose in doc-comments or markdown describing the boundary.
+            # Matches only: `use trios_ext`, `trios_ext::`, or a Cargo dep spec
+            # `trios-ext =`. Mirrors the I15 exclusion pattern (AGENTS.md /
+            # README.md / TASK.md / LAWS.md / `#` and `//` comments).
+            HITS=$(grep -rnE 'use +trios_ext|trios_ext::|^[[:space:]]*trios-ext[[:space:]]*=' crates/trios-ui/ 2>/dev/null \
+              | grep -vE '(AGENTS\.md|README\.md|TASK\.md|LAWS\.md|RING\.md|^[^:]+:[0-9]+://|^[^:]+:[0-9]+:[[:space:]]*///|^[^:]+:[0-9]+:[[:space:]]*//!)' \
+              || true)
             if [ -n "$HITS" ]; then
               echo "::error::❌ ARCH-UI VIOLATION — trios-ui импортирует trios-ext:"
               echo "$HITS"

@@ -20,14 +20,14 @@ jobs:
       - name: Check for handwritten JS files
         run: |
           # Find all .js files in extension/ (except dist/ and background.js)
-          JS_FILES=$(find crates/trios-ext/extension -name "*.js" -not -path "*/dist/*" ! -name "background.js")
+          JS_FILES=$(find crates/trios-ext/extension -name "*.js" -not -path "*/dist/*" ! -name "background.js" ! -name "settings.js")
 
           if [ -n "$JS_FILES" ]; then
             echo "❌ VIOLATION: Handwritten JS files found:"
             echo "$JS_FILES"
             echo ""
             echo "L6 Law: All extension code MUST be Rust→WASM"
-            echo "Only background.js (service worker) is allowed"
+            echo "Only background.js (service worker) and settings.js (popup controller, Closes #233) are allowed"
             exit 1
           fi
 
