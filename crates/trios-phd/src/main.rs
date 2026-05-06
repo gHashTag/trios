@@ -828,7 +828,7 @@ fn regex_lite_capture<F: Fn(&str) -> bool>(
             if let Some(idx) = line.find(prefix) {
                 let rest = &line[idx..];
                 let end = rest
-                    .find(|c: char| c == ':' || c == ' ' || c == ')' || c == ',')
+                    .find([':', ' ', ')', ','])
                     .unwrap_or(rest.len());
                 let candidate = &rest[..end];
                 if candidate.ends_with(".tex") {
