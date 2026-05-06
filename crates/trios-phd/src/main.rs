@@ -841,6 +841,109 @@ fn regex_lite_capture<F: Fn(&str) -> bool>(
 }
 
 // -------------------------------------------------------------------------
+// BUILD-BOOK (PhD v6 — single-command monograph build, R1 pure Rust)
+// -------------------------------------------------------------------------
+//
+// Pipeline (in order):
+//   1. materialize_stubs (creates missing \include{...} stubs)
+//   2. pandoc render of <md_dir>/ch-*.md → chapters/ch_NN.tex (best-effort)
+//   3. fix_common_latex (mechanical TeX hygiene)
+//   4. compile_resilient (tectonic with quarantine loop, max_rounds budget)
+//
+// `assets_dir` is currently informational — assets are referenced via
+// \graphicspath in main.tex. Kept in the signature for forward-compat with
+// future asset-copy logic.
+//
+// R1 (CROWN): pure Rust orchestrator. Pandoc is invoked as an external binary,
+// not via shell scripts.
+
+fn build_book(
+    phd_root: &Path,
+    md_dir: &Path,
+    _assets_dir: &Path,
+    max_rounds: usize,
+) -> Result<()> {
+    eprintln!("=== build-book: phase 1/4 materialize-stubs ===");
+    materialize_stubs(phd_root)?;
+
+    eprintln!("=== build-book: phase 2/4 pandoc MD → ch_NN.tex ===");
+    let md_root = if md_dir.is_absolute() {
+        md_dir.to_path_buf()
+    } else {
+        phd_root.join("..").join("..").join(md_dir)
+    };
+    if md_root.is_dir() {
+        let chapters_out = phd_root.join("chapters");
+        std::fs::create_dir_all(&chapters_out).ok();
+        let mut rendered = 0usize;
+        let entries: Vec<PathBuf> = std::fs::read_dir(&md_root)
+            .map(|it| {
+                it.filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("md"))
+                    .filter(|p| {
+                        p.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n.starts_with("ch-"))
+                            .unwrap_or(false)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for src in entries {
+            let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            // Extract leading number from "ch-NN-..." → ch_NN
+            let num: String = stem
+                .trim_start_matches("ch-")
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if num.is_empty() {
+                continue;
+            }
+            let pad = if num.len() == 1 { format!("0{}", num) } else { num.clone() };
+            let target = chapters_out.join(format!("ch_{}.tex", pad));
+            let status = std::process::Command::new("pandoc")
+                .arg(&src)
+                .arg("--from=markdown")
+                .arg("--to=latex")
+                .arg("--wrap=preserve")
+                .arg("-o")
+                .arg(&target)
+                .status();
+            match status {
+                Ok(s) if s.success() => {
+                    rendered += 1;
+                }
+                Ok(s) => eprintln!("  pandoc {}: {}", stem, s),
+                Err(e) => eprintln!("  pandoc {} skipped: {}", stem, e),
+            }
+        }
+        eprintln!("  rendered {} chapter(s) from {}", rendered, md_root.display());
+    } else {
+        eprintln!("  md_dir {} not present — skipping pandoc phase", md_root.display());
+    }
+
+    eprintln!("=== build-book: phase 3/4 fix-common-latex ===");
+    fix_common_latex(phd_root)?;
+
+    eprintln!("=== build-book: phase 4/4 compile-resilient ===");
+    compile_resilient(phd_root, max_rounds)?;
+
+    println!(
+        "{}",
+        serde_json::json!({
+            "anchor": TRINITY_ANCHOR,
+            "version": "v6",
+            "phase": "build-book",
+            "status": "ok",
+            "phd_root": phd_root.display().to_string(),
+        })
+    );
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
 // COMPILE-CHAPTERS (PhD v5 — Markdown → TeX → PDF, per chapter)
 // -------------------------------------------------------------------------
 
