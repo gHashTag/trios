@@ -86,6 +86,18 @@ enum Cmd {
         #[arg(long, default_value_t = 80)]
         max_rounds: usize,
     },
+    /// Materialise R5-honest deferred stubs for every section that
+    /// `main.tex` `\include{}`s but for which no `.tex` file exists yet.
+    /// Each generated stub explicitly states the canonical body lives in
+    /// Neon `ssot.chapters` (per migration manifest gHashTag/trios#380),
+    /// re-derives the Trinity anchor `\varphi^2 + \varphi^{-2} = 3`, and
+    /// will be auto-replaced by `trios-phd export-neon` once the SSOT
+    /// migration completes.
+    ///
+    /// R1 (CROWN): pure Rust.  R5 (HONEST): never fabricates prose.
+    /// R6 (SSOT contract): writing a stub here is the only legal way to
+    /// satisfy `\include{}` against a missing section.
+    MaterializeStubs,
     /// PhD v5 — compile every Markdown chapter in `docs/golden-sunflowers/`
     /// to a per-chapter PDF using `pandoc` + the v5 hero-fullwidth template
     /// and Lua filter.
@@ -410,12 +422,14 @@ fn compile_resilient(phd_root: &Path, max_rounds: usize) -> Result<()> {
 /// so the monograph remains a coherent document while the SSOT migration completes.
 fn build_deferred_stub(stem: &str) -> String {
     // Humanize the stem: strip leading numeric/letter prefix, replace `-` with spaces, title-case.
-    let after_prefix: &str = if let Some(idx) = stem.find('-') {
+    // Strip leading numeric/letter prefix and replace dashes/underscores with spaces.
+    // Pattern handles: "02-golden-cut" -> "golden cut", "ch_05" -> "05", "L-pollen-channel" -> "pollen channel"
+    let after_prefix: &str = if let Some(idx) = stem.find(['-', '_']) {
         &stem[idx+1..]
     } else {
         stem
     };
-    let human_lower = after_prefix.replace('-', " ");
+    let human_lower = after_prefix.replace(['-', '_'], " ");
     let mut human = String::with_capacity(human_lower.len());
     let mut cap_next = true;
     for c in human_lower.chars() {
@@ -428,6 +442,8 @@ fn build_deferred_stub(stem: &str) -> String {
         }
     }
     let title = if human.is_empty() { stem.to_string() } else { human };
+    // Escape underscores for LaTeX (e.g. `ch_01` -> `ch\_01`).
+    let stem_tex = stem.replace('_', "\\_");
 
     format!(
         "% ============================================================\n\
@@ -538,33 +554,9 @@ fn build_deferred_stub(stem: &str) -> String {
          the page-count gate (R8) accordingly. Until then, this stub is the\n\
          audit-of-record for the chapter \\textsc{{{title}}}.\n\
          \n\
-         \\subsection*{{Methodological lineage}}\n\
-         \n\
-         The proof discipline applied throughout the monograph follows the\n\
-         Lee/GVSU formal-monograph style (R12): every theorem is stated with\n\
-         an explicit honesty marker (\\texttt{{Proven}} or \\texttt{{Admitted}}),\n\
-         every empirical claim ships with a falsification witness (R7), and\n\
-         every numerical constant traces back to either the Trinity anchor or\n\
-         to a named external dataset whose DOI is recorded in Appendix~G.\n\
-         The chapter \\textsc{{{title}}}, when restored, will conform to this\n\
-         lineage; the deferred stub explicitly does not attempt to anticipate\n\
-         the chapter's specific theorems lest fabricated content sneak past\n\
-         the auditor.\n\
-         \n\
-         \\subsection*{{Bibliographic placeholder note}}\n\
-         \n\
-         The bibliographic record for this chapter (citations, related work,\n\
-         primary sources) is held in Neon \\texttt{{ssot.bibliography}} and is\n\
-         joined into the main \\texttt{{bibliography.bib}} only at export time.\n\
-         The current \\texttt{{.bib}} therefore omits any entry that is\n\
-         exclusively cited from this chapter, in keeping with R5 (do not\n\
-         pre-publish citations whose target prose is not yet rendered). The\n\
-         R11 floor of $\\geq 150$ entries continues to be enforced against\n\
-         the union of all rendered chapters.\n\
-         \n\
          \\par\\medskip\\noindent\\hrulefill\\par\\medskip\n\
          \n",
-        stem = stem,
+        stem = stem_tex,
         title = title,
     )
 }
@@ -632,6 +624,54 @@ fn locate_offender(output: &str, phd_root: &Path) -> Option<PathBuf> {
         }
     }
     None
+}
+
+// -------------------------------------------------------------------------
+// MATERIALIZE-STUBS — R5-honest deferred stubs for missing \include{} targets.
+// -------------------------------------------------------------------------
+
+fn materialize_stubs(phd_root: &Path) -> Result<()> {
+    let main_tex = phd_root.join("main.tex");
+    let src = std::fs::read_to_string(&main_tex)
+        .map_err(|e| anyhow!("cannot read main.tex: {}", e))?;
+    // Capture every \include{<dir>/<stem>}
+    let re = regex_lite_global(&src, "\\include{");
+    let mut created = 0usize;
+    for start in re {
+        let after = &src[start..];
+        // find closing brace
+        let close = match after.find('}') { Some(i) => i, None => continue };
+        let body = &after["\\include{".len()..close];
+        // body is like "chapters/ch_05" or "appendix/L-pollen-channel"
+        let parts: Vec<&str> = body.splitn(2, '/').collect();
+        if parts.len() != 2 { continue; }
+        let dir = parts[0];
+        let stem = parts[1];
+        let target = phd_root.join(dir).join(format!("{stem}.tex"));
+        if target.is_file() { continue; }
+        // Make sure parent exists
+        if let Some(p) = target.parent() {
+            std::fs::create_dir_all(p).ok();
+        }
+        let stub = build_deferred_stub(stem);
+        std::fs::write(&target, stub)
+            .map_err(|e| anyhow!("cannot write {}: {}", target.display(), e))?;
+        eprintln!("materialize-stubs: wrote {}", target.display());
+        created += 1;
+    }
+    eprintln!("materialize-stubs: created {} stub(s)", created);
+    Ok(())
+}
+
+/// Find every byte-offset in `s` where `needle` begins.
+fn regex_lite_global(s: &str, needle: &str) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while let Some(p) = s[i..].find(needle) {
+        out.push(i + p);
+        i = i + p + needle.len();
+    }
+    out
 }
 
 // -------------------------------------------------------------------------
@@ -961,6 +1001,7 @@ fn main() -> ExitCode {
         Cmd::Compile => compile(&cli.phd_root),
         Cmd::CompileResilient { max_rounds } => compile_resilient(&cli.phd_root, *max_rounds),
         Cmd::FixCommonLatex => fix_common_latex(&cli.phd_root),
+        Cmd::MaterializeStubs => materialize_stubs(&cli.phd_root),
         Cmd::CompileChapters {
             chapters_dir,
             template,
