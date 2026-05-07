@@ -251,9 +251,38 @@ async fn main() -> Result<()> {
     let phi: f64 = (1.0 + 5.0_f64.sqrt()) / 2.0;
     assert!((phi * phi + 1.0 / (phi * phi) - 3.0).abs() < 1e-12, "Trinity anchor");
 
+    // Accept DATABASE_URL or RAILWAY_SSOT_URL; fail loudly with a clear message.
     let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
-    let (client, conn) = tokio_postgres::connect(&database_url, NoTls).await?;
+        .or_else(|_| std::env::var("RAILWAY_SSOT_URL"))
+        .map_err(|_| anyhow::anyhow!(
+            "DATABASE_URL (or RAILWAY_SSOT_URL) must be set. \
+             Expected: postgresql://USER:PASS@HOST:PORT/DBNAME (e.g. \
+             postgresql://postgres:****@phd-postgres-ssot.railway.internal:5432/railway). \
+             Set it in Railway → Variables for service phd-dashboard."
+        ))?;
+    let trimmed = database_url.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "DATABASE_URL is set but empty. \
+             Expected a postgres URL like \
+             postgresql://postgres:****@phd-postgres-ssot.railway.internal:5432/railway"
+        );
+    }
+    if !(trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://")) {
+        anyhow::bail!(
+            "DATABASE_URL must start with postgres:// or postgresql:// (got {} chars, first 8: {:?})",
+            trimmed.len(),
+            trimmed.chars().take(8).collect::<String>()
+        );
+    }
+    tracing::info!(
+        "connecting to postgres: scheme={}, host_present={}, len={} chars",
+        trimmed.split(':').next().unwrap_or("?"),
+        trimmed.contains('@'),
+        trimmed.len()
+    );
+    let (client, conn) = tokio_postgres::connect(trimmed, NoTls).await
+        .map_err(|e| anyhow::anyhow!("tokio_postgres::connect failed: {e}"))?;
     tokio::spawn(async move {
         if let Err(e) = conn.await { eprintln!("db conn error: {e}"); }
     });
