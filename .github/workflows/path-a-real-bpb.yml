@@ -1,0 +1,132 @@
+# L-FH4 / Phase B · Run the real-forward falsifier with TRIOS_USE_REAL_BPB=1
+#
+# Pre-registration: docs/preregistration/forward_hook_bridge_v1.md
+# One-shot:        OS-001-forward-hook-bridge-v1
+# Refs:            #446, #509, #521
+#
+# Acceptance band: |Δbpb(f32, gf16)| ≥ 1e-6 in at least one of seeds {42,43,44}.
+# Reject band:     |Δbpb| == 0 across all three seeds.
+#
+# Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877
+
+name: Path A · L-FH4 real-forward falsifier
+
+on:
+  pull_request:
+    paths:
+      - 'crates/trios-igla-race/**'
+      - 'docs/preregistration/forward_hook_bridge_v1.md'
+      - '.github/workflows/path-a-real-bpb.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/trios-igla-race/**'
+
+# Pin trainer-igla SHA for reproducibility (BL-5 mitigation).
+env:
+  TRAINER_IGLA_REPO: gHashTag/trios-trainer-igla
+  TRAINER_IGLA_SHA: 73aae9ea8d74a100c1d8204ea26fbe7b82795629
+  CARGO_TERM_COLOR: always
+
+jobs:
+  l_fh4_real_forward:
+    name: L-FH4 · |Δbpb(f32,gf16)| ≥ 1e-6 falsifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout trios
+        uses: actions/checkout@v4
+        with:
+          path: trios
+
+      - name: Checkout trios-trainer-igla @ pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TRAINER_IGLA_REPO }}
+          ref: ${{ env.TRAINER_IGLA_SHA }}
+          path: trios-trainer-igla
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+
+      - name: Cache cargo (trainer-igla)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            trios-trainer-igla/target/
+          key: ${{ runner.os }}-trainer-igla-${{ env.TRAINER_IGLA_SHA }}
+          restore-keys: |
+            ${{ runner.os }}-trainer-igla-
+
+      - name: Cache cargo (trios)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            trios/target/
+          key: ${{ runner.os }}-trios-l-fh4-${{ hashFiles('trios/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-trios-l-fh4-
+
+      - name: Provide tinyshakespeare corpus (synthetic deterministic)
+        run: |
+          # cpu_train reads data/tinyshakespeare.txt from cwd. We synthesise a
+          # deterministic ~32 KB corpus instead of pulling from network so the
+          # test is hermetic. Must be ≥ 1024 bytes for non-trivial training.
+          mkdir -p trios-trainer-igla/data
+          if [ ! -f trios-trainer-igla/data/tinyshakespeare.txt ]; then
+            python3 -c "
+import hashlib, sys
+out = bytearray()
+seed = b'L-FH4 hermetic corpus · phi^2+phi^-2=3 · IGLA'
+i = 0
+while len(out) < 32768:
+    h = hashlib.sha256(seed + i.to_bytes(8, 'big')).digest()
+    # Map to printable ASCII so cpu_train treats bytes as token ids 0-255
+    # but the FakeQuant path differentiates regardless.
+    out.extend(h)
+    i += 1
+sys.stdout.buffer.write(bytes(out[:32768]))
+" > trios-trainer-igla/data/tinyshakespeare.txt
+          fi
+          ls -la trios-trainer-igla/data/
+
+      - name: Build cpu_train (release)
+        working-directory: trios-trainer-igla
+        run: cargo build --release --bin cpu_train
+
+      - name: Confirm cpu_train help / format env wiring
+        working-directory: trios-trainer-igla
+        run: |
+          ls -la target/release/cpu_train
+          # Smoke: 50 steps each format, ensure non-empty stdout.
+          TRIOS_FORMAT_TYPE=f32  ./target/release/cpu_train --seed=42 --steps=50 | tail -5
+          TRIOS_FORMAT_TYPE=gf16 ./target/release/cpu_train --seed=42 --steps=50 | tail -5
+
+      - name: Run L-FH4 real-forward falsifier
+        working-directory: trios
+        env:
+          TRIOS_USE_REAL_BPB: "1"
+          TRIOS_TRAINER_BIN: ${{ github.workspace }}/trios-trainer-igla/target/release/cpu_train
+          TRIOS_TRAINER_CWD: ${{ github.workspace }}/trios-trainer-igla
+        run: |
+          cargo test -p trios-igla-race \
+            --test real_forward_distinguishes_formats \
+            -- --ignored --nocapture --test-threads=1
+
+      - name: Confirm legacy bit-exact preservation still holds
+        working-directory: trios
+        run: |
+          # Without TRIOS_USE_REAL_BPB, simulate_bpb_v2 must remain byte-identical
+          # to legacy simulate_bpb. This is the gate that protects all other CI.
+          unset TRIOS_USE_REAL_BPB
+          cargo test -p trios-igla-race --lib test_v2_default_matches_legacy

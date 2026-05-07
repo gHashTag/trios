@@ -104,14 +104,35 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
         )
     })?;
 
-    let output = Command::new(&bin)
+    // Phase B fix: cpu_train uses CLI args `--seed=N --steps=N`, not env vars
+    // (see trios-trainer-igla/src/bin/cpu_train.rs `arg_or` parser).
+    // Format selection is the only env-controlled axis; FakeQuant kicks in
+    // when TRIOS_FORMAT_TYPE != "f32".
+    let mut cmd = Command::new(&bin);
+    cmd.arg(format!("--seed={}", seed))
+        .arg(format!("--steps={}", steps))
         .env("TRIOS_FORMAT_TYPE", fmt_str)
-        .env("TRIOS_SEED", seed.to_string())
-        .env("TRIOS_STEPS", steps.to_string())
         .env("TRIOS_FQ_HOOK", format!("{:08x}", hook_marker.to_bits()))
         .stderr(Stdio::inherit())
-        .stdout(Stdio::piped())
-        .output()?;
+        .stdout(Stdio::piped());
+
+    // Phase B fix: cpu_train hard-codes `data/tinyshakespeare.txt` relative to
+    // the current working directory. CI / dev callers may have the trainer
+    // checkout in an arbitrary location, so honour `TRIOS_TRAINER_CWD` and
+    // fall back to `<bin>/../../..` (release-build layout) so `data/` resolves.
+    let cwd = std::env::var("TRIOS_TRAINER_CWD").ok().map(PathBuf::from)
+        .or_else(|| {
+            // bin path: <repo>/target/release/cpu_train -> repo = bin..3
+            bin.parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf())
+        });
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+
+    let output = cmd.output()?;
 
     if !output.status.success() {
         return Err(std::io::Error::new(
