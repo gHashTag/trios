@@ -2,8 +2,11 @@
 //! R1: pure Rust, no .py/.sh, no JS frameworks
 //! φ² + φ⁻² = 3 · TRINITY
 //!
-//! ENV: DATABASE_URL="$RAILWAY_SSOT_URL"   (set via Railway service variables)
+//! ENV: RAILWAY_SSOT_URL=postgresql://postgres:...@interchange.proxy.rlwy.net:30942/railway
 //!      PORT=3030 (default)
+//!
+//! NOTE: do NOT use DATABASE_URL — Railway auto-injects it from linked Postgres
+//!       as an unresolved ${{Postgres.DATABASE_URL}} template reference.
 
 use anyhow::Result;
 use askama::Template;
@@ -18,11 +21,7 @@ use std::sync::Arc;
 use tokio_postgres::NoTls;
 use tracing_subscriber::EnvFilter;
 
-// ─── DB pool (simple Arc<tokio_postgres::Client>) ────────────────────────────
-
 type Db = Arc<tokio_postgres::Client>;
-
-// ─── Data structs ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Clone)]
 struct ChapterRow {
@@ -66,8 +65,6 @@ struct Stats {
     duplicate_slugs: i64,
 }
 
-// ─── Askama templates ─────────────────────────────────────────────────────────
-
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
@@ -76,8 +73,6 @@ struct IndexTemplate {
     duplicates: Vec<DuplicateRow>,
     rag: Vec<RagRow>,
 }
-
-// ─── DB queries ───────────────────────────────────────────────────────────────
 
 async fn fetch_chapters(db: &tokio_postgres::Client) -> Result<Vec<ChapterRow>> {
     let rows = db
@@ -93,102 +88,74 @@ async fn fetch_chapters(db: &tokio_postgres::Client) -> Result<Vec<ChapterRow>> 
             &[],
         )
         .await?;
-    Ok(rows
-        .iter()
-        .map(|r| ChapterRow {
-            chapter_slug: r.get(0),
-            chapter_no: r.get(1),
-            kind: r.get(2),
-            title: r.get(3),
-            line_count: r.get::<_, i32>(4),
-            r3_full: r.get(5),
-            has_figure: r.get(6),
-            theorem_count: r.get(7),
-            updated_at: {
-                let s: String = r.get(8);
-                s.chars().take(10).collect() // YYYY-MM-DD
-            },
-        })
-        .collect())
+    Ok(rows.iter().map(|r| ChapterRow {
+        chapter_slug: r.get(0),
+        chapter_no: r.get(1),
+        kind: r.get(2),
+        title: r.get(3),
+        line_count: r.get::<_, i32>(4),
+        r3_full: r.get(5),
+        has_figure: r.get(6),
+        theorem_count: r.get(7),
+        updated_at: { let s: String = r.get(8); s.chars().take(10).collect() },
+    }).collect())
 }
 
 async fn fetch_duplicates(db: &tokio_postgres::Client) -> Result<Vec<DuplicateRow>> {
-    // Дубликаты по title (нормализованному)
-    let rows = db
-        .query(
-            "SELECT chapter_slug, title, cnt FROM (\
-               SELECT chapter_slug, title, \
-                      COUNT(*) OVER (PARTITION BY lower(trim(title))) AS cnt \
-               FROM ssot.chapters\
-             ) sub WHERE cnt > 1 ORDER BY cnt DESC, title",
-            &[],
-        )
-        .await?;
-    Ok(rows
-        .iter()
-        .map(|r| DuplicateRow {
-            chapter_slug: r.get(0),
-            title: r.get(1),
-            dup_count: r.get(2),
-        })
-        .collect())
+    let rows = db.query(
+        "SELECT chapter_slug, title, cnt FROM (\
+           SELECT chapter_slug, title, \
+                  COUNT(*) OVER (PARTITION BY lower(trim(title))) AS cnt \
+           FROM ssot.chapters\
+         ) sub WHERE cnt > 1 ORDER BY cnt DESC, title",
+        &[],
+    ).await?;
+    Ok(rows.iter().map(|r| DuplicateRow {
+        chapter_slug: r.get(0),
+        title: r.get(1),
+        dup_count: r.get(2),
+    }).collect())
 }
 
 async fn fetch_rag(db: &tokio_postgres::Client) -> Result<Vec<RagRow>> {
-    let rows = db
-        .query(
-            "SELECT \
-                e.chapter_slug, \
-                COUNT(e.id)                                        AS total_chunks, \
+    let rows = db.query(
+        "SELECT e.chapter_slug, \
+                COUNT(e.id) AS total_chunks, \
                 COUNT(e.id) FILTER (WHERE e.embedding IS NOT NULL) AS embedded_chunks, \
                 (ROUND(100.0 * COUNT(e.id) FILTER (WHERE e.embedding IS NOT NULL) \
-                      / NULLIF(COUNT(e.id),0), 1))::float8           AS pct, \
-                COALESCE(MAX(e.embedded_at)::text, 'pending')      AS last_embedded \
-             FROM ssot.embeddings e \
-             GROUP BY e.chapter_slug \
-             ORDER BY e.chapter_slug",
-            &[],
-        )
-        .await?;
-    Ok(rows
-        .iter()
-        .map(|r| RagRow {
-            chapter_slug: r.get(0),
-            total_chunks: r.get(1),
-            embedded_chunks: r.get(2),
-            pct: r.get::<_, f64>(3),
-            last_embedded: {
-                let s: String = r.get(4);
-                s.chars().take(19).collect() // YYYY-MM-DD HH:MM:SS
-            },
-        })
-        .collect())
+                      / NULLIF(COUNT(e.id),0), 1))::float8 AS pct, \
+                COALESCE(MAX(e.embedded_at)::text, 'pending') AS last_embedded \
+         FROM ssot.embeddings e \
+         GROUP BY e.chapter_slug ORDER BY e.chapter_slug",
+        &[],
+    ).await?;
+    Ok(rows.iter().map(|r| RagRow {
+        chapter_slug: r.get(0),
+        total_chunks: r.get(1),
+        embedded_chunks: r.get(2),
+        pct: r.get::<_, f64>(3),
+        last_embedded: { let s: String = r.get(4); s.chars().take(19).collect() },
+    }).collect())
 }
 
 async fn fetch_stats(db: &tokio_postgres::Client) -> Result<Stats> {
-    let row = db
-        .query_one(
-            "SELECT \
-                (SELECT COUNT(*) FROM ssot.chapters) AS total_chapters, \
-                (SELECT COUNT(*) FROM ssot.chapters WHERE COALESCE(line_count,0) >= 1500) AS r3_ok, \
-                (SELECT COUNT(*) FROM ssot.chapter_figures) AS with_figure, \
-                (SELECT COUNT(*) FROM ssot.theorems) AS total_theorems, \
-                (SELECT COUNT(*) FROM ssot.embeddings) AS rag_total, \
-                (SELECT COUNT(*) FROM ssot.embeddings WHERE embedding IS NOT NULL) AS rag_embedded, \
-                (SELECT COUNT(*) FROM ( \
-                   SELECT chapter_slug FROM ssot.chapters \
-                   GROUP BY lower(trim(title)) HAVING COUNT(*) > 1 \
-                ) d) AS duplicate_slugs",
-            &[],
-        )
-        .await?;
+    let row = db.query_one(
+        "SELECT \
+            (SELECT COUNT(*) FROM ssot.chapters) AS total_chapters, \
+            (SELECT COUNT(*) FROM ssot.chapters WHERE COALESCE(line_count,0) >= 1500) AS r3_ok, \
+            (SELECT COUNT(*) FROM ssot.chapter_figures) AS with_figure, \
+            (SELECT COUNT(*) FROM ssot.theorems) AS total_theorems, \
+            (SELECT COUNT(*) FROM ssot.embeddings) AS rag_total, \
+            (SELECT COUNT(*) FROM ssot.embeddings WHERE embedding IS NOT NULL) AS rag_embedded, \
+            (SELECT COUNT(*) FROM ( \
+               SELECT chapter_slug FROM ssot.chapters \
+               GROUP BY lower(trim(title)) HAVING COUNT(*) > 1 \
+            ) d) AS duplicate_slugs",
+        &[],
+    ).await?;
     let rag_total: i64 = row.get(4);
     let rag_embedded: i64 = row.get(5);
-    let rag_pct = if rag_total > 0 {
-        (rag_embedded as f64 / rag_total as f64) * 100.0
-    } else {
-        0.0
-    };
+    let rag_pct = if rag_total > 0 { (rag_embedded as f64 / rag_total as f64) * 100.0 } else { 0.0 };
     Ok(Stats {
         total_chapters: row.get(0),
         r3_ok: row.get(1),
@@ -202,14 +169,9 @@ async fn fetch_stats(db: &tokio_postgres::Client) -> Result<Stats> {
     })
 }
 
-// ─── Handlers ─────────────────────────────────────────────────────────────────
-
 async fn index(State(db): State<Db>) -> impl IntoResponse {
     let (stats, chapters, duplicates, rag) = tokio::join!(
-        fetch_stats(&db),
-        fetch_chapters(&db),
-        fetch_duplicates(&db),
-        fetch_rag(&db),
+        fetch_stats(&db), fetch_chapters(&db), fetch_duplicates(&db), fetch_rag(&db),
     );
     IndexTemplate {
         stats: stats.unwrap_or(Stats {
@@ -223,7 +185,6 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
     }
 }
 
-// HTMX partial — refresh only chapters table
 async fn htmx_chapters(State(db): State<Db>) -> impl IntoResponse {
     #[derive(Template)]
     #[template(path = "partials/chapters_table.html")]
@@ -231,7 +192,6 @@ async fn htmx_chapters(State(db): State<Db>) -> impl IntoResponse {
     T { chapters: fetch_chapters(&db).await.unwrap_or_default() }
 }
 
-// HTMX partial — refresh only RAG table
 async fn htmx_rag(State(db): State<Db>) -> impl IntoResponse {
     #[derive(Template)]
     #[template(path = "partials/rag_table.html")]
@@ -239,59 +199,33 @@ async fn htmx_rag(State(db): State<Db>) -> impl IntoResponse {
     T { rag: fetch_rag(&db).await.unwrap_or_default() }
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    // φ² + φ⁻² = 3  anchor
     let phi: f64 = (1.0 + 5.0_f64.sqrt()) / 2.0;
     assert!((phi * phi + 1.0 / (phi * phi) - 3.0).abs() < 1e-12, "Trinity anchor");
 
-    // Accept DATABASE_URL or RAILWAY_SSOT_URL; fail loudly with a clear message.
-    let database_url = std::env::var("DATABASE_URL")
-        .or_else(|_| std::env::var("RAILWAY_SSOT_URL"))
+    // Use RAILWAY_SSOT_URL — NOT DATABASE_URL (Railway auto-fills that with
+    // an unresolved ${{Postgres.*}} template from any linked Postgres service).
+    let database_url = std::env::var("RAILWAY_SSOT_URL")
         .map_err(|_| anyhow::anyhow!(
-            "DATABASE_URL (or RAILWAY_SSOT_URL) must be set. \
-             Expected: postgresql://USER:PASS@HOST:PORT/DBNAME (e.g. \
-             postgresql://postgres:****@phd-postgres-ssot.railway.internal:5432/railway). \
-             Set it in Railway → Variables for service phd-dashboard."
+            "RAILWAY_SSOT_URL must be set in Railway → Variables. \
+             Value: postgresql://postgres:PASS@interchange.proxy.rlwy.net:30942/railway"
         ))?;
     let trimmed = database_url.trim();
-    if trimmed.is_empty() {
-        anyhow::bail!(
-            "DATABASE_URL is set but empty. \
-             Expected a postgres URL like \
-             postgresql://postgres:****@phd-postgres-ssot.railway.internal:5432/railway"
-        );
-    }
     if !(trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://")) {
-        anyhow::bail!(
-            "DATABASE_URL must start with postgres:// or postgresql:// (got {} chars, first 8: {:?})",
-            trimmed.len(),
-            trimmed.chars().take(8).collect::<String>()
-        );
+        anyhow::bail!("RAILWAY_SSOT_URL must start with postgres:// or postgresql://");
     }
-    tracing::info!(
-        "connecting to postgres: scheme={}, host_present={}, len={} chars",
-        trimmed.split(':').next().unwrap_or("?"),
-        trimmed.contains('@'),
-        trimmed.len()
-    );
+
     let (client, conn) = tokio_postgres::connect(trimmed, NoTls).await
-        .map_err(|e| anyhow::anyhow!("tokio_postgres::connect failed: {e}"))?;
-    tokio::spawn(async move {
-        if let Err(e) = conn.await { eprintln!("db conn error: {e}"); }
-    });
+        .map_err(|e| anyhow::anyhow!("connect failed: {e}"))?;
+    tokio::spawn(async move { if let Err(e) = conn.await { eprintln!("db err: {e}"); } });
 
     let db: Db = Arc::new(client);
-    let port: u16 = std::env::var("PORT")
-        .unwrap_or_else(|_| "3030".into())
-        .parse()
-        .unwrap_or(3030);
+    let port: u16 = std::env::var("PORT").unwrap_or_else(|_| "3030".into()).parse().unwrap_or(3030);
 
     let app = Router::new()
         .route("/", get(index))
@@ -300,8 +234,7 @@ async fn main() -> Result<()> {
         .with_state(db);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!("PhD SSOT Dashboard listening on http://{addr}");
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    tracing::info!("PhD SSOT Dashboard on http://{addr}");
+    axum::serve(tokio::net::TcpListener::bind(addr).await?, app).await?;
     Ok(())
 }
