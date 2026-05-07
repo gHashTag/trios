@@ -1,0 +1,29 @@
+<table id="rag-table">
+  <thead>
+    <tr>
+      <th>Chapter</th>
+      <th>Total chunks</th>
+      <th>Embedded</th>
+      <th>Coverage</th>
+      <th>Last embedded</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rag %}
+    <tr>
+      <td><span class="slug">{{ r.chapter_slug }}</span></td>
+      <td style="text-align:right">{{ r.total_chunks }}</td>
+      <td style="text-align:right">{{ r.embedded_chunks }}</td>
+      <td>
+        <span {% if r.pct >= 100.0 %}class="badge badge-ok"{% else %}class="badge badge-warn"{% endif %}>
+          {{ r.pct }}%
+        </span>
+        <span class="progress-bar">
+          <span class="progress-fill" style="width:{{ r.pct }}%"></span>
+        </span>
+      </td>
+      <td style="color:var(--muted);font-size:11px">{{ r.last_embedded | truncate(19) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

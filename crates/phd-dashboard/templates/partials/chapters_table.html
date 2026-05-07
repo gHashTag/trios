@@ -1,0 +1,50 @@
+<table id="chapters-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Slug</th>
+      <th>Kind</th>
+      <th>Title</th>
+      <th>Lines</th>
+      <th>R3</th>
+      <th>Figure</th>
+      <th>Theorems</th>
+      <th>Updated</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for ch in chapters %}
+    <tr>
+      <td style="color:var(--muted)">{{ ch.chapter_no }}</td>
+      <td><span class="slug">{{ ch.chapter_slug }}</span></td>
+      <td>
+        {% if ch.kind == "fa" %}
+          <span class="badge badge-gold">FA</span>
+        {% else if ch.kind == "trinity" %}
+          <span class="badge badge-blue">Trinity</span>
+        {% else %}
+          <span class="badge" style="background:var(--surface2);color:var(--muted)">App</span>
+        {% endif %}
+      </td>
+      <td>{{ ch.title }}</td>
+      <td style="text-align:right">{{ ch.line_count }}</td>
+      <td>
+        {% if ch.r3_full %}
+          <span class="badge badge-ok">✓</span>
+        {% else %}
+          <span class="badge badge-warn">✗</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if ch.has_figure %}
+          <span class="badge badge-ok">✓</span>
+        {% else %}
+          <span class="badge badge-warn">✗</span>
+        {% endif %}
+      </td>
+      <td style="text-align:center">{{ ch.theorem_count }}</td>
+      <td style="color:var(--muted);font-size:11px">{{ ch.updated_at | truncate(10) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
