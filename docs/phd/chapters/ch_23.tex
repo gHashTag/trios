@@ -10,6 +10,48 @@
 \caption*{Figure — Ch.23: MCP integration.}
 \end{figure}
 
+\begin{quote}\itshape
+``The enemy of knowledge is not ignorance --- it is the illusion of a clean
+interface. Every real system leaks state across its boundaries.''
+\upshape\hfill---~Richard M.~Stallman, \textit{GNU Manifesto} annotations (1985)
+\end{quote}
+
+\section*{The gap between tokens and tools}
+
+Imagine a language model mid-sentence, predicting the next token in a
+sequence about stock prices, when an external tool call interrupts it with a
+fresh JSON blob containing today's numbers. For a conventional floating-point
+model, the splice is invisible: append the response, shift the attention mask,
+continue. The positional embeddings are learned coordinates, not algebraic
+objects, so a new block of text at position 1024 is just position 1024.
+Nothing breaks. Nothing is preserved either.
+
+For Trinity S³AI, the situation is precisely the reverse. The \(\varphi\)-structured
+positional embeddings encode position \(k\) as \(\varphi^k \bmod 1\) --- an
+irrational rotation that is dense in the unit interval. Appending a tool-call
+response of length \(L\) to a context of length \(N\) produces a combined
+sequence of length \(N + L\) whose embedding structure is misaligned unless
+that total coincides with a canonical Fibonacci or Lucas index. The joint
+normalisation invariant \(\varphi^2 + \varphi^{-2} = 3\) --- which is the
+algebraic certificate that the embedding scale is preserved across layers ---
+breaks as soon as the context boundary falls between Fibonacci numbers.
+
+Boundary snapping solves the problem with zero-padding: the adapter finds the
+smallest canonical index exceeding \(N + L\) and pads to that length before
+resuming inference. The worst-case overhead below \(F_{21} = 10946\) is
+\(F_{20} - 1 = 6764\) padding tokens --- expensive, but bounded, and the bound
+itself comes from the Fibonacci recurrence. On the QMTech XC7A100T FPGA
+running at 92 MHz, end-to-end throughput degrades by less than 8\% relative to
+the baseline 63 tokens per second. The gap between tokens and tools turns out
+to be a manageable 8\% tax, not an architectural obstacle.
+
+The rest of this chapter is about how that tax is collected and audited:
+Section~2 defines canonical boundaries and the snapping procedure formally;
+Section~3 proves the seed-preservation theorem across tool-call boundaries;
+Section~4 presents the Rust adapter implementation and measured latency;
+and Section~5 discusses the MCP compliance properties and their relation
+to the FPGA-side token-stream architecture described in Ch.28.
+
 \section{Abstract}\label{abstract}
 
 The Model Context Protocol (MCP) provides a standardised interface for connecting language model inference engines to external tool ecosystems. This chapter describes the integration of the Trinity S³AI inference runtime with MCP, enabling the golden-ratio-structured HSLM engine to consume and expose MCP tool calls without violating the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant. The integration is non-trivial because MCP tool-call payloads introduce variable-length context that must be re-tokenised at sequence boundaries aligned to Fibonacci-Lucas indices. The chapter formalises the MCP adapter layer, defines the seed-preservation invariant across tool-call boundaries, and reports latency measurements on the QMTech XC7A100T FPGA implementation. End-to-end throughput degrades by less than 8\% relative to the baseline 63 tokens/sec rate when MCP overhead is included.

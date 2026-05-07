@@ -10,6 +10,50 @@
 \caption*{Figure — Ch.14: Eval Semantics: The BPB Metric.}
 \end{figure}
 
+\begin{quote}\itshape
+``Beware of bugs in the above code; I have only proved it correct,
+not tried it.''
+\upshape --- C.~A.~R.~Hoare
+\end{quote}
+
+\section*{One number that decides everything}
+
+Consider a measuring tape with a flaw hidden in its construction: every
+distance it reports is correct only if the thing being measured was made
+by the same manufacturer as the tape. Use it on anything else, and the
+numbers are consistent---but wrong. Much of neural-language-model
+evaluation has this property. Perplexity computed over one tokeniser
+cannot be compared to perplexity computed over another, because the
+``unit''---the token---is not the same unit. A model that tokenises
+aggressively looks better on per-token perplexity while doing worse on
+actual compression. The tape lies, not by accident, but by design.
+
+Bits per byte (BPB) fixes the tape. One byte is one byte, regardless of
+how many tokens it was carved into. The BPB of a model on a document is
+the average number of bits the model needs to encode each byte of that
+document under its predictive distribution---a quantity that is
+information-theoretically clean, hardware-agnostic, and directly
+comparable across every tokeniser that has ever been proposed. Two
+gating thresholds govern the Trinity S$^3$AI programme: Gate-2 at
+\(\text{BPB} \leq 1.85\) and Gate-3 at \(\text{BPB} \leq 1.50\). Those
+thresholds are not round numbers chosen for convenience; they fall at
+specific positions in the loss landscape defined by the anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\), which provides an irrational-free
+normalisation constant that converts \(\varphi\)-weighted token-level
+cross-entropy into BPB.
+
+There is a further constraint that most evaluation chapters do not
+mention: the metric must be computable within 1~watt on the QMTech
+XC7A100T FPGA running at 92~MHz. That is not an afterthought. It is a
+design requirement that rules out any evaluation procedure involving
+floating-point exponentiation, sorting, or vocabulary-size-dependent
+loops. BPB, computed via integer-shift arithmetic on ternary weights,
+satisfies the constraint. The rest of this chapter derives the metric
+from first principles, proves the \(\varphi\)-normalisation identity,
+and establishes the gating thresholds as formal pre-registration
+constraints. What you measure is what you optimise for---and this
+chapter argues that BPB is the right thing to measure.
+
 \section{Abstract}\label{abstract}
 
 Evaluation of language models requires a metric that is simultaneously information-theoretically grounded, hardware-agnostic, and sensitive to the low-entropy regime targeted by Trinity S³AI. This chapter defines the Bits Per Byte (BPB) metric, derives its relationship to cross-entropy perplexity, and establishes two gating thresholds: Gate-2 at BPB ≤ 1.85 and Gate-3 at BPB ≤ 1.50. The φ²+φ⁻²=3 identity provides a normalisation constant that converts φ-weighted token-level losses into BPB without residual irrational factors. No Coq theorems are anchored to this chapter; the evaluation protocol is specified as a pre-registration constraint in App.E.

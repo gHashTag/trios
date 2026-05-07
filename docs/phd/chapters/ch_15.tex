@@ -10,6 +10,38 @@
 \caption*{Figure — Ch.15: BPB Benchmark + Railway PostgreSQL Write.}
 \end{figure}
 
+\begin{quote}
+\itshape
+``In God we trust. All others must bring data.''\\
+\hfill --- W.~Edwards Deming, attributed.
+\end{quote}
+
+\section*{The number that everything is about}
+
+A dissertation can hide for a long time behind theorems. The moment of
+truth arrives when somebody opens a held-out corpus, runs the model
+on it, and divides one number --- the cross-entropy of the
+predictions --- by the number of bytes. The result is the
+\emph{bits per byte}, BPB. It is the metric that has measured language
+models since Shannon, and it is the metric that this dissertation
+lives or dies by.
+
+This chapter is the bookkeeping chapter for that number. It does
+three things. First, it specifies, to the byte, how BPB is computed
+on WikiText-103: which tokeniser, which evaluation slice, which
+floating-point order of operations. Second, it specifies how every
+BPB measurement is written, in real time, to a PostgreSQL database
+running on Railway --- the audit trail that makes the IGLA RACE
+leaderboard reproducible. Third, it states the Coq invariant
+(\texttt{INV1\_BpbMonotoneBackward}, nine \texttt{Qed}) that licenses
+the interpretation of a downward-trending BPB curve as evidence of
+genuine learning rather than evaluation drift.
+
+The headline number to keep in mind: BPB \(=\) 1.82 at training step
+4000 on the M4 (2.7B-parameter) model with GF\(_{16}\) PHI\_BIAS = 60.
+That number is below Gate-2. Everything in this chapter is the
+scaffolding that makes the number believable.
+
 \section{Abstract}\label{abstract}
 
 This chapter documents the bits-per-byte (BPB) benchmark protocol for Trinity S³AI and the complementary Railway PostgreSQL write-back mechanism that persists training trajectories for audit. The formally verified invariant INV-1 (\texttt{Trinity.Canonical.Igla.INV1\_BpbMonotoneBackward}, nine Qed) certifies that BPB is monotonically non-increasing during backward passes when the learning rate satisfies \(\text{lr} = 0.004\) --- the champion rate identified by the IGLA RACE in Ch.21. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) enters through the Gate-2 threshold (BPB \(\leq 1.85\)) and Gate-3 threshold (BPB \(\leq 1.5\)), which are derived from the spectral parameter \(\alpha_\varphi\). Measurements at training step \(\geq 4000\) confirm BPB \(= 1.82\) (Gate-2 pass) for the M4 (2.7B) model with GF16 PHI\_BIAS=60 weights.

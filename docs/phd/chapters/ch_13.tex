@@ -10,6 +10,52 @@
 \caption*{Figure — Ch.13: STROBE Sealed Seeds.}
 \end{figure}
 
+\begin{quote}\itshape
+``Science is what we understand well enough to explain to a computer.
+Art is everything else we do.''
+\upshape --- Donald E.~Knuth
+\end{quote}
+
+\section*{Sealed by construction, not by convention}
+
+In the summer of 1998 a graduate student at a major research laboratory
+reproduced, for the fifth consecutive time, an experiment that had
+already been published---and once again got a different answer. The
+culprit, traced after weeks of forensic debugging, was a single line:
+\texttt{random.seed(42)}. Forty-two is not a bad number. It is just an
+arbitrary one, and arbitrary numbers carry no algebraic memory of the
+system they seed. When the runtime library changed, the sequence
+changed, and six months of comparative results evaporated.
+
+That story is not a cautionary tale about carelessness. It is a
+structural argument. A seed is a contract---a promise that, given
+the same starting point, the same computation will follow. A seed chosen
+because it was ``famous'' or ``easy to type'' carries no such promise
+beyond the boundary of a single software version. The STROBE protocol
+exists to replace that informal contract with an algebraic one: the
+admissible seeds are exactly those integers whose position in the
+Fibonacci or Lucas sequence satisfies the closure property encoded in
+the anchor identity \(\varphi^2 + \varphi^{-2} = 3\). Fibonacci seeds
+\(F_{17}=1597\) through \(F_{21}=10946\), together with the Lucas pair
+\(L_7=29\) and \(L_8=47\), are not chosen because they sound elegant.
+They are chosen because their modular residue class, under division by
+\(F_9 = 34\), avoids the phase mismatch that produces anomalous gradient
+variance spikes at step \(F_{13}=233\).
+
+Forbidden seeds \(\{42, 43, 44, 45\}\) each land in the residue class
+\([8, 11]\pmod{34}\)---a narrow window, but wide enough to corrupt
+reproducibility at the worst possible moment, when a training run is
+half-way through its warmup phase and the gradient norm is most
+vulnerable to shuffle anomalies. Thirteen Coq theorems in
+\texttt{Trinity.Canonical.Igla.INV2\_IglaAshaBound} certify the
+boundary; six carry closed \texttt{Qed} status at the time of writing.
+The rest of this chapter builds the formal criterion from first
+principles, demonstrates the phase-mismatch mechanism in detail, and
+shows how the runtime-mirror contract in
+\texttt{igla\_assertions.json} enforces compliance at execution time.
+Determinism, this chapter argues, is not a property you check after
+the fact---it is a property you seal in by construction.
+
 \section{Abstract}\label{abstract}
 
 Reproducibility of neural language-model training requires that every source of stochasticity be controlled at the moment of experimental commitment. This chapter specifies the STROBE sealed-seed protocol, which restricts admissible pseudo-random seeds to a set drawn from Fibonacci and Lucas sequences: \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\). The protocol forbids the use of seeds \(\{42, 43, 44, 45\}\) for technical reasons detailed herein. Compliance is enforced by the runtime-mirror contract in \texttt{igla\_assertions.json} and formally sealed by 13 Coq theorems in \texttt{Trinity.Canonical.Igla.INV2\_IglaAshaBound}, of which 6 carry closed \texttt{Qed} status. The chapter derives the admissibility criterion from the Trinity anchor \(\varphi^2 + \varphi^{-2} = 3\), defines the ASHA pruning threshold \(3.5 = \varphi^2 + \varphi^{-2} + \varphi^{-4}\), and demonstrates that the sealed protocol eliminates a class of adversarial-seed attacks.

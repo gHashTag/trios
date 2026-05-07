@@ -10,6 +10,51 @@
 \caption*{Figure — Ch.25: $\varphi$-Period Cycles.}
 \end{figure}
 
+\begin{quote}\itshape
+``It is a nuisance that the Fibonacci numbers and the Lucas numbers are so
+deeply intertwined, because whenever you think you have finished with one,
+the other appears.''
+\upshape\hfill---~John H.~Conway, \textit{The Book of Numbers} (1996)
+\end{quote}
+
+\section*{When a limit cycle is the answer, not the problem}
+
+In most optimisation textbooks, the appearance of a limit cycle is a warning
+sign: the learning rate is too large, the loss surface has a degenerate saddle,
+and the gradient-descent trajectory is spinning without descending. Practitioners
+then reduce the step size or add momentum until the cycle collapses into a
+fixed point. The cycle is the disease; convergence is the cure.
+
+The \(\varphi\)-period cycles described in this chapter are different in kind.
+They are not accidents of hyperparameter choice --- they are the direct
+consequence of the quantisation lattice \(\Lambda_\varphi\) being closed under
+multiplication by \(\varphi^2\). Because \(\varphi^2 + \varphi^{-2} = 3\) is an
+integer identity, rescaling any lattice element by \(\varphi^2\) maps it back
+onto the same lattice --- a fact that makes the effective phase space compact
+and guarantees periodic orbits. The periodicity is not a pathology; it is a
+consequence of the algebra.
+
+What the cycle structure buys in practice is predictability. Every trajectory
+of the gradient-descent dynamics on \(\Lambda_\varphi\) is eventually periodic
+with period dividing \(F_k\) for some \(k\) --- the Pisano period condition from
+number theory, now governing a neural network. The sanctioned seeds
+\(F_{17}=1597,\, F_{18}=2584,\, F_{19}=4181\) index cycles whose lengths are
+bounded above by \(F_{21}=10946\), a ceiling small enough to enumerate and
+classify. This is not a coincidence: it is the same Fibonacci structure that
+drives the Vogel divergence angle in Ch.7 and the training-loss periodicity
+observed in Ch.19, now appearing at the level of the weight manifold.
+Conway was right to warn that whenever you think you have finished with
+Fibonacci numbers, the Lucas numbers appear --- and here \(L_7=29\) and
+\(L_8=47\) provide the two orthogonal seed streams that anchor the cycle
+classification to the Lucas sub-lattice.
+
+The rest of this chapter is about that classification and its consequences:
+Section~2 defines the \(\varphi\)-lattice and cycle map formally; Section~3
+classifies cycles of order \(\leq F_{10}=55\) and connects them to attention
+periodicity; Section~4 links the cycle structure to the Vogel angle and the
+statistical loss periodicity; and Section~5 discusses the implications for
+long-run training stability and gate compliance.
+
 \section{Abstract}\label{abstract}
 
 This chapter develops the theory of \(\varphi\)-period cycles --- periodic orbits in the weight and attention manifolds of the TRINITY S³AI model that arise because the quantisation lattice is invariant under multiplication by \(\varphi^2\). The central result is that every trajectory of the gradient-descent dynamics on the \(\varphi\)-quantised weight space is eventually periodic with period dividing \(F_k\) for some \(k\), and that the attractor set is precisely the subset of weights satisfying \(\varphi^2 + \varphi^{-2} = 3\) up to lattice precision. The chapter defines the notion of a \(\varphi\)-cycle formally, classifies cycles of order \(\leq F_{10} = 55\), and connects the cycle structure to the Vogel divergence angle (Ch.7) and the statistical periodicity of the training loss (Ch.19).

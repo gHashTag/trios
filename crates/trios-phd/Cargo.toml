@@ -19,6 +19,15 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 walkdir = "2.5"
+# RAG embeddings (BGE-M3 via fastembed-rs, gated behind `rag` feature so the
+# default trios-phd binary stays slim and ONNX-free for everyday compile/audit).
+tokio = { workspace = true, optional = true }
+tokio-postgres = { version = "0.7", optional = true }
+fastembed = { version = "5.13", optional = true }
+
+[features]
+default = []
+rag = ["dep:tokio", "dep:tokio-postgres", "dep:fastembed"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -26,3 +35,10 @@ tempfile = { workspace = true }
 [[bin]]
 name = "defense_gate"
 path = "src/bin/defense_gate.rs"
+
+# RAG embedder: only built with `--features rag`, otherwise excluded so
+# downstream consumers do not pay for the ONNX runtime / pg client.
+[[bin]]
+name = "embed_rag"
+path = "src/bin/embed_rag.rs"
+required-features = ["rag"]

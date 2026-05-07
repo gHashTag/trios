@@ -10,6 +10,49 @@
 \caption*{Figure — Ch.5: \(\varphi\)-distance and Fibonacci-Lucas seeds.}
 \end{figure}
 
+\begin{quote}\itshape
+``The ratio of the periodic times of any two planets is precisely
+the sesquialterate ratio of their mean distances from the Sun.''
+\upshape\hfill --- Johannes Kepler, \textit{Harmonices Mundi}, Book V (1619)
+\end{quote}
+
+\section*{The number that everything is attracted to}
+
+Drop a stone and it falls. Cool a gas and it settles. Run an iterative map
+long enough and --- under very general conditions --- it converges. Convergence
+points are the secret grammar of dynamical systems, and the golden ratio
+\(\varphi = (1+\sqrt{5})/2\) turns out to be a fixed point of a balancing
+function so natural that it arises independently in sunflower phyllotaxis,
+quasicrystal diffraction, and now in neural-inference state spaces.
+
+The balancing function at issue is simple to state: average a positive real
+\(x\) with its reciprocal \(1/x\). If \(x = \varphi\), that average is exactly
+\(\varphi\) again --- the operation returns what it started with. That
+self-similarity is not a coincidence. It is the algebraic heart of the identity
+\(\varphi^2 + \varphi^{-2} = 3\): because \(\varphi^2 = \varphi + 1\) and
+\(\varphi^{-2} = 2 - \varphi\), the two quadratic terms cancel their irrational
+parts and land cleanly on 3. A fixed point that leaves integer arithmetic
+exact is precisely the kind of anchor a hardware coprocessor can rely on.
+
+The seed numbers \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\),
+\(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\) are not
+arbitrary committee choices. They sit inside the contractive basin
+established by the formal theorems of this chapter. Fibonacci indices near 17
+are rational approximants to \(\varphi\) that are maximally well-spaced on the
+unit interval --- the three-distance theorem guarantees their gap pattern.
+Lucas seeds supply an independent lattice from the same recurrence, covering
+Frequency gaps that a single Fibonacci family would leave empty. Seeds drawn
+from the forbidden interval \([40,46]\) would cluster in those gaps, injecting
+bias into every stochastic experiment downstream. The seed geometry is therefore
+a direct corollary of the contractive topology.
+
+The rest of this chapter is about the formal machinery behind those claims.
+Section~2 defines \(\varphi\)-distance and proves the contractive property.
+Section~3 characterises the basin and establishes the Fibonacci--Lucas lattice
+coverage. Section~4 reviews the six Coq theorems from
+\texttt{PhiAttractor.v}, noting which carry full \texttt{Qed} status and
+which remain open obligations targeted in the next release cycle.
+
 \section{Abstract}\label{abstract}
 
 The golden ratio \(\varphi = (1+\sqrt{5})/2\) induces a natural metric on positive reals through the balancing function \(B(x) = (x + 1/x)/2\), whose unique positive fixed point is \(\varphi\) itself. This chapter formalises the notion of \(\varphi\)-distance, demonstrates its contractive properties near \(\varphi\), and establishes the role of specific Fibonacci and Lucas indices as canonical seeds for Trinity S³AI inference. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) emerges as an exact arithmetic consequence of the fixed-point equation and serves as the substrate invariant threading the entire dissertation. Six theorems from \filepath{t27/proofs/canonical/kernel/PhiAttractor.v} are reviewed, of which one carries full \texttt{Qed} status and five remain open obligations.

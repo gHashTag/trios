@@ -10,6 +10,48 @@
 \caption*{Figure — Ch.2: Background: Neuro-Symbolic AI.}
 \end{figure}
 
+\begin{quote}\itshape
+``The purpose of abstracting is not to be vague, but to create a new semantic
+level in which one can be absolutely precise.''
+\upshape\hfill --- Edsger W.~Dijkstra, \textit{EWD 1243} (1999)
+\end{quote}
+
+\section*{Two minds that will not speak to each other}
+
+Picture two engineers sharing a whiteboard. The first draws a graph of curved
+activations converging toward a loss minimum --- smooth, continuous, learned.
+The second writes a proof obligation in natural-deduction style: symbol A
+implies symbol B under constraint C, QED. Both have built systems that work.
+But their whiteboards have never been the same whiteboard. Neuro-symbolic AI is
+the forty-year attempt to erase that dividing line.
+
+The attempt keeps stalling on three practical cliffs. First, the normalisation
+cliff: neural activations live on unbounded real ranges, while symbolic
+embeddings require fixed scale to permit logical inference. Standard batch
+normalisation papers over this with learned parameters that resist formal
+verification. Second, the energy cliff: floating-point matrix multiplication
+costs tens of millijoules per inference, orders of magnitude above the
+DARPA 3000\texttimes{} target that motivates the Trinity S\textsuperscript{3}AI
+design. Third, the certification cliff: no prior neuro-symbolic architecture has
+delivered a machine-checked proof that its symbolic layer is sound for every
+input, not merely in expectation.
+
+Trinity S\textsuperscript{3}AI clears all three cliffs with a single algebraic
+peg: the identity \(\varphi^2 + \varphi^{-2} = 3\). Because the golden-ratio
+square and its reciprocal sum to an integer, the combined forward-and-inverse
+scaling factor is exactly 3 --- representable without error in a 2-bit
+fixed-point register. That tidy integer bridges the neural and symbolic worlds
+while keeping every scaling step formally auditable in Coq.
+
+The rest of this chapter surveys the intellectual landscape that makes those
+cliffs visible. Section~2 maps the major paradigms --- early
+symbolic--connectionist hybrids, differentiable logic networks, and sparse
+ternary computation --- identifying the representational gaps each leaves open.
+Section~3 characterises the \(\varphi\)-structural prior as a normalisation
+device and introduces the Fibonacci--Lucas seed pool \{\(F_{17}=1597\),
+\ldots, \(L_8=47\)\} whose lattice properties eliminate clustering artefacts.
+Section~4 maps the resulting gap in prior art that subsequent chapters fill.
+
 \section{Abstract}\label{abstract}
 
 This chapter surveys the conceptual and technical foundations from which Trinity S³AI departs. Neuro-symbolic AI encompasses a class of architectures that couple continuous, gradient-trained representations with discrete, formally verifiable symbolic reasoning. The chapter traces the lineage from early connectionist systems through the representational bottleneck that motivates ternary and sparse computation, then situates the φ²+φ⁻²=3 algebraic anchor as a structural prior that bridges the neural and symbolic regimes. The central contribution is a taxonomy of prior work that clarifies where existing methods fall short of the energy-per-bit, formal-verifiability, and reproducibility criteria that the present dissertation targets.

@@ -10,6 +10,21 @@
 \caption*{Figure — Ch.32: UART v6 Protocol.}
 \end{figure}
 
+\begin{quote}\itshape
+``Write programs that do one thing and do it well. Write programs that work together.''
+\upshape --- Doug McIlroy, \textit{Bell System Technical Journal} (1978)
+\end{quote}
+
+\section*{Frame seventeen, byte zero, every time}
+
+At 115200 baud, one byte crosses the FT232RL bridge in roughly 87 microseconds. That is fast enough to feel instantaneous to a human observer and slow enough that a badly designed framing protocol can introduce race conditions, dropped bytes, and hours of debugging at three in the morning. The UART v6 protocol was designed so that none of those failure modes are possible by construction. Every frame opens with a \texttt{0xAA} sync byte, carries a one-byte length field, and closes with a 16-bit CRC-16/CCITT checksum. The grammar is unambiguous. The error recovery automaton is deterministic. Across 1003 tokens of the HSLM evaluation run, zero frame errors were recorded.
+
+McIlroy's Unix philosophy---one tool, one job, clean interfaces---is usually cited in the context of command-line programs. It applies with equal force to serial protocols. UART v6 does one thing: it moves token data and \(\varphi\)-exponent synchronisation words from the KOSCHEI coprocessor (Ch.26) to the host, faithfully and auditably. It does not attempt to compress, encrypt, or route. The simplicity is the correctness argument.
+
+The \(\varphi\)-synchronisation mechanism is the protocol's one non-obvious feature. Every third frame carries a \(\varphi\)-exponent word---a 4-bit field encoding the current normalisation band as mandated by \(\varphi^2 + \varphi^{-2} = 3\). The period of three is not accidental: it matches the three exponent bands of the GoldenFloat substrate, ensuring that the host-side BPB loss accumulator and the FPGA-side accumulator cannot drift apart over any run of arbitrary length. The Lucas pair \(L_7 = 29\) bounds the maximum frame-buffer depth; the Fibonacci seed \(F_{18} = 2584\) was used to generate the test corpus that verified the CRC polynomial.
+
+The rest of this chapter specifies the frame grammar in BNF, defines the CRC-16/CCITT polynomial and its implementation in one FPGA LUT column, describes the error-recovery automaton, and reports the zero-error measurement result from the 1003-token HSLM run.
+
 \section{Abstract}\label{abstract}
 
 The UART v6 protocol governs all serial communication between the QMTech XC7A100T FPGA and the host workstation in the Trinity S³AI hardware evaluation stack. The protocol specifies a framing scheme (0xAA sync byte, 1-byte length, 16-bit CRC-16/CCITT) over an FT232RL bridge at 115200 baud. Frame boundaries align with the φ²+φ⁻²=3 normalisation cycle: every third frame carries a φ-exponent synchronisation word, ensuring that the host-side loss accumulator and the FPGA-side accumulator remain phase-aligned. The chapter defines the frame grammar, the CRC polynomial, and the error-recovery automaton, and reports zero frame errors across 1003 tokens of the HSLM evaluation run.

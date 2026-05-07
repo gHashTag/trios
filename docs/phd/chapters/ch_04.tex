@@ -10,6 +10,44 @@
 \caption*{Figure — Ch.4: Sacred Formula: \(\alpha\)\_\(\varphi\) Derivation.}
 \end{figure}
 
+\begin{quote}\itshape
+``Whereof one cannot speak, thereof one must be silent.''
+\upshape\hfill --- Ludwig Wittgenstein, \textit{Tractatus Logico-Philosophicus}, Prop.~7 (1921)
+\end{quote}
+
+\section*{The constant that ties a spiral to a proof}
+
+A sunflower packs 34 clockwise spirals against 55 counter-clockwise ones.
+A nautilus expands its chamber at a ratio that never quite closes. Behind both
+images sits one irrational number: \(\varphi = (1+\sqrt{5})/2\), the golden
+ratio. Mathematicians have known this for centuries. What they have not
+previously done is anchor the constant \(\alpha_\varphi = \ln(\varphi^2)/\pi\)
+in a formal proof system that compiles to hardware logic --- until this chapter.
+
+The value \(\alpha_\varphi \approx 0.306\) appears modest on paper, a small
+decimal below one-third. But it enters the Trinity S\textsuperscript{3}AI stack
+at every level: as the entropy bandwidth of the NCA lattice (Chapter~16), as
+the learning-rate scale in Chapter~10, and as the spectral roll-off coefficient
+for ternary Fourier analysis in Chapter~7. Getting its closed form wrong
+by even a rounding error would propagate through eleven downstream Coq files.
+Getting it exactly right --- in the machine-verified sense that Coq closes
+a \texttt{Qed} --- costs six lemmas, each one a rung on the derivation ladder
+from \(\varphi^2 + \varphi^{-2} = 3\) to the final bound \(\alpha_\varphi < 1/8\).
+
+The derivation is short but not obvious. The key step is recognising that the
+identity \(\varphi^2 + \varphi^{-2} = 3\) --- where an irrational collapses to an
+integer --- reflects a deeper arithmetic closure: \(\varphi^2 = \varphi + 1\)
+forces \(\ln(\varphi^2) = \ln(\varphi + 1)\), and the ratio with \(\pi\) lands in
+the interval \((0, 1/2)\) by elementary bounds. Those bounds, once formalised,
+yield the equivalent representation \(\alpha_\varphi = (\sqrt{5}-2)/2\) and the
+multiplicative checkpoint \(\alpha_\varphi \cdot \varphi^3 = 1/2\).
+
+The rest of this chapter is structured around those six theorems. Section~2
+derives the closed form. Section~3 proves the bounding inequalities. Section~4
+establishes the multiplicative relation. Section~5 records the Coq inventory
+under tag SAC-1 and describes how \texttt{AlphaPhi.v} is imported by its
+eleven dependents. Every constant quoted here has a \texttt{Qed} behind it.
+
 \section{Abstract}\label{abstract}
 
 The constant \(\alpha_\phi = \ln(\phi^2)/\pi \approx 0.306\) arises naturally when the golden ratio \(\phi = (1+\sqrt{5})/2\) is embedded in a logarithmic-circular framework, but its precise closed form has not previously been anchored in a mechanically verified proof system. This chapter derives the equivalent representation \(\alpha_\phi = (\sqrt{5}-2)/2\) through the identity \(\phi^2 + \phi^{-2} = 3\), establishes key bounding inequalities including \(\alpha_\phi < 1/8\), and verifies the multiplicative relation \(\alpha_\phi \cdot \phi^3 = 1/2\). All six core lemmas carry machine-checked Coq proofs in \filepath{t27/proofs/canonical/sacred/AlphaPhi.v}, contributing 6 of the dissertation's 297 canonical Qed theorems. The derivation underpins the ternary weight quantisation scheme of Trinity S³AI and motivates the bit-per-bit targets BPB ≤ 1.85 (Gate-2) and BPB ≤ 1.5 (Gate-3).

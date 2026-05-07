@@ -10,6 +10,50 @@
 \caption*{Figure — Ch.17: Ablation matrix.}
 \end{figure}
 
+\begin{quote}\itshape
+``If you torture the data long enough, it will confess.''
+\upshape --- Ronald H.~Coase (attributed)
+\end{quote}
+
+\section*{Seven switches, one truth table}
+
+In 1962, Richard Hamming described the standard intellectual crime of
+engineering research: build a system, show it works, then explain why
+each design choice was necessary. The logic runs backwards. You
+cannot know which choices matter until you have systematically removed
+them, one by one, and measured what breaks. Anything less is
+testimony, not evidence.
+
+The Trinity S$^3$AI pipeline makes seven major architectural claims---
+weight ternarity, \(\varphi\)-structured attention, canonical seed
+selection, golden-ratio positional encoding, MXFP4 quantisation,
+zero-DSP FPGA scheduling, and the \(\varphi^2 + \varphi^{-2} = 3\)
+normalisation constraint. Each claim has been motivated analytically in
+earlier chapters, and the full assembled system clears both Gate-2 and
+Gate-3 in BPB. But which of the seven choices is responsible for how
+much? That question demands a \(2^7 = 128\)-cell factorial experiment,
+not a paragraph of reasoning.
+
+This chapter reports that experiment. The anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\) is not merely a mathematical
+curiosity here---it structures the factor space itself: because the
+identity has three terms involving the two fundamental powers of
+\(\varphi\), the natural factor space for \(\varphi\)-structured
+models is spanned by decisions that enforce or relax the golden-ratio
+constraint in each of those three structural positions, plus four
+system-level factors that separate hardware efficiency contributions
+from algorithmic ones. Every ablated variant uses at least one
+canonical seed from the pool \(\{F_{17}=1597,\ldots,L_8=47\}\), so
+the pre-registration constraint of H\textsubscript{1} is respected
+throughout. The verdict, previewed here: seed selection and the
+normalisation constraint contribute the largest independent BPB
+reduction; the FPGA scheduling factor is orthogonal to BPB but
+indispensable for the 1~W energy target. The rest of this chapter
+lays out the factor definitions, the experimental design, and the
+full interaction table---so that the seven architectural claims can
+stand on their own factorial evidence, not on the authority of their
+authors.
+
 \section{Abstract}\label{abstract}
 
 A systematic ablation study isolates the contribution of each architectural decision in the Trinity S³AI pipeline to the aggregate BPB metric. This chapter presents a full \(2^k\) factorial design over \(k=7\) binary factors --- weight ternarity, \(\varphi\)-structured attention, canonical seed selection, golden-ratio positional encoding, MXFP4 quantisation, zero-DSP FPGA scheduling, and the \(\varphi^2 + \varphi^{-2} = 3\) normalisation constraint --- and reports the first-order effects and their interactions. Results confirm that seed selection and the normalisation constraint contribute the largest independent BPB reduction, while the FPGA scheduling factor is orthogonal to BPB but critical for the 1 W energy target. The ablation matrix is the empirical counterpart to the formal Coq proof obligations distributed across the dissertation.

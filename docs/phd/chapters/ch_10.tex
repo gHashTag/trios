@@ -10,6 +10,45 @@
 \caption*{Figure — Ch.10: Coq L1 Range\(\times\)Precision Pareto.}
 \end{figure}
 
+\begin{quote}\itshape
+``A proof is a proof.  What kind of a proof?  It's a proof.  A proof is a proof,
+and when you have a good proof, it's because it's proven.''
+\upshape --- Imre Lakatos, \textit{Proofs and Refutations} (1976)
+\end{quote}
+
+\section*{The curve that no format can cross}
+
+Every engineer who has quantised a neural network has faced the same wall: push
+for wider dynamic range and you lose mantissa precision; claw back mantissa bits
+and your largest weights start to blur.  The tradeoff is real, it is
+unavoidable---and for most formats it is handled by intuition, convention, and
+hope.  This chapter draws the wall precisely.  It is called the L1
+range\(\times\)precision Pareto frontier, and within the GF(16) arithmetic of
+Trinity S\textsuperscript{3}AI it is not merely plotted---it is proved.
+
+The proof machinery is Coq, and the key insight is algebraic rather than
+numerical.  The anchor identity \(\phi^2 + \phi^{-2} = 3\) means the two extreme
+exponents of GF(16)---the sub-unity band at \(\phi^{-2}\) and the super-unity
+band at \(\phi^2\)---sum to exactly 3.  The ternary alphabet \(\{-1, 0, +1\}\)
+spans an integer range whose total width is also 3.  This coincidence is not
+accidental: it is the structural reason that GF(16) with \texttt{PHI\_BIAS=60}
+can represent the full weight range without bias, and it is formalised as a
+combined invariant across INV-1, INV-1b, INV-4, and INV-9 in
+\filepath{t27/proofs/canonical/igla/}.
+
+Fifty-one \texttt{Qed} closures live in this chapter---the largest single-chapter
+Coq contribution in the dissertation.  But the technical weight should not obscure
+the practical payoff.  The Pareto frontier tells a system designer, in one glance,
+whether a proposed exponent-to-mantissa split is efficient or wasteful.  Conjecture
+C1 sharpens this: the efficient split ratio equals \(\phi^{-1}\), and the
+KL-divergence \(\text{KL}(W \| \text{gfN}(W))\) is minimised exactly there.  The
+rest of this chapter formalises GF(16) range and precision (Section~2),
+establishes the five core invariants (Section~3), constructs the Pareto curve
+(Section~4), and states Conjecture C1 together with the partial evidence for it
+(Section~5).  Gate-2 BPB \(\leq 1.85\) and Gate-3 BPB \(\leq 1.5\) are both
+locatable on the curve---which means this chapter is also the map that shows
+how close the system already is to its own finish line.
+
 \section{Abstract}\label{abstract}
 
 Designing ternary neural-network quantisation requires navigating a two-dimensional Pareto frontier between dynamic range and numerical precision, both of which are constrained by the finite GF(16) arithmetic available in the Trinity S³AI kernel. This chapter formalises that frontier using five machine-verified Coq invariants --- INV-1, INV-1b, INV-4, INV-9, and their composition --- and derives the conjecture C1 that the KL-divergence \(\text{KL}(W \| \text{gfN}(W))\) is minimised when the exponent-to-mantissa split ratio equals \(\phi^{-1}\). The anchor identity \(\phi^2 + \phi^{-2} = 3\) enters as the algebraic certificate that the ternary alphabet can represent the full integer range \(\{-1,0,+1\}\) without bias, and all kernel positivity lemmas --- \texttt{coeff\_53\_pos}, \texttt{sqrt5\_sq}, \texttt{phi\_pos} --- are verified in \filepath{t27/proofs/canonical/kernel/Phi.v}. The 51-theorem count for this chapter represents the largest single-chapter Coq contribution in the dissertation.

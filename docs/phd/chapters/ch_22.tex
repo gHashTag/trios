@@ -10,6 +10,51 @@
 \caption*{Figure — Ch.22: Railway / Trios Orchestration.}
 \end{figure}
 
+\begin{quote}\itshape
+``Those tools that are not mastered become masters of their users. The pipeline
+discipline is not about elegance --- it is about keeping humans in the loop.''
+\upshape\hfill---~Douglas McIlroy, Bell Labs Technical Memorandum (1964)
+\end{quote}
+
+\section*{Containers that know when to say no}
+
+When a Railway service restarts at 03:14 on a Tuesday morning, nobody is
+watching. The container comes up, the health endpoint returns 200, and the
+worker pool resumes accepting inference requests. What the monitoring dashboard
+cannot show --- unless someone has encoded it in a proof --- is whether the
+newly started workers satisfy the invariants that the rest of the system
+assumes. A worker pool that violates the inference-rate floor or exceeds the
+worker-count ceiling looks identical to a healthy one until a downstream
+client times out. By then, the incident has already started.
+
+The Railway/Trios orchestration architecture described in this chapter closes
+that gap with a different strategy: instead of checking invariants at incident
+time, it encodes them in Coq and checks them at proof time. The composite
+invariant \texttt{INV-8} captures three independent properties --- inference
+rate floor, worker count ceiling, and throughput threshold --- and the Coq
+verification produces both falsification witnesses (configurations that are
+provably rejected) and a satisfaction witness (the canonical \(\phi\)-scaled
+configuration that is provably accepted). A PostgreSQL database hosted on
+Railway stores the certified configuration; a health endpoint that returns
+the Coq certificate is the only health check that matters.
+
+The \(\phi^2 + \phi^{-2} = 3\) anchor is not decoration here. Worker-pool
+sizing follows the trinity partition: any pool of \(3n\) workers can be split
+into \(\lceil \phi^2 n \rceil\) inference workers and the remainder as embedding
+workers, with rounding error bounded by exactly one worker. This is not an
+approximation --- it follows from the fact that \(\phi^2 + \phi^{-2}\) is an
+integer, which means the partition is exact on the integers whenever the pool
+size is a multiple of 3. The same algebraic fact that constrains the weight
+lattice in Ch.6 now constrains the container fleet.
+
+The rest of this chapter is about the formal specification and its operational
+consequences: Section~2 defines the worker-pool invariants and presents the
+six falsification witnesses and one satisfaction witness; Section~3 describes
+the \texttt{victory\_not\_yet} predicate and its role in gate-compliance
+monitoring; Section~4 covers the Railway deployment specifics, including the
+PostgreSQL-backed configuration store; and Section~5 connects the orchestration
+layer to the FPGA-side counterparts described in Ch.28 and Ch.31.
+
 \section{Abstract}\label{abstract}
 
 Deploying a formally verified ternary neural system at scale requires an orchestration layer that can co-ordinate model-serving workers, manage configuration invariants at runtime, and expose falsifiable witnesses for operational properties. This chapter describes the Railway/Trios orchestration architecture, in which worker pools are governed by the composite invariant \texttt{INV-8} (\texttt{WorkerPoolComposite.v}, 10 Qed). Six Coq theorems establish falsification witnesses --- demonstrating that unsafe configurations are provably rejected --- and one satisfaction witness --- demonstrating that the canonical \(\phi\)-scaled configuration is provably accepted. The anchor identity \(\phi^2 + \phi^{-2} = 3\) constrains worker-pool sizing: the ratio of inference workers to embedding workers is targeted at \(\phi^2 : \phi^{-2} = \phi^4 : 1 \approx 6.854 : 1\). The chapter also introduces the \texttt{victory\_not\_yet} predicate, which certifies that the system has not yet reached the operational milestone requiring full Gate-3 compliance.
