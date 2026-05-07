@@ -50,9 +50,11 @@ For GF64 the mantissa width is 52 hidden-bit-plus-53 stored bits, preserving IEE
 The Coq development in `gHashTag/t27/proofs/canonical/kernel/PhiFloat.v` encodes GF64 using the `Flocq` library's `Binary.binary_float` type [4]. The mantissa parameter is `prec = 53` and the exponent parameter is `emax = 1024`, matching IEEE binary64. Two canonical constants are defined:
 
 ```coq
-Definition phi_mantissa : positive := 7316717653056966267. (* ≈ φ·2^52 *)
+Definition phi_mantissa : positive :=
+  7316717653056966267.  (* ≈ φ·2^52 *)
 Definition phi_exponent : Z := 0.
-Definition phi_f64 : binary64 := B754_finite false phi_mantissa phi_exponent eq_refl.
+Definition phi_f64 : binary64 :=
+  B754_finite false phi_mantissa phi_exponent eq_refl.
 ```
 
 The bounded predicate `bounded prec emax m e` checks that $m < 2^{\mathtt{prec}}$ and $e + \mathtt{prec} \leq \mathtt{emax} + 1$. Theorem `phi_f64_bounded` establishes this for the phi constant.
@@ -175,3 +177,4 @@ Future work includes GF128 (sub-1-bit effective width via block-floating-point a
 [12] Vogel, H. (1979). A better way to construct the sunflower head. *Mathematical Biosciences*, 44(3–4), 179–189. https://doi.org/10.1016/0025-5564(79)90080-4
 
 [13] This dissertation, Ch.28: FPGA Synthesis — QMTech XC7A100T, 0 DSP, 63 toks/sec, 92 MHz, 1 W.
+
