@@ -2,11 +2,8 @@
 //! R1: pure Rust, no .py/.sh, no JS frameworks
 //! φ² + φ⁻² = 3 · TRINITY
 //!
-//! ENV: RAILWAY_SSOT_URL=postgresql://postgres:...@interchange.proxy.rlwy.net:30942/railway
-//!      PORT=3030 (default)
-//!
-//! NOTE: do NOT use DATABASE_URL — Railway auto-injects it from linked Postgres
-//!       as an unresolved ${{Postgres.DATABASE_URL}} template reference.
+//! ENV: DATABASE_URL or RAILWAY_SSOT_URL (set in Railway → Variables)
+//!      PORT — set automatically by Railway (do NOT hardcode 3030)
 
 use anyhow::Result;
 use askama::Template;
@@ -75,19 +72,16 @@ struct IndexTemplate {
 }
 
 async fn fetch_chapters(db: &tokio_postgres::Client) -> Result<Vec<ChapterRow>> {
-    let rows = db
-        .query(
-            "SELECT chapter_slug, chapter_no, kind, title, \
-                    COALESCE(line_count,0) AS line_count, \
-                    (COALESCE(line_count,0) >= 1500) AS r3_full, \
-                    (EXISTS(SELECT 1 FROM ssot.chapter_figures f WHERE f.chapter_slug = c.chapter_slug)) AS has_figure, \
-                    (SELECT COUNT(*) FROM ssot.theorems t WHERE t.chapter_slug = c.chapter_slug) AS theorem_count, \
-                    updated_at::text \
-             FROM ssot.chapters c \
-             ORDER BY chapter_no",
-            &[],
-        )
-        .await?;
+    let rows = db.query(
+        "SELECT chapter_slug, chapter_no, kind, title, \
+                COALESCE(line_count,0) AS line_count, \
+                (COALESCE(line_count,0) >= 1500) AS r3_full, \
+                (EXISTS(SELECT 1 FROM ssot.chapter_figures f WHERE f.chapter_slug = c.chapter_slug)) AS has_figure, \
+                (SELECT COUNT(*) FROM ssot.theorems t WHERE t.chapter_slug = c.chapter_slug) AS theorem_count, \
+                updated_at::text \
+         FROM ssot.chapters c ORDER BY chapter_no",
+        &[],
+    ).await?;
     Ok(rows.iter().map(|r| ChapterRow {
         chapter_slug: r.get(0),
         chapter_no: r.get(1),
@@ -125,8 +119,7 @@ async fn fetch_rag(db: &tokio_postgres::Client) -> Result<Vec<RagRow>> {
                 (ROUND(100.0 * COUNT(e.id) FILTER (WHERE e.embedding IS NOT NULL) \
                       / NULLIF(COUNT(e.id),0), 1))::float8 AS pct, \
                 COALESCE(MAX(e.embedded_at)::text, 'pending') AS last_embedded \
-         FROM ssot.embeddings e \
-         GROUP BY e.chapter_slug ORDER BY e.chapter_slug",
+         FROM ssot.embeddings e GROUP BY e.chapter_slug ORDER BY e.chapter_slug",
         &[],
     ).await?;
     Ok(rows.iter().map(|r| RagRow {
@@ -141,31 +134,22 @@ async fn fetch_rag(db: &tokio_postgres::Client) -> Result<Vec<RagRow>> {
 async fn fetch_stats(db: &tokio_postgres::Client) -> Result<Stats> {
     let row = db.query_one(
         "SELECT \
-            (SELECT COUNT(*) FROM ssot.chapters) AS total_chapters, \
-            (SELECT COUNT(*) FROM ssot.chapters WHERE COALESCE(line_count,0) >= 1500) AS r3_ok, \
-            (SELECT COUNT(*) FROM ssot.chapter_figures) AS with_figure, \
-            (SELECT COUNT(*) FROM ssot.theorems) AS total_theorems, \
-            (SELECT COUNT(*) FROM ssot.embeddings) AS rag_total, \
-            (SELECT COUNT(*) FROM ssot.embeddings WHERE embedding IS NOT NULL) AS rag_embedded, \
-            (SELECT COUNT(*) FROM ( \
-               SELECT chapter_slug FROM ssot.chapters \
-               GROUP BY lower(trim(title)) HAVING COUNT(*) > 1 \
-            ) d) AS duplicate_slugs",
+            (SELECT COUNT(*) FROM ssot.chapters), \
+            (SELECT COUNT(*) FROM ssot.chapters WHERE COALESCE(line_count,0) >= 1500), \
+            (SELECT COUNT(*) FROM ssot.chapter_figures), \
+            (SELECT COUNT(*) FROM ssot.theorems), \
+            (SELECT COUNT(*) FROM ssot.embeddings), \
+            (SELECT COUNT(*) FROM ssot.embeddings WHERE embedding IS NOT NULL), \
+            (SELECT COUNT(*) FROM (SELECT chapter_slug FROM ssot.chapters GROUP BY lower(trim(title)) HAVING COUNT(*) > 1) d)",
         &[],
     ).await?;
     let rag_total: i64 = row.get(4);
     let rag_embedded: i64 = row.get(5);
     let rag_pct = if rag_total > 0 { (rag_embedded as f64 / rag_total as f64) * 100.0 } else { 0.0 };
     Ok(Stats {
-        total_chapters: row.get(0),
-        r3_ok: row.get(1),
-        with_figure: row.get(2),
-        total_theorems: row.get(3),
-        rag_total,
-        rag_embedded,
-        rag_pct,
-        rag_pct_int: rag_pct.round() as i64,
-        duplicate_slugs: row.get(6),
+        total_chapters: row.get(0), r3_ok: row.get(1), with_figure: row.get(2),
+        total_theorems: row.get(3), rag_total, rag_embedded, rag_pct,
+        rag_pct_int: rag_pct.round() as i64, duplicate_slugs: row.get(6),
     })
 }
 
@@ -186,46 +170,46 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
 }
 
 async fn htmx_chapters(State(db): State<Db>) -> impl IntoResponse {
-    #[derive(Template)]
-    #[template(path = "partials/chapters_table.html")]
+    #[derive(Template)] #[template(path = "partials/chapters_table.html")]
     struct T { chapters: Vec<ChapterRow> }
     T { chapters: fetch_chapters(&db).await.unwrap_or_default() }
 }
 
 async fn htmx_rag(State(db): State<Db>) -> impl IntoResponse {
-    #[derive(Template)]
-    #[template(path = "partials/rag_table.html")]
+    #[derive(Template)] #[template(path = "partials/rag_table.html")]
     struct T { rag: Vec<RagRow> }
     T { rag: fetch_rag(&db).await.unwrap_or_default() }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
 
     let phi: f64 = (1.0 + 5.0_f64.sqrt()) / 2.0;
     assert!((phi * phi + 1.0 / (phi * phi) - 3.0).abs() < 1e-12, "Trinity anchor");
 
-    // Use RAILWAY_SSOT_URL — NOT DATABASE_URL (Railway auto-fills that with
-    // an unresolved ${{Postgres.*}} template from any linked Postgres service).
-    let database_url = std::env::var("RAILWAY_SSOT_URL")
+    // Try RAILWAY_SSOT_URL first (explicit), then DATABASE_URL.
+    // Railway auto-injects DATABASE_URL as ${{Postgres.*}} which may be unresolved
+    // if the linked service name doesn't match — so we prefer RAILWAY_SSOT_URL.
+    let raw = std::env::var("RAILWAY_SSOT_URL")
+        .or_else(|_| std::env::var("DATABASE_URL"))
         .map_err(|_| anyhow::anyhow!(
-            "RAILWAY_SSOT_URL must be set in Railway → Variables. \
-             Value: postgresql://postgres:PASS@interchange.proxy.rlwy.net:30942/railway"
+            "Set RAILWAY_SSOT_URL in Railway → Variables: \
+             postgresql://postgres:PASS@interchange.proxy.rlwy.net:30942/railway"
         ))?;
-    let trimmed = database_url.trim();
-    if !(trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://")) {
-        anyhow::bail!("RAILWAY_SSOT_URL must start with postgres:// or postgresql://");
+    let url = raw.trim().to_string();
+    if !(url.starts_with("postgres://") || url.starts_with("postgresql://")) {
+        anyhow::bail!("DB URL must start with postgres:// or postgresql:// — got: {:?}", &url[..url.len().min(20)]);
     }
+    tracing::info!("Connecting to DB (len={} chars)", url.len());
 
-    let (client, conn) = tokio_postgres::connect(trimmed, NoTls).await
-        .map_err(|e| anyhow::anyhow!("connect failed: {e}"))?;
+    let (client, conn) = tokio_postgres::connect(&url, NoTls).await
+        .map_err(|e| anyhow::anyhow!("DB connect failed: {e}"))?;
     tokio::spawn(async move { if let Err(e) = conn.await { eprintln!("db err: {e}"); } });
 
     let db: Db = Arc::new(client);
-    let port: u16 = std::env::var("PORT").unwrap_or_else(|_| "3030".into()).parse().unwrap_or(3030);
+    // PORT is injected by Railway — do NOT default to 3030 or healthcheck will mismatch
+    let port: u16 = std::env::var("PORT").unwrap_or_else(|_| "8080".into()).parse().unwrap_or(8080);
 
     let app = Router::new()
         .route("/", get(index))
