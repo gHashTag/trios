@@ -1,0 +1,16 @@
+[build]
+dockerfilePath = "crates/phd-dashboard/Dockerfile"
+
+[deploy]
+startCommand = "/usr/local/bin/phd-dashboard"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+
+[[services]]
+name = "phd-dashboard"
+
+[services.variables]
+PORT = "3030"
+# Set DATABASE_URL in Railway dashboard → Variables:
+# DATABASE_URL = postgresql://postgres:<pwd>@phd-postgres-ssot.railway.internal:5432/railway
