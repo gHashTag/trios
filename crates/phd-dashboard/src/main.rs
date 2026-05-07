@@ -140,7 +140,7 @@ async fn fetch_stats(db: &tokio_postgres::Client) -> Result<Stats> {
             (SELECT COUNT(*) FROM ssot.theorems), \
             (SELECT COUNT(*) FROM ssot.embeddings), \
             (SELECT COUNT(*) FROM ssot.embeddings WHERE embedding IS NOT NULL), \
-            (SELECT COUNT(*) FROM (SELECT chapter_slug FROM ssot.chapters GROUP BY lower(trim(title)) HAVING COUNT(*) > 1) d)",
+            (SELECT COUNT(*) FROM (SELECT lower(trim(title)) AS t FROM ssot.chapters GROUP BY lower(trim(title)) HAVING COUNT(*) > 1) d)",
         &[],
     ).await?;
     let rag_total: i64 = row.get(4);
@@ -157,6 +157,10 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
     let (stats, chapters, duplicates, rag) = tokio::join!(
         fetch_stats(&db), fetch_chapters(&db), fetch_duplicates(&db), fetch_rag(&db),
     );
+    if let Err(e) = &stats { tracing::error!("fetch_stats failed: {e:?}"); }
+    if let Err(e) = &chapters { tracing::error!("fetch_chapters failed: {e:?}"); }
+    if let Err(e) = &duplicates { tracing::error!("fetch_duplicates failed: {e:?}"); }
+    if let Err(e) = &rag { tracing::error!("fetch_rag failed: {e:?}"); }
     IndexTemplate {
         stats: stats.unwrap_or(Stats {
             total_chapters: 0, r3_ok: 0, with_figure: 0,
