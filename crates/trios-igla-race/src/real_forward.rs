@@ -150,13 +150,14 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
     })
 }
 
-/// Parse the last `step train_loss val_bpb best_bpb ms` line from stdout.
+/// Parse the last `step | train_loss | val_bpb | best_bpb | ms` line from stdout.
 ///
-/// Returns the third whitespace-separated column (val_bpb) of the last
-/// line that parses as `(u32, f32, f64, ...)`.
+/// Returns the third column (val_bpb) of the last line that parses as
+/// `(u32, f32, f64, ...)`. Tolerates pipe (`|`) column separators emitted by
+/// `cpu_train` (`{:>6} | {:>10.4} | {:>10.4} | ...`).
 fn parse_final_val_bpb(stdout: &str) -> Option<f64> {
     stdout.lines().rev().find_map(|line| {
-        let mut tok = line.split_whitespace();
+        let mut tok = line.split_whitespace().filter(|t| *t != "|");
         let _step = tok.next()?.parse::<u32>().ok()?;
         let _loss = tok.next()?.parse::<f32>().ok()?;
         let val_bpb = tok.next()?.parse::<f64>().ok()?;
@@ -201,6 +202,19 @@ step train_loss val_bpb best_bpb ms
 200  2.5000     2.1900   2.1900  330
 ";
         let bpb = parse_final_val_bpb(canned).expect("must parse");
+        assert!((bpb - 2.19).abs() < 1e-9, "got {}", bpb);
+    }
+
+    #[test]
+    fn test_parse_pipe_separated_stdout() {
+        // Real cpu_train output uses `|` separators.
+        let canned = "\
+   step | train_loss |    val_bpb |   best_bpb |       ms
+------------------------------------------------------------
+     50 |     4.8540 |     7.0005 |     7.0000 |    110ms
+    200 |     2.5000 |     2.1900 |     2.1900 |    330ms
+";
+        let bpb = parse_final_val_bpb(canned).expect("must parse pipe-separated");
         assert!((bpb - 2.19).abs() < 1e-9, "got {}", bpb);
     }
 
