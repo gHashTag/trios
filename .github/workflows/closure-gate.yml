@@ -1,0 +1,42 @@
+name: Closure Gate (#446 — 312/312)
+# Phase C lane L-C7 of gHashTag/trios#536. Idempotent gate that only closes
+# gHashTag/trios#446 when every cell of the 312-cell Format×Algorithm matrix
+# in `ssot.bpb_samples` is non-empty with bpb>1.0. Runs hourly on a 17-min
+# offset from matrix-bot so the live body is fresh, plus on demand via
+# workflow_dispatch.
+#
+# Anchor: phi^2 + phi^-2 = 3.
+
+on:
+  schedule:
+    - cron: "24 * * * *"  # every hour at :24 (17 min after matrix-bot)
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: closure-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Verify 312/312 and close on win
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psycopg2
+        run: pip install --quiet psycopg2-binary
+
+      - name: Run closure_gate
+        env:
+          MATRIX_DATABASE_URL: ${{ secrets.MATRIX_DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/closure_gate.py
