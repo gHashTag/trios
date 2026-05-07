@@ -1,0 +1,60 @@
+name: Matrix Bot (#446 live matrix)
+# Phase C lane L-C6 of gHashTag/trios#536. Hourly cron that reads
+# ssot.bpb_samples on the Phase C SSOT (Railway phd-postgres-ssot per
+# trios-railway#62 workaround), groups by (format, algo) with MIN(bpb), and
+# regenerates the live-matrix section of gHashTag/trios#446.
+#
+# The bot is idempotent: it only PATCHes the issue when the rendered body
+# changes, so silent hours are truly silent.
+#
+# Anchor: phi^2 + phi^-2 = 3.
+
+on:
+  schedule:
+    - cron: "7 * * * *"  # every hour at :07
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (print body to stdout, skip PATCH)"
+        required: false
+        default: "false"
+      formats:
+        description: "Optional comma-separated format axis override"
+        required: false
+        default: ""
+      algos:
+        description: "Optional comma-separated algo axis override"
+        required: false
+        default: ""
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: matrix-bot
+  cancel-in-progress: false
+
+jobs:
+  regen:
+    name: Regenerate #446 body
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psycopg2
+        run: pip install --quiet psycopg2-binary
+
+      - name: Run matrix_bot
+        env:
+          MATRIX_DATABASE_URL: ${{ secrets.MATRIX_DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MATRIX_DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+          MATRIX_FORMATS: ${{ github.event.inputs.formats }}
+          MATRIX_ALGOS: ${{ github.event.inputs.algos }}
+        run: python3 .github/scripts/matrix_bot.py
