@@ -104,14 +104,35 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
         )
     })?;
 
-    let output = Command::new(&bin)
+    // Phase B fix: cpu_train uses CLI args `--seed=N --steps=N`, not env vars
+    // (see trios-trainer-igla/src/bin/cpu_train.rs `arg_or` parser).
+    // Format selection is the only env-controlled axis; FakeQuant kicks in
+    // when TRIOS_FORMAT_TYPE != "f32".
+    let mut cmd = Command::new(&bin);
+    cmd.arg(format!("--seed={}", seed))
+        .arg(format!("--steps={}", steps))
         .env("TRIOS_FORMAT_TYPE", fmt_str)
-        .env("TRIOS_SEED", seed.to_string())
-        .env("TRIOS_STEPS", steps.to_string())
         .env("TRIOS_FQ_HOOK", format!("{:08x}", hook_marker.to_bits()))
         .stderr(Stdio::inherit())
-        .stdout(Stdio::piped())
-        .output()?;
+        .stdout(Stdio::piped());
+
+    // Phase B fix: cpu_train hard-codes `data/tinyshakespeare.txt` relative to
+    // the current working directory. CI / dev callers may have the trainer
+    // checkout in an arbitrary location, so honour `TRIOS_TRAINER_CWD` and
+    // fall back to `<bin>/../../..` (release-build layout) so `data/` resolves.
+    let cwd = std::env::var("TRIOS_TRAINER_CWD").ok().map(PathBuf::from)
+        .or_else(|| {
+            // bin path: <repo>/target/release/cpu_train -> repo = bin..3
+            bin.parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf())
+        });
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+
+    let output = cmd.output()?;
 
     if !output.status.success() {
         return Err(std::io::Error::new(
@@ -129,13 +150,14 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
     })
 }
 
-/// Parse the last `step train_loss val_bpb best_bpb ms` line from stdout.
+/// Parse the last `step | train_loss | val_bpb | best_bpb | ms` line from stdout.
 ///
-/// Returns the third whitespace-separated column (val_bpb) of the last
-/// line that parses as `(u32, f32, f64, ...)`.
+/// Returns the third column (val_bpb) of the last line that parses as
+/// `(u32, f32, f64, ...)`. Tolerates pipe (`|`) column separators emitted by
+/// `cpu_train` (`{:>6} | {:>10.4} | {:>10.4} | ...`).
 fn parse_final_val_bpb(stdout: &str) -> Option<f64> {
     stdout.lines().rev().find_map(|line| {
-        let mut tok = line.split_whitespace();
+        let mut tok = line.split_whitespace().filter(|t| *t != "|");
         let _step = tok.next()?.parse::<u32>().ok()?;
         let _loss = tok.next()?.parse::<f32>().ok()?;
         let val_bpb = tok.next()?.parse::<f64>().ok()?;
@@ -180,6 +202,19 @@ step train_loss val_bpb best_bpb ms
 200  2.5000     2.1900   2.1900  330
 ";
         let bpb = parse_final_val_bpb(canned).expect("must parse");
+        assert!((bpb - 2.19).abs() < 1e-9, "got {}", bpb);
+    }
+
+    #[test]
+    fn test_parse_pipe_separated_stdout() {
+        // Real cpu_train output uses `|` separators.
+        let canned = "\
+   step | train_loss |    val_bpb |   best_bpb |       ms
+------------------------------------------------------------
+     50 |     4.8540 |     7.0005 |     7.0000 |    110ms
+    200 |     2.5000 |     2.1900 |     2.1900 |    330ms
+";
+        let bpb = parse_final_val_bpb(canned).expect("must parse pipe-separated");
         assert!((bpb - 2.19).abs() < 1e-9, "got {}", bpb);
     }
 
