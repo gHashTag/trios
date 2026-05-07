@@ -78,27 +78,12 @@ jobs:
             ${{ runner.os }}-trios-l-fh4-
 
       - name: Provide tinyshakespeare corpus (synthetic deterministic)
+        shell: bash
         run: |
-          # cpu_train reads data/tinyshakespeare.txt from cwd. We synthesise a
-          # deterministic ~32 KB corpus instead of pulling from network so the
-          # test is hermetic. Must be ≥ 1024 bytes for non-trivial training.
           mkdir -p trios-trainer-igla/data
-          if [ ! -f trios-trainer-igla/data/tinyshakespeare.txt ]; then
-            python3 -c "
-import hashlib, sys
-out = bytearray()
-seed = b'L-FH4 hermetic corpus · phi^2+phi^-2=3 · IGLA'
-i = 0
-while len(out) < 32768:
-    h = hashlib.sha256(seed + i.to_bytes(8, 'big')).digest()
-    # Map to printable ASCII so cpu_train treats bytes as token ids 0-255
-    # but the FakeQuant path differentiates regardless.
-    out.extend(h)
-    i += 1
-sys.stdout.buffer.write(bytes(out[:32768]))
-" > trios-trainer-igla/data/tinyshakespeare.txt
-          fi
+          python3 trios/.github/scripts/synth_tinyshakespeare.py > trios-trainer-igla/data/tinyshakespeare.txt
           ls -la trios-trainer-igla/data/
+          wc -c trios-trainer-igla/data/tinyshakespeare.txt
 
       - name: Build cpu_train (release)
         working-directory: trios-trainer-igla
