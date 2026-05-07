@@ -62,6 +62,7 @@ struct Stats {
     rag_total: i64,
     rag_embedded: i64,
     rag_pct: f64,
+    rag_pct_int: i64,
     duplicate_slugs: i64,
 }
 
@@ -103,7 +104,10 @@ async fn fetch_chapters(db: &tokio_postgres::Client) -> Result<Vec<ChapterRow>> 
             r3_full: r.get(5),
             has_figure: r.get(6),
             theorem_count: r.get(7),
-            updated_at: r.get::<_, String>(8),
+            updated_at: {
+                let s: String = r.get(8);
+                s.chars().take(10).collect() // YYYY-MM-DD
+            },
         })
         .collect())
 }
@@ -137,8 +141,8 @@ async fn fetch_rag(db: &tokio_postgres::Client) -> Result<Vec<RagRow>> {
                 e.chapter_slug, \
                 COUNT(e.id)                                        AS total_chunks, \
                 COUNT(e.id) FILTER (WHERE e.embedding IS NOT NULL) AS embedded_chunks, \
-                ROUND(100.0 * COUNT(e.id) FILTER (WHERE e.embedding IS NOT NULL) \
-                      / NULLIF(COUNT(e.id),0), 1)                  AS pct, \
+                (ROUND(100.0 * COUNT(e.id) FILTER (WHERE e.embedding IS NOT NULL) \
+                      / NULLIF(COUNT(e.id),0), 1))::float8           AS pct, \
                 COALESCE(MAX(e.embedded_at)::text, 'pending')      AS last_embedded \
              FROM ssot.embeddings e \
              GROUP BY e.chapter_slug \
@@ -153,7 +157,10 @@ async fn fetch_rag(db: &tokio_postgres::Client) -> Result<Vec<RagRow>> {
             total_chunks: r.get(1),
             embedded_chunks: r.get(2),
             pct: r.get::<_, f64>(3),
-            last_embedded: r.get(4),
+            last_embedded: {
+                let s: String = r.get(4);
+                s.chars().take(19).collect() // YYYY-MM-DD HH:MM:SS
+            },
         })
         .collect())
 }
@@ -190,6 +197,7 @@ async fn fetch_stats(db: &tokio_postgres::Client) -> Result<Stats> {
         rag_total,
         rag_embedded,
         rag_pct,
+        rag_pct_int: rag_pct.round() as i64,
         duplicate_slugs: row.get(6),
     })
 }
@@ -207,7 +215,7 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
         stats: stats.unwrap_or(Stats {
             total_chapters: 0, r3_ok: 0, with_figure: 0,
             total_theorems: 0, rag_total: 0, rag_embedded: 0,
-            rag_pct: 0.0, duplicate_slugs: 0,
+            rag_pct: 0.0, rag_pct_int: 0, duplicate_slugs: 0,
         }),
         chapters: chapters.unwrap_or_default(),
         duplicates: duplicates.unwrap_or_default(),
