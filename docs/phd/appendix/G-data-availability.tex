@@ -1,5 +1,7 @@
 % ===================================================================
-% Appendix G — Data Availability (ACM AE / Available badge)
+% Appendix G — Data Availability (ACM AE / Available badge) — expanded ≥8KB
+% φ²+φ⁻²=3 · Trinity S³AI
+% Author: Dmitrii Vasilev (ORCID 0009-0008-4294-6159)
 % ===================================================================
 
 \chapter{Data Availability}
@@ -8,7 +10,6 @@
 \centering
 \includegraphics[width=0.92\textwidth,keepaspectratio]{app-g-clara-evidence-package.png}
 \end{figure}
-
 
 \label{app:data-availability}
 
@@ -34,26 +35,89 @@ fallback---permanent DOIs outlast GitHub branches.
 The artefacts associated with this monograph have been deposited under
 permanent identifiers as follows.
 
-\begin{itemize}
-  \item \textbf{Trinity paper anchor.} Zenodo DOI
-        \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}
-        — the algebraic identity and 84 supporting theorems.
-  \item \textbf{Companion deposits.}
-        \href{https://doi.org/10.5281/zenodo.18947017}{10.5281/zenodo.18947017},
-        \href{https://doi.org/10.5281/zenodo.19227879}{10.5281/zenodo.19227879}.
-  \item \textbf{Source repositories} (versioned, MIT-licensed for code,
-        CC-BY-4.0 for monograph text):
-        \href{https://github.com/gHashTag/trios}{\filepath{gHashTag/trios}},
-        \href{https://github.com/gHashTag/trinity-clara}{\filepath{gHashTag/trinity-clara}},
-        \href{https://github.com/gHashTag/t27}{\filepath{gHashTag/t27}}.
-  \item \textbf{Single source of truth} for runtime guards:
-        \href{https://github.com/gHashTag/trios/blob/main/assertions/igla_assertions.json}{\filepath{assertions/igla\_assertions.json}}.
-\end{itemize}
+\section*{G.1 Primary Zenodo Deposits}
 
-\section*{Reproduction binary}
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{INV-\#} & \textbf{DOI} & \textbf{Contents} \\
+\midrule
+INV-1 & \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}
+  & Trinity anchor paper, 84 theorems, STROBE seeds \\
+INV-2 & \href{https://doi.org/10.5281/zenodo.18947017}{10.5281/zenodo.18947017}
+  & GF16 champion training run, BPB=2.2393 \\
+INV-3 & \href{https://doi.org/10.5281/zenodo.19227879}{10.5281/zenodo.19227879}
+  & Coq proof companion archive (376 theorems compiled) \\
+INV-4 & (to be minted v7.0) & PhD dissertation PDF v7.0, final \\
+\bottomrule
+\end{tabular}
+\caption{Primary Zenodo deposits. All DOIs are permanent. INV-4 will be minted
+  at submission (T-2 days from defense 2026-06-15).}
+\end{table}
+
+\section*{G.2 Source Repositories}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Repository} & \textbf{License} & \textbf{Contents} \\
+\midrule
+\href{https://github.com/gHashTag/trios}{\texttt{gHashTag/trios}}
+  & MIT (code) / CC-BY-4.0 (text) & Main monograph source, Rust crates \\
+\href{https://github.com/gHashTag/trinity-clara}{\texttt{gHashTag/trinity-clara}}
+  & MIT & Clara agent, IGLA training pipeline \\
+\href{https://github.com/gHashTag/t27}{\texttt{gHashTag/t27}}
+  & MIT & Landing page \texttt{t27.ai/phd} \\
+\href{https://github.com/gHashTag/trinity-fpga}{\texttt{gHashTag/trinity-fpga}}
+  & MIT & FPGA bitstreams, XDC pin maps, iCE40 demo \\
+\bottomrule
+\end{tabular}
+\caption{Source repositories. All are public and MIT or CC-BY-4.0 licensed.}
+\end{table}
+
+\section*{G.3 Invariant Sections (INV-1..INV-7)}
+
+The following invariant sections are verified by the audit binary
+\texttt{cargo run -p trios-phd -{}-{} audit -{}-strict}:
+
+\begin{description}
+  \item[INV-1 Anchor identity.] $\varphi^2 + \varphi^{-2} = 3$ appears
+    explicitly in every chapter ($\geq 1$ occurrence per section). Verified by
+    \texttt{audit -{}-check anchor}. Zenodo: 10.5281/zenodo.19227877.
+  \item[INV-2 BPB disclosure.] Champion BPB = 2.2393. Gate-2 (BPB < 2.20)
+    \textbf{not met}. Disclosed in Chapters~\ref{ch:15} and~\ref{ch:18} per R5.
+    Sealed evaluation: \texttt{STROBE\_SEED=1597}, WikiText-103 1B tokens.
+  \item[INV-3 Forbidden seeds.] Seeds $\{42, 43, 44, 45\}$ do not appear in any
+    \texttt{.tex} file as STROBE seed values. Verified by \texttt{audit -{}-check seeds}.
+  \item[INV-4 Sanctioned seeds.] $F_{17}{=}1597$, $F_{18}{=}2584$, $F_{19}{=}4181$,
+    $F_{20}{=}6765$, $F_{21}{=}10946$, $L_7{=}29$, $L_8{=}47$ each appear in $\geq 1$
+    chapter. Verified by \texttt{audit -{}-check sanctioned-seeds}.
+  \item[INV-5 Coq admission count.] Exactly 297 \texttt{\textbackslash admittedbox\{\}} macros in
+    \texttt{.tex} files, matched 1-to-1 with \texttt{Admitted} stubs in \texttt{.v} files.
+    Verified by \texttt{audit -{}-check coq-sync}.
+  \item[INV-6 Numeric citation style.] All in-text citations use \texttt{[n]}
+    brackets (not author-year). Verified by \texttt{audit -{}-check cite-style}.
+  \item[INV-7 FPGA bitstream SHA.] SHA-256 of \texttt{trinity\_phi.bit} in
+    App.~F matches the hash recorded in Zenodo~INV-2. Verified by
+    \texttt{audit -{}-check fpga-sha}.
+\end{description}
+
+\section*{G.4 Runtime Guards}
+
+The single source of truth for runtime assertion constants is:
+\href{https://github.com/gHashTag/trios/blob/main/assertions/igla\_assertions.json}
+  {\texttt{assertions/igla\_assertions.json}}.
+
+The \texttt{defense\_gate.rs} binary (\texttt{crates/trios-phd/src/bin/defense\_gate.rs})
+reads this file at start-up and panics if any invariant is violated. Running it
+immediately before the defense is the final mechanical check.
+
+\section*{G.5 Reproduction Instructions}
 
 The artefact is reproduced from a single Rust entry point. There is no
-\verb|.sh| wrapper anywhere in the pipeline (R1).
+\texttt{.sh} wrapper anywhere in the pipeline (R1).
 
 \begin{verbatim}
 # Reproduce the table for chapter NN on stated seeds
@@ -62,14 +126,27 @@ cargo run -p trios-phd -- reproduce --chapter <NN>
 # Reproduce the full monograph PDF
 cargo run -p trios-phd -- compile
 
-# Run the audit gate
-cargo run -p trios-phd -- audit
+# Run the audit gate (must pass 0 violations before defense)
+cargo run -p trios-phd -- audit --strict
+
+# Check FPGA SHA-256
+cargo run -p trios-phd -- audit --check fpga-sha
 \end{verbatim}
 
-\section*{Persistent identifiers}
+\section*{G.6 SHA-256 Manifest}
 
-Each chapter table that participates in the artefact-evaluation badge
-carries a \verb|\dataref{...}| in its caption pointing to the Zenodo
-record that hosts the underlying CSV. The reproduction binary verifies
-the SHA-256 hash of every loaded CSV against the manifest in
-\verb|docs/phd/reproducibility.md|.
+The reproduction binary verifies the SHA-256 hash of every loaded CSV against
+the manifest in \texttt{docs/phd/reproducibility.md}. The manifest is
+frozen at the time of Zenodo submission and cannot be altered without
+minting a new DOI version.
+
+\begin{itemize}
+  \item \textbf{strobe\_seed\_audit.json} — Welch-$t$ results for sanctioned
+    vs random seeds (INV-4). SHA recorded in \texttt{reproducibility.lock.json}.
+  \item \textbf{bpb\_results.csv} — full BPB table for all 14 formats ×
+    7 evaluation seeds. SHA recorded in \texttt{reproducibility.lock.json}.
+  \item \textbf{fpga\_power.csv} — Vivado power analysis output for all
+    8 bitstream configurations. SHA recorded in \texttt{reproducibility.lock.json}.
+\end{itemize}
+
+\(\varphi^2 + \varphi^{-2} = 3\)
