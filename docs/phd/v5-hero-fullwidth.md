@@ -36,7 +36,7 @@ pipeline. The goal: every chapter's hero illustration is rendered as the
 
 ## Operational notes
 
-- Schema in Neon uses `body_md`, `body_pdf_url`, `illustration_url`,
+- Schema in Railway phd-postgres-ssot uses `body_md`, `body_pdf_url`, `illustration_url`,
   `illustration_path` (snake_case). There is no `slug` column.
 - `ch_num` is **text** (`Ch.1`, `App.A`, `FA.07`, `FM.01`, `AP.A`),
   not an integer — never use `WHERE ch_num BETWEEN 1 AND 44`.
