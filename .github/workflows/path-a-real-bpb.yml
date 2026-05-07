@@ -50,7 +50,12 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.85.0
+          # rustc 1.86+ required by icu_normalizer@2.2.0 (transitive dep).
+          # Pinning latest stable is more hermetic than a floating channel
+          # because dtolnay/rust-toolchain@stable resolves to the published
+          # stable at job time, and the Cargo.lock in trainer-igla pins
+          # exact dep versions.
+          toolchain: 1.86.0
 
       - name: Cache cargo (trainer-igla)
         uses: actions/cache@v4
