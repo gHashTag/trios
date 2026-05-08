@@ -7,7 +7,7 @@
 \caption*{Figure --- Kepler Solids: BPB Benchmark --- Railway PostgreSQL Write.}
 \end{figure}
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{fa_15:abstract}
 
 This chapter documents the bits-per-byte (BPB)
 benchmark protocol for Trinity S³AI and the
@@ -29,7 +29,7 @@ derived from the spectral parameter
 for the M4 (2.7B) model with GF16 PHI\_BIAS=60
 weights.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{fa_15:introduction}
 
 Bits per byte (BPB) is the primary accuracy metric
 for language modelling in this dissertation. It is
@@ -71,10 +71,10 @@ are well-behaved under the champion learning rate.
 
 \section{2. BPB Protocol and Monotone Backward
 Invariant
-(INV-1)}\label{bpb-protocol-and-monotone-backward-invariant-inv-1}
+(INV-1)}\label{fa_15:bpb-protocol-and-monotone-backward-invariant-inv-1}
 
 \subsection{2.1 Evaluation
-Protocol}\label{evaluation-protocol}
+Protocol}\label{fa_15:evaluation-protocol}
 
 BPB is computed on the WikiText-103 test split
 (245,569 bytes after UTF-8 encoding) using a
@@ -100,7 +100,7 @@ never used; the Railway PostgreSQL ingestion script rejects any
 run metadata row containing those seed values.
 
 \subsection{2.2 INV-1: BPB Monotone
-Backward}\label{inv-1-bpb-monotone-backward}
+Backward}\label{fa_15:inv-1-bpb-monotone-backward}
 
 \textbf{Invariant INV-1}
 (\texttt{Trinity.Canonical.Igla.INV1\_BpbMonotoneBackward},
@@ -141,7 +141,7 @@ curvature bound is in turn controlled by INV-3
 (GF16 precision bounds) and the spectral identity
 \(\varphi^2 + \varphi^{-2} = 3\) [1, 2].
 
-\subsection{2.3 Warmup Gate}\label{warmup-gate}
+\subsection{2.3 Warmup Gate}\label{fa_15:warmup-gate}
 
 INV-1 applies only for \(t \geq t_0 = 100\).
 Before that, the learning rate ramp can cause
@@ -154,10 +154,10 @@ criterion. The victory criterion requires step
 \(< 1.85\) (Gate-2) [6].
 
 \section{3. Railway PostgreSQL Write-Back
-Architecture}\label{railway-write-back-architecture}
+Architecture}\label{fa_15:railway-write-back-architecture}
 
 \subsection{3.1 Database
-Schema}\label{database-schema}
+Schema}\label{fa_15:database-schema}
 
 The Railway PostgreSQL instance (project
 \texttt{golden-sunflowers-bench}, region
@@ -189,7 +189,7 @@ required for victory evaluation is applied at
 query time by the IGLA RACE agent (Ch.21).
 
 \subsection{3.2 Write-Back
-Protocol}\label{write-back-protocol}
+Protocol}\label{fa_15:write-back-protocol}
 
 At every evaluation checkpoint (every 500 steps),
 the bench agent:
@@ -219,7 +219,7 @@ clause is used. This ensures the Golden Ledger
 audit is not corrupted by duplicate entries.
 
 \subsection{3.3 Gate
-Evaluation}\label{gate-evaluation}
+Evaluation}\label{fa_15:gate-evaluation}
 
 After each write, the bench agent evaluates the
 Gate-2 and Gate-3 predicates:
@@ -233,7 +233,7 @@ formal \texttt{victory\_three\_seeds} predicate in
 INV-7 (Ch.21 [6]).
 
 \section{4. Results /
-Evidence}\label{results-evidence}
+Evidence}\label{fa_15:results-evidence}
 
 \textbf{BPB trajectory (M4, 2.7B, GF16
 PHI\_BIAS=60, seed 1597):}
@@ -292,7 +292,7 @@ inserted across 5 training runs with 0 write
 failures and 0 seed-constraint violations.
 
 \section{5. Qed
-Assertions}\label{qed-assertions}
+Assertions}\label{fa_15:qed-assertions}
 
 No Coq theorems are directly anchored to this
 chapter's output files. The relevant obligations
@@ -302,7 +302,7 @@ chapter's output files. The relevant obligations
 \filepath{t27/proofs/canonical/}. The champion lr
 \(= 0.004\) is certified by INV-1.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{fa_15:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -314,7 +314,7 @@ chapter's output files. The relevant obligations
   monotone backward, lr=0.004 (9 Qed).
 \end{itemize}
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{fa_15:discussion}
 
 The BPB benchmark protocol and Railway PostgreSQL write-back
 described here provide the empirical backbone for
@@ -335,7 +335,7 @@ would be needed for the IGLA RACE fleet described
 in Ch.21 to operate at sub-second polling
 intervals.
 
-\section{References}\label{references}
+\section{References}\label{fa_15:references}
 
 [1] \emph{Golden Sunflowers} dissertation,
 Ch.3 --- Trinity Identity
