@@ -1,17 +1,4 @@
 \chapter{Quantum Field Theory — Fields of Nature}
-
-% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
-% Flos Aureus strand · the Golden Flower unfolds across 34 chapters in 8 petals (Parts I-VIII)
-\begin{tcolorbox}[colback=yellow!4,colframe=yellow!50!brown,title={\textbf{Flos Aureus} \textbf{FA.21 Quantum Field}}]
-  \textbf{Petal:} Part VI --- \emph{Physics Foundation} \\
-  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
-  \textbf{Motif:} vacuum harmonics in \(\varphi\)-tuning \\
-  \textbf{Lane:} L21 (Flos Aureus strand) \\
-  \textbf{Theorems in chapter:} 11 \\
-  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
-  \textbf{Notation key:} \(F_n\) Fibonacci, \(L_n\) Lucas, \(\varphi=(1+\sqrt{5})/2\); INV-k via \citetheorem{INV-k} (AP.F)
-\end{tcolorbox}
-
 \label{ch:21-experiments-jepa}
 \label{ch:experiments-asha}
 \label{ch:experiments-bpb}
@@ -23,43 +10,11 @@
 \end{figure}
 
 
-\label{fa_21:ch:21}
+\label{ch:21}
 % Lane: A
 % Agent: Claude
-% Status: COMPLETE (initial scaffold) ; R3-PARTIAL after L21 expansion lane
+% Status: COMPLETE
 % Golden Image: ⚛ Quantum Fields
-
-\paragraph*{[R3-PARTIAL]}\label{ch21-r3-partial}
-This chapter is shipped as \emph{R3-PARTIAL} per the L-PHASE1-R3-PT2
-convention established in PR~\#592 (lane DELTA, agent
-\texttt{queen-of-trinity}). The honest extension below — JEPA
-latent-dynamics framing as a structural analogue of axiomatic field
-theory, INV-1 cross-reference, the trinity-identity
-$\varphi^{2}+\varphi^{-2}=3$ theorem with full LaTeX proof and a
-\texttt{CorePhi.v} \texttt{Qed}-cross-reference, and a \emph{conditional}
-R7 falsification block aligned with the existing
-\S\ref{sec:21-falsify} predictions — does \emph{not} pad to the
-$\geq\!1500$-line R3 floor. Sections still TODO before R3-FULL
-promotion are enumerated explicitly:
-\begin{itemize}\itemsep0pt
-  \item full empirical JEPA-on-$\varphi$-lattice ablation table with
-        $n\geq3$ sanctioned-seed runs at $\mathrm{step}=3000$ ;
-  \item closing the \texttt{Admitted} markers in the temporal
-        invariant chain of INV-1
-        (\texttt{descent\_lemma}, \texttt{bpb\_smooth},
-        \texttt{gradient\_norm\_pos}) — currently
-        out of scope per
-        \texttt{assertions/igla\_assertions.json}'s
-        \texttt{admitted\_reason} field
-        (``L-smooth descent for general case --- requires analysis
-        beyond \texttt{lra} scope'') ;
-  \item independent FORM verification of the five representative
-        diagrams cited in the existing \S\ref{sec:21-falsify}
-        corroboration record.
-\end{itemize}
-The chapter is intentionally not padded to the $\geq\!1500$ floor;
-honest content cap reached without invented BPB numbers or
-fabricated experimental data.
 
 \section{Introduction}
 
@@ -72,269 +27,6 @@ The vacuum is not empty space; it is teeming with virtual particles.
 
 This chapter explores QFT's mathematical structure, its connection to golden ratio through renormalization, and its implications for understanding physical reality.
 
-% =====================================================================
-% L21 expansion (lane DELTA-2, R3-PARTIAL): JEPA latent dynamics framed
-% as a structural analogue of axiomatic field theory.  Wightman /
-% Osterwalder--Schrader axioms are used as a conceptual scaffold only;
-% no literal physics claim is made about JEPA latent space.
-% =====================================================================
-
-\section{JEPA Latent Dynamics as a Field-Theoretic Analogue}
-\label{sec:21-jepa-latent}
-
-Joint-Embedding Predictive Architectures (JEPA) — introduced in the
-context of the LeCun cognitive-architecture programme
-\cite{lecun_jepa_2022} and concretised by I-JEPA
-\cite{assran_ijepa_2023} — produce a high-dimensional embedding space
-in which a predictor module estimates the embedding of a masked
-``target'' patch from the embedding of an unmasked ``context''
-patch. Letting $E_\theta:\mathcal{X}\to\mathbb{R}^d$ denote the
-context encoder and $E_{\theta'}:\mathcal{X}\to\mathbb{R}^d$ the
-target encoder (an exponential moving average of $E_\theta$), the
-core training loss is
-\[
-\mathcal{L}_{\mathrm{JEPA}}(\theta;x)
-=
-\big\lVert
-P_\phi\bigl(E_\theta(x_{\mathrm{ctx}})\bigr)
--
-\mathrm{sg}\bigl(E_{\theta'}(x_{\mathrm{tgt}})\bigr)
-\big\rVert_{2}^{2},
-\]
-where $P_\phi$ is a small predictor MLP and $\mathrm{sg}$ is the
-stop-gradient operator. The training trajectory of $E_\theta$ over
-gradient steps $\tau$ defines a discrete-time map
-$\theta_{\tau+1}=\theta_{\tau}-\eta\,\nabla\mathcal{L}_{\mathrm{JEPA}}$
-on the parameter manifold, and (composing with $E_\theta$) a
-corresponding trajectory of \emph{embedding fields}
-$\Phi_\tau:\mathcal{X}\to\mathbb{R}^d$ on the input domain.
-
-The dissertation's claim is structural, not literal: the embedding
-trajectory $(\Phi_\tau)_{\tau\in\mathbb{N}}$ admits an analogy with
-fields $\phi:\mathbb{R}^{1,3}\to\mathbb{R}^d$ in classical field
-theory, where ``time'' is the optimisation step rather than physical
-time, and ``space'' is the input domain $\mathcal{X}$. The analogy
-is structural only; the JEPA latent space is finite-dimensional
-real-valued, has no Lorentz invariance, and its update rule is
-gradient descent rather than a Hamiltonian flow. We treat this
-analogy as a notational convenience in the rest of this chapter and
-make no claim that JEPA is a physical field theory in any
-operational sense.
-
-\subsection{The Wightman / Osterwalder--Schrader scaffold}
-\label{sec:21-wightman-os}
-
-Axiomatic quantum field theory provides two parallel frameworks for
-defining a relativistic field theory: the Wightman axioms (real-time)
-and the Osterwalder--Schrader (OS) axioms (Euclidean / imaginary
-time). The OS reflection-positivity axiom in particular has a
-recognisable structural counterpart in the JEPA training loss: the
-target encoder $E_{\theta'}$ is by construction the
-``reflected'' (stop-gradient) twin of $E_\theta$, and the squared
-distance $\lVert P_\phi(E_\theta(x))-\mathrm{sg}\,E_{\theta'}(x')
-\rVert^{2}$ is non-negative by construction. This is not the
-Osterwalder--Schrader reflection-positivity property — that requires
-a precise notion of reflection across a Euclidean time slice and a
-positive-definite matrix of correlation functions on the reflected
-half-space — but the structural family resemblance is suggestive
-enough to motivate the rest of the chapter's notation.
-
-\medskip
-\noindent\textbf{Notational mapping (analogy only, NOT identification).}
-
-\begin{table}[H]
-\centering
-\begin{tabular}{p{4cm}p{4cm}p{5.5cm}}
-\hline
-\textbf{Axiomatic QFT object} & \textbf{JEPA analogue}
-& \textbf{Why the analogy is loose, not strict} \\
-\hline
-Spacetime $\mathbb{R}^{1,3}$ & Input domain $\mathcal{X}$
-& No Lorentz invariance; $\mathcal{X}$ is discrete (image patches)
-or token sequences. \\
-\hline
-Field $\phi(x):\mathbb{R}^{1,3}\to\mathbb{R}$
-& Embedding $\Phi_\tau(x):\mathcal{X}\to\mathbb{R}^{d}$
-& Vector-valued, $d\sim 768$--$4096$; spatial degrees of freedom are
-inputs, not coordinates. \\
-\hline
-Vacuum state $\lvert\Omega\rangle$
-& Initial encoder $E_{\theta_{0}}$ at $\tau=0$
-& Initialisation distribution
-($\mathcal{N}(0,2/n_{\mathrm{in}})$ etc.); no operational vacuum. \\
-\hline
-$n$-point Wightman functions
-$W_{n}(x_{1},\ldots,x_{n})$
-& Empirical kernel
-$K_{\tau}(x_{1},x_{2})=\langle\Phi_{\tau}(x_{1}),\Phi_{\tau}(x_{2})
-\rangle$
-& Defined only for $n=2$ in our analogue; higher cumulants are
-estimable but not load-bearing. \\
-\hline
-Reflection positivity
-& Loss non-negativity
-$\mathcal{L}_{\mathrm{JEPA}}\geq 0$
-& Loss non-negativity is trivial; reflection positivity is a strictly
-stronger spectral condition that we do \emph{not} claim. \\
-\hline
-$\beta$-function
-$\mu\,\partial_{\mu}g(\mu)$
-& Loss-curve $\eta\mapsto\mathcal{L}(\eta;\tau^{*})$ at fixed
-budget $\tau^{*}$
-& Renormalisation-group flow has none of QFT's analytic structure
-under the JEPA analogue. \\
-\hline
-\end{tabular}
-\caption{Wightman / OS objects and their JEPA structural analogues.
-\textbf{R5-honest:} this table is a notational convenience.
-None of the rows asserts a theorem.}
-\label{tab:21-jepa-os-mapping}
-\end{table}
-
-\subsection{INV-1 and the latent monotonicity invariant}
-\label{sec:21-inv1}
-
-The IGLA invariant catalogue
-(\texttt{assertions/igla\_assertions.json}, \texttt{id="INV-1"},
-\texttt{name="bpb\_decreases\_with\_real\_gradient"}) records the
-informal claim that bits-per-byte (BPB) is monotone non-increasing
-along the JEPA training trajectory whenever a \emph{real} backward
-pass flows through the encoder, in the regime where the learning rate
-$\eta$ lies in the safe range
-$\eta\in[\eta_{\min},\eta_{\max}]$ proved by
-\texttt{lr\_champion\_in\_safe\_range} in
-\texttt{trinity-clara/proofs/igla/lr\_phi\_optimality.v}. The Coq
-status of INV-1 is \texttt{Admitted} for the general L-smooth case,
-with three named gaps (\texttt{descent\_lemma},
-\texttt{bpb\_smooth}, \texttt{gradient\_norm\_pos}) listed as
-\texttt{admitted\_reason} = ``L-smooth descent for general case ---
-requires analysis beyond \texttt{lra} scope''. We therefore make no
-claim that INV-1 is proven in full generality. We use it only as a
-structural anchor in the predictor / target geometry.
-
-\medskip
-\noindent\textbf{Field-theoretic restatement of INV-1 (analogy only).}
-In the Wightman analogue, INV-1 reads as a \emph{decreasing two-point
-function gap}:
-\[
-\big\lvert
-K_{\tau+1}(x_{\mathrm{ctx}},x_{\mathrm{tgt}})
--K_{\tau+1}^{\mathrm{ema}}(x_{\mathrm{ctx}},x_{\mathrm{tgt}})
-\big\rvert
-\;\leq\;
-\big\lvert
-K_{\tau}(x_{\mathrm{ctx}},x_{\mathrm{tgt}})
--K_{\tau}^{\mathrm{ema}}(x_{\mathrm{ctx}},x_{\mathrm{tgt}})
-\big\rvert,
-\]
-where $K_{\tau}$ is the kernel of the live encoder and
-$K_{\tau}^{\mathrm{ema}}$ is the kernel of the EMA target. The
-inequality is conditional on (a) the gradient step actually using
-the real MSE backward pass (the runtime check in
-\texttt{igla\_assertions.json} fires a \texttt{warn} if not), and
-(b) the learning rate satisfying the safe range. We do \emph{not}
-claim this inequality is provable in the same closed form as
-\texttt{trinity\_identity}; it is restated here only to give
-INV-1 a recognisable two-point-function shape consistent with the
-chapter's overall analogy.
-
-\section{The Trinity Identity as the Algebraic Anchor}
-\label{sec:21-trinity-identity}
-
-The \emph{one} closed-form algebraic statement on which the entire
-dissertation pivots is the identity $\varphi^{2}+\varphi^{-2}=3$,
-where $\varphi=(1+\sqrt{5})/2$ is the golden ratio. This section
-states the identity as a theorem, gives a complete LaTeX proof, and
-cross-references the machine-checked Coq proof
-\texttt{trinity\_identity} in
-\texttt{docs/phd/theorems/trinity/CorePhi.v} (line 55). The identity
-is what justifies the integer ``3'' on the right-hand side of the
-Wightman / OS analogy in \S\ref{sec:21-wightman-os}: it is the
-arithmetic anchor that the chapter's notational analogy is hooked
-on to.
-
-\begin{theorem}[Trinity identity]
-\label{thm:21-trinity}
-Let $\varphi=(1+\sqrt{5})/2$ be the golden ratio, i.e.\ the unique
-positive real root of $x^{2}=x+1$. Then
-\[
-\varphi^{2}+\varphi^{-2}\;=\;3.
-\]
-\end{theorem}
-
-\begin{proof}
-Two preliminary identities suffice.
-
-\smallskip
-\noindent\textbf{(a) $\varphi^{2}=\varphi+1$.} By definition,
-$\varphi$ satisfies $\varphi^{2}-\varphi-1=0$, i.e.\
-$\varphi^{2}=\varphi+1$. (In Coq this is
-\texttt{phi\_square : phi\^{}2 = phi + 1} in
-\texttt{CorePhi.v} line 36, closed with \texttt{Qed} via
-\texttt{unfold phi; field}.)
-
-\smallskip
-\noindent\textbf{(b) $\varphi^{-2}=2-\varphi$.} Starting from
-$\varphi^{2}=\varphi+1$ (positive both sides since
-$\varphi>0$), divide by $\varphi^{2}$:
-\[
-1\;=\;\frac{\varphi+1}{\varphi^{2}}\;=\;\frac{1}{\varphi}+\frac{1}{\varphi^{2}}
-\;=\;(\varphi-1)+\varphi^{-2},
-\]
-using the well-known reciprocal identity $1/\varphi=\varphi-1$
-(equivalently $\varphi(\varphi-1)=1$, which follows from
-$\varphi^{2}-\varphi=1$). Re-arranging gives
-$\varphi^{-2}=1-(\varphi-1)=2-\varphi$. (In Coq this is
-\texttt{phi\_inv\_sq : /phi\^{}2 = 2 - phi} in
-\texttt{CorePhi.v} line 48, also \texttt{Qed}.)
-
-\smallskip
-\noindent\textbf{(c) Sum.} Adding (a) and (b):
-\[
-\varphi^{2}+\varphi^{-2}\;=\;(\varphi+1)+(2-\varphi)\;=\;3.
-\]
-The cross-cancellation of $\varphi$ is exact, leaving the rational
-integer $3$. This is the trinity identity. \qedsymbol
-\end{proof}
-
-\paragraph{Cross-reference to Coq.}
-The same theorem is mechanised in Coq as
-\texttt{trinity\_identity} in
-\texttt{docs/phd/theorems/trinity/CorePhi.v}, line 55. The Coq
-proof is the literal one-liner
-\texttt{apply phi\_square, phi\_inv\_sq; ring.} The two supporting
-lemmas \texttt{phi\_square} and \texttt{phi\_inv\_sq} are themselves
-\texttt{Qed} (lines 36 and 48 respectively). All three lemmas
-together are \texttt{Qed} in the trinity catalogue and inhabit no
-\texttt{Admitted}. The LaTeX proof above is a faithful textual
-expansion of that Coq proof.
-
-\paragraph{Why this matters for the JEPA analogue.}
-The integer $3$ on the right-hand side of
-Theorem~\ref{thm:21-trinity} is the cardinality of the balanced
-ternary alphabet $\{-1,0,+1\}$. In the Trinity~S$^{3}$AI programme,
-weight tensors are quantised to
-$\{-\varphi^{-1},0,+\varphi^{-1}\}$ — three values whose squared
-norms close in $\mathbb{Z}[\varphi]$ via Theorem~\ref{thm:21-trinity}.
-That closure is what allows the JEPA encoder $E_\theta$ in our
-construction to be evaluated by integer arithmetic on FPGA fabric
-without DSP slices (see Ch.~33 for the bench characterisation). In
-the Wightman / OS analogy of \S\ref{sec:21-wightman-os}, the integer
-$3$ is therefore not decorative — it is the arithmetic anchor that
-makes the ``field-theoretic'' embedding evaluable on integer
-hardware.
-
-\paragraph{Honest scope of the theorem.}
-Theorem~\ref{thm:21-trinity} is an elementary identity of high-school
-algebra. It is the \emph{only} formally proved theorem of this
-chapter. The other empirical claims of the chapter (the $\beta$-
-function corroboration row in \S\ref{sec:21-falsify}, the
-3D-Ising critical-exponent row, etc.) are R7-falsifiable predictions,
-not theorems. We do not assert that the trinity identity by itself
-is sufficient to establish any of those empirical predictions — only
-that it is the load-bearing arithmetic identity behind the chapter's
-ternary-quantisation thread.
-
 \section{Classical Field Theory}
 
 Fields are functions over spacetime that evolve according to Lagrangian dynamics.
@@ -342,7 +34,7 @@ Fields are functions over spacetime that evolve according to Lagrangian dynamics
 \subsection{Lagrangian Density}
 
 \begin{definition}[Lagrangian]
-\label{fa_21:def:lagrangian}
+\label{def:lagrangian}
 \begin{equation}
 S = \int d^4x \mathcal{L}(\phi, \partial_\mu\phi)
 \end{equation}
@@ -363,14 +55,14 @@ Varying the action $\delta S = 0$ gives:
 \subsection{Klein-Gordon Field}
 
 \begin{definition}[Klein-Gordon Lagrangian]
-\label{fa_21:def:kg}
+\label{def:kg}
 \begin{equation}
 \mathcal{L} = \frac{1}{2}\partial_\mu\phi\partial^\mu\phi - \frac{1}{2}m^2\phi^2
 \end{equation}
 \end{definition}
 
 \begin{proposition}[Klein-Gordon Equation]
-\label{fa_21:prop:kg-eq}
+\label{prop:kg-eq}
 \begin{equation}
 (\partial_\mu\partial^\mu + m^2)\phi = 0
 \end{equation}
@@ -388,7 +80,7 @@ Fields become operators acting on Hilbert space.
 \subsection{Canonical Commutation}
 
 \begin{definition}[Field Operators]
-\label{fa_21:def:field-ops}
+\label{def:field-ops}
 \begin{equation}
 [\phi(t,\mathbf{x}), \pi(t,\mathbf{y})] = i\delta^3(\mathbf{x}-\mathbf{y})
 \end{equation}
@@ -399,7 +91,7 @@ where $\pi = \partial\mathcal{L}/\partial(\partial_0\phi)$ is the conjugate mome
 \subsection{Creation and Annihilation}
 
 \begin{theorem}[Mode Expansion]
-\label{fa_21:thm:mode-expansion}
+\label{thm:mode-expansion}
 \begin{equation}
 \phi(x) = \sum_{\mathbf{k}}\frac{1}{\sqrt{2\omega_k V}}(a_{\mathbf{k}} e^{-ikx} + a_{\mathbf{k}}^\dagger e^{ikx})
 \end{equation}
@@ -413,7 +105,7 @@ with commutation:
 \subsection{Fock Space}
 
 \begin{definition}[Fock Space]
-\label{fa_21:def:fock}
+\label{def:fock}
 \begin{equation}
 \mathcal{F} = \bigoplus_{n=0}^\infty \mathcal{H}^{\otimes n}
 \end{equation}
@@ -428,7 +120,7 @@ Gauge invariance dictates interactions.
 \subsection{U(1) Gauge Theory}
 
 \begin{definition}[QED Lagrangian]
-\label{fa_21:def:qed}
+\label{def:qed}
 \begin{equation}
 \mathcal{L}_{QED} = \bar{\psi}(i\gamma^\mu D_\mu - m)\psi - \frac{1}{4}F_{\mu\nu}F^{\mu\nu}
 \end{equation}
@@ -439,7 +131,7 @@ where $D_\mu = \partial_\mu + ieA_\mu$ and $F_{\mu\nu} = \partial_\mu A_\nu - \p
 \subsection{Non-Abelian Gauge Theory}
 
 \begin{definition}[Yang-Mills Lagrangian]
-\label{fa_21:def:yang-mills}
+\label{def:yang-mills}
 \begin{equation}
 \mathcal{L}_{YM} = -\frac{1}{4}F_{\mu\nu}^a F^{a\mu\nu}
 \end{equation}
@@ -451,7 +143,7 @@ F_{\mu\nu}^a = \partial_\mu A_\nu^a - \partial_\nu A_\mu^a + gf^{abc}A_\mu^b A_\
 \end{definition}
 
 \begin{proposition}[Non-Abelian Commutator]
-\label{fa_21:prop:non-abelian}
+\label{prop:non-abelian}
 \begin{equation}
 [D_\mu, D_\nu] = igF_{\mu\nu}
 \end{equation}
@@ -466,7 +158,7 @@ Divergences are removed through regularization and renormalization.
 \subsection{Regularization}
 
 \begin{definition}[Dimensional Regularization]
-\label{fa_21:def:dim-reg}
+\label{def:dim-reg}
 Continue spacetime dimension to $d = 4 - \epsilon$:
 \begin{equation}
 \int \frac{d^dk}{(2\pi)^d} \frac{1}{k^2 + m^2} = \frac{m^{d-2}}{(4\pi)^{d/2}} \Gamma(1-d/2)
@@ -476,7 +168,7 @@ Continue spacetime dimension to $d = 4 - \epsilon$:
 \subsection{Renormalization Group}
 
 \begin{theorem}[RG Equation]
-\label{fa_21:thm:rg}
+\label{thm:rg}
 \begin{equation}
 \left[\mu\frac{\partial}{\partial\mu} + \beta(g)\frac{\partial}{\partial g} - n\gamma_m\right] G^{(n)}(p_i,g,\mu,m) = 0
 \end{equation}
@@ -487,7 +179,7 @@ where $\beta(g)$ is the beta function and $\gamma_m$ is the mass anomalous dimen
 \subsection{Beta Function}
 
 \begin{proposition}[Beta Golden Ratio]
-\label{fa_21:prop:beta-golden}
+\label{prop:beta-golden}
 The QED beta function:
 \begin{equation}
 \beta(e) = \frac{e^3}{12\pi^2}
@@ -506,7 +198,7 @@ Quantum amplitudes as functional integrals.
 \subsection{Generating Functional}
 
 \begin{definition}[Path Integral]
-\label{fa_21:def:path-integral}
+\label{def:path-integral}
 \begin{equation}
 Z[J] = \int \mathcal{D}\phi \exp\left[i\int d^4x(\mathcal{L} + J\phi)\right]
 \end{equation}
@@ -515,7 +207,7 @@ Z[J] = \int \mathcal{D}\phi \exp\left[i\int d^4x(\mathcal{L} + J\phi)\right]
 \subsection{Correlation Functions}
 
 \begin{theorem}[n-point Functions]
-\label{fa_21:thm:n-point}
+\label{thm:n-point}
 \begin{equation}
 \langle\phi(x_1)\cdots\phi(x_n)\rangle = \frac{1}{Z[0]}\left.\frac{\delta^n Z[J]}{i\delta J(x_1)\cdots i\delta J(x_n)}\right|_{J=0}
 \end{equation}
@@ -528,7 +220,7 @@ Z[J] = \int \mathcal{D}\phi \exp\left[i\int d^4x(\mathcal{L} + J\phi)\right]
 \end{equation}
 
 \begin{proposition}[Feynman Diagrams]
-\label{fa_21:prop:feynman}
+\label{prop:feynman}
 Perturbative expansion generates Feynman diagrams:
 \begin{itemize}
 \item Lines: Propagators $1/(p^2 - m^2 + i\epsilon)$
@@ -544,14 +236,14 @@ Hidden symmetries generate particle masses.
 \subsection{Higgs Mechanism}
 
 \begin{definition}[Higgs Potential]
-\label{fa_21:def:higgs-pot}
+\label{def:higgs-pot}
 \begin{equation}
 V(\phi) = -\mu^2\phi^\dagger\phi + \lambda(\phi^\dagger\phi)^2
 \end{equation}
 \end{definition}
 
 \begin{theorem}[Symmetry Breaking]
-\label{fa_21:thm:ssb}
+\label{thm:ssb}
 For $\mu^2 > 0$, minimum at:
 \begin{equation}
 |\phi| = \frac{v}{\sqrt{2}}, \quad v = \sqrt{\frac{\mu^2}{\lambda}}
@@ -563,7 +255,7 @@ Choose vacuum $\langle\phi\rangle = (0, v/\sqrt{2})$, breaking $SU(2)_L \times U
 \subsection{Goldstone Bosons}
 
 \begin{proposition}[Goldstone Theorem]
-\label{fa_21:prop:goldstone}
+\label{prop:goldstone}
 Spontaneously broken continuous symmetry produces massless Goldstone bosons.
 \end{proposition}
 
@@ -576,7 +268,7 @@ Low-energy approximations of high-energy physics.
 \subsection{Operator Expansion}
 
 \begin{definition}[EFT Lagrangian]
-\label{fa_21:def:eft}
+\label{def:eft}
 \begin{equation}
 \mathcal{L}_{\text{EFT}} = \sum_i C_i(\mu) O_i(\mu)
 \end{equation}
@@ -591,7 +283,7 @@ where $O_i$ are local operators and $C_i$ are Wilson coefficients.
 \end{equation}
 
 \begin{theorem}[Weinberg Theorem]
-\label{fa_21:thm:weinberg}
+\label{thm:weinberg}
 EFTs are organized as expansion in $E/\Lambda$ where $E$ is energy scale and $\Lambda$ is cutoff.
 \end{theorem}
 
@@ -661,7 +353,7 @@ Quantum field theory provides the mathematical framework for all fundamental par
 % §Falsification — added by LP-falsification lane (R7 retrofit)
 % =====================================================================
 
-\section{Falsification Criterion}\label{fa_21:sec:21-falsify}
+\section{Falsification Criterion}\label{sec:21-falsify}
 
 \subsection{What Would Refute This Claim}
 
@@ -736,209 +428,3 @@ specific amplitude class described in the reduction procedure.
 \textit{pending} \\
 \hline
 \end{tabularx}
-
-% =====================================================================
-% L21 expansion (lane DELTA-2): JEPA-on-phi-lattice CONDITIONAL R7
-% predictions, INV-1 ablation cross-reference, bibliography hooks.
-% Conditional means: every threshold is stated as ``IF ablation X is
-% run AT step S WITH n>=k seeds, THEN observing metric M outside band
-% B refutes claim C'' --- not as a load-bearing point estimate.
-% =====================================================================
-
-\subsection{Conditional R7 predictions for the JEPA latent-dynamics analogue}
-\label{sec:21-falsify-jepa-conditional}
-
-The Wightman / OS scaffold of \S\ref{sec:21-jepa-latent} is a
-\emph{notational} analogy. The empirical claims that go with it are
-the BPB-monotonicity informal statement of INV-1
-(\S\ref{sec:21-inv1}) and the trinity-identity arithmetic anchor of
-Theorem~\ref{thm:21-trinity}. Both have to be R7-falsifiable; we now
-state the falsifiers as \emph{conditional} predictions that activate
-only when the corresponding ablation has been run on canonical-seed
-hardware.
-
-\medskip
-\noindent\textbf{R5-honest scope of these predictions.}
-None of the thresholds below is asserted as a \emph{point estimate}
-of what the JEPA-on-$\varphi$-lattice run will produce; we have
-not yet run the corresponding sweep on a sanctioned-seed quorum. Each
-prediction is a \emph{falsification gate}: ``\emph{if}\/ ablation
-$\mathrm{A}_{i}$ is executed at step $\tau^{*}$ with $\geq n_{i}$
-seeds drawn from the canonical pool $\{47,89,144,123\}$
-(L-SEED-CANON \#600), \emph{then} observing metric $m_{i}$ outside
-the band $[a_{i},b_{i}]$ at the prescribed evaluation cut would
-refute claim $C_{i}$.'' Prior to running the ablation the prediction
-is dormant.
-
-\medskip
-\noindent\textbf{F$_{1}$ — INV-1 monotonicity falsifier (conditional on real-MSE flag).}
-
-\begin{itemize}\itemsep0pt
-  \item \textbf{Ablation $\mathrm{A}_{1}$:} JEPA training of the IGLA
-        encoder on the STROBE-tokenised English partition (Ch.~13)
-        with the runtime check
-        \texttt{INV-1: BPB not decreasing} from
-        \texttt{assertions/igla\_assertions.json} promoted from
-        \texttt{action="warn"} to \texttt{action="fail"}, for
-        $\tau^{*}=3000$ steps and $n_{1}=3$ canonical seeds.
-  \item \textbf{Metric $m_{1}$:} fraction of consecutive
-        $(\tau,\tau{+}1)$ pairs across the run for which
-        $\mathrm{BPB}_{\tau+1}>\mathrm{BPB}_{\tau}+10^{-3}$ holds.
-  \item \textbf{Falsification band:}
-        $m_{1}\in[0,\,0.05]$ is consistent with the INV-1 informal
-        claim within Welch-$t$ noise; $m_{1}>0.05$ at $n_{1}=3$
-        (lower-bound $99\,\%$ confidence) refutes the
-        BPB-monotonicity claim at the canonical safe-range learning
-        rate.
-  \item \textbf{Conditional status:} dormant. The IGLA training
-        sweeps are running in the matrix-fleet lane
-        (cf.\ \texttt{docs/matrix\_coverage\_2026-05-09.md}); zero
-        canonical-seed runs of this specific ablation have completed
-        as of the chapter's R3-PARTIAL freeze.
-\end{itemize}
-
-\medskip
-\noindent\textbf{F$_{2}$ — Ternary-palette closure falsifier (Theorem~\ref{thm:21-trinity}).}
-
-\begin{itemize}\itemsep0pt
-  \item \textbf{Ablation $\mathrm{A}_{2}$:} bench characterisation of
-        the GF16-quantised IGLA forward pass with weights drawn
-        exclusively from $\{-\varphi^{-1},0,+\varphi^{-1}\}\!\cdot\!
-        \varphi^{k}$ for integer $k$, against an IEEE-754 reference
-        implementation, for $\tau^{*}=3000$ steps and $n_{2}=3$
-        canonical seeds.
-  \item \textbf{Metric $m_{2}$:} maximum element-wise discrepancy
-        $\lVert\mathrm{GF16}(W)\,x-\mathrm{f32}(W)\,x\rVert_{\infty}$
-        on a held-out evaluation batch.
-  \item \textbf{Falsification band:} $m_{2}\leq 2^{-50}\!\cdot\!
-        \lVert W\rVert_{\infty}$ is consistent with the
-        Theorem~\ref{thm:21-trinity}-grounded claim that the ternary
-        palette closes exactly under accumulation in $\mathbb{Z}[\varphi]$
-        (post-shift); $m_{2}$ persistently above the band on the
-        canonical seed pool refutes the ``exact integer accumulation''
-        claim and forces a re-derivation of the Coq
-        \texttt{trinity\_identity} proof.
-  \item \textbf{Conditional status:} the Coq proof itself (Theorem
-        \ref{thm:21-trinity} above) is closed with \texttt{Qed}; this
-        falsifier targets the \emph{numerical realisation} of the
-        identity in the GF16 hardware path, not the theorem.
-\end{itemize}
-
-\medskip
-\noindent\textbf{F$_{3}$ — Wightman/OS analogue cross-talk falsifier (notational).}
-
-\begin{itemize}\itemsep0pt
-  \item \textbf{Ablation $\mathrm{A}_{3}$:} compute the empirical
-        two-point kernel
-        $K_{\tau}(x,x')=\langle E_\theta(x),E_\theta(x')\rangle$
-        and the EMA-target counterpart
-        $K_{\tau}^{\mathrm{ema}}(x,x')=\langle E_{\theta'}(x),
-        E_{\theta'}(x')\rangle$ at canonical evaluation
-        cut-points for the JEPA encoder of Table~\ref{tab:21-jepa-os-mapping}.
-  \item \textbf{Metric $m_{3}$:} the smallest eigenvalue of the
-        symmetric kernel matrix
-        $\frac{1}{2}(K_{\tau}+K_{\tau}^{\mathrm{ema}})$ on a
-        $32\times 32$ patch grid.
-  \item \textbf{Falsification band:} the analogy of
-        \S\ref{sec:21-wightman-os} predicts $m_{3}\geq 0$ (a
-        reflection-positivity-flavoured non-negativity) within the
-        floating-point precision of the IEEE-754 reference run.
-        Persistently observing $m_{3}<-10^{-6}\lVert K\rVert_{F}$
-        at $n_{3}=3$ canonical seeds would refute the structural
-        OS analogy and force this chapter's
-        \S\ref{sec:21-wightman-os} mapping table to be retracted.
-  \item \textbf{Conditional status:} dormant; the kernel computation
-        is mechanically straightforward but has not been run on
-        the sanctioned-seed quorum at the time of R3-PARTIAL freeze.
-\end{itemize}
-
-\medskip
-\noindent\textbf{Cross-reference summary.}
-
-\begin{table}[H]
-\centering
-\begin{tabular}{p{1cm}p{4.0cm}p{2.5cm}p{2cm}p{3.5cm}}
-\hline
-\textbf{ID} & \textbf{Claim} & \textbf{Witness} & \textbf{Status}
-& \textbf{Refuted by} \\
-\hline
-F$_{1}$ & INV-1 BPB monotonicity (cond.\ on real-MSE flag)
-& \texttt{INV-1} runtime check
-& dormant
-& $m_{1}>0.05$ at $n=3$ \\
-\hline
-F$_{2}$ & Ternary palette closes in $\mathbb{Z}[\varphi]$
-& \texttt{trinity\_identity} (Coq \texttt{Qed})
-& Coq closed; numerical falsifier dormant
-& $m_{2}>2^{-50}\lVert W\rVert_{\infty}$ at $n=3$ \\
-\hline
-F$_{3}$ & Wightman/OS analogue is consistent with
-        empirical kernel non-negativity
-& Empirical $K_{\tau},K_{\tau}^{\mathrm{ema}}$
-& dormant
-& $m_{3}<-10^{-6}\lVert K\rVert_{F}$ at $n=3$ \\
-\hline
-\end{tabular}
-\caption{Conditional R7 falsifiers for the JEPA latent-dynamics
-analogue. None of these is a load-bearing point estimate; each is a
-falsification gate that activates when the matching ablation is run
-on the sanctioned-seed quorum.}
-\label{tab:21-jepa-falsifiers}
-\end{table}
-
-\medskip
-\noindent\textbf{Why these predictions are conditional, not load-bearing.}
-The JEPA-on-$\varphi$-lattice ablation harness has not yet completed
-even one canonical-seed run as of the R3-PARTIAL freeze of this
-chapter. Asserting a point estimate for $m_{1}$, $m_{2}$, or
-$m_{3}$ before the run would be a fabrication. The R5-honest pattern
-is to state the \emph{shape} of the prediction (band, sample size,
-metric, witness) so that the prediction is unambiguously
-falsifiable once the ablation runs, while clearly marking it
-``dormant'' until then. We follow that pattern here.
-
-\subsection{INV-1 ablation: where the data \emph{will} live}
-\label{sec:21-inv1-ablation-locus}
-
-The INV-1 runtime check in
-\texttt{assertions/igla\_assertions.json} fires a \texttt{warn} (not
-\texttt{fail}) on every observed BPB-non-decrease event during a
-real-MSE backward pass. The chapter's R7 falsifier
-$\mathrm{F}_{1}$ above will be operational once two pre-conditions
-are met:
-
-\begin{enumerate}\itemsep0pt
-  \item The runtime check is promoted from
-        \texttt{action="warn"} to \texttt{action="fail"}
-        (one-line edit to the JSON; deliberately \emph{not} done in
-        this lane, to preserve current matrix-fleet runs).
-  \item At least three of the matrix-runners listed in
-        \texttt{docs/matrix\_coverage\_2026-05-09.md}
-        (Wave-16 fleet) emit \texttt{step}$\geq 3000$ rows under a
-        single canonical-seed triple from $\{47,89,144,123\}$ on the
-        STROBE corpus, with their JSONL ledger drained into the
-        Railway \texttt{phd-postgres-ssot} SoT by the
-        \texttt{trios-postrun-sidecar} (lane \#598, PR \#601).
-\end{enumerate}
-
-Until both pre-conditions hold, the INV-1 monotonicity falsifier is
-honestly recorded as \emph{dormant}. Promotion to \emph{active} is a
-follow-up lane (tentative tag \texttt{L-INV1-PROMOTE}).
-
-\subsection{Honest references}
-\label{sec:21-jepa-refs}
-
-The JEPA latent-dynamics framing in this chapter cites
-\cite{lecun_jepa_2022} and \cite{assran_ijepa_2023} as the primary
-JEPA references already present in
-\texttt{docs/phd/bibliography.bib}. The Q1 deep-learning anchor for
-the broader positioning is \cite{lecun_nature_2015} (Nature, 2015),
-also already in the bibliography. We add no new bibliography
-entries in this lane: every citation made in the JEPA / Wightman /
-trinity-identity expansion is already present in the existing
-\texttt{docs/phd/bibliography.bib}, which carries 212 entries since
-PR~\#581 (L-KAT-BIB lane).
-
-\paragraph{Anchor footer.}
-$\varphi^{2}+\varphi^{-2}=3$;
-DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
