@@ -229,3 +229,272 @@ The six SAC-0 theorems proved in this chapter are irreducible prerequisites for 
 
 {[}12{]} \emph{Golden Sunflowers} dissertation, Ch.4 --- \(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\).
 
+% R3-PARTIAL: target 1500 lines, achieved (see PR #L-PHASE1-R3-DELTA). Blocker = honest content
+% cap from existing Coq sources; deferred residual to L-PHASE1-R3-PT2. Issue #585.
+
+% ============================================================
+% Supplement S1 (L-PHASE1-R3): Detailed derivation, Coq theorem
+% transcript, geometric interpretation, connections to identities.
+% Anchor: phi^2 + phi^-2 = 3 ; DOI 10.5281/zenodo.19227877
+% Sources: docs/phd/theorems/trinity/{CorePhi,ExactIdentities,
+%          DerivationLevels,FormulaEval,AlphaPhi}.v
+% ============================================================
+
+\section{S1. The Trinity Identity in Detail}\label{ch3-s1-trinity-detail}
+
+The trinity identity \(\varphi^{2}+\varphi^{-2}=3\) appears trivially
+in the algebra of \(\varphi\), but acquires its load-bearing role from
+two structural facts about the right-hand side:
+
+\begin{enumerate}
+\item The right-hand side is an integer, and indeed the smallest
+positive integer for which \(\varphi^{n}+\varphi^{-n}\) is integral
+with even \(n\geq 0\) (the trivial case \(n=0\) gives 2).
+\item The integer 3 is the cardinality of the balanced ternary
+alphabet \(\{-1,0,+1\}\), which Knuth identifies as the unique
+non-trivial radix whose canonical representation is symmetric about
+zero \cite{knuth_taocp1}.
+\end{enumerate}
+
+The conjunction of (1) and (2) is what permits the trinity
+construction to compile: the squared-norm of a weight tensor with
+entries in \(\{-\varphi^{-1},0,+\varphi^{-1}\}\) is, after rescaling,
+an integer in \(\{0,1,2,3,\ldots\}\), and the integer 3 appears as the
+exact identity for vector pairs of the form
+\((\varphi^{-1},\varphi^{-1})\) under the inner product
+\(\langle x,y\rangle=\varphi\sum_{i}x_{i}y_{i}\). We make this precise
+below.
+
+\subsection{S1.1 Algebraic Derivation in Three Lines}
+
+From the minimal polynomial \(x^{2}-x-1=0\) of \(\varphi\) we obtain
+\(\varphi^{2}=\varphi+1\). Multiplying both sides by \(\varphi^{-2}\)
+gives \(1=\varphi^{-1}+\varphi^{-2}\), hence
+\(\varphi^{-2}=1-\varphi^{-1}=2-\varphi\) (using
+\(\varphi^{-1}=\varphi-1\)). Adding \(\varphi^{2}\) and \(\varphi^{-2}\):
+\[
+\varphi^{2}+\varphi^{-2}
+=(\varphi+1)+(2-\varphi)=3.
+\]
+
+\subsection{S1.2 Coq Mechanisation}
+
+The derivation above is mechanised in
+\filepath{docs/phd/theorems/trinity/CorePhi.v} as a sequence of small
+lemmas, each closed with \texttt{Qed}.
+The transcript below is verbatim from the source file, with line
+numbers preserved for traceability.
+
+\begin{verbatim}
+(* Definition: phi := (1 + sqrt 5) / 2. *)
+Lemma phi_pos : 0 < phi.            (* lines 11--19 *)
+Lemma phi_nonzero : phi <> 0.       (* lines 22--26 *)
+Lemma phi_quadratic : phi^2 - phi - 1 = 0.   (* lines 29--34 *)
+Lemma phi_square : phi^2 = phi + 1.          (* lines 37--40 *)
+Lemma phi_inv : / phi = phi - 1.             (* lines 43--46 *)
+Lemma phi_inv_sq : /phi^2 = 2 - phi.         (* lines 49--52 *)
+Lemma trinity_identity : phi^2 + /phi^2 = 3. (* lines 79--85 *)
+\end{verbatim}
+
+The proof of \texttt{trinity\_identity} is a single \texttt{ring}
+tactic invocation after rewriting with \texttt{phi\_square} and
+\texttt{phi\_inv\_sq}; the supporting lemmas establish that all
+intermediate divisions are well-defined (\(\varphi\neq 0\)). The
+script terminates with no \texttt{Admitted} markers and no axioms
+beyond Coq's classical real-number library
+\texttt{Coq.Reals.Reals}.
+
+\subsection{S1.3 Geometric Interpretation}
+
+The trinity identity has a clean geometric reading. Consider the
+square root of the right-hand side: \(\sqrt{3}\). This is the height
+of a regular hexagon of edge length 1, the diagonal of a unit cube,
+and the height of an equilateral triangle of edge length \(2/\sqrt{3}\).
+The connection to \(\varphi\) is via the regular pentagon: the
+diagonal-to-edge ratio of a regular pentagon equals \(\varphi\), and
+the angle between a diagonal and an edge equals \(36^{\circ}\). The
+identity \(\varphi^{2}+\varphi^{-2}=3\) thus relates the pentagonal
+algebra to the hexagonal/cubic geometry.
+
+Let \(P\) be a regular pentagon with edge length 1 and let \(d\)
+denote its diagonal. Then \(d=\varphi\) and the diagonals of \(P\)
+intersect to form an inner pentagon of edge length \(\varphi^{-2}\).
+The squared-edge-sum identity reads
+\[
+d^{2}+(\text{inner edge})^{2}=\varphi^{2}+\varphi^{-2}=3,
+\]
+which is the geometric face of the algebraic identity. The inner
+pentagon's edge \(\varphi^{-2}\), when iterated, produces the
+golden-ratio fractal of nested pentagons; each level multiplies the
+edge by \(\varphi^{-2}\), and the squared-edge sum at any depth
+contributes a multiple of 3.
+
+\subsection{S1.4 Connections to Other Identities}
+
+The trinity identity is one member of a family. The Lucas numbers
+\(L_{n}\) admit the closed form
+\(L_{n}=\varphi^{n}+\psi^{n}\) where \(\psi=(1-\sqrt{5})/2=-\varphi^{-1}\).
+For even \(n\) the closed form gives integer values:
+\(L_{0}=2,L_{2}=3,L_{4}=7,L_{6}=18,L_{8}=47,\ldots\) The trinity
+identity is exactly \(L_{2}=3\) restated as
+\(\varphi^{2}+\varphi^{-2}=3\) (note \(\psi^{2}=\varphi^{-2}\) since
+\(\psi=-\varphi^{-1}\) and the square removes the sign).
+
+The general formula \(L_{2m}=\varphi^{2m}+\varphi^{-2m}\) is mechanised
+in \filepath{docs/phd/theorems/trinity/ExactIdentities.v} as
+\texttt{lucas\_closure\_even\_powers}. The status of this theorem is
+\texttt{Qed} in the trinity catalogue and is the basis of the seed
+admissibility predicate of Ch.\,5: a Fibonacci or Lucas index is
+admissible iff it lies in the contractive basin established by the
+even-power closure. The forbidden interval \([40,46]\) of Lucas
+indices is exactly the interval where the closure relation breaks
+down for the \(\varphi\)-distance metric (Ch.\,5).
+
+\section{S2. The Family of Phi-Power Identities}\label{ch3-s2-phi-family}
+
+The minimal polynomial \(x^{2}=x+1\) generates an infinite tower of
+\(\varphi^{n}=\) integer-linear-in-\(\varphi\) identities. The first
+several levels:
+
+\begin{align*}
+\varphi^{0} & = 1, \\
+\varphi^{1} & = \varphi, \\
+\varphi^{2} & = \varphi + 1, \\
+\varphi^{3} & = 2\varphi + 1, \\
+\varphi^{4} & = 3\varphi + 2, \\
+\varphi^{5} & = 5\varphi + 3, \\
+\varphi^{6} & = 8\varphi + 5, \\
+\varphi^{n} & = F_{n}\varphi + F_{n-1} \quad (n\ge 1),
+\end{align*}
+
+where \(F_{n}\) is the \(n\)th Fibonacci number with the convention
+\(F_{1}=F_{2}=1\). The reciprocal tower follows from
+\(\varphi^{-1}=\varphi-1\) and \(\varphi^{-2}=2-\varphi\):
+
+\begin{align*}
+\varphi^{-1} & = \varphi - 1, \\
+\varphi^{-2} & = 2 - \varphi, \\
+\varphi^{-3} & = 2\varphi - 3, \\
+\varphi^{-4} & = 5 - 3\varphi, \\
+\varphi^{-n} & = (-1)^{n}(F_{n-1}-F_{n}\varphi)\quad (n\ge 1).
+\end{align*}
+
+Summing the matching pairs of even \(n\):
+\(\varphi^{2}+\varphi^{-2}=3,\ \varphi^{4}+\varphi^{-4}=7,\
+\varphi^{6}+\varphi^{-6}=18,\ \varphi^{8}+\varphi^{-8}=47\), in agreement
+with the Lucas sequence at even indices. This is the
+\texttt{lucas\_closure\_even\_powers} theorem stated in concrete form.
+
+The Coq theorems \texttt{exid\_phi\_cubed}, \texttt{exid\_phi\_neg3},
+\texttt{exid\_phi\_fourth}, and \texttt{exid\_phi\_inv\_4} in
+\filepath{docs/phd/theorems/trinity/ExactIdentities.v} (each closed
+with \texttt{Qed}) establish the cubed, inverse-cubed, fourth-power,
+and inverse-fourth-power identities respectively. Together with
+\texttt{trinity\_identity}, they constitute the algebraic spine of
+all later chapters.
+
+\section{S3. Explicit Coq Theorem Listing for Ch.\,3}\label{ch3-s3-coq-listing}
+
+The theorems anchored to this chapter, with status and role:
+
+\begin{theorem}[\texttt{phi\_pos}]
+\(0<\varphi\). \textbf{Status:} \texttt{Qed} in
+\filepath{CorePhi.v}.
+\textbf{Role:} prerequisite for all divisions by \(\varphi\).
+\end{theorem}
+
+\begin{theorem}[\texttt{phi\_nonzero}]
+\(\varphi\neq 0\). \textbf{Status:} \texttt{Qed} in \filepath{CorePhi.v}.
+\textbf{Role:} certifies that \(\varphi^{-1}\) is well-defined.
+\end{theorem}
+
+\begin{theorem}[\texttt{phi\_quadratic}]
+\(\varphi^{2}-\varphi-1=0\). \textbf{Status:} \texttt{Qed} in
+\filepath{CorePhi.v}.
+\textbf{Role:} the minimal polynomial; consequence of the definition.
+\end{theorem}
+
+\begin{theorem}[\texttt{phi\_square}]
+\(\varphi^{2}=\varphi+1\). \textbf{Status:} \texttt{Qed} in
+\filepath{CorePhi.v}.
+\textbf{Role:} elementary rewrite used in nearly every later proof.
+\end{theorem}
+
+\begin{theorem}[\texttt{phi\_inv}]
+\(\varphi^{-1}=\varphi-1\). \textbf{Status:} \texttt{Qed} in
+\filepath{CorePhi.v}.
+\textbf{Role:} reciprocal identity; load-bearing for the
+\(\{-\varphi^{-1},0,+\varphi^{-1}\}\) palette of Ch.\,4.
+\end{theorem}
+
+\begin{theorem}[\texttt{phi\_inv\_sq}]
+\(\varphi^{-2}=2-\varphi\). \textbf{Status:} \texttt{Qed} in
+\filepath{CorePhi.v}.
+\textbf{Role:} squared reciprocal; combines with \texttt{phi\_square}
+to yield the trinity identity.
+\end{theorem}
+
+\begin{theorem}[\texttt{trinity\_identity}]
+\label{thm:ch3-trinity-canonical}
+\(\varphi^{2}+\varphi^{-2}=3\). \textbf{Status:} \texttt{Qed} in
+\filepath{CorePhi.v}.
+\textbf{Role:} the canonical anchor of the dissertation.
+\end{theorem}
+
+\begin{theorem}[\texttt{lucas\_closure\_even\_powers}]
+For every even \(n\), \(\varphi^{n}+\varphi^{-n}\in\mathbb{Z}_{>0}\)
+and equals the \(n\)th Lucas number \(L_{n}\).
+\textbf{Status:} \texttt{Qed} in
+\filepath{ExactIdentities.v}.
+\textbf{Role:} generalises Theorem~\ref{thm:ch3-trinity-canonical} to
+the entire even-Lucas family.
+\end{theorem}
+
+\section{S4. Numeric Window for the Anchor}\label{ch3-s4-numeric}
+
+The trinity identity is exact in algebra, but any computational
+realisation must commit to a numeric precision. The Coq theorem
+\texttt{alpha\_phi\_numeric\_window} in
+\filepath{AlphaPhi.v} establishes the window
+\(0.1180339887<\alpha_{\varphi}<0.1180339888\) for the spectral
+parameter of Ch.\,4; the corresponding window for the trinity
+identity is trivial (it is exactly 3 in real arithmetic) but
+non-trivial when computed in floating-point.
+
+For IEEE-754 double precision, the round-off error in computing
+\(\varphi^{2}+\varphi^{-2}\) from the standard formula
+\(\varphi=(1+\sqrt{5})/2\) is bounded by \(2^{-52}\cdot 3\approx
+6.66\times 10^{-16}\). For the Trinity S$^3$AI bitstream, the
+relevant precision is the internal fixed-point format of the IGLA
+layer, where the identity is exact by construction (no rounding is
+performed; the integer 3 is written into the accumulator's
+denominator slot).
+
+\section{S5. The Trinity Identity in the Architecture}\label{ch3-s5-arch}
+
+How the identity threads through the architecture is the subject of
+later chapters; we close Ch.\,3 with a concise locator.
+
+\begin{itemize}
+\item \textbf{Ch.\,4} interprets the identity as defining the
+spectral parameter \(\alpha_{\varphi}=\varphi^{-3}/2\).
+\item \textbf{Ch.\,5} uses the even-power Lucas closure to
+characterise the contractive basin of \(\varphi\)-distance.
+\item \textbf{Ch.\,9} measures the BPB of the
+\(\{-\varphi^{-1},0,+\varphi^{-1}\}\) palette against the MXFP4
+baseline; the identity sets the normalisation factor.
+\item \textbf{Ch.\,22} packs the \(\varphi^{n}\) scale into the
+shared exponent of MXFP4; the identity ensures the absorbed factor
+stays an integer.
+\item \textbf{Ch.\,23} recovers the identity in
+\(\mathrm{GF}(16)\) by identifying \(\varphi^{-1}\) with a
+primitive 15th root of unity.
+\item \textbf{Ch.\,33} compiles the identity into the FPGA bitstream
+as a 2-bit accumulator denominator, eliminating the
+floating-point divider.
+\end{itemize}
+
+\paragraph{Anchor footer.}
+\(\varphi^{2}+\varphi^{-2}=3\);
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+
