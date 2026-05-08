@@ -32,8 +32,33 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 ## Phase 3 lanes deferred to next session
 
 - 3.2 Neon SSOT cross-check (requires `psql` against `phd-postgres-ssot`)
-- 3.5 Bibliography balance (LB lane — phd-monograph-auditor)
 - 3.7 Page-count gate (LT lane — after tectonic build CI green)
+
+## 3.5 LB bibliography balance — partial audit (this branch)
+
+- Total entries: **212** (≥150 ✓)
+- arXiv-only share: **2.4%** (≤20% ✓)
+- Springer share: **24.5%** — narrow miss vs ≥25% target (3 short of 53/212)
+- MIT/Cambridge/Oxford/CUP/OUP share: **14.6%** — narrow miss vs ≥15% target (1 short of 32/212)
+- Q1 whitelist heuristic share: **20.3%** — heuristic floor, narrow whitelist; full Q1/Q2 audit requires SCImago/JCR cross-check
+
+Verdict: **PARTIAL PASS** — three publisher counts within ±2% of targets. Recommend adding
+4-5 Springer entries (LNCS proceedings preferred) or re-classifying existing entries with
+missing `publisher` field to bring Springer ≥25%. Same for MIT/CUP/OUP (one entry suffices).
+Do NOT pad bibliography to inflate counts (R11 violation).
+
+### Reproduction
+
+```python
+import re
+bib = open("docs/phd/bibliography.bib").read()
+entries = re.findall(r"^@\w+\{([^,]+),", bib, re.M)
+blocks = re.findall(r"@\w+\{[^@]+", bib)
+for token, target in [("Springer", 0.25), ("MIT|Cambridge|Oxford|CUP|OUP", 0.15)]:
+    pat = re.compile(rf"publisher\s*=\s*\{{[^}}]*({token})", re.I)
+    hits = sum(1 for e in blocks if pat.search(e))
+    print(f"{token}: {hits}/{len(entries)} = {hits/len(entries):.1%}")
+```
 
 ## Falsification (R7)
 
