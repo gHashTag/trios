@@ -42,7 +42,7 @@ except ImportError:
 
 # ----------------------------------------------------------------------------- #
 # Axis definition — must match `gHashTag/trios#446` `comment-id 4370442020`
-# (39 formats x 8 algos = 312 cells).
+# (39 formats x 9 algos = 351 cells; soap added per gHashTag/trios#596).
 # ----------------------------------------------------------------------------- #
 
 FORMATS_ORDERED: List[str] = [
@@ -96,6 +96,7 @@ ALGOS_ORDERED: List[str] = [
     "lamb",
     "schedulefree",
     "rmsprop",
+    "soap",
 ]
 
 GH_API = "https://api.github.com"
