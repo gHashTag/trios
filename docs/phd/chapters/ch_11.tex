@@ -50,11 +50,11 @@ IGLA-RACE evaluation harness (Section~4), and the audit trail linking the OSF
 time-stamp to the theorem identifier (Section~5).  If the experiment fails, this
 chapter says so unambiguously---which is the point.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_11:abstract}
 
 Scientific credibility requires that empirical claims be registered before data collection. This chapter presents the formal pre-registration of Hypothesis H₁: that Trinity S³AI achieves bits-per-byte (BPB) \(\leq 1.5\) when initialised with at least three distinct seeds drawn from the canonical Fibonacci-Lucas pool, at a minimum sequence length of 4000 tokens. The registration is anchored to the \(\varphi^2 + \varphi^{-2} = 3\) identity, which constrains the theoretical minimum entropy of ternary representations on the golden substrate. The INV-7 invariant formalises H₁ in Coq, and the IGLA-RACE multi-agent benchmark provides the competitive evaluation harness. The pre-registration protocol follows Open Science Framework conventions and is published prior to any Gate-3 BPB measurement.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_11:introduction}
 
 The Trinity S³AI framework rests on three architectural commitments: ternary weight encoding, \(\varphi\)-structured attention, and seed-diverse initialisation. The third commitment is the subject of this chapter. Seed diversity matters because the \(\varphi\)-distance metric (Ch.5) identifies a contractive basin around \(\varphi\), and multiple distinct starting points in that basin provide independent evidence that convergence is genuine rather than an artefact of a single initialisation path.
 
@@ -62,7 +62,7 @@ Pre-registration of H₁ serves two functions. First, it prevents post-hoc selec
 
 The theoretical motivation for BPB \(\leq 1.5\) as a threshold comes from the information-theoretic bound implied by ternary arithmetic under the \(\varphi^2 + \varphi^{-2} = 3\) constraint. A ternary symbol drawn from \(\{-1, 0, +1\}\) carries at most \(\log_2 3 \approx 1.585\) bits; the golden substrate shaves off the excess, yielding the Gate-3 target of 1.5 BPB as an achievable lower bound rather than a strict theoretical limit {[}1{]}.
 
-\section{2. Hypothesis Formalisation and Registration Protocol}\label{hypothesis-formalisation-and-registration-protocol}
+\section{2. Hypothesis Formalisation and Registration Protocol}\label{ch_11:hypothesis-formalisation-and-registration-protocol}
 
 \textbf{Definition 2.1 (H₁ --- formal statement).} Let \(\mathcal{S} = \{s_1, s_2, s_3\} \subset \{1597, 2584, 4181, 6765, 10946, 29, 47\}\) with \(|\mathcal{S}| \geq 3\) and \(s_i \neq s_j\) for \(i \neq j\). Let \(\mathcal{M}(\mathcal{S}, T)\) denote the Trinity S³AI model initialised with seed set \(\mathcal{S}\) and evaluated on a held-out text corpus at sequence length \(T \geq 4000\) tokens. Then
 
@@ -79,7 +79,7 @@ The constraint \(|\mathcal{S}| \geq 3\) is the minimum required for diversity: w
 
 \textbf{Remark 2.3 (Gate-2 vs Gate-3).} The weaker Gate-2 threshold BPB \(\leq 1.85\) is governed by the IGLA-RACE multi-agent protocol {[}3{]}, which uses the same seed pool but permits any single seed. Gate-3 requires the stricter H₁ condition above. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates both thresholds: 3 in the identity maps to the ternary alphabet, while the two numeric thresholds bracket the information-theoretic ternary bound \(\log_2 3 \approx 1.585\).
 
-\section{3. INV-7 Invariant and Coq Formalisation}\label{inv-7-invariant-and-coq-formalisation}
+\section{3. INV-7 Invariant and Coq Formalisation}\label{ch_11:inv-7-invariant-and-coq-formalisation}
 
 The INV-7 invariant formalises H₁ in the Coq proof assistant. Its statement in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v} encodes the following:
 
@@ -114,7 +114,7 @@ INV-7 carries status \textbf{golden} in the seed registry, indicating that the i
 
 \emph{Proof Sketch.} The IGLA-RACE harness enforces canonical seed selection by construction; any non-canonical seed fails the \texttt{canonical\_seed} predicate check and is rejected at initialisation time. Since all accepted seeds lie in the contractive \(\varphi\)-basin (Ch.5), the BPB bound follows from the entropy argument above {[}7{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_11:results-evidence}
 
 Pre-registration status as of the current dissertation version:
 
@@ -139,11 +139,11 @@ The pre-registration itself is the primary deliverable of this chapter. Empirica
 
 The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) provides the theoretical floor: since \(3 = \log_2 8\) in bits, a balanced ternary representation that fully exploits the golden structure achieves at most \(\log_2 3 / \log_2 8 \times 8 = \log_2 3\) BPB, and the Gate-3 threshold of 1.5 represents 94.6\% of this theoretical maximum.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_11:qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_11:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -153,11 +153,11 @@ No Coq theorems are anchored to this chapter; obligations are tracked in the Gol
   \textbf{IGLA-RACE} (branch, alive, \(\phi\)-weight = 1.0): \filepath{gHashTag/trios/issues/143} --- linked to Ch.21, Ch.11 --- multi-agent BPB \(< 1.85\) race harness.
 \end{itemize}
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_11:discussion}
 
 The pre-registration protocol described here is unusual for a dissertation chapter: it commits to a falsification criterion before the empirical evidence is collected, which is standard in clinical trials but less common in machine learning research. The rationale within the Trinity S³AI programme is that the \(\varphi^2 + \varphi^{-2} = 3\) substrate provides a theoretical prediction (BPB \(\leq 1.5\)) that should be testable without parameter tuning. The main limitation is that the H₁ statement does not specify a particular corpus; future work should pin the evaluation corpus to a publicly released benchmark to remove ambiguity. The IGLA-RACE harness (trios\#143) provides one candidate benchmark environment. This chapter connects backward to Ch.5 (seed formalisation), forward to Ch.17 (ablation matrix that breaks down the BPB contribution of each seed), and sideways to Ch.21 (the IGLAFoundCriterion in full detail).
 
-\section{References}\label{references}
+\section{References}\label{ch_11:references}
 
 {[}1{]} Shannon, C. E. (1948). A mathematical theory of communication. \emph{Bell System Technical Journal}, 27(3), 379--423.
 

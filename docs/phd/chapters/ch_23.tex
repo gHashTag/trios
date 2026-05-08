@@ -52,11 +52,11 @@ Section~4 presents the Rust adapter implementation and measured latency;
 and Section~5 discusses the MCP compliance properties and their relation
 to the FPGA-side token-stream architecture described in Ch.28.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_23:abstract}
 
 The Model Context Protocol (MCP) provides a standardised interface for connecting language model inference engines to external tool ecosystems. This chapter describes the integration of the Trinity S³AI inference runtime with MCP, enabling the golden-ratio-structured HSLM engine to consume and expose MCP tool calls without violating the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant. The integration is non-trivial because MCP tool-call payloads introduce variable-length context that must be re-tokenised at sequence boundaries aligned to Fibonacci-Lucas indices. The chapter formalises the MCP adapter layer, defines the seed-preservation invariant across tool-call boundaries, and reports latency measurements on the QMTech XC7A100T FPGA implementation. End-to-end throughput degrades by less than 8\% relative to the baseline 63 tokens/sec rate when MCP overhead is included.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_23:introduction}
 
 Large-scale deployment of neural inference engines increasingly relies on agentic architectures in which the model interleaves generation with external tool calls --- web search, code execution, database queries, file I/O. The Model Context Protocol (MCP), introduced as an open standard in 2024, provides a JSON-RPC-based specification for this interleaving {[}1{]}. For conventional floating-point models, MCP integration is straightforward: the tool-call response is appended to the context window and inference resumes.
 
@@ -64,7 +64,7 @@ For Trinity S³AI, the integration is more delicate. The HSLM engine encodes con
 
 This alignment problem is the central engineering challenge of MCP integration. The solution adopted here --- boundary snapping with zero-padding to the nearest canonical index --- preserves the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant and introduces worst-case overhead of \(\lceil F_{n+1} - N - L \rceil\) padding tokens, where \(F_{n+1}\) is the smallest Fibonacci number exceeding \(N + L\).
 
-\section{2. MCP Adapter Layer Architecture}\label{mcp-adapter-layer-architecture}
+\section{2. MCP Adapter Layer Architecture}\label{ch_23:mcp-adapter-layer-architecture}
 
 \textbf{Definition 2.1 (MCP context boundary).} A \emph{canonical boundary} is a token position \(p\) such that \(p \in \{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}\), or any sum of at most two such values.
 
@@ -84,7 +84,7 @@ The padding overhead is bounded in relative terms: \((F_{n+1} - F_n) / F_n \to 1
 
 \emph{Proof Sketch.} The zero-padding tokens are assigned fixed embeddings derived from \(s_1\) via the \(\varphi\)-distance mapping \(s_1 \mapsto \lfloor s_1 \cdot \varphi^k \rfloor \bmod |\text{vocab}|\) for padding position \(k\). Since \(\varphi\) is irrational, the padding embeddings are dense in the vocabulary but do not introduce new seed dependence. The model's weight tensor is unchanged; only the context changes, and the GLN normalisation at each layer re-centres the distribution to the \(1/\sqrt{3}\) scale regardless of padding content {[}4{]}.
 
-\section{3. Protocol Implementation and Latency Analysis}\label{protocol-implementation-and-latency-analysis}
+\section{3. Protocol Implementation and Latency Analysis}\label{ch_23:protocol-implementation-and-latency-analysis}
 
 The MCP adapter is implemented as a thin Rust layer sitting between the FPGA token stream and the JSON-RPC endpoint. The implementation follows the MCP specification version 1.0 {[}1{]} and exposes the following capabilities:
 
@@ -112,7 +112,7 @@ For the typical case (\(L < 200\), \(N < 2584\)), total MCP overhead is less tha
 
 \emph{Proof Sketch.} Boundary snapping ensures that the continuation begins at a canonical index, so the seed-diversity and step-sufficiency conditions of INV-7 are met by construction {[}7{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_23:results-evidence}
 
 Performance measurements on QMTech XC7A100T FPGA (0 DSP slices, 92 MHz clock, 1 W):
 
@@ -133,19 +133,19 @@ HSLM benchmark (tokens) & 1003 & 1003 & 0\% \\
 
 The 8.1\% throughput degradation falls within the acceptance criterion for MCP-enabled deployment. The HSLM benchmark score is unchanged because the benchmark does not include tool-call boundaries; the 1003 token score reported in Ch.28 remains valid {[}8{]}. The \(\varphi^2 + \varphi^{-2} = 3\) normalisation constant is preserved in all 128 ablation variants that include MCP integration (cf.~Ch.17).
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_23:qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_23:sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_23:discussion}
 
 The MCP integration chapter demonstrates that the \(\varphi\)-structured inference architecture can interoperate with standard agentic infrastructure without sacrificing the formal invariants established in earlier chapters. The worst-case 61.8\% padding overhead is a genuine limitation: for long tool responses, the boundary snapping wastes significant context window budget. Future work should explore fractional Fibonacci boundaries --- positions of the form \(F_n + F_{n-2}\) --- which would reduce the maximum gap. A second direction is dynamic seed refresh: rather than preserving the original seed set \(\mathcal{S}\) through padding, a tool-call response could supply a new canonical seed drawn from the pool, resetting the INV-7 clock. This chapter connects to Ch.11 (INV-7 invariant), Ch.17 (GLN normalisation), Ch.27 (TRI-27 verifiable VM) and App.F (FPGA bitstream distribution).
 
-\section{References}\label{references}
+\section{References}\label{ch_23:references}
 
 {[}1{]} Anthropic. (2024). Model Context Protocol Specification v1.0. \url{https://modelcontextprotocol.io/specification}.
 

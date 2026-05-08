@@ -52,11 +52,11 @@ punchline is compact: the number that stops a sunflower from wasting space is th
 same number that stops a neural network from wasting bits---and both facts are now
 formal theorems.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_07:abstract}
 
 Vogel's 1979 model of sunflower head packing describes each floret position by a polar angle increment of \(137.5°\), the golden angle. This chapter proves that \(137.5° = 360°/\varphi^2\) follows directly from the Trinity anchor identity \(\varphi^2 + \varphi^{-2} = 3\) and establishes a formal correspondence between the H4 root system and the E8 lattice via a \(\varphi\)-scaled block decomposition. Six Coq theorems in \filepath{kernel/FlowerE8Embedding.v} formalise the key algebraic steps. The chapter argues that phyllotactic packing geometry is not merely analogical to the S³AI architecture but constitutes a structural template: the same \(\varphi\)-scaling that spaces florets without overlap also spaces quantised weights without collisions.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_07:introduction}
 
 The observation that sunflower seed heads, pine cones, and daisy florets arrange themselves in Fibonacci-count spirals dates to the nineteenth century {[}1{]}. Vogel (1979) supplied the precise generative model: place the \(n\)-th floret at polar radius \(r_n = c\sqrt{n}\) and azimuth \(\theta_n = n \cdot 137.508°\), where \(137.508°\) is the golden angle {[}2{]}. The packing density achieved by this construction is provably maximal among constant-angle spirals: any other divergence angle produces visible radial gaps. Within the TRINITY S³AI framework the same maximality argument applies to weight placement on the \(\varphi\)-quantised lattice. The anchor identity
 
@@ -64,7 +64,7 @@ The observation that sunflower seed heads, pine cones, and daisy florets arrange
 
 determines both the angle (\(360°/\varphi^2\)) and the lattice spacing (\(\varphi^{-1}\) and \(\varphi^{-2}\)), unifying botanic geometry with learned representations. The present chapter makes this correspondence precise and provides the Coq certificates that underpin it.
 
-\section{2. From the Trinity Identity to the Golden Angle}\label{from-the-trinity-identity-to-the-golden-angle}
+\section{2. From the Trinity Identity to the Golden Angle}\label{ch_07:from-the-trinity-identity-to-the-golden-angle}
 
 \textbf{Definition 2.1 (Golden ratio).}
 \(\varphi = (1+\sqrt{5})/2\), the positive root of \(x^2 - x - 1 = 0\).
@@ -88,7 +88,7 @@ The complementary arc \(360° - \alpha_G = 360°/\varphi \approx 222.492°\) div
 
 The Fibonacci numbers index the spiral arms visible in a Vogel phyllotaxis diagram. For a head with \(F_k\) and \(F_{k+1}\) visible spirals, the packing efficiency approaches 1 as \(k \to \infty\). The sanctioned seeds \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\) lie deep in this asymptotic regime; at these indices, the angular deviation from the ideal golden angle is less than \(10^{-7}\) radians {[}4{]}.
 
-\section{\texorpdfstring{3. H4 Root System, E8 Lattice, and the \(\varphi\)-Scaled Block Decomposition}{3. H4 Root System, E8 Lattice, and the \textbackslash varphi-Scaled Block Decomposition}}\label{h4-root-system-e8-lattice-and-the-varphi-scaled-block-decomposition}
+\section{\texorpdfstring{3. H4 Root System, E8 Lattice, and the \(\varphi\)-Scaled Block Decomposition}{3. H4 Root System, E8 Lattice, and the \textbackslash varphi-Scaled Block Decomposition}}\label{ch_07:h4-root-system-e8-lattice-and-the-varphi-scaled-block-decomposition}
 
 The 240 roots of the E8 lattice can be partitioned into two H4 half-shells of 120 roots each, related by a \(\varphi\)-scaling {[}5{]}. This decomposition is the algebraic analogue of the Vogel construction: H4 is the 4-dimensional hyperoctahedral group associated with the icosahedron, whose rotational symmetry group has order 120 and whose geometry is saturated with \(\varphi\)-ratios.
 
@@ -113,7 +113,7 @@ The 120 roots of H4 decompose into 60 positive and 60 negative roots, mirroring 
 
 The geometric picture is the following. A Vogel sunflower head with \(F_{20}=6765\) florets exhibits 6765 clockwise spirals and \(F_{19}=4181\) counter-clockwise spirals. Projecting the floret coordinates into 8 dimensions via the standard embedding of the icosahedral lattice into \(\mathbb{R}^8\) yields a point cloud whose nearest-neighbour graph approximates the E8 contact graph to within \(0.3\%\) angular error at the outermost ring {[}5{]}. The S³AI model exploits this geometric coincidence by initialising attention key matrices from E8-projected Fibonacci lattice points, an initialisation that is formally justified by Theorem 3.3.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_07:results-evidence}
 
 Four quantitative results anchor this chapter.
 
@@ -129,7 +129,7 @@ Four quantitative results anchor this chapter.
   \textbf{Phyllotaxis simulation.} A Python reference implementation in \texttt{reproduce.sh} (App.D) generates \(F_{21}=10946\) florets using the Vogel formula with seed \(F_{17}=1597\), producing a packing density of \(0.9997\) relative to the theoretical maximum, confirming that the sanctioned seeds lie in the asymptotic regime.
 \end{enumerate}
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_07:qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -147,15 +147,15 @@ Four quantitative results anchor this chapter.
   \filepath{trinity\_e8\_h4\_encoding} (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v}) --- \emph{Status: Qed} --- \(\varphi^2 + \varphi^{-2} = 3 \Rightarrow \dim(H4) + \dim(\varphi \cdot H4) = \dim(E8)/2\).
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_07:sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_07:discussion}
 
 The two \texttt{Abort} theorems (KER-3) represent the principal limitation of the present chapter. The \texttt{e8\_roots\_decomposition} proof requires an explicit bijection between the 240 E8 roots and the union of two H4 half-shells, a task that demands a formalised root-system library in Coq. Integration of the \texttt{mathcomp-algebra} library is planned for the next proof sprint. The \texttt{phi\_scaling\_invariant} theorem requires a formalised proof that \(x \mapsto \varphi x\) is measure-preserving on finite sets, which reduces to a cardinality argument but needs the right abstract combinatorics infrastructure. Until both theorems close, the E8/H4 decomposition used in the attention initialisation experiment (§4, item 3) rests on algebraic arguments rather than machine-verified certificates. This is disclosed in compliance with R5 honesty. Future work includes: (a) closing KER-3 obligations, (b) extending the phyllotaxis analysis to 3D (cylindrical) arrangements relevant to recurrent architectures, and (c) connecting the \(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\) spectral constant (Ch.4) to the angular spectrum of E8 root vectors.
 
-\section{References}\label{references}
+\section{References}\label{ch_07:references}
 
 {[}1{]} Church, A. H. (1904). \emph{On the Relation of Phyllotaxis to Mechanical Laws.} Williams \& Norgate, London.
 
