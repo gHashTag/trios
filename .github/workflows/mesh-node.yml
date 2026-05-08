@@ -78,8 +78,7 @@ jobs:
     name: "🚂 Deploy 3 nodes to Railway"
     needs: test
     runs-on: ubuntu-latest
-    # Only deploy when on main AND RAILWAY_TOKEN secret is configured
-    if: github.ref == 'refs/heads/main' && secrets.RAILWAY_TOKEN != ''
+    if: github.ref == 'refs/heads/main'
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
@@ -91,18 +90,15 @@ jobs:
       - name: 🔍 Check Railway auth
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "⚠️ RAILWAY_TOKEN is not set — skipping deploy"
-            echo "To enable deploy: Settings → Secrets → add RAILWAY_TOKEN"
+            echo "⚠️ RAILWAY_TOKEN secret is not set — skipping deploy"
+            echo "Add it: Settings → Secrets and variables → Actions → RAILWAY_TOKEN"
             exit 0
           fi
           railway whoami
 
       - name: 🚂 Deploy trinity-node-0
         if: env.RAILWAY_TOKEN != ''
-        run: |
-          railway up \
-            --service trinity-node-0 \
-            --detach
+        run: railway up --service trinity-node-0 --detach
         working-directory: crates/trios-mesh-node
         env:
           MESH_SEED: "0"
@@ -111,10 +107,7 @@ jobs:
 
       - name: 🚂 Deploy trinity-node-1
         if: env.RAILWAY_TOKEN != ''
-        run: |
-          railway up \
-            --service trinity-node-1 \
-            --detach
+        run: railway up --service trinity-node-1 --detach
         working-directory: crates/trios-mesh-node
         env:
           MESH_SEED: "1"
@@ -123,10 +116,7 @@ jobs:
 
       - name: 🚂 Deploy trinity-node-2
         if: env.RAILWAY_TOKEN != ''
-        run: |
-          railway up \
-            --service trinity-node-2 \
-            --detach
+        run: railway up --service trinity-node-2 --detach
         working-directory: crates/trios-mesh-node
         env:
           MESH_SEED: "2"
@@ -135,12 +125,12 @@ jobs:
 
       - name: ✅ Summary
         run: |
-          echo "## 🔺 Trinity CPU Mesh Network deployed" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔺 Trinity CPU Mesh Network" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Node | Seed | Endpoint |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| trinity-node-0 | 0 | GET /info /health POST /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
-          echo "| trinity-node-1 | 1 | GET /info /health POST /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
-          echo "| trinity-node-2 | 2 | GET /info /health POST /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node | Seed | Endpoints |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-0 | 0 | /info /health /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-1 | 1 | /info /health /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-2 | 2 | /info /health /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "φ² + φ⁻² = 3 | CPU ~800mW | ASIC target <25mW (TTIHP27a Q4 2026)" >> $GITHUB_STEP_SUMMARY
