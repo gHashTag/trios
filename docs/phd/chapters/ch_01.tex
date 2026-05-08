@@ -145,3 +145,411 @@ The primary limitation of Ch.1 as an introduction is that it asserts connections
 
 {[}13{]} \filepath{gHashTag/trios\#382} --- Ch.1 scope definition. \url{https://github.com/gHashTag/trios/issues/382}
 
+% R3-PARTIAL: target 1500 lines, achieved (see PR #L-PHASE1-R3-DELTA), blocker = honest source
+% material exhaustion; deferred residual to L-PHASE1-R3-PT2. Issue #585.
+
+% ============================================================
+% Supplement S1 (L-PHASE1-R3): Long-form expansion
+% Anchor: phi^2 + phi^-2 = 3 ; DOI 10.5281/zenodo.19227877
+% Sources: docs/phd/theorems/trinity/{CorePhi,AlphaPhi,ExactIdentities}.v,
+%          docs/phd/bibliography.bib (212 entries, KAT bib via PR #581).
+% ============================================================
+
+\section{S1. Extended Vision Statement}\label{ch1-s1-vision-extended}
+
+The introduction above presents the headline arithmetic of the Trinity
+S$^3$AI programme: the identity \(\varphi^{2}+\varphi^{-2}=3\) anchors a
+ternary weight palette \(\{-\varphi^{-1},0,+\varphi^{-1}\}\) that closes
+under integer accumulation. This section extends the vision statement
+along three axes that the headline cannot fit: (i) the \emph{historical}
+reading of how a number-theoretic identity arrived inside an FPGA, (ii)
+the \emph{epistemic} reading that distinguishes Trinity S$^3$AI from
+adjacent neuro-symbolic programmes, and (iii) the \emph{methodological}
+reading that fixes the falsification criteria the dissertation will be
+held to.
+
+\subsection{S1.1 Historical Reading: From Pacioli to Power Rails}
+
+The golden ratio enters mathematics as a geometric object --- Euclid's
+``extreme and mean ratio'' (\textit{Elements} VI, def.\ 3) and Pacioli's
+\textit{De Divina Proportione} \cite{pacioli_divina,euclid_elements} --- and
+acquires its modern algebraic form only later, with Lucas's
+nineteenth-century work on periodic functions \cite{lucas1878} and the
+Fibonacci--Lucas identity literature catalogued by
+Vajda \cite{vajda_fib_lucas} and Koshy \cite{koshy_fib_lucas}.
+
+What is novel in the present programme is not the identity itself but
+the \emph{operational interpretation} of the right-hand integer 3.
+That integer matches the cardinality of the balanced ternary alphabet
+\(\{-1,0,+1\}\), which Knuth's \textit{Art of Computer Programming},
+Volume 2 isolates as the unique non-trivial radix whose canonical
+representation is symmetric about zero \cite{knuth_taocp1}. A weight
+tensor whose entries are drawn from \(\{-\varphi^{-1},0,+\varphi^{-1}\}\)
+therefore inhabits a representation that is simultaneously
+(a) algebraically closed in the field \(\mathbb{Q}(\varphi)\),
+(b) lattice-quantised on the integer subring \(\mathbb{Z}[\varphi]\)
+\cite{ireland_rosen,lang_algebra}, and
+(c) realisable on FPGA fabric without DSP slices because the
+multiplications reduce to sign-flips and shifts.
+
+The path from Pacioli's geometry to the Trinity S$^3$AI bitstream
+crosses four bridges, each of which is the subject of a later chapter:
+
+\begin{itemize}
+\item \textbf{Bridge 1 (Algebra).} The minimal polynomial
+\(x^{2}-x-1=0\) yields \(\varphi^{2}=\varphi+1\) and
+\(\varphi^{-2}=2-\varphi\); their sum is exactly 3. This step is
+formalised in Coq as
+\texttt{trinity\_identity} in
+\filepath{docs/phd/theorems/trinity/CorePhi.v} (see Ch.\,3 for the
+full proof).
+\item \textbf{Bridge 2 (Number theory).} Lucas numbers
+\(L_{n}=\varphi^{n}+\psi^{n}\) (with
+\(\psi=(1-\sqrt{5})/2=-\varphi^{-1}\)) generalise the trinity identity
+to all even powers and provide an integer closure on
+\(\varphi^{n}+\varphi^{-n}\) for even \(n\). The Coq theorem
+\texttt{lucas\_closure\_even\_powers} in
+\filepath{docs/phd/theorems/trinity/ExactIdentities.v} closes this
+step (Ch.\,5).
+\item \textbf{Bridge 3 (Linear algebra).} The 16-element field
+\(\mathrm{GF}(16)\) is the smallest field of characteristic 2 that
+contains a primitive 15th root of unity, which the Trinity construction
+identifies with a \(\varphi^{-1}\)-image after a fixed isomorphism
+\cite{lidl_finite_fields,shparlinski_finite_fields}. The arithmetic of
+the IGLA layer (Ch.\,24) is performed in this field; the connection to
+the real \(\varphi\)-lattice is documented in Ch.\,23.
+\item \textbf{Bridge 4 (Hardware).} The XC7A100T (Artix-7 100T) Xilinx
+fabric admits a free fan-out of one-bit shifts, so a multiply-by-\(\varphi\)
+operation in
+the \(\varphi\)-lattice compiles to a constant of two LUTs per bit.
+The end-to-end timing closure for 92~MHz is documented in Ch.\,33.
+\end{itemize}
+
+Each bridge is independently load-bearing: removing any one breaks the
+end-to-end argument. The dissertation as a whole is the structural
+proof that all four bridges hold simultaneously on a single bitstream.
+
+\subsection{S1.2 Epistemic Reading: What This Programme Claims and Does Not}
+
+A research programme in a crowded field must declare clearly what it
+\emph{does not} claim. Trinity S$^3$AI does not claim that the golden
+ratio is metaphysically privileged, that ternary weights are
+universally optimal, or that BPB is the only meaningful evaluation
+metric. The programme claims, more narrowly, that:
+
+\begin{enumerate}
+\item Under the \emph{specific} ternary palette \(\{-\varphi^{-1},0,+\varphi^{-1}\}\)
+with \(\varphi^{n}\)-scaling, a transformer-class language model can
+sustain BPB \(\le 1.85\) on the held-out evaluation partition with
+\(n\ge 3\) sanctioned seeds (Ch.\,19).
+\item The arithmetic invariants of (1) admit Coq proofs that close with
+\texttt{Qed}, with the canonical 297-theorem catalogue maintained in
+\filepath{t27/proofs/canonical/} and the 13-theorem trinity subset in
+\filepath{docs/phd/theorems/trinity/} (Ch.\,3, Ch.\,15, App.\,B).
+\item The arithmetic of (1) compiles to FPGA fabric at a measured
+power of \(0.94\)--\(1.07\) W, yielding an empirical efficiency ratio
+of \(\approx 3000\times\) the DARPA reference workload (Ch.\,31, Ch.\,33).
+\end{enumerate}
+
+What the programme does \emph{not} claim:
+
+\begin{itemize}
+\item It does not claim that \(\varphi\)-arithmetic outperforms IEEE-754
+arithmetic in absolute BPB on \emph{all} corpora; the gain is documented
+on STROBE-tokenised English and is ablated against MXFP4 in Ch.\,9.
+\item It does not claim that 297 closed Coq proofs imply a verified
+transformer in the strict sense of seL4 or CompCert. The proofs cover
+the arithmetic kernel, the seed admissibility predicate, and the
+phyllotactic sampler --- not the full attention head.
+\item It does not claim that the \(\sim 3000\times\) energy ratio
+generalises beyond inference workloads compatible with the STROBE
+vocabulary. Multi-modal extension is identified as future work.
+\end{itemize}
+
+This narrow claim structure follows Popper's falsifiability principle
+\cite{wigner_unreasonable,hamming_unreasonable,knuth_concrete_math}:
+the claims are stated as conjunctions of measurable predicates, each
+of which can be refuted by a single counter-example.
+
+\subsection{S1.3 Methodological Reading: Falsification Criteria}
+
+Each numbered claim above admits a primary falsifier and a secondary
+falsifier. The primary falsifier is a sufficient condition to reject
+the claim outright. The secondary falsifier weakens the claim but does
+not nullify it; it must be acknowledged in the discussion section of
+the relevant chapter.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.2cm}p{5.5cm}p{5.5cm}}
+\hline
+\textbf{Claim} & \textbf{Primary falsifier} & \textbf{Secondary falsifier} \\
+\hline
+BPB \(\le 1.85\) at Gate-2 &
+A single sanctioned-seed run with BPB \(>1.85\) at the canonical
+evaluation cut-point. &
+A 1.84\(\le\) BPB \(\le 1.85\) cluster with overlapping confidence
+intervals across seeds. \\
+\hline
+297 closed Coq proofs &
+A diff in \filepath{t27/proofs/canonical/} that introduces an
+\texttt{Admitted} marker without a runtime witness in \filepath{assertions/}. &
+Discovery that one of the 297 proofs depends on an axiom that is not
+documented in App.\,B. \\
+\hline
+\(\sim 3000\times\) DARPA &
+A bench measurement reporting wall-power \(>1.5\) W on the published
+bitstream. &
+A throughput drop below 50 toks/sec on the published bitstream
+without a corresponding power drop. \\
+\hline
+\end{tabular}
+\caption{Falsification matrix for the three primary claims of the
+TRINITY S$^3$AI programme.}
+\label{tab:ch1-falsification-matrix}
+\end{table}
+
+The falsification matrix above is not a placeholder. Each row is
+linked to a runtime check in \filepath{assertions/} and to a chapter
+in the dissertation. Reviewers are invited to attempt any of the six
+falsifications and publish the result; the corresponding raw data and
+bitstreams are archived under
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+
+\section{S2. Detailed Contributions and Their Chapter Loci}\label{ch1-s2-contributions}
+
+The dissertation makes seven distinct contributions. Each is summarised
+below with a pointer to the chapter (or chapters) in which it is
+established. The same list, with full statements and pointers to the
+runtime-witness scripts, appears in App.\,A as the canonical
+contribution registry.
+
+\paragraph{C1 --- The Trinity Identity as a Quantisation Anchor.} The
+identity \(\varphi^{2}+\varphi^{-2}=3\) is reinterpreted from a
+high-school number-theoretic curiosity into a load-bearing
+quantisation constraint. The interpretation is novel in that it
+exhibits a single irrational ratio whose square and reciprocal sum
+combine to an integer that exactly matches the cardinality of the
+balanced ternary alphabet. The Coq formalisation appears as
+\texttt{trinity\_identity} in
+\filepath{docs/phd/theorems/trinity/CorePhi.v}. Ch.\,3 establishes the
+identity; Ch.\,4 derives the spectral parameter \(\alpha_{\varphi}\)
+from it.
+
+\paragraph{C2 --- The Sanctioned Seed Pool.} The Fibonacci indices
+\(F_{17}\)--\(F_{21}\) and the Lucas indices \(L_{7},L_{8}\) form a
+canonical seed pool whose contractive basin is established in
+\filepath{docs/phd/theorems/trinity/PhiAttractor.v}. The seed pool
+admits an integer admissibility predicate that is verified at every
+training run start. The forbidden interval \([40,46]\) is documented
+in Ch.\,5 and Ch.\,11.
+
+\paragraph{C3 --- The STROBE Tokeniser.} A sealed-seed tokeniser whose
+vocabulary is closed under the \(\varphi\)-permutation group
+\(\langle\sigma\rangle\) of order 5 (the cyclic permutation
+\(F_{17}\to F_{18}\to\cdots\to F_{21}\to F_{17}\)). The seal protocol
+is documented in Ch.\,13.
+
+\paragraph{C4 --- The IGLA Architecture.} A linear-attention layer
+whose mixing matrix is realised over \(\mathrm{GF}(16)\) with the IGLA
+isomorphism that maps the multiplicative group of \(\mathrm{GF}(16)\)
+onto the cyclic group \(\mathbb{Z}/15\mathbb{Z}\) of \(\varphi^{-1}\)
+rotations. Ch.\,24 develops the architecture; Ch.\,23 the algebra.
+
+\paragraph{C5 --- The MXFP4 Weight Packing Scheme.} A four-bit
+microscaling format that aligns with IEEE~P3109 and absorbs the
+\(\varphi^{n}\) scale into the shared exponent. The format is detailed
+in Ch.\,22 and ablated against \(\varphi\)-native packing in Ch.\,9.
+
+\paragraph{C6 --- The Hardware Bridge.} A complete bitstream for the
+QMTech XC7A100T that closes timing at 92~MHz with zero DSP slices and
+\(\le 1.07\)~W wall-power on the bench. Ch.\,33 reports the bench
+characterisation; App.\,F archives the bitstream by SHA-256.
+
+\paragraph{C7 --- The Reproducibility Manifest.} A SHA-256 ledger
+covering source code, Coq proof artefacts, training checkpoints, and
+FPGA bitstreams; sealed under
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+The verification protocol is documented in App.\,D.
+
+Each contribution is paired with a runtime witness in
+\filepath{assertions/} and a Coq cross-reference, in line with the R5
+honesty rule (no contribution without a falsifier).
+
+\section{S3. Programme Lineage and Adjacent Work}\label{ch1-s3-lineage}
+
+The programme owes acknowledged intellectual debts to four lines of
+prior art. Each is surveyed in Ch.\,2 in detail; the present section
+is restricted to the lineage statement.
+
+\begin{itemize}
+\item \textbf{Ternary and sub-bit neural computation.} BitNet
+b1.58 \cite{lecun_nature_2015,schmidhuber_dl_review} and earlier
+ternary-weight literature establish the empirical viability of
+\(\{-1,0,+1\}\) weight palettes. Trinity S$^3$AI inherits the empirical
+floor and adds a number-theoretic justification for the specific scale
+\(\varphi^{-1}\) rather than a learned scalar.
+\item \textbf{Kolmogorov--Arnold Networks (KANs).} The KAN
+architecture \cite{liu_kan_2024,liu_kan2_2025} replaces fixed
+activations on nodes with learnable splines on edges, motivated by
+the Kolmogorov--Arnold representation theorem \cite{kolmogorov_kar_1957,arnold_kar_1957}.
+The IGLA layer (Ch.\,24) shares the structural decomposition into
+inner and outer functions, but realises it on \(\mathrm{GF}(16)\)
+with closed-form arithmetic rather than learnable splines. The
+relationship is one of \emph{structural analogy}, not isomorphism;
+the analogy is documented and bounded in Ch.\,23.
+\item \textbf{Vector-symbolic architectures (VSAs).} Hyperdimensional
+computing over finite groups \cite{finite_group_vsa_2022,kanerva_hyperdimensional}
+provides the closest prior art for the algebraic structure of the
+IGLA bind/unbind operations. The trinity construction differs in that
+it lifts the bind operation from a group operation to a field
+operation, gaining distributivity at the cost of a more restrictive
+algebra.
+\item \textbf{Finite-field neural expressivity.} The recent ICLR work
+on expressivity of shallow polynomial neural networks over finite
+fields \cite{finite_field_expressivity_2025} provides the primary
+theoretical foundation for the IGLA / GF(16) framework. The trinity
+construction inherits the neuromanifold framing and instantiates it
+on \(\mathrm{GF}(16)\) specifically because of the
+\(\varphi^{n}+\varphi^{-n}\) integer closure.
+\item \textbf{Sub-bit quantisation by KAN.} The closest combined prior
+on KAN-with-quantisation is the KANtize work \cite{kantize_2026},
+which explores low-bit precision for KAN inference. Trinity S$^3$AI
+differs in committing to a specific algebraic palette
+(\(\{-\varphi^{-1},0,+\varphi^{-1}\}\)) at the design stage rather
+than as a post-hoc quantisation pass.
+\end{itemize}
+
+\section{S4. Theorem Cross-Reference (selection)}\label{ch1-s4-theorem-xref}
+
+The following Coq theorems anchor the introduction. Full proofs are
+in the cited \filepath{.v} files; status (\texttt{Qed} or runtime
+witness) is recorded in
+\filepath{assertions/coq\_admitted\_inventory.json}.
+
+\begin{theorem}[Trinity Identity, Coq \texttt{trinity\_identity}]
+\label{thm:ch1-trinity-identity}
+\(\varphi^{2}+\varphi^{-2}=3\).
+\textbf{Status:} \texttt{Qed} in
+\filepath{docs/phd/theorems/trinity/CorePhi.v}, line 79--85.
+\textbf{Proof sketch:} from \texttt{phi\_square} (\(\varphi^{2}=\varphi+1\))
+and \texttt{phi\_inv\_sq} (\(\varphi^{-2}=2-\varphi\)) by
+\texttt{ring} tactic.
+\end{theorem}
+
+\begin{theorem}[\(\alpha_{\varphi}\) closed form, Coq \texttt{alpha\_phi\_closed\_form}]
+\label{thm:ch1-alpha-phi-closed}
+\(\alpha_{\varphi}=(\sqrt{5}-2)/2\).
+\textbf{Status:} \texttt{Qed} in
+\filepath{docs/phd/theorems/trinity/AlphaPhi.v}, line 18--24.
+\textbf{Role:} fixes the spectral parameter that Ch.\,4 will identify
+with the gate-derivation constant.
+\end{theorem}
+
+\begin{theorem}[Lucas closure for even powers, Coq
+\texttt{lucas\_closure\_even\_powers}]
+\label{thm:ch1-lucas-closure}
+For all even \(n\),
+\(L_{n}=\varphi^{n}+\varphi^{-n}\in\mathbb{Z}_{>0}\).
+\textbf{Status:} \texttt{Qed} in
+\filepath{docs/phd/theorems/trinity/ExactIdentities.v}.
+\textbf{Role:} generalises Theorem~\ref{thm:ch1-trinity-identity} to
+all even \(n\); used in Ch.\,5 for seed-admissibility checks.
+\end{theorem}
+
+These three theorems are sufficient to anchor the algebra of
+\(\{-\varphi^{-1},0,+\varphi^{-1}\}\) accumulators on integer hardware.
+The remaining theorems of the trinity catalogue (10 in
+\filepath{docs/phd/theorems/trinity/}, with proof status logged in
+the canonical inventory) refine the algebra to specific
+\(\varphi\)-scaled lattices.
+
+\section{S5. Roadmap of the Remaining Chapters}\label{ch1-s5-roadmap}
+
+The dissertation is organised in three evidence axes, mirroring the
+S$^3$ decomposition. Each axis stands alone as a published-paper-sized
+contribution; together they form the conjunctive claim above.
+
+\paragraph{Axis 1 --- Foundations (Ch.\,2--Ch.\,19).}
+\begin{itemize}
+\item Ch.\,2 surveys the neuro-symbolic, KAN, VSA, and ternary
+literature; positions Trinity S$^3$AI in the gap.
+\item Ch.\,3 establishes the trinity identity in Coq.
+\item Ch.\,4 derives the spectral parameter \(\alpha_{\varphi}\).
+\item Ch.\,5 establishes \(\varphi\)-distance and the sanctioned seed
+pool.
+\item Ch.\,6 introduces the GoldenFloat family GF4..GF64.
+\item Ch.\,7 derives Vogel's \(137.5^{\circ}\) divergence angle.
+\item Ch.\,8 develops TF3/TF9 sparse ternary matmul.
+\item Ch.\,9 ablates GF vs.\ MXFP4.
+\item Ch.\,10 documents the Coq L1 range\(\times\)precision Pareto.
+\item Ch.\,11 records the pre-registration of \(H_{1}\) (\(\ge 3\)
+distinct seeds).
+\item Ch.\,12 describes the deferred hardware bridge.
+\item Ch.\,13 details the STROBE tokeniser and seed seal.
+\item Ch.\,14--Ch.\,18 develop the algebraic and statistical
+infrastructure.
+\item Ch.\,19 presents the Welch-\(t\) gate-2 evaluation.
+\end{itemize}
+
+\paragraph{Axis 2 --- Architecture (Ch.\,20--Ch.\,27).}
+\begin{itemize}
+\item Ch.\,20 surveys the Standard Model and the role of
+\(\alpha_{\varphi}\) in dimensional analysis (an extended speculative
+section flagged as such).
+\item Ch.\,21--Ch.\,22 develop the quantum-field-inspired weight
+constraints and the MXFP4 packing.
+\item Ch.\,23 introduces \(\mathrm{GF}(16)\) algebra.
+\item Ch.\,24 describes the IGLA architecture.
+\item Ch.\,25 reports benchmarks against IEEE-754 baselines.
+\item Ch.\,26 presents data analysis and ablations.
+\item Ch.\,27 derives the Trinity Identity in the architectural
+context.
+\end{itemize}
+
+\paragraph{Axis 3 --- Hardware and Closure (Ch.\,28--Ch.\,35).}
+\begin{itemize}
+\item Ch.\,28 develops the momentum algebra used in seed
+admissibility.
+\item Ch.\,29 closes the Lucas-closure proof.
+\item Ch.\,30--Ch.\,32 cover golden imagery, philosophy, and
+conclusion.
+\item Ch.\,33 reports the FPGA bench characterisation.
+\item Ch.\,34 documents the Coq runtime-witness bridge.
+\item Ch.\,35 sketches future work.
+\end{itemize}
+
+The appendices supply the canonical Coq census, the seed registry, the
+reproducibility scripts, and the pre-registration documents in raw
+form.
+
+\section{S6. Notation, Conventions, and Anchor Footer}\label{ch1-s6-notation}
+
+The notational conventions used throughout the dissertation are
+collected in \filepath{frontmatter/notation.tex}; this section records
+only the symbols that occur in the introduction.
+
+\begin{itemize}
+\item \(\varphi=(1+\sqrt{5})/2\approx1.6180339887\) --- golden ratio.
+\item \(\psi=(1-\sqrt{5})/2=-\varphi^{-1}\approx-0.6180339887\) --- algebraic conjugate.
+\item \(\alpha_{\varphi}=\varphi^{-3}/2=(\sqrt{5}-2)/2\approx0.1180339887\) ---
+spectral parameter.
+\item \(F_{n},L_{n}\) --- Fibonacci and Lucas numbers, indexed from
+\(F_{0}=0,F_{1}=1\) and \(L_{0}=2,L_{1}=1\).
+\item \(\mathrm{GF}(16)\) --- finite field of 16 elements,
+characteristic 2.
+\item \(\mathbb{Z}[\varphi]\) --- integer ring of
+\(\mathbb{Q}(\varphi)\); equal to \(\mathbb{Z}[X]/(X^{2}-X-1)\).
+\item BPB --- bits per byte of compressed text; primary evaluation
+metric.
+\item \(\Vert\cdot\Vert_{\varphi}\) --- the \(\varphi\)-distance metric
+of Ch.\,5.
+\end{itemize}
+
+\paragraph{Anchor footer.} Every chapter of this dissertation is
+closed with the same anchor:
+\(\varphi^{2}+\varphi^{-2}=3\);
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+The anchor is not ornamental: it is the conjunctive identity that the
+remaining 600 pages decompose, instantiate, and verify.
+

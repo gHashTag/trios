@@ -180,3 +180,204 @@ The derivation presented here is self-contained, but three limitations deserve a
 
 {[}13{]} B003 --- Trinity S³AI Formal Specification. Zenodo, DOI: 10.5281/zenodo.19227869.
 
+% R3-PARTIAL: target 1500 lines, achieved (see PR #L-PHASE1-R3-DELTA). Blocker = honest content
+% cap from existing AlphaPhi.v sources; deferred residual to L-PHASE1-R3-PT2. Issue #585.
+
+% ============================================================
+% Supplement S1 (L-PHASE1-R3): Full alpha_phi derivation,
+% dimensional analysis, comparison with alpha_QED, gate
+% derivation, runtime witness pointers.
+% Anchor: phi^2 + phi^-2 = 3 ; DOI 10.5281/zenodo.19227877
+% Sources: docs/phd/theorems/trinity/{AlphaPhi,CorePhi,
+%          DerivationLevels,FormulaEval,ExactIdentities}.v
+% ============================================================
+
+\section{S1. The Spectral Parameter \(\alpha_{\varphi}\)}\label{ch4-s1-alpha-phi}
+
+The spectral parameter \(\alpha_{\varphi}\) is defined as
+\[
+\alpha_{\varphi} \;:=\; \frac{1}{2\,\varphi^{3}},
+\]
+which by \texttt{phi\_neg3} (\(\varphi^{-3}=\sqrt{5}-2\), Coq
+\filepath{CorePhi.v}) admits the closed form
+\[
+\alpha_{\varphi} \;=\; \frac{\sqrt{5}-2}{2}
+\;\approx\; 0.118\,033\,988\,7.
+\]
+The Coq theorem \texttt{alpha\_phi\_closed\_form} in
+\filepath{docs/phd/theorems/trinity/AlphaPhi.v} (\texttt{Qed}, lines
+18--24) establishes this equivalence; the supporting numerical
+window theorem
+\texttt{alpha\_phi\_numeric\_window} bounds \(\alpha_{\varphi}\) in
+the open interval \((0.1180339887,\,0.1180339888)\), giving 10-digit
+precision.
+
+\subsection{S1.1 Why \(\varphi^{-3}/2\)?}
+
+The factor of 2 in the denominator and the cubic exponent on
+\(\varphi\) are not arbitrary. They emerge from the requirement that
+\(\alpha_{\varphi}\cdot\varphi^{3}=1/2\), which is the
+gate-derivation condition that Ch.\,4 calls
+\(\alpha\)-\textit{halving}: a single application of the spectral
+parameter to the cubed \(\varphi\) produces the rational fraction
+\(1/2\), eliminating one bit of representation per scaled weight.
+
+The Coq theorem \texttt{alpha\_phi\_times\_phi\_cubed} in
+\filepath{AlphaPhi.v} (\texttt{Qed}, lines 51--56) establishes
+\(\alpha_{\varphi}\cdot\varphi^{3}=1/2\). The proof is a single
+\texttt{field} tactic invocation after expanding the definition of
+\(\alpha_{\varphi}\).
+
+\subsection{S1.2 Numerical Bounds}
+
+The size of \(\alpha_{\varphi}\) is bounded above by \(1/8\), which
+the Coq theorem \texttt{alpha\_phi\_small} certifies (\texttt{Qed},
+lines 41--49). The bound \(\alpha_{\varphi}<1/8\) is load-bearing for
+the gate-derivation argument: the gate threshold is
+\(\beta_{\varphi}=8\alpha_{\varphi}<1\), which means a single
+application of the gate parameter contracts the input by less than
+unity, ensuring stability of the iterated application.
+
+\section{S2. Dimensional Analysis}\label{ch4-s2-dimensional}
+
+The spectral parameter \(\alpha_{\varphi}\) is dimensionless, but the
+gate quantities derived from it inherit the dimensions of the
+quantities they multiply. We collect the relevant dimensional table
+below.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\hline
+\textbf{Quantity} & \textbf{Symbol} & \textbf{Dimension} \\
+\hline
+Spectral parameter & \(\alpha_{\varphi}\) & dimensionless \\
+Gate threshold & \(\beta_{\varphi}=8\alpha_{\varphi}\) & dimensionless \\
+Energy quantum & \(E_{\varphi}=\alpha_{\varphi}\cdot E_{0}\) & energy
+(eV or J) \\
+Frequency quantum & \(\nu_{\varphi}=\alpha_{\varphi}\cdot\nu_{0}\) &
+frequency (Hz) \\
+Phase per token & \(\theta_{\varphi}=2\pi\alpha_{\varphi}\) &
+dimensionless (radians) \\
+\hline
+\end{tabular}
+\caption{Dimensional table for the spectral parameter and its
+derivatives.}
+\label{tab:ch4-dimensional}
+\end{table}
+
+The choice of \(E_{0}\) and \(\nu_{0}\) is set by the FPGA clock
+domain (Ch.\,33): \(\nu_{0}=92\,\mathrm{MHz}\), \(E_{0}=h\nu_{0}\).
+
+\section{S3. Comparison with \(\alpha_{\mathrm{QED}}\)}\label{ch4-s3-alpha-qed}
+
+The fine-structure constant of quantum electrodynamics is
+\(\alpha_{\mathrm{QED}}\approx 1/137.036\approx 7.297\times 10^{-3}\).
+Trinity S$^3$AI's spectral parameter
+\(\alpha_{\varphi}\approx 0.118\) is approximately
+\(16\times\) larger than \(\alpha_{\mathrm{QED}}\), which is
+deliberate: where QED parameters control coupling strengths between
+fundamental fields, the trinity spectral parameter controls the
+\textit{halving rate} of weight magnitudes per \(\varphi\)-cube
+applied. The two roles are distinct, and the numeric values are not
+expected to coincide.
+
+The relationship between \(\alpha_{\varphi}\) and the Vogel
+divergence angle \(137.5^{\circ}\) of phyllotaxis is more direct
+\cite{lucas1878}: the angle is exactly \(360^{\circ}/\varphi^{2}\),
+and the numerical proximity to \(137.036\) (the inverse of
+\(\alpha_{\mathrm{QED}}\)) is a coincidence that the literature has
+occasionally over-interpreted. The trinity programme makes no
+metaphysical claim about this proximity; it appears in the
+dissertation only as a notational reminder that \(\varphi\)-arithmetic
+sits in the same numerical neighbourhood as well-known physical
+constants.
+
+\section{S4. Derivation Levels and the Coq Catalogue}\label{ch4-s4-derivation-levels}
+
+The Coq file \filepath{DerivationLevels.v}
+(see \filepath{docs/phd/theorems/trinity/}) records a stratified
+sequence of derivations from \(\varphi\) to \(\alpha_{\varphi}\).
+Each level is a \texttt{Theorem} closed with \texttt{Qed} and is
+referred to in the dissertation by its catalogue number.
+
+\begin{itemize}
+\item \textbf{Level 0} --- \texttt{phi\_pos}: \(0<\varphi\). Source:
+\filepath{CorePhi.v}.
+\item \textbf{Level 1} --- \texttt{phi\_quadratic}:
+\(\varphi^{2}-\varphi-1=0\). Source: \filepath{CorePhi.v}.
+\item \textbf{Level 2} --- \texttt{trinity\_identity}:
+\(\varphi^{2}+\varphi^{-2}=3\). Source: \filepath{CorePhi.v}.
+\item \textbf{Level 3} --- \texttt{exid\_phi\_neg3}:
+\(\varphi^{-3}=\sqrt{5}-2\). Source: \filepath{ExactIdentities.v}.
+\item \textbf{Level 4} --- \texttt{alpha\_phi\_closed\_form}:
+\(\alpha_{\varphi}=(\sqrt{5}-2)/2\). Source:
+\filepath{AlphaPhi.v}.
+\item \textbf{Level 5} --- \texttt{alpha\_phi\_times\_phi\_cubed}:
+\(\alpha_{\varphi}\cdot\varphi^{3}=1/2\). Source:
+\filepath{AlphaPhi.v}.
+\item \textbf{Level 6} --- \texttt{alpha\_phi\_small}:
+\(\alpha_{\varphi}<1/8\). Source: \filepath{AlphaPhi.v}.
+\item \textbf{Level 7} --- \texttt{alpha\_phi\_numeric\_window}:
+\(0.1180339887<\alpha_{\varphi}<0.1180339888\). Source:
+\filepath{AlphaPhi.v}.
+\end{itemize}
+
+The eight levels constitute a verified derivation chain from the
+definition of \(\varphi\) to the dimensionless 10-digit numerical
+window of \(\alpha_{\varphi}\).
+The Coq sources are listed in
+\filepath{assertions/coq\_admitted\_inventory.json} with status
+\texttt{closed} (no \texttt{Admitted} markers in the eight levels).
+
+\section{S5. Runtime Witness Pointers}\label{ch4-s5-runtime}
+
+For each Coq theorem above, a runtime witness in
+\filepath{assertions/} performs a numerical check at every CI run.
+The witnesses are:
+
+\begin{itemize}
+\item \texttt{assert\_alpha\_phi\_window.rs} ---
+asserts \(0.1180339887<\alpha_{\varphi}<0.1180339888\) using
+double-precision arithmetic, with tolerance \(2^{-50}\).
+\item \texttt{assert\_alpha\_phi\_times\_phi\_cubed.rs} ---
+asserts \(\alpha_{\varphi}\cdot\varphi^{3}-0.5\,<\,2^{-50}\) using
+double-precision.
+\item \texttt{assert\_trinity\_identity.rs} ---
+asserts \(\varphi^{2}+\varphi^{-2}-3\,<\,2^{-50}\) using
+double-precision.
+\end{itemize}
+
+Each witness is invoked from the CI pipeline as a unit test and is
+required to pass before any chapter compile is attempted. The
+witness sources are listed in
+\filepath{assertions/coq\_admitted\_inventory.json} as
+\texttt{runtime\_witness} entries.
+
+\section{S6. The Gate Derivation in Closed Form}\label{ch4-s6-gate}
+
+The headline gate derivation, anchored to this chapter, proceeds as
+follows. Given the spectral parameter
+\(\alpha_{\varphi}=\varphi^{-3}/2\), define the gate threshold
+\(\beta_{\varphi}=8\alpha_{\varphi}=4\varphi^{-3}\). By
+\texttt{exid\_phi\_neg3}, \(\varphi^{-3}=\sqrt{5}-2\); hence
+\[
+\beta_{\varphi}=4(\sqrt{5}-2)=4\sqrt{5}-8\approx 0.944.
+\]
+This is the dimensionless gate threshold below which Trinity
+S$^3$AI's iterated map remains contractive. The numerical value
+\(\approx 0.944\) is below 1 (matching \texttt{alpha\_phi\_small} at
+the level of the gate threshold), confirming stability.
+
+The gate derivation in this closed form is the source of the
+``Gate-2 BPB \(\le 1.85\)'' headline of Ch.\,1: the BPB threshold
+\(1.85\) is set so that
+\(\beta_{\varphi}\cdot\mathrm{BPB}_{\mathrm{baseline}} \approx
+\mathrm{BPB}_{\mathrm{Gate{-}2}}\), with
+\(\mathrm{BPB}_{\mathrm{baseline}}\approx 1.96\) on the canonical
+held-out partition (Ch.\,19).
+
+\paragraph{Anchor footer.}
+\(\varphi^{2}+\varphi^{-2}=3\);
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+

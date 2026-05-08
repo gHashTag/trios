@@ -1,0 +1,103 @@
+name: Matrix Runner Postrun (#598 commit-back)
+# Scheduled fallback for the trios-mr-priority-runner JSONL retrieval lane.
+# Runs hourly (cron 23 * * * *) and on workflow_dispatch. Pulls the runner's
+# current `assertions/matrix_samples.jsonl` from a designated retrieval path
+# (default: a sidecar branch the runner pushes to), invokes
+# scripts/postrun_commit_back.ts, and lets the orchestrator open PR-per-batch.
+#
+# Use case: when the Railway sidecar (scripts/postrun_sidecar.ts) is offline
+# or unreachable. The CI version reads the runner output from a sibling
+# branch named `data/matrix-runner-staging` (configurable via input) and
+# treats it as the local JSONL.
+#
+# Anchor: phi^2 + phi^-2 = 3 · DOI 10.5281/zenodo.19227877.
+
+on:
+  schedule:
+    - cron: "23 * * * *"  # hourly at :23
+  workflow_dispatch:
+    inputs:
+      staging_branch:
+        description: "Branch to read assertions/matrix_samples.jsonl from"
+        required: false
+        default: "data/matrix-runner-staging"
+      batch_size:
+        description: "Rows per PR"
+        required: false
+        default: "25"
+      dry_run:
+        description: "Set to 1 to print plan without remote writes"
+        required: false
+        default: "0"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: matrix-runner-postrun
+  cancel-in-progress: false
+
+jobs:
+  commit-back:
+    name: Commit back matrix_samples.jsonl
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch staging JSONL into workspace
+        env:
+          STAGING_BRANCH: ${{ github.event.inputs.staging_branch || 'data/matrix-runner-staging' }}
+        run: |
+          set -e
+          # If the staging branch exists, pull its assertions/matrix_samples.jsonl
+          # into the working tree so postrun_commit_back.ts can read it locally.
+          if git ls-remote --exit-code --heads origin "$STAGING_BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$STAGING_BRANCH":refs/remotes/origin/"$STAGING_BRANCH"
+            git --no-pager show "origin/$STAGING_BRANCH:assertions/matrix_samples.jsonl" \
+              > assertions/matrix_samples.jsonl || true
+            echo "STAGING_BYTES=$(wc -c < assertions/matrix_samples.jsonl)" >> "$GITHUB_ENV"
+          else
+            echo "::notice::staging branch $STAGING_BRANCH not present; nothing to retrieve"
+            echo "STAGING_BYTES=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Setup Node
+        if: env.STAGING_BYTES != '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install tsx
+        if: env.STAGING_BYTES != '0'
+        run: npm i -g tsx@4
+
+      - name: Run commit-back orchestrator
+        if: env.STAGING_BYTES != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size || '25' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+          RUNNER_SHA: ${{ github.sha }}
+          PARENT_ISSUE: "446"
+        run: |
+          tsx scripts/postrun_commit_back.ts
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Matrix Runner Postrun"
+            echo ""
+            echo "- staging_bytes: ${STAGING_BYTES:-0}"
+            echo "- batch_size: ${{ github.event.inputs.batch_size || '25' }}"
+            echo "- dry_run: ${{ github.event.inputs.dry_run || '0' }}"
+            echo ""
+            echo "Anchor: \`phi^2 + phi^-2 = 3\` · DOI 10.5281/zenodo.19227877"
+          } >> "$GITHUB_STEP_SUMMARY"

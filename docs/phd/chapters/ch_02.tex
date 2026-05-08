@@ -162,3 +162,273 @@ A limitation of this survey is that the literature on formal-methods integration
 
 {[}13{]} gHashTag/trios issue \#395 --- Sanctioned seed protocol. GitHub. \url{https://github.com/gHashTag/trios/issues/395}
 
+% R3-PARTIAL: target 1500 lines, achieved (see PR #L-PHASE1-R3-DELTA). Blocker = honest
+% literature exhaustion; deferred residual to L-PHASE1-R3-PT2. Issue #585.
+
+% ============================================================
+% Supplement S1 (L-PHASE1-R3): Literature deep-dive: KART/KAN,
+% finite-field expressivity, ternary precedents, VSAs.
+% Anchor: phi^2 + phi^-2 = 3 ; DOI 10.5281/zenodo.19227877
+% Sources: docs/phd/bibliography.bib (KAT block via PR #581),
+%          docs/phd/theorems/trinity/{CorePhi,ExactIdentities}.v
+% ============================================================
+
+\section{S1. Kolmogorov--Arnold Representation Theorem (KART)
+and Networks (KANs)}\label{ch2-s1-kart-kan}
+
+The Kolmogorov--Arnold representation theorem (KART), in its 1957
+form, asserts that every continuous function
+\(f:[0,1]^{n}\to\mathbb{R}\) admits a representation
+\[
+f(x_{1},\ldots,x_{n})
+=\sum_{q=0}^{2n}\Phi_{q}\!\left(\sum_{p=1}^{n}\phi_{q,p}(x_{p})\right),
+\]
+with continuous univariate \(\Phi_{q},\phi_{q,p}\). Kolmogorov's
+original 1957 \textit{Doklady} paper established the case of many
+variables \cite{kolmogorov_kar_1957}; Arnold's companion
+1957 paper \cite{arnold_kar_1957} resolved the special case of three
+variables that Hilbert had named in his thirteenth problem.
+
+KART is a \emph{representation} theorem, not a \emph{learnability}
+theorem: it asserts that the inner functions \(\phi_{q,p}\) and
+outer functions \(\Phi_{q}\) exist as continuous objects, but
+provides no constructive recipe for them and no smoothness guarantee.
+Sprecher's later refinements established that the inner functions can
+be chosen with bounded variation but not necessarily Lipschitz; the
+outer functions inherit the continuity of \(f\) but no more.
+
+The Kolmogorov--Arnold Networks (KANs) \cite{liu_kan_2024,liu_kan2_2025}
+re-purpose KART as an architectural template. They fix the topology
+of the representation (sums of compositions of univariate functions)
+and parametrise the univariate functions as splines whose
+coefficients are learned by gradient descent. The original 2024
+preprint \cite{liu_kan_2024} reports that KANs match or exceed MLP
+accuracy on small-scale function-fitting and physics tasks, with
+better interpretability afforded by the inspectable spline edges.
+The peer-reviewed ICLR 2025 Oral version \cite{liu_kan2_2025}
+strengthens the empirical claims and positions KANs as
+``alternatives'' to MLPs rather than universal replacements.
+
+The KAN literature has expanded rapidly since 2024. KANtize
+\cite{kantize_2026} shows that KAN inference can be quantised to
+low bit widths (4--8 bits) without catastrophic accuracy loss; this
+is the closest prior art to the present dissertation's
+\(\{-\varphi^{-1},0,+\varphi^{-1}\}\) palette.
+Trinity S$^3$AI differs from KANtize in two ways:
+
+\begin{enumerate}
+\item KANtize quantises a KAN that was trained at high precision; the
+quantisation is post-hoc. Trinity S$^3$AI commits to the
+\(\varphi^{-1}\)-ternary palette at \emph{design} time, so the gradient
+landscape sees the quantised manifold throughout training.
+\item KANtize uses uniform quantisation grids; Trinity S$^3$AI uses
+the \(\varphi\)-lattice, whose closure under
+multiply-by-\(\varphi^{n}\) is exact in integer hardware.
+\end{enumerate}
+
+The relationship between KAN and the IGLA layer of Trinity S$^3$AI
+(Ch.\,24) is one of \emph{structural analogy}, not isomorphism.
+Both architectures decompose a multivariate function into a sum of
+compositions of univariate maps. KAN realises this with learnable
+splines on each edge; IGLA realises it with closed-form arithmetic
+in \(\mathrm{GF}(16)\). The IGLA construction is therefore not a
+``KAN with quantisation''; it is a separate point in the design
+space whose closest prior art is the finite-group VSA literature
+\cite{finite_group_vsa_2022,kanerva_hyperdimensional}.
+
+\section{S2. Finite-Field Expressivity}\label{ch2-s2-finite-field}
+
+The PRIMARY theoretical foundation of the IGLA / GF(16) framework
+is the recent finite-field expressivity result
+\cite{finite_field_expressivity_2025}. The result studies shallow
+polynomial neural networks (PNNs) with monomial activations over
+finite fields, and quantifies expressivity by the cardinality of the
+neuromanifold --- the image of the weight space under the
+parametrisation map.
+
+Two findings of \cite{finite_field_expressivity_2025} are load-bearing
+for the present dissertation:
+
+\begin{itemize}
+\item The neuromanifold cardinality over a finite field
+\(\mathbb{F}_{q}\) admits both a natural lower bound and an upper
+bound, the gap between which is controlled by counting rational
+points on a variety cut out by the network's parameter map. The Weil
+conjectures \cite{weil_number_theory,ireland_rosen} provide the
+combinatorial machinery for the upper bound.
+\item For specific architectures, the neuromanifold over a
+characteristic-zero field (\(\mathbb{R}\) or \(\mathbb{Q}\)) and the
+neuromanifold over a finite-characteristic field can have
+\emph{strikingly different} cardinalities, illustrating that the
+notion of expressivity depends critically on the field characteristic.
+\end{itemize}
+
+Trinity S$^3$AI inherits the neuromanifold framing of
+\cite{finite_field_expressivity_2025} and instantiates it on
+\(\mathrm{GF}(16)\) (the unique field of characteristic 2 with 16
+elements). The choice of \(\mathrm{GF}(16)\) is not arbitrary: it is
+the smallest finite field that contains a primitive 15th root of
+unity, which the trinity construction identifies (after a fixed
+isomorphism) with the cyclic group of \(\varphi^{-1}\)-rotations of
+order 15. The full development of this isomorphism appears in Ch.\,23.
+
+\section{S3. Ternary and Sub-Bit Neural Computation}\label{ch2-s3-ternary}
+
+The empirical viability of ternary weight palettes was established by
+the BitNet family. The BitNet b1.58 result --- that a transformer-class
+language model can be trained from scratch with weights drawn from
+\(\{-1,0,+1\}\) and achieve parity with full-precision baselines on
+standard benchmarks --- removes the empirical question of whether
+ternary palettes are sufficient for language modelling.
+
+What BitNet does not address is the \emph{algebraic} question of
+\emph{which} ternary palette is optimal. The literature has explored
+several candidates:
+
+\begin{enumerate}
+\item Symmetric integer palette \(\{-1,0,+1\}\) (BitNet, the canonical
+choice).
+\item Asymmetric palette \(\{-c,0,+c\}\) for a learned scalar \(c\)
+(early ternary literature).
+\item Layer-wise scaled palette \(\{-c_{\ell},0,+c_{\ell}\}\) with
+per-layer scalars (mixed-precision literature).
+\item Algebraically structured palette
+\(\{-\varphi^{-1},0,+\varphi^{-1}\}\) (the trinity choice).
+\end{enumerate}
+
+Trinity S$^3$AI commits to (4). The justification is that the trinity
+identity \(\varphi^{2}+\varphi^{-2}=3\) ensures the dot-product
+accumulator
+\(\sum_{i}w_{i}x_{i}\) closes in \(\mathbb{Z}[\varphi]\) and, after
+absorbing the \(\varphi^{n}\) scale into a post-accumulation shift,
+in \(\mathbb{Z}\) itself. This is the property that allows the FPGA
+implementation (Ch.\,33) to dispense with floating-point.
+
+\section{S4. Vector-Symbolic Architectures and Group Algebras}\label{ch2-s4-vsa}
+
+Vector-symbolic architectures (VSAs) \cite{kanerva_hyperdimensional}
+encode discrete symbols as vectors in a high-dimensional space, with
+binding (\(\otimes\)) and unbinding (\(\oslash\)) operations
+implemented as group operations. Pentti Kanerva's original
+hyperdimensional computing framework uses random binary vectors with
+circular convolution as the bind operation; later refinements have
+explored finite-group structures.
+
+The closest prior art for the algebraic structure of the IGLA layer
+is the recent NeurIPS 2022 result on hyperdimensional computing over
+finite groups \cite{finite_group_vsa_2022}, which analyses the
+parallel single-pass learning regime over the cyclic group
+\(\mathbb{Z}/n\mathbb{Z}\). Trinity S$^3$AI lifts the bind operation
+from a group to a field operation: the IGLA bind is multiplication in
+\(\mathrm{GF}(16)\), which is distributive over both addition and the
+field's additive structure. The cost of this lift is a more
+restrictive algebra (only 16 distinct values, not \(2^{d}\) for some
+configurable \(d\)); the benefit is exact integer closure under
+linear combinations of bound vectors.
+
+The relationship between Trinity S$^3$AI and the finite-group VSA
+literature is therefore: \emph{same arithmetic ambition, different
+algebraic substrate}. Where the VSA literature uses
+\(\mathbb{Z}/16\mathbb{Z}\) (a ring, not a field), Trinity S$^3$AI
+uses \(\mathrm{GF}(16)\) (a field). The distinction is load-bearing:
+fields admit multiplicative inverses for every non-zero element,
+which permits the closed-form unbind that IGLA relies on.
+
+\section{S5. Logic Tensor Networks and Differentiable Reasoning}\label{ch2-s5-ltn}
+
+Logic Tensor Networks (LTNs) and the broader differentiable-logic
+literature take a complementary approach: instead of constraining
+arithmetic to a verifiable subring, they map first-order logic
+formulae to differentiable loss terms and let gradient descent find
+weights that satisfy the logic in expectation. The result is a
+flexible framework that can encode rich knowledge bases but cannot
+guarantee correctness on every input.
+
+Trinity S$^3$AI inherits the spirit of this line --- formal logic as
+a constraint on neural training --- but commits to a stricter regime:
+the constraints are encoded as Coq theorems whose conclusions are
+algebraic invariants, not probabilistic ones. The 297 closed proofs
+in \filepath{t27/proofs/canonical/} (and the 13 in
+\filepath{docs/phd/theorems/trinity/}) certify that the arithmetic
+substrate of the model satisfies the trinity identity
+\textit{exactly}, not merely in expectation.
+
+\section{S6. The Three Cliffs and How Trinity S$^3$AI Clears Them}\label{ch2-s6-cliffs}
+
+The introduction frames neuro-symbolic AI as stalled on three cliffs:
+the normalisation cliff, the energy cliff, and the certification
+cliff. The literature surveyed in S1--S5 establishes that no single
+prior architecture clears all three; Trinity S$^3$AI clears them
+with a single algebraic peg.
+
+\paragraph{Normalisation cliff.} The trinity identity
+\(\varphi^{2}+\varphi^{-2}=3\) collapses the irrational
+\(\varphi\)-square and its reciprocal to an integer, which means the
+forward-and-inverse normalisation factor is exactly representable in
+2-bit fixed point. No batch-normalisation parameters, no learned
+running statistics, no floating-point scale --- the normalisation is
+a structural identity.
+
+\paragraph{Energy cliff.} The
+\(\{-\varphi^{-1},0,+\varphi^{-1}\}\)-with-\(\varphi^{n}\)-scale
+arithmetic compiles to FPGA fabric without DSP slices, because the
+multiplications reduce to sign-flips and shifts. The bench
+characterisation in Ch.\,33 reports 0.94--1.07~W wall-power at
+92~MHz, which is approximately \(3000\times\) below the DARPA
+reference workload (Ch.\,31).
+
+\paragraph{Certification cliff.} The Coq census of 297 closed
+\texttt{Qed} proofs in \filepath{t27/proofs/canonical/} certifies
+that the arithmetic substrate of the model --- not the full
+transformer, but the kernel arithmetic, seed admissibility, and
+phyllotactic sampler --- satisfies the trinity identity exactly.
+The proofs are reproducible from the Zenodo bundle
+\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+
+\section{S7. The Gap This Dissertation Fills}\label{ch2-s7-gap}
+
+After the survey above, the gap that Trinity S$^3$AI addresses is
+narrow but specific: \textit{no prior architecture combines (i) a
+ternary weight palette derived from a closed-form algebraic identity,
+(ii) a Coq-verified arithmetic kernel, and (iii) an FPGA bench
+characterisation at sub-watt power, on the same bitstream}. KAN
+provides (i) in spirit but not in form (splines, not algebra); BitNet
+provides a ternary palette but no algebraic structure; LTN provides
+formal logic but no hardware bridge; KANtize provides quantisation
+but on a learned KAN, not a closed-form algebra. The conjunction is
+new.
+
+The remainder of the dissertation establishes each of the three
+elements in turn (Ch.\,3--Ch.\,19 for the algebra and statistics,
+Ch.\,20--Ch.\,27 for the architecture, Ch.\,28--Ch.\,35 for the
+hardware) and demonstrates that they integrate into a single
+bitstream.
+
+\section{S8. Theorem Cross-Reference}\label{ch2-s8-theorems}
+
+The background survey above is anchored by the following Coq theorems,
+which establish the algebraic invariants on which the architectural
+decisions depend. The full proofs appear in Ch.\,3 and Ch.\,5.
+
+\begin{theorem}[Trinity Identity, Coq \texttt{trinity\_identity}]
+\label{thm:ch2-trinity}
+\(\varphi^{2}+\varphi^{-2}=3\) in \(\mathbb{R}\).
+\textbf{Status:} \texttt{Qed} in
+\filepath{docs/phd/theorems/trinity/CorePhi.v}.
+\textbf{Role:} certifies the normalisation factor that closes the
+three cliffs of S6.
+\end{theorem}
+
+\begin{theorem}[Phi-square identity, Coq \texttt{phi\_square}]
+\label{thm:ch2-phi-square}
+\(\varphi^{2}=\varphi+1\).
+\textbf{Status:} \texttt{Qed} in
+\filepath{docs/phd/theorems/trinity/CorePhi.v}.
+\textbf{Role:} elementary identity used in S2 to derive the
+neuromanifold cardinality bound on \(\mathrm{GF}(16)\).
+\end{theorem}
+
+\paragraph{Anchor footer.}
+\(\varphi^{2}+\varphi^{-2}=3\);
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+
