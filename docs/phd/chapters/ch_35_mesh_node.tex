@@ -461,6 +461,82 @@ maintains a valid entry at all times.
 \admittedbox{Liveness proof requires specifying the network topology
 model; deferred to arXiv draft (L-DPC5).}
 
+% ============================================================
+% Theorem 35.13 — Trinity MRU as KART forward-pass (L-KAT-35).
+% Companion to Theorem 12.7 (cell-level KART–GF(16) isomorphism).
+% Lee/GVSU style; R5-honest Admitted.
+% ============================================================
+
+\begin{theorem}[Trinity MRU as KART forward-pass]
+\label{thm:mru-kart}
+Let $n \in \mathbb{N}$ denote the ternary input width of a single
+Mesh-Resolution-Unit (MRU), the smallest deployable inference cell of
+the Trinity~\textsc{S}$^3$\textsc{AI} mesh node, and let
+$x \in \mathrm{GF}(16)^n$ denote one such input vector. The MRU
+forward pass realises a \emph{Kolmogorov–Arnold-shaped} two-layer
+decomposition over $\mathrm{GF}(16)$:
+\[
+  \mathrm{MRU}(x) \;=\; \Phi_{\theta}\!\left(
+    \sum_{i=1}^{2n+1} g_i\bigl(\langle x, w_i \rangle_{\mathrm{GF}(16)}\bigr)
+  \right),
+\]
+where the inner layer $g_i$ is the
+\texttt{vsa\_matmul} of
+Theorem~\ref{thm:gf16-kart} (Ch.~12, §5), the outer threshold $\Phi_\theta$
+is the φ-thresholded popcount aggregator at
+$\theta = \lceil n \cdot \varphi^{-1} \rceil$, and the outer-layer
+width $2n+1$ is the Kolmogorov 1957 superposition
+width~\cite{kolmogorov1957superposition,arnold1963superposition}.
+\end{theorem}
+
+\begin{proof}[Proof sketch (Lee/GVSU style)]
+We argue at the deployment-cell granularity. By
+Theorem~\ref{thm:gf16-kart} (Ch.~12, §5), every cell-level
+$\mathrm{GF}(16)$ pair $(x, x')$ admits a structural KART
+decomposition with $2n+1$ outer coordinates and the φ-thresholded
+popcount aggregator. The MRU is, by construction
+(§\ref{sec:mesh-roadmap}, M35-3), an iverilog-synthesisable
+composition of the same \texttt{vsa\_matmul} primitive followed by
+the identical popcount + φ-threshold gate. Hence the MRU forward pass
+realises the same KART-shaped decomposition at the deployment-cell
+level; the metric form requires a ternary-input finite-field
+analogue of Schmidt-Hieber's KART
+bound~\cite{schmidt-hieber2020nonparametric}, which is the gap
+blocking $\Qed$.
+\qed
+\end{proof}
+\admittedbox{Theorem~\ref{thm:mru-kart} stays Admitted: the missing
+lemma is a ternary-input finite-field analogue of
+Schmidt-Hieber~\cite{schmidt-hieber2020nonparametric}.
+Coq stub at
+\filepath{trinity-clara/proofs/igla/mru\_kart.v} (\texttt{Theorem
+mru\_kart\_decomposition\_eq}); brute-force witness covers $n \in
+\{2, 4\}$ via
+\filepath{crates/trios-golden-float/tests/kart\_gf16\_witness.rs}.}
+
+\subsection*{Falsification criterion (R7)}
+\label{sec:mru-kart-falsify}
+A witnessed input pair $(x, x') \in \mathrm{GF}(16)^n \times
+\mathrm{GF}(16)^n$ on which the MRU forward pass deviates from the
+structural KART decomposition by more than $\theta = \lceil n \cdot
+\varphi^{-1} \rceil$ would refute Theorem~\ref{thm:mru-kart}. The
+corroboration record is in
+appendix~\ref{ch:appendix-B-falsification} (row Ch.35-MRU-KART). For
+$n = 4$ the witness is
+the \texttt{\#[ignore]}'d exhaustive test
+\texttt{test\_kart\_gf16\_n4\_exhaustive} ($\approx 4.3\cdot 10^9$
+pairs); for $n > 4$ exhaustive enumeration is structurally infeasible
+($16^{2n} > 10^{19}$ at $n = 8$) and the theorem stays Admitted in
+honest agreement with that gap.
+
+\subsection*{0-DSP discipline at the deployment cell}
+The MRU forward pass compiles to XOR + popcount only — no
+multipliers, no DSPs, mirroring the 0-DSP discipline of
+Theorem~\ref{thm:gf16-kart} and INV-3
+(\filepath{trinity-clara/proofs/igla/gf16\_precision.v}). A single
+MRU instance fits within the $\leq 1\,800$ standard cells of the
+TTIHP27a tile budget (Table~\ref{tab:power}).
+
 \section{Chapter Summary}
 
 This chapter establishes the architectural and mathematical foundations
