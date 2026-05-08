@@ -1,0 +1,155 @@
+% ===================================================================
+% Erratum E2 — Honest disclosure of the 312-cell Format×Algorithm
+%               matrix and the 50-cell priority subset adopted for
+%               the 2026-06-15 defense.
+%
+% Author : Dmitrii Vasilev <admin@t27.ai>
+% Date   : 2026-05-08
+% Issues : #582 (L-MR-L3-ALT), L-MR-MATRIX-PRIORITY (this lane)
+% Anchor : phi^2 + phi^-2 = 3 · DOI 10.5281/zenodo.19227877
+%
+% This file is a stand-alone short erratum (1-2 pages) intended to be
+% \input{} into main.tex (or its successor) at the position currently
+% occupied by the original 312-cell completion claim. It can also be
+% compiled stand-alone via:
+%   tectonic docs/phd/erratum/E2-matrix-honest-disclosure.tex
+% by uncommenting the four lines below.
+% ===================================================================
+
+% \documentclass[12pt,a4paper]{article}
+% \usepackage{fontspec}
+% \setmainfont{DejaVu Serif}
+% \begin{document}
+
+\section*{Erratum E2 --- Honest disclosure of the
+Format$\times$Algorithm matrix scope}
+\addcontentsline{toc}{section}{Erratum E2 --- Format$\times$Algorithm
+matrix scope}
+
+\paragraph{Status.}
+This erratum is published in advance of the public defense
+(2026-06-15) and Rehearsal~\#2 (2026-05-25). It supersedes the
+original completion claim attached to closed issue
+\href{https://github.com/gHashTag/trios/issues/446}{gHashTag/trios\#446}
+and reframes the matrix-completion narrative in line with the
+honest gate hardened in
+\href{https://github.com/gHashTag/trios/pull/570}{gHashTag/trios\#570}
+(R7-honest closure: $\text{rows}\geq3$, distinct seeds~$\geq2$,
+$\max(\text{step})\geq3000$).
+
+\paragraph{What was originally claimed.}
+The thesis prospectus and several intermediate technical reports
+referred to a complete 312-cell Format$\times$Algorithm sweep
+(39~numerical formats $\times$ 8~optimisation algorithms). The
+\texttt{ssot.bpb\_samples} table was, at the time of issue~\#446
+closure, populated with a single-row stub per cell, which the legacy
+closure gate accepted at face value
+(\texttt{WHERE bpb > 1.0 GROUP BY format, algo}).
+
+\paragraph{What the audit revealed.}
+The lane L-MR-L4 audit of \texttt{matrix\_per\_cell\_audit.csv}
+(312 rows, see \texttt{assertions/matrix\_per\_cell\_audit.csv} in
+the repository at the time of writing) showed that
+\emph{every} cell carried \texttt{synthetic\_flag\_R7=1}, with the
+typical reason being \texttt{n\_rows=1<3; distinct\_seeds=1<2}
+or worse. In other words, no cell in the original sweep met the
+hardened R7 thresholds. The only safe path forward is a partial,
+honest re-population on the user's own hardware, governed by a
+priority subset that the defense schedule can actually accommodate.
+
+\paragraph{What is being claimed instead.}
+For the 2026-06-15 defense and the 2026-05-25 rehearsal, the
+honest matrix evidence is restricted to a 50-cell priority subset
+selected by the rules below and pinned in
+\texttt{assertions/matrix\_priority\_50.csv}. The selection is
+deterministic and reproducible from
+\texttt{assertions/matrix\_per\_cell\_audit.csv} alone:
+
+\begin{enumerate}
+  \item \textbf{Golden formats} --- every cell whose format is in
+        the golden set $\{\texttt{gf16}\}$ (cf.\ \texttt{gf16\_fa}
+        and \texttt{ternary*} which are listed for completeness in
+        the selection rule but are not yet present in the matrix
+        baseline).
+  \item \textbf{Priority optimisers} --- every cell whose algorithm
+        is in $\{\texttt{muon}, \texttt{adamw}\}$ (the two priority
+        optimisers actually present in the matrix; \texttt{soap}
+        and \texttt{shampoo} from the original priority list are
+        not implemented in the audit baseline and are therefore
+        deferred).
+  \item \textbf{Lowest-bpb decile} --- the ten cells with the
+        smallest \texttt{min\_bpb\_neon} (most defensible /
+        competitive on prior synthetic baseline).
+  \item \textbf{Highest-heterogeneity decile} --- the ten cells
+        with the largest \texttt{distinct\_sha\_git} (most
+        provenance heterogeneity already on record).
+\end{enumerate}
+
+The four layers are applied in order with deduplication and the
+result is capped at exactly 50 rows. In the present baseline the
+cap is reached during layer~2 (golden + priority), so layers~3
+and~4 are documented but not active --- a fact that is recorded
+in \texttt{priority\_reason} per row.
+
+\paragraph{Honest population protocol.}
+The 50 priority cells are populated by the local runner
+\texttt{scripts/run\_priority\_matrix.ts} (TypeScript per the
+repository's law L1, which forbids \texttt{.sh} files). Each
+cell is run with the three Lucas/Fibonacci seeds
+$\{47, 89, 144\}$ for $3000$~training steps each, yielding
+$50 \times 3 = 150$ honest sample rows that satisfy the R7-honest
+gate by construction:
+$\text{rows} = 3 \geq 3$, distinct seeds $= 3 \geq 2$,
+$\max(\text{step}) = 3000 \geq 3000$.
+The verdict is computed by the dedicated gate
+\texttt{.github/scripts/closure\_gate\_priority.py}, which is a
+read-only PASS/FAIL tool with cell-by-cell breakdown; it never
+posts comments, never closes issues, and never touches GitHub
+state. Production closure
+(\texttt{.github/scripts/closure\_gate.py}) remains the sole
+authority for the full 312-cell grid and is unchanged by this
+erratum.
+
+\paragraph{What is deferred.}
+The remaining $312 - 50 = 262$ cells of the full sweep are
+\emph{deferred} to the post-defense work-package and remain marked
+as synthetic in
+\texttt{assertions/matrix\_per\_cell\_audit.csv}. The thesis text
+will explicitly cite the 50-cell priority result and clearly
+delimit it from the deferred cells; no claim of complete
+312-cell honest coverage will be made at the viva. Any cell whose
+training run fails to converge in $3000$ steps is recorded as
+\texttt{status: "non\_convergent"} in
+\texttt{assertions/matrix\_samples.jsonl} per the L-MR-L3-ALT
+protocol (\href{https://github.com/gHashTag/trios/issues/582}{\#582})
+and is excluded from the honest gate rather than being faked.
+
+\paragraph{Rationale for this erratum's existence.}
+Per R5 (\emph{honest status}) and R7 (\emph{anti-fake-pass guard})
+of the trios laws, every public claim about matrix completeness
+must be backed by data that satisfies the same SQL predicate that
+the closure gate enforces. The original 312-cell narrative did
+not. This erratum restores that property by (i) explicitly
+withdrawing the 312-cell completion claim, (ii) substituting the
+50-cell priority claim that \emph{is} backed by data once the
+local runner has executed, and (iii) listing the deferred 262
+cells as future work. The substitution is queen-approved and
+issue-tracked, and constitutes the matrix evidence that the
+2026-06-15 defense and the 2026-05-25 rehearsal will rely on.
+
+\paragraph{Cross-references.}
+Issue \href{https://github.com/gHashTag/trios/issues/582}{\#582}
+(L-MR-L3-ALT, JSONL extension protocol);
+the L-MR-MATRIX-PRIORITY tracking issue and merge-blocker PR
+opened for this erratum (see the repository's issue list);
+\href{https://github.com/gHashTag/trios/pull/570}{PR\#570}
+(L-MR-L4, hardened closure gate);
+\href{https://github.com/gHashTag/trios/issues/446}{\#446}
+(closed under the legacy gate; this erratum reopens the
+narrative, not the issue).
+
+\paragraph{Anchor.}
+$\varphi^{2} + \varphi^{-2} = 3$ ---
+DOI \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+
+% \end{document}
