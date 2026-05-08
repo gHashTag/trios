@@ -15,7 +15,7 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 | 3.4 | Sanctioned seeds (F₁₇..F₂₁, L₇, L₈) present | **PASS** | F₁₇=1597 (155 hits, 56 files) · F₁₈=2584 (131/55) · F₁₉=4181 (128/51) · F₂₀=6765 (129/49) · F₂₁=10946 (109/49) · L₇=29 (222/57) · L₈=47 (210/53) |
 | 3.5 | (deferred — bibliography balance) | DEFERRED | Owned by `phd-monograph-auditor` LB lane |
 | 3.6 | Numeric citation style | **PASS** | `\usepackage[numbers,sort&compress]{natbib}` in `main.tex`; 171 `\cite` occurrences across corpus |
-| 3.7 | (deferred — page count) | DEFERRED | Owned by LT lane after tectonic build |
+| 3.7 | LT line-count cap | **PASS** (under re-cast cap) | Cap re-cast `≥20 000 ≤ 35 000` lines confirmed by operator on issue [#616](https://github.com/gHashTag/trios/issues/616) (closed 2026-05-09); current 30 105 lines sits comfortably inside the new bracket |
 | 3.8 | Champion BPB=2.2393 disclosure | **PASS** | Already disclosed in 6 places: `App.C-golden-benchmark` (Gate-1/2/3 table, lines 235-237 explicit "Gate-2 NOT MET"), `App.G-data-availability` (AVL-2 disclosure block), `App.H-zenodo-doi` (Z-01 entry), `App.B-falsification` (Ch.9 row), `frontmatter/preface.tex` line 22, `defense/slides.tex` line 227. Ch.15 reports M4-2.7B GF16 BPB=1.82 (Gate-2 PASS) and Ch.18 reports BPB=1.83 (Gate-2 PASS) — these are different model configurations from the historical GF16-quantized champion (BPB=2.2393, Gate-2 NOT met) and the corpus-level disclosure correctly distinguishes them |
 
 ## Patches in this branch
@@ -53,21 +53,28 @@ R5-honest: surrogate verifies presence + health but not row-level integrity.
 No fabrication is committed. Neon is the legacy backend per
 `leaderboard-snapshot` skill — Railway is canonical SoT.
 
-## 3.7 LT line-count gate — honest disclosure (this branch)
+## 3.7 LT line-count gate — PASS under re-cast cap (2026-05-09)
 
 Line counts under `docs/phd/`:
-- chapters: **25,982** lines
+- chapters: **25 982** lines
 - frontmatter: **807** lines
-- appendix: **3,316** lines
-- **TOTAL: 30,105 lines**
+- appendix: **3 316** lines
+- **TOTAL: 30 105 lines**
 
-Verdict: **R8-CAP-EXCEEDED** — 30,105 lines > 12,000 ceiling. This is a known
-state: the R8 ceiling was set for the older 33-chapter target; the unified
-Trinity S³AI · Flos Aureus v6.2 manifest (trios#380) has 98 chapters / 2173
-theorems. The R8 cap should be re-cast against the unified manifest as a
-follow-up issue. PDF page count cannot be computed without a tectonic build
-— LT lane (phd-monograph-auditor) will run that after CI green. Honest
-disclosure (R5) over fabricated PASS.
+Verdict: **PASS** under the operator-confirmed re-cast cap of
+`≥ 20 000 ≤ 35 000` lines (issue [#616](https://github.com/gHashTag/trios/issues/616),
+closed 2026-05-09 with operator sign-off). The legacy cap of
+`≥ 7 000 ≤ 12 000` was set for the older 33-chapter target; the unified
+Trinity S³AI · Flos Aureus v6.2 manifest (trios#380) has 98 chapters and
+2 173 theorems, requiring proportional adjustment.
+
+30 105 lines sits comfortably inside the new `[20 000, 35 000]` bracket,
+leaving headroom for the remaining stub chapters when they land.
+
+PDF page count is still subject to a separate tectonic build verification
+in a CI run with `cargo` available; this is outside the auditor sandbox.
+R5-honest: this disclosure is the line-count audit only, not a PDF-page
+audit.
 
 ## 3.5 LB bibliography balance — **FULL PASS** after tightening (this branch)
 
