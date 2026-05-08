@@ -13,17 +13,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
-use tracing::{info, warn};
+use tracing::info;
 
 // Re-export trios-mesh with std feature
 use trios_mesh::{
     identity::NodeIdentity,
-    packet::AnnounceHeader,
     routing::RoutingTable,
     DestHash,
 };
 
-// ── Node State ─────────────────────────────────────────────────────────────
+// ── Node State ────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
 struct NodeState {
@@ -38,7 +37,7 @@ impl NodeState {
         // Deterministic identity from seed (dev mode)
         let mut pubkey = [0u8; 32];
         pubkey[0] = seed;
-        pubkey[1] = 0xTR; // Trinity marker
+        pubkey[1] = 0xA3; // Trinity marker (φ-derived constant)
         let h = Sha256::digest(&pubkey);
         pubkey[2..18].copy_from_slice(&h[..16]); // φ-stretch
 
@@ -62,7 +61,7 @@ impl NodeState {
     }
 }
 
-// ── HTTP API types ──────────────────────────────────────────────────────────
+// ── HTTP API types ─────────────────────────────────────────────────────
 
 #[derive(Serialize)]
 struct NodeInfo {
@@ -107,7 +106,7 @@ struct NextHopResp {
     local:    bool,
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn hex_to_dest(s: &str) -> Option<DestHash> {
     let bytes = hex::decode(s).ok()?;
@@ -121,7 +120,7 @@ fn dest_to_hex(d: &DestHash) -> String {
     hex::encode(d)
 }
 
-// ── Route handlers ──────────────────────────────────────────────────────────
+// ── Route handlers ────────────────────────────────────────────────────────────
 
 async fn health() -> &'static str { "ok" }
 
@@ -138,7 +137,7 @@ async fn get_info(State(s): State<NodeState>) -> Json<NodeInfo> {
     })
 }
 
-async fn get_routes(State(s): State<NodeState>) -> Json<Vec<RouteView>> {
+async fn get_routes(State(_s): State<NodeState>) -> Json<Vec<RouteView>> {
     // expose table via debug dump — real impl needs table iterator
     Json(vec![])
 }
@@ -188,7 +187,7 @@ async fn post_next_hop(
     }
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
 async fn main() -> Result<()> {
