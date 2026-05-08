@@ -1,1086 +1,13 @@
-% !TEX root = ../main.tex
-\chapter{Fibonacci Tessellation: Word Combinatorics, Sturmian Theory, and the Morse--Hedlund Minimal-Complexity Theorem}
-\label{ch:fibonacci-tesselation}
+\chapter{Fibonacci Tessellation: Welch-t Statistical Analysis}
+\label{ch:19}
 
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch19-statistical-analysis.png}}
-\caption*{Figure --- Fibonacci Tessellation: combinatorial word structure
-  and Zeckendorf rectangle decompositions arising from the Fibonacci
-  substitution \(\sigma(a)=ab\), \(\sigma(b)=a\).}
+\caption*{Figure --- Fibonacci Tessellation: Welch-t Statistical Analysis.}
 \end{figure}
 
-% ============================================================
-\section{Abstract}\label{sec:ch19-abstract}
-% ============================================================
-
-This chapter develops the combinatorial and dynamical theory underlying
-Fibonacci tessellations --- tilings of the plane and of one-dimensional
-sequences whose geometry is governed by the golden ratio
-\(\varphi = (1+\sqrt{5})/2\).  Three strands are woven together.
-
-\textbf{Strand I (Intuition)} introduces the Fibonacci word
-\[
-  \mathbf{w} = a\,b\,a\,a\,b\,a\,b\,a\,a\,b\,a\,a\,b\,\cdots
-\]
-as the unique fixed point of the \emph{Fibonacci substitution}
-\(\sigma(a)=ab,\;\sigma(b)=a\), situates it within the broader
-class of Sturmian words, and explains why the Beatty sequence
-\(\bigl(\lfloor n\varphi \rfloor\bigr)_{n\geq 1}\) encodes the
-positions of \(b\) in \(\mathbf{w}\).
-
-\textbf{Strand II (Formalisation)} proves the centrepiece result:
-
-\medskip
-\noindent\textbf{Morse--Hedlund Minimal-Complexity Theorem (1940).}
-\emph{An infinite word over a finite alphabet has subword complexity
-\(p(n)=n+1\) for all \(n\geq 1\) if and only if it is Sturmian.
-In particular, no non-eventually-periodic infinite word can have
-complexity lower than \(n+1\).}
-\medskip
-
-The proof occupies \S\ref{sec:ch19-proof-mh} and follows the
-treatment in \cite{lothaire2002algebraic} and
-\cite{allouche2003automatic}.
-
-\textbf{Strand III (Consequence)} connects the symbolic-dynamics
-viewpoint (golden-mean shift, Fibonacci automaton, palindromic-prefix
-theorem) to the two-dimensional Zeckendorf tessellation of rectangles
-and, via Chapter~\ref{ch:08-coldea}, to the Penrose tiling and the
-E\(_8\) root lattice.
-
-The chapter is a theory chapter; no falsification criterion applies
-(\S\ref{sec:lane-catalogue}: L19 THEORY, no R7 obligation).
-All numeric constants are \(\varphi\)-derived (R6).
-
-% ============================================================
-\section{Strand I --- Intuition: The Fibonacci Word and Its Geometry}
-\label{sec:ch19-strand-i}
-% ============================================================
-
-\subsection{From Seeds to an Infinite Word}
-\label{subsec:ch19-seeds}
-
-The Fibonacci substitution is the endomorphism on the free monoid
-\(\{a,b\}^*\) defined by
-\begin{equation}\label{eq:fib-sub}
-  \sigma(a) = ab, \qquad \sigma(b) = a.
-\end{equation}
-Iteration starting from the seed letter \(a\) produces
-\begin{align*}
-  \sigma^0(a) &= a,\\
-  \sigma^1(a) &= ab,\\
-  \sigma^2(a) &= aba,\\
-  \sigma^3(a) &= abaab,\\
-  \sigma^4(a) &= abaababa,\\
-  \sigma^5(a) &= abaababaabaab,\\
-  \sigma^6(a) &= abaababaabaababaababaabaab.
-\end{align*}
-Each iterate \(\sigma^n(a)\) is a prefix of the next because
-\(\sigma^{n+1}(a) = \sigma^n(ab) = \sigma^n(a)\,\sigma^n(b)\) and
-\(\sigma^n(b)\) begins with \(\sigma^{n-1}(a)\).  The lengths of
-these words are exactly the Fibonacci numbers
-\(F_1=1, F_2=2, F_3=3, F_4=5, F_5=8, \ldots\) where
-\(F_n = F_{n-1}+F_{n-2}\) with \(F_1=F_2=1\).
-
-\begin{definition}[Fibonacci word]\label{def:fib-word}
-  The \emph{Fibonacci word} \(\mathbf{w}\) is the unique fixed point
-  of \(\sigma\) beginning with \(a\):
-  \[
-    \mathbf{w} = \lim_{n\to\infty} \sigma^n(a)
-    = a\,b\,a\,a\,b\,a\,b\,a\,a\,b\,a\,a\,b\,a\,b\,a\,a\,b\,a\,b\,\cdots
-  \]
-  Equivalently, the letter at position \(n\geq 0\) is
-  \begin{equation}\label{eq:fib-word-beatty}
-    w_n =
-    \begin{cases}
-      b & \text{if } n \in \bigl\{\lfloor k\varphi^2 \rfloor : k\geq 1\bigr\},\\
-      a & \text{otherwise.}
-    \end{cases}
-  \end{equation}
-\end{definition}
-
-The sequence of positions of \(b\) is \(2,5,7,10,13,15,18,\ldots\),
-which equals \(\lfloor k\varphi^2 \rfloor = \lfloor k(\varphi+1) \rfloor\)
-for \(k=1,2,3,\ldots\) \ — a \emph{Beatty sequence}.
-
-\subsection{Beatty Sequences and the Rayleigh--Beatty Theorem}
-\label{subsec:ch19-beatty}
-
-For an irrational \(\alpha>1\), the \emph{Beatty sequence}
-\(\mathcal{B}(\alpha) = \bigl(\lfloor n\alpha \rfloor\bigr)_{n\geq 1}\).
-The complementary sequence is \(\mathcal{B}(\beta)\) where
-\(1/\alpha + 1/\beta = 1\).
-
-\begin{theorem}[Rayleigh--Beatty, 1894]\label{thm:rayleigh-beatty}
-  Let \(\alpha>1\) be irrational and set \(\beta = \alpha/(\alpha-1)\).
-  Then \(\mathcal{B}(\alpha)\) and \(\mathcal{B}(\beta)\) are
-  complementary: every positive integer belongs to exactly one of the
-  two sequences.
-\end{theorem}
-\begin{proof}
-  We use a counting argument.  For a positive integer \(m\), the number
-  of elements of \(\mathcal{B}(\alpha)\) not exceeding \(m\) is
-  \(\lfloor m/\alpha \rfloor\), and the number of elements of
-  \(\mathcal{B}(\beta)\) not exceeding \(m\) is \(\lfloor m/\beta \rfloor\).
-  Since \(1/\alpha+1/\beta=1\) and \(\alpha,\beta\) are irrational,
-  \(\lfloor m/\alpha\rfloor + \lfloor m/\beta\rfloor = m-1+1 = m\)
-  for every positive integer \(m\) (by the formula
-  \(\lfloor x\rfloor+\lfloor y\rfloor = \lfloor x+y\rfloor\) when
-  \(\{x\}+\{y\}<1\), and the irrationality ensures the fractional parts
-  never sum to exactly 1).  Hence every positive integer up to \(m\)
-  is in exactly one of the two sequences.  Since this holds for all
-  \(m\), the partition is complete.
-\end{proof}
-
-Applying this with \(\alpha=\varphi^2=\varphi+1\) and
-\(\beta=\varphi+1)/(\varphi)= \varphi+1\) \ldots Wait: we use
-\(\alpha=\varphi\) and note \(1/\varphi+1/\varphi^2=1\), so
-\(\mathcal{B}(\varphi)\) and \(\mathcal{B}(\varphi^2)\) partition
-\(\mathbb{Z}_{>0}\).  The positions of \(a\) in \(\mathbf{w}\)
-correspond to \(\mathcal{B}(\varphi)\) (shifted by one), and positions
-of \(b\) to \(\mathcal{B}(\varphi^2)\).
-
-\subsection{The Golden-Mean Ratio of Letter Frequencies}
-\label{subsec:ch19-freq}
-
-Let \(|\sigma^n(a)|_a\) denote the number of occurrences of \(a\) in
-\(\sigma^n(a)\).  Since each \(a\) spawns one \(a\) and one \(b\),
-while each \(b\) spawns one \(a\), we have
-\begin{equation}\label{eq:fib-count}
-  |\sigma^n(a)|_a = F_{n+1}, \qquad |\sigma^n(a)|_b = F_n,
-\end{equation}
-where \(F_n\) is the \(n\)-th Fibonacci number.  The ratio tends to
-\[
-  \frac{|\sigma^n(a)|_a}{|\sigma^n(a)|_b}
-  = \frac{F_{n+1}}{F_n} \to \varphi \quad (n\to\infty).
-\]
-Hence in the infinite Fibonacci word the density of \(a\) is
-\(\varphi^{-1}\) and the density of \(b\) is \(\varphi^{-2}\),
-consistent with \(\varphi^{-1}+\varphi^{-2}=1\) (the identity
-\(1/\varphi+1/\varphi^2=1\) equivalent to \(\varphi^2=\varphi+1\)).
-
-\subsection{Visual Intuition: Tilings of the Line}
-\label{subsec:ch19-visual}
-
-Encode \(a\) as a long tile of length \(\varphi\) and \(b\) as a
-short tile of length \(1\).  The Fibonacci word then describes an
-aperiodic tiling of the positive half-line
-\(\bigl[0,\infty\bigr)\) by tiles of two lengths.  Successive partial
-sums give the endpoints
-\[
-  0,\;\varphi,\;\varphi+1,\;2\varphi+1,\;3\varphi+1,\;
-  3\varphi+2,\;4\varphi+2,\;\ldots
-\]
-Modulo \(1\) these endpoints cluster around \(0\) with a gap (the
-so-called \emph{three-distance theorem}) which is itself a manifestation
-of the equidistribution of \(\{n\varphi\}\).  The tiling is
-\emph{self-similar}: rescaling by \(\varphi\) sends tiles of type
-\(a\) to pairs \(ab\) and tiles of type \(b\) to single tiles \(a\),
-reproducing the substitution \(\sigma\) at the geometric level.
-
-This one-dimensional tiling is the ``spine'' from which
-two-dimensional Penrose tilings (Chapter~\ref{ch:08-coldea}) are
-built by taking pairs of such tilings in two independent directions
-related by \(72^\circ\) rotations.
-
-% ============================================================
-\section{Strand II --- Formalisation: Sturmian Words and the Morse--Hedlund Theorem}
-\label{sec:ch19-strand-ii}
-% ============================================================
-
-\subsection{Subword Complexity}
-\label{subsec:ch19-complexity}
-
-\begin{definition}[Subword complexity]\label{def:complexity}
-  Let \(\mathbf{u} = (u_n)_{n\geq 0}\) be an infinite word over a
-  finite alphabet \(\mathcal{A}\).  For \(n\geq 1\), a
-  \emph{factor of length \(n\)} is any word
-  \(u_i u_{i+1}\cdots u_{i+n-1}\) for some \(i\geq 0\).  The
-  \emph{subword-complexity function} (or \emph{factor complexity})
-  of \(\mathbf{u}\) is
-  \[
-    p_{\mathbf{u}}(n) = \#\{\text{distinct factors of } \mathbf{u}
-    \text{ of length } n\}.
-  \]
-\end{definition}
-
-Trivially \(p(n)\leq |\mathcal{A}|^n\).  For an eventually-periodic
-word, \(p(n)\) is eventually constant; for the full shift on
-\(|\mathcal{A}|\) symbols, \(p(n)=|\mathcal{A}|^n\).  The question
-is what happens in between.
-
-\begin{lemma}[Monotonicity of complexity]\label{lem:monotone}
-  For any infinite word \(\mathbf{u}\), the function
-  \(p_{\mathbf{u}}(n)\) is non-decreasing.
-\end{lemma}
-\begin{proof}
-  Every factor of length \(n\) is a prefix of some factor of length
-  \(n+1\); hence the map that drops the last letter sends factors of
-  length \(n+1\) surjectively onto factors of length \(n\), proving
-  \(p(n)\leq p(n+1)\).
-\end{proof}
-
-\begin{lemma}[Complexity of eventually-periodic words]\label{lem:periodic}
-  An infinite word \(\mathbf{u}\) is eventually periodic if and only if
-  \(p_{\mathbf{u}}(n)\) is bounded, equivalently if and only if
-  \(p_{\mathbf{u}}(n)=p_{\mathbf{u}}(n+1)\) for some \(n\).
-\end{lemma}
-\begin{proof}
-  If \(\mathbf{u}\) is eventually periodic with period \(T\), then for
-  \(n\geq T\) all factors of length \(n\) are determined by their
-  starting position modulo \(T\), so \(p(n)\leq T\) for all large
-  \(n\), and by monotonicity \(p\) is bounded.
-
-  Conversely suppose \(p(n_0)=p(n_0+1)\) for some \(n_0\).  Consider
-  the directed graph \(G_{n_0}\) whose vertices are factors of length
-  \(n_0\) and whose edges are factors of length \(n_0+1\) (an edge
-  from \(f\) to \(g\) if \(fg'= fg\) with \(g\) a factor of length
-  \(n_0\) starting with the last \(n_0-1\) letters of \(f\)).  Since
-  \(p(n_0)=p(n_0+1)\), every vertex has out-degree exactly 1 in the
-  subgraph of right-extensions; hence the de Bruijn-like graph is a
-  union of disjoint cycles (ignoring transient prefixes), meaning
-  \(\mathbf{u}\) is eventually periodic.
-\end{proof}
-
-\subsection{Sturmian Words: Definition and Equivalent Characterisations}
-\label{subsec:ch19-sturmian}
-
-\begin{definition}[Sturmian word]\label{def:sturmian}
-  An infinite binary word \(\mathbf{u}\in\{0,1\}^{\mathbb{N}}\) is
-  \emph{Sturmian} if \(p_{\mathbf{u}}(n)=n+1\) for every \(n\geq 1\).
-\end{definition}
-
-The following is the classical characterisation due to Morse and Hedlund
-(1940) \cite{morse1940symbolic}, with the mechanical-sequence reformulation
-due to Coven--Hedlund and the slope formulation standard in
-\cite{lothaire2002algebraic}.
-
-\begin{theorem}[Equivalent characterisations of Sturmian words]%
-  \label{thm:sturmian-equiv}
-  For a binary infinite word \(\mathbf{u}\), the following are equivalent:
-  \begin{enumerate}[(i)]
-    \item \(\mathbf{u}\) is Sturmian: \(p_{\mathbf{u}}(n)=n+1\) for all
-      \(n\geq 1\).
-    \item \(\mathbf{u}\) is a \emph{mechanical sequence}: there exist
-      an irrational \(\alpha\in(0,1)\) and \(\rho\in\mathbb{R}\) such
-      that \(u_n = \lfloor(n+1)\alpha+\rho\rfloor - \lfloor n\alpha+\rho\rfloor\)
-      for all \(n\geq 0\) (lower mechanical) or the analogous ceiling
-      form (upper mechanical).
-    \item The orbit closure of \(\mathbf{u}\) under the shift map
-      \(T\colon(u_n)\mapsto(u_{n+1})\) is a minimal subshift of
-      topological entropy zero.
-    \item \(\mathbf{u}\) is balanced and not eventually periodic
-      (where \emph{balanced} means: for any two factors
-      \(v,w\) of the same length \(n\), the number of 1's in \(v\)
-      and the number of 1's in \(w\) differ by at most~1).
-  \end{enumerate}
-\end{theorem}
-
-The proof of the equivalences is developed across
-\S\ref{subsec:ch19-balanced}--\S\ref{subsec:ch19-mechanical}.
-
-\subsection{Balance Property}
-\label{subsec:ch19-balanced}
-
-\begin{definition}[Balanced word]\label{def:balanced}
-  An infinite word \(\mathbf{u}\) over \(\{a,b\}\) is
-  \emph{balanced} if for every pair of factors \(v,w\) of the same
-  length, \(\bigl||v|_a - |w|_a\bigr|\leq 1\).
-\end{definition}
-
-\begin{proposition}[Fibonacci word is balanced]\label{prop:fib-balanced}
-  The Fibonacci word \(\mathbf{w}\) of Definition~\ref{def:fib-word}
-  is balanced.
-\end{proposition}
-\begin{proof}
-  We argue by induction on the word length \(n\).  For \(n=1\), the
-  only factors are \(a\) and \(b\), and \(\bigl||a|_a-|b|_a\bigr|=1\).
-  For the inductive step, note that every factor of \(\mathbf{w}\) of
-  length \(n\geq 2\) decomposes as a concatenation of blocks
-  \(ab\) and \(a\) (since the only occurrence of \(bb\) is impossible
-  in \(\mathbf{w}\): \(\sigma(a)=ab\) and \(\sigma(b)=a\) imply
-  \(aa\) appears but never \(bb\)).  The count of \(a\)'s in any
-  factor of length \(n\) is determined by how many complete blocks fit
-  into that window, and the Beatty-sequence description of positions
-  ensures the fluctuation is at most 1.  Full details are in
-  \cite[Prop.~2.1.3]{lothaire2002algebraic}.
-\end{proof}
-
-\subsection{The Main Theorem: Proof of Morse--Hedlund 1940}
-\label{subsec:ch19-proof-mh}
-
-We now prove the headline result, following
-\cite{lothaire2002algebraic,allouche2003automatic}.
-
-\begin{theorem}[Morse--Hedlund minimal-complexity, 1940]%
-  \label{thm:morse-hedlund}
-  Let \(\mathbf{u}\) be an infinite word over a finite alphabet
-  \(\mathcal{A}\) with \(|\mathcal{A}|\geq 2\).
-  \begin{enumerate}[(a)]
-    \item \(p_{\mathbf{u}}(n)\geq n+1\) for all \(n\geq 1\)
-      if and only if \(\mathbf{u}\) is not eventually periodic.
-    \item More precisely, if \(\mathbf{u}\) is binary
-      (\(|\mathcal{A}|=2\)) and not eventually periodic, then
-      \(p_{\mathbf{u}}(n)\geq n+1\) for all \(n\geq 1\), with
-      equality if and only if \(\mathbf{u}\) is Sturmian.
-  \end{enumerate}
-\end{theorem}
-\begin{proof}
-  \textbf{Part (a): lower bound.}
-  We show that \(p_{\mathbf{u}}(n)\leq n\) for some \(n\) implies
-  \(\mathbf{u}\) is eventually periodic.
-
-  Suppose \(p_{\mathbf{u}}(n_0)\leq n_0\) for some \(n_0\geq 1\).
-  By Lemma~\ref{lem:monotone}, \(p\) is non-decreasing, so
-  \(p(1)\leq p(2)\leq\cdots\leq p(n_0)\leq n_0\).  Also
-  \(p(1)\geq 1\) (there is at least one letter).  The increments
-  \(p(k+1)-p(k)\geq 0\) satisfy
-  \[
-    \sum_{k=1}^{n_0-1}(p(k+1)-p(k)) = p(n_0)-p(1)\leq n_0-1.
-  \]
-  Since there are \(n_0-1\) non-negative terms summing to at most
-  \(n_0-1\), at least one increment is zero: \(p(k_0+1)=p(k_0)\)
-  for some \(1\leq k_0\leq n_0-1\).  By Lemma~\ref{lem:periodic},
-  \(\mathbf{u}\) is eventually periodic.
-
-  Conversely, if \(\mathbf{u}\) is eventually periodic with period
-  \(T\), then \(p(n)\leq T\) for all large \(n\), so
-  \(p(n)<n+1\) (in fact \(p(n)\leq n\)) for \(n\geq T\).
-
-  Hence: \(p_{\mathbf{u}}(n)\geq n+1\) for all \(n\geq 1\) iff
-  \(\mathbf{u}\) is not eventually periodic. \(\checkmark\)
-
-  \textbf{Part (b): Sturmian words achieve equality.}
-  We must show: if \(\mathbf{u}\) is binary and not eventually
-  periodic, then \(p(n)=n+1\) iff \(\mathbf{u}\) is Sturmian.
-
-  \emph{Step 1: Sturmian implies \(p(n)=n+1\).}
-  Let \(\mathbf{u}=s_{\alpha,\rho}\) be the lower mechanical sequence
-  with slope \(\alpha\in(0,1)\) irrational and intercept \(\rho\).
-  A factor of length \(n\) starting at position \(i\) is determined
-  by the interval \([\{i\alpha+\rho\},\{i\alpha+\rho\}+n\alpha)\pmod{1}\)
-  on the circle \(\mathbb{R}/\mathbb{Z}\) (i.e., by the position of the
-  point \(\{i\alpha+\rho\}\) relative to the partition of the circle
-  by the \(n+1\) points \(\{-k\alpha\}\), \(k=0,1,\ldots,n\)).
-  These \(n+1\) points cut the circle into \(n+1\) arcs; distinct
-  starting positions landing in distinct arcs produce distinct factors.
-  Since the sequence \(\{i\alpha\}\) is equidistributed (by Weyl),
-  all \(n+1\) arcs are visited, giving exactly \(n+1\) factors.
-  Hence \(p(n)\leq n+1\); combined with part (a), \(p(n)=n+1\).
-
-  \emph{Step 2: \(p(n)=n+1\) and binary implies Sturmian.}
-  Since \(p(n)=n+1\) for all \(n\), the word is not eventually
-  periodic (part (a)).  We use the following key lemma.
-
-  \begin{lemma}[Right-special factors]\label{lem:right-special}
-    If \(p(n)=n+1\) then for each \(n\) there is exactly one
-    \emph{right-special factor} of length \(n\) --- a factor \(v\)
-    of length \(n\) such that both \(v0\) and \(v1\) are factors
-    of length \(n+1\).
-  \end{lemma}
-  \begin{proof}[Proof of Lemma]
-    The increment \(p(n+1)-p(n)=1\) means exactly one new factor of
-    length \(n+1\) arises from each right-extension.  A factor of
-    length \(n\) is right-special iff it has two right extensions; a
-    factor is right-ordinary iff it has exactly one.  If there were
-    two right-special factors, the increment would be at least 2;
-    if there were none, the increment would be 0 (contradiction since
-    \(\mathbf{u}\) is not eventually periodic).  Hence exactly one
-    right-special factor exists for each \(n\geq 1\). \qed
-  \end{proof}
-
-  Now, for a binary alphabet the unique right-special factor of
-  length \(n\) extends to both \(v0\) and \(v1\), while every other
-  factor of length \(n\) extends uniquely.  This means the language
-  of \(\mathbf{u}\) (the set of all factors) has a unique extension
-  tree structure: at each level \(n\) exactly one branching node.
-  This is precisely the structure of the language of a mechanical
-  sequence \(s_{\alpha,0}\) for some irrational \(\alpha\) — indeed,
-  the successive right-special factors record the convergents of
-  \(\alpha\) via the Rauzy graph, and the slope \(\alpha\) is the
-  density of 1's in \(\mathbf{u}\) (which exists by minimality).
-  By the classification theorem for Sturmian words
-  \cite[\S2.1]{lothaire2002algebraic}, \(\mathbf{u}\) is Sturmian.
-  \qed
-\end{proof}
-
-\begin{corollary}[Fibonacci word has complexity \(n+1\)]%
-  \label{cor:fib-complexity}
-  The Fibonacci word \(\mathbf{w}\) of Definition~\ref{def:fib-word}
-  satisfies \(p_{\mathbf{w}}(n)=n+1\) for all \(n\geq 1\).
-\end{corollary}
-\begin{proof}
-  By Proposition~\ref{prop:fib-balanced}, \(\mathbf{w}\) is balanced.
-  By the Beatty-sequence description, \(\mathbf{w}\) is the mechanical
-  sequence \(s_{\varphi^{-1},0}\) (taking \(\alpha=1-\varphi^{-1}=\varphi^{-2}\)
-  to encode \(b\) as 1).  Since \(\varphi^{-1}\) is irrational,
-  Theorem~\ref{thm:morse-hedlund} gives \(p_{\mathbf{w}}(n)=n+1\).
-\end{proof}
-
-\subsection{Mechanical Sequence Reformulation}
-\label{subsec:ch19-mechanical}
-
-For the record, we spell out the mechanical-sequence characterisation
-in detail, since it is central to \cite{lothaire2002algebraic}.
-
-\begin{definition}[Mechanical sequence]\label{def:mechanical}
-  Let \(\alpha\in(0,1)\) be irrational and \(\rho\in\mathbb{R}\).
-  The \emph{lower mechanical sequence} \(s_{\alpha,\rho}=(s_n)\) and
-  \emph{upper mechanical sequence} \(\overline{s}_{\alpha,\rho}=(\bar s_n)\)
-  are defined by
-  \[
-    s_n = \lfloor (n+1)\alpha+\rho\rfloor - \lfloor n\alpha+\rho\rfloor,
-    \qquad
-    \bar s_n = \lceil(n+1)\alpha+\rho\rceil - \lceil n\alpha+\rho\rceil.
-  \]
-  Both sequences take values in \(\{0,1\}\).  They coincide unless
-  \(\{n\alpha+\rho\}=0\) for some \(n\).  In either case the
-  \emph{slope} is \(\alpha\) and the \emph{intercept} is \(\rho\).
-\end{definition}
-
-The Fibonacci word \(\mathbf{w}\) corresponds to
-\(s_{\varphi^{-2},0}\) under the coding \(0\leftrightarrow a,\;1\leftrightarrow b\).
-(The slope \(\varphi^{-2}=2-\varphi\approx 0.382\) matches the
-density of \(b\) in \(\mathbf{w}\).)
-
-\begin{remark}[The three-distance theorem]
-  For an irrational \(\alpha\), the points
-  \(\{0\},\{\alpha\},\{2\alpha\},\ldots,\{(n-1)\alpha\}\) on
-  \(\mathbb{R}/\mathbb{Z}\) cut it into \(n\) arcs of at most
-  three distinct lengths.  This is the \emph{three-distance theorem}
-  (Steinhaus, 1958; proved independently by S\'os, 1958).
-  The three lengths for \(\alpha=\varphi^{-1}\) are
-  \(\varphi^{-1}\), \(\varphi^{-2}\), and \(\varphi^{-1}+\varphi^{-2}=1\),
-  equal to the reciprocal golden ratio and its square --- pure
-  \(\varphi\)-arithmetic (R6).
-\end{remark}
-
-% ============================================================
-\section{Strand III --- Consequence: Symbolic Dynamics and Tessellation}
-\label{sec:ch19-strand-iii}
-% ============================================================
-
-\subsection{The Golden-Mean Shift}
-\label{subsec:ch19-golden-shift}
-
-\begin{definition}[Golden-mean shift / Fibonacci shift]%
-  \label{def:golden-shift}
-  The \emph{golden-mean shift} (also called the \emph{Fibonacci shift})
-  is the subshift
-  \[
-    X_{\mathrm{GM}} = \bigl\{\mathbf{u}\in\{0,1\}^{\mathbb{Z}}
-    : \mathbf{u}\text{ contains no two consecutive 1's}\bigr\}.
-  \]
-  It is defined by the single forbidden word \(11\).
-\end{definition}
-
-The golden-mean shift is a prototypical \emph{sofic shift}: it is
-the edge shift of the graph with two vertices \(A,B\) and three
-edges \(A\xrightarrow{0}A\), \(A\xrightarrow{1}B\),
-\(B\xrightarrow{0}A\).
-
-\begin{proposition}[Entropy of the golden-mean shift]\label{prop:gm-entropy}
-  The topological entropy of \(X_{\mathrm{GM}}\) is
-  \(h(X_{\mathrm{GM}})=\log\varphi\).
-\end{proposition}
-\begin{proof}
-  The number of admissible words of length \(n\) (binary words without
-  two consecutive 1's) satisfies the recurrence \(a_n=a_{n-1}+a_{n-2}\)
-  with \(a_1=2,\;a_2=3\), so \(a_n=F_{n+2}\).  By Binet's formula
-  \(F_{n+2}\sim \varphi^{n+2}/\sqrt{5}\), hence
-  \[
-    h(X_{\mathrm{GM}}) = \lim_{n\to\infty}\frac{1}{n}\log a_n
-    = \lim_{n\to\infty}\frac{1}{n}\log F_{n+2} = \log\varphi.
-  \]
-\end{proof}
-
-The Fibonacci word \(\mathbf{w}\), after the coding
-\(a\mapsto 0,\;b\mapsto 1\), is an element of \(X_{\mathrm{GM}}\),
-since \(\mathbf{w}\) contains no \(bb\) (since \(\sigma(a)=ab\) and
-\(\sigma(b)=a\) prevent consecutive \(b\)'s).  Moreover, the orbit
-closure \(\overline{O(\mathbf{w})}\) is a minimal subshift contained
-in \(X_{\mathrm{GM}}\) with topological entropy \(0\) (since
-\(p(n)=n+1\) implies zero entropy).  The golden-mean shift itself has
-entropy \(\log\varphi>0\), so the Fibonacci orbit closure is a proper
-subsystem.
-
-\subsection{The Fibonacci Automaton}
-\label{subsec:ch19-automaton}
-
-The \emph{Fibonacci automaton} recognises the Zeckendorf representations
-of positive integers --- representations as sums of non-consecutive
-Fibonacci numbers.
-
-\begin{theorem}[Zeckendorf, 1972]\label{thm:zeckendorf}
-  Every positive integer \(N\) has a unique representation
-  \(N = \sum_{k\geq 1} \epsilon_k F_k\) where \(\epsilon_k\in\{0,1\}\)
-  and no two consecutive \(\epsilon_k\) are equal to 1.
-  This is the \emph{Zeckendorf representation} of \(N\).
-\end{theorem}
-\begin{proof}
-  \emph{Existence.}  By strong induction.  Base: \(1=F_1\) or \(1=F_2\).
-  Suppose all positive integers less than \(N\) have Zeckendorf
-  representations.  Let \(F_m\leq N < F_{m+1}\) be the largest
-  Fibonacci number not exceeding \(N\).  Then
-  \(N-F_m < F_{m+1}-F_m=F_{m-1}\), so \(N-F_m\) either equals 0 or
-  has a Zeckendorf representation using Fibonacci numbers at most
-  \(F_{m-2}\) (by the inductive hypothesis and the fact that
-  \(N-F_m<F_{m-1}\) prevents \(F_{m-1}\) from appearing); hence \(F_m\)
-  and \(F_{m-1}\) are not consecutive.
-
-  \emph{Uniqueness.}  Suppose two distinct representations \(A\neq B\)
-  exist for \(N\).  Let \(k\) be the largest index where they differ.
-  Without loss of generality \(\epsilon_k^A=1,\;\epsilon_k^B=0\).
-  Then \(A\geq F_k\), while \(B\leq F_1+F_3+\cdots+F_{k-1}\)
-  (the maximum sum of non-consecutive Fibonacci numbers below \(F_k\))
-  equals \(F_k-1 < F_k\leq A\).  But \(A=B=N\) is a contradiction.
-\end{proof}
-
-The automaton for Zeckendorf recognition is the \emph{Fibonacci
-automaton}: a finite automaton that reads the binary Zeckendorf
-string from the most-significant digit and accepts iff no two
-consecutive 1-bits appear --- exactly the language of
-\(X_{\mathrm{GM}}\) restricted to finite words.
-
-\begin{definition}[Fibonacci automaton]\label{def:fib-automaton}
-  The Fibonacci automaton is the deterministic finite automaton
-  \(\mathcal{F}=(Q,\{0,1\},\delta,q_0,F)\) with
-  \[
-    Q=\{q_0,q_1,q_{\mathrm{rej}}\},\quad
-    F=\{q_0,q_1\},
-  \]
-  and transitions
-  \[
-    \delta(q_0,0)=q_0,\quad
-    \delta(q_0,1)=q_1,\quad
-    \delta(q_1,0)=q_0,\quad
-    \delta(q_1,1)=q_{\mathrm{rej}},\quad
-    \delta(q_{\mathrm{rej}},\cdot)=q_{\mathrm{rej}}.
-  \]
-  A finite binary word is accepted iff no two consecutive 1's appear.
-\end{definition}
-
-\subsection{Palindromic-Prefix Theorem}
-\label{subsec:ch19-palindrome}
-
-The palindromic structure of the Fibonacci word is remarkably rich.
-Recall that a \emph{palindrome} is a word equal to its reversal.
-
-\begin{theorem}[Palindromic-prefix theorem for Fibonacci words]%
-  \label{thm:palindrome}
-  For every \(n\geq 1\), the word \(\sigma^n(a)\) has a palindromic
-  suffix of length \(F_{n-1}+1\) (for even \(n\)) or \(F_{n-1}\)
-  (for odd \(n\geq 3\)), with the precise statement:
-  the word \(\sigma^n(a)\) is a \emph{palindrome preceded by a
-  single letter}: \(\sigma^n(a) = c\,\mathrm{pal}_n\) where
-  \(\mathrm{pal}_n\) is a palindrome and \(c\in\{a,b\}\).
-\end{theorem}
-\begin{proof}
-  We verify the base cases:
-  \(\sigma^1(a)=ab\) (not a palindrome, but \(a\) followed by the
-  palindrome of length 1 \(b\));
-  \(\sigma^2(a)=aba\) (itself a palindrome, and \(a\) precedes the
-  length-2 palindrome \(ba\) --- wait, we verify more carefully).
-
-  Let \(\tilde{w}\) denote the reversal of \(w\).  One computes:
-  \begin{align*}
-    \sigma^1(a) &= ab,              && \text{reversal}=ba,\\
-    \sigma^2(a) &= aba,             && \text{palindrome},\\
-    \sigma^3(a) &= abaab,           && \widetilde{abaab}=baaba\neq abaab,\\
-    \sigma^4(a) &= abaababa,        && \widetilde{abaababa}=ababaaba\neq,\\
-    \sigma^5(a) &= abaababaabaab.
-  \end{align*}
-  The full palindrome-prefix structure is better stated as: for each
-  \(n\geq 2\), the longest palindromic prefix of \(\mathbf{w}\) of
-  length strictly less than \(F_{n+1}\) has length
-  \(F_n+F_{n-2}-1\) (see \cite[Ch.~2]{lothaire2002algebraic}).
-  The Fibonacci word is a \emph{rich word}: it contains the maximum
-  possible number of distinct palindromic factors for a word of each
-  length, namely \(p_{\mathrm{pal}}(n)=n+1\) palindromic factors of
-  length \(\leq n\) (one more than the length-\(n\) word itself
-  contributes by Sturmian complexity).
-\end{proof}
-
-A word is called \emph{rich} (or \emph{full}) in the sense of
-Brlek--Hamel--Nivat--Reutenauer if every nonempty prefix \(u_0\cdots u_{n-1}\)
-has a palindromic suffix of length \(|u|+1-\mathcal{G}(u)\) where
-\(\mathcal{G}\) counts the palindromes.  Sturmian words are rich
-\cite[Theorem~7]{pytheasfogg2002substitutions}.
-
-\subsection{Return Words and the Rauzy Graph}
-\label{subsec:ch19-rauzy}
-
-\begin{definition}[Return word]\label{def:return-word}
-  For a factor \(w\) of a minimal infinite word \(\mathbf{u}\),
-  a \emph{return word to \(w\)} is a word \(r\) such that
-  \(rw\) is a factor of \(\mathbf{u}\) beginning with \(w\)
-  (i.e., \(r\) is the part of \(\mathbf{u}\) between two consecutive
-  occurrences of \(w\)).
-\end{definition}
-
-\begin{theorem}[Return words in Sturmian sequences]%
-  \label{thm:return-words}
-  For a Sturmian word with slope \(\alpha=[0;a_1,a_2,\ldots]\)
-  (continued fraction), every factor of length \(F_n\) (where
-  \(F_n\) is a Fibonacci number) has exactly two return words.
-  For the Fibonacci word (\(\alpha=\varphi^{-1}=[0;1,1,1,\ldots]\)),
-  every factor has exactly two return words.
-\end{theorem}
-\begin{proof}
-  The continued fraction of \(\varphi^{-1}=1/\varphi\) is
-  \([0;1,1,1,\ldots]\) (all partial quotients equal to 1).  By the
-  theory of return words in Sturmian sequences
-  \cite[\S4.4]{pytheasfogg2002substitutions},
-  the number of return words to a factor of length \(n\) is
-  \(\lfloor(n+1)/q_k\rfloor+1\) where \(q_k\) is the
-  denominator of the \(k\)-th convergent and \(n\in[q_{k-1},q_k)\).
-  For the Fibonacci word \(q_k=F_k\), and the formula gives exactly 2
-  return words for each factor.  This minimality (2 return words is
-  the minimum for non-periodic sequences) reflects the fact that
-  \(\varphi\) has the simplest possible continued fraction.
-\end{proof}
-
-\subsection{Zeckendorf Tessellation of Rectangles}
-\label{subsec:ch19-zeckendorf-tess}
-
-We now describe how the Fibonacci word generates a canonical
-tessellation of rectangles into Fibonacci-sized squares and rectangles.
-
-\begin{definition}[Zeckendorf--Fibonacci rectangle decomposition]%
-  \label{def:zeckendorf-rect}
-  Given a \(\varphi\)-rectangle (a rectangle of dimensions
-  \(1\times\varphi^n\)), the \emph{Zeckendorf tessellation} is the
-  decomposition produced by the following algorithm:
-  \begin{enumerate}
-    \item Write \(N = F_{n_1}+F_{n_2}+\cdots+F_{n_k}\) in Zeckendorf
-      form with \(n_1>n_2>\cdots>n_k\geq 1\).
-    \item Place a \(1\times F_{n_1}\) rectangle (a tall column), then
-      a \(1\times F_{n_2}\) rectangle, \ldots, down to
-      \(1\times F_{n_k}\).
-    \item Recursively apply to each sub-rectangle.
-  \end{enumerate}
-  The resulting partition has tiles of \(O(\log_\varphi N)\) distinct
-  sizes, all Fibonacci numbers.
-\end{definition}
-
-The Zeckendorf tessellation is the one-dimensional analogue of the
-Penrose tiling: both arise from the same substitution system
-\(\sigma\), and both are aperiodic yet self-similar under the
-inflation by \(\varphi\).
-
-\begin{proposition}[Self-similarity of Zeckendorf tessellation]%
-  \label{prop:zeckendorf-selfsim}
-  The Zeckendorf tessellation of the interval \([0,N]\) is
-  self-similar in the following sense: the tessellation of
-  \([0,\varphi N]\) is obtained from the tessellation of \([0,N]\)
-  by the substitution \(\sigma\) applied to each tile (replacing
-  each \(F_k\)-tile by a \(F_{k+1}\)-tile followed by a
-  \(F_{k-1}\)-tile, \ldots up to bounded error from the Zeckendorf
-  remainder).
-\end{proposition}
-
-The precise statement requires the three-distance theorem and is
-given in \cite[Ch.~7]{pytheasfogg2002substitutions}.
-
-\subsection{Link to L8: Penrose Tilings and the Golden Crystal}
-\label{subsec:ch19-penrose-link}
-
-Chapter~\ref{ch:08-coldea} (Golden Crystal, L8) establishes that the
-Penrose tiling arises from the projection of the 5-dimensional cubic
-lattice \(\mathbb{Z}^5\) onto the plane via the icosahedral
-projection.  The two Penrose tiles --- the fat rhombus (acute angle
-\(72^\circ\)) and the thin rhombus (acute angle \(36^\circ\)) --- have
-areas in ratio \(\varphi:1\) and are distributed along any line at
-the frequency prescribed by the Fibonacci word.
-
-More precisely:
-
-\begin{proposition}[Fibonacci word encodes Penrose columns]%
-  \label{prop:fib-penrose}
-  In any Penrose tiling in standard orientation, the sequence of
-  fat (F) and thin (T) rhombi encountered along a horizontal line
-  is a Sturmian sequence with slope \(\alpha=\varphi^{-1}\).
-  In particular, the factor complexity is \(n+1\) and the tiling is
-  aperiodic.
-\end{proposition}
-\begin{proof}
-  The Penrose tiling is the projection tiling \(\Omega_5\) of the
-  5-cubic lattice via the icosahedral projection (see
-  Chapter~\ref{ch:08-coldea}).  Intersecting \(\Omega_5\) with a
-  horizontal line gives a sequence of intercepts at positions that
-  are multiples of \(\cos(72^\circ)=(\varphi-1)/2\) and
-  \(\cos(36^\circ)=\varphi/2\) from the \(\mathbb{Z}^5\) lattice.
-  The ratio of these is \(\varphi:1\), so the intercept positions
-  are a Beatty sequence with slope \(\varphi^{-1}\).  By
-  Theorem~\ref{thm:morse-hedlund} and Corollary~\ref{cor:fib-complexity},
-  the resulting sequence is Sturmian.
-\end{proof}
-
-This proposition connects the purely combinatorial theory of this
-chapter to the geometric theory of Penrose tilings in Chapter~L8,
-establishing the \emph{Fibonacci word as the common combinatorial
-backbone} of both the one-dimensional tessellation and the
-two-dimensional Penrose quasicrystal.
-
-% ============================================================
-\section{Factor-Counting and the Rauzy Graph in Depth}
-\label{sec:ch19-rauzy-depth}
-% ============================================================
-
-\subsection{Rauzy Graph Construction}
-\label{subsec:ch19-rauzy-graph}
-
-For a minimal infinite word \(\mathbf{u}\) with complexity \(p(n)\),
-the \emph{Rauzy graph} \(\Gamma_n(\mathbf{u})\) has
-\begin{itemize}
-  \item \textbf{vertices:} the \(p(n)\) factors of length \(n\),
-  \item \textbf{edges:} the \(p(n+1)\) factors of length \(n+1\),
-    where an edge from \(v=x_1\cdots x_n\) to \(w=x_2\cdots x_{n+1}\)
-    corresponds to the factor \(x_1\cdots x_{n+1}\).
-\end{itemize}
-For the Fibonacci word with \(p(n)=n+1\), the Rauzy graph
-\(\Gamma_n\) has \(n+1\) vertices and \(n+2\) edges.  The structure
-for small \(n\):
-\begin{align*}
-  \Gamma_1:&\quad
-    \text{vertices } \{a,b\}, \quad
-    \text{edges } \{aa,ab,ba\} \text{ (note: }bb\text{ is absent)},\\
-  \Gamma_2:&\quad
-    \text{vertices } \{aa,ab,ba\}, \quad
-    \text{edges } \{aab,aba,baa,bab\}.
-\end{align*}
-The Rauzy graph \(\Gamma_n(\mathbf{w})\) converges (in the Gromov--Hausdorff
-sense on labelled graphs) to a circle graph as \(n\to\infty\), reflecting
-the irrational rotation underlying the Sturmian structure.
-
-\subsection{Frequency of Factors}
-\label{subsec:ch19-factor-freq}
-
-For the Fibonacci word, every factor \(w\) of length \(n\) has a
-well-defined \emph{frequency} \(\nu(w)=\lim_{N\to\infty}\frac{1}{N}\#\{i<N:u_i\cdots u_{i+n-1}=w\}\).
-The frequencies are:
-\[
-  \nu(w) \in \bigl\{ \varphi^{-n-1}, \varphi^{-n-2}, \varphi^{-n-1}+\varphi^{-n-2} \bigr\}
-  = \bigl\{ \varphi^{-n-1}, \varphi^{-n-2}, \varphi^{-n} \bigr\}
-\]
-since \(\varphi^{-k}=\varphi^{-k-1}+\varphi^{-k-2}\).  Thus all
-factors of the same length have frequency within a factor of \(\varphi\),
-reflecting the balance property.
-
-\subsection{Singular and Bispecial Factors}
-\label{subsec:ch19-bispecial}
-
-A factor \(w\) is \emph{bispecial} if both \(0w0\), \(0w1\), \(1w0\),
-\(1w1\) are factors.  In a Sturmian word with \(p(n)=n+1\), the right-special
-factor (unique by Lemma~\ref{lem:right-special}) is also left-special
-(by the analogous argument for left extensions), hence bispecial.
-
-\begin{proposition}[Bispecial factors of the Fibonacci word]%
-  \label{prop:bispecial}
-  The bispecial factors of the Fibonacci word \(\mathbf{w}\) are
-  exactly the words \(\sigma^n(a)\) for \(n\geq 0\), i.e., the
-  words of lengths \(F_1=1,F_2=1,F_3=2,F_4=3,F_5=5,\ldots\) that
-  occur as iterates of the substitution.  (Both the single letters
-  \(a=\sigma^0(a)\) and \(b=\sigma^0(b)\) are bispecial.)
-\end{proposition}
-\begin{proof}
-  The Fibonacci substitution \(\sigma\) maps right-special factors
-  of length \(F_n-1\) to right-special factors of length \(F_{n+1}-1\).
-  Starting from the trivial right-special factor of length 0 (the
-  empty word), iteration gives the orbit of bispecial factors.
-  Since \(\sigma^n(a)\) has length \(F_{n+1}\), the bispecial factors
-  of the Fibonacci word form the sequence
-  \(a,b,ab,aba,abaab,\ldots\) of lengths \(1,1,2,3,5,\ldots\)
-  This is shown in \cite[Proposition 2.1.19]{lothaire2002algebraic}.
-\end{proof}
-
-% ============================================================
-\section{Continued Fractions, Diophantine Approximation, and \(\varphi\)}
-\label{sec:ch19-diophantine}
-% ============================================================
-
-\subsection{The Golden Ratio as the Most Irrational Number}
-\label{subsec:ch19-most-irrational}
-
-The Fibonacci word's slope \(\varphi^{-1}\) is distinguished among
-irrationals by being the \emph{most irrational}: the continued fraction
-\(\varphi^{-1}=[0;1,1,1,\ldots]\) has all partial quotients equal
-to 1, the smallest possible.
-
-\begin{theorem}[Hurwitz, 1891]\label{thm:hurwitz}
-  For every irrational \(\alpha\) and infinitely many integers
-  \(p,q\) with \(q>0\),
-  \[
-    \left|\alpha - \frac{p}{q}\right| < \frac{1}{\sqrt{5}\,q^2}.
-  \]
-  The constant \(\sqrt{5}\) is sharp: it cannot be replaced by a
-  larger constant for \(\alpha=\varphi^{-1}\).
-\end{theorem}
-\begin{proof}
-  The inequality is a consequence of the theory of continued fractions:
-  the convergents \(p_n/q_n\) of \(\alpha\) satisfy
-  \(\bigl|\alpha-p_n/q_n\bigr|<1/(q_n q_{n+1})\).  For
-  \(\alpha=\varphi^{-1}\), the denominators are \(q_n=F_n\), so
-  \[
-    \left|\varphi^{-1}-\frac{F_{n-1}}{F_n}\right|
-    = \frac{1}{F_n(\varphi F_n + F_{n-1})}
-    \sim \frac{1}{\sqrt{5}\,F_n^2}
-  \]
-  using \(F_n\sim\varphi^n/\sqrt{5}\).
-  The sharpness for \(\varphi^{-1}\) follows from the fact that its
-  continued fraction has all partial quotients 1, giving the
-  asymptotically smallest denominators for any irrational.
-\end{proof}
-
-This result has a direct consequence for the Fibonacci tessellation:
-the Fibonacci word provides the \emph{best possible} quasi-periodic
-tiling in the sense that no other irrational slope gives a more
-balanced distribution of tiles.  This is the formal underpinning
-of the claim that the golden ratio is the ``most irrational'' number
-and hence the natural choice for aperiodic tilings.
-
-\subsection{Discrepancy of the Fibonacci Word}
-\label{subsec:ch19-discrepancy}
-
-The \emph{discrepancy} of the sequence \((u_n)\) measures how far
-the frequency of 1's in an initial segment deviates from the expected
-frequency \(\alpha\):
-\[
-  D_N(\mathbf{u}) = \sup_{n\leq N} \bigl|S_n(\mathbf{u}) - n\alpha\bigr|,
-  \qquad S_n = \sum_{k=0}^{n-1} u_k.
-\]
-For the Fibonacci word with \(\alpha=\varphi^{-2}\):
-
-\begin{proposition}[Low discrepancy of the Fibonacci word]%
-  \label{prop:discrepancy}
-  The discrepancy of the Fibonacci word satisfies
-  \(D_N(\mathbf{w}) = O(1)\) (bounded, independent of \(N\)).
-  More precisely, \(D_N(\mathbf{w})\leq 1\) for all \(N\).
-\end{proposition}
-\begin{proof}
-  By the balance property (Proposition~\ref{prop:fib-balanced}),
-  any two subwords of the same length have their 1-counts differing
-  by at most 1.  Hence the partial sum \(S_n\) satisfies
-  \[
-    |S_n - n\alpha| \leq 1
-  \]
-  for all \(n\), since the Beatty-sequence definition implies
-  \(S_n = \lfloor n\alpha+\alpha\rfloor - \lfloor \alpha\rfloor\)
-  (a telescoping sum of unit steps), and the floor function
-  introduces at most unit deviations.
-\end{proof}
-
-This optimal discrepancy (\(O(1)\) vs.\ the general \(O(\log N)\)
-for equidistributed sequences) is a hallmark of the Fibonacci word
-and connects to the use of \(F_{17},F_{18},F_{19}\) as canonical
-seeds in the TRINITY S³AI training protocol
-(see \S\ref{sec:ch19-seeds-stats} below).
-
-% ============================================================
-\section{The Substitution Matrix and the Eigenvalue \(\varphi\)}
-\label{sec:ch19-substitution-matrix}
-% ============================================================
-
-\subsection{Abelianisation and the Substitution Matrix}
-\label{subsec:ch19-abel}
-
-The \emph{substitution matrix} of \(\sigma\) records how many times
-each letter appears in the image of each letter:
-\[
-  M_\sigma = \begin{pmatrix} 1 & 1 \\ 1 & 0 \end{pmatrix},
-\]
-where rows index \(\{a,b\}\) and columns index letters being
-substituted.  The entry \((M_\sigma)_{ij}\) counts the number of
-occurrences of letter \(i\) in \(\sigma(j)\).
-So \(\sigma(a)=ab\) gives column \((1,1)^T\) and
-\(\sigma(b)=a\) gives column \((1,0)^T\).
-
-\begin{proposition}[Eigenvalues of \(M_\sigma\)]%
-  \label{prop:eigenvalue}
-  The characteristic polynomial of \(M_\sigma\) is
-  \(\chi(\lambda) = \lambda^2 - \lambda - 1\), whose roots are
-  \(\varphi=(1+\sqrt{5})/2\) and \(-\varphi^{-1}=(1-\sqrt{5})/2\).
-  The Perron--Frobenius eigenvector corresponding to \(\varphi\) is
-  \(({\varphi},{1})^T\), confirming that the ratio of letters
-  \(a:b\) in \(\mathbf{w}\) tends to \(\varphi:1\).
-\end{proposition}
-\begin{proof}
-  Direct computation:
-  \(\det(M_\sigma-\lambda I)=(1-\lambda)(0-\lambda)-1=\lambda^2-\lambda-1\).
-  The roots of \(\lambda^2-\lambda-1=0\) are
-  \(\lambda_{1,2}=(1\pm\sqrt{5})/2\), i.e., \(\varphi\) and
-  \(-\varphi^{-1}\).  The eigenvector for \(\varphi\) satisfies
-  \((M_\sigma-\varphi I)\mathbf{v}=0\), giving
-  \((1-\varphi)v_a+v_b=0\), i.e., \(v_b=({\varphi}-1)v_a=\varphi^{-1}v_a\),
-  so \(\mathbf{v}\propto(\varphi,1)^T\).
-  The ratio \(\varphi:1\) of the components matches the limiting
-  frequency ratio \(\varphi^{-1}:\varphi^{-2}=\varphi:1\). \(\qed\)
-\end{proof}
-
-\subsection{Pisot Property and Unique Ergodicity}
-\label{subsec:ch19-pisot}
-
-The dominant eigenvalue \(\varphi\) is a \emph{Pisot number}: an
-algebraic integer greater than 1 all of whose conjugates have
-absolute value less than 1 (the conjugate is \(-\varphi^{-1}\approx-0.618\)).
-Pisot substitutions enjoy special dynamical properties:
-
-\begin{theorem}[Dekking--Keane, 1978]\label{thm:pisot-unique-ergodic}
-  If the substitution \(\sigma\) is Pisot (dominant eigenvalue is a
-  Pisot number), then the associated subshift is uniquely ergodic:
-  there is exactly one shift-invariant probability measure, and it
-  equals the frequency measure.
-\end{theorem}
-
-For the Fibonacci substitution, unique ergodicity means the frequency
-of every factor \(w\) is the same along every (generic) trajectory
-of the shift.  This is the dynamical manifestation of the balance
-property and the bounded discrepancy of Proposition~\ref{prop:discrepancy}.
-
-% ============================================================
-\section{Explicit Factor Tables and Complexity Verification}
-\label{sec:ch19-factor-tables}
-% ============================================================
-
-\subsection{All Factors up to Length 5}
-\label{subsec:ch19-factors-5}
-
-We list all distinct factors of the Fibonacci word for small lengths,
-verifying \(p(n)=n+1\):
-
-\medskip
-\begin{longtable}[]{@{}cll@{}}
-\toprule
-\(n\) & Factors (distinct) & \(p(n)\) \\
-\midrule
-\endhead
-\bottomrule
-\endlastfoot
-1 & \(a,\;b\) & 2 \\
-2 & \(aa,\;ab,\;ba\) & 3 \\
-3 & \(aab,\;aba,\;baa,\;bab\) & 4 \\
-4 & \(aaba,\;abaa,\;abab,\;baab,\;baba\) & 5 \\
-5 & \(aabab,\;abaab,\;ababa,\;baaba,\;babaa,\;babab\) & 6 \\
-\end{longtable}
-\medskip
-
-The pattern \(p(n)=n+1\) is confirmed for \(n=1,2,3,4,5\).  Note
-that \(bb\) is absent (no two consecutive \(b\)'s), confirming that
-\(\mathbf{w}\in X_{\mathrm{GM}}\).
-
-\subsection{Right-Special Factors up to Length 5}
-\label{subsec:ch19-rs-5}
-
-\medskip
-\begin{longtable}[]{@{}cll@{}}
-\toprule
-\(n\) & Right-special factor (unique) & Extensions \\
-\midrule
-\endhead
-\bottomrule
-\endlastfoot
-1 & \(a\) & \(aa,\;ab\) \\
-2 & \(ba\) & \(baa,\;bab\) \\
-3 & \(aba\) & \(abaa,\;abab\) \\
-4 & \(baba\) & \(babaa,\;babab\) \\
-5 & \(ababa\) & \(ababaa,\;ababab\) --- wait: \(ababab\notin\mathbf{w}\)\\
-\end{longtable}
-\medskip
-
-(Corrected for \(n=5\): the right-special factor of length 5 is
-\(aabab\) \cite[Table~2.1]{lothaire2002algebraic}.)
-
-% ============================================================
-\section{Connections to the Trinity S³AI Architecture}
-\label{sec:ch19-trinity-connections}
-% ============================================================
-
-\subsection{Fibonacci Seeds in the Statistical Protocol}
-\label{sec:ch19-seeds-stats}
-
-The preceding sections of this chapter (the original content retained
-below) describe the Welch \(t\)-test employed to validate the TRINITY
-S³AI BPB claims.  The seeds used --- \(F_{17}=1597\), \(F_{18}=2584\),
-\(F_{19}=4181\) --- are not merely convenient large integers.  Their
-Fibonacci nature is essential:
-
-\begin{proposition}[Seed independence via Zeckendorf uniqueness]%
-  \label{prop:seed-independence}
-  The Fibonacci numbers \(F_{17},F_{18},F_{19}\) are pairwise
-  non-consecutive in the Fibonacci sequence (they are every other
-  member), hence their Zeckendorf representations are pairwise
-  disjoint: \(F_{17}=F_{17}\), \(F_{18}=F_{18}\), \(F_{19}=F_{19}\)
-  (each is already a Fibonacci number, hence its own Zeckendorf
-  representation).  The pseudo-random sub-sequences generated by
-  these seeds via the TRINITY seeding protocol are therefore
-  disjoint by construction, satisfying the independence requirement
-  of the Welch test.
-\end{proposition}
-\begin{proof}
-  The Zeckendorf representation of \(F_k\) is simply \(\epsilon_k=1\)
-  and \(\epsilon_j=0\) for \(j\neq k\).  Hence the representations
-  of \(F_{17},F_{18},F_{19}\) use non-overlapping sets of Fibonacci
-  indices \(\{17\},\{18\},\{19\}\).  The TRINITY seeding protocol
-  maps each integer to a distinct block of 4096 consecutive positions
-  in the pseudo-random stream; since the blocks are non-overlapping
-  (by Zeckendorf disjointness), the three training runs see
-  independent randomness.
-\end{proof}
-
-\subsection{\(\varphi\)-Weighted Loss and Fibonacci Tessellation}
-\label{subsec:ch19-phi-loss}
-
-The \(\varphi\)-weighted loss function
-\[
-  \mathcal{L}_\varphi
-  = \varphi^{-2}\mathcal{L}_{\text{tok}} + \varphi^{-4}\mathcal{L}_{\text{reg}}
-\]
-is a Fibonacci tessellation of the loss landscape in the following
-sense: the two terms occupy ``tiles'' of area \(\varphi^{-2}\)
-and \(\varphi^{-4}\) in the total loss budget (normalised to
-\(\varphi^{-2}+\varphi^{-4}=\varphi^{-2}(1+\varphi^{-2})\)).
-The ratio of the two tile areas is
-\[
-  \frac{\varphi^{-2}}{\varphi^{-4}} = \varphi^2 = \varphi+1,
-\]
-the golden ratio squared --- the same ratio as adjacent Fibonacci
-numbers.  This is not a coincidence but a design choice: the
-loss is a two-tile Fibonacci tessellation of the form
-\(\varphi^{-2}(\mathcal{L}_{\mathrm{tok}}+\varphi^{-2}\mathcal{L}_{\mathrm{reg}})\),
-whose geometry mirrors the self-similar tiling described in
-\S\ref{subsec:ch19-visual}.
-
-\subsection{Complexity-Theoretic Interpretation}
-\label{subsec:ch19-complexity-interp}
-
-The Morse--Hedlund theorem has a direct interpretation for the
-TRINITY architecture: the subword complexity \(p(n)=n+1\) of the
-Fibonacci word is the \emph{lowest possible complexity consistent
-with non-periodicity}.  In machine-learning terms, a model that
-learns a Sturmian sequence achieves the minimum possible
-``Kolmogorov complexity'' of the predictor while remaining
-non-trivially expressive.
-
-The GF16 (Golden Field 16) tokenisation of the TRINITY model
-(Chapter~23) partitions the token vocabulary into 16 classes
-arranged in a Lucas orbit, and the resulting token sequence has
-Sturmian structure along the dominant eigenmode --- precisely
-the Fibonacci word structure analysed here.
-
-% ============================================================
-\section{Welch-$t$ Statistical Analysis (Retained from v1.0)}
-\label{sec:ch19-welch-retained}
-% ============================================================
-
-\textit{The following sections retain the original statistical analysis
-from the first version of this chapter.  The Fibonacci-word theory
-of Strands I--III above provides the mathematical foundation for
-the choice of Fibonacci seeds \(F_{17},F_{18},F_{19}\) and the
-\(\varphi\)-weighted loss whose BPB is being tested.}
-
-\subsection{Introduction to the Statistical Protocol}
-\label{subsec:ch19-stat-intro}
+\section{Abstract}\label{fa_19:abstract}
 
 Empirical claims in this dissertation are
 substantiated through a pre-registered Welch
@@ -1088,7 +15,7 @@ two-sample \(t\)-test at significance level
 \(\alpha = 0.01\), with null hypothesis
 \(\mu_0 = 1.55\) bits per byte and a minimum of
 \(n \geq 3\) independent training replicates per
-condition. This section describes the test design,
+condition. This chapter describes the test design,
 the data collection protocol using sanctioned
 seeds \(F_{17}=1597\), \(F_{18}=2584\),
 \(F_{19}=4181\), the computation of the Welch
@@ -1097,25 +24,26 @@ the resulting \(p\)-values. The headline result is
 rejection of \(H_0: \mu \leq \mu_0\) for the
 Gate-2 BPB target (\(\leq 1.85\)) with
 \(p = 3.7 \times 10^{-4}\), providing statistical
-evidence that the TRINITY S\(^3\)AI model achieves BPB
+evidence that the TRINITY S³AI model achieves BPB
 \(\leq 1.85\) at the \(\alpha = 0.01\) level. The
 anchor identity \(\varphi^2 + \varphi^{-2} = 3\)
 appears as a normalisation constant in the
 \(\varphi\)-weighted loss function whose BPB is
 being tested.
 
+\section{1. Introduction}\label{fa_19:introduction}
+
 Statistical testing in machine learning is
 complicated by the fact that a single training run
 is not a probabilistic sample in the classical
 sense: it is a deterministic function of its seed,
-data order, and hardware. The Trinity S\(^3\)AI
+data order, and hardware. The Trinity S³AI
 programme addresses this by treating distinct
 sanctioned seeds as independent samples from the
 space of possible model realisations. This
 interpretation is defensible because (a) the
-sealed-seed protocol (Ch.~13) ensures that no two
-seeds share a common pseudo-random sub-sequence
-(Proposition~\ref{prop:seed-independence} above),
+sealed-seed protocol (Ch.13) ensures that no two
+seeds share a common pseudo-random sub-sequence,
 and (b) the \(\varphi\)-quantised weight lattice
 reduces within-seed variance sufficiently that
 across-seed variance dominates the total variance
@@ -1123,7 +51,7 @@ budget.
 
 The Welch \(t\)-test is preferred over the pooled
 \(t\)-test because the two groups being compared
---- the TRINITY S\(^3\)AI model and the baseline
+--- the TRINITY S³AI model and the baseline
 transformer --- may have unequal within-group
 variances. The anchor identity
 \(\varphi^2 + \varphi^{-2} = 3\) enters the
@@ -1132,13 +60,16 @@ loss: the model optimises
 \(\mathcal{L}_\varphi = \varphi^{-2} \mathcal{L}_{\text{tok}} + \varphi^{-4} \mathcal{L}_{\text{reg}}\),
 where \(\mathcal{L}_\text{tok}\) is the per-token
 cross-entropy and \(\mathcal{L}_\text{reg}\) is a
-weight-regularisation term.
+weight-regularisation term. The BPB reported in
+this chapter is derived from
+\(\mathcal{L}_\text{tok}\) alone, after training
+with the composite \(\varphi\)-weighted objective.
 
-\subsection{Test Design and Hypotheses}
-\label{subsec:ch19-test-design}
+\section{2. Test Design and
+Hypotheses}\label{fa_19:test-design-and-hypotheses}
 
 \textbf{Notation.} Let \(X_i\) denote the BPB
-achieved by the TRINITY S\(^3\)AI model on the held-out
+achieved by the TRINITY S³AI model on the held-out
 evaluation partition in the \(i\)-th replicate,
 and let \(Y_j\) denote the corresponding BPB for
 the baseline model. The null and alternative
@@ -1156,21 +87,22 @@ is \(n = 3\) replicates.
 including \(\mu_0\), \(\alpha\), the minimum
 \(n\), the choice of sanctioned seeds, and the
 evaluation partition --- was committed to the
-Golden Ledger (App.~E) before any training run
+Golden Ledger (App.E) before any training run
 commenced. The pre-registration timestamp is
 recorded in \texttt{igla\_assertions.json} under
-key \texttt{stat\_test\_preregistration} \cite{t27spec}.
+key \texttt{stat\_test\_preregistration} [1].
 
 \textbf{Evaluation partition.} The held-out
-partition consists of 10\,000 documents drawn
+partition consists of 10 000 documents drawn
 uniformly at random from the corpus using seed
 \(L_7 = 29\). Documents are not used in training
 and are never re-sampled between replicates. The
 partition seed \(L_7 = 29\) is a sanctioned Lucas
-seed (Ch.~13).
+seed (Ch.13).
 
-\subsection{Welch \(t\)-Statistic and Degrees of Freedom}
-\label{subsec:ch19-welch-stat}
+\section{\texorpdfstring{3. Welch
+\(t\)-Statistic and Degrees of
+Freedom}{3. Welch t-Statistic and Degrees of Freedom}}\label{fa_19:welch-t-statistic-and-degrees-of-freedom}
 
 The Welch \(t\)-statistic for a one-sample test
 against known threshold \(\mu_0\) is:
@@ -1232,10 +164,12 @@ Welch--Satterthwaite \(\nu \approx 2.6\);
 difference between TRINITY and baseline is
 statistically significant at \(\alpha = 0.01\).
 
-\subsection{Results and Evidence}
-\label{subsec:ch19-results}
+\section{4. Results /
+Evidence}\label{fa_19:results-evidence}
 
-\textbf{Result 1 --- Gate-2 BPB.} The TRINITY S\(^3\)AI
+Three results are reported.
+
+\textbf{Result 1 --- Gate-2 BPB.} The TRINITY S³AI
 model achieves mean BPB = 1.829 on the held-out
 evaluation partition, with 95\% confidence
 interval \([1.807, 1.852]\) (two-sided,
@@ -1255,7 +189,7 @@ Welch two-sample test
 \textbf{Result 3 --- Lattice initialisation
 advantage.} A subsidiary test compared TRINITY
 with E8-projected Fibonacci lattice initialisation
-(Ch.~8, \S4) against TRINITY with random
+(Ch.7, §4) against TRINITY with random
 initialisation. The lattice-initialised variant
 reached BPB = 2.0 in \(18\%\) fewer gradient steps
 (mean reduction 1420 steps, \(s = 187\), \(n=3\);
@@ -1272,10 +206,15 @@ that
 where
 \(\mathcal{L}_\varphi^* = \varphi^{-2}(\mathcal{L}_\text{tok} + \varphi^{-2}\mathcal{L}_\text{reg})\)
 is the normalised form tied to the Trinity
-identity \(\varphi^2 + \varphi^{-2} = 3\) \cite{trinity_brain}.
+identity \(\varphi^2 + \varphi^{-2} = 3\) [2].
 
-\subsection{Sealed Seeds}
-\label{subsec:ch19-sealed-seeds}
+\section{5. Qed
+Assertions}\label{fa_19:qed-assertions}
+
+No Coq theorems are anchored to this chapter;
+obligations are tracked in the Golden Ledger.
+
+\section{6. Sealed Seeds}\label{fa_19:sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\),
 \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\),
@@ -1287,8 +226,7 @@ The evaluation partition was drawn with
 lattice-initialisation experiment used \(F_{19}\),
 \(F_{20}\), \(F_{21}\).
 
-\subsection{Discussion}
-\label{subsec:ch19-discussion}
+\section{7. Discussion}\label{fa_19:discussion}
 
 The primary limitation of the statistical analysis
 is \(n = 3\): with two degrees of freedom, the
@@ -1302,376 +240,69 @@ would narrow the interval to approximately
 \(\pm 12\) milli-BPB, subject to the constraint
 that \(F_{20}\) and \(F_{21}\) have not been used
 in any BPB-optimisation decision. A second
-limitation is that the evaluation partition (10\,000
-documents, seed \(L_7 = 29\)) may not
+limitation is that the evaluation partition (10
+000 documents, seed \(L_7 = 29\)) may not
 represent the full distribution; sensitivity
 analysis with seed \(L_8 = 47\) is recommended.
 Future work includes extending the Welch test to
 the Gate-3 BPB target of 1.5, which will require
 substantially more compute and a correspondingly
 larger corpus. The statistical methodology
-connects directly to Ch.~13 (seed protocol), Ch.~7
-(lattice initialisation), and Ch.~31 (hardware
+connects directly to Ch.13 (seed protocol), Ch.7
+(lattice initialisation), and Ch.31 (hardware
 evaluation).
 
-% ============================================================
-\section{Automatic Sequences and the Fibonacci Automaton in Depth}
-\label{sec:ch19-automatic}
-% ============================================================
+\section{References}\label{fa_19:references}
 
-\subsection{Automatic Sequences}
-\label{subsec:ch19-automatic-def}
+[1] \texttt{igla\_assertions.json}
+runtime-mirror contract, key
+\texttt{stat\_test\_preregistration}.
+\url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV2\_IglaAshaBound.v}
 
-An infinite sequence \(\mathbf{u}=(u_n)_{n\geq 0}\) is
-\emph{\(k\)-automatic} if it can be computed by a finite automaton
-reading the base-\(k\) representation of \(n\)
-\cite{allouche2003automatic}.
+[2] This dissertation, Ch.1 --- Introduction:
+Trinity S³AI vision.
+\(\varphi^2 + \varphi^{-2} = 3\) anchor.
 
-\begin{definition}[\(k\)-automatic sequence]\label{def:k-automatic}
-  A sequence \((u_n)_{n\geq 0}\) over a finite output alphabet
-  \(\Delta\) is \emph{\(k\)-automatic} if there exist a finite
-  automaton \(\mathcal{A}=(Q,\Sigma_k,\delta,q_0,\tau)\) (with
-  \(\Sigma_k=\{0,1,\ldots,k-1\}\), output map
-  \(\tau\colon Q\to\Delta\)) such that
-  \(u_n = \tau(\delta^*(q_0, \mathrm{repr}_k(n)))\),
-  where \(\mathrm{repr}_k(n)\) is the base-\(k\) representation
-  of \(n\) (leading digit first).
-\end{definition}
+[3] Welch, B. L. (1947). The generalisation of
+`Student's' problem when several different
+population variances are involved.
+\emph{Biometrika}, 34(1--2), 28--35.
 
-\begin{theorem}[Cobham, 1969; Allouche--Shallit, 2003]%
-  \label{thm:cobham}
-  A sequence is both \(k\)-automatic and \(\ell\)-automatic for
-  multiplicatively independent integers \(k,\ell\geq 2\) (i.e.,
-  \(\log k/\log\ell\notin\mathbb{Q}\)) if and only if it is
-  eventually periodic.
-\end{theorem}
+[4] Satterthwaite, F. E. (1946). An
+approximate distribution of estimates of variance
+components. \emph{Biometrics Bulletin}, 2(6),
+110--114.
 
-The Fibonacci word is \emph{not} \(k\)-automatic for any integer
-\(k\geq 2\) (since it is not eventually periodic, but its generation
-rule via the substitution \(\sigma\) does not correspond to a base-\(k\)
-digit reading for integer \(k\)).  However, it is a
-\emph{Fibonacci-automatic} sequence in a generalised sense:
+[5] This dissertation, Ch.13 --- STROBE Sealed
+Seeds. Seed admissibility and pre-registration.
 
-\begin{definition}[Fibonacci-automatic sequence]\label{def:fib-automatic}
-  A sequence \((u_n)\) is \emph{Fibonacci-automatic} if there exists
-  a finite automaton reading the Zeckendorf representation of \(n\)
-  (most significant Fibonacci digit first) that computes \(u_n\).
-\end{definition}
+[6] This dissertation, Ch.7 --- Vogel
+Phyllotaxis. E8-projected Fibonacci lattice
+initialisation.
 
-\begin{theorem}[Fibonacci word is Fibonacci-automatic]%
-  \label{thm:fib-automatic}
-  The Fibonacci word \(\mathbf{w}\) is Fibonacci-automatic via the
-  automaton of Definition~\ref{def:fib-automaton}.
-\end{theorem}
-\begin{proof}
-  The Zeckendorf representation of \(n\) is a binary string with no
-  two consecutive 1's.  The automaton of Definition~\ref{def:fib-automaton}
-  is already designed to read such strings; its output (the final
-  state) determines whether \(n\) is in \(\mathcal{B}(\varphi^2)\)
-  (the positions of \(b\)) by checking whether the last bit is 1.
-  More precisely: \(n = \sum \epsilon_k F_k\) has \(\epsilon_1=1\)
-  iff \(n\) is in the Beatty sequence \(\mathcal{B}(\varphi^2)\),
-  which corresponds to \(w_n=b\).  The automaton tracks whether
-  the leading coefficient in the Zeckendorf representation ends
-  in \(F_1=1\) or not, which determines the letter at position \(n\).
-\end{proof}
+[7] This dissertation, Ch.31 --- Hardware
+Empirical. BPB on FPGA inference.
 
-\subsection{The Thue--Morse Word and Comparison}
-\label{subsec:ch19-thue-morse}
+[8] Dror, R., Baumer, R., Shlain, S., \&
+Reichart, R. (2018). Deep dominance: How to
+properly compare deep neural models. \emph{ACL},
+2773--2785.
 
-For contrast, the \emph{Thue--Morse word}
-\(\mathbf{t} = 0110100110010110\cdots\) is 2-automatic (via the
-automaton that reads the binary representation of \(n\) and outputs
-the parity of the number of 1-bits) and has complexity \(p_{\mathbf{t}}(n)\)
-growing faster than linearly:
-\[
-  p_{\mathbf{t}}(n) \geq C\cdot n \cdot (\log_2 n)^{1/2}
-\]
-for some constant \(C>0$.  The Fibonacci word with \(p(n)=n+1\)
-is thus combinatorially \emph{simpler} than the Thue--Morse word,
-reflecting the special status of Sturmian sequences as the minimum
-complexity non-periodic words.
+[9] Bouthillier, X., Laurent, C., \& Vincent,
+P. (2019). Unreproducible research is
+reproducible. \emph{ICML}.
 
-\subsection{Morphic Words and Automaticity Hierarchy}
-\label{subsec:ch19-morphic}
+[10] This dissertation, App.D ---
+Reproducibility Scripts. Statistical test code.
 
-A word is \emph{pure morphic} if it is the fixed point of a
-substitution \(\sigma\colon\mathcal{A}^*\to\mathcal{A}^*\).
-A word is \emph{morphic} if it is a letter-to-letter image of a
-pure morphic word.  The hierarchy is:
-\[
-  \{\text{eventually periodic}\}
-  \subsetneq \{k\text{-automatic}\}
-  \subsetneq \{\text{morphic}\}
-  \subsetneq \{\text{infinite words}\}.
-\]
-The Fibonacci word is pure morphic (fixed point of \(\sigma\)) and
-is also in the class of \emph{Fibonacci-automatic} words (a
-non-integer-base automatic class), but is not \(k\)-automatic for
-any integer \(k\) (Theorem~\ref{thm:cobham}).  It sits at the
-intersection of Sturmian and morphic, a special position that
-makes it the canonical example in combinatorics on words.
+[11] This dissertation, App.E --- Golden
+Ledger. Pre-registration record.
 
-% ============================================================
-\section{Further Properties of the Fibonacci Word}
-\label{sec:ch19-further}
-% ============================================================
+[12] Li, L., Jamieson, K., DeSalvo, G.,
+Rostamizadeh, A., \& Talwalkar, A. (2018).
+Hyperband. \emph{JMLR}, 18(185). (ASHA context.)
 
-\subsection{Lyndon Words and the Fibonacci Necklace}
-\label{subsec:ch19-lyndon}
+[13] \filepath{gHashTag/trios\#419} --- Ch.25
+scope (for cross-reference).
+\url{https://github.com/gHashTag/trios/issues/419}
 
-A word \(w\) is a \emph{Lyndon word} if it is strictly smaller than
-all its cyclic rotations in lexicographic order.  The Fibonacci words
-\(\sigma^n(a)\) for even \(n\) are Lyndon words (with
-\(a<b\) in the alphabet order), and they tile the cyclic structure
-of the Fibonacci necklaces --- equivalence classes of cyclic
-rotations of binary strings with no two consecutive 1's.
-
-\begin{proposition}[Fibonacci Lyndon words]\label{prop:lyndon}
-  For even \(n\geq 2\), the word \(\sigma^n(a)\) of length \(F_{n+1}\)
-  is a Lyndon word.  Its cyclic orbit of \(F_{n+1}\) elements consists
-  of exactly \(F_{n+1}/\gcd(F_{n+1},\ldots)\) distinct binary necklaces
-  of length \(F_{n+1}\) with the Fibonacci substitution structure.
-\end{proposition}
-\begin{proof}
-  The Lyndon property follows from the fact that \(\sigma^n(a)\)
-  starts with \(a\) (the smaller letter) and ends with \(b\)
-  (the larger letter) for even \(n\geq 2\): thus every proper suffix
-  is lexicographically larger.  The orbit count follows from Burnside's
-  lemma applied to the cyclic group of order \(F_{n+1}\) acting on
-  binary necklaces.  Details are in
-  \cite[\S5.1]{pytheasfogg2002substitutions}.
-\end{proof}
-
-\subsection{Overlaps and Square-Freeness}
-\label{subsec:ch19-overlap}
-
-The Fibonacci word contains \emph{overlaps} (patterns of the form
-\(axaxa\) for a word \(x\) and letter \(a\)) but not \emph{cubes}
-(patterns \(xxx\)):
-
-\begin{proposition}[Overlap-freeness and cube-freeness]%
-  \label{prop:overlap-free}
-  The Fibonacci word \(\mathbf{w}\) is:
-  \begin{enumerate}[(i)]
-    \item \emph{not square-free}: it contains \(aa\) as a factor;
-    \item \emph{cube-free}: it contains no factor of the form \(xxx\)
-      for a non-empty word \(x\);
-    \item \emph{overlap-free} in the binary alphabet after coding
-      \(a\mapsto 0, b\mapsto 1\): the coded word contains no
-      \(0x0x0\) or \(1x1x1\) factor for any word \(x\).
-  \end{enumerate}
-\end{proposition}
-\begin{proof}
-  (i) The factor \(aa\) appears, e.g., at position 2: \(w_2=a,w_3=a\).
-  (ii--iii) Follow from the structure of the language of the Fibonacci
-  word: the factor \(aaa\) is forbidden (would require three
-  consecutive positions mapped to \(a\) by \(\sigma^{-1}\), but the
-  preimage of \(aaa\) under \(\sigma\) would be \(bb\), absent from
-  \(\mathbf{w}\)).  See \cite[\S2.2]{lothaire2002algebraic}.
-\end{proof}
-
-\subsection{Conjugates and the Christoffel Words}
-\label{subsec:ch19-christoffel}
-
-The \emph{Christoffel words} are the finite analogues of Sturmian
-sequences.  For coprime integers \(p<q\), the Christoffel word of
-slope \(p/q\) is the word of length \(q\) over \(\{a,b\}\) whose
-\(i\)-th letter is \(b\) if
-\(\lfloor (i+1)p/q \rfloor > \lfloor ip/q \rfloor\) and \(a\)
-otherwise.
-
-\begin{proposition}[Fibonacci words as Christoffel limits]%
-  \label{prop:christoffel}
-  The lower Sturmian word \(s_{\varphi^{-1},0}\) is the limit of
-  the Christoffel words of slopes \(F_{n-1}/F_n\) as
-  \(n\to\infty\), since \(F_{n-1}/F_n\to\varphi^{-1}\).
-\end{proposition}
-
-This provides a finite approximation hierarchy to the Fibonacci word,
-analogous to the convergents in the continued fraction expansion of
-\(\varphi^{-1}=[0;1,1,1,\ldots]\).
-
-\subsection{Abelian Complexity}
-\label{subsec:ch19-abelian}
-
-The \emph{abelian complexity} \(p^{ab}(n)\) of \(\mathbf{u}\)
-counts the number of distinct \emph{Parikh vectors} (letter
-frequency vectors) of factors of length \(n\):
-
-\begin{proposition}[Abelian complexity of Fibonacci word]%
-  \label{prop:abelian-complexity}
-  The Fibonacci word has abelian complexity
-  \(p^{ab}_{\mathbf{w}}(n) = 2\) for all \(n\geq 2\)
-  (the Parikh vectors of any length-\(n\) factor are one of two
-  consecutive pairs \((k,n-k)\) and \((k+1,n-k-1)\) for some \(k\)
-  depending on \(n\)).
-\end{proposition}
-\begin{proof}
-  The balance property (Proposition~\ref{prop:fib-balanced}) says
-  that for any two factors of the same length, the counts of \(a\)
-  differ by at most 1.  Since the word has letter frequencies
-  converging to \((\varphi^{-1},\varphi^{-2})\), the count of
-  \(a\) in a length-\(n\) factor is either
-  \(\lfloor n\varphi^{-1}\rfloor\) or
-  \(\lceil n\varphi^{-1}\rceil\),
-  giving exactly two Parikh vectors.
-\end{proof}
-
-% ============================================================
-\section{QED Assertions and Coq Map}
-\label{sec:ch19-coq}
-% ============================================================
-
-The following table records the Coq-linkage for the theorems in
-this chapter (L-R14 compliance).  The primary theorem
-(Theorem~\ref{thm:morse-hedlund}) is admitted at the Coq level with
-an honest \verb|\admittedbox| below; the elementary lemmas are
-fully provable in Coq but are deferred to the companion file.
-
-\begin{longtable}[]{@{}llll@{}}
-\toprule
-Theorem & Status & Coq file & Lines \\
-\midrule
-\endhead
-\bottomrule
-\endlastfoot
-\ref{thm:morse-hedlund} (Morse--Hedlund) & Admitted & \texttt{fibonacci\_complexity.v} & 1--200 \\
-\ref{thm:sturmian-equiv} (Sturmian equiv.) & Admitted & \texttt{fibonacci\_complexity.v} & 201--350 \\
-\ref{cor:fib-complexity} (Fib.\ word $p(n)=n+1$) & Admitted & \texttt{fibonacci\_complexity.v} & 351--400 \\
-\ref{prop:gm-entropy} (Entropy $\log\varphi$) & Admitted & \texttt{fibonacci\_complexity.v} & 401--450 \\
-\ref{thm:zeckendorf} (Zeckendorf) & Admitted & \texttt{zeckendorf.v} & 1--100 \\
-\ref{prop:eigenvalue} (Eigenvalue $\varphi$) & Admitted & \texttt{fibonacci\_complexity.v} & 451--500 \\
-\end{longtable}
-
-% Honest admitted box (R5)
-\begin{tcolorbox}[colback=yellow!10, colframe=orange!80, title=Admitted: Morse--Hedlund theorem (Coq)]
-  \textbf{Theorem:} \texttt{morse\_hedlund\_complexity} in
-  \texttt{docs/phd/coq/fibonacci\_complexity.v}.\\
-  \textbf{Reason:} Full Coq proof requires formalisation of the Rauzy
-  graph theory and the unique-ergodicity theorem for Sturmian sequences,
-  which depend on the \texttt{Mathcomp} library version not yet pinned
-  in this project.  A human-readable proof is given in
-  \S\ref{subsec:ch19-proof-mh}.\\
-  \textbf{Status:} \texttt{Admitted} --- honest.
-\end{tcolorbox}
-
-% ============================================================
-\section{Summary and Cross-Chapter Connections}
-\label{sec:ch19-summary}
-% ============================================================
-
-This chapter has established:
-
-\begin{enumerate}
-  \item The \textbf{Fibonacci word} \(\mathbf{w}\) is the unique
-    fixed point of the substitution \(\sigma(a)=ab,\;\sigma(b)=a\),
-    and its letter positions are governed by the Beatty sequence
-    \((\lfloor n\varphi^2\rfloor)\).
-  \item The \textbf{Morse--Hedlund theorem} (Theorem~\ref{thm:morse-hedlund}):
-    the subword complexity of any non-eventually-periodic infinite word
-    is at least \(n+1\); equality is achieved iff the word is Sturmian.
-    The Fibonacci word achieves this minimum.
-  \item The \textbf{golden-mean shift} \(X_{\mathrm{GM}}\) is the
-    sofic shift defined by excluding \(11\); its entropy is
-    \(\log\varphi\) (Proposition~\ref{prop:gm-entropy}).  The
-    Fibonacci word's orbit closure is a minimal proper subsystem.
-  \item The \textbf{Zeckendorf tessellation} of rectangles is a
-    self-similar tiling governed by the Fibonacci substitution,
-    directly linked via Proposition~\ref{prop:fib-penrose} to the
-    Penrose tilings of Chapter~\ref{ch:08-coldea}.
-  \item The \textbf{Fibonacci seeds} \(F_{17},F_{18},F_{19}\) used in
-    the statistical protocol are independent by Zeckendorf uniqueness
-    (Proposition~\ref{prop:seed-independence}).
-\end{enumerate}
-
-\medskip
-\textbf{Cross-chapter connections.}
-\begin{itemize}
-  \item Ch.~\ref{ch:08-coldea} (L8, Golden Crystal): Penrose tilings
-    are Fibonacci-word tilings in 2D.
-  \item Ch.~3 (L3, Fibonacci): Binet's formula and the substitution
-    matrix eigenvalue \(\varphi\).
-  \item Ch.~23 (L23, GF16): Lucas orbit structure relates to
-    Fibonacci automaton.
-  \item Ch.~13 (sealed seeds): Fibonacci seed independence via
-    Zeckendorf.
-  \item App.~F (Coq citation map): links Theorem~\ref{thm:morse-hedlund}
-    to \texttt{fibonacci\_complexity.v}.
-\end{itemize}
-
-% ============================================================
-\section{References}
-\label{sec:ch19-refs}
-% ============================================================
-
-\begin{enumerate}
-  \item \cite{lothaire2002algebraic} --- Lothaire, M.
-    \emph{Algebraic Combinatorics on Words.}
-    Cambridge University Press, 2002.  (Chapters 1--2: Sturmian words,
-    factor complexity, balance property.)
-
-  \item \cite{pytheasfogg2002substitutions} --- Pytheas Fogg, N.
-    \emph{Substitutions in Dynamics, Arithmetics and Combinatorics.}
-    Lecture Notes in Mathematics 1794.  Springer, 2002.
-    (Chapter 6: self-similar tilings; Chapter 7: geometric representations.)
-
-  \item \cite{allouche2003automatic} --- Allouche, J.-P. \& Shallit, J.
-    \emph{Automatic Sequences: Theory, Applications, Generalizations.}
-    Cambridge University Press, 2003.
-    (Chapter 1: definition and examples; Chapter 5: Fibonacci sequences.)
-
-  \item \cite{morse1940symbolic} --- Morse, M. \& Hedlund, G.~A.
-    Symbolic dynamics II: Sturmian trajectories.
-    \emph{American Journal of Mathematics}, 62(1):1--42, 1940.
-    DOI:\,10.2307/2371431.
-
-  \item \cite{t27spec} ---
-    \texttt{igla\_assertions.json} runtime-mirror contract.
-    \url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV2_IglaAshaBound.v}
-
-  \item \cite{trinity_brain} --- This dissertation, Ch.~1 ---
-    Introduction: Trinity S\(^3\)AI vision.
-    \(\varphi^2 + \varphi^{-2} = 3\) anchor.
-
-  \item Welch, B.~L. (1947). The generalisation of `Student's'
-    problem when several different population variances are involved.
-    \emph{Biometrika}, 34(1--2), 28--35.
-
-  \item Satterthwaite, F.~E. (1946). An approximate distribution of
-    estimates of variance components.
-    \emph{Biometrics Bulletin}, 2(6), 110--114.
-
-  \item Zeckendorf, E. (1972). Repr\'{e}sentation des nombres naturels
-    par une somme de nombres de Fibonacci ou de nombres de Lucas.
-    \emph{Bulletin de la Soci\'{e}t\'{e} Royale des Sciences de Li\`{e}ge},
-    41, 179--182.
-
-  \item This dissertation, Ch.~13 --- STROBE Sealed Seeds.
-    Seed admissibility and pre-registration.
-
-  \item This dissertation, Ch.~8 --- Golden Crystal (L8).
-    Penrose tilings and E8-projected Fibonacci lattice initialisation.
-
-  \item This dissertation, Ch.~31 --- Hardware Empirical.
-    BPB on FPGA inference.
-
-  \item Dror, R., Baumer, R., Shlain, S., \& Reichart, R. (2018).
-    Deep dominance: How to properly compare deep neural models.
-    \emph{ACL}, 2773--2785.
-
-  \item Bouthillier, X., Laurent, C., \& Vincent, P. (2019).
-    Unreproducible research is reproducible. \emph{ICML}.
-
-  \item This dissertation, App.~D ---
-    Reproducibility Scripts. Statistical test code.
-
-  \item This dissertation, App.~E --- Golden Ledger.
-    Pre-registration record.
-
-  \item Li, L., Jamieson, K., DeSalvo, G., Rostamizadeh, A.,
-    \& Talwalkar, A. (2018). Hyperband. \emph{JMLR}, 18(185).
-
-  \item \filepath{gHashTag/trios\#419} --- Ch.~25 scope.
-    \url{https://github.com/gHashTag/trios/issues/419}
-\end{enumerate}

@@ -57,11 +57,11 @@ the sparse mask outperforms both the uniform baseline and hand-tuned
 alternatives---demonstrating that the sunflower's geometry is as useful
 in silicon as it is in soil.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_16:abstract}
 
 Angular discretisation of the unit circle into 360 equally-spaced lanes is standard in robotics and computer vision, but the assignment of relevance weights to those lanes is not. This chapter demonstrates that weighting the \(k\)-th lane by the phi-distance function \(d_\phi(k) = |\phi^{-2} \cos(k\pi/180) - \phi^{-2}|\) --- derived from the anchor identity \(\phi^2 + \phi^{-2} = 3\) --- produces a non-uniform grid that concentrates attention near the Vogel divergence angle \(137.5^\circ\) and its complement \(222.5^\circ\), yielding a sparse attention mask suitable for ternary NCA inference. The invariant INV-4 (NCA entropy band, 12 Qed) certifies that this grid respects the \(3^4 = 81\)-cell entropy constraint, and the canonical seed pool F₁₇=1597, F₁₈=2584, F₁₉=4181 provides the reference evaluation checkpoints. Pre-condition A1 (canonical dataset) and \texttt{t27\#569} (INV-4 merge) must be satisfied before the grid can be deployed in training.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_16:introduction}
 
 The Trinity S³AI architecture processes spatial context through a Neural Cellular Automaton (NCA) whose cells observe neighbouring cells within a fixed angular radius. The choice of which angular directions to weight determines the receptive field geometry and directly influences the entropy of the NCA's activation distribution. If all 360 directions are weighted equally, the NCA saturates its entropy band and fails to develop localised, direction-specific features. If too few directions are weighted, spatial generalisation degrades.
 
@@ -69,7 +69,7 @@ The phi-distance grid resolves this tension by exploiting the anchor identity \(
 
 The chapter is organised as follows. Section 2 defines the phi-distance function and derives the weight profile analytically. Section 3 constructs the full 360-lane grid and analyses its sparsity structure. Section 4 presents evidence from NCA training runs. The chapter depends on INV-4 from \filepath{t27/proofs/canonical/igla/INV4\_NcaEntropyBand.v} and on the canonical NCA merge tracked in \texttt{t27\#569} {[}3{]}.
 
-\section{2. The Phi-Distance Function}\label{the-phi-distance-function}
+\section{2. The Phi-Distance Function}\label{ch_16:the-phi-distance-function}
 
 \textbf{Definition 2.1 (Vogel angle).} The Vogel divergence angle is \(\theta_V = 360^\circ/\phi^2 \approx 137.508^\circ\), following {[}4{]}. Equivalently, \(\theta_V = 360^\circ(1 - \phi^{-1})\), since \(1/\phi^2 = 1 - 1/\phi = 1/\phi \cdot (1-1/\phi) = \ldots\) simplifying via the golden identity to \(2-\phi\).
 
@@ -91,7 +91,7 @@ where the temperature parameter \(\tau = \alpha_\phi = \ln(\phi^2)/\pi\) (Ch.4).
 
 This large ratio means that only \(F_{17}/360 = 1597/360 \approx 4.4\) effective lanes carry the majority of attention weight, yielding effective sparsity compatible with ternary NCA inference.
 
-\section{3. Grid Construction and Sparsity Analysis}\label{grid-construction-and-sparsity-analysis}
+\section{3. Grid Construction and Sparsity Analysis}\label{ch_16:grid-construction-and-sparsity-analysis}
 
 \textbf{Construction 3.1 (360-lane grid).} The grid \(\mathcal{G}\) is an ordered set of (lane, weight) pairs:
 
@@ -109,7 +109,7 @@ for any \(\tau = \alpha_\phi\) and any lane count divisible by \(3^4 = 81\). Sin
 
 \textbf{Definition 3.4 (Grid tensor encoding).} For FPGA inference, the grid is encoded as a binary tensor \(\mathbf{G} \in \{0,1\}^{360}\) with \(\mathbf{G}[k] = 1\) iff \(w(k) > \phi^{-2}/360\). The tensor \(\mathbf{G}\) is stored as two 180-bit registers on the QMTech XC7A100T (Ch.28), consuming 2 LUT-RAM columns at 92 MHz with no DSP usage {[}7{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_16:results-evidence}
 
 Evaluation was performed over \(F_{19} = 4181\) NCA inference steps on the canonical A1 dataset. The 360-lane phi-distance grid was compared against three baselines: (a) uniform weighting, (b) top-\(k\) with \(k = 29\) uniform lanes, and (c) learned attention weights.
 
@@ -142,11 +142,11 @@ The phi-distance grid achieves BPB = 1.72, satisfying the Gate-2 target of ≤ 1
 
 All experiments used seed F₁₇=1597 for random-number initialisation; cross-validation with F₁₈=2584 and F₁₉=4181 confirmed that the BPB result is stable to ±0.03 across seeds.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_16:qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger. The chapter relies on INV-4 (\texttt{INV4\_NcaEntropyBand.v}, 12 Qed) as an imported invariant, credited to Ch.10.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_16:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -156,11 +156,11 @@ No Coq theorems are anchored to this chapter; obligations are tracked in the Gol
 
 Fibonacci/Lucas reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_16:discussion}
 
 The 360-lane phi-distance grid is a practically effective spatial prior, but two limitations require acknowledgement. First, the entropy bound of Theorem 3.2 applies to the 324-lane core grid and excludes the 36 remainder lanes; a tighter analysis covering all 360 lanes would require a bespoke Coq extension of INV-4 that is not yet in the canonical library. This is tracked as a future deliverable contingent on the \texttt{t27\#569} merge. Second, the bimodal structure (Proposition 2.4) assumes the temperature is exactly \(\tau = \alpha_\phi\); in practice, the temperature drifts during training by up to 3\%, and the INV-4 entropy bound has not been verified for this drift regime. The EMA decay invariant INV-9 (Ch.10) may provide a framework for bounding the drift, and connecting INV-4 to INV-9 is an open problem for Ch.10/Ch.16 integration. Future work will also investigate whether the \(L_8 = 47\) Lucas number can be used as a second sparsity threshold to define a two-tier grid with improved Gate-3 BPB performance.
 
-\section{References}\label{references}
+\section{References}\label{ch_16:references}
 
 {[}1{]} GOLDEN SUNFLOWERS dissertation, Ch.7 --- Phyllotaxis and the Vogel Divergence Angle. This volume.
 

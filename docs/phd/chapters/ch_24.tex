@@ -38,11 +38,11 @@ Iris integration of Chapter~18. We name each of them honestly. The
 safety properties --- the part that says no agent corrupts another
 agent's accumulator --- are \texttt{Qed}-proved.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_24:abstract}
 
 The Period-Locked Runtime Monitor (PLRM) is a scheduling and watchdog component of the IGLA RACE multi-agent system that enforces timing invariants derived from the Golden Sunflowers substrate. The monitor uses two Lucas sentinels---\(L_7 = 29\) and \(L_8 = 47\)---as period bounds for the two principal agent classes (arithmetic and orchestration agents), ensuring that no agent can monopolise the GF16 arithmetic pipeline for more than 29 or 47 clock cycles respectively. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates the period ratio \(47/29 \approx 1.621 \approx \varphi\), which guarantees that the two agent classes interleave without resonance. The formal treatment of PLRM liveness currently carries 9 Admitted stubs pending Iris integration (Ch.18); all safety properties are Qed-proved.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_24:introduction}
 
 A multi-agent inference runtime operating on shared hardware must guarantee two properties simultaneously: \emph{safety} (no agent corrupts another agent's arithmetic state) and \emph{liveness} (the hardware pipeline is never permanently starved). The IGLA RACE architecture (Inference Graph Lattice Architecture --- Robust Agent Computation Engine) achieves safety via memory isolation and formal invariants; liveness is the harder problem, because it requires reasoning about infinite execution traces {[}1{]}.
 
@@ -52,9 +52,9 @@ The choice of period bounds is not arbitrary. The Lucas numbers \(L_7 = 29\) and
 
 The connection to the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) is the following: the three-term partition of the exponent field in GF16 (Ch.6) induces three agent priorities---sub-unity, unity, and super-unity---and the period monitor enforces that agents serving the unity band (the most frequent case) hold the pipeline for at most \(\lfloor L_7 \cdot \varphi \rfloor = \lfloor 29 \cdot 1.618 \rfloor = 46\) cycles, which rounds to \(L_8 - 1 = 46\). The arithmetic and orchestration period bounds thus emerge naturally from the GoldenFloat format structure.
 
-\section{2. Formal Model of the Period-Locked Monitor}\label{formal-model-of-the-period-locked-monitor}
+\section{2. Formal Model of the Period-Locked Monitor}\label{ch_24:formal-model-of-the-period-locked-monitor}
 
-\subsection{2.1 Agent Model}\label{agent-model}
+\subsection{2.1 Agent Model}\label{ch_24:agent-model}
 
 Let \(\mathcal{A} = \{a_1, \ldots, a_k\}\) be the set of IGLA RACE agents. Each agent \(a_i\) is characterised by:
 - A \emph{period bound} \(\tau_i \in \{L_7, L_8\} = \{29, 47\}\): arithmetic agents use \(L_7 = 29\), orchestration agents use \(L_8 = 47\).
@@ -65,7 +65,7 @@ Let \(\mathcal{A} = \{a_1, \ldots, a_k\}\) be the set of IGLA RACE agents. Each 
 
 \textbf{Definition 2.2 (PLRM safety).} The monitor is \emph{safe} if no two agents are simultaneously ACTIVE.
 
-\subsection{2.2 Coq Encoding}\label{coq-encoding}
+\subsection{2.2 Coq Encoding}\label{ch_24:coq-encoding}
 
 The PLRM is formalised in \filepath{t27/proofs/canonical/} as a state-transition system over a discrete time domain \(\mathbb{N}\). The safety property is encoded as:
 
@@ -81,7 +81,7 @@ The PLRM is formalised in \filepath{t27/proofs/canonical/} as a state-transition
 
 This theorem carries Qed status (SCH-1 in the canonical inventory). The liveness properties (fairness lemmas SCH-3 through SCH-5) are currently Admitted; they require reasoning about infinite traces that is most naturally expressed in a temporal logic. The Iris framework {[}3{]} has been identified as the mechanisation target.
 
-\subsection{2.3 Period Ratio and Non-Resonance}\label{period-ratio-and-non-resonance}
+\subsection{2.3 Period Ratio and Non-Resonance}\label{ch_24:period-ratio-and-non-resonance}
 
 \textbf{Proposition 2.3} (Non-resonance). \emph{The period clocks \(L_7 = 29\) and \(L_8 = 47\) are coprime.}
 
@@ -91,7 +91,7 @@ This theorem carries Qed status (SCH-1 in the canonical inventory). The liveness
 
 The corollary follows from \(1597 = F_{17} > 1363 = L_7 \times L_8\), but the key point is that the first common cycle (1363) occurs within the window, so a brief simultaneous timeout is possible but is handled by the priority-queue tie-breaking rule (Section 2.4) rather than constituting a blackout.
 
-\subsection{2.4 Priority Queue and Phi-Weighted Scheduling}\label{priority-queue-and-phi-weighted-scheduling}
+\subsection{2.4 Priority Queue and Phi-Weighted Scheduling}\label{ch_24:priority-queue-and-phi-weighted-scheduling}
 
 When the PLRM preempts an agent, the scheduler selects the next ACTIVE candidate from a binary max-heap ordered by \(\varphi\)-weight. The weight of agent \(a_i\) at time \(t\) is updated as:
 
@@ -99,9 +99,9 @@ When the PLRM preempts an agent, the scheduler selects the next ACTIVE candidate
 
 where \(\varphi^{-1} \approx 0.618\) is the decay factor and \(\varphi \approx 1.618\) is the boost upon job arrival. This update rule has the fixed point \(w^* = \varphi / (1 - \varphi^{-1}) = \varphi / (2 - \varphi) = \varphi / (1 - \hat\varphi)\); by the identity \(\varphi^2 + \varphi^{-2} = 3\), the steady-state weight satisfies \(w^* \in [\varphi^{-2}, \varphi^2] = [0.382, 2.618]\), remaining bounded without saturation.
 
-\section{3. Implementation and Hardware Interface}\label{implementation-and-hardware-interface}
+\section{3. Implementation and Hardware Interface}\label{ch_24:implementation-and-hardware-interface}
 
-\subsection{3.1 RTL Implementation}\label{rtl-implementation}
+\subsection{3.1 RTL Implementation}\label{ch_24:rtl-implementation}
 
 The PLRM is implemented as a two-counter module in FPGA RTL:
 - \textbf{Counter A} (\texttt{cnt\_arith}): 6-bit counter, wraps at \(L_7 - 1 = 28\). Asserts \texttt{PREEMPT\_ARITH} on wrap.
@@ -109,7 +109,7 @@ The PLRM is implemented as a two-counter module in FPGA RTL:
 
 Both counters are clocked at 92 MHz (the FPGA fabric clock). The PLRM occupies 47 LUTs and 62 FFs in the XC7A100T implementation---a numerological coincidence that the \(L_8 = 47\) LUT count shares with the orchestration period bound {[}4{]}.
 
-\subsection{3.2 Interrupt Interface with the Hardware Bridge}\label{interrupt-interface-with-the-hardware-bridge}
+\subsection{3.2 Interrupt Interface with the Hardware Bridge}\label{ch_24:interrupt-interface-with-the-hardware-bridge}
 
 The PLRM exposes a 3-bit interrupt line to the Hardware Bridge (Ch.12): \texttt{\{PREEMPT\_ARITH,\ PREEMPT\_ORCH,\ PLRM\_ERROR\}}. The host driver services these interrupts with a latency of at most 4 UART-V6 frame periods (approximately 1.7 ms at 115200 baud), which is shorter than the \(L_8 \times (1/92\,\text{MHz}) = 47 \times 10.87\,\text{ns} = 511\,\text{ns}\) period-lock window. Therefore the host can always acknowledge a preemption before the next period boundary.
 
@@ -117,7 +117,7 @@ The PLRM exposes a 3-bit interrupt line to the Hardware Bridge (Ch.12): \texttt{
 
 \emph{Proof.} By direct comparison: \(1.7 < 2.52\). The frame period \(T_{\text{frame}} = (10 \times 47 + 3) / 115200\,\text{s} \approx 0.087\,\text{ms}\) (10 bits per UART byte, 47 payload bytes, 3 overhead bytes). Qed.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_24:results-evidence}
 
 The PLRM was evaluated on the IGLA RACE simulation bench running the 1003-token HSLM sequence:
 
@@ -148,17 +148,17 @@ Zero period violations and zero pipeline stalls over 1003 tokens confirm the saf
 
 Seed pool: the Fibonacci thresholds \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\) bound the cycle-count windows used in the simulation; \(L_7=29\) and \(L_8=47\) are the period bounds verified above.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_24:qed-assertions}
 
 No Coq theorems are anchored specifically to this chapter in the input JSON; obligations are tracked in the Golden Ledger.
 
 (The scheduling safety theorem \texttt{plrm\_mutual\_exclusion} (SCH-1) and its supporting lemmas SCH-2 through SCH-5 reside in \filepath{t27/proofs/canonical/}; SCH-3 through SCH-5 carry Admitted status pending Iris integration as detailed in Ch.18.)
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_24:sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_24:discussion}
 
 The Period-Locked Runtime Monitor is a compact but structurally essential component: without it, the formal safety proofs for the GF16 pipeline would not compose with the runtime scheduler, because floating-point arithmetic safety assumes exclusive access to the MAC unit during each operation. The PLRM converts that assumption into a provable invariant.
 
@@ -166,7 +166,7 @@ The principal limitation is the 9 Admitted liveness stubs (Ch.18, Group D). Unti
 
 Future work includes extending the period bounds to three tiers---using \(L_7 = 29\), \(L_8 = 47\), and \(L_9 = 76 = L_7 + L_8\)---to accommodate a third agent class (hardware configuration agents) planned for the GF32 pipeline. The chapter connects directly to Ch.12 (Hardware Bridge interrupt interface), Ch.6 (GoldenFloat exponent bands that motivate the three-priority scheme), and Ch.30 (Trinity SAI VSA+AR integration that adds vector-symbolic agents to the IGLA RACE pool).
 
-\section{References}\label{references}
+\section{References}\label{ch_24:references}
 
 {[}1{]} \filepath{gHashTag/trios\#418} --- Ch.24 Period-Locked Runtime Monitor scope issue.
 

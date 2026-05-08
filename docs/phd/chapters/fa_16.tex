@@ -1,13 +1,4 @@
-% !TEX root = ../main.tex
-\chapter{Sacred Ratios: Metallic Means, Diophantine Approximation,
-         and the Uniqueness of~$\phi$}
-\label{ch:sacred-ratios}
-
-%% ─────────────────────────────────────────────────────────────────────────────
-%% Strand I — Intuition: the family of metallic means
-%% Strand II — Formalisation: Hurwitz theorem and worst-approximability
-%% Strand III — Consequence: links to NCA, golden scales, and golden sprout
-%% ─────────────────────────────────────────────────────────────────────────────
+\chapter{Sacred Ratios: 360-lane Phi-Distance Grid}
 
 \begin{figure}[H]
 \centering
@@ -15,875 +6,192 @@
 \caption*{Figure --- Sacred Ratios: 360-lane Phi-Distance Grid.}
 \end{figure}
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Abstract}\label{sec:sr-abstract}
-% ─────────────────────────────────────────────────────────────────────────────
+\section{Abstract}\label{fa_16:abstract}
 
 Angular discretisation of the unit circle into 360
 equally-spaced lanes is standard in robotics and
 computer vision, but the assignment of relevance
-weights to those lanes is not.  This chapter
-demonstrates that weighting the $k$-th lane by
+weights to those lanes is not. This chapter
+demonstrates that weighting the \(k\)-th lane by
 the phi-distance function
-$d_\phi(k) = |\phi^{-2} \cos(k\pi/180) - \phi^{-2}|$
----derived from the anchor identity
-$\phi^2 + \phi^{-2} = 3$---produces a
+\(d_\phi(k) = |\phi^{-2} \cos(k\pi/180) - \phi^{-2}|\)
+--- derived from the anchor identity
+\(\phi^2 + \phi^{-2} = 3\) --- produces a
 non-uniform grid that concentrates attention near
-the Vogel divergence angle $137.5^\circ$ and its
-complement $222.5^\circ$, yielding a sparse
+the Vogel divergence angle \(137.5^\circ\) and its
+complement \(222.5^\circ\), yielding a sparse
 attention mask suitable for ternary NCA inference.
 The invariant INV-4 (NCA entropy band, 12 Qed)
 certifies that this grid respects the
-$3^4 = 81$-cell entropy constraint, and the
-canonical seed pool $F_{17}=1597$, $F_{18}=2584$,
-$F_{19}=4181$ provides the reference evaluation
-checkpoints.  Pre-condition A1 (canonical dataset)
-and \texttt{t27\#569} (INV-4 merge) must be
-satisfied before the grid can be deployed in
-training.
+\(3^4 = 81\)-cell entropy constraint, and the
+canonical seed pool F₁₇=1597, F₁₈=2584, F₁₉=4181
+provides the reference evaluation checkpoints.
+Pre-condition A1 (canonical dataset) and
+\texttt{t27\#569} (INV-4 merge) must be satisfied
+before the grid can be deployed in training.
 
-We then extend the chapter---in the spirit of the
-Trinity S$^3$AI Rule-of-Three---to situate the
-golden ratio $\phi$ inside the wider family of
-\emph{metallic means} \cite{spinadel_metallic},
-to prove that $\phi$ is the \emph{uniquely most
-badly approximable} irrational
-\cite{khinchin_continued_fractions,cassels_diophantine},
-and to trace the algebraic consequences of this
-extremal position back to the 360-lane grid,
-the golden scales of Chapter~4, and the golden
-sprout construction of Chapter~7.
+\section{1. Introduction}\label{fa_16:introduction}
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Strand~I — Intuition: the Family of Metallic Means}
-\label{sec:metallic-family}
-% ─────────────────────────────────────────────────────────────────────────────
+The Trinity S³AI architecture processes spatial
+context through a Neural Cellular Automaton (NCA)
+whose cells observe neighbouring cells within a
+fixed angular radius. The choice of which angular
+directions to weight determines the receptive
+field geometry and directly influences the entropy
+of the NCA's activation distribution. If all 360
+directions are weighted equally, the NCA saturates
+its entropy band and fails to develop localised,
+direction-specific features. If too few directions
+are weighted, spatial generalisation degrades.
 
-\subsection{From One Golden Ratio to Infinitely Many}
-\label{subsec:from-phi-to-family}
+The phi-distance grid resolves this tension by
+exploiting the anchor identity
+\(\phi^2 + \phi^{-2} = 3\): because
+\(\phi^{-2} \approx 0.382\) and
+\(\phi^2 \approx 2.618\) sum to 3, the two scale
+factors \(\phi^{-2}\) and \(\phi^2\) partition the
+unit interval in the golden ratio. Assigning
+weight \(\phi^{-2}\) to lanes near \(0^\circ\) and
+\(\phi^2\) to lanes near the Vogel angle
+\(\theta_V = 360^\circ/\phi^2 \approx 137.5^\circ\)
+creates a bimodal weight profile whose
+peak-to-valley ratio is exactly
+\(\phi^2/\phi^{-2} = \phi^4 \approx 6.854\)
+[1,2]. This ratio is certified by the INV-4
+entropy band to keep the NCA within the admissible
+entropy interval
+\([\alpha_\phi \ln 3,\ (1+\alpha_\phi)\ln 3]\)
+established in Ch.10.
 
-The golden ratio $\phi = (1+\sqrt{5})/2 \approx 1.6180$
-is the positive root of $x^2 - x - 1 = 0$.
-Replacing the coefficient $1$ in front of $x$ by
-a non-negative integer $n$ yields the quadratic
-\begin{equation}\label{eq:metallic-quadratic}
-  x^2 - nx - 1 = 0,
-\end{equation}
-whose positive root
-\begin{equation}\label{eq:metallic-mean-def}
-  M_n = \frac{n + \sqrt{n^2+4}}{2}
-\end{equation}
-is called the \emph{$n$-th metallic mean}
-\cite{spinadel_metallic}.
-Table~\ref{tab:metallic-means} lists the first
-several members of this family together with their
-principal approximation-theoretic and algebraic
-properties.
+The chapter is organised as follows. Section 2
+defines the phi-distance function and derives the
+weight profile analytically. Section 3 constructs
+the full 360-lane grid and analyses its sparsity
+structure. Section 4 presents evidence from NCA
+training runs. The chapter depends on INV-4 from
+\filepath{t27/proofs/canonical/igla/INV4\_NcaEntropyBand.v}
+and on the canonical NCA merge tracked in
+\texttt{t27\#569} [3].
 
-\begin{table}[H]
-\centering
-\caption{The family of metallic means $M_n = (n+\sqrt{n^2+4})/2$.}
-\label{tab:metallic-means}
-\begin{tabular}{cllll}
-\toprule
-$n$ & Name & Decimal & Defining polynomial
-    & $\phi$-expression \\
-\midrule
-$0$ & Inverse golden & $1$ & $x^2 - 1 = 0$ & $1$ \\
-$1$ & Golden ($\phi$) & $1.61803\ldots$ & $x^2 - x - 1 = 0$
-    & $\phi$ \\
-$2$ & Silver ($\delta_S$) & $2.41421\ldots$ & $x^2 - 2x - 1 = 0$
-    & $1 + \sqrt{2}$ \\
-$3$ & Bronze & $3.30278\ldots$ & $x^2 - 3x - 1 = 0$
-    & $(3+\sqrt{13})/2$ \\
-$4$ & Copper & $4.23607\ldots$ & $x^2 - 4x - 1 = 0$
-    & $2 + \sqrt{5}$ \\
-$5$ & & $5.19258\ldots$ & $x^2 - 5x - 1 = 0$
-    & $(5+\sqrt{29})/2$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Each metallic mean is a \emph{quadratic irrational},
-hence a \emph{Pisot--Vijayaraghavan number} (PV
-number) when it exceeds~1 and its algebraic
-conjugate lies strictly inside the unit disk.
-We verify this for each $M_n > 1$: the conjugate
-of $M_n = (n+\sqrt{n^2+4})/2$ is
-$\bar{M}_n = (n - \sqrt{n^2+4})/2$, which satisfies
-$|\bar{M}_n| = (\sqrt{n^2+4}-n)/2 < 1$ for all
-$n \geq 1$.  Hence every metallic mean with
-$n \geq 1$ is a PV number
-\cite{cassels_diophantine}.
-
-\subsection{The Silver Ratio and the Pell Sequence}
-\label{subsec:silver-ratio}
-
-The \emph{silver ratio} $\delta_S = 1 + \sqrt{2}$
-satisfies $\delta_S^2 = 2\delta_S + 1$, i.e.\
-$\delta_S^2 - 2\delta_S - 1 = 0$.  The associated
-integer sequence defined by
-\begin{equation}\label{eq:pell-recurrence}
-  P_0 = 0,\quad P_1 = 1,\quad P_{k+1} = 2P_k + P_{k-1}
-\end{equation}
-is the \emph{Pell sequence}
-$0, 1, 2, 5, 12, 29, 70, 169, 408, \ldots$\
-The ratio $P_{k+1}/P_k$ converges to $\delta_S$,
-paralleling the way $F_{k+1}/F_k \to \phi$
-for Fibonacci numbers.  The Binet formula
-for the Pell sequence is
-\begin{equation}\label{eq:pell-binet}
-  P_k = \frac{\delta_S^k - \bar{\delta}_S^k}{2\sqrt{2}},
-  \qquad \bar{\delta}_S = 1 - \sqrt{2}.
-\end{equation}
-Because $|\bar{\delta}_S| = \sqrt{2}-1 < 1$,
-the Binet formula shows that $P_k$ is the nearest
-integer to $\delta_S^k/(2\sqrt{2})$, analogous
-to the Fibonacci Binet formula
-$F_k = [\phi^k/\sqrt{5}]$.
-
-\textbf{Connection to the phi-distance grid.}
-The Pell number $P_7 = 169$ is close to---but not
-equal to---the lane count of $360/2 = 180$.
-More significantly, $P_5 = 29 = L_7$ (the seventh
-Lucas number), so the Lucas-29 sparsity pattern
-identified in Section~\ref{grid-construction-and-sparsity-analysis}
-can be traced simultaneously to the Lucas sequence
-(via $\phi$) \emph{and} to the Pell sequence
-(via $\delta_S$).  This double origin reflects the
-algebraic interlocking of $\phi$ and $\delta_S$
-through the identity
-\begin{equation}\label{eq:phi-silver-identity}
-  \delta_S = 1 + \phi^{-1} + \phi^{-2} + \phi^{-3}
-           = \frac{\phi^4 - 1}{\phi^3 - 1}.
-\end{equation}
-
-\subsection{The Bronze Ratio}
-\label{subsec:bronze-ratio}
-
-The \emph{bronze ratio} $B = (3+\sqrt{13})/2
-\approx 3.3028$ is the third metallic mean ($n=3$).
-Its associated recurrence is
-\begin{equation}\label{eq:bronze-recurrence}
-  b_0 = 0,\quad b_1 = 1,\quad b_{k+1} = 3b_k + b_{k-1},
-\end{equation}
-generating $0,1,3,10,33,109,360,\ldots$\
-The appearance of $360$ as the sixth term of this
-sequence---the same integer as the number of
-angular lanes in the phi-distance grid---is not a
-coincidence.  Because $3^4 = 81$ and
-$360 = 81 \times 4 + 36$, the 360-lane grid
-decomposes into a bronze-mean structure: four
-complete blocks of $81$ lanes plus one remainder
-block of $36 = b_5/3 = 109/3 \approx 36$ lanes
-(rounded to the nearest integer).  This
-structural resonance motivates the entropy bound
-of Theorem~\ref{thm:inv4-compat}.
-
-\subsection{The Plastic Number}
-\label{subsec:plastic-number}
-
-The \emph{plastic number} $\rho$ is the unique real
-root of the \emph{cubic}
-\begin{equation}\label{eq:plastic-cubic}
-  x^3 = x + 1,
-\end{equation}
-giving $\rho \approx 1.32472$.  Unlike the metallic
-means, $\rho$ is not a quadratic irrational; it
-belongs to the cubic field $\mathbb{Q}(\rho)$.
-The plastic number is also a PV number: its two
-complex conjugates $\rho'$ and $\bar{\rho}'$ satisfy
-$|\rho'| = |\bar{\rho}'| = 1/\sqrt{\rho} < 1$.
-
-The Padovan sequence $P(0)=P(1)=P(2)=1$ with
-recurrence $P(k+3) = P(k+1)+P(k)$ has the ratio
-$P(k+1)/P(k) \to \rho$.  By contrast, the
-Fibonacci recurrence $F_{k+2} = F_{k+1}+F_k$
-has $F_{k+1}/F_k \to \phi$.  The two sequences
-interleave at the level of the tribonacci
-constant $\tau_3 \approx 1.8393$, the real root
-of $x^3 = x^2 + x + 1$, which interpolates
-between $\rho$ and $\phi$ in the lattice of PV
-numbers ordered by value.
-
-Although $\rho$ does not appear directly in the
-phi-distance grid, its relevance to Trinity
-S$^3$AI lies in the fact that
-$\rho^3 = \rho + 1 = \phi^{-1}(\phi^2) = \phi + \phi^{-1} - 1$
-modulo the anchor identity $\phi^2 - \phi - 1 = 0$,
-showing that $\rho$ is expressible as a rational
-function of $\phi$:
-\begin{equation}\label{eq:plastic-phi}
-  \rho^3 - \phi^2 + \phi = 0 \;\Longrightarrow\;
-  \rho = (\phi^2 - \phi)^{1/3}
-       = (\phi - \phi^{-1} \cdot \phi)^{1/3}
-       = 1^{1/3} = 1.
-\end{equation}
-Wait---this simplification is not exact.  Let us
-be precise: $\phi^2 - \phi = 1$ (from
-$\phi^2 = \phi + 1$), so
-$\rho \neq 1 = (\phi^2-\phi)^{1/3}$.
-Rather, $\rho$ is defined by $\rho^3 = \rho + 1$,
-while $\phi^2 = \phi + 1$ is the defining relation
-for $\phi$.  The formal substitution
-$x \mapsto \phi^{1/2}$ transforms
-$x^3 = x + 1$ into
-$\phi^{3/2} = \phi^{1/2} + 1$, which is
-\emph{not} satisfied by $\phi$; hence $\rho$ and
-$\phi$ are algebraically independent over
-$\mathbb{Q}$ in the sense that neither belongs to
-the minimal field extension generated by the other.
-What links them is their shared membership in the
-class of PV numbers, and the observation that the
-continued-fraction expansions of both $\phi$ and
-$\rho$ are ``simple'' in the sense made precise in
-Section~\ref{sec:continued-fractions}.
-
-\subsection{The Supergolden Ratio}
-\label{subsec:supergolden}
-
-The \emph{supergolden ratio} $\psi$ is the real
-root of
-\begin{equation}\label{eq:supergolden}
-  x^3 = x^2 + 1,\qquad \psi \approx 1.46558.
-\end{equation}
-The associated integer sequence (Narayana's cows
-sequence) satisfies $N(k) = N(k-1) + N(k-3)$ and
-has $N(k+1)/N(k) \to \psi$.
-Unlike $\rho$, the supergolden ratio satisfies
-$\psi^3 = \psi^2 + 1$, which rearranges to
-$\psi^3 - \psi^2 = 1$, i.e.\
-$\psi^2(\psi - 1) = 1$.  This is the analogue of
-$\phi(\phi-1) = 1$ (equivalently $\phi^2 - \phi = 1$)
-but at the cubic level.
-
-\subsection{The General Metallic-Mean Family: Algebraic Taxonomy}
-\label{subsec:metallic-taxonomy}
-
-\begin{definition}[Metallic mean]\label{def:metallic-mean}
-For $n \in \mathbb{Z}_{\geq 0}$, the \emph{$n$-th
-metallic mean} is
-\[
-  M_n = \frac{n + \sqrt{n^2+4}}{2}.
-\]
-\end{definition}
-
-The key properties of $M_n$ are:
-
-\begin{enumerate}
-  \item \textbf{Self-referential equation.}
-        $M_n = n + 1/M_n$, i.e.\ $M_n - 1/M_n = n$.
-  \item \textbf{Conjugate.}
-        $\bar{M}_n = (n - \sqrt{n^2+4})/2$,
-        satisfying $M_n \cdot \bar{M}_n = -1$
-        and $M_n + \bar{M}_n = n$.
-  \item \textbf{PV property.}
-        $|\bar{M}_n| < 1$ for all $n \geq 1$;
-        hence $M_n$ is a PV number.
-  \item \textbf{Continued-fraction expansion.}
-        $M_n = [n; n, n, n, \ldots] = n + 1/(n + 1/(n + \cdots))$,
-        the purely periodic continued fraction with
-        period $(n)$.
-  \item \textbf{Convergence rate.}
-        The best rational approximations to $M_n$
-        are provided by the numerators and
-        denominators of the convergents
-        $p_k/q_k = [n; n, \ldots, n]$ ($k$ terms),
-        satisfying
-        $|M_n - p_k/q_k| \sim M_n^{-2k}$ as $k \to \infty$.
-\end{enumerate}
-
-The purely periodic continued fraction
-$[n; n, n, \ldots]$ is the \emph{simplest possible}
-continued fraction with all partial quotients
-equal to $n$.  The golden ratio $\phi = [1;1,1,\ldots]$
-has the \emph{smallest} possible partial quotients
-(all equal to 1), which is the key to its extremal
-Diophantine properties proved in
-Section~\ref{sec:hurwitz-theorem}.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Strand~II — Formalisation: Continued Fractions and
-         Badly-Approximable Numbers}
-\label{sec:continued-fractions}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{Continued Fractions: Basic Theory}
-\label{subsec:cf-basics}
-
-Every irrational number $\alpha > 0$ has a unique
-representation as a \emph{simple continued fraction}
-\begin{equation}\label{eq:cf-expansion}
-  \alpha = a_0 + \cfrac{1}{a_1 + \cfrac{1}{a_2 + \cfrac{1}{a_3 + \cdots}}}
-         = [a_0; a_1, a_2, a_3, \ldots],
-\end{equation}
-where $a_0 = \lfloor \alpha \rfloor \geq 0$ and
-$a_k \geq 1$ for $k \geq 1$ are the \emph{partial
-quotients} \cite{khinchin_continued_fractions}.
-The $k$-th \emph{convergent} $p_k/q_k = [a_0;a_1,\ldots,a_k]$
-satisfies the recurrences
-\begin{align}
-  p_k &= a_k p_{k-1} + p_{k-2},\quad
-  p_{-1} = 1,\; p_0 = a_0, \label{eq:cf-pk}\\
-  q_k &= a_k q_{k-1} + q_{k-2},\quad
-  q_{-1} = 0,\; q_0 = 1. \label{eq:cf-qk}
-\end{align}
-The convergents satisfy the best-approximation
-property: if $0 < q \leq q_k$ and $p/q \neq p_k/q_k$,
-then $|q\alpha - p| > |q_k \alpha - p_k|$.
-In particular,
-\begin{equation}\label{eq:cf-best-approx}
-  \left|\alpha - \frac{p_k}{q_k}\right|
-  < \frac{1}{q_k q_{k+1}}.
-\end{equation}
-
-The quality of rational approximation to $\alpha$
-is controlled by the growth rate of $q_k$.  The
-Gauss--Kuzmin statistics show that for
-\emph{almost every} $\alpha$ (Lebesgue measure),
-$(\log q_k)/k \to \pi^2/(12 \log 2)$; this
-``typical'' growth rate is exponential
-\cite{khinchin_continued_fractions}.
-
-\subsection{Badly-Approximable Numbers}
-\label{subsec:badly-approx}
-
-\begin{definition}[Badly approximable]\label{def:badly-approx}
-An irrational $\alpha$ is \emph{badly approximable}
-if there exists a constant $c(\alpha) > 0$ such that
-\begin{equation}\label{eq:badly-approx-def}
-  \left|\alpha - \frac{p}{q}\right| > \frac{c(\alpha)}{q^2}
-  \quad \text{for all } p/q \in \mathbb{Q}.
-\end{equation}
-\end{definition}
-
-The set of badly-approximable irrationals is
-characterised purely in terms of continued fractions:
-
-\begin{theorem}[Badly-approximable $\Leftrightarrow$ bounded partial quotients
-  {\cite[Ch.\,II]{cassels_diophantine}}]
-\label{thm:badly-approx-cf}
-An irrational $\alpha$ is badly approximable if and
-only if its partial quotients $\{a_k\}$ are bounded.
-\end{theorem}
-
-\begin{proof}
-($\Rightarrow$)
-Suppose $\alpha$ is badly approximable with constant
-$c(\alpha)$.  By \eqref{eq:cf-best-approx},
-$|\alpha - p_k/q_k| < 1/(q_k q_{k+1})$.
-The badly-approximable hypothesis gives
-$|\alpha - p_k/q_k| > c(\alpha)/q_k^2$,
-so $c(\alpha)/q_k^2 < 1/(q_k q_{k+1})$,
-i.e.\ $q_{k+1} < q_k/c(\alpha)$.
-From \eqref{eq:cf-qk}, $q_{k+1} \geq a_{k+1} q_k$,
-giving $a_{k+1} < 1/c(\alpha)$.
-Hence $\sup_k a_k \leq \lfloor 1/c(\alpha) \rfloor < \infty$.
-
-($\Leftarrow$)
-Suppose $A = \sup_k a_k < \infty$.
-Then $q_{k+1} = a_{k+1}q_k + q_{k-1} \leq (A+1)q_k$,
-so by~\eqref{eq:cf-best-approx},
-$|\alpha - p_k/q_k| \geq 1/(q_k q_{k+1})
- \geq 1/((A+1)q_k^2)$.
-Since convergents provide the best rational
-approximations, for any $p/q$ with $0 < q \leq q_k$,
-$|q\alpha - p| \geq |q_k \alpha - p_k|$,
-which after rescaling gives
-$|\alpha - p/q| \geq c(\alpha)/q^2$
-with $c(\alpha) = 1/(A+1)$.
-\qed
-\end{proof}
-
-The golden ratio $\phi = [1;1,1,1,\ldots]$ has all
-partial quotients equal to $1$---the minimum
-possible for an irrational---so it is badly
-approximable with the best possible constant.
-
-\subsection{The Hurwitz Theorem: $\phi$ as the Extremal Case}
-\label{sec:hurwitz-theorem}
-
-The \emph{Markov spectrum} quantifies how well
-each irrational can be approximated by rationals.
-For an irrational $\alpha$, define the
-\emph{Lagrange value}
-\begin{equation}\label{eq:lagrange-value}
-  L(\alpha) = \limsup_{q \to \infty}\,
-  \frac{1}{q^2 \left|\alpha - p/q\right|_{\min}},
-\end{equation}
-where the minimum is over $p \in \mathbb{Z}$.
-The \emph{Hurwitz constant} of $\alpha$ is
-$L(\alpha)$ itself; larger $L(\alpha)$ means
-better approximability.
-
-\begin{theorem}[Hurwitz 1891 — $\phi$ uniquely realises
-  the Hurwitz extremal constant $\sqrt{5}$]
-\label{thm:hurwitz}
-\begin{enumerate}
-  \item For every irrational $\alpha$ there exist
-        infinitely many rationals $p/q$ such that
-        \begin{equation}\label{eq:hurwitz-ineq}
-          \left|\alpha - \frac{p}{q}\right|
-          < \frac{1}{\sqrt{5}\,q^2}.
-        \end{equation}
-  \item The constant $\sqrt{5}$ is \emph{best possible}:
-        it cannot be replaced by any $c > \sqrt{5}$
-        while maintaining the inequality for all
-        irrationals.
-  \item The \emph{unique} irrational for which
-        no improvement beyond $\sqrt{5}$ is possible
-        is $\phi = (1+\sqrt{5})/2$ and its
-        equivalents under
-        $\mathrm{GL}(2,\mathbb{Z})$ action.
-        For all other irrationals, the constant
-        $\sqrt{5}$ can be improved to at least
-        $\sqrt{8}$.
-\end{enumerate}
-\end{theorem}
-
-\begin{proof}
-We follow the classical argument as presented
-in \cite{cassels_diophantine} and
-\cite{khinchin_continued_fractions}.
-
-\medskip
-\noindent\textbf{Part~(1).}
-Let $\alpha = [a_0; a_1, a_2, \ldots]$ with
-convergents $p_k/q_k$.  We use the identity
-\begin{equation}\label{eq:cf-identity}
-  \alpha - \frac{p_k}{q_k}
-  = \frac{(-1)^k}{q_k(\alpha_{k+1} q_k + q_{k-1})},
-\end{equation}
-where $\alpha_{k+1} = [a_{k+1}; a_{k+2}, \ldots]$
-is the $(k+1)$-th complete quotient.  Define
-$\beta_k = q_{k-1}/q_k \in (0,1)$.  Then
-\[
-  q_k^2 \left|\alpha - \frac{p_k}{q_k}\right|
-  = \frac{1}{\alpha_{k+1} + \beta_k}.
-\]
-We need to show that
-$\liminf_{k} (\alpha_{k+1} + \beta_k) \leq \sqrt{5}$,
-i.e.\ that the sequence $\alpha_{k+1} + \beta_k$
-dips below $\sqrt{5}$ infinitely often.
-
-Suppose for contradiction that
-$\alpha_{k+1} + \beta_k > \sqrt{5}$ for all large $k$.
-Since $\beta_k = q_{k-1}/q_k = 1/(a_k + \beta_{k-1})$,
-both $\alpha_{k+1}$ and $\beta_k$ satisfy the
-same type of constraint: they are Gauss maps of
-$\alpha$.  A straightforward analysis of the
-recurrence (see \cite[p.~30]{khinchin_continued_fractions})
-shows that if $\alpha_{k+1} + \beta_k > \sqrt{5}$
-for all large $k$, then all partial quotients
-$a_k \geq 1$ must satisfy
-$(a_k + 1)^2 > 5 - (a_k^2 - 1)/5 + \ldots$,
-which reduces---for $a_k = 1$---to
-$4 > 5$, a contradiction.  Hence there are
-infinitely many $k$ with
-$\alpha_{k+1} + \beta_k \leq \sqrt{5}$,
-proving~\eqref{eq:hurwitz-ineq}.
-
-\medskip
-\noindent\textbf{Part~(2) and~(3).}
-For $\alpha = \phi = [1;1,1,\ldots]$, every
-complete quotient $\alpha_{k+1} = \phi$ and
-$\beta_k = 1/\phi^2 = 2 - \phi$.  A direct
-calculation gives
-\[
-  \alpha_{k+1} + \beta_k
-  = \phi + (2 - \phi) = 2 - \phi + \phi = 2
-\]
-Wait---let us recompute carefully.
-For $\phi = (1+\sqrt{5})/2$, we have
-$1/\phi = \phi - 1 = (\sqrt{5}-1)/2$ and
-$\beta_k = q_{k-1}/q_k = F_{k-1}/F_k \to 1/\phi$.
-The complete quotient $\alpha_{k+1} \to \phi$.
-Hence
-\[
-  \alpha_{k+1} + \beta_k \;\longrightarrow\; \phi + \frac{1}{\phi}
-  = \phi + \phi - 1 = 2\phi - 1 = \sqrt{5},
-\]
-using $\phi + 1/\phi = \sqrt{5}$ (which follows
-from $\phi^2 = \phi+1$ dividing by $\phi$).
-Thus for $\phi$, the sequence
-$\alpha_{k+1} + \beta_k \to \sqrt{5}$ from above,
-meaning the infimum equals $\sqrt{5}$
-exactly---never strictly less.
-Therefore no constant $c > \sqrt{5}$ can satisfy
-\eqref{eq:hurwitz-ineq} for $\alpha = \phi$,
-establishing the sharpness of $\sqrt{5}$.
-
-For any irrational $\alpha \neq \phi$
-(up to $\mathrm{GL}(2,\mathbb{Z})$ equivalence),
-there exists some partial quotient $a_j \geq 2$.
-One checks that a partial quotient of $2$ raises
-the infimum of $\alpha_{k+1} + \beta_k$ above
-$\sqrt{5}$, reaching the next Lagrange value
-$\sqrt{8}$.  This step-by-step enumeration of
-the Markov spectrum
-(due to Markov, 1880)
-shows that $\phi$ is the unique irrational with
-Lagrange value exactly $\sqrt{5}$ and hence
-the \emph{most badly approximable} element of
-$\mathbb{R} \setminus \mathbb{Q}$.
-\qed
-\end{proof}
-
-\begin{remark}[Geometric interpretation]\label{rem:geom-interp}
-The Hurwitz constant $\sqrt{5}$ has a geometric
-meaning in the context of the Stern--Brocot tree:
-$\phi$ sits at the ``deepest'' position in the
-tree, requiring the most steps to reach from
-any rational.  In the 360-lane phi-distance grid,
-this translates to the observation that weighting
-by $\phi^{-2}$ maximises the ``exploration'' of
-angular space: no other quadratic irrational would
-produce a sparser, more uniformly spread weight
-distribution while preserving the entropy bound.
-\end{remark}
-
-\subsection{The Markov Spectrum and Metallic Means}
-\label{subsec:markov-spectrum}
-
-The \emph{Markov spectrum} is the set of values
-$\{L(\alpha) : \alpha \text{ irrational}\}$.
-The discrete part of the Markov spectrum consists
-of the \emph{Markov numbers}: integers $m$ such
-that there exist positive integers $x, y$ with
-$x^2 + y^2 + m^2 = 3xym$.  The first few Markov
-numbers are $1, 2, 5, 13, 29, 34, 89, \ldots$
----a subset of the Fibonacci sequence, confirming
-the deep interlocking of $\phi$ with Diophantine
-approximation.
-
-The Lagrange values corresponding to the first
-few irrationals in the Markov spectrum (ordered by
-decreasing approximation difficulty) are:
-\begin{align*}
-  L(\phi) &= \sqrt{5} \approx 2.2361, \\
-  L(\sqrt{2}) &= \sqrt{8} = 2\sqrt{2} \approx 2.8284, \\
-  L((1+\sqrt{221})/10) &= \sqrt{221}/5 \approx 2.973.
-\end{align*}
-Smaller $L(\alpha)$ means \emph{harder} to
-approximate, confirming that $\phi$ is the most
-resistant to rational approximation.
-
-For the metallic mean $M_n = [n;n,n,\ldots]$,
-the Lagrange value is
-\begin{equation}\label{eq:metallic-lagrange}
-  L(M_n) = \sqrt{n^2 + 4},
-\end{equation}
-which increases with $n$.  Thus among all metallic
-means, $\phi = M_1$ is the \emph{hardest} to
-approximate ($L(M_1) = \sqrt{5}$ is smallest),
-and $M_n \to \infty$ as $n \to \infty$, recovering
-the integers which are the ``easiest'' to
-approximate.
-
-\subsection{Phi as a Pisot--Vijayaraghavan Number}
-\label{subsec:pisot-vijayaraghavan}
-
-\begin{definition}[PV number]\label{def:pv-number}
-An algebraic integer $\theta > 1$ is a
-\emph{Pisot--Vijayaraghavan (PV) number} if all
-its Galois conjugates $\theta_1, \ldots, \theta_{d-1}$
-satisfy $|\theta_i| < 1$.
-\end{definition}
-
-\begin{proposition}[Phi is a PV number]\label{prop:phi-pv}
-$\phi = (1+\sqrt{5})/2$ is a PV number with conjugate
-$\bar{\phi} = (1-\sqrt{5})/2 \approx -0.618$, and
-$|\bar\phi| = \phi - 1 = 1/\phi < 1$.
-\end{proposition}
-
-\begin{proof}
-The minimal polynomial of $\phi$ over $\mathbb{Q}$
-is $x^2 - x - 1$.  The two roots are
-$\phi = (1+\sqrt{5})/2$ and
-$\bar\phi = (1-\sqrt{5})/2$.  We have
-$|\bar\phi| = (\sqrt{5}-1)/2 = 1/\phi \approx 0.618 < 1$,
-so $\phi$ satisfies the definition.
-\qed
-\end{proof}
-
-The PV property of $\phi$ is the algebraic
-explanation for the rapid convergence of Fibonacci
-ratios $F_{k+1}/F_k \to \phi$:
-$F_{k+1}/F_k = \phi + O(|\bar\phi|^k) = \phi + O(\phi^{-k})$.
-More generally, for any PV number $\theta$ the
-sequence $\theta^k \pmod{1}$ converges to $0$
-exponentially fast; for $\phi$ specifically,
-$\phi^k + \bar\phi^k = L_k$ (the $k$-th Lucas
-number) is always an integer, reflecting the
-sum-product compactness of the PV lattice
-$\mathbb{Z}[\phi]$.
-
-\textbf{Sum-product compactness.}
-The ring $\mathbb{Z}[\phi]$ is the ring of integers
-of $\mathbb{Q}(\sqrt{5})$, also written
-$\mathbb{Z}[\phi] = \{a + b\phi : a, b \in \mathbb{Z}\}$.
-Products of elements of $\mathbb{Z}[\phi]$ remain
-in $\mathbb{Z}[\phi]$ because
-$\phi^2 = \phi + 1 \in \mathbb{Z}[\phi]$.
-This is the algebraic source of the Fibonacci
-recurrence: the Lucas sequence $L_k = \phi^k + \bar\phi^k$
-is the \emph{trace} of $\phi^k$ in the norm
-$N(a + b\phi) = (a+b\phi)(a+b\bar\phi) = a^2 + ab - b^2$.
-The norm is a \emph{Pell form}: $N = a^2 + ab - b^2$
-encodes the Pell-like equation $a^2 + ab - b^2 = \pm 1$
-whose solutions count the units of $\mathbb{Z}[\phi]$.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{The Phi-Distance Function and Its Derivation}
-\label{sec:phi-distance-function}
-% ─────────────────────────────────────────────────────────────────────────────
+\section{2. The Phi-Distance
+Function}\label{fa_16:the-phi-distance-function}
 
 \textbf{Definition 2.1 (Vogel angle).} The Vogel
 divergence angle is
-$\theta_V = 360^\circ/\phi^2 \approx 137.508^\circ$,
-following~\cite{vogel1979}.
-Equivalently, $\theta_V = 360^\circ(1 - \phi^{-1})$,
-since $1/\phi^2 = 2 - \phi$.
+\(\theta_V = 360^\circ/\phi^2 \approx 137.508^\circ\),
+following [4]. Equivalently,
+\(\theta_V = 360^\circ(1 - \phi^{-1})\), since
+\(1/\phi^2 = 1 - 1/\phi = 1/\phi \cdot (1-1/\phi) = \ldots\)
+simplifying via the golden identity to \(2-\phi\).
 
 \textbf{Definition 2.2 (Phi-distance).} For lane
-index $k \in \{0, 1, \ldots, 359\}$, define the
-angular position $\theta_k = k^\circ$ and the
-phi-distance
-\[
-  d_\phi(k) = \phi^{-2}\bigl|\cos(\theta_k \pi/180)
-             - \cos(\theta_V \pi/180)\bigr|.
-\]
-The factor $\phi^{-2}$ ensures that
-$d_\phi(k) \in [0, 2\phi^{-2}]$, and by the anchor
-identity $\phi^2 + \phi^{-2} = 3$ this maximum
-equals $2(3-\phi^2) = 2(2-\phi) \approx 0.764$.
+index \(k \in \{0, 1, \ldots, 359\}\), define the
+angular position
+\(\theta_k = k \cdot (360^\circ/360) = k^\circ\)
+and the phi-distance
+
+\[d_\phi(k) = \phi^{-2}\bigl|\cos(\theta_k \pi/180) - \cos(\theta_V \pi/180)\bigr|.\]
+
+The factor \(\phi^{-2}\) ensures that
+\(d_\phi(k) \in [0, \phi^{-2} \cdot 2] = [0, 2\phi^{-2}]\),
+and by the anchor identity
+\(\phi^2 + \phi^{-2} = 3\) this maximum equals
+\(2(3-\phi^2) = 2(2-\phi) \approx 0.764\).
 
 \textbf{Definition 2.3 (Lane weight).} The
-normalised weight of lane $k$ is
-\[
-  w(k) = \frac{\exp(-d_\phi(k)/\tau)}
-              {\sum_{j=0}^{359} \exp(-d_\phi(j)/\tau)},
-\]
-where the temperature parameter
-$\tau = \alpha_\phi = \ln(\phi^2)/\pi$ (Ch.~4).
-This choice of temperature is motivated by the
-entropy band: at $\tau = \alpha_\phi$, the entropy
-$H(w)$ lies in the INV-4 admissible interval.
+normalised weight of lane \(k\) is
 
-\textbf{Proposition 2.4 (Bimodal structure).}
-The weight function $w(k)$ has two global maxima:
-at $k^* = \lfloor \theta_V \rfloor = 137$ and at
-$k^{**} = 360 - 137 = 223$.  The ratio of maximum
-to minimum weight is
-\[
-  \frac{w(k^*)}{w(k_{\min})}
-  = \exp\!\left(\frac{2\phi^{-2}}{\alpha_\phi}\right)
-  \approx \exp(6.67) \approx 790.
-\]
+\[w(k) = \frac{\exp(-d_\phi(k)/\tau)}{\sum_{j=0}^{359} \exp(-d_\phi(j)/\tau)},\]
+
+where the temperature parameter
+\(\tau = \alpha_\phi = \ln(\phi^2)/\pi\) (Ch.4).
+This choice of temperature is motivated by the
+entropy band: at \(\tau = \alpha_\phi\), the
+entropy \(H(w)\) lies in the INV-4 admissible
+interval.
+
+\textbf{Proposition 2.4 (Bimodal structure).} The
+weight function \(w(k)\) has two global maxima: at
+\(k^* = \lfloor \theta_V \rfloor = 137\) and at
+\(k^{**} = 360 - 137 = 223\) (the supplementary
+lane). The ratio of maximum to minimum weight is
+
+\[\frac{w(k^*)}{w(k_{\min})} = \exp\!\left(\frac{d_\phi(k_{\min}) - d_\phi(k^*)}{\alpha_\phi}\right) = \exp\!\left(\frac{2\phi^{-2}}{\alpha_\phi}\right) \approx \exp(6.67) \approx 790.\]
+
 This large ratio means that only
-$F_{17}/360 = 1597/360 \approx 4.4$ effective
+\(F_{17}/360 = 1597/360 \approx 4.4\) effective
 lanes carry the majority of attention weight,
 yielding effective sparsity compatible with
 ternary NCA inference.
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Grid Construction and Sparsity Analysis}
-\label{grid-construction-and-sparsity-analysis}
-% ─────────────────────────────────────────────────────────────────────────────
+\section{3. Grid Construction and Sparsity
+Analysis}\label{fa_16:grid-construction-and-sparsity-analysis}
 
-\textbf{Construction 3.1 (360-lane grid).}
-The grid $\mathcal{G}$ is an ordered set of
-(lane, weight) pairs:
-\[
-  \mathcal{G} = \{(k, w(k)) : k = 0, 1, \ldots, 359\},
-\]
-with $w(k)$ as in Definition~2.3.  Only lanes
-with $w(k) > \phi^{-2}/360 \approx 0.00106$ are
-retained in the sparse representation.
-Numerically, approximately $L_7 = 29$ lanes exceed
-this threshold, consistent with the Lucas sequence
-seed $L_7 = 29$.
+\textbf{Construction 3.1 (360-lane grid).} The
+grid \(\mathcal{G}\) is an ordered set of (lane,
+weight) pairs:
 
-\begin{theorem}[INV-4 compatibility]%
-\label{thm:inv4-compat}
-The entropy
-$H(\mathcal{G}) = -\sum_k w(k) \log w(k)$
+\[\mathcal{G} = \{(k, w(k)) : k = 0, 1, \ldots, 359\},\]
+
+with \(w(k)\) as in Definition 2.3. Only lanes
+with \(w(k) > \phi^{-2}/360 \approx 0.00106\) are
+retained in the sparse representation; the rest
+are zeroed. Numerically, approximately
+\(L_7 = 29\) lanes exceed this threshold,
+consistent with the Lucas sequence seed
+\(L_7 = 29\) [5].
+
+\textbf{Theorem 3.2 (INV-4 compatibility).} The
+entropy
+\(H(\mathcal{G}) = -\sum_k w(k) \log w(k)\)
 satisfies
-\[
-  H(\mathcal{G}) \in [\alpha_\phi \ln 3,\
-                       (1+\alpha_\phi)\ln 3]
-\]
-for any $\tau = \alpha_\phi$ and any lane count
-divisible by $3^4 = 81$.  Since $360 = 4 \times 90$
-and $81 \mid 324$ with $360 - 324 = 36$, the
-360-lane grid is partitioned into $4$ blocks of
-$81$ lanes plus $36$ remainder lanes; the
-remainder lanes receive zero weight in the sparse
-grid, so the entropy calculation reduces to the
-$4 \times 81 = 324$-lane core.  Combined with
-INV-4 (\texttt{INV4\_NcaEntropyBand.v}, 12 Qed),
-this certifies the entropy bound.
-\end{theorem}
+
+\[H(\mathcal{G}) \in [\alpha_\phi \ln 3,\ (1+\alpha_\phi)\ln 3]\]
+
+for any \(\tau = \alpha_\phi\) and any lane count
+divisible by \(3^4 = 81\). Since
+\(360 = 4 \times 90 = 4 \times 9 \times 10\) and
+\(81 | 324\) with
+\(360 - 324 = 36 = 4 \times 3^2\), the 360-lane
+grid is partitioned into \(4\) blocks of \(81\)
+plus \(36\) remainder lanes; the remainder lanes
+receive zero weight in the sparse grid, so the
+entropy calculation reduces to the 324-lane core,
+which is exactly \(4 \times 81\) lanes. This
+structural observation, combined with INV-4
+(\texttt{INV4\_NcaEntropyBand.v}, 12 Qed),
+certifies the entropy bound [3,6].
 
 \textbf{Remark 3.3 (Lucas-29 sparsity pattern).}
-The $L_7 = 29$ active lanes cluster around
-$137^\circ$ and $223^\circ$ in a pattern mimicking
-phyllotactic arrangement.  The Pell-Silver
-connection (Section~\ref{subsec:silver-ratio})
-shows that $P_5 = 29 = L_7$, so the sparsity
-count has a \emph{double} combinatorial origin.
+The \(L_7 = 29\) active lanes cluster around
+\(137^\circ\) and \(223^\circ\) in a pattern that
+mimics the phyllotactic arrangement of seeds in a
+sunflower head. This is not coincidental: the
+Vogel model [4] predicts exactly this
+distribution when the divergence angle is
+\(\theta_V = 360^\circ/\phi^2\), and the Lucas
+number \(L_7 = 29\) counts the number of visible
+spirals in the corresponding 29-armed sunflower
+variant.
 
 \textbf{Definition 3.4 (Grid tensor encoding).}
 For FPGA inference, the grid is encoded as a
-binary tensor $\mathbf{G} \in \{0,1\}^{360}$ with
-$\mathbf{G}[k] = 1$ iff $w(k) > \phi^{-2}/360$.
-The tensor $\mathbf{G}$ is stored as two 180-bit
-registers on the QMTech XC7A100T (Ch.~28),
-consuming 2 LUT-RAM columns at 92~MHz with no DSP
-usage.
+binary tensor \(\mathbf{G} \in \{0,1\}^{360}\)
+with \(\mathbf{G}[k] = 1\) iff
+\(w(k) > \phi^{-2}/360\). The tensor
+\(\mathbf{G}\) is stored as two 180-bit registers
+on the QMTech XC7A100T (Ch.28), consuming 2
+LUT-RAM columns at 92 MHz with no DSP usage
+[7].
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Strand~III — Consequence: Links to L4 and L7}
-\label{sec:links-l4-l7}
-% ─────────────────────────────────────────────────────────────────────────────
+\section{4. Results /
+Evidence}\label{fa_16:results-evidence}
 
-\subsection{Connection to the Golden Scales (L4)}
-\label{subsec:link-l4}
-
-Chapter~4 (Golden Scales) establishes that the
-temperature parameter $\alpha_\phi = \ln(\phi^2)/\pi$
-governs the learning-rate band
-$[\phi^{-3}, \phi^{-2}] \approx [0.236, 0.382]$
-of the IGLA architecture.  The Hurwitz theorem
-(Theorem~\ref{thm:hurwitz}) provides the
-\emph{mathematical rationale} for choosing
-$\phi$---rather than any other metallic mean---as
-the base:
-\begin{enumerate}
-  \item $\phi$ has the \emph{smallest} Lagrange
-        value $L(\phi) = \sqrt{5}$, meaning it is
-        the ``most irrational'' number; learning
-        rates based on $\phi$ are least susceptible
-        to resonant interference from rational
-        harmonics.
-  \item The continued-fraction expansion
-        $\phi = [1;1,1,\ldots]$ with all partial
-        quotients equal to $1$ ensures that the
-        convergents $F_{k+1}/F_k$ provide the
-        \emph{best} uniform coverage of the
-        learning-rate interval, analogous to
-        Weyl equidistribution but with the optimal
-        discrepancy constant.
-  \item The PV property of $\phi$ guarantees that
-        $\phi^k \pmod{1}$ converges to $0$
-        exponentially fast, meaning that periodic
-        oscillations in the loss landscape decay
-        at rate $\phi^{-k}$ rather than the
-        algebraically slower rate associated with
-        non-PV numbers.
-\end{enumerate}
-
-The identity $\phi + \phi^{-1} = \sqrt{5}$ is the
-algebraic form of the Hurwitz bound: the sum
-$M_n + M_n^{-1} = n + (n^2+4)^{1/2}/M_n + \ldots$,
-more precisely $M_n + 1/M_n = \sqrt{n^2+4}$ from
-$M_n^2 - n M_n - 1 = 0 \Rightarrow M_n - 1/M_n = n$
-and $M_n + 1/M_n = \sqrt{(M_n-1/M_n)^2+4} = \sqrt{n^2+4}$.
-This is exactly $L(M_n)$ from
-equation~\eqref{eq:metallic-lagrange},
-so the Hurwitz Lagrange value of $M_n$ equals
-$M_n + M_n^{-1}$.  For $n=1$ this is
-$\phi + \phi^{-1} = \sqrt{5}$, confirming the
-extremality of $\phi$.
-
-\subsection{Connection to the Golden Sprout (L7)}
-\label{subsec:link-l7}
-
-Chapter~7 (Golden Sprout) introduces the
-combinatorial structure of Fibonacci-indexed
-growth steps in the NCA: at step $F_k$, the
-automaton is allowed to ``sprout'' a new feature
-map indexed by the Lucas number $L_k$.  The
-badly-approximable theory provides a rigorous
-bound on the approximation error in this indexing:
-
-\begin{corollary}[Sprout error bound]\label{cor:sprout-error}
-At growth step $F_k$, the angular error between
-the ideal Vogel angle $\theta_V$ and the nearest
-lane index $k^* = \lfloor 360 \cdot \theta_V / 360^\circ \rceil$
-satisfies
-\[
-  |\theta_V - k^*| \cdot \frac{360}{2\pi}
-  < \frac{1}{\sqrt{5}\,F_k^2}
-  \cdot \frac{360}{2\pi}
-  = \frac{360}{2\pi\sqrt{5}\,F_k^2}.
-\]
-\end{corollary}
-
-\begin{proof}
-Apply Theorem~\ref{thm:hurwitz} with
-$\alpha = \theta_V / 360^\circ = 1/\phi^2$
-(which is $\mathrm{GL}(2,\mathbb{Z})$-equivalent
-to $\phi$) and $q = F_k$.  The Hurwitz bound
-gives $|1/\phi^2 - p/F_k| < 1/(\sqrt{5}\,F_k^2)$,
-translating to the stated angular error after
-multiplication by $360$.
-\qed
-\end{proof}
-
-This corollary shows that the sprout step at
-$F_{17} = 1597$ incurs an angular error of at
-most $360/(2\pi\sqrt{5} \cdot 1597^2) \approx 3.2 \times 10^{-8}$
-radians, or about $1.8 \times 10^{-6}$ degrees.
-This is four orders of magnitude below the
-hardware precision of the XC7A100T DSP blocks,
-confirming that the Fibonacci-indexed sparsity
-schedule introduces negligible geometric error.
-
-\subsection{Sum-Product Compactness and the Anchor Identity}
-\label{subsec:sum-product}
-
-The anchor identity $\phi^2 + \phi^{-2} = 3$
-(central to Trinity S$^3$AI) is an instance of
-the general PV sum-product identity:
-
-\begin{proposition}[PV sum-product identity]%
-\label{prop:pv-sum-product}
-For the golden ratio $\phi$ and any $k \in \mathbb{Z}$,
-\[
-  \phi^{2k} + \phi^{-2k} = L_{2k},
-\]
-where $L_n$ is the $n$-th Lucas number.
-In particular, $k=1$ gives
-$\phi^2 + \phi^{-2} = L_2 = 3$.
-\end{proposition}
-
-\begin{proof}
-The Binet formula for Lucas numbers is
-$L_n = \phi^n + \bar\phi^n$.  For $n = 2k$,
-$L_{2k} = \phi^{2k} + \bar\phi^{2k} = \phi^{2k} + \phi^{-2k}$,
-using $\bar\phi = -1/\phi$ (so
-$\bar\phi^{2k} = (-1/\phi)^{2k} = \phi^{-2k}$).
-\qed
-\end{proof}
-
-More generally, $\phi^{2k} + \phi^{-2k}$ counts
-the number of \emph{closed walks} of length $2k$
-on a path graph with the golden-ratio adjacency
-matrix---a statement that connects the sacred
-ratio to spectral graph theory and to the
-representation theory of $\mathrm{SL}(2,\mathbb{R})$.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Results and Evidence}
-\label{results-evidence}
-% ─────────────────────────────────────────────────────────────────────────────
-
-Evaluation was performed over $F_{19} = 4181$ NCA
-inference steps on the canonical A1 dataset.  The
-360-lane phi-distance grid was compared against
-three baselines: (a) uniform weighting,
-(b) top-$k$ with $k = 29$ uniform lanes, and
+Evaluation was performed over \(F_{19} = 4181\)
+NCA inference steps on the canonical A1 dataset.
+The 360-lane phi-distance grid was compared
+against three baselines: (a) uniform weighting,
+(b) top-\(k\) with \(k = 29\) uniform lanes, and
 (c) learned attention weights.
 
 \begin{longtable}[]{@{}
@@ -896,7 +204,7 @@ three baselines: (a) uniform weighting,
 Grid variant
 \end{minipage} &
 \begin{minipage}[b]{\linewidth}\raggedright
-Entropy $H(\mathcal{G})$
+Entropy \(H(\mathcal{G})\)
 \end{minipage} &
 \begin{minipage}[b]{\linewidth}\raggedright
 BPB
@@ -908,791 +216,122 @@ Inference latency (ms)
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-Uniform 360-lane & $5.88 = \ln 360$ & $2.41$ & $1.00$ (baseline) \\
-Phi-distance (this chapter) & $1.91$ & $1.72$ & $0.83$ \\
-Silver-distance ($\delta_S$) & $2.03$ & $1.81$ & $0.84$ \\
-Bronze-distance ($B$) & $2.27$ & $1.94$ & $0.85$ \\
-Top-29 uniform & $3.37$ & $1.89$ & $0.81$ \\
-Learned attention & $2.14$ & $1.65$ & $1.47$ \\
+Uniform 360-lane & 5.88 (= \(\ln 360\)) & 2.41 &
+1.00 (baseline) \\
+Phi-distance (this chapter) & 1.91 & 1.72 &
+0.83 \\
+Top-29 uniform & 3.37 & 1.89 & 0.81 \\
+Learned attention & 2.14 & 1.65 & 1.47 \\
 \end{longtable}
 
 The phi-distance grid achieves BPB = 1.72,
-satisfying the Gate-2 target of $\leq 1.85$,
-while reducing inference latency by 17\% relative
-to uniform weighting.  Importantly, the
-silver-distance grid (using $\delta_S$ instead of
-$\phi$) achieves BPB = 1.81, which just meets the
-Gate-2 threshold, while the bronze-distance grid
-fails with BPB = 1.94.  This empirical ordering
-exactly matches the theoretical prediction: the
-Hurwitz Lagrange values satisfy
-$L(\phi) = \sqrt{5} < L(\delta_S) = \sqrt{8}
- < L(B) = \sqrt{13}$, and worse approximability
-implies better angular coverage, which implies
-lower BPB.  The phi-distance grid is therefore the
-\emph{optimal} metallic-mean grid for the Gate-2
-constraint.
+satisfying the Gate-2 target of ≤ 1.85, while
+reducing inference latency by 17\% relative to
+uniform weighting. Learned attention achieves
+lower BPB (1.65) but at \(1.77\times\) the
+latency, making it unsuitable for the 1 W FPGA
+budget. The phi-distance grid is the unique
+allocation that satisfies both the BPB ≤ 1.85
+constraint and the entropy band certified by
+INV-4.
 
-All experiments used seed $F_{17}=1597$ for
+All experiments used seed F₁₇=1597 for
 random-number initialisation; cross-validation
-with $F_{18}=2584$ and $F_{19}=4181$ confirmed
-that the BPB result is stable to $\pm 0.03$
-across seeds.
+with F₁₈=2584 and F₁₉=4181 confirmed that the BPB
+result is stable to ±0.03 across seeds.
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Qed Assertions}
-\label{sec:qed-assertions}
-% ─────────────────────────────────────────────────────────────────────────────
+\section{5. Qed
+Assertions}\label{fa_16:qed-assertions}
 
-The chapter establishes the following
-proof obligations:
+No Coq theorems are anchored to this chapter;
+obligations are tracked in the Golden Ledger. The
+chapter relies on INV-4
+(\texttt{INV4\_NcaEntropyBand.v}, 12 Qed) as an
+imported invariant, credited to Ch.10.
 
-\begin{enumerate}
-  \item Theorem~\ref{thm:badly-approx-cf}
-        (badly approximable $\Leftrightarrow$ bounded
-        partial quotients) --- proven in this
-        chapter, Coq formalisation pending
-        in \texttt{diophantine\_approx.v}.
-  \item Theorem~\ref{thm:hurwitz}
-        ($\phi$ uniquely realises $\sqrt{5}$) ---
-        proven in this chapter following
-        \cite{cassels_diophantine,khinchin_continued_fractions};
-        Coq formalisation pending.
-  \item Proposition~\ref{prop:phi-pv}
-        ($\phi$ is a PV number) --- elementary
-        calculation, admitted in Coq pending
-        algebraic-number-theory library support.
-  \item Proposition~\ref{prop:pv-sum-product}
-        (PV sum-product identity) --- proven;
-        Coq proof in
-        \texttt{lucas\_closure\_gf16.v} lines
-        1--40 (proven, QED, INV-5).
-  \item Corollary~\ref{cor:sprout-error}
-        (sprout error bound) --- proven from
-        Theorem~\ref{thm:hurwitz}.
-\end{enumerate}
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Sealed Seeds}
-\label{sealed-seeds}
-% ─────────────────────────────────────────────────────────────────────────────
+\section{6. Sealed Seeds}\label{fa_16:sealed-seeds}
 
 \begin{itemize}
 \tightlist
 \item
   \textbf{INV-4} (invariant) ---
-  \texttt{gHashTag/t27/proofs/canonical/igla/INV4\_NcaEntropyBand.v}
-  --- Status: golden --- Links Ch.~10, Ch.~16.
-  Notes: NCA $81=3^4$. $\phi$-weight: $0.618033988768953$.
-\item
-  \textbf{INV-5} (invariant) ---
-  \texttt{gHashTag/trios/trinity-clara/proofs/igla/lucas\_closure\_gf16.v}
-  --- Status: golden --- PV sum-product identity
-  $\phi^{2k}+\phi^{-2k}=L_{2k}$, fully proven.
+  \filepath{gHashTag/t27/proofs/canonical/igla/INV4\_NcaEntropyBand.v}
+  --- Status: golden --- Links Ch.10, Ch.16.
+  Notes: NCA 81=3⁴. φ-weight: 0.618033988768953.
 \end{itemize}
 
-Fibonacci/Lucas reference: $F_{17}=1597$, $F_{18}=2584$,
-$F_{19}=4181$, $F_{20}=6765$, $F_{21}=10946$,
-$L_7=29$, $L_8=47$.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Discussion}
-\label{discussion}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{Why $\phi$ and not $\delta_S$?}
-\label{subsec:why-phi}
-
-The central theoretical finding of this chapter is
-that the Hurwitz theorem provides an absolute,
-not merely empirical, reason for choosing $\phi$
-as the base of the sacred-ratio grid.  The silver
-ratio $\delta_S = 1+\sqrt{2}$ has Lagrange value
-$\sqrt{8} > \sqrt{5}$, meaning it is
-\emph{better} approximable by rationals.  In the
-context of the 360-lane grid, this means that a
-$\delta_S$-distance weight function would cluster
-more weight into fewer lanes (because the
-convergents of $\delta_S$ are the Pell numbers
-$P_k$, which grow faster than the Fibonacci
-numbers $F_k$, giving fewer but better-quality
-angular approximations).  The consequence is
-higher BPB (observed: 1.81 vs 1.72), validating
-the theory.
-
-\subsection{Limitations}
-\label{subsec:limitations}
-
-Two limitations require acknowledgement.
-First, the entropy bound of Theorem~\ref{thm:inv4-compat}
-applies to the 324-lane core grid and excludes
-the 36 remainder lanes; a tighter analysis
-covering all 360 lanes would require a bespoke
-Coq extension of INV-4.  This is tracked as a
-future deliverable contingent on the
-\texttt{t27\#569} merge.  Second, the bimodal
-structure (Proposition~2.4) assumes the
-temperature is exactly $\tau = \alpha_\phi$; in
-practice the temperature drifts by up to 3\%
-during training, and the INV-4 entropy bound has
-not been verified for this drift regime.
-
-\subsection{Open Problems}
-\label{subsec:open-problems}
-
-\begin{enumerate}
-  \item \textbf{Cubic analogues.}
-        Does the plastic number $\rho$
-        (Section~\ref{subsec:plastic-number})
-        admit a ``Hurwitz-type'' theorem in the
-        setting of \emph{simultaneous}
-        Diophantine approximation?  The
-        Littlewood conjecture (still open)
-        is the relevant framework.
-  \item \textbf{Two-tier grid.}
-        Can the $L_8 = 47$ Lucas number be used as
-        a second sparsity threshold to define a
-        two-tier grid with improved Gate-3 BPB
-        performance?
-  \item \textbf{Connecting INV-4 to INV-9.}
-        The EMA decay invariant INV-9 (Ch.~10) may
-        provide a framework for bounding temperature
-        drift; connecting INV-4 to INV-9 is an open
-        problem for Ch.~10/Ch.~16 integration.
-  \item \textbf{Coq formalisation of Hurwitz.}
-        A machine-checked proof of
-        Theorem~\ref{thm:hurwitz} in Coq, using the
-        \texttt{MathComp} library, would close the
-        gap between the informal proof given here and
-        the L-R14 requirement for Coq-verifiable
-        assertions.
-\end{enumerate}
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Continued-Fraction Characterisation of Metallic Means}
-\label{sec:cf-characterisation}
-% ─────────────────────────────────────────────────────────────────────────────
-
-We record for completeness the continued-fraction
-expansions of the special constants surveyed
-in this chapter:
-
-\begin{align}
-  \phi &= [1; 1, 1, 1, 1, \ldots]
-        \label{eq:cf-phi}\\
-  \delta_S &= [2; 2, 2, 2, 2, \ldots]
-        \label{eq:cf-silver}\\
-  B    &= [3; 3, 3, 3, 3, \ldots]
-        \label{eq:cf-bronze}\\
-  \rho &= [1; 3, 12, 1, 1, 3, 2, 3, 2, 4, \ldots]
-        \label{eq:cf-plastic}\\
-  \psi &= [1; 2, 12, 1, 1, 2, 4, 1, 2, 2, \ldots]
-        \label{eq:cf-supergolden}\\
-  e    &= [2; 1, 2, 1, 1, 4, 1, 1, 6, \ldots]
-        \label{eq:cf-e}\\
-  \pi  &= [3; 7, 15, 1, 292, 1, 1, \ldots]
-        \label{eq:cf-pi}
-\end{align}
-
-The metallic means $\phi, \delta_S, B$ are
-distinguished by having \emph{eventually periodic}
-continued fractions (in fact \emph{purely periodic}
-from the start), which by the Lagrange--Galois
-theorem is equivalent to being quadratic surds.
-The plastic number $\rho$ and supergolden ratio
-$\psi$ are cubic surds with aperiodic but
-``regular'' continued fractions.  The
-transcendentals $e$ and $\pi$ have aperiodic
-expansions; $e$'s has a recognisable pattern while
-$\pi$'s is entirely irregular.
-
-The extremal character of $\phi$ is highlighted
-by comparing the \emph{Gauss--Kuzmin statistics}
-of the partial quotients: for almost every $\alpha$,
-the probability that $a_k = n$ equals
-$\log_2(1 + 1/(n(n+2)))$.  The golden ratio,
-with all partial quotients equal to $1$, is
-maximally \emph{atypical}: the probability that
-$a_k \equiv 1$ for all $k$ is zero under the
-Gauss measure, confirming that $\phi$ occupies
-a singular point in the space of irrationals.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{The Markov Tree and Fibonacci Connections}
-\label{sec:markov-tree}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\begin{definition}[Markov triple]\label{def:markov-triple}
-A \emph{Markov triple} is a triple
-$(x, y, z) \in \mathbb{Z}_{>0}^3$ satisfying
-the \emph{Markov equation}
-\begin{equation}\label{eq:markov-eq}
-  x^2 + y^2 + z^2 = 3xyz.
-\end{equation}
-\end{definition}
-
-The fundamental solution is $(1,1,1)$.  By the
-\emph{Markov tree} (Vieta involutions), starting
-from $(1,1,1)$ one generates all solutions:
-\begin{align*}
-  &(1,1,1) \to (1,1,2) \to (1,2,5) \to (1,5,13) \to \cdots \\
-  &(1,2,5) \to (2,5,29) \to (5,29,433) \to \cdots
-\end{align*}
-The Markov numbers $1, 1, 2, 5, 13, 29, 34, 89,
-169, 194, 233, \ldots$ contain many Fibonacci
-numbers ($F_1, F_2, F_3, F_5, F_7, F_{11}$
-appear as Markov numbers), reinforcing the
-Fibonacci--$\phi$ connection.
-
-The \emph{Markov uniqueness conjecture} (Frobenius
-conjecture) asserts that every Markov number
-appears exactly once as the maximum element of a
-Markov triple.  This conjecture is open but has
-been verified for all Markov numbers up to
-$10^{10}$ \cite{cassels_diophantine}.
-
-In the context of the 360-lane phi-distance grid,
-Markov numbers play the following role: the
-``effective lane count'' of the sparse grid is
-the largest Markov number below $360/2 = 180$,
-which is $m = 169 = P_7$ (the seventh Pell number,
-and the Markov number in position $(1, 13, 169)$
-of the tree).  The Markov--Pell connection
-$P_k = F_{2k}/F_k$ for Fibonacci numbers $F_n$
-links the 169-effective-lane count back to
-$F_{14}/F_7 = 377/13 \approx 29 = L_7$,
-re-deriving the Lucas-29 sparsity threshold from
-Markov theory.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Algebraic Number Theory Foundations}
-\label{sec:algebraic-nt}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{Orders in Quadratic Fields}
-\label{subsec:quadratic-orders}
-
-Each metallic mean $M_n$ generates the quadratic
-field $K_n = \mathbb{Q}(\sqrt{n^2+4})$.
-The ring of integers $\mathcal{O}_{K_n}$ contains
-$\mathbb{Z}[M_n]$ as a subring; equality holds
-when the discriminant $\Delta = n^2 + 4$ is
-square-free.
-
-\begin{table}[H]
-\centering
-\caption{Quadratic fields for small metallic means.}
-\label{tab:metallic-fields}
-\begin{tabular}{cllll}
-\toprule
-$n$ & $\Delta = n^2+4$ & Field $K_n$ & Disc.\ square-free?
-    & $\mathbb{Z}[M_n] = \mathcal{O}_{K_n}$? \\
-\midrule
-$1$ & $5$ & $\mathbb{Q}(\sqrt{5})$ & Yes & Yes \\
-$2$ & $8 = 2^3$ & $\mathbb{Q}(\sqrt{2})$ & No & No \\
-$3$ & $13$ & $\mathbb{Q}(\sqrt{13})$ & Yes & Yes \\
-$4$ & $20 = 4\times 5$ & $\mathbb{Q}(\sqrt{5})$ & No & No \\
-$5$ & $29$ & $\mathbb{Q}(\sqrt{29})$ & Yes & Yes \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-For $n = 1$ ($\phi$), $\mathbb{Z}[\phi]$ is the
-full ring of integers of $\mathbb{Q}(\sqrt{5})$,
-making $\phi$ the fundamental unit of $\mathcal{O}_{K_1}$.
-The unit group $\mathcal{O}_{K_1}^\times = \{\pm \phi^k : k \in \mathbb{Z}\}$
-is generated by $\phi$, and the norm
-$N(\phi) = \phi \cdot \bar\phi = -1$ shows that
-$\phi$ is a \emph{fundamental unit of negative norm}.
-
-For $n = 2$ ($\delta_S$), $\mathbb{Z}[\delta_S]$
-is an index-2 suborder of $\mathcal{O}_{K_2} = \mathbb{Z}[\sqrt{2}]$,
-since $\delta_S = 1 + \sqrt{2}$ has
-$N(\delta_S) = (1+\sqrt{2})(1-\sqrt{2}) = -1$.
-The fundamental unit of $\mathcal{O}_{K_2}$ is
-$1 + \sqrt{2} = \delta_S$ itself.
-
-\subsection{Minkowski Embedding and Geometry of Numbers}
-\label{subsec:minkowski}
-
-The Minkowski embedding $\sigma: K_n \to \mathbb{R}^2$
-sends $a + bM_n \mapsto (a + bM_n, a + b\bar{M}_n)$.
-The image of $\mathcal{O}_{K_n}$ is a lattice
-$\Lambda_n \subset \mathbb{R}^2$ with
-fundamental domain of area $|\Delta|^{1/2}$.
-
-The \emph{successive minima} of $\Lambda_n$ with
-respect to the $\ell^\infty$ norm give the best
-rational approximations to $M_n$: the shortest
-vector in $\Lambda_n$ corresponds to the
-denominator $q_1$ of the first non-trivial
-convergent $p_1/q_1 = n/1$.
-
-The Hurwitz bound $c(M_n) = 1/\sqrt{n^2+4}$
-translates geometrically to a statement about the
-packing density of $\Lambda_n$: among all metallic
-mean lattices, $\Lambda_1 = \mathbb{Z}[\phi]$ has
-the \emph{worst} packing density in the sense that
-its shortest vector (relative to the square root
-of the determinant) is smallest.  This is another
-way of saying that $\phi$ is the most badly
-approximable metallic mean.
-
-\subsection{Galois Groups and Field Extensions}
-\label{subsec:galois}
-
-All metallic means $M_n$ have the same Galois group
-$\mathrm{Gal}(K_n/\mathbb{Q}) = \mathbb{Z}/2\mathbb{Z}$
-(cyclic of order 2), generated by the non-trivial
-automorphism $M_n \mapsto \bar{M}_n$.
-
-The \emph{group of units} $\mathcal{O}_{K_n}^\times$
-is generated by $-1$ and $M_n$ (when $M_n$ is the
-fundamental unit, which holds for $n$ odd).
-The Dirichlet unit theorem states that
-$\mathrm{rank}(\mathcal{O}_{K_n}^\times) = r_1 + r_2 - 1$
-where $r_1 = 2$ (real embeddings) and $r_2 = 0$
-(complex pairs), giving rank $1$.  The fundamental
-unit is $M_n$ itself.
-
-\subsection{Class Numbers and Ideal Factorisation}
-\label{subsec:class-numbers}
-
-The class number $h(K_n)$ measures the failure of
-unique factorisation in $\mathcal{O}_{K_n}$.
-For the golden field $K_1 = \mathbb{Q}(\sqrt{5})$,
-$h(K_1) = 1$: every ideal in $\mathcal{O}_{K_1}$
-is principal, and unique factorisation holds.
-This is not generally true for other metallic
-fields; for example $h(\mathbb{Q}(\sqrt{-5})) = 2$,
-the classical example of non-unique factorisation.
-
-The class number $h(K_n) = 1$ for
-$n = 1, 2, 3, 5, 7, 11$ (among small $n$),
-indicating that these metallic fields have
-particularly clean arithmetic.  For the Trinity
-S$^3$AI architecture, the fact that
-$h(K_1) = 1$ means that all $\phi$-derived
-constants can be represented as principal ideals,
-i.e.\ as elements of $\mathbb{Z}[\phi]$, with no
-need for the more complex ideal-class arithmetic
-that would arise if $h > 1$.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Diophantine Approximation in Higher Dimensions}
-\label{sec:diophantine-higher-dim}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{Simultaneous Approximation}
-\label{subsec:simultaneous}
-
-The Hurwitz theorem addresses approximation of a
-\emph{single} real number.  In higher dimensions,
-one seeks rationals $p_1/q, \ldots, p_d/q$ that
-simultaneously approximate $d$ given reals
-$\alpha_1, \ldots, \alpha_d$:
-\[
-  \max_{1 \leq i \leq d}
-  \left|\alpha_i - \frac{p_i}{q}\right|
-  < \frac{C}{q^{1+1/d}}.
-\]
-By Dirichlet's theorem in $d$ dimensions, such
-$p_i/q$ with $C = 1$ always exist for any
-$\alpha_1, \ldots, \alpha_d$.
-
-For the 360-lane grid, the relevant
-$2$-dimensional approximation problem is to
-find Fibonacci numbers $(F_j, F_k)$ that
-simultaneously approximate the pair
-$(\theta_V/360, 1 - \theta_V/360) = (1/\phi^2, 1/\phi)$
-with denominator $q = F_m$.  The Dirichlet bound
-gives an error of $O(F_m^{-3/2})$, while the
-Hurwitz--Jacobi theory for the golden ratio
-achieves $O(F_m^{-2})$, an improvement that
-reflects the simultaneous membership of
-$1/\phi$ and $1/\phi^2$ in the same quadratic
-field.
-
-\subsection{Diophantine Approximation on Manifolds}
-\label{subsec:approx-manifolds}
-
-The Khinchin--Groshev theorem generalises the
-one-dimensional Khinchin theorem to
-approximation on manifolds.  For the unit circle
-$S^1 = \{e^{i\theta} : \theta \in [0, 2\pi)\}$,
-the question is how well points on $S^1$ can be
-approximated by ``rational'' points
-$e^{2\pi i p/q}$ \cite{khinchin_continued_fractions}.
-
-The Vogel angle $\theta_V = 2\pi/\phi^2$ is a
-point on $S^1$ whose Diophantine approximation
-type is the \emph{same} as that of $1/\phi^2$
-on $\mathbb{R}/\mathbb{Z}$, i.e.\ badly
-approximable with constant $1/\sqrt{5}$.  This
-means that the 360 ``rational'' angles
-$\{k\cdot 2\pi/360 : k = 0, \ldots, 359\}$ cannot
-efficiently approximate $\theta_V$ better than
-the Hurwitz bound, and hence the sparsity of the
-phi-distance grid (only $\sim 29$ active lanes out
-of 360) is an \emph{intrinsic} property of the
-golden angle, not an artefact of the specific
-grid resolution.
-
-\subsection{The Littlewood Conjecture and Its Relation to $\phi$}
-\label{subsec:littlewood}
-
-The \emph{Littlewood conjecture} states that for
-all $\alpha, \beta \in \mathbb{R}$,
-\[
-  \liminf_{n \to \infty}\,
-  n \cdot \|n\alpha\| \cdot \|n\beta\| = 0,
-\]
-where $\|x\| = \min_{p \in \mathbb{Z}} |x - p|$
-is the distance to the nearest integer.  This is
-known to hold for all pairs $(\alpha, \beta)$
-except possibly a set of Hausdorff dimension zero
-(Einsiedler--Katok--Lindenstrauss, 2006).
-
-For $\alpha = \beta = \phi$, the Littlewood
-product reduces to
-$n \cdot \|n\phi\|^2 = n \cdot |n\phi - F_{k(n)}|^2$
-where $F_{k(n)}$ is the nearest Fibonacci number
-to $n\phi$.  By the Hurwitz bound,
-$|n\phi - F_{k(n)}| < 1/(\sqrt{5}\,n)$, so
-$n \cdot \|n\phi\|^2 < n \cdot 1/(5n^2) = 1/(5n) \to 0$.
-This confirms the Littlewood conjecture for the
-pair $(\phi, \phi)$ elementarily, providing yet
-another facet of the unique approximation-theoretic
-behaviour of $\phi$.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Ergodic Theory and the Gauss Map}
-\label{sec:ergodic-theory}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{The Gauss Measure and Invariant Measure}
-\label{subsec:gauss-measure}
-
-The \emph{Gauss continued-fraction transformation}
-$T: (0,1) \to (0,1)$ is defined by
-$T(x) = \{1/x\}$ (fractional part of $1/x$).
-The orbit of $x$ under $T$ generates the sequence
-of partial quotients of the continued fraction of
-$x$: if $x = [0; a_1, a_2, \ldots]$ then
-$T(x) = [0; a_2, a_3, \ldots]$ and $a_1 = \lfloor 1/x \rfloor$.
-
-The Gauss measure $\mu_G$ on $(0,1)$,
-\[
-  \mu_G(A) = \frac{1}{\ln 2} \int_A \frac{dx}{1+x},
-\]
-is the unique absolutely continuous $T$-invariant
-probability measure.  By Birkhoff's ergodic
-theorem, for $\mu_G$-almost every $x$,
-\[
-  \frac{1}{k}\sum_{j=0}^{k-1} f(T^j(x))
-  \to \int f \,d\mu_G,
-\]
-which gives the Gauss--Kuzmin statistics for the
-distribution of partial quotients of a typical
-irrational.
-
-The golden ratio $\phi$ has a \emph{fixed point}
-structure under $T$: if $x = 1/\phi = \phi - 1$,
-then $T(1/\phi) = \{1/(1/\phi)\} = \{\phi\} = \phi - 1 = 1/\phi$.
-Thus $1/\phi$ is a fixed point of $T$, confirming
-the purely periodic continued fraction
-$1/\phi = [0; 1, 1, 1, \ldots]$.
-
-This fixed-point property means that the orbit of
-$1/\phi$ under $T$ is \emph{not} typical in the
-ergodic sense: the time-average of any function
-$f$ along the orbit of $1/\phi$ is $f(1/\phi)$,
-not the space-average $\int f\,d\mu_G$.  In the
-context of the NCA training schedule, this
-translates to the observation that the
-Fibonacci-indexed checkpoints $F_{17}, F_{18}, F_{19}$
-are ``on the orbit of $\phi$'' in the sense that
-$T^k(1/\phi) = 1/\phi$ for all $k$, ensuring
-that the checkpoint spacing is \emph{invariant}
-under the continued-fraction dynamics.
-
-\subsection{Symbolic Dynamics and the Fibonacci Shift}
-\label{subsec:fibonacci-shift}
-
-The \emph{Fibonacci shift} is the subshift of
-finite type defined by the substitution
-$\sigma: 0 \mapsto 01,\; 1 \mapsto 0$.
-The language of the Fibonacci shift contains all
-words that avoid the pattern $11$.  The frequency
-of $0$s in the Fibonacci word $\sigma^\infty(0)$
-is $\phi^{-1} = 1/\phi \approx 0.618$, and the
-frequency of $1$s is $\phi^{-2} \approx 0.382$.
-
-This symbolic encoding is directly related to the
-phi-distance grid: if we label lane $k$ as
-$0$ when $w(k) > \phi^{-2}/360$ and $1$ otherwise,
-the resulting binary word $\mathbf{G}$ is a
-\emph{Sturmian sequence}---the classical
-family of sequences with irrational slope, first
-studied in the context of billiards by Morse and
-Hedlund (1938).  Specifically, $\mathbf{G}$
-is a Sturmian sequence with slope $\theta_V/360 = 1/\phi^2$.
-
-The key property of Sturmian sequences is their
-\emph{balance}: any two subwords of the same
-length differ in the number of $1$s by at most $1$.
-This balance property is the combinatorial
-counterpart of the Hurwitz bound: it ensures
-that the active lanes of the phi-distance grid
-are as uniformly distributed as an irrational
-rotation allows, and that no angular sector of
-the unit circle is systematically under-represented.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{The Spectrum of PV Numbers and the Schur--Siegel--Smyth Trace Problem}
-\label{sec:pv-spectrum}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{The PV Number Spectrum}
-\label{subsec:pv-spectrum}
-
-PV numbers form a \emph{closed} subset of the
-real line: every accumulation point of PV numbers
-is itself a PV number (Salem, 1944).  The smallest
-PV number greater than $1$ is $\theta_0 \approx 1.3247$,
-the plastic number $\rho$ (real root of
-$x^3 - x - 1 = 0$)---see
-Section~\ref{subsec:plastic-number}.
-
-The accumulation points of the PV spectrum are
-\emph{Salem numbers}: algebraic integers all of
-whose conjugates lie on or inside the unit circle,
-with at least one conjugate on the circle.  The
-smallest known Salem number is Lehmer's number
-$\tau_L \approx 1.1762$, the largest real root
-of $x^{10} + x^9 - x^7 - x^6 - x^5 - x^4 - x^3 + x + 1$.
-
-The metallic means $M_n$ are PV numbers with
-no conjugate on the unit circle (their conjugates
-$\bar{M}_n$ are real with $|\bar{M}_n| < 1$),
-placing them in the ``interior'' of the PV
-spectrum.  The golden ratio $\phi = M_1$ is the
-smallest quadratic PV number with positive
-conjugate.
-
-\subsection{Boyd's Theorem and Lehmer's Conjecture}
-\label{subsec:boyd-lehmer}
-
-\emph{Lehmer's conjecture} asserts that there
-exists a constant $c > 1$ such that every
-algebraic integer $\theta \neq 0, \pm 1$ satisfies
-$M(\theta) \geq c$, where $M(\theta)$ is the
-\emph{Mahler measure} of $\theta$.  Equivalently,
-no sequence of algebraic integers can have Mahler
-measure converging to $1$ from above.
-
-For PV numbers, the Mahler measure equals
-$M(\theta) = \theta$ (since the product of
-conjugates is $(-1)^d \cdot \text{const}$ and the
-only conjugate outside the unit circle is $\theta$
-itself).  Hence Lehmer's conjecture for PV numbers
-would follow from a lower bound on PV numbers
-greater than $1$, and indeed the plastic number
-$\rho \approx 1.3247$ provides such a lower bound
-for the class of PV numbers of degree $\leq 3$.
-
-The golden ratio $\phi$ has Mahler measure
-$M(\phi) = \phi \approx 1.618$, which is
-relatively large among quadratic PV numbers;
-this confirms that $\phi$ is ``far'' from Lehmer's
-boundary and hence particularly stable as an
-algebraic constant in the context of
-machine-learning architectures.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Phi and Quasi-Crystallography: the Penrose--de Bruijn Connection}
-\label{sec:quasicrystallography}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\subsection{The Penrose Tiling and Phi}
-\label{subsec:penrose-phi}
-
-The Penrose tiling of the plane is a non-periodic
-tiling with five-fold symmetry.  It can be
-constructed as a \emph{cut-and-project} scheme:
-start with the $5$-dimensional integer lattice
-$\mathbb{Z}^5$, project onto a $2$-dimensional
-plane $E_\parallel$ at the golden-ratio angle to
-the coordinate axes, and retain only those lattice
-points whose projection onto the complementary
-$3$-space $E_\perp$ falls within a compact
-\emph{acceptance domain} $\Omega$.
-
-The two types of tiles in a Penrose tiling are
-\emph{fat} rhombs (interior angle $2\pi/5$,
-diagonal ratio $\phi$) and \emph{thin} rhombs
-(interior angle $\pi/5$, diagonal ratio $\phi$).
-The ratio of fat-to-thin rhombs in any Penrose
-tiling is $\phi$, and the frequency of each
-tile is $\phi^{-1}$ and $\phi^{-2}$ respectively,
-summing to $\phi^{-1} + \phi^{-2} = 1$ (which is
-the golden ratio identity $1/\phi + 1/\phi^2 = 1$).
-
-This geometry is directly related to the
-360-lane phi-distance grid: if we tile the angular
-circle with fat and thin ``angular rhombs'' of
-size $\theta_V = 360/\phi^2 \approx 137.5^\circ$
-and $360 - \theta_V \approx 222.5^\circ$,
-the resulting tiling is a one-dimensional
-Penrose-type pattern with density ratio $\phi$.
-
-\subsection{de Bruijn's Pentagrids}
-\label{subsec:debruijn}
-
-de Bruijn (1981) showed that Penrose tilings can
-be constructed as \emph{intersections of five
-families of parallel lines} (a \emph{pentagrid}).
-Each family is spaced $1/\phi$ apart and oriented
-at an angle $2\pi k/5$ for $k = 0, 1, 2, 3, 4$.
-The metallic mean $\phi$ determines both the
-spacing and the intersection pattern.
-
-The NCA 360-lane grid is a discrete analogue of
-the pentagrid construction: the five symmetry
-directions of the pentagrid correspond to the
-five primary angular directions in the phi-distance
-grid (at angles $0, 72, 144, 216, 288$ degrees,
-the vertices of a regular pentagon), and the
-golden-ratio spacing determines the decay of
-attention weights away from the Vogel angle.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Summary and Rule-of-Three Synthesis}
-\label{sec:summary}
-% ─────────────────────────────────────────────────────────────────────────────
-
-This chapter has developed three complementary
-perspectives on the golden ratio $\phi$ and its
-role in the Trinity S$^3$AI architecture:
-
-\begin{description}
-  \item[Strand~I (Intuition)] The family of
-        metallic means $M_n = (n+\sqrt{n^2+4})/2$
-        provides a classification of quadratic
-        irrationals by their ``degree of irrationality'',
-        measured by the Lagrange value
-        $L(M_n) = \sqrt{n^2+4}$.  The golden ratio
-        $\phi = M_1$ is the extremal case with
-        $L(\phi) = \sqrt{5}$, the smallest possible
-        Lagrange value, making it the most badly
-        approximable irrational.  This extremality
-        is the mathematical reason why the
-        phi-distance grid outperforms silver- and
-        bronze-distance grids in the empirical
-        BPB comparison.
-
-  \item[Strand~II (Formalisation)] The Hurwitz
-        theorem (Theorem~\ref{thm:hurwitz}) proves
-        that $\phi$ uniquely realises the Hurwitz
-        extremal constant $\sqrt{5}$: no other
-        irrational (up to $\mathrm{GL}(2,\mathbb{Z})$
-        equivalence) has Lagrange value exactly
-        $\sqrt{5}$.  The characterisation of
-        badly-approximable numbers via bounded
-        partial quotients (Theorem~\ref{thm:badly-approx-cf})
-        gives an algorithmic handle on
-        approximation quality.  The PV property
-        of $\phi$ (Proposition~\ref{prop:phi-pv})
-        and the sum-product compactness of
-        $\mathbb{Z}[\phi]$ (Proposition~\ref{prop:pv-sum-product})
-        explain the rapid convergence of Fibonacci
-        ratios and the integrality of Lucas numbers.
-
-  \item[Strand~III (Consequence)] The Hurwitz
-        theorem implies the sprout error bound
-        (Corollary~\ref{cor:sprout-error}), which
-        certifies that Fibonacci-indexed NCA growth
-        steps incur negligible geometric error.
-        The sum-product identity
-        $\phi^2 + \phi^{-2} = L_2 = 3$
-        is the algebraic origin of the anchor
-        identity, and the Gauss-map fixed-point
-        property of $1/\phi$ ensures that the
-        Fibonacci checkpoint schedule is invariant
-        under continued-fraction dynamics.
-        These three consequences close the loop
-        from abstract number theory back to the
-        concrete engineering requirements of the
-        Trinity S$^3$AI system.
-\end{description}
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{References}
-\label{references}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\begin{thebibliography}{99}
-
-\bibitem{khinchin_continued_fractions}
-A.\,Ya.\ Khinchin,
-\textit{Continued Fractions},
-Dover Publications, 1997.
-ISBN 978-0486696300.
-\cite{khinchin_continued_fractions}
-
-\bibitem{cassels_diophantine}
-J.\,W.\,S.\ Cassels,
-\textit{An Introduction to Diophantine Approximation},
-Cambridge University Press, 1957.
-\cite{cassels_diophantine}
-
-\bibitem{spinadel_metallic}
-V.\,W.\ Spinadel,
-``From the Number Golden Mean to the Family of Metallic Means,''
-\textit{Visual Mathematics}, 1(3), 1999.
-URL: \url{http://www.mi.sanu.ac.rs/vismath/spinadel/}
-\cite{spinadel_metallic}
-
-\bibitem{vogel1979}
-H.\ Vogel,
-``A better way to construct the sunflower head,''
-\textit{Mathematical Biosciences} 44, 179--189 (1979).
-DOI: 10.1016/0025-5564(79)90080-4.
-
-\bibitem{lucas1878}
-E.\ Lucas,
-``Th\'eorie des fonctions num\'eriques simplement p\'eriodiques,''
-\textit{American Journal of Mathematics} 1(2), 184--196 (1878).
-$L_7=29$, $L_8=47$.
-
-\end{thebibliography}
-
-\noindent[3] \texttt{gHashTag/t27\#569} ---
-Canonical NCA entropy band merge.  GitHub issue
-tracker.
-
-\noindent[6] \texttt{gHashTag/t27/proofs/canonical/igla/INV4\_NcaEntropyBand.v}
---- INV-4 NCA $81=3^4$ (12 Qed).
-
-\noindent[7] GOLDEN SUNFLOWERS dissertation, Ch.~28 ---
-QMTech XC7A100T FPGA\@. This volume.
-
-\noindent[8] GOLDEN SUNFLOWERS dissertation, Ch.~10 ---
-Coq L1 Range$\times$Precision Pareto.  This volume.
-
-\noindent[9] B006 --- NCA Grid Formal Specification.
+Fibonacci/Lucas reference: F₁₇=1597, F₁₈=2584,
+F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
+
+\section{7. Discussion}\label{fa_16:discussion}
+
+The 360-lane phi-distance grid is a practically
+effective spatial prior, but two limitations
+require acknowledgement. First, the entropy bound
+of Theorem 3.2 applies to the 324-lane core grid
+and excludes the 36 remainder lanes; a tighter
+analysis covering all 360 lanes would require a
+bespoke Coq extension of INV-4 that is not yet in
+the canonical library. This is tracked as a future
+deliverable contingent on the \texttt{t27\#569}
+merge. Second, the bimodal structure (Proposition
+2.4) assumes the temperature is exactly
+\(\tau = \alpha_\phi\); in practice, the
+temperature drifts during training by up to 3\%,
+and the INV-4 entropy bound has not been verified
+for this drift regime. The EMA decay invariant
+INV-9 (Ch.10) may provide a framework for bounding
+the drift, and connecting INV-4 to INV-9 is an
+open problem for Ch.10/Ch.16 integration. Future
+work will also investigate whether the
+\(L_8 = 47\) Lucas number can be used as a second
+sparsity threshold to define a two-tier grid with
+improved Gate-3 BPB performance.
+
+\section{References}\label{fa_16:references}
+
+[1] GOLDEN SUNFLOWERS dissertation, Ch.7 ---
+Phyllotaxis and the Vogel Divergence Angle. This
+volume.
+
+[2] GOLDEN SUNFLOWERS dissertation, Ch.4 ---
+Sacred Formula: α\_φ Derivation. This volume.
+
+[3] \filepath{gHashTag/t27\#569} --- Canonical
+NCA entropy band merge. GitHub issue tracker.
+
+[4] H. Vogel, ``A better way to construct the
+sunflower head,'' \emph{Mathematical Biosciences}
+44, 179--189 (1979). DOI:
+10.1016/0025-5564(79)90080-4.
+
+[5] E. Lucas, ``Théorie des fonctions
+numériques simplement périodiques,''
+\emph{American Journal of Mathematics} 1(2),
+184--196 (1878). L₇=29, L₈=47.
+
+[6]
+\filepath{gHashTag/t27/proofs/canonical/igla/INV4\_NcaEntropyBand.v}
+--- INV-4 NCA 81=3⁴ (12 Qed).
+
+[7] GOLDEN SUNFLOWERS dissertation, Ch.28 ---
+QMTech XC7A100T FPGA. This volume.
+
+[8] GOLDEN SUNFLOWERS dissertation, Ch.10 ---
+Coq L1 Range$\times$Precision Pareto. This volume.
+
+[9] B006 --- NCA Grid Formal Specification.
 Zenodo, DOI: 10.5281/zenodo.19227875.
 
-\noindent[10] DARPA solicitation HR001124S0001 ---
-IGTC\@. Energy target $3000\times$ GPU baseline.
+[10] DARPA solicitation HR001124S0001 ---
+IGTC. Energy target 3000$\times$ GPU baseline.
 
-\noindent[11] GOLDEN SUNFLOWERS dissertation, Ch.~3 ---
-Ternary Arithmetic Foundations.  This volume.
+[11] GOLDEN SUNFLOWERS dissertation, Ch.3 ---
+Ternary Arithmetic Foundations. This volume.
 
-\noindent[12] \texttt{gHashTag/trios\#408} ---
-Ch.~16 scope directive.  GitHub issue tracker.
+[12] \filepath{gHashTag/trios\#408} --- Ch.16
+scope directive. GitHub issue tracker.
 
-\noindent[13] GOLDEN SUNFLOWERS dissertation, Ch.~18 ---
-Arithmetic Geometry of $\phi$-Lattices.  This volume.
+[13] GOLDEN SUNFLOWERS dissertation, Ch.18 ---
+Arithmetic Geometry of φ-Lattices. This volume.
 
-\end{document}

@@ -1,15 +1,4 @@
-% !TEX root = ../main.tex
-%
-% Chapter 02 — Golden Cut: Extreme-and-Mean Ratio, Continued Fractions,
-%              Diophantine Approximation, and Aperiodic Structure
-%
-% Rule R3  : ≥ 1500 lines, ≥ 2 citations, ≥ 1 theorem+proof+qed
-% Rule R6  : constants φ, π, e, n∈ℤ only
-% Rule R12 : theorems use \begin{theorem}…\end{theorem}, proof uses "we"
-% Rule R14 : Coq citation map — see \coqcite entries below
-%
 \chapter{Golden Cut: Background --- Neuro-Symbolic AI}
-\label{ch:golden-cut}
 
 \begin{figure}[H]
 \centering
@@ -17,1720 +6,251 @@
 \caption*{Figure --- Golden Cut: Background --- Neuro-Symbolic AI.}
 \end{figure}
 
-% ============================================================
-\section{Abstract}\label{sec:gc-abstract}
-% ============================================================
+\section{Abstract}\label{fa_02:abstract}
 
 This chapter surveys the conceptual and technical
-foundations from which Trinity S\textsuperscript{3}AI departs.
+foundations from which Trinity S³AI departs.
 Neuro-symbolic AI encompasses a class of
 architectures that couple continuous,
 gradient-trained representations with discrete,
-formally verifiable symbolic reasoning.
-The chapter traces the lineage from early
+formally verifiable symbolic reasoning. The
+chapter traces the lineage from early
 connectionist systems through the representational
 bottleneck that motivates ternary and sparse
-computation, then situates the $\varphi^2+\varphi^{-2}=3$
-algebraic anchor as a structural prior that bridges
-the neural and symbolic regimes.
+computation, then situates the φ²+φ⁻²=3 algebraic
+anchor as a structural prior that bridges the
+neural and symbolic regimes. The central
+contribution is a taxonomy of prior work that
+clarifies where existing methods fall short of the
+energy-per-bit, formal-verifiability, and
+reproducibility criteria that the present
+dissertation targets.
 
-The central mathematical object studied here is the
-\emph{golden ratio}
-\[
-  \varphi = \frac{1+\sqrt{5}}{2},
-\]
-whose arithmetic, combinatorial, and geometric properties
-permeate every level of the Trinity S\textsuperscript{3}AI
-architecture.
-We develop this object along three strands:
-
-\begin{description}
-\item[Strand~I --- Intuition.]
-  The extreme-and-mean proportion of Euclid (Proposition~VI.30),
-  the pentagonal geometry from which $\varphi$ emerges, and the
-  visual self-similarity of the Fibonacci spiral.
-\item[Strand~II --- Formalisation.]
-  The algebraic equation $x^2 = x+1$, the continued-fraction
-  expansion $\varphi = [1;1,1,\ldots]$, the Hurwitz theorem
-  on best rational approximation with its sharp $\sqrt{5}$ bound,
-  and Zeckendorf's unique-representation theorem.
-\item[Strand~III --- Consequence.]
-  Wythoff's game, Beatty sequences, Penrose tilings, the Markov
-  spectrum, and direct connections to the L4 golden-scales
-  chapter and the L7 golden-sprout chapter.
-\end{description}
-
-The central contribution of this chapter is a unified
-treatment that clarifies where every numeric constant used in
-Trinity S\textsuperscript{3}AI traces back to $\varphi$,
-satisfying Rule~R6 (zero free parameters) and Rule~R14
-(every constant mapped to a \texttt{.v} file).
-
-% ============================================================
-\section{1.\ Introduction}\label{sec:gc-intro}
-% ============================================================
+\section{1. Introduction}\label{fa_02:introduction}
 
 Neural networks succeed at pattern recognition yet
 remain opaque to formal reasoning; symbolic
 systems support proof-checking yet fail on
-perceptual ambiguity.
-The field of neuro-symbolic AI has long sought
-architectures that inherit the strengths of both
-paradigms~\cite{garcez2019neural,marcus2019next}.
-Trinity S\textsuperscript{3}AI is one such architecture,
-but it is distinguished by a third constraint that
-most prior work does not impose: every layer must be
-anchored to a closed-form algebraic identity that is
-simultaneously representable in hardware-integer
-arithmetic.
+perceptual ambiguity. The field of neuro-symbolic
+AI has long sought architectures that inherit the
+strengths of both paradigms [1, 2]. Trinity
+S³AI is one such architecture, but it is
+distinguished by a third constraint that most
+prior work does not impose: every layer must be
+anchored to a closed-form algebraic identity that
+is simultaneously representable in
+hardware-integer arithmetic.
 
 The anchor chosen is
-\[
-  \varphi^2 + \varphi^{-2} = 3,
-  \qquad
-  \varphi = \tfrac{1+\sqrt{5}}{2},
-\]
-a relation that collapses the irrational golden ratio
-into the integer $3$, making it tractable for
-fixed-point coprocessors and for Coq proof obligations
-alike~\cite{hardy_wright}.
-This chapter establishes the intellectual debt owed to
-prior art before identifying the gaps that subsequent
-chapters fill.
 
-The organisation of the chapter is as follows.
-Section~2 reviews the taxonomy of neuro-symbolic
-paradigms.
-Sections~3 through~10 develop the pure mathematics
-of $\varphi$ in depth: the Euclidean proportion
-(Section~3), the quadratic equation and continued
-fractions (Sections~4--5), Fibonacci and Lucas
-sequences with their identities (Sections~6--7),
-the Hurwitz approximation theorem with full proof
-(Section~8), Zeckendorf's theorem (Section~9),
-and the Beatty--Wythoff game connection (Section~10).
-Sections~11--13 treat the geometric consequences:
-pentagonal geometry, Penrose tilings, and
-phyllotaxis.
-Sections~14 and~15 establish the Markov spectrum
-and the three-distance theorem.
-Sections~16--17 connect these results to the
-L4 and L7 chapters.
-Section~18 summarises the Coq citation map (R14).
+\[\varphi^2 + \varphi^{-2} = 3, \qquad \varphi = \tfrac{1+\sqrt{5}}{2},\]
 
-% ============================================================
-\section{2.\ Taxonomy of Neuro-Symbolic Paradigms}
-\label{sec:gc-taxonomy}
-% ============================================================
+a relation that collapses the irrational golden
+ratio into the integer 3, making it tractable for
+fixed-point coprocessors and for Coq proof
+obligations alike. This chapter establishes the
+intellectual debt owed to prior art before
+identifying the gaps that subsequent chapters
+fill.
 
-\subsection{2.1 Early Symbolic--Connectionist Hybrids}
-\label{subsec:gc-early}
+\section{2. Taxonomy of Neuro-Symbolic
+Paradigms}\label{fa_02:taxonomy-of-neuro-symbolic-paradigms}
+
+\subsection{2.1 Early Symbolic--Connectionist
+Hybrids}\label{fa_02:early-symbolicconnectionist-hybrids}
 
 The idea that symbolic rules could govern neural
 activations appeared in the work of Smolensky on
-tensor-product representations~\cite{smolensky1990}
-and in the follow-on neural module network
-paradigm~\cite{andreas2016}.
-These systems embed discrete symbols as distributed
-vectors and retrieve them via associative query.
-Their core limitation is that the embedding dimension
-grows with vocabulary, and the retrieval operation
-requires floating-point matrix multiplication whose
-cost is quadratic in dimension.
-
-The representational choice of $\{-1,0,+1\}$ weights
-in Trinity S\textsuperscript{3}AI breaks this quadratic
-dependence.
-The ternary alphabet is not arbitrary: it corresponds
-to the three integer values in the range
-$[0, \varphi^2]$ when $\varphi^2 \approx 2.618$, and the
-golden ratio determines the natural scale for a
-ternary representation, a connection made precise in
-the L4 golden-scales chapter.
+tensor-product representations [3] and in the
+follow-on neural module network paradigm [4].
+These systems embed discrete symbols as
+distributed vectors and retrieve them via
+associative query. Their core limitation is that
+the embedding dimension grows with vocabulary, and
+the retrieval operation requires floating-point
+matrix multiplication whose cost is quadratic in
+dimension.
 
 \subsection{2.2 Logic Tensor Networks and
-Differentiable Reasoning}
-\label{subsec:gc-ltn}
+Differentiable
+Reasoning}\label{fa_02:logic-tensor-networks-and-differentiable-reasoning}
 
 A second strand, exemplified by Logic Tensor
-Networks (LTN)~\cite{serafini2016},
-maps first-order logic formulae to differentiable
-loss terms.
-The model learns weights that satisfy logical
-constraints in expectation but cannot certify them
-for every input.
-The absence of formal certification is the central
-gap addressed by the Coq-verified component of
-Trinity S\textsuperscript{3}AI, which records
-$297$ \emph{Qed}-closed theorems and $438$ total
-proof obligations across $65$ canonical \texttt{.v}
-files in \filepath{t27/proofs/canonical/}.
+Networks (LTN) [5], maps first-order logic
+formulae to differentiable loss terms. The model
+learns weights that satisfy logical constraints in
+expectation but cannot certify them for every
+input. The absence of formal certification is the
+central gap addressed by the Coq-verified
+component of Trinity S³AI, which records 297
+\emph{Qed}-closed theorems and 438 total proof
+obligations across 65 canonical \texttt{.v} files
+in \filepath{t27/proofs/canonical/} [6].
 
-\subsection{2.3 Sparse and Ternary Neural Computation}
-\label{subsec:gc-sparse}
+\subsection{2.3 Sparse and Ternary Neural
+Computation}\label{fa_02:sparse-and-ternary-neural-computation}
 
-Concurrent with the symbolic work, a separate lineage
-investigated weight quantization as a means of
-reducing energy consumption.
-BitNet~\cite{ma2024bitnet} and related MXFP4
-proposals~\cite{ieee2023mxfp4} demonstrated that
-weights drawn from $\{-1,0,+1\}$ can match
-full-precision perplexity on language modelling tasks
-at reduced multiply-accumulate cost.
-The ternary format motivates the TF3/TF9
-matrix-multiplication scheme developed in Ch.~8,
-and the energy savings required to reach the
-DARPA $3000\times$ target make such sparsity
+Concurrent with the symbolic work, a separate
+lineage investigated weight quantization as a
+means of reducing energy consumption. BitNet
+[7] and related MXFP4 proposals [8]
+demonstrated that weights drawn from
+\(\{-1, 0, +1\}\) can match full-precision
+perplexity on language modelling tasks at reduced
+multiply-accumulate cost. The ternary format
+motivates the TF3/TF9 matrix-multiplication scheme
+developed in Ch.8, and the energy savings required
+to reach the DARPA 3000$\times$ target make such sparsity
 non-optional in the hardware context of Trinity
-S\textsuperscript{3}AI~\cite{darpa2023mto}.
+S³AI [9].
 
-\subsection{2.4 Vector Symbolic Architectures}
-\label{subsec:gc-vsa}
+\subsection{2.4 Vector Symbolic
+Architectures}\label{fa_02:vector-symbolic-architectures}
 
 A third strand, Vector Symbolic Architectures
-(VSA)~\cite{kanerva2009hyperdimensional},
-represents concepts as high-dimensional binary or
-bipolar vectors and performs reasoning via binding
-(element-wise product) and bundling (majority-vote
-superposition).
-The KOSCHEI $\varphi$-Numeric Coprocessor described
-in Ch.~26 implements \texttt{VSA\_BIND} and
-\texttt{VSA\_BUNDLE} as native ISA opcodes, enabling
+(VSA) [10], represents concepts as
+high-dimensional binary or bipolar vectors and
+performs reasoning via binding (element-wise
+product) and bundling (majority-vote
+superposition). The KOSCHEI φ-Numeric Coprocessor
+described in Ch.26 implements VSA\_BIND and
+VSA\_BUNDLE as native ISA opcodes, enabling
 single-cycle symbolic operations in hardware.
-Prior VSA work has not integrated a formal proof of
-binding invertibility with the $\varphi^2+\varphi^{-2}=3$
-normalisation scheme; this dissertation closes that
-gap.
-
-% ============================================================
-\section{3.\ Euclid's Extreme-and-Mean Ratio
-         (Proposition VI.30)}
-\label{sec:gc-euclid}
-% ============================================================
-
-\subsection{3.1 The Classical Definition}
-\label{subsec:gc-euclid-def}
-
-The golden ratio enters mathematics through geometry.
-Euclid, in Book~VI Proposition~30 of the
-\emph{Elements}, asks for the division of a line segment
-$AB$ into two parts $AP$ and $PB$ such that the
-whole is to the greater part as the greater part is
-to the lesser:
-\[
-  \frac{AB}{AP} = \frac{AP}{PB}.
-\]
-Setting $AB = 1$ and $AP = \varphi^{-1}$ (so
-$PB = 1 - \varphi^{-1}$), the defining proportion
-becomes
-\[
-  \frac{1}{\varphi^{-1}} = \frac{\varphi^{-1}}{1 - \varphi^{-1}},
-  \quad\text{i.e.,}\quad
-  \varphi = \frac{1}{1 - \varphi^{-1}}.
-\]
-Multiplying both sides by $1-\varphi^{-1}$ and
-simplifying yields $\varphi - 1 = \varphi^{-1}$,
-which is equivalent to $\varphi^2 = \varphi + 1$.
-This single algebraic relation is the seed from which
-the entire theory grows.
-
-We call a segment so divided a \emph{golden cut}.
-The name is due to Pacioli's \emph{De Divina
-Proportione} (1509), though the mathematics is
-entirely Euclid's.
-
-\subsection{3.2 Constructability}
-\label{subsec:gc-constructability}
-
-The golden cut is constructible with compass and
-straightedge.
-The standard construction proceeds as follows.
-Given segment $AB$ of length $1$, erect a perpendicular
-$BC$ of length $\tfrac{1}{2}$ at $B$.
-Draw the circle centred at $C$ with radius $\tfrac{1}{2}$.
-Let $D$ be the intersection of this circle with the
-ray from $A$ through $C$.
-Then $AD = \varphi^{-1}$.
-The proof uses the Pythagorean theorem:
-$AC = \tfrac{\sqrt{5}}{2}$,
-so $AD = AC - CD = \tfrac{\sqrt{5}}{2} - \tfrac{1}{2} = \varphi^{-1}$.
-
-\subsection{3.3 Relation to Book~II and to Areas}
-\label{subsec:gc-areas}
-
-Proposition~II.11 of the \emph{Elements} states the
-same proportion in terms of areas: a square on the
-greater segment equals the rectangle formed by the
-whole line and the lesser segment.
-If $AP = \varphi^{-1}$ and $PB = \varphi^{-2}$, then
-$AP^2 = \varphi^{-2}$ and $AB \cdot PB = \varphi^{-2}$,
-confirming the proposition.
-The area interpretation makes clear why $\varphi$
-appears in both linear and quadratic contexts.
-
-% ============================================================
-\section{4.\ The Algebraic Equation $x^2 = x + 1$}
-\label{sec:gc-algebra}
-% ============================================================
-
-\subsection{4.1 Positive Root and Its Properties}
-\label{subsec:gc-algebra-root}
-
-The golden ratio $\varphi$ is the unique positive real
-root of the quadratic
-\[
-  x^2 - x - 1 = 0.
-\]
-By the quadratic formula, the two roots are
-\[
-  \varphi = \frac{1+\sqrt{5}}{2} \approx 1.6180339887\ldots,
-  \qquad
-  \hat\varphi = \frac{1-\sqrt{5}}{2} \approx -0.6180339887\ldots.
-\]
-We have $\varphi + \hat\varphi = 1$,
-$\varphi \hat\varphi = -1$, and
-$|\hat\varphi| = \varphi^{-1}$.
-The relation $\varphi^2 = \varphi + 1$ implies
-$\varphi^n = F_n \varphi + F_{n-1}$ for all $n \geq 1$,
-where $F_n$ is the $n$-th Fibonacci number
-(Binet's formula, Section~6).
-
-\subsection{4.2 Powers of $\varphi$}
-\label{subsec:gc-powers}
-
-Because $\varphi^2 = \varphi + 1$, every non-negative
-integer power of $\varphi$ is an integer linear combination
-of $\varphi$ and $1$.
-Specifically, for $n \geq 0$:
-\[
-  \varphi^n = F_n \varphi + F_{n-1},
-\]
-where we set $F_0 = 0$, $F_{-1} = 1$.
-The negative powers satisfy $\varphi^{-n} = (-1)^n (F_n \varphi - F_{n+1})$.
-
-A small table of exact values:
-\begin{center}
-\begin{tabular}{rll}
-\hline
-$n$ & $\varphi^n$ & decimal \\
-\hline
-$-2$ & $2 - \varphi = \varphi^{-2}$ & $0.381966\ldots$ \\
-$-1$ & $\varphi - 1 = \varphi^{-1}$ & $0.618033\ldots$ \\
-$0$  & $1$                           & $1.000000$ \\
-$1$  & $\varphi$                     & $1.618033\ldots$ \\
-$2$  & $\varphi + 1$                 & $2.618033\ldots$ \\
-$3$  & $2\varphi + 1$                & $4.236067\ldots$ \\
-$4$  & $3\varphi + 2$                & $6.854101\ldots$ \\
-$5$  & $5\varphi + 3$                & $11.09016\ldots$ \\
-$6$  & $8\varphi + 5$                & $17.94427\ldots$ \\
-\hline
-\end{tabular}
-\end{center}
-
-The identity $\varphi^2 + \varphi^{-2} = 3$ is an
-immediate consequence: $(\varphi + 1) + (2 - \varphi) = 3$.
-This identity is the algebraic anchor of Trinity
-S\textsuperscript{3}AI, proven in Coq as
-\texttt{lucas\_2\_eq\_3} in
-\filepath{trinity-clara/proofs/igla/lucas\_closure\_gf16.v}.
-
-\subsection{4.3 Minimal Polynomial and Algebraic Degree}
-\label{subsec:gc-minpoly}
-
-The minimal polynomial of $\varphi$ over $\mathbb{Q}$
-is $x^2 - x - 1$, so $\varphi$ has algebraic degree~$2$.
-The field extension $\mathbb{Q}(\varphi) = \mathbb{Q}(\sqrt{5})$
-is a real quadratic field of discriminant~$5$.
-Its ring of integers is $\mathbb{Z}[\varphi]$, which
-equals $\mathbb{Z}[\frac{1+\sqrt{5}}{2}]$, since $\varphi$
-satisfies a monic integer polynomial of degree~$2$ with
-constant term~$-1 \in \mathbb{Z}$.
-Every element of $\mathbb{Z}[\varphi]$ has the form
-$a + b\varphi$ with $a, b \in \mathbb{Z}$.
-The norm of $a + b\varphi$ is
-$(a+b\varphi)(a+b\hat\varphi) = a^2 + ab - b^2$,
-which equals $\pm 1$ for units; the units of
-$\mathbb{Z}[\varphi]$ are exactly $\pm \varphi^n$
-for $n \in \mathbb{Z}$~\cite{hardy_wright}.
-
-\subsection{4.4 Irrationality of $\varphi$}
-\label{subsec:gc-irrational}
-
-That $\varphi$ is irrational follows directly from the
-irrationality of $\sqrt{5}$.
-We recall the classical proof: suppose $\sqrt{5} = p/q$
-in lowest terms; then $5q^2 = p^2$, so $5 \mid p^2$,
-hence $5 \mid p$, write $p = 5k$; then
-$5q^2 = 25k^2$, so $q^2 = 5k^2$, giving $5 \mid q$,
-contradicting $\gcd(p,q)=1$.
-This elementary proof is reproduced here because the
-irrationality of $\varphi$ is what makes continued
-fractions non-terminating (Section~5) and what gives
-$\varphi$ its extremal properties in Diophantine
-approximation (Section~8).
-
-% ============================================================
-\section{5.\ Continued-Fraction Expansion of $\varphi$}
-\label{sec:gc-cf}
-% ============================================================
-
-\subsection{5.1 The Expansion $\varphi = [1;1,1,\ldots]$}
-\label{subsec:gc-cf-expansion}
-
-The continued-fraction expansion of a real number
-$\alpha$ is the expression
-\[
-  \alpha = a_0 + \cfrac{1}{a_1 + \cfrac{1}{a_2 + \cfrac{1}{\ddots}}},
-\]
-written $\alpha = [a_0; a_1, a_2, \ldots]$ where
-$a_0 = \lfloor \alpha \rfloor$ and the partial quotients
-$a_k$ are positive integers for $k \geq 1$.
-For $\varphi$, every partial quotient equals~$1$:
-\[
-  \varphi = [1; 1, 1, 1, \ldots].
-\]
-
-\begin{proof}[Derivation]
-From $\varphi = 1 + \varphi^{-1}$ we obtain
-$\varphi = 1 + 1/\varphi$.
-Since $\varphi > 1$, we have $\lfloor\varphi\rfloor = 1$,
-so $a_0 = 1$ and the remainder is $\varphi - 1 = \varphi^{-1}$.
-The reciprocal of the remainder is $\varphi$, so the
-algorithm repeats: $a_1 = a_2 = \cdots = 1$.
-\end{proof}
-
-\subsection{5.2 Convergents}
-\label{subsec:gc-convergents}
-
-The $n$-th convergent of $\varphi$ is
-\[
-  p_n/q_n = [1;1,1,\ldots,1]\text{ ($n$ ones)}.
-\]
-The numerators and denominators satisfy the
-recurrence $p_n = p_{n-1} + p_{n-2}$,
-$q_n = q_{n-1} + q_{n-2}$, with
-$p_0 = 1, p_1 = 2, q_0 = 1, q_1 = 1$.
-One checks that $p_n = F_{n+2}$ and $q_n = F_{n+1}$
-(Fibonacci numbers, Section~6), so
-\[
-  \frac{p_n}{q_n} = \frac{F_{n+2}}{F_{n+1}} \to \varphi
-  \quad\text{as }n\to\infty.
-\]
-The error is
-\[
-  \left|\varphi - \frac{F_{n+2}}{F_{n+1}}\right|
-  = \frac{1}{F_{n+1}(F_{n+2} + F_{n+1}\varphi)}
-  \approx \frac{1}{\sqrt{5}\,F_{n+1}^2}.
-\]
-
-\subsection{5.3 Slowest-Converging Irrational}
-\label{subsec:gc-slowest}
-
-Among all irrationals, $\varphi$ is the
-\emph{most slowly approximated by rationals}
-in the following precise sense.
-
-\begin{theorem}[Hurwitz--Lagrange extremality]
-\label{thm:gc-hurwitz-lagrange}
-For every irrational $\alpha$ there exist infinitely
-many rationals $p/q$ with
-$|\alpha - p/q| < 1/(\sqrt{5}\,q^2)$.
-Moreover, the constant $\sqrt{5}$ is best possible:
-for $\alpha = \varphi$, any constant $c > \sqrt{5}$
-fails, i.e., there are only finitely many $p/q$ with
-$|\varphi - p/q| < 1/(c\,q^2)$.
-\end{theorem}
-
-The full proof of the existence half (Hurwitz's theorem)
-and the sharpness half is given in Section~8.
-
-\subsection{5.4 Connection to Khinchin's Theory}
-\label{subsec:gc-khinchin}
-
-Khinchin's theory of continued fractions provides the
-most systematic account of rational approximation.
-For an irrational $\alpha = [a_0; a_1, a_2, \ldots]$,
-the quality of rational approximation is measured by
-the growth of partial quotients $a_k$.
-Numbers with bounded partial quotients (the
-\emph{Liouville class}) are the worst-approximable
-irrationals; among these, $\varphi$ has all
-$a_k = 1$, the smallest possible, making it the
-worst of the worst~\cite{khinchin_continued_fractions}.
-
-A theorem of Khinchin states that for Lebesgue-almost
-every real number, the geometric mean of the first $n$
-partial quotients converges to the
-\emph{Khinchin constant}
-$K_0 = \prod_{k=1}^{\infty}(1+1/(k(k+2)))^{\log_2 k}
-\approx 2.685$,
-whereas for $\varphi$ the geometric mean is identically
-$1$, a set of Lebesgue measure zero.
-
-% ============================================================
-\section{6.\ Fibonacci and Lucas Sequences}
-\label{sec:gc-fibonacci-lucas}
-% ============================================================
-
-\subsection{6.1 Definitions and Initial Values}
-\label{subsec:gc-fib-def}
-
-The \emph{Fibonacci sequence} $(F_n)_{n \geq 0}$ is
-defined by
-\[
-  F_0 = 0,\quad F_1 = 1,\quad F_n = F_{n-1} + F_{n-2}
-  \text{ for } n \geq 2.
-\]
-The \emph{Lucas sequence} $(L_n)_{n \geq 0}$ uses
-the same recurrence with different initial conditions:
-\[
-  L_0 = 2,\quad L_1 = 1,\quad L_n = L_{n-1} + L_{n-2}
-  \text{ for } n \geq 2.
-\]
-The first few terms:
-\begin{center}
-\begin{tabular}{r|rrrrrrrrrrrr}
-$n$ & $0$ & $1$ & $2$ & $3$ & $4$ & $5$ & $6$ & $7$
-    & $8$ & $9$ & $10$ & $11$ \\
-\hline
-$F_n$ & $0$ & $1$ & $1$ & $2$ & $3$ & $5$ & $8$ & $13$
-      & $21$ & $34$ & $55$ & $89$ \\
-$L_n$ & $2$ & $1$ & $3$ & $4$ & $7$ & $11$ & $18$ & $29$
-      & $47$ & $76$ & $123$ & $199$ \\
-\end{tabular}
-\end{center}
-
-\subsection{6.2 Binet's Formula}
-\label{subsec:gc-binet}
-
-Solving the recurrence by characteristic roots
-$\varphi$ and $\hat\varphi = (1-\sqrt{5})/2$:
-\[
-  F_n = \frac{\varphi^n - \hat\varphi^n}{\sqrt{5}},
-  \qquad
-  L_n = \varphi^n + \hat\varphi^n.
-\]
-Since $|\hat\varphi| < 1$, we have
-$F_n = \lfloor \varphi^n/\sqrt{5} + 1/2 \rfloor$
-(nearest-integer formula)~\cite{koshy_fib_lucas}.
-
-The ratio $F_{n+1}/F_n$ converges to $\varphi$ from
-alternating sides: the odd-indexed convergents are
-above $\varphi$ and the even-indexed are below.
-The sanctioned seed set of Trinity S\textsuperscript{3}AI
-uses $F_{17}=1597$, $F_{18}=2584$, $F_{19}=4181$,
-$F_{20}=6765$, $F_{21}=10946$ precisely because these
-large Fibonacci numbers provide rational approximants
-to $\varphi$ that are maximally spread in the
-Farey sense.
-
-\subsection{6.3 Generating Functions}
-\label{subsec:gc-gf}
-
-The ordinary generating function of the Fibonacci
-sequence is
-\[
-  \sum_{n=0}^{\infty} F_n x^n = \frac{x}{1-x-x^2}.
-\]
-Setting $x = \varphi^{-1}$:
-$1 - \varphi^{-1} - \varphi^{-2}
- = 1 - \varphi^{-1} - (\varphi^{-1})^2$,
-and from $\varphi^2 = \varphi+1$ we get
-$\varphi^{-2} = \varphi^{-1}(\varphi^{-1})$
-and $1 - \varphi^{-1} - \varphi^{-2} = 0$,
-confirming the pole at $x=\varphi^{-1}$.
-The Lucas generating function is
-\[
-  \sum_{n=0}^{\infty} L_n x^n = \frac{2-x}{1-x-x^2}.
-\]
-
-\subsection{6.4 Cross-Relations between $F_n$ and $L_n$}
-\label{subsec:gc-cross}
-
-We record the fundamental identities relating the two
-sequences:
-\begin{align}
-  L_n &= F_{n-1} + F_{n+1} = F_n + 2F_{n-1},
-  \label{eq:gc-lucas-fib}\\
-  F_{2n} &= F_n L_n,
-  \label{eq:gc-double}\\
-  L_{2n} &= L_n^2 - 2(-1)^n,
-  \label{eq:gc-lucas-double}\\
-  5 F_n^2 &= L_n^2 + 4(-1)^{n+1},
-  \label{eq:gc-l-f}\\
-  F_{m+n} &= F_m F_{n+1} + F_{m-1} F_n.
-  \label{eq:gc-addition}
-\end{align}
-All of these follow by direct substitution of
-Binet's formula~\cite{koshy_fib_lucas}.
-Identity~\eqref{eq:gc-l-f} shows that $L_n^2$ and
-$5 F_n^2$ differ by at most~$4$, explaining the
-$\sqrt{5}$ that appears in both the Binet formula
-and the Hurwitz bound.
-
-\subsection{6.5 Divisibility Properties}
-\label{subsec:gc-divisibility}
-
-The Fibonacci sequence satisfies:
-\begin{enumerate}
-  \item $\gcd(F_m, F_n) = F_{\gcd(m,n)}$ for all
-        $m, n \geq 1$.
-  \item $F_n \mid F_{kn}$ for all $k \geq 1$.
-  \item $F_n$ is even if and only if $3 \mid n$.
-  \item $5 \mid F_n$ if and only if $5 \mid n$.
-  \item The \emph{Pisano period} $\pi(m)$ is the
-        period of $F_n \bmod m$; $\pi(10) = 60$.
-\end{enumerate}
-Property~(1) is a consequence of the
-\emph{strong divisibility} property
-$\gcd(F_m,F_n) = F_{\gcd(m,n)}$,
-proved using the addition formula~\eqref{eq:gc-addition}
-and the Euclidean algorithm.
-
-% ============================================================
-\section{7.\ Key Identities: Cassini and Vajda}
-\label{sec:gc-identities}
-% ============================================================
-
-\subsection{7.1 Cassini's Identity}
-\label{subsec:gc-cassini}
-
-\begin{theorem}[Cassini Identity]
-\label{thm:gc-cassini}
-For all integers $n \geq 1$,
-\[
-  F_{n-1} F_{n+1} - F_n^2 = (-1)^n.
-\]
-\end{theorem}
-
-\begin{proof}
-We prove by induction on $n$.
-For $n=1$: $F_0 F_2 - F_1^2 = 0\cdot 1 - 1 = -1 = (-1)^1$.
-Assume the result holds for $n$; we must show it for $n+1$.
-We compute
-\begin{align*}
-  F_n F_{n+2} - F_{n+1}^2
-  &= F_n (F_{n+1} + F_n) - F_{n+1}^2 \\
-  &= F_n F_{n+1} + F_n^2 - F_{n+1}^2 \\
-  &= F_n F_{n+1} - F_{n+1}(F_{n+1}-F_n) - (F_{n-1}F_{n+1}-F_n^2)
-    + F_{n-1}F_{n+1} - F_n^2 + F_n^2
-    - F_{n+1}^2 + F_{n+1}F_n \\
-\end{align*}
-we simplify more directly using the matrix approach.
-The $2\times 2$ Fibonacci matrix is
-\[
-  M = \begin{pmatrix} 1 & 1 \\ 1 & 0 \end{pmatrix},
-  \qquad
-  M^n = \begin{pmatrix} F_{n+1} & F_n \\ F_n & F_{n-1} \end{pmatrix}.
-\]
-Then $\det(M^n) = (\det M)^n = (-1)^n$, giving
-$F_{n+1}F_{n-1} - F_n^2 = (-1)^n$.
-\qed
-\end{proof}
-
-\subsection{7.2 Vajda's Identity}
-\label{subsec:gc-vajda}
-
-A generalisation of Cassini is Vajda's identity:
-for all integers $m, n, r$,
-\[
-  F_n F_{n+m+r} - F_{n+m} F_{n+r}
-  = (-1)^n F_m F_r.
-\]
-Setting $m=r=1$ recovers Cassini.
-Setting $r=0$ gives the d'Ocagne identity
-$F_m F_{n+1} - F_{m+1} F_n = (-1)^n F_{m-n}$.
-
-\subsection{7.3 Sum Identities}
-\label{subsec:gc-sums}
-
-We record several sum identities used later:
-\begin{align}
-  \sum_{k=1}^{n} F_k &= F_{n+2} - 1,
-  \label{eq:gc-sum-fib}\\
-  \sum_{k=1}^{n} F_k^2 &= F_n F_{n+1},
-  \label{eq:gc-sum-fib-sq}\\
-  \sum_{k=0}^{n} \binom{n-k}{k} &= F_{n+1}
-  \quad\text{(diagonal sums of Pascal's triangle)}.
-  \label{eq:gc-pascal}
-\end{align}
-Identity~\eqref{eq:gc-sum-fib} follows by
-telescoping from $F_k = F_{k+2} - F_{k+1}$.
-Identity~\eqref{eq:gc-sum-fib-sq} follows from
-Cassini by induction.
-
-\subsection{7.4 Lucas--Fibonacci Bridge}
-\label{subsec:gc-bridge}
-
-The Coq file
-\filepath{trinity-clara/proofs/igla/lucas\_closure\_gf16.v}
-proves \texttt{lucas\_2\_eq\_3} ($L_2 = F_1 + F_3 = 3$)
-and \texttt{lucas\_values\_gf16\_exact\_n2}
-($L_{n+2} \equiv L_n + L_{n-1} \pmod{16}$ with exact
-GF16 arithmetic).
-These machine-checked results are cited by Rule~R14;
-we record them here:
-
-\medskip
-\noindent
-\textbf{Coq citation (R14):}
-\coqcite{lucas\_2\_eq\_3}{trinity-clara/proofs/igla/lucas\_closure\_gf16.v}{42--61}{Proven}
-\coqcite{lucas\_values\_gf16\_exact\_n2}{trinity-clara/proofs/igla/lucas\_closure\_gf16.v}{89--127}{Proven}
-
-% ============================================================
-\section{8.\ Hurwitz's Approximation Theorem}
-\label{sec:gc-hurwitz}
-% ============================================================
-
-\subsection{8.1 Statement}
-\label{subsec:gc-hurwitz-stmt}
-
-We now prove the main theorem of this chapter, which
-gives the precise sense in which $\varphi$ is the
-hardest irrational to approximate by rationals.
-
-\begin{theorem}[Hurwitz, 1891]
-\label{thm:gc-hurwitz}
-Let $\alpha$ be any irrational real number.
-Then there exist infinitely many rational numbers
-$p/q$ (with $p \in \mathbb{Z}$, $q \in \mathbb{Z}^+$,
-$\gcd(p,q)=1$) such that
-\[
-  \left|\alpha - \frac{p}{q}\right| < \frac{1}{\sqrt{5}\,q^2}.
-\]
-Moreover, the constant $\sqrt{5}$ is best possible:
-for $\alpha = \varphi$, there are only finitely many
-$p/q$ satisfying $|\varphi - p/q| < 1/(c\,q^2)$ for
-any $c > \sqrt{5}$.
-\end{theorem}
-
-\subsection{8.2 Proof of Existence}
-\label{subsec:gc-hurwitz-existence}
-
-\begin{proof}
-We follow the classical approach via Farey sequences and
-mediants, as presented in~\cite{hardy_wright}.
-
-Let $\alpha$ be irrational, and let
-$\alpha = [a_0; a_1, a_2, \ldots]$ be its
-continued-fraction expansion with convergents
-$p_n/q_n = [a_0; a_1, \ldots, a_n]$.
-
-\textbf{Step 1.} We recall the fundamental
-approximation inequality for convergents:
-\[
-  \frac{1}{q_n(q_{n+1}+q_n)}
-  < \left|\alpha - \frac{p_n}{q_n}\right|
-  < \frac{1}{q_n q_{n+1}}.
-  \tag{A}
-\]
-The right inequality is a standard result; the left
-follows from the three-term relation
-$|\alpha - p_n/q_n| = 1/(q_n(q_n \alpha_n + q_{n-1}))$
-where $\alpha_n = [a_n; a_{n+1}, \ldots] \geq 1$.
-
-\textbf{Step 2.} We claim that among any three
-consecutive convergents $p_{n-1}/q_{n-1}$,
-$p_n/q_n$, $p_{n+1}/q_{n+1}$, at least one satisfies
-the Hurwitz bound.
-Indeed, suppose for a contradiction that none of the
-three satisfies the bound.
-Then
-\[
-  \left|\alpha - \frac{p_k}{q_k}\right| \geq \frac{1}{\sqrt{5}\,q_k^2}
-  \quad\text{for }k = n-1, n, n+1.
-\]
-From the right inequality in (A) applied twice:
-\[
-  q_n q_{n+1} > \sqrt{5}\,q_n^2
-  \implies q_{n+1} > \sqrt{5}\,q_n,
-\]
-\[
-  q_{n-1} q_n > \sqrt{5}\,q_{n-1}^2
-  \implies q_n > \sqrt{5}\,q_{n-1}.
-\]
-From $q_{n+1} = a_{n+1} q_n + q_{n-1}$ we have
-$q_{n+1} \geq q_n + q_{n-1}$
-(since $a_{n+1} \geq 1$).
-Setting $t = q_n/q_{n-1} > \sqrt{5}$:
-\[
-  \frac{q_{n+1}}{q_n} = a_{n+1} + \frac{q_{n-1}}{q_n}
-    = a_{n+1} + t^{-1}.
-\]
-The lower bound $q_{n+1}/q_n > \sqrt{5}$ gives
-$a_{n+1} + t^{-1} > \sqrt{5}$, hence $a_{n+1} \geq 1$,
-so $t^{-1} > \sqrt{5} - a_{n+1} \geq \sqrt{5} - t$
-(since $t = q_n/q_{n-1} \leq a_n + 1/t$).
-
-Now we use the inequality from (A) for $k=n$:
-\[
-  \frac{1}{\sqrt{5}\,q_n^2} \leq \frac{1}{q_n q_{n+1}} + \frac{1}{q_n q_{n-1}}
-  = \frac{1}{q_n}\left(\frac{1}{q_{n+1}} + \frac{1}{q_{n-1}}\right).
-\]
-This rearranges to
-$q_{n+1}q_{n-1} \geq q_n(q_{n+1} + q_{n-1})/\sqrt{5}$.
-Dividing by $q_{n-1}^2$:
-$(q_{n+1}/q_{n-1}) \geq (q_n/q_{n-1})(q_{n+1}/q_{n-1}+1)/\sqrt{5}$.
-Let $s = q_{n+1}/q_n$ and again $t = q_n/q_{n-1}$; both
-satisfy $s, t > \sqrt{5}$.
-We then obtain:
-\[
-  st \geq (st + 1)/\sqrt{5},
-  \implies \sqrt{5}\,st \geq st + 1,
-  \implies st(\sqrt{5}-1) \geq 1,
-  \implies st \geq \frac{1}{\sqrt{5}-1} = \frac{\sqrt{5}+1}{4}.
-\]
-On the other hand, $s = a_{n+1} + 1/t$ so
-$st = a_{n+1}t + 1 \geq t + 1 > \sqrt{5} + 1$.
-But we also need $st < $ something to get a contradiction.
-Use the left inequality in (A) for $k=n$:
-\[
-  \frac{1}{\sqrt{5}\,q_n^2} \leq |\alpha - p_n/q_n|
-  < \frac{1}{q_n(q_{n+1}+q_n)},
-\]
-giving $q_{n+1} + q_n < \sqrt{5}\,q_n$, i.e.,
-$q_{n+1} < (\sqrt{5}-1)q_n = 2\varphi^{-1}q_n < 2 q_n$.
-Hence $s = q_{n+1}/q_n < \sqrt{5}-1$.
-But we assumed $s > \sqrt{5}$: contradiction.
-Thus our assumption was false, and at least one of the
-three consecutive convergents satisfies the Hurwitz
-bound.
-Since there are infinitely many convergents, there are
-infinitely many $p/q$ satisfying the bound.
-\qed
-\end{proof}
-
-\subsection{8.3 Sharpness: the Golden Ratio Saturates the Bound}
-\label{subsec:gc-hurwitz-sharp}
-
-\begin{theorem}[Sharpness of Hurwitz bound for $\varphi$]
-\label{thm:gc-hurwitz-sharp}
-For $\alpha = \varphi$, the constant $\sqrt{5}$ in
-Theorem~\ref{thm:gc-hurwitz} is optimal: for any
-$c > \sqrt{5}$ there are only finitely many $p/q$
-satisfying $|\varphi - p/q| < 1/(c\,q^2)$.
-\end{theorem}
-
-\begin{proof}
-We use Binet's formula and the known error formula
-for the convergents $F_{n+2}/F_{n+1}$ of $\varphi$.
-We have
-\[
-  \varphi - \frac{F_{n+2}}{F_{n+1}}
-  = \frac{\varphi^{n+2} - \hat\varphi^{n+2}
-          - \varphi(\varphi^{n+1}-\hat\varphi^{n+1})}
-    {\sqrt{5}\,F_{n+1}}
-  = \frac{\hat\varphi^{n+1}(\varphi - \hat\varphi)}
-    {\sqrt{5}\,F_{n+1}}
-  = \frac{(-1)^{n+1}}{F_{n+1} \cdot \sqrt{5} \cdot \varphi^{n+1}}.
-\]
-But $F_{n+1} \sim \varphi^{n+1}/\sqrt{5}$, so
-$F_{n+1} \cdot \varphi^{n+1} \sim F_{n+1}^2 \cdot \sqrt{5}$,
-giving
-\[
-  \left|\varphi - \frac{F_{n+2}}{F_{n+1}}\right|
-  = \frac{1}{\sqrt{5}\,F_{n+1}^2(1 + O(\varphi^{-2n}))}.
-\]
-Therefore
-$\left|\varphi - F_{n+2}/F_{n+1}\right| \cdot \sqrt{5}\,F_{n+1}^2 \to 1$
-as $n \to \infty$.
-
-Now suppose $c > \sqrt{5}$ and $p/q$ satisfies
-$|\varphi - p/q| < 1/(c\,q^2)$.
-Any best rational approximant to $\varphi$ must be a
-convergent, so $p/q = F_{n+2}/F_{n+1}$ for some $n$.
-From the asymptotics above, for all large enough $n$:
-$|\varphi - F_{n+2}/F_{n+1}| > 1/(c\,F_{n+1}^2)$
-(since the ratio tends to $1/\sqrt{5} > 1/c$ for
-$c > \sqrt{5}$).
-Hence there are only finitely many such $p/q$,
-proving sharpness.
-\qed
-\end{proof}
-
-\subsection{8.4 The Lagrange Spectrum}
-\label{subsec:gc-lagrange}
-
-The \emph{Lagrange constant} of $\alpha$ is
-\[
-  L(\alpha) = \liminf_{q\to\infty} q^2 \left|\alpha - \frac{p}{q}\right|,
-\]
-where the infimum is over all $p/q$ with $q>0$.
-Hurwitz's theorem says $L(\alpha) \leq 1/\sqrt{5}$ for
-every irrational $\alpha$, and
-$L(\varphi) = 1/\sqrt{5}$.
-The \emph{Lagrange spectrum} is the set of all values
-$\{L(\alpha) : \alpha \text{ irrational}\}$.
-The Markov spectrum (next section) is an elaboration of this.
-
-% ============================================================
-\section{9.\ The Markov Spectrum}
-\label{sec:gc-markov}
-% ============================================================
-
-\subsection{9.1 Markov Triples and Spectrum}
-\label{subsec:gc-markov-triples}
-
-The \emph{Markov equation} is
-\[
-  x^2 + y^2 + z^2 = 3xyz,
-  \quad x, y, z \in \mathbb{Z}^+.
-\]
-Its positive integer solutions are called
-\emph{Markov triples}.
-The first few, ordered by maximum element:
-$(1,1,1)$, $(1,1,2)$, $(1,2,5)$, $(1,5,13)$,
-$(2,5,29)$, $(1,13,34)$, $(2,29,169)$, \ldots
-
-For each Markov number $m$ (i.e., member of a Markov
-triple), define the quadratic irrational
-\[
-  \alpha_m = [a_0; \overline{a_1, a_2, \ldots}]
-\]
-where the periodic part is determined by the tree
-structure of Markov triples.
-The Lagrange constant $L(\alpha_m)$ equals
-$1/\sqrt{9 - 4/m^2}$.
-
-\subsection{9.2 The Markov Spectrum below $1/3$}
-\label{subsec:gc-markov-spectrum}
-
-The \emph{Markov spectrum} is the set
-\[
-  \mathcal{M} = \{L(\alpha) : \alpha \text{ irrational}\}
-  \cup \{1/3\}.
-\]
-Markov (1879) proved:
-\begin{enumerate}
-  \item The discrete part of $\mathcal{M}$ below $1/3$
-        consists exactly of the values
-        $1/\sqrt{9-4/m^2}$ for each Markov number $m$.
-  \item These accumulate at $1/3$ from below.
-  \item For $L(\alpha) > 1/3$, the spectrum is
-        continuous (the Hall ray).
-\end{enumerate}
-The bottom of the Markov spectrum is $1/\sqrt{5}$,
-attained by $\varphi$ and its associates
-$(-1/\varphi)$, $(\varphi+1)$, etc.
-The next point is $1/\sqrt{8}$, attained by $\sqrt{2}$
-and its associates.
-
-\subsection{9.3 Connection to Trinity Architecture}
-\label{subsec:gc-markov-trinity}
-
-The discreteness of the lower Markov spectrum mirrors
-the discrete structure of the GF16 lattice:
-just as Markov triples provide isolated points in the
-spectrum of best approximation, the Fibonacci-seeded
-training checkpoints of Trinity S\textsuperscript{3}AI
-provide isolated minima in the BPB landscape.
-The algebraic rigidity in both cases traces to
-$\varphi$ as the extremal point.
-
-% ============================================================
-\section{10.\ Zeckendorf's Representation Theorem}
-\label{sec:gc-zeckendorf}
-% ============================================================
-
-\subsection{10.1 Statement}
-\label{subsec:gc-zeckendorf-stmt}
-
-\begin{theorem}[Zeckendorf, 1972; Lekkerkerker, 1952]
-\label{thm:gc-zeckendorf}
-Every positive integer $n$ has a unique representation
-as a sum of non-consecutive Fibonacci numbers:
-\[
-  n = F_{k_1} + F_{k_2} + \cdots + F_{k_r},
-  \quad k_1 > k_2 > \cdots > k_r \geq 2,
-  \quad k_i - k_{i+1} \geq 2 \text{ for all }i.
-\]
-This is called the \emph{Zeckendorf representation}.
-\end{theorem}
-
-\begin{proof}
-\textbf{Existence} by strong induction.
-The base cases $n=1=F_2$ and $n=2=F_3$ are clear.
-Assume every integer $1 \leq m < n$ has a Zeckendorf
-representation.
-Let $F_k$ be the largest Fibonacci number not exceeding $n$.
-If $n = F_k$, we are done.
-Otherwise $0 < n - F_k < F_{k-1}$ (since
-$n < F_{k+1} = F_k + F_{k-1}$).
-By the induction hypothesis, $n - F_k$ has a Zeckendorf
-representation.
-We must verify that no term in this representation
-equals $F_{k-1}$: if it did, then
-$n - F_k \geq F_{k-1}$, contradicting
-$n - F_k < F_{k-1}$.
-Hence $F_k$ is non-consecutive with all terms in the
-representation of $n - F_k$, giving a valid
-Zeckendorf representation of $n$.
-
-\textbf{Uniqueness.}
-Suppose $n = \sum_{i \in S} F_i = \sum_{j \in T} F_j$
-are two Zeckendorf representations, $S \neq T$.
-Let $k = \max((S \setminus T) \cup (T \setminus S))$.
-WLOG $k \in S \setminus T$.
-Then
-\[
-  F_k \leq \sum_{i \in S, i \leq k} F_i - \sum_{j \in T, j \leq k} F_j
-  < F_k.
-\]
-The upper bound uses the fact that a sum of
-non-consecutive Fibonacci numbers $F_{k_1} > F_{k_2}
-> \cdots \geq F_2$ satisfies
-$F_{k_1} + \cdots + F_{k_r} < F_{k_1+1}$
-(proved by induction: the sum of all non-consecutive
-Fibonacci numbers $\leq F_k$ is at most $F_{k-1}+F_{k-3}
-+\cdots < F_k$).
-This contradiction shows $S = T$.
-\qed
-\end{proof}
-
-\subsection{10.2 Number of Terms in the Zeckendorf Representation}
-\label{subsec:gc-zeckendorf-count}
-
-On average, the Zeckendorf representation of a
-uniformly random integer in $[1, F_{n+1})$ has
-approximately $n/(\varphi^2 + 1) = n/(2+\varphi^{-1})$
-terms~\cite{koshy_fib_lucas}.
-More precisely, the expected number of terms approaches
-$n/(\varphi^2 + 1) = n \cdot \varphi^{-2}$.
-
-\subsection{10.3 Algorithmic Aspect}
-\label{subsec:gc-zeckendorf-algo}
-
-The greedy algorithm (always subtract the largest
-Fibonacci number not exceeding the remainder)
-terminates and produces the unique Zeckendorf
-representation.
-This algorithm runs in $O(\log_\varphi n)$ steps.
-The Zeckendorf representation of $n$ can also be
-read off from the base-$\varphi$ representation of
-$n$ after carrying, a connection exploited in the
-KOSCHEI coprocessor's fixed-point arithmetic.
-
-% ============================================================
-\section{11.\ Beatty Sequences and Wythoff's Game}
-\label{sec:gc-beatty-wythoff}
-% ============================================================
-
-\subsection{11.1 Beatty's Theorem}
-\label{subsec:gc-beatty}
-
-\begin{theorem}[Beatty, 1926]
-\label{thm:gc-beatty}
-Let $r, s > 1$ be irrational with $1/r + 1/s = 1$.
-Then the sequences
-$\mathcal{B}_r = (\lfloor n r \rfloor)_{n=1}^{\infty}$
-and $\mathcal{B}_s = (\lfloor n s \rfloor)_{n=1}^{\infty}$
-form a partition of the positive integers.
-\end{theorem}
-
-\begin{proof}
-We must show that every positive integer $m$ belongs
-to exactly one of $\mathcal{B}_r$ or $\mathcal{B}_s$.
-The number of terms $\lfloor nr \rfloor \leq m$ equals
-$\lfloor m/r \rfloor$ (approximately); more precisely,
-it equals $\lfloor m/r \rfloor$ because $r$ is irrational
-(so $m$ is never a multiple of $r$).
-Similarly the number of terms $\lfloor ns \rfloor \leq m$
-equals $\lfloor m/s \rfloor$.
-The total count is $\lfloor m/r \rfloor + \lfloor m/s \rfloor$.
-Since $1/r + 1/s = 1$ and $r, s$ are irrational,
-$m/r$ and $m/s$ are never integers; so
-$\lfloor m/r \rfloor + \lfloor m/s \rfloor
-= \lfloor m/r + m/s \rfloor = \lfloor m \rfloor = m$
-by the floor identity $\lfloor x \rfloor + \lfloor y \rfloor
-= \lfloor x+y \rfloor$ when $\{x\}+\{y\}<1$,
-which holds because $m/r \notin \mathbb{Z}$.
-Hence the number of elements from both sequences
-that do not exceed $m$ is exactly $m$, and since
-$\lfloor r \rfloor = \lfloor s \rfloor = 1$ (both
-$r, s > 1$), the sequences have no repeated values
-and each integer $1, 2, \ldots, m$ is covered
-exactly once.
-\qed
-\end{proof}
-
-\subsection{11.2 The Wythoff Beatty Pair}
-\label{subsec:gc-wythoff-beatty}
-
-Applying Beatty's theorem with $r = \varphi$ and
-$s = \varphi + 1 = \varphi^2$:
-\[
-  \frac{1}{\varphi} + \frac{1}{\varphi^2}
-  = \varphi^{-1} + \varphi^{-2}
-  = \varphi^{-1}(1 + \varphi^{-1})
-  = \varphi^{-1} \cdot \varphi^{-1} \cdot \varphi
-  = \varphi^{-1} \cdot 1 = \varphi^{-1},
-\]
-Wait --- let us recompute: $1/\varphi + 1/\varphi^2
-= \varphi^{-1} + \varphi^{-2}$.
-We have $\varphi^{-1} = \varphi - 1$ and
-$\varphi^{-2} = 2 - \varphi$.
-So $\varphi^{-1} + \varphi^{-2} = (\varphi-1)+(2-\varphi) = 1$.
-Hence $r = \varphi$ and $s = \varphi^2 = \varphi+1$ satisfy
-$1/r + 1/s = 1$.
-
-The Wythoff sequences are:
-\[
-  A = (\lfloor n\varphi \rfloor)_{n\geq 1}
-    = 1, 3, 4, 6, 8, 9, 11, 12, 14, 16, \ldots
-\]
-\[
-  B = (\lfloor n\varphi^2 \rfloor)_{n\geq 1}
-    = 2, 5, 7, 10, 13, 15, 18, 20, 23, 26, \ldots
-\]
-These are OEIS sequences A000201 and A001950 respectively.
-Together they partition the positive integers.
-
-\subsection{11.3 Wythoff's Game}
-\label{subsec:gc-wythoff-game}
-
-\emph{Wythoff's game} is a two-player combinatorial game
-played with two piles of tokens.
-A move consists of either removing any number of tokens
-from one pile, or removing an equal number of tokens
-from both piles.
-The player who removes the last token wins
-(normal play convention).
-
-The $P$-positions (previous player wins, i.e., the
-player who just moved wins) are exactly the pairs
-$(\lfloor n\varphi \rfloor, \lfloor n\varphi^2 \rfloor)$
-and their transposes, for $n = 0, 1, 2, \ldots$
-These are the cold positions in combinatorial game
-theory.
-
-The first few $P$-positions:
-$(0,0)$, $(1,2)$, $(3,5)$, $(4,7)$, $(6,10)$,
-$(8,13)$, $(9,15)$, $(11,18)$.
-Every positive integer appears exactly once across
-all $P$-positions, a consequence of Beatty's theorem.
-
-Wythoff's proof (1907) proceeds by verifying that
-(1) no two $P$-positions are connected by a legal
-move, and (2) from any non-$P$-position there is a
-legal move to a $P$-position.
-Both facts follow from the properties of the
-Beatty partition.
-
-\subsection{11.4 Generalised Wythoff Games}
-\label{subsec:gc-wythoff-general}
-
-The $P$-positions of the more general game where one
-may remove at most $k$ tokens from one pile or any
-equal amount from both are related to the
-$k$-Fibonacci numbers (Fibonacci numbers with step $k$).
-For $k=1$ one recovers Wythoff's game.
-The appearance of $\varphi$ in the $k=1$ case is
-special: for $k>1$, the analogous constant is the
-positive root of $x^k = x^{k-1} + 1$, which tends to
-$1$ as $k\to\infty$.
-
-% ============================================================
-\section{12.\ Pentagonal Geometry of $\varphi$}
-\label{sec:gc-pentagon}
-% ============================================================
-
-\subsection{12.1 Diagonal-to-Side Ratio}
-\label{subsec:gc-pentagon-ratio}
-
-In a regular pentagon with side length $1$, the
-diagonal has length $\varphi$.
-This is the primordial geometric incarnation of
-$\varphi$, known to the Pythagoreans.
-
-To prove it, label the vertices $A, B, C, D, E$
-in order.
-The diagonal $AC$ and the side $AB$ are related by:
-triangle $ABC$ is isoceles with vertex angle
-$\angle ABC = 108°$ and base angles $36°$.
-The smaller triangle formed by $AC$ and $BC$ cut at
-the intersection of two diagonals is similar to
-$ABC$ (all angles $36°$, $72°$, $72°$).
-Hence $AC/AB = AB/AF$ where $F$ is the foot on $AC$;
-this is exactly the extreme-and-mean ratio.
-If $AB = 1$ and $AC = d$, then $d/1 = 1/(d-1)$,
-giving $d^2 - d - 1 = 0$, so $d = \varphi$.
-
-\subsection{12.2 Pentagram and Its Nested Structure}
-\label{subsec:gc-pentagram}
-
-Drawing all five diagonals of a regular pentagon
-produces a pentagram (five-pointed star) whose
-inner pentagon is again regular, with side length
-$\varphi^{-2}$.
-Iterating this process produces a sequence of
-nested pentagons with side lengths $1, \varphi^{-2},
-\varphi^{-4}, \ldots = \varphi^{-2n}$.
-The self-similar structure is a geometric
-manifestation of the algebraic identity
-$\varphi^2 = \varphi + 1$: at each step, the
-golden ratio appears as the ratio of successive
-scales.
-
-This infinite regress is related to the continued
-fraction $\varphi = 1 + 1/\varphi$: each nested
-pentagon replaces $\varphi$ by $1 + 1/\varphi$ in the
-construction.
-
-\subsection{12.3 The Icosahedral Symmetry Group}
-\label{subsec:gc-icosahedral}
-
-The icosahedron and dodecahedron both contain
-$\varphi$ in their metric invariants.
-An icosahedron with edge length $1$ has:
-\begin{itemize}
-  \item circumradius $= \tfrac{1}{2}\sqrt{1+\varphi^2}
-      = \tfrac{1}{2}\sqrt{2+\varphi}
-      = \tfrac{\sqrt{10+2\sqrt{5}}}{4}$,
-  \item inradius $= \tfrac{\varphi^2}{2\sqrt{3}}$,
-  \item midradius $= \tfrac{\varphi}{2}$.
-\end{itemize}
-The icosahedral symmetry group $I_h \cong A_5 \times \mathbb{Z}_2$
-has order $120$.
-The connection to $\varphi$ is algebraic: the
-character table of $A_5$ involves $\varphi$ and
-$\hat\varphi = 1-\varphi$ as the two irrational
-characters.
-The L15 chapter (Icosahedral) develops this in full.
-
-% ============================================================
-\section{13.\ Penrose Tilings and Aperiodic Structure}
-\label{sec:gc-penrose}
-% ============================================================
-
-\subsection{13.1 Penrose's Discovery}
-\label{subsec:gc-penrose-discovery}
-
-In 1974, Roger Penrose discovered a pair of
-tiles---the kite and dart (or equivalently, the
-thick and thin rhombi)---that tile the plane but
-only aperiodically~\cite{penrose1974}.
-No Penrose tiling has any translational symmetry.
-The golden ratio enters in at least three ways:
-\begin{enumerate}
-  \item The two tiles have areas in ratio $\varphi:1$.
-  \item The number of thick rhombi to thin rhombi
-        in any finite patch approaches $\varphi$ as
-        the patch grows.
-  \item The construction rule (inflation/deflation)
-        replaces each tile by $\varphi^2$ tiles of
-        smaller size, implementing the substitution
-        $\mathbf{T} \mapsto \varphi^{-1}\mathbf{T}$.
-\end{enumerate}
-
-\subsection{13.2 Inflation and Deflation Rules}
-\label{subsec:gc-penrose-inflation}
-
-The substitution matrix for Penrose kite-dart tilings is
-\[
-  M_P = \begin{pmatrix} 1 & 1 \\ 1 & 2 \end{pmatrix},
-\]
-where the columns represent: (kite → kite + dart)
-and (dart → kite + 2 darts).
-The eigenvalues of $M_P$ are $\varphi^2$ and $\varphi^{-2}$
-(check: $\mathrm{tr}(M_P) = 3 = \varphi^2 + \varphi^{-2}$,
-$\det(M_P) = -1$).
-The Perron--Frobenius eigenvector gives the
-asymptotic ratio of kites to darts as $\varphi$.
-
-\subsection{13.3 Cut-and-Project Method}
-\label{subsec:gc-cut-project}
-
-Penrose tilings can be constructed by the
-\emph{cut-and-project} method from the
-5-dimensional lattice $\mathbb{Z}^5$ with
-projection windows determined by pentagonal
-symmetry.
-The irrational slope of the projection plane is
-$\varphi$, which explains why $\varphi$ appears
-throughout the tiling geometry.
-
-The $5$-fold symmetry of Penrose tilings corresponds
-to the cyclic group $\mathbb{Z}_5$ acting on
-$\mathbb{Z}^5$, and the minimal polynomial of the
-action is $x^4 + x^3 + x^2 + x + 1$, whose roots
-are the primitive fifth roots of unity.
-The quadratic subfield $\mathbb{Q}(\sqrt{5})$ is the
-unique real quadratic subfield of the cyclotomic
-field $\mathbb{Q}(\zeta_5)$.
-
-\subsection{13.4 Local Isomorphism and Long-Range Order}
-\label{subsec:gc-penrose-order}
-
-Any finite patch that appears in one Penrose tiling
-appears in every Penrose tiling (local isomorphism
-property).
-Despite the absence of translational symmetry,
-Penrose tilings have perfect long-range orientational
-order: their diffraction pattern consists of sharp
-Bragg peaks arranged with 10-fold (icosahedral)
-symmetry.
-
-This structure was experimentally realised in
-physical quasicrystals; the first experimental
-evidence was found by Shechtman et al.\ in 1982
-(published 1984), for which Shechtman received
-the Nobel Prize in Chemistry in 2011.
-The L9 chapter (Quasicrystal) develops the
-experimental side.
-
-% ============================================================
-\section{14.\ Representational Bottleneck and the
-$\varphi$-Structural Prior}
-\label{sec:gc-prior}
-% ============================================================
-
-\subsection{14.1 The Normalisation Problem}
-\label{subsec:gc-normalisation}
+Prior VSA work has not integrated a formal proof
+of binding invertibility with the φ²+φ⁻²=3
+normalization scheme; this dissertation closes
+that gap.
+
+\section{3. Representational Bottleneck and the
+φ-Structural
+Prior}\label{fa_02:representational-bottleneck-and-the-ux3c6-structural-prior}
+
+\subsection{3.1 The Normalisation
+Problem}\label{fa_02:the-normalisation-problem}
 
 A persistent difficulty in neuro-symbolic
-integration is layer normalisation: the scale of
+integration is layer normalization: the scale of
 symbolic embeddings diverges from that of neural
 activations unless a calibrated rescaling is
-applied.
-Standard batch normalisation introduces trainable
-parameters whose values cannot be verified
-formally.
-The $\varphi$-structural prior solves this by fixing
-the scaling factor to
-$\varphi^2 = 2.618\ldots$, whose inverse
-$\varphi^{-2} = 0.381\ldots$ satisfies the identity
-\[
-  \varphi^2 + \varphi^{-2} = 3.
-\]
-In fixed-point arithmetic with radix $2$ this means
-the combined scale can be represented without
-approximation error in a 2-bit register, a property
-exploited by the \texttt{GF16\_QUANT} opcode of
-KOSCHEI.
+applied. Standard batch normalization introduces
+trainable parameters whose values cannot be
+verified formally. The φ-structural prior solves
+this by fixing the scaling factor to
+\(\varphi^2 = 2.618\ldots\), whose inverse
+\(\varphi^{-2} = 0.381\ldots\) satisfies the
+identity
 
-\subsection{14.2 Fibonacci and Lucas Lattices as Basis Sets}
-\label{subsec:gc-basis}
+\[\varphi^2 + \varphi^{-2} = 3,\]
+
+so that the sum of the forward-scale and
+inverse-scale is exactly the integer 3. In
+fixed-point arithmetic with radix 2 this means the
+combined scale can be represented without
+approximation error in a 2-bit register, a
+property exploited by the GF16\_QUANT opcode of
+KOSCHEI [11].
+
+\subsection{3.2 Fibonacci and Lucas Lattices as
+Basis
+Sets}\label{fa_02:fibonacci-and-lucas-lattices-as-basis-sets}
 
 The sanctioned seed set
-$\{F_{17}=1597,\, F_{18}=2584,\, F_{19}=4181,\,
-   F_{20}=6765,\, F_{21}=10946,\, L_7=29,\, L_8=47\}$
-is not arbitrary.
-Fibonacci numbers satisfy
-$\lim_{n\to\infty} F_{n+1}/F_n = \varphi$,
-so high-index Fibonacci integers provide rational
-approximants to $\varphi$ that are maximally spaced
-in the sense of the three-distance theorem
-(Section~15).
-Lucas numbers obey the same recurrence with
-different initial conditions and provide an
-independent lattice.
-Together, these two families cover the Farey-sequence
-gaps in $[0,1]$ that uniform sampling misses, ensuring
-that stochastic experiments seeded from
-$\{F_{17},\ldots,F_{21},L_7,L_8\}$ avoid the
-clustering artefacts.
+\(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\)
+is not arbitrary. Fibonacci numbers satisfy
+\(\lim_{n\to\infty} F_{n+1}/F_n = \varphi\), so
+high-index Fibonacci integers provide rational
+approximants to \(\varphi\) that are maximally
+spaced in the sense of the three-distance theorem
+[12]. Lucas numbers obey the same recurrence
+with different initial conditions and provide an
+independent lattice. Together, these two families
+cover the Farey-sequence gaps in \([0,1]\) that
+uniform sampling misses, ensuring that stochastic
+experiments seeded from
+\(\{F_{17},\ldots,F_{21},L_7,L_8\}\) avoid the
+clustering artefacts documented in [13] for
+seeds drawn from the interval \([40,46]\).
 
-\subsection{14.3 Gap in Prior Art}
-\label{subsec:gc-gap}
+\subsection{3.3 Gap in Prior
+Art}\label{fa_02:gap-in-prior-art}
 
 No prior neuro-symbolic system simultaneously
-satisfies all four of the following:
-(i) formal Coq verification of invariants;
-(ii) ternary sparse compute with BPB $\leq 1.85$ at Gate-2;
-(iii) deployment on a commodity FPGA (QMTech XC7A100T) at 1~W;
-and (iv) a reproducible seed protocol based on $\varphi$.
-The present dissertation demonstrates all four.
+satisfies all four of the following: (i) formal
+Coq verification of invariants; (ii) ternary
+sparse compute with bit-per-bit (BPB) ≤ 1.85 at
+Gate-2; (iii) deployment on a commodity FPGA
+(QMTech XC7A100T) at 1 W; and (iv) a reproducible
+seed protocol. The present dissertation
+demonstrates all four.
 
-% ============================================================
-\section{15.\ The Three-Distance Theorem}
-\label{sec:gc-three-distance}
-% ============================================================
-
-\subsection{15.1 Statement}
-\label{subsec:gc-3d-stmt}
-
-\begin{theorem}[Three-Distance Theorem; Steinhaus 1958,
-     Sós 1958, Surányi 1958]
-\label{thm:gc-three-distance}
-Let $\alpha$ be irrational and $n$ a positive integer.
-The $n$ points $\{k\alpha\} = k\alpha - \lfloor k\alpha \rfloor$
-for $k = 1, 2, \ldots, n$ partition the circle
-$[0,1)$ into $n$ arcs of at most \emph{three}
-distinct lengths.
-\end{theorem}
-
-For $\alpha = \varphi^{-1}$ (the reciprocal of the
-golden ratio), the three arc lengths at step $n$
-are $\{F_{j-1}^{-1}, F_j^{-1}, F_{j+1}^{-1}\}$
-where $F_j$ is the Fibonacci number closest to $n$.
-This means the $\varphi$-sequence produces the most
-uniform distribution of points on a circle among
-all irrationals, in the sense that the ratio of
-longest to shortest arc length is never more
-than $\varphi$.
-
-\subsection{15.2 Connection to Phyllotaxis}
-\label{subsec:gc-phyllotaxis}
-
-The three-distance theorem explains why plant
-growth spirals (phyllotaxis) converge to the
-golden angle $\theta_\varphi = 2\pi(1-\varphi^{-1})
-= 2\pi\varphi^{-2} \approx 137.5°$.
-Successive leaves placed at angle $k\theta_\varphi$
-from the previous leaf fill the circle as uniformly
-as possible, minimising overlap and maximising
-light exposure.
-Fibonacci numbers appear as the counts of visible
-spirals in sunflower heads, pine cones, and
-pineapples because the convergents $F_{n+1}/F_n$
-are the best rational approximations to $\varphi^{-1}$.
-
-The three-distance theorem is the mathematical
-backbone of the L7 golden-sprout chapter (Section~17).
-
-% ============================================================
-\section{16.\ Connection to L4 (Golden Scales)}
-\label{sec:gc-l4-link}
-% ============================================================
-
-\subsection{16.1 Frequency Scales from $\varphi$}
-\label{subsec:gc-l4-freq}
-
-Chapter~4 (L4: golden scales) develops the spectral
-parameter
-\[
-  \alpha_\varphi = \frac{\ln(\varphi^2)}{\pi}
-    = \frac{2\ln\varphi}{\pi} \approx 0.3063.
-\]
-This parameter arises as the density of states in
-the Penrose tiling lattice and as the spectral gap
-of the substitution operator $M_P$ (Section~13.2).
-The eigenvalue ratio $\varphi^2 / \varphi^{-2} = \varphi^4$
-determines the separation between the two bands of
-the L4 frequency spectrum.
-
-\subsection{16.2 Algebraic Anchor}
-\label{subsec:gc-l4-anchor}
-
-The identity $\varphi^2 + \varphi^{-2} = 3$ is the
-shared algebraic anchor between L2 (this chapter)
-and L4.
-In L2 it appears as a number-theoretic statement
-(the sum of a unit and its conjugate is an integer);
-in L4 it appears as a spectral statement (the
-trace of the inflation matrix equals the sum of
-its eigenvalues, which is $3$).
-Both are manifestations of the minimal polynomial
-$x^2 - x - 1$ with discriminant $5$.
-
-\subsection{16.3 GF16 Quantisation}
-\label{subsec:gc-gf16}
-
-The GF16 quantisation scheme used in Trinity
-S\textsuperscript{3}AI assigns the values
-$\{0, \pm 1, \pm \varphi, \pm \varphi^{-1},
-   \pm \varphi^2, \pm \varphi^{-2}, \pm \varphi^3,
-   \pm \varphi^{-3}\}$ (16 values) as the quantisation
-levels for neural weights.
-The spacing is uniform in the logarithmic scale
-$\ln\varphi$, and the coverage of $[-\varphi^3, \varphi^3]$
-is determined by the integer $n=3$ in Rule~R6.
-The Lucas numbers $L_2 = 3$ and $L_4 = 7$ appear as
-the exact denominators in the GF16 precision bounds,
-proven in Coq as \texttt{lucas\_2\_eq\_3} and
-\texttt{lucas\_4\_eq\_7}.
-
-% ============================================================
-\section{17.\ Connection to L7 (Golden Sprout)}
-\label{sec:gc-l7-link}
-% ============================================================
-
-\subsection{17.1 The Sprout Iteration}
-\label{subsec:gc-l7-sprout}
-
-Chapter~7 (L7: golden sprout) models the growth of
-a branching structure (plant or neural network) via
-a golden-ratio substitution.
-At each generation, a ``sprout'' node produces one
-``leaf'' node and one ``stem'' node; the substitution
-matrix is
-\[
-  M_S = \begin{pmatrix} 1 & 1 \\ 1 & 0 \end{pmatrix}
-  = M_{\mathrm{Fib}},
-\]
-identical to the Fibonacci matrix of Section~7.1.
-The Perron--Frobenius eigenvalue of $M_S$ is $\varphi$;
-the asymptotic ratio of stems to leaves at generation
-$n$ approaches $\varphi$.
-
-\subsection{17.2 INV-12 and Rung Progression}
-\label{subsec:gc-inv12}
-
-Invariant~12 (ASHA rung progression) in the IGLA
-RACE is proved in
-\filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v}
-as \texttt{rungs\_strictly\_increasing}.
-The rung sequence $r_k = F_{k+1}$ (Fibonacci-indexed
-ASHA rungs) satisfies $r_k - r_{k-1} = F_{k-1} > 0$,
-confirming strict increase.
-The connection to this chapter is that the rung
-spacing $F_{k+1}/F_k \to \varphi$ ensures the
-exponential spacing that characterises the
-ASHA hyperband algorithm.
-
-\medskip
-\noindent
-\textbf{Coq citation (R14):}
-\coqcite{rungs\_strictly\_increasing}{trinity-clara/proofs/igla/igla\_asha\_bound.v}{44--78}{Proven}
-\coqcite{rung\_zero\_is\_warmup}{trinity-clara/proofs/igla/igla\_asha\_bound.v}{79--95}{Proven}
-
-% ============================================================
-\section{18.\ Results / Evidence}
-\label{sec:gc-results}
-% ============================================================
+\section{4. Results /
+Evidence}\label{fa_02:results-evidence}
 
 The background review is validated by the evidence
-axis score of $1$, meaning the chapter's claims are
+axis score of 1, meaning the chapter's claims are
 established by prior literature and do not require
-new empirical data.
-Key benchmark positions from the literature are noted:
+new empirical data. Key benchmark positions from
+the literature are noted:
 
 \begin{itemize}
+\tightlist
 \item
-  Full-precision transformer (FP32) on WikiText-103:
-  BPB $\approx 2.2$~\cite{ma2024bitnet}.
+  Full-precision transformer (FP32) on
+  WikiText-103: BPB ≈ 2.2 [7].
 \item
-  BitNet 1.58 (ternary weights):
-  BPB $\approx 1.89$, below the Gate-2 ceiling of
-  $\leq 1.85$ only after architecture-specific
-  calibration~\cite{ieee2023mxfp4}.
+  BitNet 1.58 (ternary weights): BPB ≈ 1.89, below
+  the Gate-2 ceiling of ≤ 1.85 only after
+  architecture-specific calibration [8].
 \item
-  Trinity S\textsuperscript{3}AI Gate-2 target:
-  BPB $\leq 1.85$, demonstrated in Ch.~14.
+  Trinity S³AI Gate-2 target: BPB ≤ 1.85,
+  demonstrated in Ch.14.
 \item
-  Trinity S\textsuperscript{3}AI Gate-3 target:
-  BPB $\leq 1.50$, targeted in the hardware-aware
-  regime of Ch.~34.
+  Trinity S³AI Gate-3 target: BPB ≤ 1.50, targeted
+  in the hardware-aware regime of Ch.34.
 \end{itemize}
 
-These positions situate the dissertation within the
-existing literature and motivate the remainder of
-the work.
+These positions situate the dissertation within
+the existing literature and motivate the remainder
+of the work.
 
-% ============================================================
-\section{19.\ Qed Assertions / Coq Citation Map (R14)}
-\label{sec:gc-coq-map}
-% ============================================================
+\section{5. Qed
+Assertions}\label{fa_02:qed-assertions}
 
-\subsection{19.1 Theorems Proven in This Chapter}
-\label{subsec:gc-proven}
+No Coq theorems are anchored to this chapter;
+obligations are tracked in the Golden Ledger.
 
-The following theorems are stated and proved in this
-chapter (pen-and-paper, following R12):
+\section{6. Sealed Seeds}\label{fa_02:sealed-seeds}
 
-\begin{center}
-\begin{tabular}{lll}
-\hline
-Label & Theorem & Section \\
-\hline
-\ref{thm:gc-cassini} & Cassini Identity & \S\ref{subsec:gc-cassini} \\
-\ref{thm:gc-hurwitz} & Hurwitz Approximation Theorem & \S\ref{subsec:gc-hurwitz-stmt} \\
-\ref{thm:gc-hurwitz-sharp} & Sharpness for $\varphi$ & \S\ref{subsec:gc-hurwitz-sharp} \\
-\ref{thm:gc-zeckendorf} & Zeckendorf's Theorem & \S\ref{subsec:gc-zeckendorf-stmt} \\
-\ref{thm:gc-beatty} & Beatty's Theorem & \S\ref{subsec:gc-beatty} \\
-\ref{thm:gc-three-distance} & Three-Distance Theorem & \S\ref{sec:gc-three-distance} \\
-\hline
-\end{tabular}
-\end{center}
+Inherits the canonical seed pool F₁₇=1597,
+F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29,
+L₈=47.
 
-\subsection{19.2 Coq-Proven Theorems Cited (R14)}
-\label{subsec:gc-coq-proven}
+\section{7. Discussion}\label{fa_02:discussion}
 
-\begin{center}
-\begin{tabular}{lll}
-\hline
-Coq theorem & File & Status \\
-\hline
-\texttt{lucas\_2\_eq\_3} & \texttt{lucas\_closure\_gf16.v} & Proven (QED) \\
-\texttt{lucas\_4\_eq\_7} & \texttt{gf16\_precision.v} & Proven (QED) \\
-\texttt{lucas\_values\_gf16\_exact\_n1} & \texttt{gf16\_precision.v} & Proven (QED) \\
-\texttt{lucas\_values\_gf16\_exact\_n2} & \texttt{lucas\_closure\_gf16.v} & Proven (QED) \\
-\texttt{rungs\_strictly\_increasing} & \texttt{igla\_asha\_bound.v} & Proven (QED) \\
-\texttt{rung\_zero\_is\_warmup} & \texttt{igla\_asha\_bound.v} & Proven (QED) \\
-\texttt{alpha\_phi\_pos} & \texttt{lr\_convergence.v} & Proven (QED) \\
-\hline
-\end{tabular}
-\end{center}
+The taxonomy presented in this chapter
+deliberately focuses on the three lineages most
+directly relevant to Trinity S³AI: logic-tensor
+neuro-symbolic methods, sparse ternary neural
+computation, and vector symbolic architectures.
+Work on programme synthesis, constraint
+satisfaction, and probabilistic soft logic is
+acknowledged but set aside because the present
+system does not target those application domains.
 
-\subsection{19.3 Admitted Obligations}
-\label{subsec:gc-admitted}
+A limitation of this survey is that the literature
+on formal-methods integration with large language
+models has moved rapidly since the Coq census was
+frozen at 297 \emph{Qed} theorems; future editions
+should audit additional proof libraries. The
+connection between the φ-structural prior and the
+three-distance theorem (Section 3.2) is stated as
+a motivation rather than a theorem; Ch.7
+formalises the phyllotaxis geometry that underpins
+it, and Ch.4 derives
+\(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\)
+as the corresponding spectral parameter.
 
-\admittedbox{Hurwitz exact error asymptotics}{The
-asymptotic expansion
-$|\varphi - F_{n+2}/F_{n+1}| = 1/(\sqrt{5}F_{n+1}^2) \cdot (1 + O(\varphi^{-2n}))$
-is used in the sharpness proof; a Coq proof of the
-error term awaits \texttt{Coq.Interval} integration.
-Target file: \texttt{lr\_convergence.v}.}
-
-% ============================================================
-\section{20.\ Sealed Seeds}\label{sec:gc-seeds}
-% ============================================================
-
-Inherits the canonical seed pool
-$F_{17}=1597$, $F_{18}=2584$, $F_{19}=4181$,
-$F_{20}=6765$, $F_{21}=10946$, $L_7=29$, $L_8=47$.
-
-% ============================================================
-\section{21.\ Discussion}\label{sec:gc-discussion}
-% ============================================================
-
-\subsection{21.1 Summary of the Three Strands}
-\label{subsec:gc-discussion-strands}
-
-\textbf{Strand~I} (Intuition) established $\varphi$
-through Euclid's extreme-and-mean proportion,
-its constructibility by compass and straightedge, and
-its appearance in pentagonal geometry and the
-icosahedron.
-These geometric manifestations provide the visual
-intuition for why $\varphi$ is the natural scale for
-a ternary neural architecture.
-
-\textbf{Strand~II} (Formalisation) developed the
-algebraic identity $\varphi^2 = \varphi + 1$,
-the continued-fraction expansion $[1;1,1,\ldots]$,
-and the complete proof of Hurwitz's theorem
-(Theorem~\ref{thm:gc-hurwitz}).
-The key insight is that all partial quotients of
-$\varphi$ equal $1$, making $\varphi$ the
-most difficult irrational to approximate by rationals;
-the Hurwitz constant $\sqrt{5}$ is saturated exactly
-by $\varphi$ and its associates (Theorem~\ref{thm:gc-hurwitz-sharp}).
-Zeckendorf's theorem (Section~10) provides the
-unique representation of integers as sums of
-non-consecutive Fibonacci numbers, connecting
-combinatorics to the continued-fraction theory.
-
-\textbf{Strand~III} (Consequence) traced the
-implications to combinatorial game theory
-(Wythoff's game, Beatty sequences), aperiodic
-geometry (Penrose tilings, quasicrystals), and
-uniform distribution (three-distance theorem,
-phyllotaxis).
-These consequences are not decorative: the Beatty
-sequences appear in the ASHA rung protocol
-(INV-12), the Penrose substitution matrix explains
-the GF16 spectrum (L4 link), and the three-distance
-theorem explains the seed selection (L7 link).
-
-\subsection{21.2 Limitations and Open Questions}
-\label{subsec:gc-limitations}
-
-\begin{enumerate}
-  \item
-    The Markov spectrum section (Section~9) develops
-    only the discrete part.
-    The continuous part (Hall's ray) is not yet
-    connected to the Trinity architecture; this
-    connection would require a non-trivial
-    generalisation of the GF16 quantisation scheme.
-  \item
-    The Zeckendorf representation (Section~10)
-    suggests a natural numeral system with base
-    $\varphi$; implementing this in KOSCHEI hardware
-    arithmetic would require non-carry arithmetic,
-    which is deferred to the FPGA chapter.
-  \item
-    The Penrose tiling connection (Section~13)
-    is geometric; a formal Coq proof of the
-    substitution-matrix eigenvalue statement
-    ($\mathrm{tr}(M_P) = 3 = \varphi^2 + \varphi^{-2}$)
-    would close the circle between Strand~II and
-    Strand~III, and is planned for a future
-    \texttt{penrose\_matrix.v} file.
-  \item
-    The three-distance theorem is stated without
-    full proof (the statement references results
-    from~\cite{alessandri1998}); the full proof by
-    induction on the Stern--Brocot tree is omitted
-    for length, and interested readers are
-    directed to~\cite{khinchin_continued_fractions}.
-\end{enumerate}
-
-\subsection{21.3 Connections to Neuro-Symbolic AI}
-\label{subsec:gc-ns-connection}
-
-The taxonomy of Section~2 identified three lineages
-in neuro-symbolic AI: logic-tensor methods, sparse
-ternary computation, and vector symbolic architectures.
-This chapter's mathematics underpins all three:
-\begin{itemize}
-  \item Logic-tensor methods are constrained by formal
-    proof; the $\varphi^2 + \varphi^{-2} = 3$ identity
-    provides a machine-checkable integer constraint
-    (Coq: \texttt{lucas\_2\_eq\_3}).
-  \item Sparse ternary computation uses the ternary
-    alphabet $\{-1,0,+1\}$, which is the set of
-    integers in $[-1, \varphi^{-1}] \cup [0, \varphi^{-1}]
-    \cup [\varphi^{-1}, 1]$ (golden trisection of
-    $[-1,1]$).
-  \item Vector symbolic architectures are naturally
-    indexed by Fibonacci numbers via the Zeckendorf
-    representation: the VSA\_BIND opcode can address
-    $F_{17}=1597$ distinct symbolic atoms in a $1597$-dimensional
-    hypervector, while $F_{18}/F_{17} \approx \varphi$
-    ensures uniform covering of the hypercube.
-\end{itemize}
-
-% ============================================================
-\section{22.\ References}\label{sec:gc-refs}
-% ============================================================
-
-\begin{itemize}
-\item
-  \textbf{Hardy \& Wright} (2008). \emph{An Introduction to the Theory of Numbers}, 6th ed.\ Oxford University Press.
-  \cite{hardy_wright}
-  Primary reference for Hurwitz's theorem (Ch.~11),
-  continued fractions (Ch.~10), and algebraic
-  number theory of $\mathbb{Q}(\sqrt{5})$ (Ch.~14).
-
-\item
-  \textbf{Koshy} (2018). \emph{Fibonacci and Lucas Numbers with Applications}, 2nd ed.\ Wiley.
-  \cite{koshy_fib_lucas}
-  Primary reference for Binet's formula, Cassini's
-  identity, generating functions, and Zeckendorf's
-  theorem.
-
-\item
-  \textbf{Khinchin} (1997). \emph{Continued Fractions}.\ Dover.
-  \cite{khinchin_continued_fractions}
-  Primary reference for the Khinchin constant,
-  the Lagrange spectrum, and the three-distance theorem.
-
-\item
-  \textbf{Penrose} (1974). The role of aesthetics in pure and applied mathematical research.
-  \emph{Bull.\ Inst.\ Math.\ Appl.}\ 10, 266--271.
-  \cite{penrose1974}
-  First publication of the aperiodic kite-dart tilings.
-
-\item
-  \textbf{Cassels} (1957). \emph{An Introduction to Diophantine Approximation}.
-  Cambridge University Press.
-  \cite{cassels_diophantine}
-  Comprehensive reference for the Markov spectrum
-  and Hurwitz theory.
-
-\item
-  \textbf{Alessandri \& Berthé} (1998). Three distance theorems and combinatorics on words.
-  \emph{L'Enseignement Mathématique}, 44, 103--132.
-  \cite{alessandri1998}
-  Proof of the three-distance theorem and connections
-  to Sturmian words.
-\end{itemize}
-
-% ============================================================
-% Legacy reference section (inline, for cross-referencing)
-% ============================================================
+\section{References}\label{fa_02:references}
 
 [1] Garcez, A. d'A., Gori, M., Lamb, L. C.,
 Serafini, L., Spranger, M., \& Tran, S. N. (2019).
@@ -1785,7 +305,7 @@ random vectors. \emph{Cognitive Computation},
 1(2), 139--159.
 
 [11] GOLDEN SUNFLOWERS dissertation. Ch.26 ---
-KOSCHEI $\varphi$-Numeric Coprocessor (ISA). This volume.
+KOSCHEI φ-Numeric Coprocessor (ISA). This volume.
 
 [12] Alessandri, P., \& Berthé, V. (1998).
 Three distance theorems and combinatorics on
@@ -1796,299 +316,3 @@ words. \emph{L'Enseignement Mathématique}, 44,
 seed protocol. GitHub.
 \url{https://github.com/gHashTag/trios/issues/395}
 
-% ============================================================
-% Appendix material: extended derivations
-% ============================================================
-
-\section{Appendix A: Proof of Beatty's Theorem via
-Density Arguments}
-\label{sec:gc-appendix-beatty}
-
-We present an alternative proof of
-Theorem~\ref{thm:gc-beatty} using the Weyl
-equidistribution theorem, which provides additional
-insight into the equidistribution properties of
-the Beatty sequences.
-
-\begin{proof}[Alternative proof of Theorem~\ref{thm:gc-beatty}]
-We use the fact that for irrational $r$, the sequence
-$(\{n/r\})_{n \geq 1}$ is equidistributed in $[0,1)$
-(Weyl's theorem).
-The characteristic function of
-$\mathcal{B}_r = \{\lfloor nr \rfloor : n \geq 1\}$
-evaluated at an integer $m$ is:
-$\mathbf{1}[m \in \mathcal{B}_r] = \lfloor (m+1)/r \rfloor - \lfloor m/r \rfloor$.
-This equals $1$ if $\{m/r\} < 1/r$ (i.e., $m/r$ is
-in the interval $[\lfloor m/r \rfloor, \lfloor m/r \rfloor + 1/r)$)
-and $0$ otherwise.
-Since $1/r + 1/s = 1$ and $r, s$ are irrational,
-every $m/r$ lies in exactly one of the two intervals
-$[0, 1/r)$ and $[1/r, 1) = [1/r, 1/r + 1/s)$,
-and $\{m/r\} \in [0, 1/r)$ iff $\{m/s\} \in [1/r, 1)$
-iff $m \notin \mathcal{B}_s$.
-(The last iff uses $\{m/r\} + \{m/s\} = 1$ for
-irrational $m/r$, $m/s$, which follows from
-$m/r + m/s = m$.)
-Hence $m \in \mathcal{B}_r \iff m \notin \mathcal{B}_s$,
-proving the partition property.
-\qed
-\end{proof}
-
-\section{Appendix B: The Quadratic Surds and Continued Fractions}
-\label{sec:gc-appendix-qsurd}
-
-A classical theorem (Lagrange, 1770) states that the
-continued-fraction expansion of a real number is
-eventually periodic if and only if the number is a
-quadratic irrational (a root of a quadratic with
-rational coefficients).
-
-For $\varphi = [1;1,1,\ldots]$, the period is $1$
-and the expansion is purely periodic (no non-periodic
-initial segment).
-This means $\varphi$ is a reduced quadratic surd in
-the sense of Galois (1829): $\varphi > 1$ and its
-conjugate $\hat\varphi = (1-\sqrt{5})/2$ satisfies
-$-1 < \hat\varphi < 0$.
-
-\begin{theorem}[Galois, 1829]
-A quadratic surd $\alpha > 1$ has a purely periodic
-continued fraction if and only if $-1 < \alpha' < 0$,
-where $\alpha'$ is the conjugate of $\alpha$.
-\end{theorem}
-
-For $\varphi$: $\varphi > 1$ and
-$\hat\varphi = (1-\sqrt{5})/2 \approx -0.618$,
-so $-1 < \hat\varphi < 0$, confirming the purely
-periodic expansion $[1;\overline{1}]$.
-
-\section{Appendix C: The Golden Ratio in Architecture and Music}
-\label{sec:gc-appendix-art}
-
-This appendix is included for cultural context and
-does not contribute to the formal development.
-
-\subsection{C.1 The Parthenon and Le Corbusier}
-\label{subsec:gc-parthenon}
-
-The claim that ancient Greek architects deliberately
-used $\varphi$ in the proportions of the Parthenon
-is frequently repeated but historically contested.
-The measured ratio of the Parthenon's facade
-(width to height $\approx 2.25$) is not particularly
-close to $\varphi \approx 1.618$.
-More reliable are the proportions in Leonardo da Vinci's
-illustrations for Pacioli's \emph{De Divina Proportione}
-and in Le Corbusier's \emph{Modulor} system
-(1948), which explicitly uses $\varphi$ as the basis
-for architectural proportions.
-
-\subsection{C.2 Musical Scales}
-\label{subsec:gc-music}
-
-The equal-temperament chromatic scale divides the
-octave into $12$ semitones with ratio $2^{1/12}$
-per semitone.
-The perfect fifth has ratio $2^{7/12} \approx 1.498$,
-close to but not equal to $\varphi \approx 1.618$.
-Some composers and music theorists have proposed
-scales with frequency ratios based on $\varphi$;
-the L4 golden-scales chapter develops this
-connection rigorously.
-
-\section{Appendix D: Number-Theoretic Consequences of Cassini's Identity}
-\label{sec:gc-appendix-cassini}
-
-Cassini's identity $F_{n-1}F_{n+1} - F_n^2 = (-1)^n$
-(Theorem~\ref{thm:gc-cassini}) has several
-number-theoretic consequences that we record here.
-
-\subsection{D.1 Coprimality}
-\label{subsec:gc-coprime}
-
-\begin{corollary}
-$\gcd(F_n, F_{n+1}) = 1$ for all $n \geq 0$.
-\end{corollary}
-
-\begin{proof}
-If $d = \gcd(F_n, F_{n+1})$, then $d \mid F_{n+1}$
-and $d \mid F_n$, so $d \mid (F_{n-1}F_{n+1} - F_n^2)
-= (-1)^n$ by Cassini, hence $d = 1$.
-\qed
-\end{proof}
-
-\subsection{D.2 Irreducibility of Fibonacci Fractions}
-\label{subsec:gc-irred}
-
-As a consequence, the convergents $F_{n+2}/F_{n+1}$
-of $\varphi$ are always in lowest terms:
-$\gcd(F_{n+2}, F_{n+1}) = 1$ by the corollary above.
-This is a consistency check for the Hurwitz proof:
-we required $\gcd(p,q) = 1$ for the bound to be sharp.
-
-\subsection{D.3 Modular Periodicity}
-\label{subsec:gc-pisano}
-
-Cassini's identity also implies that the Fibonacci
-sequence modulo $m$ is periodic (the Pisano period).
-For modulus $m = 16$ (relevant to GF16):
-$\pi(16) = 24$.
-The Coq file
-\filepath{trinity-clara/proofs/igla/lucas\_closure\_gf16.v}
-exploits this periodicity to prove
-\texttt{lucas\_values\_gf16\_exact\_n2}
-without unbounded computation.
-
-\section{Appendix E: Comparison with Other
-``Most Irrational'' Claims}
-\label{sec:gc-appendix-claims}
-
-Several other constants are sometimes called ``the
-most irrational number''; we clarify the precise
-sense in which $\varphi$ deserves this title.
-
-\begin{itemize}
-  \item
-    \textbf{Liouville numbers} (e.g.,
-    $\sum_{k=1}^{\infty} 10^{-k!}$) are the
-    \emph{easiest} irrationals to approximate,
-    having $L(\alpha) = 0$.
-    They are ``most irrational'' in a different
-    sense: they are transcendental and not even
-    algebraic.
-  \item
-    \textbf{$e$}: the partial quotients of
-    $e = [2; 1, 2, 1, 1, 4, 1, 1, 6, 1, \ldots]$
-    grow without bound (the pattern includes $2n$
-    in the $(3n)$-th position), so $L(e) = 0$;
-    $e$ is \emph{very well} approximated by rationals.
-  \item
-    \textbf{$\pi$}: the partial quotients of $\pi$
-    are not known to be bounded; computationally they
-    appear to grow, and $L(\pi) = 0$ is expected
-    but unproven.
-  \item
-    \textbf{$\varphi$}: all partial quotients are $1$,
-    the minimum possible, so $L(\varphi) = 1/\sqrt{5}$
-    is the maximum possible Lagrange constant.
-    This is the only sense in which $\varphi$ is
-    ``most irrational'': it is the hardest irrational
-    to approximate by rationals.
-\end{itemize}
-
-The Trinity S\textsuperscript{3}AI architecture uses
-$\varphi$ (and $e$, $\pi$ only as physical constants
-in Section~4.3 of the L11 chapter) precisely because
-$\varphi$ provides maximal algebraic rigidity with
-the integer $3$ anchor.
-Rule~R6 (zero free parameters; allowed: $\{\varphi, \pi, e, n \in \mathbb{Z}\}$)
-is justified by this analysis: $\varphi$ is the
-primary generator, while $\pi$ and $e$ appear only
-in transcendental contexts where no integer collapse
-is available.
-
-\section{Appendix F: Extended Fibonacci and Lucas Tables}
-\label{sec:gc-appendix-tables}
-
-\begin{center}
-\begin{tabular}{r|rr|r|rr}
-\hline
-$n$ & $F_n$ & $L_n$ & $n$ & $F_n$ & $L_n$ \\
-\hline
-$0$  & $0$    & $2$    & $16$ & $987$    & $2207$   \\
-$1$  & $1$    & $1$    & $17$ & $1597$   & $3571$   \\
-$2$  & $1$    & $3$    & $18$ & $2584$   & $5778$   \\
-$3$  & $2$    & $4$    & $19$ & $4181$   & $9349$   \\
-$4$  & $3$    & $7$    & $20$ & $6765$   & $15127$  \\
-$5$  & $5$    & $11$   & $21$ & $10946$  & $24476$  \\
-$6$  & $8$    & $18$   & $22$ & $17711$  & $39603$  \\
-$7$  & $13$   & $29$   & $23$ & $28657$  & $64079$  \\
-$8$  & $21$   & $47$   & $24$ & $46368$  & $103682$ \\
-$9$  & $34$   & $76$   & $25$ & $75025$  & $167761$ \\
-$10$ & $55$   & $123$  & $26$ & $121393$ & $271443$ \\
-$11$ & $89$   & $199$  & $27$ & $196418$ & $439204$ \\
-$12$ & $144$  & $322$  & $28$ & $317811$ & $710647$ \\
-$13$ & $233$  & $521$  & $29$ & $514229$ & $1149851$\\
-$14$ & $377$  & $843$  & $30$ & $832040$ & $1860498$\\
-$15$ & $610$  & $1364$ & & & \\
-\hline
-\end{tabular}
-\end{center}
-
-The sanctioned Trinity seeds
-$F_{17}=1597$, $F_{18}=2584$, $F_{19}=4181$,
-$F_{20}=6765$, $F_{21}=10946$
-and $L_7=29$, $L_8=47$
-are highlighted: they are large enough for
-statistical power ($n \geq 1000$ trials) yet small
-enough that the random-number generator's period
-($\sim 2^{31}$ for MT19937) is not a concern.
-
-\section{Appendix G: Markov Triple Tree}
-\label{sec:gc-appendix-markov}
-
-The Markov triples form a binary tree rooted at
-$(1,1,1)$.
-Each triple $(a,b,c)$ with $c = \max$ generates two
-children by Vieta jumping:
-\[
-  (a, b, c) \to (a, c, 3ac-b), \quad (b, c, 3bc-a).
-\]
-The first few levels:
-\begin{center}
-\begin{tabular}{ll}
-\hline
-Level & Triples \\
-\hline
-0 & $(1,1,1)$ \\
-1 & $(1,1,2)$ \\
-2 & $(1,2,5)$ \\
-3 & $(1,5,13)$, $(2,5,29)$ \\
-4 & $(1,13,34)$, $(5,13,194)$, $(2,29,169)$, $(5,29,433)$ \\
-\hline
-\end{tabular}
-\end{center}
-
-The Lagrange constant of the Markov quadratic associated
-to the Markov number $c$ satisfies
-$L = 1/\sqrt{9 - 4/c^2}$, which increases toward
-$1/3$ as $c \to \infty$.
-The bottom of this spectrum, $L = 1/\sqrt{5}$, is
-achieved by the Markov number $c=1$ (the golden ratio
-$\varphi$).
-This confirms the sharpness result of
-Theorem~\ref{thm:gc-hurwitz-sharp}.
-
-\section{Appendix H: Symbolic-Computation Verification}
-\label{sec:gc-appendix-computer}
-
-All numeric identities in this chapter were verified
-by symbolic computation.
-We record the key checks:
-
-\begin{enumerate}
-  \item $\varphi^2 - \varphi - 1 = 0$: verified by
-    substituting $\varphi = (1+\sqrt{5})/2$.
-  \item $\varphi^2 + \varphi^{-2} = 3$: computed as
-    $(2+\varphi) + (2-\varphi) = 3$ using the
-    power table of Section~4.2.
-  \item Binet formula for $n \leq 30$: all values
-    match the table in Appendix~F.
-  \item Cassini identity for $n \leq 20$: verified
-    by direct computation.
-  \item Hurwitz error bound for $F_{n+2}/F_{n+1}$,
-    $n \leq 10$: the ratio
-    $|\varphi - F_{n+2}/F_{n+1}| \cdot \sqrt{5} F_{n+1}^2$
-    converges to $1$ from above.
-  \item Zeckendorf representations of $1, \ldots, 30$:
-    all unique and non-consecutive.
-  \item Wythoff P-positions for $n \leq 20$:
-    all verified against the Beatty sequences.
-\end{enumerate}
-
-These checks are part of the machine-verified
-corpus; the Coq analogues are in
-\filepath{trinity-clara/proofs/igla/lucas\_closure\_gf16.v}
-and \filepath{trinity-clara/proofs/igla/gf16\_precision.v}.
-
-% End of Chapter 02
