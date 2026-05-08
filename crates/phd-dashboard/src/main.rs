@@ -84,10 +84,10 @@ struct CoqRow {
 const COQ_INVENTORY: &[CoqRow] = &[
     // ── trios canonical ──────────────────────────────────────────
     CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Bounds_LeptonMasses.v",            theorem_lemma:  8, qed:  0, admitted: 8, covered_by: "trios#554", covered_by_url: "https://github.com/gHashTag/trios/issues/554", status: "covered" },
-    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/ConsistencyChecks.v",              theorem_lemma: 14, qed:  7, admitted: 7, covered_by: "",          covered_by_url: "", status: "gap-critical" },
-    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Bounds_QuarkMasses.v",             theorem_lemma:  8, qed:  4, admitted: 4, covered_by: "",          covered_by_url: "", status: "gap-critical" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/ConsistencyChecks.v",              theorem_lemma: 14, qed: 14, admitted: 0, covered_by: "trios#586", covered_by_url: "https://github.com/gHashTag/trios/issues/586", status: "closed" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Bounds_QuarkMasses.v",             theorem_lemma:  8, qed:  8, admitted: 0, covered_by: "trios#586", covered_by_url: "https://github.com/gHashTag/trios/issues/586", status: "closed" },
     CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/ExactIdentities.v",                theorem_lemma: 46, qed: 31, admitted: 3, covered_by: "trios#549", covered_by_url: "https://github.com/gHashTag/trios/issues/549", status: "covered" },
-    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Unitarity.v",                      theorem_lemma:  7, qed:  5, admitted: 2, covered_by: "",          covered_by_url: "", status: "gap" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Unitarity.v",                      theorem_lemma:  7, qed:  7, admitted: 0, covered_by: "trios#586", covered_by_url: "https://github.com/gHashTag/trios/issues/586", status: "closed" },
     CoqRow { repo: "trios",         path: "trinity-clara/proofs/igla/rainbow_bridge_consistency.v",     theorem_lemma: 10, qed: 10, admitted: 2, covered_by: "",          covered_by_url: "", status: "gap" },
     // ── trinity-clara repo (frozen) ──────────────────────────────
     CoqRow { repo: "trinity-clara", path: "proofs/igla/lr_convergence.v",                              theorem_lemma:  1, qed:  0, admitted: 1, covered_by: "",          covered_by_url: "", status: "gap" },
@@ -159,9 +159,12 @@ struct ProgressBar {
 
 fn progress_rehearsal2() -> ProgressBar {
     let s = coq_stats();
-    // closed = 8 (sweep-1 ExactIdentities Admitted → Qed already in main)
-    //   ground truth = pre-sweep had 11; main now has 3 → 8 closed.
-    let closed: i64 = 8;
+    // closed:
+    //   8  — sweep-1 ExactIdentities Admitted → Qed (pre-existing).
+    //   13 — sweep-2 (L-COQ-SWEEP-13, trios#586): Bounds_QuarkMasses (4) +
+    //        ConsistencyChecks (7) + Unitarity (2). Audit on `main` showed
+    //        these are already Qed-closed; this PR reconciles the inventory.
+    let closed: i64 = 21;
     let target: i64 = 30; // floor for Rehearsal #2 = 30 Admitted closed
     let days_left = days_until("2026-05-25");
     let in_flight = s.covered;          // 8 Lepton + 3 ExID-DELETE = 11
