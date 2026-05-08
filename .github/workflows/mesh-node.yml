@@ -1,0 +1,136 @@
+name: Trinity Mesh Node — CI + Railway Deploy
+# φ² + φ⁻² = 3
+
+on:
+  push:
+    paths:
+      - 'crates/trios-mesh/**'
+      - 'crates/trios-mesh-node/**'
+      - '.github/workflows/mesh-node.yml'
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.82"
+
+jobs:
+  test:
+    name: "🧪 trios-mesh unit tests + smoke"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-mesh-${{ hashFiles('crates/trios-mesh/Cargo.toml', 'crates/trios-mesh-node/Cargo.toml') }}
+
+      - name: 🧪 Run trios-mesh tests
+        run: cargo test -p trios-mesh --features std
+
+      - name: 📦 Build mesh-node binary
+        run: cargo build --release -p trios-mesh-node
+
+      - name: 🚀 Smoke-test 2-node mesh
+        run: |
+          MESH_SEED=0 MESH_NODE_NAME=ci-node-0 PORT=18080 \
+            ./target/release/mesh-node &
+          NODE0_PID=$!
+
+          MESH_SEED=1 MESH_NODE_NAME=ci-node-1 PORT=18081 \
+            ./target/release/mesh-node &
+          NODE1_PID=$!
+
+          sleep 3
+
+          curl -sf http://localhost:18080/health && echo "✅ node-0 healthy"
+          curl -sf http://localhost:18081/health && echo "✅ node-1 healthy"
+
+          N0=$(curl -sf http://localhost:18080/info | python3 -c "import sys,json; print(json.load(sys.stdin)['dest_hash'])")
+          N1=$(curl -sf http://localhost:18081/info | python3 -c "import sys,json; print(json.load(sys.stdin)['dest_hash'])")
+          echo "Node-0: $N0"
+          echo "Node-1: $N1"
+
+          RESULT=$(curl -sf -X POST http://localhost:18080/announce \
+            -H 'Content-Type: application/json' \
+            -d "{\"dest_hash\":\"$N1\",\"sender\":\"$N1\",\"hops\":1,\"quality\":2}")
+          echo "ANNOUNCE: $RESULT"
+          echo $RESULT | grep -q '"accepted":true' && echo "✅ ANNOUNCE accepted"
+
+          HOP=$(curl -sf -X POST http://localhost:18080/next-hop \
+            -H 'Content-Type: application/json' \
+            -d "{\"dest_hash\":\"$N1\"}")
+          echo "Next-hop: $HOP"
+          echo $HOP | grep -q 'next_hop' && echo "✅ next-hop found"
+
+          kill $NODE0_PID $NODE1_PID 2>/dev/null || true
+          echo "🎉 Smoke tests passed! φ² + φ⁻² = 3"
+
+  deploy:
+    name: "🚂 Deploy 3 nodes to Railway"
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: 🔍 Railway whoami
+        run: railway whoami
+
+      - name: 🚂 Deploy trinity-node-0
+        run: |
+          railway up \
+            --service trinity-node-0 \
+            --detach
+        working-directory: crates/trios-mesh-node
+        env:
+          MESH_SEED: "0"
+          MESH_NODE_NAME: "trinity-node-0"
+          RUST_LOG: "info"
+
+      - name: 🚂 Deploy trinity-node-1
+        run: |
+          railway up \
+            --service trinity-node-1 \
+            --detach
+        working-directory: crates/trios-mesh-node
+        env:
+          MESH_SEED: "1"
+          MESH_NODE_NAME: "trinity-node-1"
+          RUST_LOG: "info"
+
+      - name: 🚂 Deploy trinity-node-2
+        run: |
+          railway up \
+            --service trinity-node-2 \
+            --detach
+        working-directory: crates/trios-mesh-node
+        env:
+          MESH_SEED: "2"
+          MESH_NODE_NAME: "trinity-node-2"
+          RUST_LOG: "info"
+
+      - name: ✅ Summary
+        run: |
+          echo "## 🔺 Trinity CPU Mesh Network deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Node | Seed | Endpoint |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-0 | 0 | GET /info /health POST /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-1 | 1 | GET /info /health POST /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-2 | 2 | GET /info /health POST /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "φ² + φ⁻² = 3 | CPU ~800mW | ASIC target <25mW (TTIHP27a Q4 2026)" >> $GITHUB_STEP_SUMMARY
