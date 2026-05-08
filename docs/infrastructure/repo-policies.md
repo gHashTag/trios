@@ -88,3 +88,49 @@ force-push.
 ## Zenodo DOI registry
 
 All Zenodo DOIs authored by Dmitrii Vasilev are catalogued in [`docs/infrastructure/zenodo-registry.md`](./zenodo-registry.md). When citing a DOI in `info.yaml`, README, LICENSE, ADR, paper, or commit message, verify the title against that registry. Do not invent sub-titles that are not present in Zenodo metadata.
+## Authorship — Dmitrii Vasilev (standing rule)
+
+The author of all Trinity / gHashTag / trios / trinity-clara / trinity-fpga
+artefacts is **Dmitrii Vasilev** (`raoffonom@icloud.com`). This includes:
+
+- `SKILL.md` `metadata.author`
+- `info.yaml` / TinyTapeout G6 submission `author`
+- PhD monograph title page (`\author{}`) and arXiv authorship
+- Zenodo `creators`, Apache LICENSE copyright holder
+- ADR sign-offs, README headers
+- Git commit `Author` and `Co-authored-by` trailers
+
+The handle `gHashTag` is **the GitHub organization namespace only**. It is
+NOT a person and must NEVER be used as `author`, `creator`, or `by`
+attribution. Legitimate uses of `gHashTag`:
+
+- Inside repo URLs (`github.com/gHashTag/<repo>`)
+- As organization name in CI log context
+- As the literal skill name of `phd-chapter-author` (skill names are not
+  attribution)
+
+Any other occurrence is an R5 violation and must be corrected on sight.
+
+### Historical audit (prior author-leak incidents)
+
+Recording here so the audit trail is immutable:
+
+- [trios#544](https://github.com/gHashTag/trios/pull/544) (L-NOJS-FIX,
+  squash `ae4e7ff` on `main`): mis-authored as
+  `trios-matrix-ledger-bot <matrix-ledger-bot@users.noreply.github.com>`
+  due to leftover git config from the preceding L-MATRIX-LEDGER
+  trainer-igla auto-PR session. True author: **Dmitrii Vasilev**. Cannot
+  be rewritten on `main` (R3 PR-only, no force-push); this entry is the
+  canonical correction.
+- [trios#546](https://github.com/gHashTag/trios/pull/546) (L-COQ47 INV-7,
+  commit `3a0eaf9`): same mis-author. Corrected on the feature branch by
+  add-commit `69cfe29` carrying `Co-authored-by: Dmitrii Vasilev`, so the
+  squash-merge will attribute correctly.
+
+### Operator hygiene
+
+After each trainer-igla bot session, the local `git config user.name` /
+`user.email` must be reset to `Dmitrii Vasilev` / `raoffonom@icloud.com`
+before any hand-written commit. The matrix-ledger bot identity is
+reserved exclusively for the `format-algo-matrix.yml` auto-PR flow on
+`gHashTag/trios-trainer-igla`.
