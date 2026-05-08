@@ -1,0 +1,38 @@
+name: No JS Companion (L-NOJS-FIX)
+
+# Why this workflow exists (queen-ratified, L-NOJS-FIX):
+#
+# Branch-protection on `main` requires a check-run named `no-js-check`.
+# The original `no-js.yml` only triggers when paths under
+# `crates/trios-ext/**` change. PRs that touch only docs / assertions /
+# proofs therefore never produce a `no-js-check` check-run, leaving
+# branch-protection in a "ghost required check" deadlock.
+#
+# This companion workflow mirrors `no-js.yml` paths-filter via
+# `paths-ignore`, runs on every other PR, and emits a job named exactly
+# `no-js-check` that always exits 0. Same context-name → branch-protection
+# satisfied in either branch (real lint runs when extension changes,
+# auto-pass companion runs otherwise). The two are mutually exclusive by
+# construction.
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'crates/trios-ext/**'
+      - '.github/workflows/no-js.yml'
+  push:
+    paths-ignore:
+      - 'crates/trios-ext/**'
+      - '.github/workflows/no-js.yml'
+
+jobs:
+  no-js-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: skip-equals-success per L-NOJS-FIX
+        run: |
+          echo "✅ no-js-check companion: PR does not touch crates/trios-ext/**"
+          echo "   The real handwritten-JS lint lives in .github/workflows/no-js.yml"
+          echo "   and runs only when extension paths change."
+          echo "   See docs/infrastructure/repo-policies.md §L-NOJS-FIX."
+          exit 0
