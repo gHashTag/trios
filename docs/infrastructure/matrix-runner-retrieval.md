@@ -14,7 +14,7 @@ matrix: [#446](https://github.com/gHashTag/trios/issues/446). Throne spark:
 appends one row per training run to `assertions/matrix_samples.jsonl` inside the
 runner container. The runner does not push back to GitHub. Without retrieval, all
 output is lost when the Railway service shuts down at end-of-job (~12.5 h after start
-for the canonical 50 cells × 3 seeds × 3000 steps workload).
+for the canonical 50 cells × 4 seeds (canon: 47, 89, 144, 123) × 3000 steps workload).
 
 ## How retrieval works
 
