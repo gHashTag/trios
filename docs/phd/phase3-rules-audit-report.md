@@ -32,7 +32,22 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 ## Phase 3 lanes deferred to next session
 
 - 3.2 Neon SSOT cross-check (requires `psql` against `phd-postgres-ssot`)
-- 3.7 Page-count gate (LT lane — after tectonic build CI green)
+
+## 3.7 LT line-count gate — honest disclosure (this branch)
+
+Line counts under `docs/phd/`:
+- chapters: **25,982** lines
+- frontmatter: **807** lines
+- appendix: **3,316** lines
+- **TOTAL: 30,105 lines**
+
+Verdict: **R8-CAP-EXCEEDED** — 30,105 lines > 12,000 ceiling. This is a known
+state: the R8 ceiling was set for the older 33-chapter target; the unified
+Trinity S³AI · Flos Aureus v6.2 manifest (trios#380) has 98 chapters / 2173
+theorems. The R8 cap should be re-cast against the unified manifest as a
+follow-up issue. PDF page count cannot be computed without a tectonic build
+— LT lane (phd-monograph-auditor) will run that after CI green. Honest
+disclosure (R5) over fabricated PASS.
 
 ## 3.5 LB bibliography balance — partial audit (this branch)
 
