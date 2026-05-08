@@ -78,7 +78,8 @@ jobs:
     name: "🚂 Deploy 3 nodes to Railway"
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Only deploy when on main AND RAILWAY_TOKEN secret is configured
+    if: github.ref == 'refs/heads/main' && secrets.RAILWAY_TOKEN != ''
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
@@ -87,10 +88,17 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: 🔍 Railway whoami
-        run: railway whoami
+      - name: 🔍 Check Railway auth
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "⚠️ RAILWAY_TOKEN is not set — skipping deploy"
+            echo "To enable deploy: Settings → Secrets → add RAILWAY_TOKEN"
+            exit 0
+          fi
+          railway whoami
 
       - name: 🚂 Deploy trinity-node-0
+        if: env.RAILWAY_TOKEN != ''
         run: |
           railway up \
             --service trinity-node-0 \
@@ -102,6 +110,7 @@ jobs:
           RUST_LOG: "info"
 
       - name: 🚂 Deploy trinity-node-1
+        if: env.RAILWAY_TOKEN != ''
         run: |
           railway up \
             --service trinity-node-1 \
@@ -113,6 +122,7 @@ jobs:
           RUST_LOG: "info"
 
       - name: 🚂 Deploy trinity-node-2
+        if: env.RAILWAY_TOKEN != ''
         run: |
           railway up \
             --service trinity-node-2 \
