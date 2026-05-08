@@ -10,6 +10,7 @@ use askama::Template;
 use askama_axum::IntoResponse;
 use axum::{
     extract::State,
+    response::Json,
     routing::get,
     Router,
 };
@@ -62,6 +63,132 @@ struct Stats {
     duplicate_slugs: i64,
 }
 
+// === Coq Admitted ledger (audit 2026-05-08, R5 §honest-status) ===
+// Source of truth: workspace/coq_audit_2026-05-08.md, also asset coq_audit_empire.
+// 100 Coq files audited across trios + trinity-clara + t27 (excl. Verilog).
+#[derive(Debug, Serialize, Clone)]
+struct CoqRow {
+    repo: &'static str,
+    path: &'static str,
+    theorem_lemma: i32,
+    qed: i32,
+    admitted: i32,
+    covered_by: &'static str,     // human label, e.g. "trios#554" or ""
+    covered_by_url: &'static str, // full URL or ""
+    status: &'static str,         // "covered", "gap-critical", "gap-stale", "gap"
+}
+
+// IMMUTABLE inventory — updated only via PR after re-running audit.
+// Sums (canonical: trios + trinity-clara only): 28 Admitted.
+// Adding t27 stale fork: +32 stale (excluded from headline floor).
+const COQ_INVENTORY: &[CoqRow] = &[
+    // ── trios canonical ──────────────────────────────────────────
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Bounds_LeptonMasses.v",            theorem_lemma:  8, qed:  0, admitted: 8, covered_by: "trios#554", covered_by_url: "https://github.com/gHashTag/trios/issues/554", status: "covered" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/ConsistencyChecks.v",              theorem_lemma: 14, qed:  7, admitted: 7, covered_by: "",          covered_by_url: "", status: "gap-critical" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Bounds_QuarkMasses.v",             theorem_lemma:  8, qed:  4, admitted: 4, covered_by: "",          covered_by_url: "", status: "gap-critical" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/ExactIdentities.v",                theorem_lemma: 46, qed: 31, admitted: 3, covered_by: "trios#549", covered_by_url: "https://github.com/gHashTag/trios/issues/549", status: "covered" },
+    CoqRow { repo: "trios",         path: "docs/phd/theorems/trinity/Unitarity.v",                      theorem_lemma:  7, qed:  5, admitted: 2, covered_by: "",          covered_by_url: "", status: "gap" },
+    CoqRow { repo: "trios",         path: "trinity-clara/proofs/igla/rainbow_bridge_consistency.v",     theorem_lemma: 10, qed: 10, admitted: 2, covered_by: "",          covered_by_url: "", status: "gap" },
+    // ── trinity-clara repo (frozen) ──────────────────────────────
+    CoqRow { repo: "trinity-clara", path: "proofs/igla/lr_convergence.v",                              theorem_lemma:  1, qed:  0, admitted: 1, covered_by: "",          covered_by_url: "", status: "gap" },
+    CoqRow { repo: "trinity-clara", path: "proofs/igla/lucas_closure_gf16.v",                          theorem_lemma:  1, qed:  0, admitted: 1, covered_by: "",          covered_by_url: "", status: "gap" },
+    // ── t27 stale fork (informational) ───────────────────────────
+    CoqRow { repo: "t27",           path: "proofs/trinity/ExactIdentities.v",                          theorem_lemma: 22, qed:  5, admitted:11, covered_by: "",          covered_by_url: "", status: "gap-stale" },
+    CoqRow { repo: "t27",           path: "proofs/trinity/Bounds_LeptonMasses.v",                      theorem_lemma:  8, qed:  0, admitted: 8, covered_by: "",          covered_by_url: "", status: "gap-stale" },
+    CoqRow { repo: "t27",           path: "proofs/trinity/ConsistencyChecks.v",                        theorem_lemma: 14, qed:  7, admitted: 7, covered_by: "",          covered_by_url: "", status: "gap-stale" },
+    CoqRow { repo: "t27",           path: "proofs/trinity/Bounds_QuarkMasses.v",                       theorem_lemma:  8, qed:  4, admitted: 4, covered_by: "",          covered_by_url: "", status: "gap-stale" },
+    CoqRow { repo: "t27",           path: "proofs/trinity/Unitarity.v",                                theorem_lemma:  7, qed:  5, admitted: 2, covered_by: "",          covered_by_url: "", status: "gap-stale" },
+];
+
+// Aggregated Coq stats — split canonical vs stale.
+#[derive(Debug, Serialize, Clone)]
+struct CoqStats {
+    files_total: i64,        // 100 (97 in inventory + 3 zero-Admitted skipped here)
+    files_audited: i64,      // 13 with Admitted > 0
+    admitted_canonical: i64, // trios + trinity-clara only
+    admitted_stale: i64,     // t27 fork drift
+    qed_total: i64,
+    theorem_lemma_total: i64,
+    covered: i64,            // Admitted under an open ONE SHOT
+    uncovered_gap: i64,      // canonical Admitted with no ONE SHOT
+}
+
+fn coq_stats() -> CoqStats {
+    let mut s = CoqStats {
+        files_total: 100,
+        files_audited: COQ_INVENTORY.len() as i64,
+        admitted_canonical: 0,
+        admitted_stale: 0,
+        qed_total: 0,
+        theorem_lemma_total: 0,
+        covered: 0,
+        uncovered_gap: 0,
+    };
+    for r in COQ_INVENTORY {
+        s.qed_total += r.qed as i64;
+        s.theorem_lemma_total += r.theorem_lemma as i64;
+        match r.status {
+            "gap-stale" => s.admitted_stale += r.admitted as i64,
+            _ => {
+                s.admitted_canonical += r.admitted as i64;
+                if !r.covered_by.is_empty() {
+                    s.covered += r.admitted as i64;
+                } else if r.admitted > 0 {
+                    s.uncovered_gap += r.admitted as i64;
+                }
+            }
+        }
+    }
+    s
+}
+
+// Rehearsal #2 progress (deadline 2026-05-25, floor: 30 Admitted closed by then).
+// Anchor: φ²+φ⁻²=3 · 28 canonical Admitted at session start.
+#[derive(Debug, Serialize, Clone)]
+struct ProgressBar {
+    label: &'static str,
+    target_label: &'static str,
+    deadline: &'static str,
+    days_left: i64,
+    closed: i64,         // Admitted already closed (#548 + #550 + #551 swept = 8)
+    in_flight: i64,      // covered by open ONE SHOTs awaiting merge
+    remaining_gap: i64,  // uncovered Admitted
+    target: i64,         // Rehearsal #2 floor
+    pct: f64,
+}
+
+fn progress_rehearsal2() -> ProgressBar {
+    let s = coq_stats();
+    // closed = 8 (sweep-1 ExactIdentities Admitted → Qed already in main)
+    //   ground truth = pre-sweep had 11; main now has 3 → 8 closed.
+    let closed: i64 = 8;
+    let target: i64 = 30; // floor for Rehearsal #2 = 30 Admitted closed
+    let days_left = days_until("2026-05-25");
+    let in_flight = s.covered;          // 8 Lepton + 3 ExID-DELETE = 11
+    let remaining_gap = s.uncovered_gap;
+    let pct = (closed as f64 / target as f64 * 100.0).clamp(0.0, 100.0);
+    ProgressBar {
+        label: "Coq Admitted Closure (sweep-2)",
+        target_label: "Rehearsal #2 — close 30 Admitted",
+        deadline: "2026-05-25",
+        days_left,
+        closed,
+        in_flight,
+        remaining_gap,
+        target,
+        pct,
+    }
+}
+
+// Approximate days-until using chrono.
+fn days_until(yyyy_mm_dd: &str) -> i64 {
+    use chrono::NaiveDate;
+    let target = NaiveDate::parse_from_str(yyyy_mm_dd, "%Y-%m-%d")
+        .unwrap_or_else(|_| chrono::Utc::now().date_naive());
+    let today = chrono::Utc::now().date_naive();
+    (target - today).num_days()
+}
+
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
@@ -69,6 +196,10 @@ struct IndexTemplate {
     chapters: Vec<ChapterRow>,
     duplicates: Vec<DuplicateRow>,
     rag: Vec<RagRow>,
+    coq_stats: CoqStats,
+    coq_inventory: &'static [CoqRow],
+    progress: ProgressBar,
+    progress_pct_int: i64,
 }
 
 async fn fetch_chapters(db: &tokio_postgres::Client) -> Result<Vec<ChapterRow>> {
@@ -161,6 +292,8 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
     if let Err(e) = &chapters { tracing::error!("fetch_chapters failed: {e:?}"); }
     if let Err(e) = &duplicates { tracing::error!("fetch_duplicates failed: {e:?}"); }
     if let Err(e) = &rag { tracing::error!("fetch_rag failed: {e:?}"); }
+    let progress = progress_rehearsal2();
+    let progress_pct_int = progress.pct.round() as i64;
     IndexTemplate {
         stats: stats.unwrap_or(Stats {
             total_chapters: 0, r3_ok: 0, with_figure: 0,
@@ -170,6 +303,10 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
         chapters: chapters.unwrap_or_default(),
         duplicates: duplicates.unwrap_or_default(),
         rag: rag.unwrap_or_default(),
+        coq_stats: coq_stats(),
+        coq_inventory: COQ_INVENTORY,
+        progress,
+        progress_pct_int,
     }
 }
 
@@ -183,6 +320,46 @@ async fn htmx_rag(State(db): State<Db>) -> impl IntoResponse {
     #[derive(Template)] #[template(path = "partials/rag_table.html")]
     struct T { rag: Vec<RagRow> }
     T { rag: fetch_rag(&db).await.unwrap_or_default() }
+}
+
+async fn htmx_coq() -> impl IntoResponse {
+    #[derive(Template)] #[template(path = "partials/coq_table.html")]
+    struct T { coq_inventory: &'static [CoqRow], coq_stats: CoqStats }
+    T { coq_inventory: COQ_INVENTORY, coq_stats: coq_stats() }
+}
+
+async fn htmx_progress() -> impl IntoResponse {
+    #[derive(Template)] #[template(path = "partials/progress_bar.html")]
+    struct T { progress: ProgressBar, progress_pct_int: i64 }
+    let p = progress_rehearsal2();
+    let pct_int = p.pct.round() as i64;
+    T { progress: p, progress_pct_int: pct_int }
+}
+
+// JSON APIs (R7 falsifiability — public read-only ground truth).
+async fn api_coq() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "anchor": "phi^2 + phi^-2 = 3",
+        "doi": "10.5281/zenodo.19227877",
+        "audit_date": "2026-05-08",
+        "stats": coq_stats(),
+        "inventory": COQ_INVENTORY,
+    }))
+}
+
+async fn api_progress() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "anchor": "phi^2 + phi^-2 = 3",
+        "progress": progress_rehearsal2(),
+    }))
+}
+
+async fn api_health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "status": "ok",
+        "version": env!("CARGO_PKG_VERSION"),
+        "anchor": "phi^2 + phi^-2 = 3",
+    }))
 }
 
 #[tokio::main]
@@ -219,6 +396,11 @@ async fn main() -> Result<()> {
         .route("/", get(index))
         .route("/htmx/chapters", get(htmx_chapters))
         .route("/htmx/rag", get(htmx_rag))
+        .route("/htmx/coq", get(htmx_coq))
+        .route("/htmx/progress", get(htmx_progress))
+        .route("/api/coq", get(api_coq))
+        .route("/api/progress", get(api_progress))
+        .route("/healthz", get(api_health))
         .with_state(db);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));

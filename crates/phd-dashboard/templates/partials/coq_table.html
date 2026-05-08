@@ -1,0 +1,70 @@
+<div id="coq-block">
+  <div class="coq-stats-row">
+    <div class="stat-card">
+      <div class="value">{{ coq_stats.theorem_lemma_total }}</div>
+      <div class="label">Theorems + Lemmas</div>
+    </div>
+    <div class="stat-card ok">
+      <div class="value">{{ coq_stats.qed_total }}</div>
+      <div class="label">Qed (proven)</div>
+    </div>
+    <div class="stat-card warn">
+      <div class="value">{{ coq_stats.admitted_canonical }}</div>
+      <div class="label">Admitted (canonical)</div>
+    </div>
+    <div class="stat-card warn">
+      <div class="value">{{ coq_stats.admitted_stale }}</div>
+      <div class="label">Admitted (t27 stale)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ coq_stats.covered }}</div>
+      <div class="label">Covered by ONE SHOT</div>
+    </div>
+    <div class="stat-card warn">
+      <div class="value">{{ coq_stats.uncovered_gap }}</div>
+      <div class="label">Uncovered gap</div>
+    </div>
+  </div>
+
+  <table id="coq-table">
+    <thead>
+      <tr>
+        <th>Repo</th>
+        <th>File</th>
+        <th>Thm+Lemma</th>
+        <th>Qed</th>
+        <th>Admitted</th>
+        <th>Covered by</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in coq_inventory %}
+      <tr>
+        <td>
+          {% if r.repo == "trios" %}<span class="badge badge-gold">{{ r.repo }}</span>
+          {% else if r.repo == "trinity-clara" %}<span class="badge badge-blue">{{ r.repo }}</span>
+          {% else %}<span class="badge badge-warn">{{ r.repo }}</span>{% endif %}
+        </td>
+        <td><span class="slug">{{ r.path }}</span></td>
+        <td style="text-align:right">{{ r.theorem_lemma }}</td>
+        <td style="text-align:right;color:var(--green)">{{ r.qed }}</td>
+        <td style="text-align:right;color:var(--red);font-weight:bold">{{ r.admitted }}</td>
+        <td>
+          {% if r.covered_by != "" %}
+            <a class="ext-link" href="{{ r.covered_by_url }}" target="_blank" rel="noopener">{{ r.covered_by }}</a>
+          {% else %}
+            <span style="color:var(--muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.status == "covered" %}<span class="badge badge-ok">covered</span>
+          {% else if r.status == "gap-critical" %}<span class="badge badge-warn">🔴 gap-critical</span>
+          {% else if r.status == "gap-stale" %}<span class="badge badge-warn">⚠ stale (t27)</span>
+          {% else %}<span class="badge badge-warn">gap</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
