@@ -4,18 +4,6 @@
 % ============================================================
 
 \chapter{Hardware Bridge (deferred)}
-
-% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
-% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
-\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.12}}]
-  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
-  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
-  \textbf{Lane:} S12 (Trinity strand) \\
-  \textbf{Theorems in chapter:} 0 \\
-  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
-  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
-\end{tcolorbox}
-
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch12-hardware-bridge.png}}
@@ -169,102 +157,9 @@ The seed pool values \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\) were used
 
 \section{5. Qed Assertions}\label{ch_12:qed-assertions}
 
-% Lane L-KAT-12 · trios#380 · author Dmitrii Vasilev · 2026-05-08
-% Anchor: \(\varphi^2 + \varphi^{-2} = 3\) · DOI 10.5281/zenodo.19227877
+No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-The register-map correctness proof and the clock-domain crossing timing
-invariant are deferred to Ch.~\ref{ch:fpga-implementation} and
-Ch.~\ref{ch:period-locked-monitor} respectively, where the hardware
-measurements required for their hypotheses are available. The chapter does,
-however, anchor one foundational theorem on the \emph{numeric} side of the
-bridge --- the finite-field analogue of the Kolmogorov--Arnold Representation
-Theorem (KART, \S~\ref{sec:related-kart} of Ch.~\ref{ch:trinity-identity})
-that justifies the zero-DSP discipline of the entire hardware pipeline.
-
-\subsection{5.1 Theorem 12.7 --- KART--GF(16) isomorphism}\label{subsec:kart-gf16-statement}
-
-Let \(n \in \mathbb{N}\), let \(W = (W_1, \dots, W_n) \in \mathrm{GF}(16)^n\)
-be a fixed weight vector, let \(x = (x_1, \dots, x_n) \in \mathrm{GF}(16)^n\)
-be an input vector, and let \(\theta \in \mathbb{Z}_{\ge 0}\) be a popcount
-threshold. Define the Trinity \emph{vsa\_matmul} primitive
-\[
-  \mathrm{vsa\_matmul}(\theta; W, x) \;=\;
-    \bigl[\, \mathrm{popcount}(W \oplus x) \;\ge\; \theta \,\bigr],
-\]
-where \(\oplus\) is bit-wise XOR applied componentwise across the four bits
-of every \(\mathrm{GF}(16)\) cell, and \(\mathrm{popcount}\) sums over all
-\(4n\) bits of the resulting vector. Define the Kolmogorov--Arnold-shape
-composition
-\[
-  \mathrm{kart\_compose}(\theta; W, x) \;=\;
-    \Phi\!\left(\theta,\; \sum_{p=1}^{n} \phi_p(W_p, x_p)\right),
-\]
-where the inner functions \(\phi_p : \mathrm{GF}(16) \times \mathrm{GF}(16)
-\to \{0,1,2,3,4\}\) are 4-bit XOR-popcount look-up tables
-\(\phi_p(W_p, x_p) = \mathrm{popcount}(W_p \oplus x_p)\), and the outer
-function \(\Phi : \mathbb{Z}_{\ge 0} \times \mathbb{Z}_{\ge 0} \to \{0,1\}\)
-is the threshold comparator \(\Phi(\theta, s) = [s \ge \theta]\).
-
-\begin{theorem}[KART--GF(16) isomorphism]\label{thm:kart-gf16}
-For every threshold \(\theta\), every \(n \in \mathbb{N}\), and every pair of
-vectors \(W, x \in \mathrm{GF}(16)^n\),
-\[
-  \mathrm{vsa\_matmul}(\theta; W, x) \;=\;
-  \mathrm{kart\_compose}(\theta; W, x).
-\]
-\end{theorem}
-
-\begin{proof}[Proof sketch (R5: full proof Admitted)]
-Let \(s = \sum_{p=1}^n \mathrm{popcount}(W_p \oplus x_p)\) and let
-\(s' = \mathrm{popcount}(W \oplus x)\). Both quantities count the number of
-set bits in the bit-wise XOR of \(W\) and \(x\); the only difference is whether
-the count is taken cell-at-a-time and then summed (\(s\)) or all at once
-(\(s'\)). Since the four bits of each \(\mathrm{GF}(16)\) cell are disjoint
-from the bits of every other cell, the two counts are equal:
-\(s = s'\). Both sides of the theorem then reduce to \([s \ge \theta]\),
-establishing the equality. The full mechanisation requires a one-step
-[length]-induction on the vectors \(W, x\) plus the disjoint-bit-lanes lemma;
-it is currently \textbf{Admitted} pending sibling lane L-KAT-12-COQ-CLOSE.
-\qed
-\end{proof}
-
-\admittedbox{kart\_gf16\_exact}{Coq mechanisation pending: file
-\filepath{trinity-clara/proofs/igla/kart\_gf16\_isomorphism.v}, theorem
-\texttt{kart\_gf16\_exact}. The brute-force witness at \(n=4\) (Rust,
-\filepath{crates/trios-golden-float/tests/kart\_gf16\_witness.rs}::\texttt{test\_kart\_gf16\_n4\_exhaustive}) exhausts all \(16^8 \approx 4.3 \cdot 10^9\) (W, x) pairs and asserts equality bit-for-bit. The Coq closure of the disjoint-bit-lanes lemma is tracked in lane L-KAT-12-COQ-CLOSE.}
-
-\subsection{5.2 Falsifier and corroboration record (R7)}\label{subsec:kart-gf16-falsifier}
-
-\begin{quote}
-\textbf{Falsifier.} Theorem~\ref{thm:kart-gf16} is rejected if there exists a
-pair \((W, x) \in \mathrm{GF}(16)^n \times \mathrm{GF}(16)^n\) for some
-\(n \le 4\) and a threshold \(\theta \le 4n\) such that
-\(\mathrm{vsa\_matmul}(\theta; W, x) \ne \mathrm{kart\_compose}(\theta; W, x)\).
-Witness path:
-\filepath{crates/trios-golden-float/tests/kart\_gf16\_witness.rs}::\texttt{test\_kart\_gf16\_n4\_exhaustive}.
-\end{quote}
-
-For \(n > 4\) the theorem is currently conjectural; the wall-clock cost of
-an exhaustive test grows as \(16^{2n} \cdot (4n + 1)\), which exceeds the
-unit-test budget at \(n = 5\). The R5-honest position is that
-Theorem~\ref{thm:kart-gf16} is established by combinatorial argument plus
-empirical witness at \(n \le 4\), pending the formal Coq closure.
-
-\subsection{5.3 Why this matters for the 0-DSP discipline}\label{subsec:kart-gf16-zero-dsp}
-
-The practical consequence of Theorem~\ref{thm:kart-gf16} is that the Trinity
-GF(16) inference pipeline is structurally KART-shaped: every learned weight
-table \(W_p\) acts as an inner function \(\phi_p\), and the popcount-threshold
-stage acts as the outer function \(\Phi\). KAN \cite{liu2024kan} pays for the
-KART shape with FP32 spline interpolation at every edge, which on FPGA
-synthesis collapses to multiply-accumulate units (DSP slices on Xilinx, MAC
-columns on iCE40). Trinity GF(16) pays for the same shape with a 16-entry
-4-bit look-up table per edge, which synthesises to combinational logic only
-(zero DSP slices, see Ch.~\ref{ch:fpga-implementation},
-\S~\ref{sec:fpga-utilisation}). Theorem~\ref{thm:kart-gf16} is therefore
-not a numeric curiosity but the formal underpinning of the entire 0-DSP
-discipline that motivates Ch.~\ref{ch:gf16-algebra},
-Ch.~\ref{ch:fpga-implementation}, and Ch.~\ref{ch:mesh-node}.
+(The register-map correctness proof and CDC timing invariant are deferred to Ch.28 and Ch.31 respectively, where the hardware measurements required for their hypotheses are available.)
 
 \section{6. Sealed Seeds}\label{ch_12:sealed-seeds}
 
