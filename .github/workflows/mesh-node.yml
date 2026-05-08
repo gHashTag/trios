@@ -82,6 +82,7 @@ jobs:
     continue-on-error: true
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,7 +90,11 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: 🚂 Deploy trinity-node-0
-        run: railway up --service trinity-node-0 --detach
+        run: |
+          railway up \
+            --service trinity-node-0 \
+            --project-id "$RAILWAY_PROJECT_ID" \
+            --detach
         working-directory: crates/trios-mesh-node
         env:
           MESH_SEED: "0"
@@ -97,7 +102,11 @@ jobs:
           RUST_LOG: "info"
 
       - name: 🚂 Deploy trinity-node-1
-        run: railway up --service trinity-node-1 --detach
+        run: |
+          railway up \
+            --service trinity-node-1 \
+            --project-id "$RAILWAY_PROJECT_ID" \
+            --detach
         working-directory: crates/trios-mesh-node
         env:
           MESH_SEED: "1"
@@ -105,7 +114,11 @@ jobs:
           RUST_LOG: "info"
 
       - name: 🚂 Deploy trinity-node-2
-        run: railway up --service trinity-node-2 --detach
+        run: |
+          railway up \
+            --service trinity-node-2 \
+            --project-id "$RAILWAY_PROJECT_ID" \
+            --detach
         working-directory: crates/trios-mesh-node
         env:
           MESH_SEED: "2"
