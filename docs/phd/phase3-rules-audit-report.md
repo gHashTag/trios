@@ -10,7 +10,7 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 | Lane | Rule | Verdict | Notes |
 |------|------|---------|-------|
 | 3.1 | Anchor in every chapter | **PASS** | 70/70 chapters carry the anchor; `frontmatter/abstract.tex` PASSES (false-negative in initial regex — uses `\;` spacing); `appendix/H-acm-ae-checklist.tex` was MISSING — fixed in this branch |
-| 3.2 | (deferred — Neon SSOT side) | DEFERRED | Requires Neon row scan; Neon quota check pending |
+| 3.2 | Railway SSOT cross-check | DEFERRED | Requires `psql` against Railway service `phd-postgres-ssot` (`c5f37b42-832a-4acd-9749-381761c94957`) |
 | 3.3 | Forbidden seeds {42,43,44,45} | **PASS-with-annotation** | 7 hits in corpus — ALL in narrative-prohibition context (e.g. Ch.15: "the forbidden values 42, 43, 44, 45 — are never used; the Railway PostgreSQL ingestion script rejects any run metadata row containing those seed values"). R5-honest meta-discussion is allowed and required |
 | 3.4 | Sanctioned seeds (F₁₇..F₂₁, L₇, L₈) present | **PASS** | F₁₇=1597 (155 hits, 56 files) · F₁₈=2584 (131/55) · F₁₉=4181 (128/51) · F₂₀=6765 (129/49) · F₂₁=10946 (109/49) · L₇=29 (222/57) · L₈=47 (210/53) |
 | 3.5 | (deferred — bibliography balance) | DEFERRED | Owned by `phd-monograph-auditor` LB lane |
@@ -31,14 +31,16 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 
 ## Phase 3 lanes deferred to next session
 
-- 3.2 Neon SSOT cross-check — **LF-NEON-QUOTA-EXHAUSTED**: probed via
-  `neon_postgres-execute-custom-query` connector at 2026-05-09; response
-  `Your account or project has exceeded the compute time quota`. This is
-  the known state catalogued in `phd-monograph-auditor` v1.2 lesson #5 and
-  v1.1 lesson #5. Quota resets at month boundary (UTC). Railway hot-mirror
-  `phd-postgres-ssot` (`c5f37b42-832a-4acd-9749-381761c94957`) is the planned
-  failover once `bin/neon_to_railway` sync lands. R5-honest: emit warning,
-  skip the sub-check, do not fabricate PASS.
+- 3.2 Railway SSOT cross-check — **DEFERRED**: SoT is the Railway service
+  `phd-postgres-ssot` (`c5f37b42-832a-4acd-9749-381761c94957`). Audit needs
+  `psql` (or equivalent) connection to this Railway Postgres to count rows in
+  `ssot.chapters` and diff against the filesystem chapter set. Neon is the
+  legacy backend (per `leaderboard-snapshot` skill: «SoT is Railway service
+  phd-postgres-ssot; Neon is legacy»). R5-honest: do not fabricate PASS
+  without an actual row count. Railway connector `tri_railway_mcp_…` is
+  CONNECTED but exposes deploy/list tooling, not arbitrary SQL — SQL access
+  to `phd-postgres-ssot` requires DATABASE_URL env or a `railway run psql`
+  session, which is the next-session deliverable.
 
 ## 3.7 LT line-count gate — honest disclosure (this branch)
 
