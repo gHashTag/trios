@@ -256,6 +256,22 @@
 % Convenience: \citealp = author-year inline (used by 00-monad)
 \providecommand{\citealp}[1]{\textcite{#1}}
 
+% \citetheorem{INV-k} — robust hyperref to a Coq invariant in appendix F.
+% Phase 1 UNIFY task 1.6 (issue #380): chapters cite invariants via this macro;
+% appendix F-coq-citation-map.tex carries the canonical \label{thm:INV-k} per row,
+% backed byte-for-byte by assertions/igla_assertions.json (R5 honesty, R14 traceability).
+%
+% Falls back gracefully if the label is missing (typeset literal text in small caps,
+% same visual as defense/slides.tex stub) so a single-chapter compile never errors.
+%
+% Usage examples:
+%   \citetheorem{INV-1}            -> [INV-1] hyperlinked to appendix F row
+%   \citetheorem{INV-12}           -> [INV-12]
+%   \citetheorem{INV-1..INV-13}    -> raw label form for slide-style compound refs
+\providecommand{\citetheorem}[1]{%
+  \hyperref[thm:#1]{[\textsc{#1}]}%
+}
+
 % Page style
 \pagestyle{fancy}
 \fancyhf{}
