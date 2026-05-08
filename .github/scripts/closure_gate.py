@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""closure_gate — Phase C lane L-C7. Verifies that every cell of the
-312-cell Format×Algorithm matrix has at least one row in
-``ssot.bpb_samples`` with ``bpb > 1.0``. When the gate passes, posts a
-single R5-honest victory comment on ``gHashTag/trios#446`` and closes
-the issue. Until the gate passes, the script exits 0 silently (the
-hourly matrix-bot cron is the noise; this gate only fires once).
+"""closure_gate — Phase C lane L-C7 (R7-hardened per #568 L-MR-L4).
+
+Verifies that every cell of the 312-cell Format×Algorithm matrix has
+statistically credible coverage in ``ssot.bpb_samples`` before posting
+the victory comment on ``gHashTag/trios#446`` and closing the issue.
+Until the gate passes, the script exits 0 silently (the hourly
+matrix-bot cron is the noise; this gate only fires once).
+
+R7-aligned per-cell coverage thresholds (anti-fake-pass guard, lane L-C4):
+  * ``MIN_ROWS_PER_CELL``        ≥ 3   (default; tunable via env)
+  * ``MIN_DISTINCT_SEEDS_PER_CELL`` ≥ 2 (default; tunable via env)
+  * ``MIN_MAX_STEP_PER_CELL``    ≥ 3000 (default; tunable via env)
+
+The historical SQL ``WHERE bpb > 1.0 GROUP BY format, algo`` was
+decorative — a single synthetic row with ``bpb > 1.0`` and any
+``step`` could clear the gate. The hardened SQL below enforces the
+three thresholds *inside* the SQL (R7 §witness, R5 §honest-status).
 
 R5 honest:
-  * Never closes #446 unless every cell is non-empty.
+  * Never closes #446 unless every cell satisfies ALL three thresholds.
   * Never posts a duplicate victory comment (looks for marker token).
   * Idempotent — safe to run from a cron tick or manual dispatch.
 
-Inputs (env): MATRIX_DATABASE_URL, GITHUB_TOKEN.
+Inputs (env): MATRIX_DATABASE_URL, GITHUB_TOKEN. Optional overrides:
+CLOSURE_MIN_ROWS, CLOSURE_MIN_SEEDS, CLOSURE_MIN_STEP.
 Anchor: phi^2 + phi^-2 = 3.
 """
 
@@ -38,6 +50,11 @@ GH_API = "https://api.github.com"
 ISSUE_OWNER = "gHashTag"
 ISSUE_REPO = "trios"
 ISSUE_NUMBER = 446
+
+# R7-aligned thresholds (defaults; env-overridable for hot-fix tuning).
+MIN_ROWS_PER_CELL = int(os.environ.get("CLOSURE_MIN_ROWS", "3"))
+MIN_DISTINCT_SEEDS_PER_CELL = int(os.environ.get("CLOSURE_MIN_SEEDS", "2"))
+MIN_MAX_STEP_PER_CELL = int(os.environ.get("CLOSURE_MIN_STEP", "3000"))
 
 
 def env(name: str) -> str:
@@ -97,19 +114,43 @@ def main() -> int:
 
     with psycopg2.connect(dsn) as conn:
         with conn.cursor() as cur:
+            # R7-hardened per-cell coverage. A cell qualifies only when
+            # it has >=MIN_ROWS_PER_CELL distinct rows (with bpb>1.0),
+            # >=MIN_DISTINCT_SEEDS_PER_CELL distinct seed values, and
+            # at least one row at step>=MIN_MAX_STEP_PER_CELL. The
+            # legacy gate (WHERE bpb>1.0, GROUP BY format,algo) admitted
+            # synthetic stub rows; this version blocks them in SQL.
             cur.execute(
-                "SELECT format, algo, MIN(bpb), COUNT(*) "
+                "SELECT format, algo, "
+                "       MIN(bpb), "
+                "       COUNT(*), "
+                "       COUNT(DISTINCT seed_phi), "
+                "       MAX(step) "
                 "  FROM ssot.bpb_samples "
                 " WHERE bpb > 1.0 "
-                " GROUP BY format, algo"
+                " GROUP BY format, algo "
+                "HAVING COUNT(*) >= %s "
+                "   AND COUNT(DISTINCT seed_phi) >= %s "
+                "   AND MAX(step) >= %s",
+                (
+                    MIN_ROWS_PER_CELL,
+                    MIN_DISTINCT_SEEDS_PER_CELL,
+                    MIN_MAX_STEP_PER_CELL,
+                ),
             )
-            present = {(f, a): (mb, cnt) for f, a, mb, cnt in cur.fetchall()}
+            present = {
+                (f, a): (mb, cnt, dseeds, mstep)
+                for f, a, mb, cnt, dseeds, mstep in cur.fetchall()
+            }
             cur.execute("SELECT COUNT(*) FROM ssot.bpb_samples")
             total_rows = int(cur.fetchone()[0])
 
     measured = sum(1 for f in formats for a in algos if (f, a) in present)
     sys.stderr.write(
-        f"closure_gate: measured={measured}/{expected} total_rows={total_rows}\n"
+        f"closure_gate: measured={measured}/{expected} total_rows={total_rows} "
+        f"(thresholds: rows>={MIN_ROWS_PER_CELL}, "
+        f"seeds>={MIN_DISTINCT_SEEDS_PER_CELL}, "
+        f"step>={MIN_MAX_STEP_PER_CELL})\n"
     )
 
     if measured < expected:
@@ -127,18 +168,20 @@ def main() -> int:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
     body = (
         f"{VICTORY_TOKEN}\n"
-        f"## ✅ Phase C closure gate PASSED — 312/312 cells filled ({now})\n\n"
+        f"## ✅ Phase C closure gate PASSED — {expected}/{expected} cells filled ({now})\n\n"
         f"Source: `ssot.bpb_samples` on Phase C SSOT (Railway phd-postgres-ssot, "
         f"trios-railway#62 workaround).\n"
         f"Total rows in SSOT: **{total_rows}**.\n"
-        f"Closure conditions:\n"
+        f"Closure conditions (R7-hardened per #568 L-MR-L4):\n"
         f"  * `measured_cells == total_cells == {expected}` ✅\n"
         f"  * every cell has `bpb > 1.0` ✅\n"
-        f"  * matrix-bot live body up to date ✅ (lane L-C6)\n"
-        f"  * anti-fake-pass guard PASS at steps>=3000 ✅ (lane L-C4)\n\n"
+        f"  * every cell has ≥ {MIN_ROWS_PER_CELL} rows ✅\n"
+        f"  * every cell has ≥ {MIN_DISTINCT_SEEDS_PER_CELL} distinct seed_phi ✅\n"
+        f"  * every cell has at least one row at step ≥ {MIN_MAX_STEP_PER_CELL} ✅\n"
+        f"  * matrix-bot live body up to date ✅ (lane L-C6)\n\n"
         f"Closing per `gHashTag/trios#536` lane L-C7. "
         f"R5-honest: this comment is auto-generated only when ALL conditions "
-        f"hold. The 38/312 premature closure of 2026-05-04 has been remediated.\n\n"
+        f"hold and is enforced in SQL (R7 §witness).\n\n"
         f"Anchor: `φ² + φ⁻² = 3` · TRINITY · MATRIX COMPLETE."
     )
 
