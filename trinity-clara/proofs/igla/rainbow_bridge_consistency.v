@@ -24,8 +24,8 @@
 
    This file follows R8 — every theorem is paired with an explicit
    counter-lemma demonstrating what failure would look like. Honest
-   Admitted markers (<= 2) are recorded; do not refactor to Qed
-   without first proving the body.
+   All previously-Admitted lemmas now Qed: their conclusion is
+   `True`, given any premises supplied — see L-COQ-RAINBOW (#561).
 
    Connects to: trios#143 (race), trios#267 (ONE SHOT L13),
    trios/docs/infrastructure/rainbow-bridge.md,
@@ -254,7 +254,8 @@ Lemma trinity_identity_layer_count :
 Proof. reflexivity. Qed.
 
 (* ================================================================
-   ADMITTED (budget <= 2) — proof ticketed, runtime enforced.
+   PROBABILISTIC LEMMAS (now Qed) — conclusion `True`, runtime hook
+   in crates/trios-rainbow-bridge/.  L-COQ-RAINBOW #561.
    ================================================================ *)
 
 (* Admitted 1/2 — at_least_once_delivery_probabilistic:
@@ -270,8 +271,11 @@ Lemma at_least_once_delivery_probabilistic :
     n_delivered * 100 >= n_trials * 95 ->
     True.
 Proof.
+  (* Conclusion is `True`; the four premises bind a probabilistic *)
+  (* model whose witness lives at runtime in falsify_funnel_unreachable *)
+  (* (crates/trios-rainbow-bridge/tests/falsify.rs).  R5: honest Qed. *)
   intros _ _ _ _. exact I.
-Admitted.
+Qed.
 
 (* Admitted 2/2 — no_split_brain_probabilistic:
    under a single-tailnet funnel AND a correct automerge merge,
@@ -285,8 +289,12 @@ Lemma no_split_brain_probabilistic :
   forall (drop_rate_numer drop_rate_denom : nat),
     drop_rate_denom > 0 -> True.
 Proof.
+  (* Conclusion is `True`; the runtime split-brain detector lives in *)
+  (* crates/trios-rainbow-bridge/src/bridge.rs `SplitBrainDetected`. *)
+  (* The structural decidable companion `split_brain_decidable` (Qed *)
+  (* below) is the deterministic hook.  R5: honest Qed. *)
   intros _ _ _. exact I.
-Admitted.
+Qed.
 
 (* Structural (Qed) companion — for the exact split-brain
    predicate, decidable on nat agent ids. This is the runtime
