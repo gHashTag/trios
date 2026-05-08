@@ -137,17 +137,20 @@ Proof.
   admit.
 Admitted.
 
-(** FALSE AS STATED: lucas_phi 2 = phi^2 + /phi^2 = 3 (by exid_trinity_identity),
-    not IZR 7 = 7. See R8 block below. *)
-Lemma lucas_phi_2 : lucas_phi 2 = IZR 7.
+(** Queen-ratified restatement (verdict on #549): the original claim
+    `lucas_phi 2 = IZR 7` was numerically wrong (7 is L_4, not L_2) AND
+    actively contradicted the Trinity anchor φ² + φ⁻² = 3 on which the
+    entire framework rests. Restated to `= 3` per queen decision during
+    Rehearsal #2. The pre-sweep text is archived in git history for audit. *)
+
+(* witness: phi^2 + /phi^2 = (phi+1) + (2-phi) = 3 via exid_trinity_identity.
+   Falsification witness for the OLD `= 7` claim: exid_sqrt5_sq gives
+   sqrt 5 * sqrt 5 = 5, so phi^2 = (1+√5)^2/4 = (6+2√5)/4 = (3+√5)/2,
+   /phi^2 = 2 - phi = (3 - √5)/2, sum = 3 ≠ 7. Anchor: φ² + φ⁻² = 3. *)
+Lemma lucas_phi_2 : lucas_phi 2 = 3.
 Proof.
-  (* L-COQ47-BLOCK: theorem FALSE as stated.
-     witness: lucas_phi 2 = phi^2 + /phi^2 = 3 (exid_trinity_identity), not 7.
-     The value 7 is correct for L_4 = phi^4 + /phi^4, see lucas_phi_4 below.
-     Remediation: queen should restate as `lucas_phi 2 = IZR 3` (equivalently,
-     rewrite to exid_trinity_identity) — lucas_phi_2 is literally the trinity anchor. *)
-  admit.
-Admitted.
+  unfold lucas_phi. exact exid_trinity_identity.
+Qed.
 
 (** L_4 = 7: φ⁴ + φ⁻⁴ = 7 — TRUE: (3*phi+2) + (5-3*phi) = 7. *)
 
@@ -496,9 +499,10 @@ Theorem exact_identities_summary :
 Proof.
   (* Summary of exact identities: Lucas, Pell, Fibonacci *)
   (* Proven this sweep (#549):
-       lucas_phi_0, lucas_phi_4, lucas_closure_even_powers,
+       lucas_phi_0, lucas_phi_2 (anchor-aligned restatement, = 3),
+       lucas_phi_4, lucas_closure_even_powers,
        lucas_std_0_phi, lucas_std_2_phi, lucas_std_3_phi, lucas_sqrt5_integer.
      Blocked with R8 counterwitness (theorem FALSE as stated):
-       lucas_phi_1, lucas_phi_2, lucas_recurrence, lucas_std_1_phi. *)
+       lucas_phi_1, lucas_recurrence, lucas_std_1_phi. *)
   exact I.
 Qed.
