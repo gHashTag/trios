@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PhD SSOT Dashboard · v5.1.0</title>
+  <title>PhD SSOT Dashboard · v5.2.0</title>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <style>
     :root {
@@ -45,17 +45,74 @@
     .no-dups { color: var(--green); padding: 12px; text-align: center; background: var(--surface); border-radius: var(--radius); }
     .slug { font-family: monospace; color: var(--gold-light); font-size: 11px; }
     footer { text-align: center; color: var(--muted); padding: 24px; font-size: 11px; border-top: 1px solid var(--surface2); }
+
+    /* === Progress card (Rehearsal #2) === */
+    .progress-card {
+      background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(92,159,224,0.06) 100%);
+      border: 1px solid var(--gold);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 32px;
+    }
+    .progress-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .progress-title { font-size: 15px; color: var(--gold-light); font-weight: bold; letter-spacing: 0.5px; }
+    .progress-title .anchor-mini { color: var(--muted); font-size: 11px; font-weight: normal; margin-left: 8px; }
+    .progress-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+    .progress-bar-big {
+      position: relative;
+      background: var(--surface2);
+      border-radius: 99px;
+      height: 28px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .progress-fill-big {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green) 0%, var(--gold) 100%);
+      border-radius: 99px;
+      transition: width 0.6s ease;
+      box-shadow: 0 0 12px rgba(201,168,76,0.5);
+    }
+    .progress-bar-label {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text); font-weight: bold; font-size: 12px; letter-spacing: 0.5px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    }
+    .progress-legend { display: flex; gap: 24px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .legend-item .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .legend-closed .dot { background: var(--green); }
+    .legend-flight .dot { background: var(--blue); }
+    .legend-gap .dot { background: var(--red); }
+    .legend-label { color: var(--muted); }
+    .legend-value { color: var(--gold-light); font-weight: bold; }
+
+    /* === Coq block === */
+    .coq-stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .ext-link { color: var(--blue); text-decoration: none; }
+    .ext-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 <header>
   <div>
     <h1>📚 PhD SSOT Dashboard</h1>
-    <span class="anchor">φ² + φ⁻² = 3 · v5.1.0 · BAAI/bge-m3 · Railway PostgreSQL</span>
+    <span class="anchor">φ² + φ⁻² = 3 · v5.2.0 · BAAI/bge-m3 · Railway PostgreSQL · <a class="ext-link" href="/api/coq">/api/coq</a> · <a class="ext-link" href="/api/progress">/api/progress</a></span>
   </div>
 </header>
 
 <div class="container">
+
+  <!-- REHEARSAL #2 PROGRESS BAR (live, htmx auto-refresh every 60s) -->
+  <section
+    hx-get="/htmx/progress"
+    hx-trigger="every 60s"
+    hx-target="#progress-card"
+    hx-swap="outerHTML">
+    {% include "partials/progress_bar.html" %}
+  </section>
 
   <!-- STATS GRID -->
   <div class="stats-grid">
@@ -129,6 +186,18 @@
               hx-swap="outerHTML">⟳ refresh</button>
     </h2>
     {% include "partials/rag_table.html" %}
+  </section>
+
+  <!-- COQ ADMITTED LEDGER (R5 §honest-status · audit 2026-05-08) -->
+  <section>
+    <h2>
+      🔏 Coq Admitted Ledger · 100 files audited · 5 repos
+      <button class="refresh-btn"
+              hx-get="/htmx/coq"
+              hx-target="#coq-block"
+              hx-swap="outerHTML">⟳ refresh</button>
+    </h2>
+    {% include "partials/coq_table.html" %}
   </section>
 
 </div>
