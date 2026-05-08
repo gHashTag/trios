@@ -125,6 +125,43 @@ crosswalk; and
 (iv)~\textsc{Appendix~G: Data Availability} for the upstream Zenodo
 and Hugging Face datasets used by every empirical chapter.
 
+\subsection*{Matrix-ledger schema (\texttt{assertions/matrix\_samples.jsonl})}
+
+The \emph{format-algo matrix} CI sweep
+(\filepath{trios-trainer-igla/.github/workflows/format-algo-matrix.yml})
+emits one \filepath{cell.json} artefact per cell. The post-sweep
+\texttt{collect-ledger} job runs the Rust binary
+\filepath{matrix\_ledger collect} (R1, no Python or shell), merges every
+artefact into a single deterministic JSONL file, and opens an auto-PR
+titled \texttt{chore(matrix-ledger): refresh assertions/matrix\_samples.jsonl}
+against \filepath{trios-trainer-igla} \texttt{main}.
+
+Each row of \filepath{matrix\_samples.jsonl} carries the keys
+\texttt{cell\_id}, \texttt{format}, \texttt{algo}, \texttt{seed},
+\texttt{seed\_painted}, \texttt{hidden}, \texttt{step}, \texttt{bpb},
+\texttt{initial\_bpb}, \texttt{delta\_bpb}, \texttt{loss\_final},
+\texttt{falsifier\_2\_hit}, \texttt{commit\_sha}, \texttt{run\_id},
+\texttt{ts\_unix}, and an optional \texttt{parse\_error}. Forbidden
+seeds $\{42, 43, 44, 45\}$ are repainted to $\varphi$-derived integers
+$\{47, 89, 144, 123\}$ via \texttt{paint\_seed} (Lucas$_8$, Fib$_{11}$,
+Fib$_{12}$, Lucas$_{10}$ respectively), traced to
+\filepath{t27/proofs/forbidden\_seeds.v::forbidden\_seed\_repaint}; the
+original raw value is preserved in \texttt{seed\_raw} for audit. The
+falsifier-2 boolean fires per cell iff
+$\mathrm{bpb} > 1.85$ \emph{or} the reconstructed
+$\mathrm{loss}_{\text{final}} = \mathrm{bpb} \cdot \ln 2$ is non-finite
+or $\geq 10^{6}$, matching Appendix~B Falsifier-2.
+
+A full per-column R4 trace (Rust source file, line range, Coq proof if
+applicable) lives in
+\filepath{assertions/igla\_assertions.json::matrix\_ledger.column\_trace};
+the same block declares \texttt{forbidden\_seeds\_painted},
+\texttt{falsifier\_2\_clause}, and the downstream \texttt{unblocks}
+list (lanes L-C6, L-C7, and Appendix~B Falsifier-2 closure-gate). The
+ledger is the JSONL substrate that feeds Appendix~B falsifier records
+when the Neon \texttt{bpb\_samples} DDL (\texttt{trios-railway\#62})
+is provisioned.
+
 \subsection*{Operator notes}
 
 The defense package (lane LD of trios\#265) does not require this stub
