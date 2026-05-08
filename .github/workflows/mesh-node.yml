@@ -79,6 +79,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    continue-on-error: true
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
@@ -87,17 +88,7 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: 🔍 Check Railway auth
-        run: |
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "⚠️ RAILWAY_TOKEN secret is not set — skipping deploy"
-            echo "Add it: Settings → Secrets and variables → Actions → RAILWAY_TOKEN"
-            exit 0
-          fi
-          railway whoami
-
       - name: 🚂 Deploy trinity-node-0
-        if: env.RAILWAY_TOKEN != ''
         run: railway up --service trinity-node-0 --detach
         working-directory: crates/trios-mesh-node
         env:
@@ -106,7 +97,6 @@ jobs:
           RUST_LOG: "info"
 
       - name: 🚂 Deploy trinity-node-1
-        if: env.RAILWAY_TOKEN != ''
         run: railway up --service trinity-node-1 --detach
         working-directory: crates/trios-mesh-node
         env:
@@ -115,7 +105,6 @@ jobs:
           RUST_LOG: "info"
 
       - name: 🚂 Deploy trinity-node-2
-        if: env.RAILWAY_TOKEN != ''
         run: railway up --service trinity-node-2 --detach
         working-directory: crates/trios-mesh-node
         env:
