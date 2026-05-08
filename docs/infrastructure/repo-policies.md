@@ -85,6 +85,9 @@ branches must be brought up to date via `gh pr update-branch <N>` (creates a
 merge commit from main into the PR branch, R3-clean) — never via local
 force-push.
 
+## Zenodo DOI registry
+
+All Zenodo DOIs authored by Dmitrii Vasilev are catalogued in [`docs/infrastructure/zenodo-registry.md`](./zenodo-registry.md). When citing a DOI in `info.yaml`, README, LICENSE, ADR, paper, or commit message, verify the title against that registry. Do not invent sub-titles that are not present in Zenodo metadata.
 ## Authorship — Dmitrii Vasilev (standing rule)
 
 The author of all Trinity / gHashTag / trios / trinity-clara / trinity-fpga
