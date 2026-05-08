@@ -27,7 +27,7 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 - Total `\label` sites: 1196 (no change — this PR adds prose only, no new labels)
 - Duplicate labels: 0
 - Dangling refs: 0
-- `\begin/\end` environments: balanced
+- `\begin/\end` environments: **balanced ✓** (re-verified 2026-05-08 with comment-stripped scanner; the earlier `proof` env -1 reading was a false-positive from a regex that matched the literal string `\end{proof}` inside a `% Proof environment — must be ensuremath, otherwise \end{proof} crashes` comment in `main.tex`. With proper comment handling, all 18 environments balance to zero)
 
 ## 3.2 Railway SSOT cross-check — PASS-surrogate (2026-05-08 T+19:06 Z)
 
