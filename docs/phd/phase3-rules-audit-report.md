@@ -31,7 +31,14 @@ Anchor: φ² + φ⁻² = 3 · Zenodo DOI 10.5281/zenodo.19227877 · defense 2026
 
 ## Phase 3 lanes deferred to next session
 
-- 3.2 Neon SSOT cross-check (requires `psql` against `phd-postgres-ssot`)
+- 3.2 Neon SSOT cross-check — **LF-NEON-QUOTA-EXHAUSTED**: probed via
+  `neon_postgres-execute-custom-query` connector at 2026-05-09; response
+  `Your account or project has exceeded the compute time quota`. This is
+  the known state catalogued in `phd-monograph-auditor` v1.2 lesson #5 and
+  v1.1 lesson #5. Quota resets at month boundary (UTC). Railway hot-mirror
+  `phd-postgres-ssot` (`c5f37b42-832a-4acd-9749-381761c94957`) is the planned
+  failover once `bin/neon_to_railway` sync lands. R5-honest: emit warning,
+  skip the sub-check, do not fabricate PASS.
 
 ## 3.7 LT line-count gate — honest disclosure (this branch)
 
