@@ -12,7 +12,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/trios-mesh/      crates/trios-mesh/
 COPY crates/trios-mesh-node/ crates/trios-mesh-node/
 
-# Stub all other workspace members
+# Stub all other workspace members with UNIQUE names derived from path
 RUN python3 - <<'PY'
 import re, pathlib
 cargo = pathlib.Path('Cargo.toml').read_text()
@@ -24,10 +24,14 @@ for m in members:
     p = pathlib.Path(m)
     if p.exists():
         continue
+    # unique name = path segments joined with dashes, avoids xtask/xtask collision
+    unique_name = m.replace('/', '-').replace('_', '-').lower()
     (p / 'src').mkdir(parents=True, exist_ok=True)
     (p / 'src' / 'lib.rs').write_text('')
-    (p / 'Cargo.toml').write_text(f'[package]\nname = "{p.name}"\nversion = "0.1.0"\nedition = "2021"\n')
-print('OK')
+    (p / 'Cargo.toml').write_text(
+        f'[package]\nname = "{unique_name}"\nversion = "0.1.0"\nedition = "2021"\n'
+    )
+print('OK: stubs created with unique names')
 PY
 
 RUN cargo build --release -p trios-mesh-node
