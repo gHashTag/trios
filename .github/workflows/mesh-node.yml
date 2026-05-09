@@ -39,9 +39,10 @@ jobs:
       - name: 📦 Build mesh-node binary (no_persist for CI speed)
         run: cargo build --release -p trios-mesh-node --no-default-features
 
-      - name: 🧪 25-test E2E suite (L-E2E-1, trinity-fpga#23)
-        run: |
-          BIN=./target/release/mesh-node bash crates/trios-mesh-node/scripts/e2e_25.sh
+      - name: 🧪 25-test E2E suite (L-E2E-1, trinity-fpga#23) — Rust-only, L1 compliant
+        run: cargo run --release -p trios-mesh-node --bin e2e_25 --no-default-features
+        env:
+          BIN: ./target/release/mesh-node
 
       - name: 📊 Run benchmarks (criterion, L-E2E-5, no plots in CI)
         run: cargo bench -p trios-mesh --features std -- --quick --noplot
