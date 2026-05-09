@@ -10,6 +10,13 @@ repository = "https://github.com/gHashTag/trios"
 name = "mesh-node"
 path = "src/main.rs"
 
+# L-E2E-1 · trinity-fpga#23 — Rust-only 25-test E2E harness
+# Replaces scripts/e2e_25.sh (forbidden under L1).
+[[bin]]
+name = "e2e_25"
+path = "src/bin/e2e_25.rs"
+required-features = []
+
 [dependencies]
 trios-mesh = { path = "../trios-mesh", features = ["std"] }
 tokio              = { workspace = true }
@@ -27,3 +34,13 @@ hex                = "0.4"
 x25519-dalek       = { version = "2", features = ["static_secrets"] }
 chacha20poly1305   = "0.10"
 base64             = "0.22"
+
+# L-E2E-4 (trinity-fpga#26) — optional Neon Postgres persistence
+sqlx               = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio-rustls", "chrono"], optional = true }
+futures-util       = { version = "0.3", optional = true }
+
+[features]
+default = ["persist"]
+# Enable Neon/Postgres-backed persistence. Without DATABASE_URL the daemon
+# silently runs in-memory only — keeps the binary deployable on boards.
+persist = ["dep:sqlx", "dep:futures-util"]

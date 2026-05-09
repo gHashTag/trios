@@ -33,46 +33,27 @@ jobs:
             target
           key: ${{ runner.os }}-mesh-${{ hashFiles('crates/trios-mesh/Cargo.toml', 'crates/trios-mesh-node/Cargo.toml') }}
 
-      - name: 🧪 Run trios-mesh tests
+      - name: 🧪 Run trios-mesh tests (incl. ETX routing, L-E2E-2)
         run: cargo test -p trios-mesh --features std
 
-      - name: 📦 Build mesh-node binary
-        run: cargo build --release -p trios-mesh-node
+      - name: 📦 Build mesh-node binary (no_persist for CI speed)
+        run: cargo build --release -p trios-mesh-node --no-default-features
 
-      - name: 🚀 Smoke-test 2-node mesh
-        run: |
-          MESH_SEED=0 MESH_NODE_NAME=ci-node-0 PORT=18080 \
-            ./target/release/mesh-node &
-          NODE0_PID=$!
+      - name: 🧪 25-test E2E suite (L-E2E-1, trinity-fpga#23) — Rust-only, L1 compliant
+        run: cargo run --release -p trios-mesh-node --bin e2e_25 --no-default-features
+        env:
+          BIN: ./target/release/mesh-node
 
-          MESH_SEED=1 MESH_NODE_NAME=ci-node-1 PORT=18081 \
-            ./target/release/mesh-node &
-          NODE1_PID=$!
+      - name: 📊 Run benchmarks (criterion, L-E2E-5, no plots in CI)
+        run: cargo bench -p trios-mesh --features std -- --quick --noplot
+        continue-on-error: true
 
-          sleep 3
-
-          curl -sf http://localhost:18080/health && echo "✅ node-0 healthy"
-          curl -sf http://localhost:18081/health && echo "✅ node-1 healthy"
-
-          N0=$(curl -sf http://localhost:18080/info | python3 -c "import sys,json; print(json.load(sys.stdin)['dest_hash'])")
-          N1=$(curl -sf http://localhost:18081/info | python3 -c "import sys,json; print(json.load(sys.stdin)['dest_hash'])")
-          echo "Node-0: $N0"
-          echo "Node-1: $N1"
-
-          RESULT=$(curl -sf -X POST http://localhost:18080/announce \
-            -H 'Content-Type: application/json' \
-            -d "{\"dest_hash\":\"$N1\",\"sender\":\"$N1\",\"hops\":1,\"quality\":2}")
-          echo "ANNOUNCE: $RESULT"
-          echo $RESULT | grep -q '"accepted":true' && echo "✅ ANNOUNCE accepted"
-
-          HOP=$(curl -sf -X POST http://localhost:18080/next-hop \
-            -H 'Content-Type: application/json' \
-            -d "{\"dest_hash\":\"$N1\"}")
-          echo "Next-hop: $HOP"
-          echo $HOP | grep -q 'next_hop' && echo "✅ next-hop found"
-
-          kill $NODE0_PID $NODE1_PID 2>/dev/null || true
-          echo "🎉 Smoke tests passed! φ² + φ⁻² = 3"
+      - name: 📄 Upload bench results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trios-mesh-bench-${{ github.sha }}
+          path: target/criterion/
+          if-no-files-found: ignore
 
   deploy:
     name: "🚂 Deploy 3 nodes to Railway"

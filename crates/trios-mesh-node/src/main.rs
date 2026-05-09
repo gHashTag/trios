@@ -5,6 +5,8 @@
 //! dest_hash = SHA256(x25519_pubkey)[..16] — single canonical derivation
 
 mod crypto;
+#[cfg(feature = "persist")]
+mod persist;
 
 use anyhow::Result;
 use axum::{
@@ -17,9 +19,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tracing::info;
+#[cfg(feature = "persist")]
+use tracing::warn;
 
 use trios_mesh::routing::RoutingTable;
 use crypto::MeshKeypair;
+
+#[cfg(feature = "persist")]
+use sqlx::PgPool;
 
 type DestHash = [u8; 16];
 
@@ -33,6 +40,8 @@ struct NodeState {
     table:     Arc<Mutex<RoutingTable>>,
     node_name: String,
     tick:      Arc<Mutex<u32>>,
+    #[cfg(feature = "persist")]
+    db:        Option<PgPool>,
 }
 
 impl NodeState {
@@ -57,6 +66,8 @@ impl NodeState {
             table:     Arc::new(Mutex::new(table)),
             node_name: name.to_owned(),
             tick:      Arc::new(Mutex::new(0)),
+            #[cfg(feature = "persist")]
+            db:        None,
         }
     }
 
@@ -177,11 +188,36 @@ async fn post_announce(
         }
     }
     let tick = s.bump_tick();
-    let mut tbl = s.table.lock().unwrap();
-    let accepted = tbl.process_announce(dest, via, req.hops, req.quality, tick);
-    let routes   = tbl.len();
+    let accepted;
+    let routes;
+    let pubkey_bytes = req.pubkey.as_deref().and_then(hex_to_pubkey);
+    {
+        let mut tbl = s.table.lock().unwrap();
+        accepted = tbl.process_announce(dest, via, req.hops, req.quality, tick);
+        routes   = tbl.len();
+    }
     if accepted {
         info!("✅ ANNOUNCE accepted dest={} hops={}", &req.dest_hash[..8], req.hops);
+        // L-E2E-4: best-effort mirror to Neon. Spawned so the announce hot
+        // path never blocks on DB I/O — errors are logged inside upsert_route.
+        #[cfg(feature = "persist")]
+        if let Some(pool) = s.db.clone() {
+            let self_dest = s.dest_hash;
+            tokio::spawn(async move {
+                persist::upsert_route(
+                    &pool,
+                    &self_dest,
+                    &dest,
+                    &via,
+                    req.hops,
+                    req.quality,
+                    pubkey_bytes.as_ref(),
+                )
+                .await;
+            });
+        }
+        #[cfg(not(feature = "persist"))]
+        let _ = pubkey_bytes; // silence unused warning when feature is off
     }
     Json(AnnounceResp { accepted, routes })
 }
@@ -293,11 +329,36 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>().unwrap_or(8080);
 
-    let state = NodeState::new(seed, &name);
+    #[cfg_attr(not(feature = "persist"), allow(unused_mut))]
+    let mut state = NodeState::new(seed, &name);
 
-    info!("🔺 Trinity Mesh Node v0.2.1 '{}' on :{}", name, port);
+    info!("🔺 Trinity Mesh Node v0.2.2 '{}' on :{}", name, port);
     info!("🔐 X25519-ECDH + ChaCha20-Poly1305 (E2E default)");
     info!("φ² + φ⁻² = 3");
+
+    // L-E2E-4 — optional Neon-backed persistence (feature `persist`, default ON).
+    #[cfg(feature = "persist")]
+    {
+        match persist::try_open_from_env().await {
+            Ok(Some(pool)) => {
+                if let Err(e) = persist::migrate(&pool).await {
+                    warn!("💾 migrations failed: {e:?} — continuing without persistence");
+                } else {
+                    match persist::load_routes(&pool, &state.dest_hash).await {
+                        Ok(restored) => {
+                            let mut tbl = state.table.lock().unwrap();
+                            tbl.restore_from(restored);
+                            info!("💾 restored {} route(s) on boot", tbl.len());
+                        }
+                        Err(e) => warn!("💾 load_routes failed: {e:?}"),
+                    }
+                    state.db = Some(pool);
+                }
+            }
+            Ok(None) => {} // already logged inside try_open_from_env
+            Err(e) => warn!("💾 Neon connection failed: {e:?} — continuing in-memory"),
+        }
+    }
 
     let app = Router::new()
         .route("/health",   get(health))
