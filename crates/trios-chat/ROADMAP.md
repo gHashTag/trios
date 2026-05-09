@@ -4,7 +4,7 @@
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-14: **209 tests · 25/25 e2e · 1300/1300 falsifier · 26 categories · 101 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-15: **221 tests · 25/25 e2e · 1400/1400 falsifier · 28 categories · 112 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -51,7 +51,7 @@ Threat-model invariants are formalised in `proofs/chat/Trinity_Chat.v`
 
 ---
 
-## Waves shipped (W1–W14)
+## Waves shipped (W1–W15)
 
 Every wave is one merged PR landing on `main`. Wave-N+1 always branches
 from `origin/main` immediately after Wave-N is merged. The cadence is
@@ -73,7 +73,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W11 | (PR open)  | 173 | INV-CHAT-47..53 (70 Qed total) | 1000 | 20 | skipped_keys_dos + mls_welcome_replay | [#689](https://github.com/gHashTag/trios/pull/689) |
 | W12 | (open) | 185 | INV-CHAT-54..60 (79 Qed total) | 1100 | 22 | prekey_exhaustion + mls_leaf_compromise | #695 (open) |
 | W13 | (open) | 197 | INV-CHAT-61..67 (90 Qed total) | 1200 | 24 | deniability_break + confused_deputy | #698 (open) |
-| **W14** | **(this PR)** | **209** | **INV-CHAT-68..74 (101 Qed total)** | **1300** | **26** | **safety_number_swap + mls_external_commit** | **(open)** |
+| W14 | (open) | 209 | INV-CHAT-68..74 (101 Qed total) | 1300 | 26 | safety_number_swap + mls_external_commit | #701 (open) |
+| **W15** | **(this PR)** | **221** | **INV-CHAT-75..81 (112 Qed total)** | **1400** | **28** | **egress_fingerprint + identity_revoke** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -154,6 +155,50 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 - No new axioms — both lanes prove constructively.
 - Falsifier 900 → 1000 (PI-SKP-001..050 + PI-WLR-001..050).
 - 18 → 20 threshold lanes in `falsifier_runner` (all ≥ 0.95 except
+  `indirect ≥ 0.90`).
+
+### Wave-15 — Tailscale-funnel egress fingerprinting + identity-key revocation
+
+- **L-CHAT-7-funnel** (R-CHAT-10) — EFP-01..06 in `CR-CHAT-07`, with new
+  `crates/trios-chat/rings/CR-CHAT-07/src/egress_fingerprint.rs` shipping
+  `EgressFingerprint` / `EgressObservables` / `TlsClass` /
+  `uniform_length_class` / `uniform_burst_ms`:
+  - canonical TLS class accepted (EFP-01) — `(version, alpn, cipher) =
+    (0x0303, h2, AES-128-GCM-SHA256)`;
+  - non-canonical TLS class rejected (EFP-02) with
+    `Error::Invariant("egress_fingerprint_tls_class")`;
+  - length quantiser maps to canonical bins `{1024, 4096, 16384, 65536}` (EFP-03);
+  - burst-gap quantiser maps to canonical bins `{50, 250, 1000, 5000}` ms (EFP-04);
+  - same-bin flows produce identical fingerprints — unlinkability across
+    egress flows (EFP-05);
+  - cross-bin flows differ ONLY along the canonical axes, never via raw
+    bytes / raw ms (EFP-06).
+- **L-CHAT-1-revoke** (R-CHAT-1) — REV-01..06 in `CR-CHAT-01`, with new
+  `crates/trios-chat/rings/CR-CHAT-01/src/revocation.rs` shipping
+  `RevocationCert` / `RevocationLedger` / `verify_identity_with_grace` /
+  `RevocationReason::{Compromise, Rotate, Lost}`:
+  - well-formed self-signed cert verifies (REV-01) — signature is over
+    the canonical 41-byte body `revoked_key ‖ revoked_at_le ‖ reason`;
+  - tampered cert rejected with `revocation_invalid_signature` (REV-02);
+  - post-revocation message outside the grace window rejected with
+    `identity_revoked` (REV-03);
+  - pre-revocation message accepted regardless of how late the verifier
+    sees it (REV-04);
+  - grace-window edge: `now == revoked_at + grace_secs` accepts,
+    `now == revoked_at + grace_secs + 1` rejects (REV-05);
+  - replayed-with-later-timestamp cert rejected (`revocation_replay_rejected`),
+    AND future-dated `signed_at` rejected (`clock_skew_future`) regardless of
+    revocation state (REV-06).
+- Coq INV-CHAT-75..81 + 3 helpers (`quantise15_smallest_below`,
+  `egress_class_eq_of_eq`, `pre_revocation_accepts`); 11 new Qed →
+  **112 Qed total**.
+- **Zero new axioms.** Both lanes prove constructively. The egress-
+  fingerprint quantiser is modeled with abstract `LEN_CLASS_*` /
+  `BURST_CLASS_*` / `CANONICAL_*` `Variable`s instead of concrete nat
+  literals — this dodges the Coq `abstract-large-number` slow-path on
+  `65536` and keeps `coqc` under one second.
+- Falsifier 1300 → 1400 (PI-EFP-001..050 + PI-REV-001..050).
+- 26 → 28 threshold lanes in `falsifier_runner` (all ≥ 0.95 except
   `indirect ≥ 0.90`).
 
 ### Wave-14 — safety-number / OOB identity + MLS external-commit forgery
@@ -246,7 +291,7 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 
 ---
 
-## Falsifier-corpus categories (W1–W14) — 26 total
+## Falsifier-corpus categories (W1–W15) — 28 total
 
 | # | Category | First wave | Threshold |
 | :-- | :-- | :-- | :-- |
@@ -274,18 +319,20 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | 22 | mls_leaf_compromise  | W12 | 0.95 |
 | 23 | deniability_break        | W13 | 0.95 |
 | 24 | confused_deputy          | W13 | 0.95 |
-| **25** | **safety_number_swap**   | **W14** | **0.95** |
-| **26** | **mls_external_commit**  | **W14** | **0.95** |
+| 25 | safety_number_swap   | W14 | 0.95 |
+| 26 | mls_external_commit  | W14 | 0.95 |
+| **27** | **egress_fingerprint** | **W15** | **0.95** |
+| **28** | **identity_revoke**    | **W15** | **0.95** |
 
 `falsifier_runner` is the gate: it loads `corpus/prompt_injection.jsonl`,
 runs `validate_output` on each entry, and exits non-zero if any threshold
-lane drops below its bound. Wave-14 ships 1300/1300 blocked across 26 lanes.
+lane drops below its bound. Wave-15 ships 1400/1400 blocked across 28 lanes.
 
 ---
 
-## Coq invariant index (INV-CHAT-1..74)
+## Coq invariant index (INV-CHAT-1..81)
 
-Cumulative `Qed.` count: **101 / 0 Admitted**. R5 admission budget: **0/10 used**.
+Cumulative `Qed.` count: **112 / 0 Admitted**. R5 admission budget: **0/10 used**.
 
 | Range | Wave | Theme |
 | :-- | :-- | :-- |
@@ -299,18 +346,19 @@ Cumulative `Qed.` count: **101 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-47..53 | W11   | skipped-keys cap + Welcome replay/forge |
 | INV-CHAT-54..60 | W12 | prekey-bundle exhaustion + MLS leaf-key compromise |
 | INV-CHAT-61..67 | W13 | cryptographic deniability + confused-deputy capability |
-| **INV-CHAT-68..74** | **W14** | **safety-number / OOB identity + MLS external-commit forgery** |
+| INV-CHAT-68..74 | W14 | safety-number / OOB identity + MLS external-commit forgery |
+| **INV-CHAT-75..81** | **W15** | **egress fingerprinting (canonical TLS / length / burst-gap classes) + identity-key revocation with grace window** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, and Wave-13 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, and Wave-15 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W15–W20) — `[ASPIRATIONAL]`
+## Future waves (W16–W20) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -321,8 +369,8 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | ~~W12~~ — SHIPPED (see Wave-12 detail above) | | | | | | |
 | ~~W13~~ — SHIPPED (see Wave-13 detail above) | | | | | | |
-| ~~W14~~ — SHIPPED in this PR (see Wave-14 detail above) | | | | | | |
-| **W15** | L-CHAT-7-funnel (R-CHAT-10) — Tailscale-funnel egress fingerprinting / TLS-fingerprint | L-CHAT-1-revoke (R-CHAT-1) — identity-key revocation + grace-window | `egress_fingerprint`, `identity_revoke` | INV-CHAT-75..81 (≥110 Qed) | ≈221 | 1400 / 28 cats |
+| ~~W14~~ — SHIPPED (see Wave-14 detail above) | | | | | | |
+| ~~W15~~ — SHIPPED in this PR (see Wave-15 detail above) | | | | | | |
 | **W16** | L-CHAT-2-clock (R-CHAT-2) — clock-skew / replay-window edge cases | L-CHAT-5-rotate (R-CHAT-5) — at-rest key rotation / re-encryption ordering | `clock_skew_replay`, `at_rest_rotation` | INV-CHAT-82..88 (≥120 Qed) | ≈233 | 1500 / 30 cats |
 | **W17** | L-CHAT-9-tool (R-CHAT-12) — tool-call argument confusion / type-confusion injection | L-CHAT-3-pcs (R-CHAT-11) — group-PCS healing after device compromise | `tool_arg_confusion`, `group_pcs_break` | INV-CHAT-89..95 (≥130 Qed) | ≈245 | 1600 / 32 cats |
 | **W18** | L-CHAT-6-cls (R-CHAT-9) — padding-class oracle (timing-class leak) | L-CHAT-7-jitter (R-CHAT-10) — jitter-injection / inter-arrival side-channel | `padding_class_oracle`, `jitter_side_channel` | INV-CHAT-96..102 (≥140 Qed) | ≈257 | 1700 / 34 cats |
@@ -347,7 +395,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1300/1300 blocked` (W14) at 26 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1400/1400 blocked` (W15) at 28 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |

@@ -50,6 +50,13 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod egress_fingerprint;
+pub use egress_fingerprint::{
+    uniform_burst_ms, uniform_length_class, AlpnId, CipherId, EgressFingerprint,
+    EgressObservables, TlsClass, CANONICAL_BURST_GAPS_MS, CANONICAL_LENGTH_CLASSES,
+    CANONICAL_TLS_CLASS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
