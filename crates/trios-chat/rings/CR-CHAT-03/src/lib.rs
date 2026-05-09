@@ -23,6 +23,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod external_commit;
+pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
