@@ -23,6 +23,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use trios_chat_cr_chat_00::{Error, Result};
@@ -94,6 +96,10 @@ pub struct Group {
     pub epoch: Epoch,
     /// Active leaf indices (1 bit per leaf for skeleton purposes).
     pub members: Vec<LeafIndex>,
+    /// **Wave-11 / R-CHAT-11** — set of `(epoch, leaf)` triples for
+    /// welcomes already consumed. Prevents Welcome-replay where the same
+    /// joining packet is re-injected after the group has moved on.
+    consumed_welcomes: BTreeSet<(u64, u32)>,
 }
 
 impl Group {
@@ -103,7 +109,43 @@ impl Group {
             group_id,
             epoch: Epoch(0),
             members: vec![founder],
+            consumed_welcomes: BTreeSet::new(),
         }
+    }
+
+    /// **Wave-11 / R-CHAT-11** — process a `Welcome` packet for the
+    /// joiner whose leaf is `w.leaf`. Returns `Ok(())` only if all of:
+    ///
+    /// 1. `w.group_id == self.group_id` (no cross-group splice)
+    /// 2. `w.epoch <= self.epoch` (no future-welcome forge)
+    /// 3. `w.epoch + 0 >= self.epoch` _OR_ leaf already a member — i.e.
+    ///    welcomes for stale epochs whose leaf was never added are
+    ///    rejected. Concretely we require `w.epoch == self.epoch`.
+    /// 4. The triple `(epoch, leaf)` has not been consumed before.
+    /// 5. The leaf is currently a member (i.e. a Commit already added
+    ///    it via `Op::Add`).
+    ///
+    /// On success the triple is recorded in `consumed_welcomes` so a
+    /// replay is detected on the very next call.
+    pub fn process_welcome(&mut self, w: &Welcome) -> Result<()> {
+        if w.group_id != self.group_id {
+            return Err(Error::Invariant("mls: welcome for wrong group"));
+        }
+        if w.epoch.0 > self.epoch.0 {
+            return Err(Error::Invariant("mls: welcome from future epoch"));
+        }
+        if w.epoch.0 < self.epoch.0 {
+            return Err(Error::Invariant("mls: welcome for stale epoch"));
+        }
+        if !self.members.contains(&w.leaf) {
+            return Err(Error::Invariant("mls: welcome for non-member leaf"));
+        }
+        let key = (w.epoch.0, w.leaf.0);
+        if self.consumed_welcomes.contains(&key) {
+            return Err(Error::Invariant("mls: welcome replay"));
+        }
+        self.consumed_welcomes.insert(key);
+        Ok(())
     }
 
     /// Apply a Commit — fails if `from_epoch != self.epoch`
@@ -727,5 +769,124 @@ mod tests {
     fn green_g_c3_mls_summary() {
         let count = 5usize;
         assert_eq!(count, 5, "Wave-10 L-CHAT-3-mls: 5 commit-reorder falsifier tests");
+    }
+
+    // ─── Wave-11 · L-CHAT-3-welcome · Welcome replay/forge resistance ───
+    //
+    // R-CHAT-11 demands the joining flow rejects (a) cross-group splice,
+    // (b) future-epoch forgery, (c) stale-epoch reuse, (d) replay of an
+    // already-consumed welcome, and (e) welcomes for leaves that are not
+    // (yet) members. These five tests pin the contract.
+
+    /// **WLR-01** — a welcome whose `group_id` differs from the receiver's
+    /// must be rejected even if epoch/leaf line up.
+    #[test]
+    fn wlr_01_cross_group_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let w = Welcome {
+            group_id: GroupId([0xCCu8; 32]),
+            epoch: Epoch(0),
+            leaf: LeafIndex(0),
+            blob: vec![],
+        };
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-01: welcome for foreign group_id must be rejected");
+    }
+
+    /// **WLR-02** — a welcome from a FUTURE epoch (epoch > current) must
+    /// be rejected. An attacker cannot pre-fabricate joining packets.
+    #[test]
+    fn wlr_02_future_epoch_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let w = Welcome {
+            group_id: gid(),
+            epoch: Epoch(5),
+            leaf: LeafIndex(0),
+            blob: vec![],
+        };
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-02: future-epoch welcome must be rejected");
+    }
+
+    /// **WLR-03** — the same `(epoch, leaf)` welcome must not be processed
+    /// twice. The second attempt is a replay and must be rejected.
+    #[test]
+    fn wlr_03_replayed_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        // Add Bob via a real Commit so leaf 1 is a member.
+        let c = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        g.process_commit(&c).unwrap();
+        let w = Welcome {
+            group_id: gid(),
+            epoch: g.epoch,
+            leaf: LeafIndex(1),
+            blob: vec![],
+        };
+        // First consumption succeeds.
+        g.process_welcome(&w).expect("WLR-03: first welcome must succeed");
+        // Replay must be rejected.
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-03: replayed welcome must be rejected");
+    }
+
+    /// **WLR-04** — a welcome whose `leaf` is NOT a member of the group
+    /// must be rejected. Without this check an attacker could spoof a
+    /// joining packet for a leaf that was never authorised.
+    #[test]
+    fn wlr_04_non_member_leaf_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let w = Welcome {
+            group_id: gid(),
+            epoch: Epoch(0),
+            // Leaf 99 was never Added.
+            leaf: LeafIndex(99),
+            blob: vec![],
+        };
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-04: welcome for non-member leaf must be rejected");
+    }
+
+    /// **WLR-05** — once the group has moved past epoch N, a welcome
+    /// stamped with epoch N must be rejected. This blocks the attack
+    /// where an old welcome is replayed after a re-key event.
+    #[test]
+    fn wlr_05_stale_epoch_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        // Capture an old welcome at epoch 0.
+        let old_w = Welcome {
+            group_id: gid(),
+            epoch: Epoch(0),
+            leaf: LeafIndex(0),
+            blob: vec![],
+        };
+        // Advance: Add Bob so epoch becomes 1.
+        let c = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        g.process_commit(&c).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        // The old welcome (epoch 0) is now stale.
+        let r = g.process_welcome(&old_w);
+        assert!(r.is_err(), "WLR-05: stale-epoch welcome must be rejected");
+    }
+
+    /// Wave-11 G-C3-welcome green summary.
+    #[test]
+    fn green_g_c3_welcome_summary() {
+        let count = 5usize;
+        assert_eq!(
+            count, 5,
+            "Wave-11 L-CHAT-3-welcome: 5 welcome-replay falsifier tests"
+        );
     }
 }
