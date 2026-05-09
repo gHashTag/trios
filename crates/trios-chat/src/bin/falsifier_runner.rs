@@ -117,6 +117,9 @@ fn main() {
         ("mls_commit_reorder", 0.95_f64),
         ("skipped_keys_dos", 0.95_f64),
         ("mls_welcome_replay", 0.95_f64),
+        // Wave-12 categories
+        ("prekey_exhaustion", 0.95_f64),
+        ("mls_leaf_compromise", 0.95_f64),
     ] {
         if let Some((n, b)) = by_cat.get(cat) {
             if *n == 0 {
@@ -132,5 +135,5 @@ fn main() {
     if failed {
         std::process::exit(1);
     }
-    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay >=95%, indirect >=90%)");
+    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise >=95%, indirect >=90%)");
 }
