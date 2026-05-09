@@ -52,6 +52,13 @@ scaffolding that makes the number believable.
 
 This chapter documents the bits-per-byte (BPB) benchmark protocol for Trinity S³AI and the complementary Railway PostgreSQL write-back mechanism that persists training trajectories for audit. The formally verified invariant INV-1 (\texttt{Trinity.Canonical.Igla.INV1\_BpbMonotoneBackward}, nine Qed) certifies that BPB is monotonically non-increasing during backward passes when the learning rate satisfies \(\text{lr} = 0.004\) --- the champion rate identified by the IGLA RACE in Ch.21. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) enters through the Gate-2 threshold (BPB \(\leq 1.85\)) and Gate-3 threshold (BPB \(\leq 1.5\)), which are derived from the spectral parameter \(\alpha_\varphi\). Measurements at training step \(\geq 4000\) confirm BPB \(= 1.82\) (Gate-2 pass) for the M4 (2.7B) model with GF16 PHI\_BIAS=60 weights.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-J-troubleshooting.jpg}}
+\caption{Azbuka of the Tridevyatoe — Appendix J: Hardware Troubleshooting Log (BLK-001..005) (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 Bits per byte (BPB) is the primary accuracy metric for language modelling in this dissertation. It is related to perplexity by BPB \(= \log_2(\text{PPL}) / \log_2(e)\) and measures the average information cost of predicting each byte of a held-out test corpus. BPB is preferred over perplexity because it is tokeniser-independent and because its theoretical lower bound under an optimal compressor is the Shannon entropy of the byte distribution --- a quantity that can be bounded using the \(\varphi\)-substrate identity \(\varphi^2 + \varphi^{-2} = 3\) {[}1{]}.

@@ -64,6 +64,13 @@ authors.
 
 A systematic ablation study isolates the contribution of each architectural decision in the Trinity S³AI pipeline to the aggregate BPB metric. This chapter presents a full \(2^k\) factorial design over \(k=7\) binary factors --- weight ternarity, \(\varphi\)-structured attention, canonical seed selection, golden-ratio positional encoding, MXFP4 quantisation, zero-DSP FPGA scheduling, and the \(\varphi^2 + \varphi^{-2} = 3\) normalisation constraint --- and reports the first-order effects and their interactions. Results confirm that seed selection and the normalisation constraint contribute the largest independent BPB reduction, while the FPGA scheduling factor is orthogonal to BPB but critical for the 1 W energy target. The ablation matrix is the empirical counterpart to the formal Coq proof obligations distributed across the dissertation.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_19.jpg}}
+\caption{Azbuka of the Tridevyatoe — Statistical Analysis (Welch-t) (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 Architectural claims in neural network research are frequently confounded: multiple non-independent design choices are adopted simultaneously, and the reported performance improvement is attributed to the combination rather than to any single factor. The Trinity S³AI programme is not immune to this confound. The HSLM benchmarks cited in Ch.28 reflect a fully assembled system running on the QMTech XC7A100T FPGA at 0 DSP slices, 92 MHz, 63 tokens/sec, and 1 W power --- but they do not, by themselves, reveal which of the seven major design choices drives the BPB improvement.

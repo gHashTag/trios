@@ -59,6 +59,13 @@ how close the system already is to its own finish line.
 
 Designing ternary neural-network quantisation requires navigating a two-dimensional Pareto frontier between dynamic range and numerical precision, both of which are constrained by the finite GF(16) arithmetic available in the Trinity S³AI kernel. This chapter formalises that frontier using five machine-verified Coq invariants --- INV-1, INV-1b, INV-4, INV-9, and their composition --- and derives the conjecture C1 that the KL-divergence \(\text{KL}(W \| \text{gfN}(W))\) is minimised when the exponent-to-mantissa split ratio equals \(\phi^{-1}\). The anchor identity \(\phi^2 + \phi^{-2} = 3\) enters as the algebraic certificate that the ternary alphabet can represent the full integer range \(\{-1,0,+1\}\) without bias, and all kernel positivity lemmas --- \texttt{coeff\_53\_pos}, \texttt{sqrt5\_sq}, \texttt{phi\_pos} --- are verified in \filepath{t27/proofs/canonical/kernel/Phi.v}. The 51-theorem count for this chapter represents the largest single-chapter Coq contribution in the dissertation.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-14-platonic-solids.jpg}}
+\caption{Azbuka of the Tridevyatoe — Platonic Solids: Eval Semantics --- BPB Metric (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 The theoretical link between \(\phi^2 + \phi^{-2} = 3\) and quantisation precision was first suggested by the closure argument of Ch.3: because the ternary multiplication table closes exactly on \(\{-1,0,+1\}\), the representation error for any weight \(w \in [-1,1]\) can be bounded in terms of the golden ratio without appeal to floating-point rounding modes. Ch.4 then introduced the sacred constant \(\alpha_\phi = \ln(\phi^2)/\pi \approx 0.306\) as a scaling coefficient for entropy calculations. The present chapter takes both results as inputs and constructs the \emph{L1 range×precision Pareto curve}: the set of (range, BPB) pairs that are simultaneously achievable under ternary GF(16) arithmetic while satisfying the formal invariants tracked in \filepath{t27/proofs/canonical/igla/}.

@@ -62,6 +62,13 @@ constant, or a hardware measurement; none is estimated.
 
 This chapter defines the GoldenFloat (GF) number family---a hierarchy of floating-point formats whose mantissa widths are drawn from the Fibonacci sequence and whose three-band exponent structure derives from the identity \(\varphi^2 + \varphi^{-2} = 3\). Five formats are specified: GF4, GF8, GF16, GF32, and GF64. For each format, formal bounds on rounding error, overflow probability, and numeric closure are stated and proved in Coq (296 + 1 = 297 total Qed across the corpus; six theorems anchored directly to this chapter). The GF16 safe-domain invariant (INV-3) and the Lucas-closure invariant (INV-5) are proved in their respective canonical files. The results show that GF16 achieves a bits-per-byte compression ratio of \(\leq 1.85\) at Gate-2 while remaining formally overflow-free within the declared operating range.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_14.jpg}}
+\caption{Azbuka of the Tridevyatoe — Eval Semantics: The BPB Metric (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 Floating-point arithmetic in neural-network inference has evolved from FP32 through FP16, BF16, and now sub-8-bit formats such as MXFP4 {[}1{]}. Each step reduces memory bandwidth and arithmetic energy but introduces new sources of error that are difficult to bound analytically. The Trinity S³AI system takes a different approach: rather than empirically tuning a fixed-width format, it derives format parameters algebraically from the golden ratio \(\varphi = (1+\sqrt{5})/2\) via the anchor identity

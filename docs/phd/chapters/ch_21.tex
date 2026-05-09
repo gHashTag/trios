@@ -46,6 +46,13 @@ later chapters analyse.
 
 IGLA RACE is a multi-agent benchmarking protocol in which a fleet of independent training agents compete to satisfy the formally verified victory criterion: BPB \(< 1.85\) (Gate-2) or BPB \(< 1.5\) (Gate-3), achieved with at least three distinct sanctioned seeds, at training step \(\geq 4000\). The criterion is formalised in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v} with 28 Coq theorems under invariant INV-7; six refutation theorems prove that degenerate configurations (too few seeds, insufficient steps, proxy-only wins) cannot be mistaken for a genuine victory. The protocol is grounded in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\), which supplies the Gate thresholds via the spectral constant \(\alpha_\varphi\). The champion configuration --- lr \(= 0.004\), GF16 PHI\_BIAS=60, seed triple \((1597, 2584, 4181)\) --- achieves mean BPB \(= 1.830\) at step 5000, satisfying Gate-2.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-C-golden-benchmark.jpg}}
+\caption{Azbuka of the Tridevyatoe — Appendix C: Golden Benchmark --- GF4/GF8/GF16 Tables (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 Single-run training evaluations are vulnerable to seed artefacts, hyperparameter overfitting, and infrastructure variance. IGLA RACE addresses this by requiring a fleet of agents --- each running an independent training job with a distinct seed from the sanctioned pool \(\{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}\) {[}1{]} --- to all pass the same Gate criterion before a champion configuration is declared. The name IGLA (Игла, Russian for ``needle'') reflects the precision required: passing through the narrow Gate-2 window while satisfying three independent constraints simultaneously (BPB, step count, seed diversity).

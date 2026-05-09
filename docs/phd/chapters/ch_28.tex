@@ -35,6 +35,13 @@ Two bitstreams---B001 and B002, archived on Zenodo---constitute the primary evid
 
 The QMTech XC7A100T development board hosts the primary hardware realisation of the Trinity S³AI ternary inference engine. Running at 92 MHz with a measured throughput of 63 tokens per second and a total board power draw of 1 W, the implementation consumes zero Xilinx DSP48 blocks, relying instead on LUT-based ternary accumulation derived from the zero-absorption laws proved in Ch.4. The anchor identity \(\phi^2 + \phi^{-2} = 3\) governs the LUT truth-table structure: because ternary multiplication closes on \(\{-1,0,+1\}\) and the two extreme products sum to 3, the full \(3\times3\) multiplication table is encoded in a single 5-LUT per accumulator lane, eliminating the need for multiplier primitives entirely. This chapter presents the architecture, resource utilisation, and throughput analysis of the zero-DSP FPGA implementation, with Zenodo-archived bitstreams B001 and B002 as the primary evidence artefacts.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-01-golden-egg.jpg}}
+\caption{Azbuka of the Tridevyatoe — Golden Seed: The Vesica Opens (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 Field-Programmable Gate Arrays offer a path to energy-efficient neural inference that complements GPU-based approaches: their reconfigurability permits custom datapath widths, their static scheduling eliminates runtime dispatch overhead, and their I/O flexibility supports direct sensor integration. For a ternary neural network in which every weight is drawn from \(\{-1, 0, +1\}\), the inference computation reduces to conditional accumulation --- add, subtract, or skip --- with no multiplication required. The QMTech XC7A100T (Xilinx Artix-7, 100k logic cells, 4.86 Mb block RAM, 240 DSP48E1 slices) was selected as the target platform because it is available at low cost, its Artix-7 fabric is well-characterised, and its resource envelope is representative of embedded edge devices {[}1,2{]}.

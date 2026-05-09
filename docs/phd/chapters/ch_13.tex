@@ -65,6 +65,13 @@ the fact---it is a property you seal in by construction.
 
 Reproducibility of neural language-model training requires that every source of stochasticity be controlled at the moment of experimental commitment. This chapter specifies the STROBE sealed-seed protocol, which restricts admissible pseudo-random seeds to a set drawn from Fibonacci and Lucas sequences: \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\). The protocol forbids the use of seeds \(\{42, 43, 44, 45\}\) for technical reasons detailed herein. Compliance is enforced by the runtime-mirror contract in \texttt{igla\_assertions.json} and formally sealed by 13 Coq theorems in \texttt{Trinity.Canonical.Igla.INV2\_IglaAshaBound}, of which 6 carry closed \texttt{Qed} status. The chapter derives the admissibility criterion from the Trinity anchor \(\varphi^2 + \varphi^{-2} = 3\), defines the ASHA pruning threshold \(3.5 = \varphi^2 + \varphi^{-2} + \varphi^{-4}\), and demonstrates that the sealed protocol eliminates a class of adversarial-seed attacks.
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-17-golden-spiral.jpg}}
+\caption{Azbuka of the Tridevyatoe — Golden Spiral: Ablation Matrix (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\end{figure}
+
 \section{1. Introduction}\label{introduction}
 
 Language model training is subject to seed-dependent variance: different pseudo-random seeds produce different weight initialisations, data shuffles, and dropout masks, leading to BPB variation that can exceed the margin between experimental conditions. The Trinity S³AI programme addresses this variance through two mechanisms. First, the \(\varphi\)-quantised weight lattice (Ch.7, Ch.22) restricts the continuous space of initialisations to a countable set, reducing seed sensitivity. Second, the STROBE sealed-seed protocol prohibits the use of seeds whose Fibonacci-index position violates the closure property of the \(\varphi^2 + \varphi^{-2} = 3\) identity.
