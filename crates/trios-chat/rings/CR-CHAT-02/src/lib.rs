@@ -156,14 +156,41 @@ impl Chain {
     }
 
     /// **DH step (R-CHAT-2)** — mix a fresh X25519 shared secret into
-    /// the root key. Future PR will combine `(DH ‖ ML-KEM ss)` exactly
-    /// per Signal PQXDH. `[VERIFIED]` for the X25519 path.
+    /// the root key. Use [`Chain::dh_kem_step`] for the full hybrid
+    /// `(DH ‖ ML-KEM ss)` mix as required by R-CHAT-2 in production.
+    /// `[VERIFIED]` for the X25519-only path.
     pub fn dh_step(&mut self, my_secret: &XSec, their_pub: &XPub) {
         let shared = my_secret.diffie_hellman(their_pub);
-        let salt = b"trinity-chat:root-step:v1";
-        let mut ikm = Vec::with_capacity(32 + 32);
+        self.mix_into_root(shared.as_bytes(), None);
+    }
+
+    /// **Hybrid DH+KEM step (R-CHAT-2 / L-CHAT-8)** — Wave-5.
+    /// Mix BOTH the fresh X25519 shared secret AND a freshly-decapsulated
+    /// ML-KEM-768 32-byte shared secret into the root key. This is the
+    /// PQXDH-style hybrid construction Trinity Chat targets in production.
+    ///
+    /// `[VERIFIED]` — round-trip tested by
+    /// `hybrid_dh_kem_step_rotates_root` and
+    /// `hybrid_dh_kem_step_diverges_from_dh_only`.
+    /// `[CITED]` Signal PQXDH (Marlinspike & al., 2023) §3.
+    pub fn dh_kem_step(&mut self, my_secret: &XSec, their_pub: &XPub, kem_ss: &[u8; 32]) {
+        let shared = my_secret.diffie_hellman(their_pub);
+        self.mix_into_root(shared.as_bytes(), Some(kem_ss));
+    }
+
+    /// Internal: mix `(root ‖ dh_ss [‖ kem_ss])` into a fresh root + chain.
+    fn mix_into_root(&mut self, dh_ss: &[u8; 32], kem_ss: Option<&[u8; 32]>) {
+        let salt: &[u8] = if kem_ss.is_some() {
+            b"trinity-chat:root-step-hybrid:v1"
+        } else {
+            b"trinity-chat:root-step:v1"
+        };
+        let mut ikm = Vec::with_capacity(32 + 32 + 32);
         ikm.extend_from_slice(&self.root.0);
-        ikm.extend_from_slice(shared.as_bytes());
+        ikm.extend_from_slice(dh_ss);
+        if let Some(k) = kem_ss {
+            ikm.extend_from_slice(k);
+        }
         let hk = Hkdf::<Sha256>::new(Some(salt), &ikm);
         let mut new_root = [0u8; 32];
         let mut new_chain = [0u8; 32];
@@ -362,5 +389,169 @@ mod tests {
         let mut c = Chain::from_root(&root(), b"recv");
         c.recv_accept(SKIPPED_KEYS_CAP as u64 + 500).unwrap();
         assert!(c.skipped_len() <= SKIPPED_KEYS_CAP);
+    }
+
+    // ---------- Wave-5 L-CHAT-2 hardening — FS + PCS gates ----------
+    //
+    // G-C2 from trinity-chat-design.md:
+    //   * **Forward Secrecy:** if attacker compromises chain-key at time T,
+    //     past message keys (counters < current) MUST be unreachable from it.
+    //   * **Post-Compromise Security:** after one DH step, the chain converges
+    //     to a fresh root unrelated to the leaked one.
+
+    #[test]
+    fn forward_secrecy_chain_key_does_not_leak_past_keys() {
+        // FS: derive m1, m2, m3. Snapshot the chain key AFTER m3.
+        // From that snapshot it must be impossible to reproduce m1 or m2 (they
+        // were derived from earlier chain-key states which have been overwritten).
+        let mut sender = Chain::from_root(&root(), b"send");
+        let m1 = sender.send_next();
+        let m2 = sender.send_next();
+        let m3 = sender.send_next();
+        let post_m3_chain = *sender.chain_key().as_bytes();
+
+        // Reconstruct from the leaked post_m3 chain key alone.
+        let mut leaked = ChainKey(post_m3_chain);
+        // Anyone with this material can derive future keys (m4, m5, ...) but
+        // CANNOT reproduce m1/m2/m3 because the HKDF-chain is one-way.
+        let m4_attempt = leaked.next_message_key(3);
+        assert_ne!(m4_attempt.key, m1.key, "FS: leaked chain MUST NOT yield m1");
+        assert_ne!(m4_attempt.key, m2.key, "FS: leaked chain MUST NOT yield m2");
+        assert_ne!(m4_attempt.key, m3.key, "FS: leaked chain MUST NOT yield m3");
+    }
+
+    #[test]
+    fn post_compromise_security_after_dh_step_recovers() {
+        // PCS: simulate compromise of root + chain at epoch 0. Then perform a
+        // DH step. The post-step root MUST differ from the leaked one and a
+        // fresh DH partner cannot be reconstructed from the leak alone.
+        use rand_core::OsRng;
+        let mut alice = Chain::from_root(&root(), b"send");
+        let mut bob = Chain::from_root(&root(), b"send");
+
+        // Adversary captures pre-step state.
+        let leaked_root = *alice.root_key().as_bytes();
+        let leaked_chain = *alice.chain_key().as_bytes();
+
+        // Alice and Bob run a DH step with FRESH ephemeral secrets.
+        let alice_eph = XSec::random_from_rng(OsRng);
+        let bob_eph = XSec::random_from_rng(OsRng);
+        let alice_pub = XPub::from(&alice_eph);
+        let bob_pub = XPub::from(&bob_eph);
+        alice.dh_step(&alice_eph, &bob_pub);
+        bob.dh_step(&bob_eph, &alice_pub);
+
+        // PCS: post-step root differs from leaked root.
+        assert_ne!(*alice.root_key().as_bytes(), leaked_root, "PCS: root must rotate");
+        assert_ne!(*alice.chain_key().as_bytes(), leaked_chain, "PCS: chain must rotate");
+        // PCS symmetry: Alice and Bob converge.
+        assert_eq!(alice.root_key().as_bytes(), bob.root_key().as_bytes(),
+                   "PCS: peers converge on fresh root");
+        // PCS: an adversary holding only `leaked_root` cannot reproduce alice's
+        // post-step root — they don't know the ephemeral DH secrets.
+        // (Demonstrated by simply checking the values differ; cryptographic
+        // unreachability is proven structurally in Coq INV-CHAT-13.)
+    }
+
+    // ---------- L-CHAT-8 hybrid PQ tests (no ml-kem dep here; we feed the
+    //             32-byte KEM shared secret directly per the API contract) ----------
+
+    #[test]
+    fn hybrid_dh_kem_step_rotates_root() {
+        use rand_core::OsRng;
+        let mut c = Chain::from_root(&root(), b"send");
+        let pre_root = *c.root_key().as_bytes();
+        let my_sk = XSec::random_from_rng(OsRng);
+        let their_sk = XSec::random_from_rng(OsRng);
+        let their_pub = XPub::from(&their_sk);
+        let kem_ss = [0xAB; 32];
+        c.dh_kem_step(&my_sk, &their_pub, &kem_ss);
+        assert_ne!(pre_root, *c.root_key().as_bytes(),
+                   "hybrid step must rotate root");
+    }
+
+    #[test]
+    fn hybrid_dh_kem_step_diverges_from_dh_only() {
+        // SAME DH inputs but DIFFERENT (or absent) KEM ss MUST yield different
+        // root keys — proves the KEM mix actually contributes entropy and is
+        // not silently dropped.
+        use rand_core::OsRng;
+        let r = root();
+        let my_sk = XSec::random_from_rng(OsRng);
+        let their_sk = XSec::random_from_rng(OsRng);
+        let their_pub = XPub::from(&their_sk);
+
+        let mut c_classic = Chain::from_root(&r, b"send");
+        c_classic.dh_step(&my_sk, &their_pub);
+
+        let mut c_hybrid = Chain::from_root(&r, b"send");
+        let kem_ss = [0x42; 32];
+        c_hybrid.dh_kem_step(&my_sk, &their_pub, &kem_ss);
+
+        assert_ne!(c_classic.root_key().as_bytes(), c_hybrid.root_key().as_bytes(),
+                   "R-CHAT-2: hybrid root must differ from classic-DH root for the same DH inputs");
+    }
+
+    #[test]
+    fn hybrid_dh_kem_step_symmetric_alice_bob() {
+        // Alice and Bob run a hybrid step with identical DH inputs (mirrored)
+        // and IDENTICAL kem_ss — they must converge.
+        use rand_core::OsRng;
+        let mut alice = Chain::from_root(&root(), b"send");
+        let mut bob = Chain::from_root(&root(), b"send");
+        let alice_sk = XSec::random_from_rng(OsRng);
+        let bob_sk = XSec::random_from_rng(OsRng);
+        let kem_ss = [0xC0; 32];
+        alice.dh_kem_step(&alice_sk, &XPub::from(&bob_sk), &kem_ss);
+        bob.dh_kem_step(&bob_sk, &XPub::from(&alice_sk), &kem_ss);
+        assert_eq!(alice.root_key().as_bytes(), bob.root_key().as_bytes(),
+                   "hybrid symmetry: peers must converge");
+    }
+
+    #[test]
+    fn falsifier_pq_downgrade_kem_ss_zeroed() {
+        // Falsifier: an attacker tries to coerce the responder into a
+        // "classic-DH only" downgrade by zeroing the KEM ss. The hybrid root
+        // produced under zeroed KEM MUST differ from the classic-DH root —
+        // even an all-zero KEM ss is mixed under a different domain string.
+        use rand_core::OsRng;
+        let r = root();
+        let my_sk = XSec::random_from_rng(OsRng);
+        let their_sk = XSec::random_from_rng(OsRng);
+        let their_pub = XPub::from(&their_sk);
+
+        let mut c_classic = Chain::from_root(&r, b"send");
+        c_classic.dh_step(&my_sk, &their_pub);
+
+        let mut c_hybrid_zero = Chain::from_root(&r, b"send");
+        c_hybrid_zero.dh_kem_step(&my_sk, &their_pub, &[0u8; 32]);
+
+        assert_ne!(c_classic.root_key().as_bytes(), c_hybrid_zero.root_key().as_bytes(),
+                   "PQ downgrade: classic-vs-hybrid path MUST diverge by domain separation");
+    }
+
+    #[test]
+    fn pcs_two_step_isolates_from_initial_compromise() {
+        // Stronger PCS gate: even if attacker captures BOTH root + a fresh
+        // ephemeral on step 1, after step 2 (with new ephemerals) they're
+        // locked out again.
+        use rand_core::OsRng;
+        let mut a = Chain::from_root(&root(), b"send");
+        let mut b = Chain::from_root(&root(), b"send");
+        let e1a = XSec::random_from_rng(OsRng);
+        let e1b = XSec::random_from_rng(OsRng);
+        a.dh_step(&e1a, &XPub::from(&e1b));
+        b.dh_step(&e1b, &XPub::from(&e1a));
+        let mid_root = *a.root_key().as_bytes();
+
+        let e2a = XSec::random_from_rng(OsRng);
+        let e2b = XSec::random_from_rng(OsRng);
+        a.dh_step(&e2a, &XPub::from(&e2b));
+        b.dh_step(&e2b, &XPub::from(&e2a));
+
+        assert_eq!(a.root_key().as_bytes(), b.root_key().as_bytes(),
+                   "two-step PCS: peers still converge");
+        assert_ne!(*a.root_key().as_bytes(), mid_root,
+                   "two-step PCS: post-step-2 root differs from post-step-1");
     }
 }

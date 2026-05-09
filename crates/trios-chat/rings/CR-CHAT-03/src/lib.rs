@@ -255,4 +255,179 @@ mod tests {
         };
         assert!(g.process_commit(&c).is_err());
     }
+
+    // ---------- Wave-5 L-CHAT-3 — full MLS state-machine chain ----------
+    //
+    // G-C3 from trinity-chat-design.md: a real MLS lifecycle MUST be
+    // exercisable end-to-end:
+    //   1. create with founder
+    //   2. Welcome → Add (epoch 0 → 1)
+    //   3. Update (epoch 1 → 2)
+    //   4. Add another (epoch 2 → 3)
+    //   5. Remove first added member (epoch 3 → 4)
+    //   6. Commit a no-op Update with new sender (epoch 4 → 5)
+    // Plus state-machine-rollback falsifiers refuse stale commits.
+
+    #[test]
+    fn full_lifecycle_welcome_add_update_remove_commit() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        assert_eq!(g.epoch, Epoch(0));
+        assert_eq!(g.members.len(), 1);
+
+        // Step 2: Add Bob, Welcome carries epoch 0 (from-state).
+        let welcome_for_bob = g.welcome_for(LeafIndex(1));
+        assert_eq!(welcome_for_bob.epoch, Epoch(0));
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        assert!(g.members.contains(&LeafIndex(1)));
+
+        // Step 3: Update from leaf 1 (now a member).
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(1),
+            sender: LeafIndex(1),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(2));
+
+        // Step 4: Add Carol.
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(2),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(2))],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(3));
+        assert!(g.members.contains(&LeafIndex(2)));
+        assert_eq!(g.members.len(), 3);
+
+        // Step 5: Remove Bob (LeafIndex 1).
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(3),
+            sender: LeafIndex(0),
+            ops: vec![Op::Remove(LeafIndex(1))],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(4));
+        assert!(!g.members.contains(&LeafIndex(1)));
+        assert!(g.members.contains(&LeafIndex(2)));
+
+        // Step 6: Carol issues an Update.
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(4),
+            sender: LeafIndex(2),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(5));
+    }
+
+    #[test]
+    fn falsifier_state_rollback_to_old_epoch_rejected() {
+        // Attacker captures a valid commit from epoch 0→1 and replays it
+        // at epoch 4. R-CHAT-11 / mls_epoch_monotone MUST reject.
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let stale = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        // Advance to epoch 4 normally.
+        for from in 0..4u64 {
+            g.process_commit(&Commit {
+                group_id: gid(),
+                from_epoch: Epoch(from),
+                sender: LeafIndex(0),
+                ops: vec![Op::Update],
+                path_blob: vec![],
+            }).unwrap();
+        }
+        assert_eq!(g.epoch, Epoch(4));
+        // Now replay stale epoch-0 commit — must reject.
+        assert!(g.process_commit(&stale).is_err(), "state rollback must be rejected");
+        assert_eq!(g.epoch, Epoch(4), "epoch must NOT regress");
+    }
+
+    #[test]
+    fn falsifier_future_epoch_jump_rejected() {
+        // Attacker tries to fast-forward state by injecting a commit with
+        // from_epoch == 100 while group is at epoch 0. MUST reject.
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let future = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(100),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        assert!(g.process_commit(&future).is_err());
+        assert_eq!(g.epoch, Epoch(0), "epoch must NOT jump forward");
+    }
+
+    #[test]
+    fn welcome_after_add_carries_correct_epoch() {
+        // After an Add, Welcome issued for the new member should carry the
+        // *new* epoch (the one in which they're members).
+        let mut g = Group::create(gid(), LeafIndex(0));
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        }).unwrap();
+        let w = g.welcome_for(LeafIndex(2));
+        assert_eq!(w.epoch, Epoch(1), "welcome must reflect post-add epoch");
+    }
+
+    #[test]
+    fn idempotent_add_does_not_duplicate_member() {
+        // Adding the same leaf twice must not duplicate.
+        let mut g = Group::create(gid(), LeafIndex(0));
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        }).unwrap();
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(1),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        }).unwrap();
+        let count = g.members.iter().filter(|m| **m == LeafIndex(1)).count();
+        assert_eq!(count, 1, "duplicate Add must not produce duplicate member");
+    }
+
+    #[test]
+    fn multiple_ops_in_one_commit_apply_atomically() {
+        // A single commit can carry multiple ops — they apply atomically and
+        // produce one epoch advance.
+        let mut g = Group::create(gid(), LeafIndex(0));
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1)), Op::Add(LeafIndex(2)), Op::Update],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        assert!(g.members.contains(&LeafIndex(1)));
+        assert!(g.members.contains(&LeafIndex(2)));
+    }
 }

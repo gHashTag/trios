@@ -27,9 +27,11 @@
 #![warn(missing_docs)]
 
 pub mod identity;
+pub mod kem;
 pub mod sealed;
 
 pub use identity::{Identity, PrekeyBundle, PrekeyBundleBody, MLKEM_PUB_LEN, MLKEM_SEC_LEN};
+pub use kem::{encapsulate_to, MlKem768Keypair, MLKEM768_CT_LEN, MLKEM768_EK_LEN, MLKEM768_SS_LEN};
 pub use sealed::{dest_hash, SealedEnvelope};
 
 /// Trinity Chat protocol version this ring implements.
