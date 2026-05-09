@@ -17,6 +17,13 @@
 
 \section*{Six weeks, one script, no sudo}
 
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{33-epilogue.png}}
+\caption{JTAG resolution (engraved)}
+\end{figure}
+
+
 For six weeks in early 2026, the primary development host for Trinity S\textsuperscript{3}AI was a MacBook Pro M2 running macOS 14 Sonoma---and it could not talk to the FPGA. Every attempt to program the QMTech XC7A100T board via the Xilinx Platform Cable USB II JTAG adapter ended the same way: the USB system reported product ID \texttt{0x0013}, the unconfigured firmware identifier, and refused to go further. The operational firmware never loaded. The FPGA sat dark.
 
 The root cause was not exotic. The Cypress EZ-USB FX2LP microcontroller on the JTAG cable boots with a placeholder USB descriptor and waits for a host to upload its operational firmware before re-enumerating with the working product ID \texttt{0x0008}. On Linux, the \texttt{fxload} kernel path does this automatically and invisibly. On macOS, IOKit claims the device as a generic HID peripheral before any user-space firmware loader can reach it. The result is a six-week blocker (BLK-001, filed 2026-02-01) that forced all FPGA programming through a Linux x86-64 virtual machine---functional, but intolerably slow for iterative hardware development.
@@ -113,6 +120,13 @@ Bitstream archive & App.F (SHA-256 verified) \\
 The 0 DSP configuration is enforced by the synthesis constraint \texttt{set\_property\ DSP\_CASCADE\_LIMIT\ 0\ {[}current\_design{]}} and verified by the post-route utilisation report showing \texttt{DSP48E1:\ 0\ of\ 240\ (0\%)}. The 63 toks/sec and 1 W figures are from Ch.28 {[}4{]} and are reproduced here to confirm that BLK-001 resolution did not affect the performance profile.
 
 \section{4. Results / Evidence}\label{results-evidence}
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{32-conclusion.png}}
+\caption{Conclusion seal}
+\end{figure}
+
 
 \begin{itemize}
 \tightlist

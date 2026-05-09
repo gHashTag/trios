@@ -17,6 +17,13 @@
 
 \section*{A hundred thousand gates and one watt}
 
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{28-momentum-algebra.png}}
+\caption{Momentum algebra (engraved)}
+\end{figure}
+
+
 Place a QMTech XC7A100T development board on a desk. It is smaller than a paperback novel. Its Artix-7 fabric holds 100,000 logic cells---a figure that would have qualified as a supercomputer in 1985---and it sips power at roughly the level of a USB phone charger. In early 2026, this unassuming rectangle became the physical substrate of a formally verified ternary inference engine running at 63 tokens per second. The board draws 1 W. An NVIDIA A100 draws 400 W for the same task. The gap is not an accident of implementation; it is a structural consequence of arithmetic.
 
 Tukey warned that the hunger for an answer cannot conjure one from inadequate data. The converse also holds: when the data---the arithmetic, the proof obligations, the gate-level logic---truly support a claim, the answer emerges without artifice. The claim here is that ternary weight arithmetic, grounded in \(\varphi^2 + \varphi^{-2} = 3\), eliminates every multiply-accumulate primitive from the FPGA datapath. The post-place-and-route report is the data: 0 DSP48E1 instances, 14,203 LUT6 instances, 7,891 LUTRAM instances, timing closure at \(-0.02\) ns worst-case slack. Those numbers are not targets or estimates. They are measurements.
@@ -79,6 +86,13 @@ IOB & 89 & 210 & 42.4\% \\
 \textbf{Theorem 3.1 (Zero-DSP closure).} The ternary inference engine for Trinity S³AI is implementable on the XC7A100T with 0 DSP48 instances, because the kernel lemmas \filepath{trit\_mul\_zero\_l} and \filepath{trit\_mul\_zero\_r} (Ch.4, KER-8) guarantee that all multiplications by the Zero trit are eliminated at synthesis time, and multiplications by \(\pm 1\) are implemented as wire routing or inversion, neither of which instantiates DSP48 primitives. \emph{This result is verified by post-implementation netlist inspection in the B002 artefact.} \(\square\)
 
 \section{4. Results / Evidence}\label{results-evidence}
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{22-e8-symmetry.png}}
+\caption{E8 symmetry}
+\end{figure}
+
 
 The primary evidence artefacts are:
 
