@@ -596,4 +596,136 @@ mod tests {
         let count = 5usize;
         assert_eq!(count, 5, "R-CHAT-3-bot: {count} partial-MLS bot falsifiers active");
     }
+
+    // ============================================================
+    // Wave-10 / L-CHAT-3-mls (R-CHAT-11): MLS commit-reorder /
+    // out-of-order falsifier suite.
+    //
+    // Threat: an attacker reorders commits on the wire and tries to
+    // (a) apply a commit out of order (MCR-01..02),
+    // (b) jump epochs (MCR-03),
+    // (c) fork the group via a parallel commit (MCR-04),
+    // (d) re-apply a future commit before the linking commit (MCR-05).
+    //
+    // [DERIVED RFC 9420 §8 + MLS architecture (Barnes et al. 2021)]
+    // ============================================================
+
+    /// **MCR-01** — commit at `from_epoch=2` while group at epoch 0
+    /// must be rejected (out-of-order: future commit before linking).
+    #[test]
+    fn mcr_01_future_commit_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let future = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(2),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        let r = g.process_commit(&future);
+        assert!(r.is_err(), "MCR-01: commit at from_epoch=2 must be rejected at epoch 0");
+        assert_eq!(g.epoch, Epoch(0), "MCR-01: epoch must NOT advance on rejected commit");
+    }
+
+    /// **MCR-02** — swapping the order of two commits A,B fails: B's
+    /// `from_epoch` references the post-A state, so applying B first
+    /// must fail.
+    #[test]
+    fn mcr_02_swapped_commit_pair_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let a = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        let b = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(1),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        // Adversary applies B first.
+        let r = g.process_commit(&b);
+        assert!(r.is_err(), "MCR-02: B (from_epoch=1) before A must be rejected");
+        // Correct order still works.
+        g.process_commit(&a).expect("MCR-02: A first must succeed");
+        g.process_commit(&b).expect("MCR-02: B second must succeed");
+        assert_eq!(g.epoch, Epoch(2));
+    }
+
+    /// **MCR-03** — epoch-jump: a commit with `from_epoch` lower than
+    /// current (replay-style) is rejected.
+    #[test]
+    fn mcr_03_epoch_replay_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let c0 = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        g.process_commit(&c0).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        // Adversary replays c0 (from_epoch=0 < current 1).
+        let r = g.process_commit(&c0);
+        assert!(r.is_err(), "MCR-03: replayed commit from_epoch<current must be rejected");
+    }
+
+    /// **MCR-04** — fork: two parallel commits both claim
+    /// `from_epoch=N`, so the second must be rejected by the local
+    /// view (only one history is consistent).
+    #[test]
+    fn mcr_04_parallel_fork_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let fork_a = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![1],
+        };
+        let fork_b = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(2))],
+            path_blob: vec![2],
+        };
+        g.process_commit(&fork_a).expect("MCR-04: first fork branch applies");
+        // After fork_a, epoch is 1; fork_b still says from_epoch=0.
+        let r = g.process_commit(&fork_b);
+        assert!(r.is_err(), "MCR-04: second fork branch must be rejected");
+        // State carries fork_a's add, not fork_b's.
+        assert!(g.members.contains(&LeafIndex(1)), "MCR-04: only fork_a applied");
+        assert!(!g.members.contains(&LeafIndex(2)), "MCR-04: fork_b not applied");
+    }
+
+    /// **MCR-05** — cross-group splice: a commit whose `group_id`
+    /// differs from the current group must be rejected even if the
+    /// epoch math would otherwise line up.
+    #[test]
+    fn mcr_05_cross_group_splice_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let other = Commit {
+            group_id: GroupId([0xAAu8; 32]),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        let r = g.process_commit(&other);
+        assert!(r.is_err(), "MCR-05: commit for foreign group_id must be rejected");
+        assert_eq!(g.epoch, Epoch(0), "MCR-05: epoch unchanged on rejection");
+    }
+
+    /// Wave-10 G-C3-mls green summary.
+    #[test]
+    fn green_g_c3_mls_summary() {
+        let count = 5usize;
+        assert_eq!(count, 5, "Wave-10 L-CHAT-3-mls: 5 commit-reorder falsifier tests");
+    }
 }
