@@ -17,12 +17,6 @@
 
 \section*{Frame seventeen, byte zero, every time}
 
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{28-momentum-algebra.png}}
-\caption{UART hardware (engraved)}
-\end{figure}
-
 
 At 115200 baud, one byte crosses the FT232RL bridge in roughly 87 microseconds. That is fast enough to feel instantaneous to a human observer and slow enough that a badly designed framing protocol can introduce race conditions, dropped bytes, and hours of debugging at three in the morning. The UART v6 protocol was designed so that none of those failure modes are possible by construction. Every frame opens with a \texttt{0xAA} sync byte, carries a one-byte length field, and closes with a 16-bit CRC-16/CCITT checksum. The grammar is unambiguous. The error recovery automaton is deterministic. Across 1003 tokens of the HSLM evaluation run, zero frame errors were recorded.
 
@@ -123,12 +117,6 @@ The recovery automaton has three states: IDLE, AWAIT\_LEN, AWAIT\_PAYLOAD. On re
 On CRC failure the automaton issues a NACK and waits for a retransmit. The retransmit limit is \(L_7 = 29\) attempts; after 29 failures the automaton halts and logs a \texttt{UART\_FATAL} event. The choice of 29 as the retry limit is not arbitrary: \(L_7 = 29\) is a Lucas prime and a member of the sanctioned seed pool, so the limit is algebraically anchored to the same lattice as all other integer constants in the system.
 
 \section{4. Results / Evidence}\label{results-evidence}
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{33-epilogue.png}}
-\caption{Hardware epilogue}
-\end{figure}
 
 
 During the HSLM evaluation run (1003 tokens, seed \(F_{17}=1597\)):
