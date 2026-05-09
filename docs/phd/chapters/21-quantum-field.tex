@@ -723,3 +723,209 @@ specific amplitude class described in the reduction procedure.
 \textit{pending} \\
 \hline
 \end{tabularx}
+
+% =====================================================================
+% L21 expansion (lane DELTA-2): JEPA-on-phi-lattice CONDITIONAL R7
+% predictions, INV-1 ablation cross-reference, bibliography hooks.
+% Conditional means: every threshold is stated as ``IF ablation X is
+% run AT step S WITH n>=k seeds, THEN observing metric M outside band
+% B refutes claim C'' --- not as a load-bearing point estimate.
+% =====================================================================
+
+\subsection{Conditional R7 predictions for the JEPA latent-dynamics analogue}
+\label{sec:21-falsify-jepa-conditional}
+
+The Wightman / OS scaffold of \S\ref{sec:21-jepa-latent} is a
+\emph{notational} analogy. The empirical claims that go with it are
+the BPB-monotonicity informal statement of INV-1
+(\S\ref{sec:21-inv1}) and the trinity-identity arithmetic anchor of
+Theorem~\ref{thm:21-trinity}. Both have to be R7-falsifiable; we now
+state the falsifiers as \emph{conditional} predictions that activate
+only when the corresponding ablation has been run on canonical-seed
+hardware.
+
+\medskip
+\noindent\textbf{R5-honest scope of these predictions.}
+None of the thresholds below is asserted as a \emph{point estimate}
+of what the JEPA-on-$\varphi$-lattice run will produce; we have
+not yet run the corresponding sweep on a sanctioned-seed quorum. Each
+prediction is a \emph{falsification gate}: ``\emph{if}\/ ablation
+$\mathrm{A}_{i}$ is executed at step $\tau^{*}$ with $\geq n_{i}$
+seeds drawn from the canonical pool $\{47,89,144,123\}$
+(L-SEED-CANON \#600), \emph{then} observing metric $m_{i}$ outside
+the band $[a_{i},b_{i}]$ at the prescribed evaluation cut would
+refute claim $C_{i}$.'' Prior to running the ablation the prediction
+is dormant.
+
+\medskip
+\noindent\textbf{F$_{1}$ — INV-1 monotonicity falsifier (conditional on real-MSE flag).}
+
+\begin{itemize}\itemsep0pt
+  \item \textbf{Ablation $\mathrm{A}_{1}$:} JEPA training of the IGLA
+        encoder on the STROBE-tokenised English partition (Ch.~13)
+        with the runtime check
+        \texttt{INV-1: BPB not decreasing} from
+        \texttt{assertions/igla\_assertions.json} promoted from
+        \texttt{action="warn"} to \texttt{action="fail"}, for
+        $\tau^{*}=3000$ steps and $n_{1}=3$ canonical seeds.
+  \item \textbf{Metric $m_{1}$:} fraction of consecutive
+        $(\tau,\tau{+}1)$ pairs across the run for which
+        $\mathrm{BPB}_{\tau+1}>\mathrm{BPB}_{\tau}+10^{-3}$ holds.
+  \item \textbf{Falsification band:}
+        $m_{1}\in[0,\,0.05]$ is consistent with the INV-1 informal
+        claim within Welch-$t$ noise; $m_{1}>0.05$ at $n_{1}=3$
+        (lower-bound $99\,\%$ confidence) refutes the
+        BPB-monotonicity claim at the canonical safe-range learning
+        rate.
+  \item \textbf{Conditional status:} dormant. The IGLA training
+        sweeps are running in the matrix-fleet lane
+        (cf.\ \texttt{docs/matrix\_coverage\_2026-05-09.md}); zero
+        canonical-seed runs of this specific ablation have completed
+        as of the chapter's R3-PARTIAL freeze.
+\end{itemize}
+
+\medskip
+\noindent\textbf{F$_{2}$ — Ternary-palette closure falsifier (Theorem~\ref{thm:21-trinity}).}
+
+\begin{itemize}\itemsep0pt
+  \item \textbf{Ablation $\mathrm{A}_{2}$:} bench characterisation of
+        the GF16-quantised IGLA forward pass with weights drawn
+        exclusively from $\{-\varphi^{-1},0,+\varphi^{-1}\}\!\cdot\!
+        \varphi^{k}$ for integer $k$, against an IEEE-754 reference
+        implementation, for $\tau^{*}=3000$ steps and $n_{2}=3$
+        canonical seeds.
+  \item \textbf{Metric $m_{2}$:} maximum element-wise discrepancy
+        $\lVert\mathrm{GF16}(W)\,x-\mathrm{f32}(W)\,x\rVert_{\infty}$
+        on a held-out evaluation batch.
+  \item \textbf{Falsification band:} $m_{2}\leq 2^{-50}\!\cdot\!
+        \lVert W\rVert_{\infty}$ is consistent with the
+        Theorem~\ref{thm:21-trinity}-grounded claim that the ternary
+        palette closes exactly under accumulation in $\mathbb{Z}[\varphi]$
+        (post-shift); $m_{2}$ persistently above the band on the
+        canonical seed pool refutes the ``exact integer accumulation''
+        claim and forces a re-derivation of the Coq
+        \texttt{trinity\_identity} proof.
+  \item \textbf{Conditional status:} the Coq proof itself (Theorem
+        \ref{thm:21-trinity} above) is closed with \texttt{Qed}; this
+        falsifier targets the \emph{numerical realisation} of the
+        identity in the GF16 hardware path, not the theorem.
+\end{itemize}
+
+\medskip
+\noindent\textbf{F$_{3}$ — Wightman/OS analogue cross-talk falsifier (notational).}
+
+\begin{itemize}\itemsep0pt
+  \item \textbf{Ablation $\mathrm{A}_{3}$:} compute the empirical
+        two-point kernel
+        $K_{\tau}(x,x')=\langle E_\theta(x),E_\theta(x')\rangle$
+        and the EMA-target counterpart
+        $K_{\tau}^{\mathrm{ema}}(x,x')=\langle E_{\theta'}(x),
+        E_{\theta'}(x')\rangle$ at canonical evaluation
+        cut-points for the JEPA encoder of Table~\ref{tab:21-jepa-os-mapping}.
+  \item \textbf{Metric $m_{3}$:} the smallest eigenvalue of the
+        symmetric kernel matrix
+        $\frac{1}{2}(K_{\tau}+K_{\tau}^{\mathrm{ema}})$ on a
+        $32\times 32$ patch grid.
+  \item \textbf{Falsification band:} the analogy of
+        \S\ref{sec:21-wightman-os} predicts $m_{3}\geq 0$ (a
+        reflection-positivity-flavoured non-negativity) within the
+        floating-point precision of the IEEE-754 reference run.
+        Persistently observing $m_{3}<-10^{-6}\lVert K\rVert_{F}$
+        at $n_{3}=3$ canonical seeds would refute the structural
+        OS analogy and force this chapter's
+        \S\ref{sec:21-wightman-os} mapping table to be retracted.
+  \item \textbf{Conditional status:} dormant; the kernel computation
+        is mechanically straightforward but has not been run on
+        the sanctioned-seed quorum at the time of R3-PARTIAL freeze.
+\end{itemize}
+
+\medskip
+\noindent\textbf{Cross-reference summary.}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{1cm}p{4.0cm}p{2.5cm}p{2cm}p{3.5cm}}
+\hline
+\textbf{ID} & \textbf{Claim} & \textbf{Witness} & \textbf{Status}
+& \textbf{Refuted by} \\
+\hline
+F$_{1}$ & INV-1 BPB monotonicity (cond.\ on real-MSE flag)
+& \texttt{INV-1} runtime check
+& dormant
+& $m_{1}>0.05$ at $n=3$ \\
+\hline
+F$_{2}$ & Ternary palette closes in $\mathbb{Z}[\varphi]$
+& \texttt{trinity\_identity} (Coq \texttt{Qed})
+& Coq closed; numerical falsifier dormant
+& $m_{2}>2^{-50}\lVert W\rVert_{\infty}$ at $n=3$ \\
+\hline
+F$_{3}$ & Wightman/OS analogue is consistent with
+        empirical kernel non-negativity
+& Empirical $K_{\tau},K_{\tau}^{\mathrm{ema}}$
+& dormant
+& $m_{3}<-10^{-6}\lVert K\rVert_{F}$ at $n=3$ \\
+\hline
+\end{tabular}
+\caption{Conditional R7 falsifiers for the JEPA latent-dynamics
+analogue. None of these is a load-bearing point estimate; each is a
+falsification gate that activates when the matching ablation is run
+on the sanctioned-seed quorum.}
+\label{tab:21-jepa-falsifiers}
+\end{table}
+
+\medskip
+\noindent\textbf{Why these predictions are conditional, not load-bearing.}
+The JEPA-on-$\varphi$-lattice ablation harness has not yet completed
+even one canonical-seed run as of the R3-PARTIAL freeze of this
+chapter. Asserting a point estimate for $m_{1}$, $m_{2}$, or
+$m_{3}$ before the run would be a fabrication. The R5-honest pattern
+is to state the \emph{shape} of the prediction (band, sample size,
+metric, witness) so that the prediction is unambiguously
+falsifiable once the ablation runs, while clearly marking it
+``dormant'' until then. We follow that pattern here.
+
+\subsection{INV-1 ablation: where the data \emph{will} live}
+\label{sec:21-inv1-ablation-locus}
+
+The INV-1 runtime check in
+\texttt{assertions/igla\_assertions.json} fires a \texttt{warn} (not
+\texttt{fail}) on every observed BPB-non-decrease event during a
+real-MSE backward pass. The chapter's R7 falsifier
+$\mathrm{F}_{1}$ above will be operational once two pre-conditions
+are met:
+
+\begin{enumerate}\itemsep0pt
+  \item The runtime check is promoted from
+        \texttt{action="warn"} to \texttt{action="fail"}
+        (one-line edit to the JSON; deliberately \emph{not} done in
+        this lane, to preserve current matrix-fleet runs).
+  \item At least three of the matrix-runners listed in
+        \texttt{docs/matrix\_coverage\_2026-05-09.md}
+        (Wave-16 fleet) emit \texttt{step}$\geq 3000$ rows under a
+        single canonical-seed triple from $\{47,89,144,123\}$ on the
+        STROBE corpus, with their JSONL ledger drained into the
+        Railway \texttt{phd-postgres-ssot} SoT by the
+        \texttt{trios-postrun-sidecar} (lane \#598, PR \#601).
+\end{enumerate}
+
+Until both pre-conditions hold, the INV-1 monotonicity falsifier is
+honestly recorded as \emph{dormant}. Promotion to \emph{active} is a
+follow-up lane (tentative tag \texttt{L-INV1-PROMOTE}).
+
+\subsection{Honest references}
+\label{sec:21-jepa-refs}
+
+The JEPA latent-dynamics framing in this chapter cites
+\cite{lecun_jepa_2022} and \cite{assran_ijepa_2023} as the primary
+JEPA references already present in
+\texttt{docs/phd/bibliography.bib}. The Q1 deep-learning anchor for
+the broader positioning is \cite{lecun_nature_2015} (Nature, 2015),
+also already in the bibliography. We add no new bibliography
+entries in this lane: every citation made in the JEPA / Wightman /
+trinity-identity expansion is already present in the existing
+\texttt{docs/phd/bibliography.bib}, which carries 212 entries since
+PR~\#581 (L-KAT-BIB lane).
+
+\paragraph{Anchor footer.}
+$\varphi^{2}+\varphi^{-2}=3$;
+DOI~\href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
