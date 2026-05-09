@@ -1228,8 +1228,173 @@ Qed.
 
 End TrinityChatWave11.
 
-(* End of Trinity_Chat.v — Wave-11 final
-   Theorems / Lemmas Qed-closed: 70 (count of `Qed.` occurrences)
+(* ============================================================ *)
+(* Wave-12 · prekey-bundle exhaustion + MLS leaf-key compromise   *)
+(* L-CHAT-1-prekey (R-CHAT-1)  + L-CHAT-3-leaf (R-CHAT-11)        *)
+(* INV-CHAT-54..60 + 2 helpers → 10 new Qed (target 80 total)     *)
+(* ============================================================ *)
+Section TrinityChatWave12.
+
+(* ----- L-CHAT-1-prekey: prekey-bundle exhaustion ----- *)
+
+(** A one-time pre-key (OTPK) pool is just a list of fresh, never-reused
+    indices. Taking from it removes one element; an empty pool forces
+    the [SignedFallback] join strategy. *)
+
+Definition Otpk : Set := nat.
+Definition OtpkPool : Set := list Otpk.
+
+Inductive JoinStrategy : Set :=
+  | JS_OneTime
+  | JS_SignedFallback.
+
+(** [pool_take]: pull one OTPK off the front of the pool. None when empty. *)
+Definition pool_take (p : OtpkPool) : option (Otpk * OtpkPool) :=
+  match p with
+  | nil => None
+  | x :: rest => Some (x, rest)
+  end.
+
+(** [join_strategy_of]: pick join strategy from current pool state. *)
+Definition join_strategy_of (p : OtpkPool) : JoinStrategy :=
+  match p with
+  | nil => JS_SignedFallback
+  | _ :: _ => JS_OneTime
+  end.
+
+(** [INV-CHAT-54] taking from the empty pool returns None.
+    [DERIVED CR-CHAT-01 / Wave-12 / PEX-03 / R-CHAT-1] *)
+Theorem inv_chat_54_pool_empty_take_none :
+  pool_take nil = None.
+Proof. reflexivity. Qed.
+
+(** Helper: taking from a non-empty pool always succeeds and the
+    remaining pool is exactly one shorter. *)
+Lemma pool_take_decreases :
+  forall p x rest,
+    pool_take p = Some (x, rest) ->
+    length p = S (length rest).
+Proof.
+  intros p x rest H. destruct p as [| h t]; simpl in H.
+  - discriminate.
+  - inversion H; subst. simpl. reflexivity.
+Qed.
+
+(** [INV-CHAT-55] strict pool-decrease on every successful take —
+    bounds the number of one-time joins to the initial pool size.
+    [DERIVED PEX-02 / R-CHAT-1] *)
+Theorem inv_chat_55_pool_strict_decrease :
+  forall p x rest,
+    pool_take p = Some (x, rest) ->
+    length rest < length p.
+Proof.
+  intros p x rest H. apply pool_take_decreases in H. lia.
+Qed.
+
+(** [INV-CHAT-56] empty pool forces [SignedFallback].
+    [DERIVED PEX-03 / R-CHAT-1] *)
+Theorem inv_chat_56_empty_pool_forces_fallback :
+  join_strategy_of nil = JS_SignedFallback.
+Proof. reflexivity. Qed.
+
+(** [INV-CHAT-57] non-empty pool always picks [OneTime].
+    [DERIVED PEX-01 / R-CHAT-1] *)
+Theorem inv_chat_57_nonempty_pool_picks_onetime :
+  forall x p, join_strategy_of (x :: p) = JS_OneTime.
+Proof. intros x p. reflexivity. Qed.
+
+(* ----- L-CHAT-3-leaf: MLS leaf-key compromise / leaf-resync ----- *)
+
+Definition LeafEpoch := nat.
+
+Record LeafResync12 : Set := mk_resync12 {
+  r_gid       : nat;
+  r_from_ep   : nat;
+  r_sender    : nat;
+  r_new_pub   : nat   (* non-zero invariant baked into checker *)
+}.
+
+Record LeafState12 : Set := mk_leaf12 {
+  ls_gid     : nat;
+  ls_epoch   : LeafEpoch;
+  ls_member  : nat -> bool;
+  ls_key     : nat -> nat   (* current leaf-pub by leaf index *)
+}.
+
+(** Updater: replace the key for one leaf, leaving others untouched. *)
+Definition key_update (k : nat -> nat) (leaf new_pub : nat) : nat -> nat :=
+  fun q => if Nat.eqb q leaf then new_pub else k q.
+
+(** [process_leaf_resync]: returns [Some s'] iff every guard passes,
+    advancing the epoch by 1 and rotating the leaf key. *)
+Definition process_leaf_resync (s : LeafState12) (r : LeafResync12)
+  : option LeafState12 :=
+  if Nat.eqb (r_gid r) (ls_gid s) then
+    if Nat.eqb (r_from_ep r) (ls_epoch s) then
+      if ls_member s (r_sender r) then
+        if Nat.eqb (r_new_pub r) 0 then None
+        else if Nat.eqb (r_new_pub r) (ls_key s (r_sender r)) then None
+        else Some (mk_leaf12 (ls_gid s) (S (ls_epoch s))
+                             (ls_member s)
+                             (key_update (ls_key s) (r_sender r) (r_new_pub r)))
+      else None
+    else None
+  else None.
+
+(** [INV-CHAT-58] cross-group leaf-resync rejected.
+    [DERIVED LCO-01 / R-CHAT-11] *)
+Theorem inv_chat_58_lco_cross_group_rejected :
+  forall s r,
+    Nat.eqb (r_gid r) (ls_gid s) = false ->
+    process_leaf_resync s r = None.
+Proof.
+  intros s r H. unfold process_leaf_resync. rewrite H. reflexivity.
+Qed.
+
+(** [INV-CHAT-59] leaf-resync at wrong from-epoch rejected (replay /
+    future-jump). [DERIVED LCO-04 / R-CHAT-11] *)
+Theorem inv_chat_59_lco_epoch_mismatch_rejected :
+  forall s r,
+    Nat.eqb (r_gid r) (ls_gid s) = true ->
+    Nat.eqb (r_from_ep r) (ls_epoch s) = false ->
+    process_leaf_resync s r = None.
+Proof.
+  intros s r Hgid Hep. unfold process_leaf_resync.
+  rewrite Hgid. rewrite Hep. reflexivity.
+Qed.
+
+(** [INV-CHAT-60] non-member leaf-resync rejected.
+    [DERIVED LCO-01 / R-CHAT-11] *)
+Theorem inv_chat_60_lco_non_member_rejected :
+  forall s r,
+    Nat.eqb (r_gid r) (ls_gid s) = true ->
+    Nat.eqb (r_from_ep r) (ls_epoch s) = true ->
+    ls_member s (r_sender r) = false ->
+    process_leaf_resync s r = None.
+Proof.
+  intros s r Hgid Hep Hmem. unfold process_leaf_resync.
+  rewrite Hgid. rewrite Hep. rewrite Hmem. reflexivity.
+Qed.
+
+(** Helper: a successful resync advances the epoch by exactly one. *)
+Lemma process_leaf_resync_advances_one :
+  forall s r s',
+    process_leaf_resync s r = Some s' ->
+    ls_epoch s' = S (ls_epoch s).
+Proof.
+  intros s r s' H. unfold process_leaf_resync in H.
+  destruct (Nat.eqb (r_gid r) (ls_gid s)) eqn:E1; try discriminate.
+  destruct (Nat.eqb (r_from_ep r) (ls_epoch s)) eqn:E2; try discriminate.
+  destruct (ls_member s (r_sender r)) eqn:E3; try discriminate.
+  destruct (Nat.eqb (r_new_pub r) 0) eqn:E4; try discriminate.
+  destruct (Nat.eqb (r_new_pub r) (ls_key s (r_sender r))) eqn:E5; try discriminate.
+  inversion H; subst. simpl. reflexivity.
+Qed.
+
+End TrinityChatWave12.
+
+(* End of Trinity_Chat.v — Wave-12 final
+   Theorems / Lemmas Qed-closed: 79 (count of `Qed.` occurrences)
      Wave-1–3:  INV-CHAT-1..12
      Wave-5:    INV-CHAT-13..15 + helpers
      Wave-6:    INV-CHAT-16..21 + helpers
@@ -1270,6 +1435,19 @@ End TrinityChatWave11.
                                   dh_step_fresh +
                                   dh_post_history_independent +
                                   hybrid_kem_non_degenerate.
+     Wave-12:   INV-CHAT-54..60 + 2 helpers (prekey-pool + leaf-resync, 9 new) -> 79 Qed
+      Wave-12 lanes:
+        L-CHAT-1-prekey (Prekey-bundle exhaustion):
+          INV-CHAT-54 inv_chat_54_pool_empty_take_none
+          INV-CHAT-55 inv_chat_55_pool_strict_decrease
+          INV-CHAT-56 inv_chat_56_empty_pool_forces_fallback
+          INV-CHAT-57 inv_chat_57_nonempty_pool_picks_onetime
+          aux: pool_take_decreases
+        L-CHAT-3-leaf (MLS leaf-key compromise / leaf-resync):
+          INV-CHAT-58 inv_chat_58_lco_cross_group_rejected
+          INV-CHAT-59 inv_chat_59_lco_epoch_mismatch_rejected
+          INV-CHAT-60 inv_chat_60_lco_non_member_rejected
+          aux: process_leaf_resync_advances_one
    Theorems Admitted: 0
    R5 budget: 0/10 admissions used.
 *)
