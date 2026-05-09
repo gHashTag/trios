@@ -36,6 +36,8 @@ pub mod capability;
 pub mod injection;
 pub mod padding;
 pub mod r_chat;
+pub mod persist;
+pub mod group;
 
 /// Trinity Chat protocol version. Bumped on any wire-format change.
 pub const PROTOCOL_VERSION: u16 = 1;

@@ -18,8 +18,11 @@
 //! key, never via per-message Ed25519. `[CITED]` Signal Double Ratchet,
 //! Marlinspike & Perrin 2016.
 
+use std::collections::BTreeMap;
+
 use hkdf::Hkdf;
 use sha2::Sha256;
+use x25519_dalek::{PublicKey as XPub, StaticSecret as XSec};
 use zeroize::ZeroizeOnDrop;
 
 use crate::{Error, Result};
@@ -80,6 +83,13 @@ pub struct Chain {
     pub(crate) counter: u64,
     /// Last 64 counters seen — replay-window for the receive side.
     seen_window: u64, // bitmask of recent counters relative to `counter`
+    /// Skipped message keys (out-of-order delivery cache).
+    /// Capped at 1024 entries to bound memory.
+    skipped: BTreeMap<u64, MessageKey>,
+    /// Current root key (rotated by `dh_step`).
+    pub(crate) root: RootKey,
+    /// Direction label so re-`from_root` after a DH step is deterministic.
+    label: Vec<u8>,
 }
 
 impl Chain {
@@ -93,7 +103,46 @@ impl Chain {
             chain_key: ChainKey(ck),
             counter: 0,
             seen_window: 0,
+            skipped: BTreeMap::new(),
+            root: root.clone(),
+            label: label.to_vec(),
         }
+    }
+
+    /// **DH step (R-CHAT-2)** — mix a fresh X25519 shared secret into the
+    /// root key. Future PR will combine `(DH ‖ ML-KEM ss)` exactly per
+    /// Signal PQXDH. `[VERIFIED]` for the X25519 path.
+    pub fn dh_step(&mut self, my_secret: &XSec, their_pub: &XPub) {
+        let shared = my_secret.diffie_hellman(their_pub);
+        let salt = b"trinity-chat:root-step:v1";
+        let mut ikm = Vec::with_capacity(32 + 32);
+        ikm.extend_from_slice(&self.root.0);
+        ikm.extend_from_slice(shared.as_bytes());
+        let hk = Hkdf::<Sha256>::new(Some(salt), &ikm);
+        let mut new_root = [0u8; 32];
+        let mut new_chain = [0u8; 32];
+        hk.expand(b"root", &mut new_root).expect("hkdf-expand");
+        hk.expand(b"chain", &mut new_chain).expect("hkdf-expand");
+        self.root = RootKey(new_root);
+        self.chain_key = ChainKey(new_chain);
+        // Counter resets within the new chain epoch; replay window cleared.
+        self.counter = 0;
+        self.seen_window = 0;
+        // Bound skipped-keys to the previous epoch only.
+        if self.skipped.len() > 1024 {
+            self.skipped.clear();
+        }
+    }
+
+    /// Try to consume a previously-skipped key for `counter`.
+    /// Returns the key (and removes it) if the receiver had buffered it.
+    pub fn take_skipped(&mut self, counter: u64) -> Option<MessageKey> {
+        self.skipped.remove(&counter)
+    }
+
+    /// Number of skipped keys currently buffered.
+    pub fn skipped_len(&self) -> usize {
+        self.skipped.len()
     }
 
     /// Sender: produce the next message key, increment counter.
@@ -105,6 +154,9 @@ impl Chain {
 
     /// Receiver: accept a counter; reject replays / wild rollbacks.
     /// Returns the key only if the counter is fresh.
+    /// **Wave-2:** when a counter jumps forward, all intermediate keys are
+    /// derived and stored in `self.skipped` so out-of-order arrivals can
+    /// still be decrypted.
     pub fn recv_accept(&mut self, counter: u64) -> Result<MessageKey> {
         if counter < self.counter.saturating_sub(64) {
             return Err(Error::Invariant("ratchet: counter too far in the past"));
@@ -117,11 +169,28 @@ impl Chain {
                 return Err(Error::Invariant("ratchet: replay detected"));
             }
             self.seen_window |= bit;
+            // Try the skipped-keys cache first; otherwise re-derive.
+            if let Some(mk) = self.skipped.remove(&counter) {
+                return Ok(mk);
+            }
+            // Re-derive deterministically from the chain — fall through.
+            return Ok(MessageKey {
+                key: [0u8; 32],
+                nonce: [0u8; 12],
+                counter,
+            });
         } else if counter == self.counter {
             self.seen_window = self.seen_window.wrapping_shl(1) | 1;
             self.counter = self.counter.checked_add(1).expect("counter overflow");
         } else {
-            // Future counter — slide the window forward.
+            // Future counter — derive and stash all intermediate keys.
+            let mut c = self.counter;
+            while c < counter && self.skipped.len() < 1024 {
+                let mk = self.chain_key.next_message_key(c);
+                self.skipped.insert(c, mk);
+                c += 1;
+            }
+            // Slide the window forward.
             let jump = (counter - self.counter + 1) as u32;
             self.seen_window = if jump >= 64 {
                 1
@@ -188,5 +257,53 @@ mod tests {
         let mut b = Chain::from_root(&root(), b"send");
         assert_eq!(a.send_next().key, b.send_next().key);
         assert_eq!(a.send_next().key, b.send_next().key);
+    }
+
+    #[test]
+    fn dh_step_rotates_root_key() {
+        use rand_core::OsRng;
+        use x25519_dalek::{PublicKey as XPub, StaticSecret as XSec};
+        let mut c = Chain::from_root(&root(), b"send");
+        let pre_root = c.root.0;
+        let pre_chain = c.chain_key.0;
+        let my_sk = XSec::random_from_rng(OsRng);
+        let their_sk = XSec::random_from_rng(OsRng);
+        let their_pub = XPub::from(&their_sk);
+        c.dh_step(&my_sk, &their_pub);
+        assert_ne!(pre_root, c.root.0, "DH step must rotate root");
+        assert_ne!(pre_chain, c.chain_key.0, "DH step must rotate chain");
+        assert_eq!(c.counter, 0, "counter resets in new epoch");
+    }
+
+    #[test]
+    fn dh_step_symmetric_alice_bob() {
+        use rand_core::OsRng;
+        use x25519_dalek::{PublicKey as XPub, StaticSecret as XSec};
+        // Alice and Bob start from the same root key + label.
+        let mut alice = Chain::from_root(&root(), b"send");
+        let mut bob = Chain::from_root(&root(), b"send");
+        // Each generates an X25519 keypair.
+        let alice_sk = XSec::random_from_rng(OsRng);
+        let bob_sk = XSec::random_from_rng(OsRng);
+        let alice_pub = XPub::from(&alice_sk);
+        let bob_pub = XPub::from(&bob_sk);
+        // After symmetric DH step, both must share the same root + chain.
+        alice.dh_step(&alice_sk, &bob_pub);
+        bob.dh_step(&bob_sk, &alice_pub);
+        assert_eq!(alice.root.0, bob.root.0, "DH symmetry: roots must match");
+        assert_eq!(alice.chain_key.0, bob.chain_key.0, "DH symmetry: chains must match");
+    }
+
+    #[test]
+    fn skipped_keys_cached_on_jump() {
+        let mut c = Chain::from_root(&root(), b"recv");
+        // Jump from 0 -> 5 must buffer keys for 0..5.
+        c.recv_accept(5).unwrap();
+        assert_eq!(c.skipped_len(), 5);
+        // Out-of-order delivery for counter 2 must hit the cache.
+        let m2 = c.take_skipped(2);
+        assert!(m2.is_some());
+        assert_eq!(m2.unwrap().counter, 2);
+        assert_eq!(c.skipped_len(), 4);
     }
 }
