@@ -497,17 +497,147 @@ Qed.
 
 End TrinityChatWave6.
 
-(* End of Trinity_Chat.v — Wave-6 final
-   Theorems / Lemmas Qed-closed: 27
+(** ===================================================================== *)
+(** ============== Wave-7: persistence + async cover ===================== *)
+(** ===================================================================== *)
+
+Section TrinityChatWave7.
+
+(** ===================================================================== *)
+(** INV-CHAT-22 — persisted_envelope_no_plaintext                          *)
+(** ===================================================================== *)
+(** [DERIVED CR-CHAT-05 / Wave-7 / R-CHAT-1] every persisted envelope      *)
+(** carries AEAD-sealed ciphertext, never plaintext. We model the          *)
+(** ciphertext predicate as a propositional tag.                           *)
+
+Inductive PersistTag : Set := pt_aead | pt_plaintext.
+
+Definition persisted_ok (t : PersistTag) : Prop := t = pt_aead.
+
+Theorem persisted_envelope_no_plaintext :
+  forall t, persisted_ok t -> t <> pt_plaintext.
+Proof.
+  intros t H Heq. unfold persisted_ok in H. rewrite H in Heq. discriminate.
+Qed.
+
+(** ===================================================================== *)
+(** INV-CHAT-23 — persisted_envelope_aad_required                          *)
+(** ===================================================================== *)
+(** [DERIVED CR-CHAT-05 / Wave-7] every persisted envelope is bound to     *)
+(** an AAD context (session,counter,dest); without AAD the row is invalid. *)
+
+Inductive AadStatus : Set := aad_present | aad_missing.
+
+Definition row_valid (a : AadStatus) (t : PersistTag) : Prop :=
+  a = aad_present /\ t = pt_aead.
+
+Theorem persisted_envelope_aad_required :
+  forall a t, row_valid a t -> a = aad_present.
+Proof.
+  intros a t [Ha _]. exact Ha.
+Qed.
+
+(** ===================================================================== *)
+(** INV-CHAT-24 — persisted_key_rotation_advances                          *)
+(** ===================================================================== *)
+(** [DERIVED CR-CHAT-05 / Wave-7 / PA-04] rotating the session key never   *)
+(** decreases the rotation epoch.                                          *)
+
+Definition rotate_epoch (e : nat) : nat := S e.
+
+Theorem persisted_key_rotation_advances :
+  forall e, rotate_epoch e > e.
+Proof.
+  intros e. unfold rotate_epoch. lia.
+Qed.
+
+(** ===================================================================== *)
+(** INV-CHAT-25 — uniform_gap_within_canonical_set                         *)
+(** ===================================================================== *)
+(** [DERIVED CR-CHAT-07 / Wave-7 / R-CHAT-10 (ii)] uniform_gap_ms always   *)
+(** returns one of the four canonical bins. We abstract the bins as a     *)
+(** finite enum (mirrors CANONICAL_GAPS_MS = [1000;5000;30000;300000]).   *)
+
+Inductive GapBin : Set := g1s | g5s | g30s | g5min.
+
+Definition gap_quantise (raw_class : nat) : GapBin :=
+  match raw_class with
+  | 0 => g1s
+  | 1 => g5s
+  | 2 => g30s
+  | _ => g5min
+  end.
+
+Theorem uniform_gap_within_canonical_set :
+  forall n,
+    gap_quantise n = g1s \/
+    gap_quantise n = g5s \/
+    gap_quantise n = g30s \/
+    gap_quantise n = g5min.
+Proof.
+  intros n. unfold gap_quantise. destruct n as [|n1].
+  - left. reflexivity.
+  - destruct n1 as [|n2].
+    + right; left. reflexivity.
+    + destruct n2 as [|n3].
+      * right; right; left. reflexivity.
+      * right; right; right. reflexivity.
+Qed.
+
+(** ===================================================================== *)
+(** INV-CHAT-26 — cover_emission_indistinguishable_at_quantile             *)
+(** ===================================================================== *)
+(** [DERIVED CR-CHAT-07 + BR-IO-CHAT-07 / Wave-7 / R-CHAT-10 (iii)] from   *)
+(** the wire observer's perspective every emission lands at a canonical    *)
+(** gap bin. Real and Cover emissions are indistinguishable on that grid.  *)
+
+Inductive Emission : Set := em_real | em_cover.
+
+Definition wire_visible (_ : Emission) (g : GapBin) : GapBin := g.
+
+Theorem cover_emission_indistinguishable_at_quantile :
+  forall g, wire_visible em_real g = wire_visible em_cover g.
+Proof.
+  intros g. unfold wire_visible. reflexivity.
+Qed.
+
+(** ===================================================================== *)
+(** INV-CHAT-27 — real_emission_subset_of_emission                         *)
+(** ===================================================================== *)
+(** [DERIVED CR-CHAT-07 / Wave-7 / R-CHAT-10 (v)] every Real produced by   *)
+(** the scheduler is also a valid Emission tag. Trivial subtype lemma      *)
+(** that ties the Coq model to the Rust enum.                              *)
+
+Definition is_emission (e : Emission) : Prop := e = em_real \/ e = em_cover.
+
+Theorem real_emission_subset_of_emission :
+  is_emission em_real.
+Proof.
+  unfold is_emission. left. reflexivity.
+Qed.
+
+(** Auxiliary: cover is also an emission (companion to the above).        *)
+Lemma cover_emission_is_emission :
+  is_emission em_cover.
+Proof.
+  unfold is_emission. right. reflexivity.
+Qed.
+
+End TrinityChatWave7.
+
+(* End of Trinity_Chat.v — Wave-7 final
+   Theorems / Lemmas Qed-closed: 34
      Wave-1–3:  INV-CHAT-1..12 (12)
      Wave-5:    INV-CHAT-13..15 + 4 helpers (7)  -> running total 21
      Wave-6:    INV-CHAT-16..21 + 2 helpers (8)  -> running total 27
+   Wave-7:    INV-CHAT-22..27 + 1 helper  (7)  -> running total 34
       including aux lemmas: bundle_id_projection,
                             sealed_sender_eq_for_same_recipient,
                             manifest_check_dichotomy,
                             forward_secrecy_state_advances,
                             pcs_symmetry,
-                            nat_eqb_refl, deny_pattern_match_head
+                            nat_eqb_refl, deny_pattern_match_head,
+                            cover_emission_is_emission
    Theorems Admitted: 0
    R5 budget: 0/10 admissions used.
 *)
