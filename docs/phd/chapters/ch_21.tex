@@ -95,6 +95,13 @@ INV-7b (\texttt{INV7b\_RainbowBridgeConsistency.v} {[}3{]}, 15 Qed) asserts that
 
 \subsection{3.1 Agent Topology}\label{agent-topology}
 
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-F-fpga-bitstream.jpg}}
+\caption{Azbuka of the Tridevyatoe — Appendix F: FPGA Bitstream Archive (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
+\end{figure}
+
 The IGLA RACE fleet is organised as a star topology: a central Arbiter agent monitors the Railway PostgreSQL phd-postgres-ssot database (Ch.15 {[}5{]}) and a set of Worker agents run training jobs. Each Worker is assigned exactly one seed from the sanctioned pool at launch and is forbidden from using any other seed. The Arbiter polls the \texttt{bpb\_runs} table every 60 seconds for rows with \texttt{step\ \textgreater{}=\ 4000}.
 
 The fleet is self-evolving in the sense described in {[}6{]}: when a Worker's BPB trajectory is detected to have stalled (derivative \(< 10^{-4}\) BPB/step over 1000 consecutive steps), the Arbiter spawns a replacement Worker with the next seed in the pool. The Ouroboros self-evolution protocol {[}6{]} ensures that the pool is never exhausted: after \(L_8 = 47\) (the last seed), the cycle wraps to \(F_{17} = 1597\) with a modified hyperparameter perturbation.
