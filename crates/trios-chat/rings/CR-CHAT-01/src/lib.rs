@@ -26,43 +26,11 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub mod appack_replay;
-pub mod handshake_fingerprint;
 pub mod identity;
-pub mod kem;
-pub mod kem_decap_oracle;
-pub mod keypackage_init_key_reuse;
-pub mod otpk;
-pub mod prekey_signature_chain;
-pub mod revocation;
 pub mod sealed;
-pub mod welcome_encrypted_group_info_aead;
 
-pub use appack_replay::{
-    AppAckError, AppAckLeaf, AppAckLedger, AppAckProposal, Generation, MessageRange,
-};
-
-pub use handshake_fingerprint::{
-    HandshakeError, HandshakeFingerprint, HSF_DOMAIN, HSF_LEN,
-};
 pub use identity::{Identity, PrekeyBundle, PrekeyBundleBody, MLKEM_PUB_LEN, MLKEM_SEC_LEN};
-pub use kem::{encapsulate_to, MlKem768Keypair, MLKEM768_CT_LEN, MLKEM768_EK_LEN, MLKEM768_SS_LEN};
-pub use kem_decap_oracle::{observe as observe_decap, ss_eq as decap_ss_eq, DecapObservation, KEM_DECAP_ORACLE_CT_LEN, KEM_DECAP_ORACLE_SS_LEN};
-pub use keypackage_init_key_reuse::{
-    validate_keypackage_init_key, KeyPackage, KeyPackageInitKeyError, KeyPackageView,
-    KEYPACKAGE_INIT_KEY_LEN,
-};
-pub use otpk::{JoinStrategy, Otpk, OtpkPool};
-pub use prekey_signature_chain::{
-    validate_prekey_chain, ChainBindingTag, PrekeyChainBundle, PrekeyChainError, PrekeyChainKey,
-    PrekeyChainView,
-};
-pub use revocation::{verify_identity_with_grace, RevocationCert, RevocationLedger, RevocationReason};
 pub use sealed::{dest_hash, SealedEnvelope};
-pub use welcome_encrypted_group_info_aead::{
-    validate_welcome_aead_envelope, WelcomeAeadEnvelope, WelcomeAeadError, WelcomeAeadView,
-    WELCOME_GROUP_INFO_AEAD_NONCE_LEN, WELCOME_GROUP_INFO_MIN_CT_LEN,
-};
 
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
