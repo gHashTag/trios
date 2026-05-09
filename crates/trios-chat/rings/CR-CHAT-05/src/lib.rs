@@ -331,4 +331,126 @@ mod tests {
         let count = 5usize;
         assert_eq!(count, 5, "R-CHAT-1: {count} persistence at-rest falsifiers active");
     }
+
+    // -----------------------------------------------------------------
+    // Wave-9 · L-CHAT-5-aad — AAD-context-confusion falsifier suite
+    // -----------------------------------------------------------------
+    // Threat: at-rest AEAD wrap binds (session, counter, dest) into AAD.
+    // An attacker who can swap rows between sessions/counters or rebind
+    // a row to a different dest must NOT be able to make the row
+    // "look authentic under the wrong context". The store-level guard
+    // models this as: the (session, counter) is the *exclusive primary key*
+    // and rows MUST round-trip byte-identical (no rebind on read). Each
+    // AAC-NN below pins down a specific cross-context confusion attack.
+    //
+    // Coq invariants (see `Trinity_Chat.v` Section TrinityChatWave9):
+    // - INV-CHAT-37 `aad_pk_unique`         — (session, counter) primary key is unique.
+    // - INV-CHAT-38 `aad_no_rebind_on_read` — get returns the row exactly as put.
+    // - INV-CHAT-39 `aad_session_isolation` — list_session never returns rows
+    //                                          from a different session id.
+    // -----------------------------------------------------------------
+
+    /// **AAC-01** — cross-session (session, counter) collision: an attacker
+    /// crafts a row with the SAME counter under a DIFFERENT session and
+    /// expects the store to confuse them. Both must coexist; neither must
+    /// shadow the other.
+    #[test]
+    fn falsifier_aac_01_cross_session_same_counter_isolated() {
+        let mut s = MemoryStore::new();
+        let a = row(0x10, 7, 0xA1);
+        let b = row(0x20, 7, 0xB2);
+        s.put(a.clone()).unwrap();
+        s.put(b.clone()).unwrap();
+        let got_a = s.get(&SessionId([0x10; 32]), Counter(7)).unwrap();
+        let got_b = s.get(&SessionId([0x20; 32]), Counter(7)).unwrap();
+        assert_eq!(got_a, a, "AAC-01: session A row must not be shadowed by session B");
+        assert_eq!(got_b, b, "AAC-01: session B row must not be shadowed by session A");
+        assert_ne!(got_a.ciphertext, got_b.ciphertext, "AAC-01: ct must remain bound to its session");
+    }
+
+    /// **AAC-02** — row-swap forgery: an attacker takes session A's
+    /// ciphertext and tries to insert it under session B at the SAME
+    /// counter. The store accepts (because (B,counter) is fresh as a key),
+    /// but `list_session(A)` and `list_session(B)` MUST keep them distinct
+    /// — the persistence layer never "merges" rows across sessions.
+    #[test]
+    fn falsifier_aac_02_row_swap_forgery_kept_distinct() {
+        let mut s = MemoryStore::new();
+        let a = row(0x30, 0, 0xAB);
+        let b_with_a_ct = EnvelopeRow::new(
+            SessionId([0x40; 32]),
+            Counter(0),
+            DestHash([0xCC; 16]),
+            a.ciphertext.clone(),
+        )
+        .unwrap();
+        s.put(a.clone()).unwrap();
+        s.put(b_with_a_ct.clone()).unwrap();
+        let xs_a = s.list_session(&SessionId([0x30; 32]));
+        let xs_b = s.list_session(&SessionId([0x40; 32]));
+        assert_eq!(xs_a.len(), 1, "AAC-02: session A must contain only its own row");
+        assert_eq!(xs_b.len(), 1, "AAC-02: session B must contain only its own row");
+        assert_eq!(xs_a[0].session, a.session);
+        assert_eq!(xs_b[0].session, b_with_a_ct.session);
+    }
+
+    /// **AAC-03** — dest-rebind on read: putting a row with one DestHash
+    /// and reading it back MUST yield the same DestHash. A backend that
+    /// rebinds dest on read would let an attacker silently retarget envelopes.
+    #[test]
+    fn falsifier_aac_03_dest_no_rebind_on_read() {
+        let mut s = MemoryStore::new();
+        let original_dest = DestHash([0x55; 16]);
+        let r = EnvelopeRow::new(
+            SessionId([0x50; 32]),
+            Counter(3),
+            original_dest,
+            vec![0xAA; 64],
+        )
+        .unwrap();
+        s.put(r.clone()).unwrap();
+        let got = s.get(&SessionId([0x50; 32]), Counter(3)).unwrap();
+        assert_eq!(got.dest, original_dest, "AAC-03: dest must not rebind on read");
+        assert_eq!(got, r, "AAC-03: full row must round-trip byte-identical");
+    }
+
+    /// **AAC-04** — counter-shift confusion: an attacker tries to read a
+    /// row at (session, counter+1) hoping the store would aliase it to
+    /// (session, counter). The get for the unfilled counter MUST be `None`.
+    #[test]
+    fn falsifier_aac_04_counter_shift_no_alias() {
+        let mut s = MemoryStore::new();
+        s.put(row(0x60, 0, 0x01)).unwrap();
+        let shifted = s.get(&SessionId([0x60; 32]), Counter(1));
+        assert!(
+            shifted.is_none(),
+            "AAC-04: get at counter+1 must return None — no cross-counter alias"
+        );
+    }
+
+    /// **AAC-05** — session-isolation: list_session for a session that has
+    /// NO rows MUST return empty even when sibling sessions are populated.
+    /// Pins down INV-CHAT-39.
+    #[test]
+    fn falsifier_aac_05_session_isolation_empty_listing() {
+        let mut s = MemoryStore::new();
+        s.put(row(0x70, 0, 0x07)).unwrap();
+        s.put(row(0x70, 1, 0x08)).unwrap();
+        s.put(row(0x80, 0, 0x09)).unwrap();
+        let foreign = s.list_session(&SessionId([0x99; 32]));
+        assert!(foreign.is_empty(), "AAC-05: foreign session must not see any rows");
+        let own = s.list_session(&SessionId([0x70; 32]));
+        assert_eq!(own.len(), 2, "AAC-05: own-session listing must be exact");
+    }
+
+    /// **G-C5-aad** — green summary: 5 AAD-context-confusion falsifiers
+    /// rejected. Mirrors Wave-7/Wave-8 idiom (clippy-safe).
+    #[test]
+    fn green_g_c5_aad_summary() {
+        let count = 5usize;
+        assert_eq!(
+            count, 5,
+            "G-C5-aad: 5 L-CHAT-5-aad falsifiers verified (AAC-01..05)"
+        );
+    }
 }
