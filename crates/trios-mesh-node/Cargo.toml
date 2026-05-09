@@ -1,8 +1,8 @@
 [package]
 name = "trios-mesh-node"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Trinity GF16 CPU mesh node daemon for Railway deployment"
+description = "Trinity GF16 CPU mesh node daemon — E2E encrypted via X25519+ChaCha20Poly1305"
 license = "MIT"
 repository = "https://github.com/gHashTag/trios"
 
@@ -12,14 +12,18 @@ path = "src/main.rs"
 
 [dependencies]
 trios-mesh = { path = "../trios-mesh", features = ["std"] }
-tokio       = { workspace = true }
-axum        = { workspace = true }
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-tracing     = { workspace = true }
+tokio              = { workspace = true }
+axum               = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
-anyhow      = { workspace = true }
-chrono      = { workspace = true }
-sha2        = "0.10"
-rand        = { workspace = true }
-hex         = "0.4"
+anyhow             = { workspace = true }
+chrono             = { workspace = true }
+sha2               = "0.10"
+rand               = { workspace = true }
+hex                = "0.4"
+# E2E encryption
+x25519-dalek       = { version = "2", features = ["static_secrets"] }
+chacha20poly1305   = "0.10"
+base64             = "0.22"
