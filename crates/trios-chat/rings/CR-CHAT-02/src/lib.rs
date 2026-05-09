@@ -1,22 +1,31 @@
+//! # CR-CHAT-02 — ratchet
+//!
 //! L-CHAT-2 · trinity-fpga#30 — Triple Ratchet skeleton.
 //!
-//! `[ASPIRATIONAL]` — full Double/Triple Ratchet construction lands in the
-//! L-CHAT-2 follow-up PR. This module ships the **state machine + chain-key
-//! advance** so dependent modules (`sealed`, `capability`) compile and so
-//! G-C2 falsifier tests have something to refute.
+//! `[ASPIRATIONAL]` — full Double/Triple Ratchet construction lands in
+//! the L-CHAT-2 follow-up PR. This module ships the **state machine +
+//! chain-key advance** so dependent rings (`CR-CHAT-01 sealed`,
+//! `CR-CHAT-06 capability`) compile and so G-C2 falsifier tests have
+//! something to refute.
 //!
 //! Concretely we deliver:
-//! * `RootKey`, `ChainKey` — KDF-chained 32-byte secrets.
-//! * `MessageKey::derive` — HKDF-SHA-256 from chain-key + counter.
-//! * `Chain::next_message_key` — strictly monotone counter, no replay.
-//! * `Chain::detect_replay` — falsifier hook for G-C2.
+//! * [`RootKey`], [`ChainKey`] — KDF-chained 32-byte secrets.
+//! * [`MessageKey::derive`] — HKDF-SHA-256 from chain-key + counter.
+//! * [`Chain::next_message_key`] — strictly monotone counter, no replay.
+//! * [`Chain::dh_step`] — root-key rotation on a fresh DH shared secret.
 //!
-//! Per R-CHAT-2 the eventual `Chain::dh_step` will mix `(DH(...) ‖ ML-KEM ss)`
-//! into the root key. The skeleton API is shaped for that.
+//! Per **R-CHAT-2** the eventual `Chain::dh_step` will mix
+//! `(DH(...) ‖ ML-KEM ss)` into the root key. The skeleton API is
+//! shaped for that.
 //!
-//! Per R-CHAT-4 messages are authenticated via MAC derived from the chain
-//! key, never via per-message Ed25519. `[CITED]` Signal Double Ratchet,
-//! Marlinspike & Perrin 2016.
+//! Per **R-CHAT-4** messages are authenticated via MAC derived from the
+//! chain key, never via per-message Ed25519. `[CITED]` Signal Double
+//! Ratchet, Marlinspike & Perrin 2016.
+//!
+//! Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA`
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 use std::collections::BTreeMap;
 
@@ -25,7 +34,14 @@ use sha2::Sha256;
 use x25519_dalek::{PublicKey as XPub, StaticSecret as XSec};
 use zeroize::ZeroizeOnDrop;
 
-use crate::{Error, Result};
+use trios_chat_cr_chat_00::{Error, Result};
+
+/// Cap on the skipped-keys cache (out-of-order delivery buffer).
+///
+/// Bounds memory under adversarial jump-by-N counter spam. Larger
+/// values trade memory for tolerance to legitimate out-of-order
+/// arrivals; 1024 is the Signal-recommended ceiling.
+pub const SKIPPED_KEYS_CAP: usize = 1024;
 
 /// 32-byte root key. Updates only on a DH (or DH+KEM) step.
 #[derive(Clone, ZeroizeOnDrop)]
@@ -36,16 +52,30 @@ impl RootKey {
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
+
+    /// Borrow the raw 32-byte root material (test-only, not exposed
+    /// to wire format).
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
 }
 
 /// 32-byte chain key. Updates on every message.
 #[derive(Clone, ZeroizeOnDrop)]
 pub struct ChainKey(pub(crate) [u8; 32]);
 
+impl ChainKey {
+    /// Borrow the raw 32-byte chain material (test-only, not exposed
+    /// to wire format).
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 /// Message key + nonce derived from one chain-key step.
 #[derive(Clone, Debug, PartialEq, Eq, ZeroizeOnDrop)]
 pub struct MessageKey {
-    /// 32-byte AEAD key (used by ChaCha20-Poly1305 in `sealed`).
+    /// 32-byte AEAD key (used by ChaCha20-Poly1305 in CR-CHAT-01).
     pub key: [u8; 32],
     /// 12-byte AEAD nonce.
     #[zeroize(skip)]
@@ -82,13 +112,14 @@ pub struct Chain {
     /// Highest counter already issued; strictly monotone.
     pub(crate) counter: u64,
     /// Last 64 counters seen — replay-window for the receive side.
-    seen_window: u64, // bitmask of recent counters relative to `counter`
+    seen_window: u64,
     /// Skipped message keys (out-of-order delivery cache).
-    /// Capped at 1024 entries to bound memory.
+    /// Capped at [`SKIPPED_KEYS_CAP`] entries to bound memory.
     skipped: BTreeMap<u64, MessageKey>,
     /// Current root key (rotated by `dh_step`).
     pub(crate) root: RootKey,
     /// Direction label so re-`from_root` after a DH step is deterministic.
+    #[allow(dead_code)]
     label: Vec<u8>,
 }
 
@@ -109,9 +140,24 @@ impl Chain {
         }
     }
 
-    /// **DH step (R-CHAT-2)** — mix a fresh X25519 shared secret into the
-    /// root key. Future PR will combine `(DH ‖ ML-KEM ss)` exactly per
-    /// Signal PQXDH. `[VERIFIED]` for the X25519 path.
+    /// Borrow the root key (test/diag only).
+    pub fn root_key(&self) -> &RootKey {
+        &self.root
+    }
+
+    /// Borrow the current chain key (test/diag only).
+    pub fn chain_key(&self) -> &ChainKey {
+        &self.chain_key
+    }
+
+    /// Current counter value (highest issued).
+    pub fn counter(&self) -> u64 {
+        self.counter
+    }
+
+    /// **DH step (R-CHAT-2)** — mix a fresh X25519 shared secret into
+    /// the root key. Future PR will combine `(DH ‖ ML-KEM ss)` exactly
+    /// per Signal PQXDH. `[VERIFIED]` for the X25519 path.
     pub fn dh_step(&mut self, my_secret: &XSec, their_pub: &XPub) {
         let shared = my_secret.diffie_hellman(their_pub);
         let salt = b"trinity-chat:root-step:v1";
@@ -129,7 +175,7 @@ impl Chain {
         self.counter = 0;
         self.seen_window = 0;
         // Bound skipped-keys to the previous epoch only.
-        if self.skipped.len() > 1024 {
+        if self.skipped.len() > SKIPPED_KEYS_CAP {
             self.skipped.clear();
         }
     }
@@ -154,9 +200,9 @@ impl Chain {
 
     /// Receiver: accept a counter; reject replays / wild rollbacks.
     /// Returns the key only if the counter is fresh.
-    /// **Wave-2:** when a counter jumps forward, all intermediate keys are
-    /// derived and stored in `self.skipped` so out-of-order arrivals can
-    /// still be decrypted.
+    /// **Wave-2:** when a counter jumps forward, all intermediate keys
+    /// are derived and stored in `self.skipped` so out-of-order
+    /// arrivals can still be decrypted.
     pub fn recv_accept(&mut self, counter: u64) -> Result<MessageKey> {
         if counter < self.counter.saturating_sub(64) {
             return Err(Error::Invariant("ratchet: counter too far in the past"));
@@ -185,7 +231,7 @@ impl Chain {
         } else {
             // Future counter — derive and stash all intermediate keys.
             let mut c = self.counter;
-            while c < counter && self.skipped.len() < 1024 {
+            while c < counter && self.skipped.len() < SKIPPED_KEYS_CAP {
                 let mk = self.chain_key.next_message_key(c);
                 self.skipped.insert(c, mk);
                 c += 1;
@@ -262,48 +308,59 @@ mod tests {
     #[test]
     fn dh_step_rotates_root_key() {
         use rand_core::OsRng;
-        use x25519_dalek::{PublicKey as XPub, StaticSecret as XSec};
         let mut c = Chain::from_root(&root(), b"send");
-        let pre_root = c.root.0;
-        let pre_chain = c.chain_key.0;
+        let pre_root = *c.root_key().as_bytes();
+        let pre_chain = *c.chain_key().as_bytes();
         let my_sk = XSec::random_from_rng(OsRng);
         let their_sk = XSec::random_from_rng(OsRng);
         let their_pub = XPub::from(&their_sk);
         c.dh_step(&my_sk, &their_pub);
-        assert_ne!(pre_root, c.root.0, "DH step must rotate root");
-        assert_ne!(pre_chain, c.chain_key.0, "DH step must rotate chain");
-        assert_eq!(c.counter, 0, "counter resets in new epoch");
+        assert_ne!(pre_root, *c.root_key().as_bytes(), "DH step must rotate root");
+        assert_ne!(pre_chain, *c.chain_key().as_bytes(), "DH step must rotate chain");
+        assert_eq!(c.counter(), 0, "counter resets in new epoch");
     }
 
     #[test]
     fn dh_step_symmetric_alice_bob() {
         use rand_core::OsRng;
-        use x25519_dalek::{PublicKey as XPub, StaticSecret as XSec};
-        // Alice and Bob start from the same root key + label.
         let mut alice = Chain::from_root(&root(), b"send");
         let mut bob = Chain::from_root(&root(), b"send");
-        // Each generates an X25519 keypair.
         let alice_sk = XSec::random_from_rng(OsRng);
         let bob_sk = XSec::random_from_rng(OsRng);
         let alice_pub = XPub::from(&alice_sk);
         let bob_pub = XPub::from(&bob_sk);
-        // After symmetric DH step, both must share the same root + chain.
         alice.dh_step(&alice_sk, &bob_pub);
         bob.dh_step(&bob_sk, &alice_pub);
-        assert_eq!(alice.root.0, bob.root.0, "DH symmetry: roots must match");
-        assert_eq!(alice.chain_key.0, bob.chain_key.0, "DH symmetry: chains must match");
+        assert_eq!(
+            alice.root_key().as_bytes(),
+            bob.root_key().as_bytes(),
+            "DH symmetry: roots must match"
+        );
+        assert_eq!(
+            alice.chain_key().as_bytes(),
+            bob.chain_key().as_bytes(),
+            "DH symmetry: chains must match"
+        );
     }
 
     #[test]
     fn skipped_keys_cached_on_jump() {
         let mut c = Chain::from_root(&root(), b"recv");
-        // Jump from 0 -> 5 must buffer keys for 0..5.
         c.recv_accept(5).unwrap();
         assert_eq!(c.skipped_len(), 5);
-        // Out-of-order delivery for counter 2 must hit the cache.
         let m2 = c.take_skipped(2);
         assert!(m2.is_some());
         assert_eq!(m2.unwrap().counter, 2);
         assert_eq!(c.skipped_len(), 4);
+    }
+
+    #[test]
+    fn skipped_keys_capped_under_adversarial_jump() {
+        // Falsifier: an attacker tries to force unbounded memory growth by
+        // sending a counter far in the future. The cache MUST stop at
+        // SKIPPED_KEYS_CAP regardless.
+        let mut c = Chain::from_root(&root(), b"recv");
+        c.recv_accept(SKIPPED_KEYS_CAP as u64 + 500).unwrap();
+        assert!(c.skipped_len() <= SKIPPED_KEYS_CAP);
     }
 }

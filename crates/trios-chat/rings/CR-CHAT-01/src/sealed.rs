@@ -13,8 +13,8 @@ use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce};
 use sha2::{Digest, Sha256};
 use x25519_dalek::{PublicKey, StaticSecret};
 
-use crate::padding::{pad_class, unpad};
-use crate::{Error, Result};
+use trios_chat_cr_chat_00::{Error, Result};
+use trios_chat_cr_chat_04::{pad_class, unpad};
 
 /// 16-byte destination hash — what the mesh sees and routes on.
 pub fn dest_hash(recipient_x25519_pub: &PublicKey) -> [u8; 16] {
@@ -46,7 +46,7 @@ fn symmetric_kdf(a: &[u8; 32], b: &[u8; 32], shared: &[u8; 32]) -> [u8; 32] {
 /// Wire-format envelope.
 ///
 /// Layout (after pad_class):
-/// | 16 dest_hash | 32 src_x25519_pub | 12 nonce | N ciphertext+tag |
+/// `| 16 dest_hash | 32 src_x25519_pub | 12 nonce | N ciphertext+tag |`
 ///
 /// `src_x25519_pub` is the **sender's** ephemeral or prekey public, not their
 /// long-term identity — the receiver dereferences it from their contact book
@@ -64,8 +64,8 @@ pub struct SealedEnvelope {
 
 impl SealedEnvelope {
     /// Seal `payload` for `recipient_x25519_pub`. Returns `(envelope,
-    /// pad_size_class)` where the ciphertext fits into one of {256, 1024,
-    /// 4096, 16384} bytes per R-CHAT-9.
+    /// pad_size_class)` where the ciphertext fits into one of `{256, 1024,
+    /// 4096, 16384}` bytes per R-CHAT-9.
     pub fn seal(
         sender_secret: &StaticSecret,
         sender_public: &PublicKey,
@@ -168,5 +168,17 @@ mod tests {
         let (_, p1) = pair();
         let (_, p2) = pair();
         assert_ne!(dest_hash(&p1), dest_hash(&p2));
+    }
+
+    #[test]
+    fn ciphertext_padding_class_is_one_of_canonical_classes() {
+        // R-CHAT-9 — wire-size privacy. The ciphertext expands by 16 (Poly1305 tag)
+        // over the padded plaintext (one of 256/1024/4096/16384).
+        let (a_s, a_p) = pair();
+        let (_, b_p) = pair();
+        let env = SealedEnvelope::seal(&a_s, &a_p, &b_p, [3u8; 12], b"short").unwrap();
+        let len = env.ciphertext.len();
+        // Expected padded size = 256 + 16 (AEAD tag).
+        assert_eq!(len, 256 + 16, "expect smallest pad class + AEAD tag");
     }
 }

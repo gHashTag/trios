@@ -5,8 +5,8 @@
 //! Per **R-CHAT-4**, only the prekey bundle is signed; messages are MAC-only.
 //!
 //! ML-KEM-768 (NIST FIPS 203) is wired as an opaque-bytes placeholder
-//! (`MlKemPubKey`, `MlKemCipher`) so the protocol shape is correct while
-//! the concrete `ml-kem` crate is feature-gated for L-CHAT-2 integration.
+//! (`MLKEM_PUB_LEN` = 1184) so the protocol shape is correct while
+//! the concrete `ml-kem` crate is feature-gated for CR-CHAT-02 integration.
 //! See `[ASPIRATIONAL]` tag below.
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
@@ -16,10 +16,12 @@ use sha2::{Digest, Sha256};
 use x25519_dalek::{PublicKey as X25519Pub, StaticSecret as X25519Sec};
 use zeroize::ZeroizeOnDrop;
 
-use crate::{Error, Result};
+use trios_chat_cr_chat_00::{Error, Result};
+
+use crate::PROTOCOL_VERSION;
 
 /// ML-KEM-768 public key placeholder (1184 B in FIPS 203).
-/// `[ASPIRATIONAL]` — opaque bytes; concrete KEM lands in L-CHAT-2.
+/// `[ASPIRATIONAL]` — opaque bytes; concrete KEM lands in CR-CHAT-02.
 pub const MLKEM_PUB_LEN: usize = 1184;
 
 /// ML-KEM-768 secret seed placeholder (32 B).
@@ -28,7 +30,7 @@ pub const MLKEM_SEC_LEN: usize = 32;
 /// One Trinity-Chat identity — long-term + ephemeral material.
 ///
 /// `[VERIFIED]` — Ed25519 + X25519 generation tested.
-/// `[ASPIRATIONAL]` — ML-KEM bytes are random placeholders; concrete KEM in L-CHAT-2.
+/// `[ASPIRATIONAL]` — ML-KEM bytes are random placeholders; concrete KEM in CR-CHAT-02.
 #[derive(ZeroizeOnDrop)]
 pub struct Identity {
     /// Long-term Ed25519 signing key — used **only** to sign prekey bundles
@@ -56,6 +58,12 @@ impl Identity {
         }
     }
 
+    /// Borrow the X25519 prekey secret (used by sealed-sender as the
+    /// recipient secret).
+    pub fn pre_x25519_secret(&self) -> &X25519Sec {
+        &self.pre_x25519
+    }
+
     /// Long-term Ed25519 verifying key.
     pub fn lt_verifying(&self) -> VerifyingKey {
         self.lt_signing.verifying_key()
@@ -75,7 +83,7 @@ impl Identity {
     /// Build a published prekey bundle, signed by the long-term key.
     pub fn build_bundle(&self) -> PrekeyBundle {
         let body = PrekeyBundleBody {
-            version: crate::PROTOCOL_VERSION,
+            version: PROTOCOL_VERSION,
             lt_pub: self.lt_verifying().to_bytes(),
             x25519_pub: self.pre_x25519_pub().to_bytes(),
             mlkem_pub: self.pre_mlkem_pub(),
@@ -87,6 +95,12 @@ impl Identity {
             body,
             signature: sig.to_bytes(),
         }
+    }
+
+    /// Sign arbitrary bytes with the long-term Ed25519 key.
+    /// Used by CR-CHAT-02 (group commits) and CR-CHAT-06 (capabilities).
+    pub fn sign(&self, msg: &[u8]) -> [u8; 64] {
+        self.lt_signing.sign(msg).to_bytes()
     }
 
     /// Compute the **safety number** between two identities.
@@ -181,7 +195,7 @@ fn derive_placeholder_pub(seed: &[u8; 32]) -> [u8; MLKEM_PUB_LEN] {
         let mut h = Sha256::new();
         h.update(b"trinity-chat:mlkem-placeholder:");
         h.update(seed);
-        h.update(&counter.to_be_bytes());
+        h.update(counter.to_be_bytes());
         let block = h.finalize();
         let n = std::cmp::min(32, MLKEM_PUB_LEN - filled);
         out[filled..filled + n].copy_from_slice(&block[..n]);

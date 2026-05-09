@@ -1,8 +1,17 @@
-//! R-CHAT-1..12: constitutional laws of Trinity Secure Chat.
+//! CR-CHAT-LAWS — Trinity Secure Chat constitutional laws (R-CHAT-1..12).
 //!
-//! [VERIFIED] These constants are imported by the laws-guard CI script
-//! (`crates/trios-chat/tests/r_chat_guard.rs`) which fails the build if any
-//! law is removed or modified outside an approved ADR-CHAT-* commit.
+//! [VERIFIED] These 12 laws are the immutable constitution of the chat stack.
+//! Any change requires an approved ADR-CHAT-* commit. The hash is asserted by
+//! laws_guard tests downstream.
+//!
+//! Sibling rings: CR-CHAT-00 (errors), CR-CHAT-01 (sealed/identity),
+//! CR-CHAT-02 (ratchet), CR-CHAT-03 (group), CR-CHAT-04 (padding),
+//! CR-CHAT-06 (capability + injection).
+//!
+//! [CITED] design §3.0 — Twelve Laws of Trinity Secure Chat.
+
+#![forbid(unsafe_code)]
+#![deny(clippy::all)]
 
 /// The 12 laws. Order is part of the contract. [CITED design §3.0]
 pub const R_CHAT_LAWS: [&str; 12] = [
@@ -55,6 +64,14 @@ mod tests {
     fn laws_have_canonical_prefix() {
         for (i, l) in R_CHAT_LAWS.iter().enumerate() {
             assert!(l.starts_with(&format!("R-CHAT-{}", i + 1)));
+        }
+    }
+
+    #[test]
+    fn laws_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for l in R_CHAT_LAWS.iter() {
+            assert!(seen.insert(*l), "duplicate law: {l}");
         }
     }
 }

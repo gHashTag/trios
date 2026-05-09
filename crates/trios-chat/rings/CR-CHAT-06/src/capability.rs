@@ -1,11 +1,11 @@
 //! L-CHAT-6: capability tokens + signed tool manifest verifier.
 //!
-//! [DERIVED from MCP-Auth-2026 + A2A spec, design §3.6, R-CHAT-6/8]
+//! `[DERIVED from MCP-Auth-2026 + A2A spec, design §3.6, R-CHAT-6/8]`
 //!
 //! Constitutional invariants:
-//! - INV-CHAT-2 (agent_capability_bound): agent action set ⊆ capability.scope
-//! - R-CHAT-6 TOOLS ARE SIGNED PROMPTS — every tool manifest carries Ed25519 sig
-//! - R-CHAT-8 SESSION-SCOPED CAPABILITY — token bound to (session_id, ttl)
+//! - **INV-CHAT-2** `agent_capability_bound` — `agent action set ⊆ capability.scope`
+//! - **R-CHAT-6** TOOLS ARE SIGNED PROMPTS — every tool manifest carries Ed25519 sig
+//! - **R-CHAT-8** SESSION-SCOPED CAPABILITY — token bound to (session_id, ttl)
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -24,21 +24,25 @@ pub enum Scope {
     FetchUrl(String),
 }
 
-/// Session-scoped capability token. [DERIVED]
+/// Session-scoped capability token. `[DERIVED]`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapabilityToken {
+    /// Session this token applies to.
     pub session_id: [u8; 32],
+    /// Bearer agent identity.
     pub agent_id: [u8; 32],
+    /// Allowed scopes.
     pub scopes: Vec<Scope>,
     /// UNIX seconds; verified ttl < 3600.
     pub expires_at: u64,
+    /// 16-byte fresh nonce per token.
     pub nonce: [u8; 16],
     /// Ed25519 signature by Issuer over canonical bytes.
     pub sig: Vec<u8>,
 }
 
 impl CapabilityToken {
-    /// Canonical bytes for signing/verification. [VERIFIED via test]
+    /// Canonical bytes for signing/verification. `[VERIFIED via test]`
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(128);
         buf.extend_from_slice(&self.session_id);
@@ -51,7 +55,9 @@ impl CapabilityToken {
         buf
     }
 
-    /// Issue a signed token. [VERIFIED]
+    /// Issue a signed token. `[VERIFIED]`
+    ///
+    /// Panics if `ttl_secs > 3600` — this is the INV-CHAT-2 hard ceiling.
     pub fn issue(
         issuer: &SigningKey,
         session_id: [u8; 32],
@@ -77,7 +83,7 @@ impl CapabilityToken {
         tok
     }
 
-    /// Verify signature, ttl, scope membership. [VERIFIED]
+    /// Verify signature, ttl, scope membership. `[VERIFIED]`
     pub fn verify(
         &self,
         issuer_pub: &VerifyingKey,
@@ -103,34 +109,44 @@ impl CapabilityToken {
     }
 }
 
+/// Capability-token verification error.
 #[derive(Debug, thiserror::Error)]
 pub enum CapError {
+    /// Token expired.
     #[error("token expired")]
     Expired,
+    /// Bad signature (length, decode, or verification).
     #[error("bad signature")]
     BadSig,
+    /// Required scope not in `scopes`.
     #[error("required scope missing")]
     ScopeMissing,
 }
 
-/// A tool manifest entry, signed by a publisher key. [DERIVED from MCP 2026]
+/// A tool manifest entry, signed by a publisher key. `[DERIVED from MCP 2026]`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolManifest {
+    /// Tool name (e.g. `"fetch_url"`).
     pub name: String,
+    /// SHA-256 hash of the JSON schema document.
     pub schema_hash: [u8; 32],
+    /// Publisher Ed25519 verifying key.
     pub publisher: [u8; 32],
+    /// Ed25519 signature over `signing_bytes`.
     pub sig: Vec<u8>,
 }
 
 impl ToolManifest {
+    /// Canonical bytes for signing/verification.
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut h = Sha256::new();
         h.update(self.name.as_bytes());
-        h.update(&self.schema_hash);
-        h.update(&self.publisher);
+        h.update(self.schema_hash);
+        h.update(self.publisher);
         h.finalize().to_vec()
     }
 
+    /// Sign a fresh manifest with `sk`.
     pub fn sign(name: &str, schema_hash: [u8; 32], sk: &SigningKey) -> Self {
         let publisher = sk.verifying_key().to_bytes();
         let mut m = Self {
@@ -144,6 +160,7 @@ impl ToolManifest {
         m
     }
 
+    /// Verify the embedded publisher signature.
     pub fn verify(&self) -> Result<(), CapError> {
         if self.sig.len() != 64 {
             return Err(CapError::BadSig);

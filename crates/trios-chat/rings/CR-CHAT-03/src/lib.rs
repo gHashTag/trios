@@ -1,20 +1,31 @@
+//! # CR-CHAT-03 — group (MLS skeleton)
+//!
 //! L-CHAT-3 · trinity-fpga#31 — MLS group skeleton (Wave-2).
 //!
-//! `[ASPIRATIONAL]` Full RFC 9420 implementation lives outside the scope of
-//! this scaffold (we will re-export from the `openmls` crate behind a
-//! feature flag in a follow-up PR). What this module ships today:
+//! `[ASPIRATIONAL]` Full RFC 9420 implementation lives outside the
+//! scope of this scaffold (we will re-export from the `openmls` crate
+//! behind a feature flag in a follow-up PR). What this ring ships
+//! today:
 //!
-//! 1. `GroupId`, `Epoch`, `LeafIndex` newtypes — the MLS state shape.
-//! 2. `Welcome` / `Commit` enums — the wire-message kinds.
-//! 3. `Group::process_commit` — applies a commit and **enforces strict
-//!    epoch monotonicity** (matches Coq theorem `mls_epoch_monotone`).
+//! 1. [`GroupId`], [`Epoch`], [`LeafIndex`] newtypes — the MLS state
+//!    shape.
+//! 2. [`Welcome`] / [`Commit`] structs + [`Op`] enum — the wire-message
+//!    kinds.
+//! 3. [`Group::process_commit`] — applies a commit and **enforces
+//!    strict epoch monotonicity** (matches Coq theorem
+//!    `mls_epoch_monotone`).
 //!
 //! Everything is in-memory and deterministic so the unit tests can pin
 //! the contract behaviour without dragging in `openmls`.
+//!
+//! Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA`
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, Result};
+use trios_chat_cr_chat_00::{Error, Result};
 
 /// 32-byte group identifier (random at creation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,8 +106,8 @@ impl Group {
         }
     }
 
-    /// Apply a Commit — fails if `from_epoch != self.epoch` (R-CHAT-11 +
-    /// Coq `mls_epoch_monotone`).
+    /// Apply a Commit — fails if `from_epoch != self.epoch`
+    /// (R-CHAT-11 + Coq `mls_epoch_monotone`).
     pub fn process_commit(&mut self, c: &Commit) -> Result<()> {
         if c.group_id != self.group_id {
             return Err(Error::Invariant("mls: commit for wrong group"));
@@ -179,7 +190,7 @@ mod tests {
         let mut g = Group::create(gid(), LeafIndex(0));
         let c = Commit {
             group_id: gid(),
-            from_epoch: Epoch(5), // wrong epoch \u2014 fork attempt
+            from_epoch: Epoch(5), // wrong epoch — fork attempt
             sender: LeafIndex(0),
             ops: vec![Op::Update],
             path_blob: vec![],
@@ -203,7 +214,6 @@ mod tests {
     #[test]
     fn remove_then_no_longer_member() {
         let mut g = Group::create(gid(), LeafIndex(0));
-        // Add Bob.
         g.process_commit(&Commit {
             group_id: gid(),
             from_epoch: Epoch(0),
@@ -212,7 +222,6 @@ mod tests {
             path_blob: vec![],
         })
         .unwrap();
-        // Remove Bob.
         g.process_commit(&Commit {
             group_id: gid(),
             from_epoch: Epoch(1),
@@ -231,5 +240,19 @@ mod tests {
         let w = g.welcome_for(LeafIndex(1));
         assert_eq!(w.epoch, g.epoch);
         assert_eq!(w.leaf, LeafIndex(1));
+    }
+
+    #[test]
+    fn wrong_group_id_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let other = GroupId([42u8; 32]);
+        let c = Commit {
+            group_id: other,
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        assert!(g.process_commit(&c).is_err());
     }
 }

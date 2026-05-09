@@ -1,0 +1,22 @@
+[package]
+name = "trios-chat-cr-chat-01"
+version = "0.1.0"
+edition = "2021"
+description = "CR-CHAT-01 — identity + sealed: Ed25519/X25519/ML-KEM prekey bundle (R-CHAT-2/4) + sealed-sender envelope (R-CHAT-3) for Trinity Secure Chat"
+publish = false
+
+# Anchor: phi^2 + phi^-2 = 3 · TRINITY · CHAT · ZERO-METADATA
+# Silver-tier (Core) ring — pure crypto + serde.
+# No async runtime, no I/O drivers, no DB.
+# Depends on CR-CHAT-00 (types) and CR-CHAT-04 (padding).
+
+[dependencies]
+trios-chat-cr-chat-00 = { path = "../CR-CHAT-00" }
+trios-chat-cr-chat-04 = { path = "../CR-CHAT-04" }
+serde             = { workspace = true }
+x25519-dalek      = { version = "2", features = ["static_secrets"] }
+ed25519-dalek     = { version = "2", features = ["rand_core"] }
+chacha20poly1305  = "0.10"
+sha2              = "0.10"
+rand_core         = "0.6"
+zeroize           = { version = "1.7", features = ["derive"] }

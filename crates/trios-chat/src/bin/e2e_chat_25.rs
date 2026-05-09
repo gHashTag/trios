@@ -101,14 +101,14 @@ fn t10_sealed_tamper_rejected() {
 
 fn t11_padding_classes_exact() {
     assert_eq!(pad_class(b"a").len(), 256);
-    assert_eq!(pad_class(&vec![0u8; 1020]).len(), 1024);
-    assert_eq!(pad_class(&vec![0u8; 4093]).len(), 16384);
+    assert_eq!(pad_class(&[0u8; 1020]).len(), 1024);
+    assert_eq!(pad_class(&[0u8; 4093]).len(), 16384);
 }
 
 fn t12_padding_no_short_leak() {
     let s1 = pad_class(b"a").len();
-    let s100 = pad_class(&vec![0u8; 100]).len();
-    let s200 = pad_class(&vec![0u8; 200]).len();
+    let s100 = pad_class(&[0u8; 100]).len();
+    let s200 = pad_class(&[0u8; 200]).len();
     assert_eq!(s1, s100);
     assert_eq!(s100, s200);
 }
