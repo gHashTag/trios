@@ -225,6 +225,103 @@ claim this inequality is provable in the same closed form as
 INV-1 a recognisable two-point-function shape consistent with the
 chapter's overall analogy.
 
+\section{The Trinity Identity as the Algebraic Anchor}
+\label{sec:21-trinity-identity}
+
+The \emph{one} closed-form algebraic statement on which the entire
+dissertation pivots is the identity $\varphi^{2}+\varphi^{-2}=3$,
+where $\varphi=(1+\sqrt{5})/2$ is the golden ratio. This section
+states the identity as a theorem, gives a complete LaTeX proof, and
+cross-references the machine-checked Coq proof
+\texttt{trinity\_identity} in
+\texttt{docs/phd/theorems/trinity/CorePhi.v} (line 55). The identity
+is what justifies the integer ``3'' on the right-hand side of the
+Wightman / OS analogy in \S\ref{sec:21-wightman-os}: it is the
+arithmetic anchor that the chapter's notational analogy is hooked
+on to.
+
+\begin{theorem}[Trinity identity]
+\label{thm:21-trinity}
+Let $\varphi=(1+\sqrt{5})/2$ be the golden ratio, i.e.\ the unique
+positive real root of $x^{2}=x+1$. Then
+\[
+\varphi^{2}+\varphi^{-2}\;=\;3.
+\]
+\end{theorem}
+
+\begin{proof}
+Two preliminary identities suffice.
+
+\smallskip
+\noindent\textbf{(a) $\varphi^{2}=\varphi+1$.} By definition,
+$\varphi$ satisfies $\varphi^{2}-\varphi-1=0$, i.e.\
+$\varphi^{2}=\varphi+1$. (In Coq this is
+\texttt{phi\_square : phi\^{}2 = phi + 1} in
+\texttt{CorePhi.v} line 36, closed with \texttt{Qed} via
+\texttt{unfold phi; field}.)
+
+\smallskip
+\noindent\textbf{(b) $\varphi^{-2}=2-\varphi$.} Starting from
+$\varphi^{2}=\varphi+1$ (positive both sides since
+$\varphi>0$), divide by $\varphi^{2}$:
+\[
+1\;=\;\frac{\varphi+1}{\varphi^{2}}\;=\;\frac{1}{\varphi}+\frac{1}{\varphi^{2}}
+\;=\;(\varphi-1)+\varphi^{-2},
+\]
+using the well-known reciprocal identity $1/\varphi=\varphi-1$
+(equivalently $\varphi(\varphi-1)=1$, which follows from
+$\varphi^{2}-\varphi=1$). Re-arranging gives
+$\varphi^{-2}=1-(\varphi-1)=2-\varphi$. (In Coq this is
+\texttt{phi\_inv\_sq : /phi\^{}2 = 2 - phi} in
+\texttt{CorePhi.v} line 48, also \texttt{Qed}.)
+
+\smallskip
+\noindent\textbf{(c) Sum.} Adding (a) and (b):
+\[
+\varphi^{2}+\varphi^{-2}\;=\;(\varphi+1)+(2-\varphi)\;=\;3.
+\]
+The cross-cancellation of $\varphi$ is exact, leaving the rational
+integer $3$. This is the trinity identity. \qedsymbol
+\end{proof}
+
+\paragraph{Cross-reference to Coq.}
+The same theorem is mechanised in Coq as
+\texttt{trinity\_identity} in
+\texttt{docs/phd/theorems/trinity/CorePhi.v}, line 55. The Coq
+proof is the literal one-liner
+\texttt{apply phi\_square, phi\_inv\_sq; ring.} The two supporting
+lemmas \texttt{phi\_square} and \texttt{phi\_inv\_sq} are themselves
+\texttt{Qed} (lines 36 and 48 respectively). All three lemmas
+together are \texttt{Qed} in the trinity catalogue and inhabit no
+\texttt{Admitted}. The LaTeX proof above is a faithful textual
+expansion of that Coq proof.
+
+\paragraph{Why this matters for the JEPA analogue.}
+The integer $3$ on the right-hand side of
+Theorem~\ref{thm:21-trinity} is the cardinality of the balanced
+ternary alphabet $\{-1,0,+1\}$. In the Trinity~S$^{3}$AI programme,
+weight tensors are quantised to
+$\{-\varphi^{-1},0,+\varphi^{-1}\}$ — three values whose squared
+norms close in $\mathbb{Z}[\varphi]$ via Theorem~\ref{thm:21-trinity}.
+That closure is what allows the JEPA encoder $E_\theta$ in our
+construction to be evaluated by integer arithmetic on FPGA fabric
+without DSP slices (see Ch.~33 for the bench characterisation). In
+the Wightman / OS analogy of \S\ref{sec:21-wightman-os}, the integer
+$3$ is therefore not decorative — it is the arithmetic anchor that
+makes the ``field-theoretic'' embedding evaluable on integer
+hardware.
+
+\paragraph{Honest scope of the theorem.}
+Theorem~\ref{thm:21-trinity} is an elementary identity of high-school
+algebra. It is the \emph{only} formally proved theorem of this
+chapter. The other empirical claims of the chapter (the $\beta$-
+function corroboration row in \S\ref{sec:21-falsify}, the
+3D-Ising critical-exponent row, etc.) are R7-falsifiable predictions,
+not theorems. We do not assert that the trinity identity by itself
+is sufficient to establish any of those empirical predictions — only
+that it is the load-bearing arithmetic identity behind the chapter's
+ternary-quantisation thread.
+
 \section{Classical Field Theory}
 
 Fields are functions over spacetime that evolve according to Lagrangian dynamics.
