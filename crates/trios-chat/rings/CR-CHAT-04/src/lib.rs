@@ -20,6 +20,9 @@
 
 use trios_chat_cr_chat_00::{Error, Result};
 
+pub mod safety_number;
+pub use safety_number::{render as render_safety_number, safety_number, verify as verify_safety_number, IdKey, SafetyDigest};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
