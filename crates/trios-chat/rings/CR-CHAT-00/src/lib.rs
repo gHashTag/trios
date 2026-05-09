@@ -121,18 +121,6 @@ pub enum Error {
     #[error("aead: decryption failed")]
     Aead,
 
-    /// Generic cryptographic operation failed (signature, KDF, etc.).
-    #[error("crypto: {0}")]
-    Crypto(&'static str),
-
-    /// Capability check refused the operation (R-CHAT-7).
-    #[error("capability denied: {0}")]
-    Capability(&'static str),
-
-    /// Input failed prompt-injection filter (R-CHAT-8).
-    #[error("injection blocked: {0}")]
-    Injection(&'static str),
-
     /// Persistence-layer failure (only emitted from CR-CHAT-05 and
     /// BR-IO-CHAT-*; CR-CHAT-00 just defines the shape).
     #[error("persist: {0}")]
@@ -141,10 +129,6 @@ pub enum Error {
     /// Wire-format failure (serde, length, etc.).
     #[error("wire: {0}")]
     Wire(&'static str),
-
-    /// Encoding / decoding failure (hex, base64, padding layout).
-    #[error("encoding: {0}")]
-    Encoding(&'static str),
 }
 
 /// Crate-wide `Result` shorthand.
