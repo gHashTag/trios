@@ -1,0 +1,24 @@
+[package]
+name = "trios-chat-cr-chat-02"
+version = "0.1.0"
+edition = "2021"
+description = "CR-CHAT-02 — ratchet: Triple Ratchet skeleton (R-CHAT-2) — DH-step + skipped-keys cache for Trinity Secure Chat"
+publish = false
+
+# Anchor: phi^2 + phi^-2 = 3 · TRINITY · CHAT · ZERO-METADATA
+# Silver-tier (Core) ring — pure crypto + KDF chain.
+# No async runtime, no I/O, no DB.
+# Depends on CR-CHAT-00 (Error/Result) and CR-CHAT-01 (X25519 types — re-used via x25519-dalek).
+
+[dependencies]
+trios-chat-cr-chat-00 = { path = "../CR-CHAT-00" }
+hkdf              = "0.12"
+sha2              = "0.10"
+x25519-dalek      = { version = "2", features = ["static_secrets"] }
+zeroize           = { version = "1.7", features = ["derive"] }
+
+[dev-dependencies]
+# `getrandom` feature is required for `OsRng` in tests; this is the only place
+# the ratchet ring touches randomness (production callers supply roots/secrets).
+rand_core         = { version = "0.6", features = ["getrandom", "std"] }
+getrandom         = "0.2"
