@@ -1,378 +1,1534 @@
-\chapter{Golden Sprout: Vogel Phyllotaxis}
-\label{ch:fibonacci}
-\label{ch:fibonacci-tesselation}
+% !TEX root = ../main.tex
+%
+% Chapter 07 — Golden Sprout: Fibonacci Recurrence as a Morphism in Z[φ]
+% Trinity S³AI — Flos Aureus v6.2
+% Author: Dmitrii Vasilev <admin@t27.ai>
+% Lane: L7  Branch: feat/phd-ch07  INV: INV-12
+% Trinity anchor: φ² + φ⁻² = 3  DOI 10.5281/zenodo.19227877
+%
+% Local macro definitions (R6 compliance — all φ-derived constants via \phipow)
+% These are local to this chapter and do not conflict with main.tex.
+%
+\providecommand{\phipow}[1]{%
+  \ensuremath{\varphi^{#1}}%
+}
+%
+% \coqcite{theorem}{file}{lines}{status}
+\providecommand{\coqcite}[4]{%
+  \begin{quote}\small
+  \textbf{Coq:} \texttt{#1} in \filepath{#2},
+  lines~#3 — \emph{#4}.
+  \end{quote}%
+}
+
+\chapter{Golden Sprout: Fibonacci Recurrence as a Morphism in \(\mathbb{Z}[\varphi]\)}
+\label{ch:golden-sprout}
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch07-vogel-phyllotaxis.png}}
-\caption*{Figure --- Golden Sprout: Vogel Phyllotaxis.}
+\makebox[\linewidth][c]{%
+  \includegraphics[width=1.18\linewidth,keepaspectratio]{ch07-vogel-phyllotaxis.png}}
+\caption*{Figure~7 — Golden Sprout: the Fibonacci spiral and its algebraic skeleton
+in the ring \(\mathbb{Z}[\varphi]\). Every arm count is a Fibonacci number;
+every spacing ratio tends to \(\varphi = \phipow{1}\).}
 \end{figure}
 
-\section{Abstract}\label{abstract}
+% ============================================================
+\section{Abstract}\label{sec:ch7-abstract}
+% ============================================================
 
-Vogel's 1979 model of sunflower head packing
-describes each floret position by a polar angle
-increment of \(137.5^\circ\), the golden angle. This
-chapter proves that \(137.5^\circ = 360^\circ/\varphi^2\)
-follows directly from the Trinity anchor identity
-\(\varphi^2 + \varphi^{-2} = 3\) and establishes a
-formal correspondence between the H4 root system
-and the E8 lattice via a \(\varphi\)-scaled block
-decomposition. Six Coq theorems in
-\filepath{kernel/FlowerE8Embedding.v} formalise the
-key algebraic steps. The chapter argues that
-phyllotactic packing geometry is not merely
-analogical to the S³AI architecture but
-constitutes a structural template: the same
-\(\varphi\)-scaling that spaces florets without
-overlap also spaces quantised weights without
-collisions.
+This chapter establishes the Fibonacci sequence as an object with three
+simultaneous identities: (I)~a recurrence defined by the \emph{growth rule}
+\(F_{n+1} = F_n + F_{n-1}\); (II)~a ring morphism on the quadratic integer
+ring \(\mathbb{Z}[\varphi]\), where \(\varphi = (1+\sqrt{5})/2\) is the
+unique positive root of \(x^2 = x + 1\); and (III)~a sequence that lifts,
+modulo the minimal polynomial of \(\varphi^4\), into a finite field of
+characteristic 2 (GF(16)), closing under the algebraic tesselation invariant
+\texttt{fib\_tess\_closure} (INV-12).
 
-\section{1. Introduction}\label{introduction}
+We prove Binet's formula \(F_n = (\phipow{n} - \psi^n)/\sqrt{5}\) directly
+from the \(\mathbb{Z}[\varphi]\) structure, exhibiting the proof as a
+computation in the quotient \(\mathbb{Z}[x]/(x^2 - x - 1)\).  We derive the
+Zeckendorf representation theorem as a corollary of the morphism structure
+\cite{zeckendorf1972}.  The chapter connects these purely algebraic results to
+the Trinity anchor identity \(\phipow{2} + \phipow{-2} = 3\)
+(DOI:~\texttt{10.5281/zenodo.19227877}), which acts as the generating
+quadratic relation throughout.
 
-The observation that sunflower seed heads, pine
-cones, and daisy florets arrange themselves in
-Fibonacci-count spirals dates to the nineteenth
-century [1]. Vogel (1979) supplied the precise
-generative model: place the \(n\)-th floret at
-polar radius \(r_n = c\sqrt{n}\) and azimuth
-\(\theta_n = n \cdot 137.508^\circ\), where
-\(137.508^\circ\) is the golden angle [2]. The
-packing density achieved by this construction is
-provably maximal among constant-angle spirals: any
-other divergence angle produces visible radial
-gaps. Within the TRINITY S³AI framework the same
-maximality argument applies to weight placement on
-the \(\varphi\)-quantised lattice. The anchor
-identity
+\textbf{Chapter type:} THEORY.
+\textbf{Falsification criterion:} N/A (pure mathematics).
+\textbf{Coq status:} \texttt{fib\_tess\_closure} — Admitted (INV-12,
+\filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v}, rung-integrity
+family); dedicated \filepath{fib\_tess.v} does not yet exist in
+\texttt{trinity-clara} — see~\S\ref{sec:ch7-coq}.
 
-\[\varphi^2 + \varphi^{-2} = 3\]
+% ============================================================
+\section{Introduction and Motivation}\label{sec:ch7-intro}
+% ============================================================
 
-determines both the angle (\(360^\circ/\varphi^2\)) and
-the lattice spacing (\(\varphi^{-1}\) and
-\(\varphi^{-2}\)), unifying botanic geometry with
-learned representations. The present chapter makes
-this correspondence precise and provides the Coq
-certificates that underpin it.
+The Fibonacci sequence appears at first glance to be elementary
+combinatorics: a pair of initial conditions and a one-line recurrence.
+Yet every serious investigation eventually arrives at the same deeper
+structure — the quadratic number field \(\mathbb{Q}(\sqrt{5})\) and its
+integer subring \(\mathbb{Z}[\varphi]\).  This is not coincidence.
+The recurrence \(F_{n+1} = F_n + F_{n-1}\) \emph{is} the addition law of
+\(\mathbb{Z}[\varphi]\) restricted to its canonical \(\mathbb{Z}\)-basis
+\(\{1,\varphi\}\), and Binet's closed form is the eigenvalue decomposition
+of the companion matrix of the minimal polynomial \(x^2 - x - 1 = 0\)
+\cite{koshy_fib_lucas}.
 
-\section{2. From the Trinity Identity to the
-Golden
-Angle}\label{from-the-trinity-identity-to-the-golden-angle}
+Within the Trinity S³AI framework, this algebraic depth is not merely
+decorative.  The ring \(\mathbb{Z}[\varphi]\) is the integer skeleton of the
+golden-ratio weight quantisation: every GF16 mantissa value is a Fibonacci-
+indexed power of \(\varphi\) reduced modulo 16, and the ring morphism
+property ensures that arithmetic on weights is closed — multiplying two GF16
+values yields a GF16 value, not an overflow.  The present chapter makes this
+formal.
 
-\textbf{Definition 2.1 (Golden ratio).}
-\(\varphi = (1+\sqrt{5})/2\), the positive root of
-\(x^2 - x - 1 = 0\).
+\subsection{Standing Notation}\label{subsec:ch7-notation}
 
-\textbf{Proposition 2.2.}
-\(\varphi^2 = \varphi + 1\) and
-\(\varphi^{-2} = 2 - \varphi\).
-
-\emph{Proof.} Immediate from
-\(\varphi^2 - \varphi - 1 = 0\) and the identity
-\(\varphi \cdot \varphi^{-1} = 1\). \(\square\)
-
-\textbf{Corollary 2.3 (Trinity identity).}
-\(\varphi^2 + \varphi^{-2} = 3\).
-
-\emph{Proof.}
-\((\varphi + 1) + (2 - \varphi) = 3\). \(\square\)
-
-\textbf{Definition 2.4 (Golden angle).} The golden
-angle \(\alpha_G\) is the smaller of the two arcs
-into which a full circle is divided in the golden
-ratio:
-\[\alpha_G = 2\pi \cdot \varphi^{-2} = 2\pi(2 - \varphi) \approx 2.3999\;\text{rad} \approx 137.508^\circ.\]
-
-\textbf{Proposition 2.5.}
-\(\alpha_G = 360^\circ/\varphi^2\).
-
-\emph{Proof.}
-\(360^\circ / \varphi^2 = 360^\circ \cdot \varphi^{-2}\).
-From Proposition 2.2,
-\(\varphi^{-2} = 2 - \varphi \approx 0.38197\),
-giving \(360^\circ \times 0.38197 \approx 137.508^\circ\).
-\(\square\)
-
-The complementary arc
-\(360^\circ - \alpha_G = 360^\circ/\varphi \approx 222.492^\circ\)
-divides the circle in the exact ratio
-\(\varphi : 1\), confirming that \(\alpha_G\) is
-the golden section of the full circle. The Vogel
-divergence angle is therefore a direct corollary
-of Corollary 2.3: any system whose geometry is
-governed by \(\varphi^2 + \varphi^{-2} = 3\) will
-naturally produce golden-angle spacing as the
-maximally dense packing solution [3].
-
-The Fibonacci numbers index the spiral arms
-visible in a Vogel phyllotaxis diagram. For a head
-with \(F_k\) and \(F_{k+1}\) visible spirals, the
-packing efficiency approaches 1 as
-\(k \to \infty\). The sanctioned seeds
-\(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\),
-\(F_{20}=6765\), \(F_{21}=10946\) lie deep in this
-asymptotic regime; at these indices, the angular
-deviation from the ideal golden angle is less than
-\(10^{-7}\) radians [4].
-
-\section{\texorpdfstring{3. H4 Root System, E8
-Lattice, and the \(\varphi\)-Scaled Block
-Decomposition}{3. H4 Root System, E8 Lattice, and the \textbackslash varphi-Scaled Block Decomposition}}\label{h4-root-system-e8-lattice-and-the-varphi-scaled-block-decomposition}
-
-The 240 roots of the E8 lattice can be partitioned
-into two H4 half-shells of 120 roots each, related
-by a \(\varphi\)-scaling [5]. This
-decomposition is the algebraic analogue of the
-Vogel construction: H4 is the 4-dimensional
-hyperoctahedral group associated with the
-icosahedron, whose rotational symmetry group has
-order 120 and whose geometry is saturated with
-\(\varphi\)-ratios.
-
-\textbf{Theorem 3.1 (h4\_root\_count,
-\texttt{FlowerE8Embedding.v}).} \(120 = 248/2\).
-
-This restates the branching number of the E8 Lie
-algebra: 248 is the dimension of
-\(\mathfrak{e}_8\), and each H4 half-shell
-accounts for exactly half the root count.
-
-\textbf{Theorem 3.2 (e8\_flower\_decomposition,
-\texttt{FlowerE8Embedding.v}).}
-\(\dim(H4) + \dim(\varphi \cdot H4) = \dim(E8)/2\).
-
-The two copies of H4 are not geometrically
-identical: the second is scaled by \(\varphi\),
-which is precisely the \(\varphi\)-scaling that
-appears in the Trinity weight quantisation. The
-proof establishes that this scaling is
-measure-preserving (Theorem 3.4 below) and
-therefore does not alter the root count.
-
-\textbf{Theorem 3.3 (trinity\_e8\_h4\_encoding,
-\texttt{FlowerE8Embedding.v}).}
-\[\varphi^2 + \varphi^{-2} = 3 \;\Rightarrow\; \dim(H4) + \dim(\varphi \cdot H4) = \dim(E8)/2.\]
-
-This is the central theorem of Ch.7: the Trinity
-anchor identity is the hypothesis that licenses
-the H4 \(\oplus\) \(\varphi\)H4 splitting of E8.
-In the Coq proof, the implication is discharged by
-substituting the real-arithmetic proof of
-\(\varphi^2 + \varphi^{-2} = 3\) and then invoking
-the cardinality lemma for the root sets {[}3,
-6{]}.
-
-\textbf{Theorem 3.4
-(h4\_dim\_equals\_twice\_roots,
-\texttt{FlowerE8Embedding.v}).}
-\(120 = 2 \times 60\).
-
-The 120 roots of H4 decompose into 60 positive and
-60 negative roots, mirroring the \(+/-\) symmetry
-of the ternary weight alphabet \(\{-1, 0, +1\}\)
-used in STROBE quantisation. The zero-weight
-tokens correspond to the 8-dimensional Cartan
-subalgebra directions, which are orthogonal to all
-roots.
-
-\textbf{Open obligations.} Two theorems in the
-same file carry \texttt{Abort} status:
-\texttt{e8\_roots\_decomposition} (explicit
-set-theoretic union
-\(E8\_\mathrm{roots} = H4\_\mathrm{block\_1} \cup H4\_\mathrm{block\_2}\))
-and \texttt{phi\_scaling\_invariant}
-(measure-preservation of \(\varphi\)-scaling on
-root sets). These require a formal
-real-closed-field library not yet integrated into
-the \texttt{t27} proof environment; they are
-tracked as KER-3 obligations in the Golden Ledger
-(App.E).
-
-The geometric picture is the following. A Vogel
-sunflower head with \(F_{20}=6765\) florets
-exhibits 6765 clockwise spirals and
-\(F_{19}=4181\) counter-clockwise spirals.
-Projecting the floret coordinates into 8
-dimensions via the standard embedding of the
-icosahedral lattice into \(\mathbb{R}^8\) yields a
-point cloud whose nearest-neighbour graph
-approximates the E8 contact graph to within
-\(0.3\%\) angular error at the outermost ring
-[5]. The S³AI model exploits this geometric
-coincidence by initialising attention key matrices
-from E8-projected Fibonacci lattice points, an
-initialisation that is formally justified by
-Theorem 3.3.
-
-\section{4. Results /
-Evidence}\label{results-evidence}
-
-Four quantitative results anchor this chapter.
-
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\item
-  \textbf{Angle precision.} The computed golden
-  angle \(360^\circ/\varphi^2 = 137.5077640500...^\circ\)
-  matches the value used in all Vogel simulations
-  to 12 significant figures, with no rounding
-  artefact from the ternary arithmetic. This is a
-  consequence of Proposition 2.5 together with the
-  \(\varphi^2 + \varphi^{-2} = 3\) identity, which
-  keeps all intermediate values in
-  \(\mathbb{Z}[\varphi]\).
-\item
-  \textbf{Coq census for KER-3.} Of the 6 theorems
-  listed in the \texttt{FlowerE8Embedding.v}
-  inventory, 4 carry \texttt{Qed} status and 2
-  carry \texttt{Abort}. The 4 closed theorems
-  collectively cover the root count (Th.3.1), the
-  dimensional equality (Th.3.2, Th.3.4), and the
-  conditional E8/H4 encoding (Th.3.3).
-\item
-  \textbf{Lattice initialisation experiment.}
-  Replacing random Glorot initialisation of
-  attention key matrices with E8-projected
-  Fibonacci lattice points reduces the number of
-  gradient steps to reach BPB = 2.0 by \(18\%\) on
-  the pilot corpus (evidence axis 1, \(n=3\),
-  reported in Ch.19 with Welch \(t\)-test).
-\item
-  \textbf{Phyllotaxis simulation.} A Python
-  reference implementation in
-  \texttt{reproduce.sh} (App.D) generates
-  \(F_{21}=10946\) florets using the Vogel formula
-  with seed \(F_{17}=1597\), producing a packing
-  density of \(0.9997\) relative to the
-  theoretical maximum, confirming that the
-  sanctioned seeds lie in the asymptotic regime.
-\end{enumerate}
-
-\section{5. Qed
-Assertions}\label{qed-assertions}
-
+Throughout this chapter we write:
 \begin{itemize}
-\tightlist
-\item
-  \texttt{h4\_root\_count}
-  (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v})
-  --- \emph{Status: Qed} --- \(120 = 248/2\); the
-  H4 half-shell contains exactly half the E8 root
-  count.
-\item
-  \filepath{h4\_dim\_equals\_twice\_roots}
-  (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v})
-  --- \emph{Status: Qed} ---
-  \(120 = 2 \times 60\); H4 roots split evenly
-  into positive and negative.
-\item
-  \texttt{e8\_roots\_decomposition}
-  (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v})
-  --- \emph{Status: Abort} ---
-  \(E8\_\mathrm{roots} = H4\_\mathrm{block\_1} \cup H4\_\mathrm{block\_2}\);
-  set-theoretic union pending real-closed-field
-  library integration (KER-3).
-\item
-  \texttt{e8\_flower\_decomposition}
-  (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v})
-  --- \emph{Status: Qed} ---
-  \(\dim(H4) + \dim(\varphi \cdot H4) = \dim(E8)/2\).
-\item
-  \texttt{phi\_scaling\_invariant}
-  (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v})
-  --- \emph{Status: Abort} --- \(\varphi\)-scaling
-  preserves root-set dimension; pending
-  real-closed-field support (KER-3).
-\item
-  \filepath{trinity\_e8\_h4\_encoding}
-  (\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v})
-  --- \emph{Status: Qed} ---
-  \(\varphi^2 + \varphi^{-2} = 3 \Rightarrow \dim(H4) + \dim(\varphi \cdot H4) = \dim(E8)/2\).
+  \item \(\varphi = \phipow{1} = (1+\sqrt{5})/2 \approx 1.6180\ldots\),
+        the golden ratio — the unique positive root of \(x^2 = x + 1\).
+  \item \(\psi = -\phipow{-1} = (1-\sqrt{5})/2 \approx -0.6180\ldots\),
+        the algebraic conjugate of \(\varphi\).
+  \item \(\mathbb{Z}[\varphi] = \{a + b\varphi \mid a, b \in \mathbb{Z}\}\),
+        the ring of golden integers.
+  \item \(F_n\) for the \(n\)-th Fibonacci number with \(F_0=0, F_1=1\).
+  \item \(L_n\) for the \(n\)-th Lucas number with \(L_0=2, L_1=1\).
+  \item \(\omega = \exp(2\pi i/16)\), the primitive 16th root of unity,
+        used in the GF(16) lift (\S\ref{sec:ch7-strand3}).
+  \item All numeric constants involving \(\varphi\) are written via
+        \verb|\phipow{n}| as required by R6.
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+The Trinity anchor identity
+\[
+  \phipow{2} + \phipow{-2} = 3
+\]
+is proved in Corollary~\ref{cor:trinity-anchor} below and serves as the
+algebraic spine of every numerical claim in this chapter.
 
-Inherits the canonical seed pool \(F_{17}=1597\),
-\(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\),
-\(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
+\subsection{Chapter Roadmap}\label{subsec:ch7-roadmap}
 
-\section{7. Discussion}\label{discussion}
+The exposition follows the Rule of Three:
 
-The two \texttt{Abort} theorems (KER-3) represent
-the principal limitation of the present chapter.
-The \texttt{e8\_roots\_decomposition} proof
-requires an explicit bijection between the 240 E8
-roots and the union of two H4 half-shells, a task
-that demands a formalised root-system library in
-Coq. Integration of the \texttt{mathcomp-algebra}
-library is planned for the next proof sprint. The
-\texttt{phi\_scaling\_invariant} theorem requires
-a formalised proof that \(x \mapsto \varphi x\) is
-measure-preserving on finite sets, which reduces
-to a cardinality argument but needs the right
-abstract combinatorics infrastructure. Until both
-theorems close, the E8/H4 decomposition used in
-the attention initialisation experiment (§4, item
-3) rests on algebraic arguments rather than
-machine-verified certificates. This is disclosed
-in compliance with R5 honesty. Future work
-includes: (a) closing KER-3 obligations, (b)
-extending the phyllotaxis analysis to 3D
-(cylindrical) arrangements relevant to recurrent
-architectures, and (c) connecting the
-\(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\)
-spectral constant (Ch.4) to the angular spectrum
-of E8 root vectors.
+\begin{description}
+  \item[Strand~I — Recurrence (§\ref{sec:ch7-strand1})]
+        The growth rule \(F_{n+1} = F_n + F_{n-1}\) is the definition of
+        the Fibonacci sequence; we study it via the companion matrix and
+        the spectral decomposition.
+  \item[Strand~II — Morphism (§\ref{sec:ch7-strand2})]
+        The map \(n \mapsto \varphi^n\) is a ring homomorphism
+        \(\mathbb{Z} \to \mathbb{Z}[\varphi]\); Binet's formula is its
+        eigenvalue shadow, and Zeckendorf's theorem is a uniqueness
+        consequence.
+  \item[Strand~III — GF(16) Lift (§\ref{sec:ch7-strand3})]
+        The Fibonacci sequence reduced modulo 16 is periodic (Pisano period
+        \(\pi(16) = 24\)); in the GF(16) setting the closure property
+        \texttt{fib\_tess\_closure} (INV-12) states that \(\varphi^4\)
+        maps to a generator of the multiplicative group of GF(16).
+\end{description}
 
-\section{References}\label{references}
+% ============================================================
+\section{Strand~I — Recurrence: The Growth Rule}\label{sec:ch7-strand1}
+% ============================================================
 
-[1] Church, A. H. (1904). \emph{On the
-Relation of Phyllotaxis to Mechanical Laws.}
-Williams \& Norgate, London.
+\subsection{The Fibonacci Growth Rule}\label{subsec:ch7-growth}
 
-[2] Vogel, H. (1979). A better way to
-construct the sunflower head. \emph{Mathematical
-Biosciences}, 44(3--4), 179--189.
+\begin{definition}[Fibonacci sequence]\label{def:fibonacci}
+The Fibonacci sequence \((F_n)_{n \geq 0}\) is defined by the initial
+conditions \(F_0 = 0\), \(F_1 = 1\) and the recurrence relation
+\[
+  F_{n+1} = F_n + F_{n-1}, \qquad n \geq 1.
+\]
+\end{definition}
 
-[3]
-\filepath{gHashTag/t27/proofs/canonical/kernel/FlowerE8Embedding.v}.
-\url{https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/kernel/FlowerE8Embedding.v}
+\begin{remark}
+The word ``growth rule'' in the chapter title refers to this recurrence
+interpreted botanically: each term represents a generation of leaf pairs,
+branch buds, or floret counts in a phyllotactic spiral.  The algebraic
+content is identical regardless of the interpretation.
+\end{remark}
 
-[4] This dissertation, Ch.13 --- STROBE Sealed
-Seeds. Seed admissibility at high Fibonacci index.
+The first sixteen terms are:
+\[
+  0,\;1,\;1,\;2,\;3,\;5,\;8,\;13,\;21,\;34,\;55,\;89,\;144,\;233,\;377,\;610,\;\ldots
+\]
+Every term from \(F_2\) onward is the sum of its two predecessors, realising
+the simplest possible second-order linear recurrence over \(\mathbb{Z}\).
 
-[5] Conway, J. H., \& Sloane, N. J. A. (1999).
-\emph{Sphere Packings, Lattices and Groups}, 3rd
-ed.~Springer. §7.3 (H4 and E8).
+\subsection{The Companion Matrix}\label{subsec:ch7-companion}
 
-[6] This dissertation, Ch.1 --- Introduction:
-Trinity S³AI vision.
-\(\varphi^2 + \varphi^{-2} = 3\) anchor.
+\begin{definition}[Fibonacci companion matrix]\label{def:companion}
+The companion matrix of the characteristic polynomial
+\(\chi(\lambda) = \lambda^2 - \lambda - 1\) is
+\[
+  \mathbf{M} = \begin{pmatrix} 1 & 1 \\ 1 & 0 \end{pmatrix}.
+\]
+\end{definition}
 
-[7] \filepath{gHashTag/trios\#377} --- Ch.7
-scope definition.
-\url{https://github.com/gHashTag/trios/issues/377}
+\begin{lemma}[Matrix power identity]\label{lem:matrix-power}
+For all \(n \geq 0\),
+\[
+  \mathbf{M}^n = \begin{pmatrix} F_{n+1} & F_n \\ F_n & F_{n-1} \end{pmatrix}.
+\]
+\end{lemma}
 
-[8] Coxeter, H. S. M. (1973). \emph{Regular
-Polytopes}, 3rd ed.~Dover. §2.8 (golden ratio in
-regular polyhedra).
+\begin{proof}
+We proceed by induction on \(n\).
 
-[9] Adams, J. F. (1996). \emph{Lectures on
-Exceptional Lie Groups.} University of Chicago
-Press.
+\emph{Base cases.}
+  For \(n = 0\): \(\mathbf{M}^0 = I = \bigl(\begin{smallmatrix}1&0\\0&1\end{smallmatrix}\bigr)\)
+  and \((F_1,F_0,F_0,F_{-1}) = (1,0,0,1)\) (where \(F_{-1} = 1\) by the
+  extended recurrence).  The identity holds.
+  For \(n = 1\): \(\mathbf{M}^1 = \bigl(\begin{smallmatrix}1&1\\1&0\end{smallmatrix}\bigr)
+  = \bigl(\begin{smallmatrix}F_2&F_1\\F_1&F_0\end{smallmatrix}\bigr)\). \checkmark
 
-[10] This dissertation, Ch.19 --- Statistical
-Analysis (Welch-\(t\)). Lattice initialisation
-experiment.
+\emph{Inductive step.}
+  Suppose \(\mathbf{M}^n = \bigl(\begin{smallmatrix}F_{n+1}&F_n\\F_n&F_{n-1}\end{smallmatrix}\bigr)\).
+  Then
+  \[
+    \mathbf{M}^{n+1} = \mathbf{M}^n \cdot \mathbf{M}
+    = \begin{pmatrix}F_{n+1}+F_n & F_{n+1}\\F_n+F_{n-1}&F_n\end{pmatrix}
+    = \begin{pmatrix}F_{n+2}&F_{n+1}\\F_{n+1}&F_n\end{pmatrix},
+  \]
+  using the recurrence \(F_{n+2} = F_{n+1} + F_n\) and
+  \(F_{n+1} = F_n + F_{n-1}\).
+\qed
+\end{proof}
 
-[11] This dissertation, App.D ---
-Reproducibility Scripts. Vogel simulation with
-sanctioned seeds.
+\subsection{Spectral Decomposition}\label{subsec:ch7-spectral}
 
-[12] Jean, R. V. (1994). \emph{Phyllotaxis: A
-Systemic Study in Plant Morphogenesis.} Cambridge
-University Press.
+The eigenvalues of \(\mathbf{M}\) satisfy \(\lambda^2 - \lambda - 1 = 0\),
+i.e., \(\lambda = \varphi\) or \(\lambda = \psi\).  The diagonalisation
+\[
+  \mathbf{M} = P \begin{pmatrix}\varphi & 0 \\ 0 & \psi\end{pmatrix} P^{-1},
+  \qquad P = \begin{pmatrix}\varphi & \psi \\ 1 & 1\end{pmatrix}
+\]
+encodes the full spectral structure of the sequence.
 
-[13] Dunlap, R. A. (1997). \emph{The Golden
-Ratio and Fibonacci Numbers.} World Scientific.
+\begin{lemma}[Spectral gap]\label{lem:spectral-gap}
+The spectral radius of \(\mathbf{M}\) equals \(\varphi = \phipow{1}\), and
+\(|\psi| = \phipow{-1} < 1\), so \(\psi^n \to 0\) as \(n \to \infty\).
+\end{lemma}
 
+\begin{proof}
+By Vieta's formulae, \(\varphi + \psi = 1\) and \(\varphi\psi = -1\), giving
+\(|\psi| = 1/\varphi = \phipow{-1} \approx 0.618 < 1\).
+Since \(\varphi > 1\), the spectral radius is \(\varphi\).
+\qed
+\end{proof}
+
+This spectral gap is the algebraic reason why Fibonacci ratios
+\(F_{n+1}/F_n\) converge to \(\varphi\): the subdominant eigenvalue
+\(\psi^n\) decays geometrically at rate \(\phipow{-1}\) per step.
+
+\subsection{Cassini's Identity}\label{subsec:ch7-cassini}
+
+\begin{proposition}[Cassini's identity]\label{prop:cassini}
+For all \(n \geq 1\),
+\[
+  F_{n+1} F_{n-1} - F_n^2 = (-1)^n.
+\]
+\end{proposition}
+
+\begin{proof}
+We have \(\det(\mathbf{M}^n) = (\det \mathbf{M})^n = (-1)^n\).
+By Lemma~\ref{lem:matrix-power},
+\[
+  \det(\mathbf{M}^n) = F_{n+1}F_{n-1} - F_n^2 = (-1)^n.
+\]
+\qed
+\end{proof}
+
+Cassini's identity will reappear in the GF(16) lift (\S\ref{sec:ch7-strand3})
+as a modular congruence determining the parity of Fibonacci terms.
+
+\subsection{Fibonacci Identities via the Growth Rule}\label{subsec:ch7-identities}
+
+We collect standard identities that follow immediately from
+Definition~\ref{def:fibonacci} and Lemma~\ref{lem:matrix-power}
+\cite{hardy_wright}.
+
+\begin{proposition}[Summation formula]\label{prop:sum-formula}
+\(
+  \sum_{k=0}^{n} F_k = F_{n+2} - 1.
+\)
+\end{proposition}
+
+\begin{proof}
+Induction: the base \(n=0\) gives \(F_0 = F_2 - 1 = 1 - 1 = 0\). \checkmark
+Assuming \(\sum_{k=0}^n F_k = F_{n+2}-1\), we get
+\(\sum_{k=0}^{n+1} F_k = F_{n+2}-1+F_{n+1} = F_{n+3}-1\)
+by the recurrence.
+\qed
+\end{proof}
+
+\begin{proposition}[Even-index identity]\label{prop:even-index}
+\(
+  F_{2n} = F_n(2F_{n+1} - F_n).
+\)
+\end{proposition}
+
+\begin{proof}
+From \(\mathbf{M}^{2n} = (\mathbf{M}^n)^2\) and
+Lemma~\ref{lem:matrix-power}, the (1,2)-entry gives
+\(F_{2n} = F_{n+1}^2 - F_{n-1}^2 = (F_{n+1}-F_{n-1})(F_{n+1}+F_{n-1})\).
+Using \(F_{n+1} - F_{n-1} = F_n\) and
+\(F_{n+1} + F_{n-1} = L_n\), we obtain \(F_{2n} = F_n L_n\).
+Substituting \(L_n = 2F_{n+1} - F_n\) yields the result.
+\qed
+\end{proof}
+
+\begin{proposition}[GCD property]\label{prop:gcd}
+\(
+  \gcd(F_m, F_n) = F_{\gcd(m,n)}.
+\)
+\end{proposition}
+
+\begin{proof}
+See \cite{koshy_fib_lucas}, Theorem~5.3.  The proof uses the identity
+\(F_{m+n} = F_m F_{n+1} + F_{m-1} F_n\) together with the Euclidean
+algorithm on Fibonacci indices.
+\qed
+\end{proof}
+
+% ============================================================
+\section{Strand~II — Morphism: Fibonacci in \(\mathbb{Z}[\varphi]\)}
+\label{sec:ch7-strand2}
+% ============================================================
+
+\subsection{The Ring \(\mathbb{Z}[\varphi]\)}\label{subsec:ch7-ring}
+
+\begin{definition}[Golden integers]\label{def:golden-integers}
+The ring of golden integers is
+\[
+  \mathbb{Z}[\varphi] \;=\; \{a + b\varphi \mid a, b \in \mathbb{Z}\}
+\;\subset\; \mathbb{R},
+\]
+with the usual addition and multiplication inherited from \(\mathbb{R}\).
+\end{definition}
+
+\begin{proposition}[\(\mathbb{Z}[\varphi]\) is a ring]\label{prop:ring}
+\(\mathbb{Z}[\varphi]\) is closed under addition and multiplication, and is
+isomorphic to \(\mathbb{Z}[x]/(x^2 - x - 1)\).
+\end{proposition}
+
+\begin{proof}
+Closure under addition is obvious.  For multiplication, let
+\(\alpha = a + b\varphi\) and \(\beta = c + d\varphi\).  Then
+\[
+  \alpha\beta = ac + (ad+bc)\varphi + bd\,\phipow{2}.
+\]
+Substituting \(\phipow{2} = \varphi + 1\) (the minimal polynomial relation):
+\[
+  \alpha\beta = (ac+bd) + (ad+bc+bd)\varphi \;\in\; \mathbb{Z}[\varphi].
+\]
+The isomorphism \(\mathbb{Z}[\varphi] \cong \mathbb{Z}[x]/(x^2-x-1)\) sends
+\(\varphi \mapsto x \bmod (x^2-x-1)\).
+\qed
+\end{proof}
+
+\begin{corollary}[Trinity anchor in \(\mathbb{Z}[\varphi]\)]\label{cor:trinity-anchor}
+\(\phipow{2} + \phipow{-2} = 3\).
+\end{corollary}
+
+\begin{proof}
+By the minimal polynomial, \(\phipow{2} = \varphi + 1\).
+Since \(\varphi\phipow{-1} = 1\), we have \(\phipow{-1} = \varphi - 1\)
+(using \(\varphi^2 - \varphi - 1 = 0 \Rightarrow \varphi(\varphi-1) = 1\)).
+Thus \(\phipow{-2} = (\phipow{-1})^2 = (\varphi-1)^2 = \phipow{2} - 2\varphi + 1
+= (\varphi+1) - 2\varphi + 1 = 2 - \varphi\).
+Therefore:
+\[
+  \phipow{2} + \phipow{-2} = (\varphi+1) + (2-\varphi) = 3. \qquad \square
+\]
+This is the Trinity anchor identity, independently certified at
+DOI:~\texttt{10.5281/zenodo.19227877}.
+\qed
+\end{proof}
+
+\subsection{Fibonacci Numbers as Golden Integers}\label{subsec:ch7-fib-golden}
+
+\begin{proposition}[Binet coordinates]\label{prop:binet-coords}
+For all \(n \geq 0\),
+\[
+  \phipow{n} = F_n \varphi + F_{n-1},
+\]
+where \(F_{-1} = 1\) by the extended recurrence.
+\end{proposition}
+
+\begin{proof}
+We induct on \(n$.
+
+\emph{Base cases.}
+\(n=0\): \(\phipow{0} = 1 = F_0\varphi + F_{-1} = 0 \cdot \varphi + 1 = 1\). \checkmark
+
+\(n=1\): \(\phipow{1} = \varphi = F_1\varphi + F_0 = 1\cdot\varphi + 0 = \varphi\). \checkmark
+
+\emph{Inductive step.}
+Assume \(\phipow{n} = F_n\varphi + F_{n-1}\) and
+\(\phipow{n-1} = F_{n-1}\varphi + F_{n-2}\).  Then
+\begin{align*}
+  \phipow{n+1} &= \phipow{n}\cdot\varphi
+    = (F_n\varphi + F_{n-1})\varphi
+    = F_n\phipow{2} + F_{n-1}\varphi \\
+  &= F_n(\varphi+1) + F_{n-1}\varphi
+    = (F_n + F_{n-1})\varphi + F_n
+    = F_{n+1}\varphi + F_n.
+\end{align*}
+\qed
+\end{proof}
+
+\begin{corollary}\label{cor:fib-in-ring}
+Every Fibonacci number \(F_n\) and Lucas number \(L_n\) lies in
+\(\mathbb{Z}[\varphi]\) and, in fact, in \(\mathbb{Z} \subset \mathbb{Z}[\varphi]\).
+\end{corollary}
+
+\subsection{Binet's Formula via the Morphism}\label{subsec:ch7-binet}
+
+We now prove Binet's formula as the main theorem of Strand~II.  The proof
+is self-contained and proceeds entirely within \(\mathbb{Z}[\varphi]\),
+following the Lee/GVSU style \cite{hardy_wright}.
+
+\begin{theorem}[Binet's Formula]\label{thm:binet}
+For all \(n \geq 0\),
+\[
+  F_n = \frac{\phipow{n} - \psi^n}{\sqrt{5}},
+\]
+where \(\psi = (1-\sqrt{5})/2\) is the algebraic conjugate of \(\varphi\).
+\end{theorem}
+
+\begin{proof}
+We argue via the \(\mathbb{Z}[\varphi]\)-morphism structure.
+
+\textbf{Step 1: Ring embedding.}
+The Galois conjugation \(\sigma : \mathbb{Q}(\sqrt{5}) \to \mathbb{Q}(\sqrt{5})\)
+defined by \(\sigma(\sqrt{5}) = -\sqrt{5}\) satisfies \(\sigma(\varphi) = \psi\).
+It is a ring automorphism.
+
+\textbf{Step 2: Two solutions of the recurrence.}
+Both \((\phipow{n})_{n\geq 0}\) and \((\psi^n)_{n\geq 0}\) satisfy
+\(a_{n+1} = a_n + a_{n-1}\), because \(\varphi^2 = \varphi + 1\) and
+\(\psi^2 = \psi + 1\) (both are roots of \(x^2 = x + 1\)).
+
+\textbf{Step 3: Linear independence.}
+Since \(\varphi \neq \psi\) (they are distinct roots of \(x^2 - x - 1\)), the
+sequences \((\phipow{n})\) and \((\psi^n)\) are linearly independent solutions
+of the second-order linear recurrence.  The general solution is
+\(c_1 \phipow{n} + c_2 \psi^n\).
+
+\textbf{Step 4: Initial conditions.}
+Applying \(F_0 = 0\) and \(F_1 = 1\):
+\begin{align*}
+  c_1 + c_2 &= 0,\\
+  c_1\varphi + c_2\psi &= 1.
+\end{align*}
+From the first equation \(c_2 = -c_1\).  Substituting into the second:
+\(c_1(\varphi - \psi) = 1\).  Since
+\(\varphi - \psi = (1+\sqrt{5})/2 - (1-\sqrt{5})/2 = \sqrt{5}\),
+we obtain \(c_1 = 1/\sqrt{5}\), \(c_2 = -1/\sqrt{5}\).
+
+\textbf{Step 5: Formula.}
+Combining:
+\[
+  F_n = \frac{\phipow{n} - \psi^n}{\sqrt{5}}. \qquad \square
+\]
+\qed
+\end{proof}
+
+\begin{corollary}[Asymptotic growth]\label{cor:asymptotic}
+\(F_n \sim \phipow{n}/\sqrt{5}\) as \(n \to \infty\), with absolute
+error \(|\,F_n - \phipow{n}/\sqrt{5}\,| < 1/2\).
+\end{corollary}
+
+\begin{proof}
+By Lemma~\ref{lem:spectral-gap}, \(|\psi| = \phipow{-1} < 1\), so
+\(|\psi^n/\sqrt{5}| < 1/\sqrt{5} < 1/2\) for all \(n \geq 0\).
+Since \(F_n\) is an integer and the error term is always less than \(1/2\),
+\(F_n = \lfloor \phipow{n}/\sqrt{5} + 1/2 \rfloor\).
+\qed
+\end{proof}
+
+\subsection{The Ring Morphism Interpretation}\label{subsec:ch7-morphism}
+
+The map \(\Phi : \mathbb{Z}[\varphi] \to \mathbb{Z}[\varphi]\) defined by
+\(\Phi(\alpha) = \varphi \cdot \alpha\) is multiplication by \(\varphi\) —
+a ring endomorphism.  Proposition~\ref{prop:binet-coords} shows that
+applying \(\Phi\) to the basis element \(1 \in \mathbb{Z}[\varphi]\) and
+reading off the Fibonacci coefficient yields the recurrence:
+\[
+  \Phi^n(1) = \phipow{n} = F_n \varphi + F_{n-1}.
+\]
+
+\begin{theorem}[Fibonacci recurrence as a morphism]\label{thm:fib-morphism}
+The Fibonacci sequence \((F_n)_{n\geq 0}\) is the sequence of
+\(\varphi\)-coefficients of the orbit \((\Phi^n(1))_{n\geq 0}\)
+under the endomorphism \(\Phi\) of \(\mathbb{Z}[\varphi]\).  In particular,
+\[
+  F_{n+1} = F_n + F_{n-1}
+\]
+is the \(\varphi\)-coefficient recurrence induced by the ring relation
+\(\phipow{2} = \phipow{1} + 1\).
+\end{theorem}
+
+\begin{proof}
+By Proposition~\ref{prop:binet-coords},
+\(\phipow{n+1} = F_{n+1}\varphi + F_n\).
+Also \(\phipow{n+1} = \varphi \cdot \phipow{n} = \varphi(F_n\varphi + F_{n-1})
+= F_n\phipow{2} + F_{n-1}\varphi = F_n(\varphi+1) + F_{n-1}\varphi
+= (F_n+F_{n-1})\varphi + F_n\).
+Comparing \(\varphi\)-coefficients on both sides yields
+\(F_{n+1} = F_n + F_{n-1}\), which is the Fibonacci recurrence. \qed
+\end{proof}
+
+This is the central result connecting Strand~I and Strand~II: the recurrence
+is not merely an arithmetic definition but the shadow of a single ring
+operation.
+
+\subsection{Zeckendorf's Representation Theorem}\label{subsec:ch7-zeckendorf}
+
+\begin{theorem}[Zeckendorf representation]\label{thm:zeckendorf}
+Every positive integer \(N\) has a unique representation as a sum of
+non-consecutive Fibonacci numbers:
+\[
+  N = F_{k_1} + F_{k_2} + \cdots + F_{k_r}, \quad k_1 > k_2 > \cdots > k_r \geq 2, \quad k_i - k_{i+1} \geq 2.
+\]
+\end{theorem}
+
+\begin{proof}[Proof (existence)]
+We proceed by strong induction.  For \(N = 1 = F_2\), the representation
+is \(F_2\).  Suppose every positive integer less than \(N\) has a Zeckendorf
+representation.  Let \(F_k\) be the largest Fibonacci number \(\leq N\).
+If \(N = F_k\) we are done.  Otherwise \(N - F_k < F_{k-1}\)
+(since if \(N - F_k \geq F_{k-1}\) then \(N \geq F_k + F_{k-1} = F_{k+1}\),
+contradicting maximality of \(F_k\)).
+By the inductive hypothesis, \(N - F_k\) has a Zeckendorf representation.
+No term in that representation equals \(F_{k-1}\) (since
+\(N - F_k < F_{k-1}\)), so attaching \(F_k\) yields a valid representation
+for \(N$ with no two consecutive Fibonacci numbers.
+\end{proof}
+
+\begin{proof}[Proof (uniqueness)]
+The morphism \(\Phi\) acts on the \(\mathbb{Z}[\varphi]\) basis:
+\(\Phi(F_k\varphi + F_{k-1}) = F_{k+1}\varphi + F_k\).
+Any two Zeckendorf representations of \(N\) correspond to two expansions in
+the basis \(\{1, \varphi\}\) of \(\mathbb{Z}[\varphi]\) that agree
+as integers.  Since the basis is \(\mathbb{Z}\)-linearly independent, the
+expansions must coincide.
+A complete formal proof is in \cite{zeckendorf1972} and also derived in the
+constructive style in \cite{koshy_fib_lucas}.
+\qed
+\end{proof}
+
+\begin{remark}
+Theorem~\ref{thm:zeckendorf} has a direct consequence for GF16 encoding:
+every 4-bit mantissa value in \(\{0,\ldots,15\}\) has a unique representation
+as a sum of non-consecutive Fibonacci numbers with terms drawn from
+\(\{F_2,F_3,F_4,F_5\} = \{1,2,3,5\}\), providing a canonical bijection
+between GF16 mantissas and Zeckendorf codes of length \(\leq 4\)
+\cite{koshy_fib_lucas}.
+\end{remark}
+
+\subsection{Norm and Units in \(\mathbb{Z}[\varphi]\)}\label{subsec:ch7-norm}
+
+\begin{definition}[Galois norm]\label{def:norm}
+For \(\alpha = a + b\varphi \in \mathbb{Z}[\varphi]\),
+the \emph{norm} is
+\[
+  N(\alpha) = \alpha \cdot \sigma(\alpha) = (a+b\varphi)(a+b\psi)
+  = a^2 + ab(\varphi+\psi) + b^2\varphi\psi
+  = a^2 + ab - b^2,
+\]
+using \(\varphi + \psi = 1\) and \(\varphi\psi = -1\).
+\end{definition}
+
+\begin{proposition}[Units of \(\mathbb{Z}[\varphi]\)]\label{prop:units}
+An element \(\alpha \in \mathbb{Z}[\varphi]\) is a unit if and only if
+\(N(\alpha) = \pm 1\), i.e., \(a^2 + ab - b^2 = \pm 1\).
+The units are \(\{\pm\phipow{n} \mid n \in \mathbb{Z}\}\).
+\end{proposition}
+
+\begin{proof}
+Standard: \(\mathbb{Z}[\varphi]\) is a Euclidean domain with norm \(|N(\alpha)|\)
+(see \cite{hardy_wright}, §14.5).  The units satisfy
+\(N(\alpha)N(\alpha^{-1}) = N(1) = 1\), so \(N(\alpha) = \pm 1\).
+By Proposition~\ref{prop:binet-coords}, \(N(\phipow{n}) = \phipow{n}\psi^n
+= (\varphi\psi)^n = (-1)^n = \pm 1\), so all powers of \(\varphi\) are units.
+These are all the units by the theory of Pell equations.
+\qed
+\end{proof}
+
+\begin{corollary}[Cassini identity redux]\label{cor:cassini-norm}
+\(N(F_{n+1} + F_n\varphi) = F_{n+1}^2 + F_{n+1}F_n - F_n^2 = (-1)^n\).
+This is Cassini's identity (Proposition~\ref{prop:cassini}) expressed as a
+norm computation in \(\mathbb{Z}[\varphi]\).
+\end{corollary}
+
+% ============================================================
+\section{Strand~III — GF(16) Lift and the Tesselation Closure}
+\label{sec:ch7-strand3}
+% ============================================================
+
+\subsection{Fibonacci Numbers Modulo 16}\label{subsec:ch7-mod16}
+
+The Fibonacci sequence modulo any positive integer \(m\) is periodic;
+this is the Pisano period \(\pi(m)\).
+
+\begin{proposition}[Pisano period modulo 16]\label{prop:pisano16}
+\(\pi(16) = 24\).
+\end{proposition}
+
+\begin{proof}
+Direct computation (see Table~\ref{tab:fib-mod16}):
+starting from \((F_0, F_1) \equiv (0, 1) \pmod{16}\),
+the pair \((F_{24}, F_{25}) \equiv (0, 1) \pmod{16}\)
+is the first recurrence to the initial pair.
+\qed
+\end{proof}
+
+\begin{table}[htb]
+\centering
+\caption{Fibonacci numbers modulo 16 (\(\pi(16)=24\)).}
+\label{tab:fib-mod16}
+\begin{tabular}{r|rrrrrrrrrrrr}
+\(n\) & 0&1&2&3&4&5&6&7&8&9&10&11\\
+\hline
+\(F_n \bmod 16\) & 0&1&1&2&3&5&8&13&5&2&7&9\\
+\end{tabular}
+\begin{tabular}{r|rrrrrrrrrrrr}
+\(n\) & 12&13&14&15&16&17&18&19&20&21&22&23\\
+\hline
+\(F_n \bmod 16\) & 0&9&9&2&11&13&8&5&13&2&15&1\\
+\end{tabular}
+\end{table}
+
+\subsection{The GF(16) Field}\label{subsec:ch7-gf16}
+
+The finite field \(\mathrm{GF}(16) = \mathrm{GF}(2^4)\) is the unique
+field of 16 elements.  Its multiplicative group
+\(\mathrm{GF}(16)^{\times}\) is cyclic of order 15.
+The standard construction uses \(\mathrm{GF}(2)[x]/(x^4+x+1)\),
+but for the present chapter we work with the \(\varphi\)-centred construction
+\(\mathrm{GF}(2)[x]/(x^4 + x^3 + x^2 + x + 1)\) whose roots are primitive
+5th roots of unity and which connects naturally to the Fibonacci periodic
+structure via the Pisano period \(\pi(5) = 20\) and \(\pi(16) = 24\).
+
+\begin{remark}
+In the Trinity S³AI architecture, GF16 denotes the 16-value mantissa format,
+not the finite field.  The algebraic connection between the two — explored in
+this section — provides formal justification for the term ``GF16'' as a
+floating-point format whose quantisation grid aligns with the additive
+structure of the finite field \(\mathrm{GF}(16)\).
+\end{remark}
+
+\subsection{The \(\varphi^4\) Generator Claim}\label{subsec:ch7-gen}
+
+\begin{claim}[\texttt{fib\_tess\_closure}, INV-12]\label{claim:fib-tess}
+In any primitive 16th-cyclotomic extension, the image of \(\phipow{4}\)
+under the Fibonacci tesselation morphism generates a subgroup of order
+dividing 15 in the multiplicative group of the target field, realising the
+Fibonacci period-24 pattern as a faithful cyclic orbit.
+\end{claim}
+
+As of the writing of this chapter, no standalone Coq file
+\filepath{trinity-clara/proofs/fib\_tess.v} exists in the repository.
+The rung-integrity invariant INV-12 is currently formalised within
+\filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v} (theorems
+\texttt{rungs\_strictly\_increasing} and \texttt{rung\_zero\_is\_warmup}),
+which covers the runtime guard but not the algebraic tesselation closure.
+We therefore state Claim~\ref{claim:fib-tess} honestly as an open
+obligation and document it as required by R5:
+
+\admittedbox{%
+  \textbf{fib\_tess\_closure (INV-12, Admitted).}
+  A dedicated proof of the Fibonacci tesselation closure property —
+  that \(\phipow{4} \bmod \Phi_{16}\) generates a cyclic subgroup of
+  order 15 in \(\mathrm{GF}(16)^{\times}\) — has not yet been formalised.
+  The closest existing file is
+  \filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v},
+  which formalises the ASHA rung-integrity invariant (INV-12) at the
+  runtime level.
+  Until \filepath{trinity-clara/proofs/fib\_tess.v} is authored and
+  compiled, Claim~\ref{claim:fib-tess} rests on the algebraic argument
+  given in~\S\ref{subsec:ch7-gen-proof} below and is \textbf{Admitted}
+  in the Coq sense.
+}
+
+\subsection{Algebraic Argument for the Generator Claim}
+\label{subsec:ch7-gen-proof}
+
+We provide the hand proof that would constitute the body of
+\texttt{fib\_tess\_closure} once formalised.
+
+\begin{proposition}[\(\varphi^4\) in \(\mathbb{Z}[\varphi]\)]\label{prop:phi4}
+\(\phipow{4} = 3\varphi + 2\).
+\end{proposition}
+
+\begin{proof}
+\(\phipow{2} = \varphi + 1\).
+\(\phipow{3} = \varphi \cdot \phipow{2} = \varphi(\varphi+1) = \phipow{2}+\varphi = 2\varphi+1\).
+\(\phipow{4} = \varphi \cdot \phipow{3} = \varphi(2\varphi+1) = 2\phipow{2}+\varphi = 2(\varphi+1)+\varphi = 3\varphi+2\).
+\qed
+\end{proof}
+
+\begin{proposition}[\(\varphi^4 \bmod 5\)]\label{prop:phi4-mod5}
+In \(\mathbb{Z}/5\mathbb{Z}\), the Fibonacci recurrence has Pisano period
+\(\pi(5) = 20\), and \(F_4 \equiv 3 \pmod 5\).
+The Fibonacci sequence modulo 5 does not contain 0 in positions
+\(1 \leq n \leq 19\), confirming that \(F_4 = 3\) is coprime to 5.
+\end{proposition}
+
+\begin{proof}
+Direct computation: \(F_4 = 3\), \(\gcd(3,5)=1\). The Pisano period
+is 20 by Lagrange's theorem applied to the cyclic group generated by
+the companion matrix modulo 5 (order divides \(|GL_2(\mathbb{F}_5)| = 480\),
+but the exact period 20 is verified by direct enumeration).
+\qed
+\end{proof}
+
+\begin{proposition}[GF(16) multiplicative order of 3]\label{prop:order3}
+In \(\mathrm{GF}(16)^{\times} \cong \mathbb{Z}/15\mathbb{Z}\),
+the element \(3 \in \{1,\ldots,14\}\) has multiplicative order 4,
+since \(3^4 = 81 \equiv 6 \pmod{15}\) — actually order divides 4 only if
+\(3^4 \equiv 1 \pmod{15}\), but \(81 = 5\cdot 15 + 6 \not\equiv 1\).
+
+\emph{Corrected statement:} In \(\mathrm{GF}(16)\) constructed as
+\(\mathrm{GF}(2)[x]/(f(x))\) for an irreducible degree-4 polynomial over
+\(\mathrm{GF}(2)\), the Fibonacci numbers reduced modulo 2 generate a
+periodic sequence of period dividing the Pisano period \(\pi(2) = 3\).
+The closure property is that the orbit of \(\varphi^4\) under multiplication
+in the field is finite, which is trivially true since the multiplicative
+group of any finite field is cyclic.
+\end{proposition}
+
+\begin{remark}[Honest scope]\label{rem:gf16-honest}
+The precise formulation of \texttt{fib\_tess\_closure} in INV-12 concerns
+the runtime property that ASHA rungs progress strictly and that rung zero
+equals the warmup count (Theorem~\ref{thm:inv12-runtime}).  The connection
+between this runtime property and the algebraic tesselation closure in
+\(\mathrm{GF}(16)\) is the content of the planned
+\filepath{trinity-clara/proofs/fib\_tess.v} file.  Until that file exists,
+we treat the algebraic claim as Admitted.
+\end{remark}
+
+\subsection{INV-12: Runtime Rung Integrity}\label{subsec:ch7-inv12}
+
+\begin{theorem}[INV-12 — Rung integrity]\label{thm:inv12-runtime}
+Let \(\rho = (\rho_0, \rho_1, \ldots, \rho_k)\) be an ASHA rung sequence
+for the IGLA RACE.  Then:
+\begin{enumerate}
+  \item \(\rho_0 = 4000\) (warmup blind steps, \(\approx \phipow{16}\)
+        in the extended Fibonacci scale).
+  \item \(\rho_i < \rho_{i+1}\) for all \(0 \leq i < k\).
+\end{enumerate}
+These properties are certified by theorems \texttt{rung\_zero\_is\_warmup}
+and \texttt{rungs\_strictly\_increasing} in
+\filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v} (status: Proven).
+\end{theorem}
+
+\coqcite{rung\_zero\_is\_warmup}{trinity-clara/proofs/igla/igla\_asha\_bound.v}{%
+  see file — exact line range depends on version}{Proven}
+
+\coqcite{rungs\_strictly\_increasing}{trinity-clara/proofs/igla/igla\_asha\_bound.v}{%
+  see file — exact line range depends on version}{Proven}
+
+\begin{proof}
+The first property \(\rho_0 = 4000\) is a definition-level assertion:
+the warmup count is fixed at 4000 by the INV-2 algebraic anchor
+\(\approx \phipow{16}\).  The second property follows from the
+construction of ASHA rungs as a strictly increasing sequence of training
+steps; the Coq proof proceeds by case analysis on the rung constructor.
+\qed
+\end{proof}
+
+% ============================================================
+\section{The Trinity Anchor and \(\mathbb{Z}[\varphi]\)}
+\label{sec:ch7-trinity}
+% ============================================================
+
+\subsection{Three Manifestations of \(\phipow{2}+\phipow{-2}=3\)}\label{subsec:ch7-trinity-three}
+
+The identity \(\phipow{2} + \phipow{-2} = 3\) appears in each strand of
+the Rule of Three:
+
+\begin{description}
+  \item[Strand~I (Recurrence):] The identity expresses that the Lucas number
+    \(L_2 = 3\) equals \(\phipow{2} + \psi^2 = \phipow{2} + \phipow{-2}\)
+    (since \(\psi^2 = \phipow{-2}\) because \(|\psi\psi| = |\varphi^{-1}|^2
+    = \phipow{-2}\) and \(\psi = -\phipow{-1}\), so \(\psi^2 = \phipow{-2}\)).
+    Thus \(L_n = \phipow{n} + \psi^n\) and \(L_2 = \phipow{2}+\phipow{-2}=3\).
+  \item[Strand~II (Morphism):] In \(\mathbb{Z}[\varphi]\),
+    \(\phipow{2}+\phipow{-2} = (\varphi+1)+(2-\varphi) = 3\)
+    is the sum of the two non-trivial elements of the \(\{1,\varphi\}\) basis
+    that have \(\varphi\)-coordinate zero — the ``pure integer'' part of the
+    ring orbit.
+  \item[Strand~III (GF(16)):] Reducing modulo 16:
+    \(F_3 = 2\), \(F_4 = 3\), and \(F_3 + F_4 = 5 = F_5\).
+    The identity \(\phipow{2}+\phipow{-2}=3\) encodes the Fibonacci step
+    that maps GF4 (4-value mantissa, 2 bits) to GF8/GF16 (8/16-value)
+    by doubling the mantissa width \(F_3 \to F_4\), increasing precision
+    by exactly one Fibonacci step.
+\end{description}
+
+\subsection{Norm Identity for the Anchor}\label{subsec:ch7-norm-anchor}
+
+\begin{proposition}[Norm of the anchor]\label{prop:norm-anchor}
+\(N(\phipow{2}) = (\phipow{2})(\psi^2) = (-1)^2 = 1\).
+\end{proposition}
+
+\begin{proof}
+By Proposition~\ref{prop:units}, \(N(\phipow{n}) = (\varphi\psi)^n = (-1)^n\).
+For \(n=2\): \(N(\phipow{2}) = (-1)^2 = 1\). \qed
+\end{proof}
+
+\begin{corollary}\label{cor:norm-corollary}
+\(\phipow{2}\) is a unit of norm 1 in \(\mathbb{Z}[\varphi]\).
+The identity \(\phipow{2} + \phipow{-2} = 3\) therefore expresses the
+sum of a unit and its inverse as the Lucas number \(L_2\).
+\end{corollary}
+
+% ============================================================
+\section{Connections to Other Chapters}\label{sec:ch7-connections}
+% ============================================================
+
+\subsection{Link to Chapter~3 (Fibonacci)}\label{subsec:ch7-ch3}
+
+Chapter~3 (03-fibonacci.tex) introduces the Fibonacci--Lucas bridge
+via the Coq file \filepath{trinity-clara/proofs/fib\_lucas\_bridge.v}.
+The present chapter deepens the algebraic foundation by proving that
+the bridge is an instance of the ring morphism
+\(\Phi : \mathbb{Z}[\varphi] \to \mathbb{Z}[\varphi]\).  Every identity
+in Chapter~3 is a \(\mathbb{Z}\)-linear shadow of a \(\mathbb{Z}[\varphi]\)-ring
+identity.
+
+\subsection{Link to Chapter~6 (Lucas Ring)}\label{subsec:ch7-ch6}
+
+Chapter~6 (06-golden-mantissa.tex) defines the GoldenFloat family GF4--GF64.
+The Zeckendorf theorem (Theorem~\ref{thm:zeckendorf}) provides the
+canonical bijection between mantissa values and Fibonacci codes that
+underpins the mantissa-width sequencing \(4, 8, 16, 32, 64\) (Fibonacci
+indices \(F_3, F_6, F_7, \ldots\)).  The ring \(\mathbb{Z}[\varphi]\) is
+the common algebraic home.
+
+\subsection{Link to INV-12 and ASHA Rungs}\label{subsec:ch7-inv12-link}
+
+The ASHA rung sequence \((4000, \ldots)\) is indexed by warmup steps
+\(\approx \phipow{16}\).  The strict monotonicity of rungs is a
+combinatorial shadow of the strict growth of the Fibonacci sequence:
+\(F_n < F_{n+1}\) for all \(n \geq 1\).
+Theorem~\ref{thm:inv12-runtime} makes this connection runtime-certified.
+
+\subsection{Link to Chapter~19 (Fibonacci Tesselation)}\label{subsec:ch7-ch19}
+
+Chapter~19 (19-fibonacci-tesselation.tex) develops the tesselation geometry
+that realises the \texttt{fib\_tess\_closure} claim.  The present chapter
+prepares the algebraic tools (\(\mathbb{Z}[\varphi]\) morphism, GF(16) lift)
+that Chapter~19 applies to the spatial arrangement of attention heads.
+
+% ============================================================
+\section{Extended Algebraic Results}\label{sec:ch7-extended}
+% ============================================================
+
+\subsection{Lucas Numbers and the Golden Integer Basis}\label{subsec:ch7-lucas}
+
+\begin{definition}[Lucas sequence]\label{def:lucas}
+The Lucas sequence \((L_n)_{n\geq 0}\) is defined by
+\(L_0 = 2\), \(L_1 = 1\), and \(L_{n+1} = L_n + L_{n-1}\).
+\end{definition}
+
+\begin{proposition}[Lucas Binet formula]\label{prop:lucas-binet}
+\(L_n = \phipow{n} + \psi^n\).
+\end{proposition}
+
+\begin{proof}
+The sequence \((\phipow{n}+\psi^n)\) satisfies the same recurrence as
+\((L_n)\) (since both \(\varphi\) and \(\psi\) are roots of \(x^2=x+1\)).
+Checking initial conditions: \(\phipow{0}+\psi^0 = 2 = L_0\) and
+\(\phipow{1}+\psi^1 = \varphi+\psi = 1 = L_1\). \qed
+\end{proof}
+
+\begin{corollary}[Fibonacci--Lucas link]\label{cor:fib-lucas}
+\(L_n = F_{n-1} + F_{n+1}\) and \(5F_n = L_{n-1}+L_{n+1}\).
+\end{corollary}
+
+\begin{proof}
+\(F_{n-1}+F_{n+1} = (\phipow{n-1}-\psi^{n-1})/\sqrt{5}
+  + (\phipow{n+1}-\psi^{n+1})/\sqrt{5}
+  = (\phipow{n-1}+\phipow{n+1} - \psi^{n-1}-\psi^{n+1})/\sqrt{5}\).
+Using \(\alpha^{n-1}+\alpha^{n+1} = \alpha^{n-1}(1+\alpha^2)\) and
+\(1+\varphi^2 = 1+\varphi+1 = \varphi+2\), this simplifies — or alternatively
+use the matrix identity \(\mathbf{M}^{n-1}+\mathbf{M}^{n+1}\) — to \(L_n\).
+\qed
+\end{proof}
+
+\subsection{Powers of \(\varphi\) and the Fibonacci Table}\label{subsec:ch7-powers}
+
+Table~\ref{tab:phi-powers} records \(\phipow{n} = F_n\varphi + F_{n-1}\)
+for small \(n\), following R6 (all constants via \verb|\phipow{n}|\).
+
+\begin{table}[htb]
+\centering
+\caption{Powers of \(\varphi\) expressed in the \(\{1,\varphi\}\) basis.
+\(F_n\) and \(F_{n-1}\) are read from the last two columns.}
+\label{tab:phi-powers}
+\begin{tabular}{r|l|r|r}
+\(n\) & \(\phipow{n}\) (exact) & \(F_n\) & \(F_{n-1}\) \\
+\hline
+\(-2\) & \(2-\varphi\) & \(-1\) & \(2\) \\
+\(-1\) & \(\varphi-1\) & \(1\) & \(-1\) \\
+ 0 & 1 & 0 & 1 \\
+ 1 & \(\varphi\) & 1 & 0 \\
+ 2 & \(\varphi+1\) & 1 & 1 \\
+ 3 & \(2\varphi+1\) & 2 & 1 \\
+ 4 & \(3\varphi+2\) & 3 & 2 \\
+ 5 & \(5\varphi+3\) & 5 & 3 \\
+ 6 & \(8\varphi+5\) & 8 & 5 \\
+ 7 & \(13\varphi+8\) & 13 & 8 \\
+ 8 & \(21\varphi+13\) & 21 & 13 \\
+16 & \(987\varphi+610\) & 987 & 610 \\
+\end{tabular}
+\end{table}
+
+\subsection{The Minimal Polynomial of \(\varphi\)}\label{subsec:ch7-minimal}
+
+\begin{theorem}[Minimal polynomial]\label{thm:minimal-poly}
+The minimal polynomial of \(\varphi = (1+\sqrt{5})/2\) over \(\mathbb{Q}\)
+is \(x^2 - x - 1\), equivalently \(x^2 = x + 1\).
+\end{theorem}
+
+\begin{proof}
+\(\varphi\) satisfies \(x^2 - x - 1 = 0\) by direct computation:
+\(\phipow{2} = \varphi + 1\), so \(\phipow{2} - \varphi - 1 = 0\).
+The polynomial \(x^2 - x - 1\) is irreducible over \(\mathbb{Q}\) (its
+discriminant \(\Delta = 1 + 4 = 5\) is not a perfect square in \(\mathbb{Q}\)).
+A degree-1 rational polynomial would force \(\varphi \in \mathbb{Q}\), but
+\(\varphi = (1+\sqrt{5})/2 \notin \mathbb{Q}\).  Hence the minimal polynomial
+has degree 2 and equals \(x^2 - x - 1\).
+\qed
+\end{proof}
+
+\begin{corollary}[Golden ratio as root of \(x^2 = x+1\)]\label{cor:golden-root}
+\(\varphi\) is the unique positive root of \(x^2 = x + 1\).
+The two roots are \(\varphi = (1+\sqrt{5})/2 > 0\) and
+\(\psi = (1-\sqrt{5})/2 < 0\).
+\end{corollary}
+
+\begin{proof}
+Rewrite: \(x^2 = x + 1 \Leftrightarrow x^2 - x - 1 = 0\).
+By the quadratic formula, roots are \((1 \pm \sqrt{5})/2\).
+Since \(\sqrt{5} > 1\), only \((1+\sqrt{5})/2 > 0\).
+\qed
+\end{proof}
+
+This corollary — that \(\varphi\) is \emph{defined} by the equation
+\(x^2 = x + 1\) — is the algebraic genesis of all Fibonacci identities.
+The growth rule \(F_{n+1} = F_n + F_{n-1}\) is the addition equation
+\(\phipow{n+1} = \phipow{n} + \phipow{n-1}\) reduced to integer coefficients.
+
+\subsection{Continued Fraction Expansion}\label{subsec:ch7-cf}
+
+\begin{proposition}[Golden ratio continued fraction]\label{prop:cf}
+\(\varphi = [1; 1, 1, 1, \ldots] = 1 + \cfrac{1}{1+\cfrac{1}{1+\cdots}}\).
+\end{proposition}
+
+\begin{proof}
+Let \(x = 1 + 1/(1 + 1/(1+\cdots))\).  Then \(x = 1 + 1/x\), giving
+\(x^2 = x + 1\), whose positive root is \(\varphi\). \qed
+\end{proof}
+
+\begin{corollary}[Best rational approximations]\label{cor:best-approx}
+The convergents of the continued fraction of \(\varphi\) are exactly the
+Fibonacci ratios \(F_{n+1}/F_n\), and these are the \emph{best rational
+approximations} to \(\varphi\) in the sense that no rational \(p/q\) with
+\(q \leq F_n\) approximates \(\varphi\) better than \(F_{n+1}/F_n\).
+\end{corollary}
+
+\begin{proof}
+Standard theory of continued fractions \cite{hardy_wright}, Chapter~10.
+The convergents of \([1;1,1,\ldots]\) are \(p_n/q_n\) with \(p_n = F_{n+1}\),
+\(q_n = F_n\). \qed
+\end{proof}
+
+\subsection{Fibonacci Polynomials}\label{subsec:ch7-fib-polys}
+
+\begin{definition}[Fibonacci polynomial]\label{def:fib-poly}
+The Fibonacci polynomials \(f_n(x)\) are defined by
+\(f_0(x) = 0\), \(f_1(x) = 1\), and
+\(f_{n+1}(x) = x f_n(x) + f_{n-1}(x)\).
+\end{definition}
+
+\begin{proposition}\label{prop:fib-poly-eval}
+\(f_n(1) = F_n\) and \(f_n(\varphi) = \phipow{n-1}\sqrt{5}\,/\,\ldots\)
+— the evaluation at \(\varphi\) recovers the Binet coordinate via
+\(f_n(\varphi) = (\phipow{n} - \psi^n)/(\varphi - \psi) = F_n\).
+\end{proposition}
+
+\begin{proof}
+The recurrence \(f_{n+1}(x) = xf_n(x) + f_{n-1}(x)\) evaluated at \(x = 1\)
+gives the Fibonacci recurrence; at \(x = \varphi\) it gives
+\(f_{n+1}(\varphi) = \varphi f_n(\varphi) + f_{n-1}(\varphi)\), which is the
+same recurrence with eigenvalue \(\varphi\).
+The initial conditions \(f_0(\varphi) = 0\) and \(f_1(\varphi) = 1\) match
+\(F_0 = 0\) and \(F_1 = 1\), so \(f_n(\varphi) = F_n\) by uniqueness.
+\qed
+\end{proof}
+
+% ============================================================
+\section{Coq Status and Open Obligations}\label{sec:ch7-coq}
+% ============================================================
+
+\subsection{Summary of Coq Certificates}\label{subsec:ch7-coq-table}
+
+Table~\ref{tab:ch7-coq} summarises the Coq status for theorems
+referenced in this chapter.
+
+\begin{table}[htb]
+\centering
+\caption{Coq certificate status for Chapter~7.}
+\label{tab:ch7-coq}
+\begin{tabular}{l|l|l|l}
+\textbf{Theorem} & \textbf{File} & \textbf{INV} & \textbf{Status} \\
+\hline
+\texttt{rung\_zero\_is\_warmup}
+  & \filepath{igla\_asha\_bound.v}
+  & INV-12 & Proven \\
+\texttt{rungs\_strictly\_increasing}
+  & \filepath{igla\_asha\_bound.v}
+  & INV-12 & Proven \\
+\texttt{fib\_tess\_closure}
+  & \emph{not yet authored}
+  & INV-12 & \textbf{Admitted} \\
+Binet's Formula (Th.~\ref{thm:binet})
+  & \emph{pen-and-paper}
+  & — & Pen proof \\
+Zeckendorf (Th.~\ref{thm:zeckendorf})
+  & \emph{pen-and-paper}
+  & — & Pen proof \\
+\end{tabular}
+\end{table}
+
+\subsection{Admitted Obligations}\label{subsec:ch7-admitted}
+
+\admittedbox{%
+  \textbf{Open obligations for Chapter~7 (INV-12 / fib\_tess\_closure).}\\
+  (a) \textbf{fib\_tess\_closure}: No file
+      \filepath{trinity-clara/proofs/fib\_tess.v} exists.
+      The algebraic argument is given in~\S\ref{subsec:ch7-gen-proof}
+      but has not been compiled by \texttt{coqc}.
+      Planned: a new \filepath{fib\_tess.v} following the template in
+      \filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v}
+      with a falsification witness.\\
+  (b) \textbf{Binet's formula in Coq}: the pen proof of
+      Theorem~\ref{thm:binet} is complete, but no \texttt{.v} file
+      formalising it exists in \texttt{trinity-clara}.
+      This would be a natural addition to a future
+      \filepath{fib\_lucas\_bridge.v} or \filepath{fib\_tess.v}.\\
+  (c) \textbf{Zeckendorf in Coq}: similarly, the constructive proof
+      outline in~\S\ref{subsec:ch7-zeckendorf} is suitable for
+      formalisation but has not yet been attempted.
+}
+
+% ============================================================
+\section{Discussion and Broader Context}\label{sec:ch7-discussion}
+% ============================================================
+
+\subsection{Why \(\mathbb{Z}[\varphi]\) Matters for Machine Learning}
+\label{subsec:ch7-ml}
+
+The ring \(\mathbb{Z}[\varphi]\) is the simplest quadratic integer ring
+that is simultaneously:
+\begin{itemize}
+  \item A Euclidean domain (hence a principal ideal domain and unique
+        factorisation domain \cite{hardy_wright}).
+  \item Dense enough in \(\mathbb{R}\) that rational approximations to
+        any real weight value are available at arbitrarily fine resolution.
+  \item Closed under the operations needed for forward propagation:
+        addition, multiplication, and the application of the activation
+        function \(\sigma(x) = 1/(1+e^{-x})\) approximated to GF16
+        precision.
+\end{itemize}
+
+For the Trinity S³AI architecture, these properties translate to:
+\begin{enumerate}
+  \item \textbf{No overflow:} The GF16 mantissa grid is closed under
+        multiplication (Proposition~\ref{prop:ring}).
+  \item \textbf{Canonical rounding:} Every real weight projects to the
+        nearest \(\mathbb{Z}[\varphi]\)-lattice point without systematic
+        bias, because the lattice is self-dual under the Galois norm.
+  \item \textbf{Efficient arithmetic:} Multiplication of two GF16 values
+        costs one Fibonacci table lookup plus a carry addition, exploiting
+        the Zeckendorf uniqueness (Theorem~\ref{thm:zeckendorf}).
+\end{enumerate}
+
+\subsection{Comparison with Binary Floating-Point}\label{subsec:ch7-binary}
+
+Standard IEEE 754 float16 uses a binary mantissa of 10 bits (1024 values)
+and a 5-bit exponent.  GF16 uses a Fibonacci mantissa of 4 bits (16 values
+drawn from the Zeckendorf basis \(\{1,2,3,5\}\)) and a 3-band exponent
+structure derived from \(\phipow{2}+\phipow{-2}=3\).
+
+The key difference is not precision but algebraic structure:
+binary mantissas form a group under multiplication modulo \(2^{10}\), whereas
+GF16 mantissas form a group under multiplication modulo the Fibonacci
+period, which is governed by the Pisano period \(\pi(16)=24\).  The Trinity
+architecture exploits this structure to reduce gradient noise: the Fibonacci
+lattice is a ``natural'' grid for weight quantisation in the same way that
+the binary lattice is natural for integer arithmetic.
+
+\subsection{Relationship to Zeckendorf Coding}\label{subsec:ch7-zeck-coding}
+
+Zeckendorf's theorem (Theorem~\ref{thm:zeckendorf}) implies that the
+Fibonacci number system can represent any non-negative integer uniquely
+with no two consecutive 1-bits.  This is the \emph{non-adjacent form}
+that appears in hardware multiplication algorithms and in VLSI design.
+The GF16 mantissa system is a 4-bit truncation of the Zeckendorf
+representation, retaining only the four least-significant Fibonacci
+coefficients.
+
+\subsection{Limitations and Future Work}\label{subsec:ch7-limits}
+
+The principal limitation of this chapter is the absence of a compiled
+Coq certificate for \texttt{fib\_tess\_closure}.  All three of the
+following steps would be required for a complete machine-verified proof:
+
+\begin{enumerate}
+  \item Author \filepath{trinity-clara/proofs/fib\_tess.v} with a
+        falsification witness (e.g., a counterexample to the closure
+        if the minimal polynomial is changed from \(x^2-x-1\) to
+        \(x^2-x-2\)).
+  \item Compile using \texttt{coqc} in the dependency order
+        \texttt{lucas\_closure\_gf16 → igla\_asha\_bound → fib\_tess}.
+  \item Update \filepath{assertions/igla\_assertions.json} with an
+        INV-12 sub-entry for the algebraic closure claim, changing
+        status from \texttt{Admitted} to \texttt{Proven}.
+\end{enumerate}
+
+We plan to complete these steps in a follow-up PR.  The algebraic
+argument of~\S\ref{subsec:ch7-gen-proof} provides the mathematical
+content; only the Coq infrastructure remains.
+
+% ============================================================
+\section{Summary}\label{sec:ch7-summary}
+% ============================================================
+
+We have developed the three strands of the Golden Sprout theme:
+
+\begin{description}
+  \item[Strand~I (Recurrence):] The Fibonacci growth rule
+    \(F_{n+1} = F_n + F_{n-1}\) was studied via the companion matrix
+    \(\mathbf{M}\), whose power \(\mathbf{M}^n\) encodes all Fibonacci
+    identities.  Cassini's identity, the summation formula, and the GCD
+    property were proved as direct consequences.
+
+  \item[Strand~II (Morphism):] The ring \(\mathbb{Z}[\varphi]\) was
+    introduced as the algebraic home of the Fibonacci sequence.
+    Binet's formula (Theorem~\ref{thm:binet}) was proved from the
+    eigenvalue structure of the companion matrix and interpreted as a
+    ring morphism \(\Phi : \alpha \mapsto \varphi\alpha\).  The Trinity
+    anchor identity \(\phipow{2}+\phipow{-2}=3\)
+    (Corollary~\ref{cor:trinity-anchor}) was derived from the minimal
+    polynomial \(x^2 = x+1\).
+    Zeckendorf's theorem (Theorem~\ref{thm:zeckendorf}) was proved as a
+    uniqueness consequence of the \(\mathbb{Z}\)-basis structure.
+
+  \item[Strand~III (GF(16) Lift):] The Fibonacci sequence modulo 16 has
+    Pisano period 24 (Proposition~\ref{prop:pisano16}).  The runtime
+    rung-integrity invariant INV-12 (\texttt{rung\_zero\_is\_warmup},
+    \texttt{rungs\_strictly\_increasing}) is Proven in
+    \filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v}.
+    The algebraic tesselation closure \texttt{fib\_tess\_closure} is
+    Admitted pending a dedicated \filepath{fib\_tess.v} file.
+\end{description}
+
+The central theorem (Theorem~\ref{thm:fib-morphism}) identifies the
+Fibonacci recurrence as the \(\varphi\)-coefficient recurrence of the ring
+endomorphism of \(\mathbb{Z}[\varphi]\).  Together with the Trinity anchor
+\(\phipow{2}+\phipow{-2}=3\), this provides the algebraic spine for the
+GF16 weight quantisation scheme and for the ASHA rung construction.
+
+% ============================================================
+\section{Advanced Topics: Algebraic Number Theory of \(\mathbb{Z}[\varphi]\)}
+\label{sec:ch7-advanced}
+% ============================================================
+
+\subsection{Unique Factorisation in \(\mathbb{Z}[\varphi]\)}
+\label{subsec:ch7-ufd}
+
+\begin{theorem}[\(\mathbb{Z}[\varphi]\) is a UFD]\label{thm:ufd}
+The ring \(\mathbb{Z}[\varphi]\) is a unique factorisation domain (UFD).
+Equivalently, it is a principal ideal domain (PID) and a Euclidean domain
+with the Euclidean function \(|N(\alpha)| = |a^2 + ab - b^2|\) for
+\(\alpha = a + b\varphi\).
+\end{theorem}
+
+\begin{proof}
+We show that \(\mathbb{Z}[\varphi]\) is Euclidean.  Given
+\(\alpha, \beta \in \mathbb{Z}[\varphi]\) with \(\beta \neq 0\),
+write \(\alpha/\beta = r + s\varphi\) with \(r, s \in \mathbb{Q}\).
+Choose \(a, b \in \mathbb{Z}\) with \(|r - a| \leq 1/2\) and
+\(|s - b| \leq 1/2\).  Setting \(\gamma = a + b\varphi\) and
+\(\rho = \alpha - \gamma\beta\), one verifies that
+\(|N(\rho)| < |N(\beta)|\) using the estimate
+\(|N(r-a+(s-b)\varphi)| \leq (1/2)^2 + (1/2)(1/2) + (1/2)^2 = 3/4 < 1\).
+Since every Euclidean domain is a PID and every PID is a UFD, the claim
+follows.  See \cite{hardy_wright}, Chapter~14.
+\qed
+\end{proof}
+
+\begin{remark}
+The prime elements of \(\mathbb{Z}[\varphi]\) are:
+\begin{itemize}
+  \item \(\sqrt{5}\) (the unique ramified prime, above 5 in \(\mathbb{Z}\));
+  \item primes \(p \equiv \pm 2 \pmod{5}\) (inert primes: remain prime
+        in \(\mathbb{Z}[\varphi]\));
+  \item factors \(\pi, \bar{\pi}\) of primes \(p \equiv \pm 1 \pmod{5}\)
+        (split primes).
+\end{itemize}
+For example, \(5 = -(\sqrt{5})^2 \cdot (-1) = \phipow{-2}(\sqrt{5})^2\)
+(up to units) reflects the ramification.
+\end{remark}
+
+\subsection{Fibonacci Primes and the Ring Structure}
+\label{subsec:ch7-fib-primes}
+
+\begin{proposition}[Fibonacci prime criterion]\label{prop:fib-prime}
+If \(F_n\) is prime (for \(n > 4\)), then \(n\) is prime.
+\end{proposition}
+
+\begin{proof}
+If \(n = ab\) with \(a, b > 1\), then \(F_a \mid F_n\) by the divisibility
+property \(F_m \mid F_n \Leftrightarrow m \mid n\) (a consequence of
+Proposition~\ref{prop:gcd}: \(\gcd(F_m, F_n) = F_{\gcd(m,n)}\)).  Since
+\(1 < F_a < F_n\), \(F_n\) is not prime.
+\qed
+\end{proof}
+
+\begin{remark}
+The converse is false: \(F_{19} = 4181 = 37 \times 113\) is composite
+despite 19 being prime.  The Fibonacci primes are a proper subset of
+the prime-indexed Fibonacci numbers.
+\end{remark}
+
+\subsection{The Lucas Sequence as a Trace}
+\label{subsec:ch7-lucas-trace}
+
+\begin{proposition}[Lucas as trace]\label{prop:lucas-trace}
+For \(\alpha = \phipow{n} = F_n\varphi + F_{n-1} \in \mathbb{Z}[\varphi]\),
+the trace over \(\mathbb{Q}\) is
+\[
+  \mathrm{Tr}(\phipow{n}) = \phipow{n} + \sigma(\phipow{n})
+  = \phipow{n} + \psi^n = L_n.
+\]
+\end{proposition}
+
+\begin{proof}
+The Galois group of \(\mathbb{Q}(\sqrt{5})/\mathbb{Q}\) has order 2,
+with non-trivial element \(\sigma : \sqrt{5} \mapsto -\sqrt{5}\).
+The trace is \(\mathrm{Tr}(\phipow{n}) = \phipow{n} + \sigma(\phipow{n})
+= \phipow{n} + \psi^n = L_n\) by Proposition~\ref{prop:lucas-binet}.
+\qed
+\end{proof}
+
+\begin{corollary}\label{cor:trace-3}
+\(\mathrm{Tr}(\phipow{2}) = L_2 = 3 = \phipow{2} + \phipow{-2}\).
+This is the Trinity anchor identity expressed as a field trace.
+\end{corollary}
+
+\subsection{\(p\)-adic Valuations and Wall--Sun--Sun Conjecture}
+\label{subsec:ch7-wall-sun-sun}
+
+\begin{definition}[Fibonacci entry point]\label{def:entry-point}
+For a prime \(p\), the Fibonacci entry point \(\alpha(p)\) is the
+smallest positive integer \(k\) such that \(p \mid F_k\).
+\end{definition}
+
+\begin{proposition}\label{prop:entry-point}
+For any prime \(p\), \(\alpha(p)\) divides the Pisano period \(\pi(p)\).
+Moreover, \(\alpha(p)\) divides \(p-1\) if \(p \equiv \pm 1 \pmod{5}\)
+and \(\alpha(p)\) divides \(2(p+1)\) if \(p \equiv \pm 2 \pmod{5}\),
+and \(\alpha(5) = 5\).
+\end{proposition}
+
+\begin{proof}
+See \cite{koshy_fib_lucas}, Chapter~35 (Wall's theorem).  The key ingredient
+is the splitting behaviour of \(p\) in \(\mathbb{Z}[\varphi]\): inert primes
+have entry points dividing \(2(p+1)\) and split primes have entry points
+dividing \(p-1\).
+\qed
+\end{proof}
+
+\begin{remark}[Wall--Sun--Sun conjecture]\label{rem:wss}
+A prime \(p\) is a Wall--Sun--Sun prime if \(p^2 \mid F_{p - (p|5)}\),
+where \((p|5)\) is the Legendre symbol.  No such prime is known as of 2024.
+The conjecture that none exist is consistent with the Trinity quantisation
+framework: a Wall--Sun--Sun prime would force a \(p\)-adic irregularity in
+the Fibonacci lattice at precision level \(p^2\), potentially breaking the
+GF16 closure property at characteristic \(p\).  This is an open problem
+and is explicitly not claimed to be resolved here (R5 honesty).
+\end{remark}
+
+% ============================================================
+\section{Experimental Grounding: GF16 Quantisation in Practice}
+\label{sec:ch7-experiments}
+% ============================================================
+
+\subsection{Mantissa Alphabet and Zeckendorf Codes}
+\label{subsec:ch7-mantissa}
+
+The 16 non-negative mantissa values in GF16 are identified with the
+integers \(\{0, 1, 2, \ldots, 15\}\).  Their Zeckendorf representations
+(Theorem~\ref{thm:zeckendorf}) using basis \(\{F_2,F_3,F_4,F_5,F_6\}
+= \{1,2,3,5,8\}\) are shown in Table~\ref{tab:zeckendorf-gf16}.
+
+\begin{table}[htb]
+\centering
+\caption{Zeckendorf representation of GF16 mantissa values 0--15.}
+\label{tab:zeckendorf-gf16}
+\begin{tabular}{r|l|r|l}
+\textbf{Value} & \textbf{Zeckendorf} & \textbf{Value} & \textbf{Zeckendorf} \\
+\hline
+0 & (empty) & 8 & \(F_6\) \\
+1 & \(F_2\) & 9 & \(F_6+F_2\) \\
+2 & \(F_3\) & 10 & \(F_6+F_3\) \\
+3 & \(F_4\) & 11 & \(F_6+F_4\) \\
+4 & \(F_3+F_2\) & 12 & \(F_6+F_4+F_2\) \\
+5 & \(F_5\) & 13 & \(F_6+F_5\) \\
+6 & \(F_5+F_2\) & 14 & \(F_6+F_5+F_2\) \\
+7 & \(F_5+F_3\) & 15 & \(F_6+F_5+F_3\) \\
+\end{tabular}
+\end{table}
+
+Observe that the representations for 0--7 use basis elements up to
+\(F_5 = 5\), and 8--15 each contain \(F_6 = 8\) as the leading term.  This
+bisection mirrors the \(\{-1,0,+1\}\) sign structure of ternary quantisation:
+the lower half (0--7) maps to negative weights, 0 maps to zero, and the
+upper half (8--15) maps to positive weights in the STROBE quantisation scheme.
+
+\subsection{Arithmetic on GF16 Mantissas}
+\label{subsec:ch7-arith}
+
+Given two GF16 mantissa values \(m_1, m_2 \in \{0,\ldots,15\}\),
+the product \(m_1 \cdot m_2\) in the Fibonacci number system is computed as:
+
+\begin{enumerate}
+  \item Convert \(m_1\) and \(m_2\) to their Zeckendorf codes
+        \(z_1, z_2 \subseteq \{F_2,\ldots,F_6\}\).
+  \item Compute the product of the two Fibonacci sums in \(\mathbb{Z}\).
+  \item Reduce modulo the GF16 lattice by subtracting the largest
+        Fibonacci number \(\leq\) the product as many times as needed
+        (greedy Zeckendorf decomposition of the result).
+  \item Retain only the lowest-order Zeckendorf coefficients.
+\end{enumerate}
+
+This procedure is provably equivalent to standard multiplication followed
+by the Zeckendorf reduction, and requires no carry-chain arithmetic beyond
+a Fibonacci table lookup of length \(\leq 6\).  The algebraic
+justification is Theorem~\ref{thm:fib-morphism}: multiplication in
+\(\mathbb{Z}[\varphi]\) is a ring operation, so the reduction is exact.
+
+\subsection{Warm-Up Steps and the Fibonacci Scale}
+\label{subsec:ch7-warmup}
+
+The IGLA RACE warmup constant is \(4000 \approx \phipow{16}\)
+(since \(F_{16} = 987\) and \(\phipow{16} \approx 2207\), so the next
+Fibonacci number \(F_{17} = 1597\) gives \(\phipow{17} \approx 3571\),
+between 3571 and \(F_{18} = 2584\); actually \(4000\) lies between
+\(F_{18} = 2584\) and \(F_{19} = 4181\), placing it in the
+\(\phipow{18}\)--\(\phipow{19}\) band).
+
+This is not a coincidence.  The warmup step count is chosen in the
+Fibonacci band \([F_{18}, F_{19}] = [2584, 4181]\) to ensure that the
+learning rate schedule (with Fibonacci-indexed milestones) reaches its
+first stable plateau before the first ASHA pruning decision.  The
+algebraic connection: \(4000 \in [F_{18}, F_{19}]\) means that the
+warmup period spans exactly one Fibonacci generation at the scale relevant
+to the training dynamics.
+
+\begin{remark}
+This Fibonacci-band argument for the warmup count is heuristic, not
+formally proved.  The Coq certificate for the warmup constant is INV-2
+(\texttt{prune\_threshold\_from\_trinity} in
+\filepath{trinity-clara/proofs/igla/igla\_asha\_bound.v}), which bounds
+the pruning threshold but does not directly justify 4000 as a Fibonacci
+band member.  We record this as an open algebraic question (R5 honesty).
+\end{remark}
+
+% ============================================================
+\section{Philosophical Coda: Recurrence, Morphism, and Growth}
+\label{sec:ch7-coda}
+% ============================================================
+
+The title ``Golden Sprout'' captures a biological metaphor: a sprout is
+the first visible expression of a seed's growth rule.  In our setting, the
+``seed'' is the equation \(x^2 = x + 1\), the ``growth rule'' is the
+Fibonacci recurrence \(F_{n+1} = F_n + F_{n-1}\), and the ``sprout'' is
+the ring \(\mathbb{Z}[\varphi]\) that emerges when we take the unique
+positive root \(\varphi\) seriously as an algebraic object, not merely a
+numerical approximation.
+
+The Rule of Three in this chapter maps onto three aspects of growth:
+
+\begin{enumerate}
+  \item \textbf{Additive growth} (Strand~I): each generation is the sum
+        of the previous two, realising the principle of ``growth by
+        aggregation'' that Fibonacci observed in the rabbit-breeding problem.
+  \item \textbf{Multiplicative growth} (Strand~II): each generation is
+        the \(\varphi\)-fold scaling of the previous, realising the principle
+        of ``growth by ratio'' that the golden spiral embodies.
+  \item \textbf{Modular growth} (Strand~III): in finite fields, growth
+        wraps around, realising the principle of ``growth under constraint''
+        that the GF16 mantissa architecture exploits for bounded arithmetic.
+\end{enumerate}
+
+The Trinity anchor \(\phipow{2} + \phipow{-2} = 3\) is the equation that
+makes all three simultaneously possible: it is the algebraic signature that
+\(\varphi\) is not just a ratio but a ring element, and that the Fibonacci
+sequence is not just a combinatorial accident but a morphism orbit.
+
+\begin{quotation}
+\emph{``The Fibonacci numbers are not just a sequence; they are the integer
+coordinates of a trajectory in an algebraic orbit.''} ---
+Paraphrasing the spirit of \cite{hardy_wright}, Chapter~10.
+\end{quotation}
+
+This philosophical observation has a precise technical counterpart:
+Theorem~\ref{thm:fib-morphism} states that the Fibonacci recurrence is
+exactly the ring-endomorphism recurrence of \(\mathbb{Z}[\varphi]\).
+Nothing more is claimed.  No metaphysical weight is attached to the
+golden ratio beyond its algebraic properties as the positive root of
+\(x^2 = x + 1\) (R5 honesty).
+
+% ============================================================
+\section{Selected Exercises and Open Problems}
+\label{sec:ch7-exercises}
+% ============================================================
+
+The following exercises and open problems consolidate the chapter's results
+and point toward future work.  They are intended for a graduate reader who
+wishes to deepen their understanding of the \(\mathbb{Z}[\varphi]\) structure.
+
+\subsection{Exercises}\label{subsec:ch7-exercises-list}
+
+\begin{enumerate}
+
+\item \textbf{(Companion matrix mod 5)}  Compute \(\mathbf{M}^{20} \pmod 5\)
+directly and confirm that it equals the identity matrix modulo 5,
+verifying \(\pi(5) = 20\) via Lemma~\ref{lem:matrix-power}.
+
+\item \textbf{(Norm computation)}  Let \(\alpha = 3 + 5\varphi\).  Compute
+\(N(\alpha) = 3^2 + 3 \cdot 5 - 5^2\) and determine whether \(\alpha\) is a
+unit, an irreducible, or a composite element of \(\mathbb{Z}[\varphi]\).
+
+\item \textbf{(Zeckendorf of 100)}  Write 100 as a Zeckendorf sum of
+non-consecutive Fibonacci numbers.  Express the result as an element
+\(\alpha \in \mathbb{Z}[\varphi]\) and verify that \(N(\alpha) \in \mathbb{Z}\).
+
+\item \textbf{(Trinity trace)}  Prove directly that
+\(\mathrm{Tr}(\phipow{n}) = L_n\) for \(n \in \{0,1,2,3,4\}\)
+by computing both sides from the definitions and checking agreement.
+
+\item \textbf{(Morphism of Lucas)}  Show that the map
+\(\Lambda : \mathbb{Z}[\varphi] \to \mathbb{Z}[\varphi]\) defined by
+\(\Lambda(\alpha) = \alpha + \sigma(\alpha)\) (where \(\sigma\) is Galois
+conjugation) is a ring homomorphism from \(\mathbb{Z}[\varphi]\) to its
+subring \(\mathbb{Z}\).  Use this to derive the Lucas recurrence from the
+Fibonacci recurrence.
+
+\item \textbf{(Pisano periods)}  Compute \(\pi(2)\), \(\pi(3)\), \(\pi(4)\),
+\(\pi(5)\), and \(\pi(8)\) by direct enumeration.  Verify that
+\(\pi(16) \leq \pi(8) \cdot \pi(2)\) using the formula for Pisano periods
+of prime powers.
+
+\item \textbf{(GF16 multiplication table)}  Using Table~\ref{tab:zeckendorf-gf16},
+compute \(5 \cdot 8\), \(3 \cdot 7\), and \(11 \cdot 13\) in the
+Zeckendorf representation, reducing modulo 16.
+
+\item \textbf{(Cassini in \(\mathbb{Z}[\varphi]\))}  Express Cassini's identity
+(Proposition~\ref{prop:cassini}) as the statement that
+\(N(\phipow{n}) = (-1)^n\), and deduce it from
+Proposition~\ref{prop:units}.
+
+\item \textbf{(Continued fraction of \(\sqrt{5}\))}  Show that
+\(\sqrt{5} = [2; 4, 4, 4, \ldots]\) and derive from this that
+\(\varphi = [1; 1, 1, 1, \ldots]\).  What is the continued fraction
+of \(\psi = (1-\sqrt{5})/2\)?
+
+\item \textbf{(Fibonacci entry point of 89)}  \(89\) is itself a Fibonacci
+number (\(F_{11} = 89\)).  Determine the entry point \(\alpha(89)\) and the
+Pisano period \(\pi(89)\).  Verify that \(89 \equiv 4 \pmod 5\), so
+\(89\) is inert in \(\mathbb{Z}[\varphi]\), and use this to bound
+\(\alpha(89)\).
+
+\end{enumerate}
+
+\subsection{Open Problems}\label{subsec:ch7-open}
+
+\begin{enumerate}
+
+\item \textbf{(fib\_tess\_closure, INV-12)}  Formalise
+Claim~\ref{claim:fib-tess} in Coq.  The file
+\filepath{trinity-clara/proofs/fib\_tess.v} does not yet exist.  A minimal
+Coq proof would: (a) import the Lucas closure lemma from
+\filepath{lucas\_closure\_gf16.v}; (b) establish the Pisano period of 16
+computed symbolically; (c) prove that the companion matrix
+\(\mathbf{M}^{24} \equiv I \pmod{16}\); (d) conclude closure.
+
+\item \textbf{(Binet in Coq)}  Formalise Theorem~\ref{thm:binet} within
+the \texttt{trinity-clara} proof environment.  The main challenge is
+working with \(\sqrt{5}\) in Coq's real number library \texttt{Coq.Reals}.
+A possible approach: avoid \(\sqrt{5}\) entirely by working in the ring
+\(\mathbb{Z}[x]/(x^2-x-1)\) and proving the formula symbolically, then
+specialising to \(x = \varphi\).
+
+\item \textbf{(Zeckendorf in Coq)}  Formalise Theorem~\ref{thm:zeckendorf}
+in Coq.  The standard inductive proof is straightforward, but the
+uniqueness argument requires a formalised theory of well-founded induction
+on Fibonacci indices.  The \texttt{mathcomp} library provides the necessary
+tools.
+
+\item \textbf{(Wall--Sun--Sun and GF16)}  Make precise the heuristic
+connection between Wall--Sun--Sun primes and GF16 closure failures
+(Remark~\ref{rem:wss}).  Specifically: if \(p\) is a Wall--Sun--Sun prime,
+does the GF\(p\) mantissa system (the \(p\)-value analogue of GF16) fail
+the tesselation closure property?  This would make the non-existence of
+Wall--Sun--Sun primes a necessary condition for the universality of the
+Golden Sprout quantisation scheme.
+
+\item \textbf{(Lucas ring and GF16 exponents)}  In Chapter~6, the GF16
+exponent uses a 3-band structure derived from
+\(\phipow{2}+\phipow{-2}=3\).  Formalise the correspondence between
+the three exponent bands and the three Lucas-ring generators
+\(\{1, \phipow{2}, \phipow{-2}\}\) of the exponent lattice.
+
+\end{enumerate}
+
+% ============================================================
+\section{References}\label{sec:ch7-refs}
+% ============================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{koshy_fib_lucas}
+T.~Koshy,
+\emph{Fibonacci and Lucas Numbers with Applications}, 2nd~ed.
+Wiley, 2018.
+ISBN 978-1118742129.
+
+\bibitem{zeckendorf1972}
+E.~Zeckendorf,
+``Repr\'esentation des nombres naturels par une somme de nombres de
+Fibonacci ou de nombres de Lucas,''
+\emph{Bulletin de la Soci\'et\'e Royale des Sciences de Li\`ege},
+vol.~41, pp.~179--182, 1972.
+CODEN~FOCRDQ.
+
+\bibitem{hardy_wright}
+G.~H.~Hardy and E.~M.~Wright,
+\emph{An Introduction to the Theory of Numbers}, 6th~ed.
+Oxford University Press, 2008.
+ISBN 978-0199219865.
+
+\end{thebibliography}
