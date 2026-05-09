@@ -1,0 +1,26 @@
+[package]
+name = "trios-chat-br-io-chat-05"
+version = "0.1.0"
+edition = "2021"
+description = "BR-IO-CHAT-05 — chat-persist-postgres: SeaORM-backed Postgres impl of CR-CHAT-05::Store. Entities + Migrator + ActiveModel CRUD."
+publish = false
+
+# Anchor: phi^2 + phi^-2 = 3 · TRINITY · CHAT · ZERO-METADATA
+# Bronze-tier I/O ring — concrete sea-orm + tokio backend for the
+# Silver trait declared in CR-CHAT-05. See sibling RING.md.
+
+[dependencies]
+trios-chat-cr-chat-00 = { path = "../CR-CHAT-00" }
+trios-chat-cr-chat-05 = { path = "../CR-CHAT-05" }
+async-trait = "0.1"
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+tokio       = { version = "1", features = ["rt-multi-thread", "macros"] }
+sea-orm     = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid"] }
+sea-orm-migration = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
+chrono      = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "test-util"] }
