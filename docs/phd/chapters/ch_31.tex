@@ -5,19 +5,6 @@
 
 \chapter{Hardware Empirical (1003 toks HSLM)}
 
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_31.jpg}}
-\caption{Azbuka of the Tridevyatoe — ch\_31: the compass / the map / the star (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
-\end{figure}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{ch31-hardware-empirical.png}}
-\caption*{Figure — Ch.31: Hardware Empirical (1003 toks HSLM).}
-\end{figure}
-
 \begin{quote}\itshape
 ``All models are wrong, but some are useful.''
 \upshape --- George E.~P.~Box, \textit{Robustness in the Strategy of Scientific Model Building} (1979)
@@ -27,6 +14,15 @@
 
 
 On a Tuesday morning in early 2026, a QMTech XC7A100T FPGA board---smaller than a trade paperback, drawing under a watt of power---completed a single HSLM inference run and deposited 1003 tokens into a log file. That number, 1003, was not a round target chosen for elegance. It was the output of a run that proceeded until the BRAM weight cache was exhausted, and it arrived with a full audit trail: timing reports, power measurements, Vivado utilisation summaries, and 297 closed Coq \texttt{Qed} proofs standing behind every arithmetic operation the hardware performed.
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_31.jpg}}
+\caption{Azbuka of the Tridevyatoe — ch\_31: the compass / the map / the star (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
+\end{figure}
+
+
 
 Box's aphorism cuts both ways. A model that is wrong in the right places can still be useful---and a model that is provably correct at the specification level still needs empirical validation at the hardware level. The Coq proofs certify the arithmetic of ternary multiply-accumulate over the \(\varphi^2 + \varphi^{-2} = 3\) substrate. The FPGA measurements confirm that the synthesised LUT fabric actually computes what the proofs describe. Neither the proofs nor the measurements alone are sufficient. Together they close the loop between formal specification and physical reality.
 
@@ -81,14 +77,6 @@ The \filepath{hw/} family (8 files, 35 \texttt{Qed}) directly certifies the TMAC
 \textbf{CLARA Red Team.} The CLARA (Controlled Language Adversarial Robustness Assessment) Red Team exercise tested 297 adversarial prompt categories against the FPGA inference engine. All 297 categories were handled without hardware exceptions, silent wrong outputs, or timing violations, yielding a 100\% robustness score. The correspondence between the 297 Red Team categories and the 297 closed \texttt{Qed} theorems is intentional: each theorem certifies an invariant that corresponds to one adversarial category {[}5{]}.
 
 \section{4. Results / Evidence}\label{results-evidence}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v513/v513-ch_31-a.jpg}}
-\caption{Architectural-blueprint triptych: the one / the trinity / the all (Trinity S\textsuperscript{3}AI v5.13).}
-\end{figure}
-
 
 
 All measurements were taken on a single QMTech XC7A100T board at ambient temperature 22°C ± 1°C, with USB power supplied by a calibrated Keysight U1241C multimeter in series.

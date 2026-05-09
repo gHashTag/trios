@@ -5,19 +5,6 @@
 
 \chapter{UART v6 Protocol}
 
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_32.jpg}}
-\caption{Azbuka triptych: UART v6 Protocol (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{ch32-uart-v6-protocol.png}}
-\caption*{Figure — Ch.32: UART v6 Protocol.}
-\end{figure}
-
 \begin{quote}\itshape
 ``Write programs that do one thing and do it well. Write programs that work together.''
 \upshape --- Doug McIlroy, \textit{Bell System Technical Journal} (1978)
@@ -27,6 +14,15 @@
 
 
 At 115200 baud, one byte crosses the FT232RL bridge in roughly 87 microseconds. That is fast enough to feel instantaneous to a human observer and slow enough that a badly designed framing protocol can introduce race conditions, dropped bytes, and hours of debugging at three in the morning. The UART v6 protocol was designed so that none of those failure modes are possible by construction. Every frame opens with a \texttt{0xAA} sync byte, carries a one-byte length field, and closes with a 16-bit CRC-16/CCITT checksum. The grammar is unambiguous. The error recovery automaton is deterministic. Across 1003 tokens of the HSLM evaluation run, zero frame errors were recorded.
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_32.jpg}}
+\caption{Azbuka triptych: UART v6 Protocol (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
+\end{figure}
+
+
 
 McIlroy's Unix philosophy---one tool, one job, clean interfaces---is usually cited in the context of command-line programs. It applies with equal force to serial protocols. UART v6 does one thing: it moves token data and \(\varphi\)-exponent synchronisation words from the KOSCHEI coprocessor (Ch.26) to the host, faithfully and auditably. It does not attempt to compress, encrypt, or route. The simplicity is the correctness argument.
 

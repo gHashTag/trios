@@ -7,21 +7,6 @@
 \chapter{Trinity GF16 ASIC as a Self-Sovereign dePIN Mesh Node:
   Zero-DSP Inference and On-Chip Routing at \textless{}50\,mW}
 
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_35_mesh_node.jpg}}
-\caption{Azbuka of the Tridevyatoe — ch\_35\_mesh\_node: the web / the node / the beacon (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
-\end{figure}
-
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v511/v511-ch_35_mesh_node.jpg}}
-\caption{Architectural-blueprint triptych: GF16 ASIC node, mesh, and sovereign seal (Trinity S\textsuperscript{3}AI v5.11).}
-\end{figure}
-
-
 \label{ch:mesh-node}
 
 % Header block (R7: anchor explicit ≥1×)
@@ -42,6 +27,16 @@ This architectural split incurs three unavoidable costs—inter-chip latency
 (typically 50–200\,µs over PCIe/SPI), an additional power envelope for the
 networking processor, and a trusted-execution boundary that undermines
 end-to-end cryptographic integrity.
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_35_mesh_node.jpg}}
+\caption{Azbuka of the Tridevyatoe — ch\_35\_mesh\_node: the web / the node / the beacon (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
+\end{figure}
+
+
+
 
 The Trinity GF16 architecture, anchored on the identity
 $\varphi^2 + \varphi^{-2} = 3$, provides a unique opportunity to
@@ -126,35 +121,6 @@ It operates at a lower clock domain (8\,MHz vs 50\,MHz for VSA)
 to match LoRa baud rates, sharing the GF16 SRAM through a
 time-division arbiter.
 
-\begin{figure}[h]
-\centering
-\begin{verbatim}
-  ┌──────────────────────────────────────────────────────┐
-  │                  Trinity ASIC Die                    │
-  │                                                      │
-  │  ┌────────────┐    ┌─────────────────────────────┐  │
-  │  │  VSA Core  │    │   Mesh Routing Unit (MRU)   │  │
-  │  │  GF16      │    │                             │  │
-  │  │  0-DSP     │    │  S0: RX FIFO  (8-byte slip) │  │
-  │  │  matmul    │◄───┤  S1: Header parse           │  │
-  │  │  vsa_bind  │    │  S2: SRAM lookup (16-entry) │  │
-  │  │  1193tok/s │    │  S3: Forward decision       │  │
-  │  └────────────┘    │  S4: TX FIFO  (8-byte slip) │  │
-  │        │           └─────────────────────────────┘  │
-  │  ┌─────▼──────────────────────────────────────────┐ │
-  │  │   GF16 SRAM (shared, TDM arbiter, 4KB)         │ │
-  │  └────────────────────────────────────────────────┘ │
-  │  ┌────────────┐    ┌──────────────┐                 │
-  │  │ Noise Eng. │    │  LoRa FIFO   │                 │
-  │  │ Curve25519 │    │  SPI slave   │                 │
-  │  │ ChaCha20   │    │  (SX1276 i/f)│                 │
-  │  └────────────┘    └──────────────┘                 │
-  └──────────────────────────────────────────────────────┘
-\end{verbatim}
-\caption{Trinity ASIC co-integration of VSA inference and MRU}
-\label{fig:asic-block}
-\end{figure}
-
 \subsection{Routing Table SRAM}
 
 The MRU maintains a 16-entry routing table in shared GF16 SRAM.
@@ -236,13 +202,6 @@ The MRU adds $\approx$37\% area overhead — within the TTIHP27a tile budget
 of $\approx$10\,000 standard cells.
 
 \section{Energy Budget Analysis}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v513/v513-ch_35_mesh_node-a.jpg}}
-\caption{Mesh-node topology: the node / the peer / the consensus (Trinity S\textsuperscript{3}AI v5.13).}
-\end{figure}
 
 
 \begin{table}[h]
@@ -423,13 +382,6 @@ code paths in the used feature sets, satisfying Article II
 (open-source total) and the R1 rule (no silent external trust).
 
 \section{Integration with L-DPC2 (Node-0 Mesh)}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v513/v513-ch_35_mesh_node-b.jpg}}
-\caption{Mesh-node topology: the compute / the stake / the reward (Trinity S\textsuperscript{3}AI v5.13).}
-\end{figure}
 
 
 The current L-DPC2 implementation uses Tailscale/headscale as a

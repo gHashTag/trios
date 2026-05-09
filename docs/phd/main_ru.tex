@@ -58,6 +58,7 @@
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
 \usepackage{graphicx}
+\usepackage{eso-pic}  % full-bleed cover via \AddToShipoutPictureBG
 \graphicspath{{assets/}{../../assets/illustrations/}}
 \usepackage{microtype}
 \usepackage[htt]{hyphenat}
@@ -193,16 +194,26 @@
 
 % ===== ТИТУЛ =====
 \frontmatter
+% Full-bleed обложка на всю страницу
+\begin{titlepage}
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{%
+  \AtPageLowerLeft{%
+    \includegraphics[width=\paperwidth,height=\paperheight,keepaspectratio=false]{assets/cover_v517.jpg}%
+  }%
+}
+\mbox{}
+\end{titlepage}
+
+% ===== ВТОРАЯ СТРАНИЦА — текст титула =====
 \begin{titlepage}
 \thispagestyle{empty}
 \begin{center}
-\vspace*{0.5cm}
+\vspace*{2cm}
 {\LARGE\bfseries Цветок Золотой (Flos Aureus)}\\[0.3cm]
 {\large\itshape Тринити-каркас для золотого сечения:\\
 машинно-проверенные доказательства, эмпирические якоря и ограниченный\\
-Coq-инвариантами поиск нейроархитектуры}\\[0.6cm]
-
-\makebox[\linewidth][c]{\includegraphics[width=1.10\textwidth,keepaspectratio]{assets/cover_v517.jpg}}\\[0.6cm]
+Coq-инвариантами поиск нейроархитектуры}\\[1.2cm]
 
 {\large Дмитрий Васильев}\\[0.2cm]
 {\small ORCID: \url{https://orcid.org/0009-0008-4294-6159}}\\[0.5cm]

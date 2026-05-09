@@ -5,21 +5,6 @@
 
 \chapter{Hardware Bridge (deferred)}
 
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_12.jpg}}
-\caption{Azbuka triptych: Hardware Bridge (deferred) (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v511/v511-ch_12.jpg}}
-\caption{Architectural-blueprint triptych: substrate, software-hardware bridge, and target die (Trinity S\textsuperscript{3}AI v5.11).}
-\end{figure}
-
-
 \begin{quote}\itshape
 ``Make each program do one thing well.  To do a new job, build afresh rather than
 complicate old programs by adding new features.  Expect the output of every
@@ -36,6 +21,16 @@ happens at a row of 16-bit AXI-Lite registers on a QMTech XC7A100T board---
 92~MHz clock, sub-watt power budget, 0 DSP slices.  The Hardware Bridge is the
 two-hundred-line RTL layer that stands between the software proofs and the
 physical pins.  It is deliberately thin.  Thin bridges do not break.
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_12.jpg}}
+\caption{Azbuka triptych: Hardware Bridge (deferred) (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
+\end{figure}
+
+
+
 
 The bridge's three-channel structure is not arbitrary.  The GoldenFloat exponent
 field splits naturally into sub-unity (\(\varphi^{-2}\)), unity, and super-unity
@@ -143,14 +138,6 @@ The 1 W power budget assigned to the FPGA (Ch.28) is allocated as follows: appro
 \emph{Proof sketch.} By the GoldenFloat format definition (Ch.6), every GF16 value has a unique exponent field value \(\hat E \in [0, 2^5-1]\). The partition \(\hat E < B\), \(\hat E = B\), \(\hat E > B\) (where \(B = 15\)) is exhaustive and mutually exclusive by the total order on \(\mathbb{Z}\). The three-band structure mirrors the three terms of \(\varphi^2 + \varphi^{-2} = 3\). Qed.
 
 \section{4. Results / Evidence}\label{results-evidence}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v513/v513-ch_12-a.jpg}}
-\caption{Architectural-blueprint triptych: the wafer / the die / the package (Trinity S\textsuperscript{3}AI v5.13).}
-\end{figure}
-
 
 
 The Hardware Bridge was instantiated and simulated in Vivado 2022.2 targeting the XC7A100T-FGG484 device. The following resource utilisation was observed (pre-placement):

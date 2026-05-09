@@ -5,21 +5,6 @@
 
 \chapter{TF3/TF9 Sparse Ternary MatMul}
 
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_08.jpg}}
-\caption{Azbuka of the Tridevyatoe — ch\_08: the forge / the anvil / the hammer (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
-\end{figure}
-
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v511/v511-ch_08.jpg}}
-\caption{Architectural-blueprint triptych: tensor, ternary kernel, and GEMM dataflow (Trinity S\textsuperscript{3}AI v5.11).}
-\end{figure}
-
-
 \begin{quote}
 \itshape
 ``Programs must be written for people to read, and only incidentally
@@ -37,6 +22,16 @@ matters: a transformer of any reasonable size spends well over
 \emph{ninety percent} of its energy on matrix multiplication. If you
 want a model that runs at one watt, the place to start is to make the
 matrix multiply cheaper.
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_08.jpg}}
+\caption{Azbuka of the Tridevyatoe — ch\_08: the forge / the anvil / the hammer (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
+\end{figure}
+
+
+
 
 The TF3 and TF9 formats described in this chapter make it cheaper by
 shrinking the alphabet. Each weight is no longer a 16-bit float; it is
@@ -127,14 +122,6 @@ After φ-normalisation each entry has effective variance \((1-p_0)\varphi^{-4}\)
 which is bounded by \(d \leq d_\text{max}\) and independent of sequence length. The Coq proof mechanises this calculation using the \texttt{PhiFloat} lemmas that certify the algebraic identity \(\varphi^2 + \varphi^{-2} = 3\) in the rational-arithmetic subset of Coq's standard library {[}3{]}.
 
 \section{4. Results / Evidence}\label{results-evidence}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v513/v513-ch_08-a.jpg}}
-\caption{Architectural-blueprint triptych: the tf3 / the tf9 / the gemm (Trinity S\textsuperscript{3}AI v5.13).}
-\end{figure}
-
 
 
 All numerical results reported here use seeds from the sanctioned pool \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\); no experiment uses seeds 42--45.
