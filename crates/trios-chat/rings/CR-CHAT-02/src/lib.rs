@@ -27,6 +27,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod deniable;
+pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

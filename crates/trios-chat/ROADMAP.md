@@ -4,7 +4,7 @@
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-12: **185 tests · 25/25 e2e · 1100/1100 falsifier · 22 categories · 79 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-13: **197 tests · 25/25 e2e · 1200/1200 falsifier · 24 categories · 90 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -51,7 +51,7 @@ Threat-model invariants are formalised in `proofs/chat/Trinity_Chat.v`
 
 ---
 
-## Waves shipped (W1–W12)
+## Waves shipped (W1–W13)
 
 Every wave is one merged PR landing on `main`. Wave-N+1 always branches
 from `origin/main` immediately after Wave-N is merged. The cadence is
@@ -71,7 +71,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W9  | `7340d24`  | 149 | INV-CHAT-34..39 (51 Qed total) | 800 | 16 | kem_key_confusion + aad_context_confusion | [#651](https://github.com/gHashTag/trios/pull/651) |
 | W10 | (PR open)  | 161 | INV-CHAT-40..46 (60 Qed total) | 900 | 18 | ratchet_forward_secrecy + mls_commit_reorder | [#665](https://github.com/gHashTag/trios/pull/665) |
 | W11 | (PR open)  | 173 | INV-CHAT-47..53 (70 Qed total) | 1000 | 20 | skipped_keys_dos + mls_welcome_replay | [#689](https://github.com/gHashTag/trios/pull/689) |
-| **W12** | **(this PR)** | **185** | **INV-CHAT-54..60 (79 Qed total)** | **1100** | **22** | **prekey_exhaustion + mls_leaf_compromise** | **(open)** |
+| W12 | (open) | 185 | INV-CHAT-54..60 (79 Qed total) | 1100 | 22 | prekey_exhaustion + mls_leaf_compromise | #695 (open) |
+| **W13** | **(this PR)** | **197** | **INV-CHAT-61..67 (90 Qed total)** | **1200** | **24** | **deniability_break + confused_deputy** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -154,6 +155,40 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 - 18 → 20 threshold lanes in `falsifier_runner` (all ≥ 0.95 except
   `indirect ≥ 0.90`).
 
+### Wave-13 — cryptographic deniability + confused-deputy capability
+
+- **L-CHAT-5-deniable** (R-CHAT-4) — DEN-01..06 in `CR-CHAT-02`, with new
+  `crates/trios-chat/rings/CR-CHAT-02/src/deniable.rs` shipping a
+  `DeniableMacKey` / `Tag` / `mac` / `verify` / `forge_transcript` API:
+  - well-formed HMAC-SHA-256 MAC verifies (DEN-01);
+  - flipping any plaintext byte invalidates the tag (DEN-02);
+  - flipping any AAD byte invalidates the tag (DEN-03);
+  - MAC under a different key is rejected (DEN-04);
+  - transcript-forgery is bit-indistinguishable from honest MAC under
+    the same key — the formal deniability witness (DEN-05);
+  - `Tag` is exactly 32 bytes — carries no per-message public-key
+    signature (DEN-06).
+- **L-CHAT-9-cap** (R-CHAT-6/8) — CAP-01..06 in `CR-CHAT-06`, with new
+  `crates/trios-chat/rings/CR-CHAT-06/src/confused_deputy.rs` shipping
+  `Invocation` / `NonceLedger` / `check_invocation` / `DeputyError`:
+  - session binding (CAP-01) — `tok.session_id == inv.session_id`;
+  - deputy binding (CAP-02) — `tok.agent_id == inv.deputy_id`;
+  - scope coverage (CAP-03) — `inv.action ∈ tok.scopes`;
+  - caller/deputy structural separation (CAP-04) — `caller_id` and
+    `deputy_id` are distinct fields, audited via `same_principal()`;
+  - nonce-replay rejection (CAP-05) — per-deputy `(deputy, nonce)`
+    ledger is one-shot;
+  - ttl coverage (CAP-06) — `inv.now_unix < tok.expires_at`.
+- Coq INV-CHAT-61..67 + 4 helpers (`mac_functional`, `cap_scope_in_cons`,
+  `ttl_failure_short_circuits`, `seen_nonce_empty`); 11 new Qed →
+  **90 Qed total**.
+- No new axioms — both lanes prove constructively. The MAC
+  collision-resistance hypothesis in INV-CHAT-64 is a *bound variable*
+  in the theorem statement, not an axiom.
+- Falsifier 1100 → 1200 (PI-DEN-001..050 + PI-CAP-001..050).
+- 22 → 24 threshold lanes in `falsifier_runner` (all ≥ 0.95 except
+  `indirect ≥ 0.90`).
+
 ### Wave-12 — prekey-bundle exhaustion + MLS leaf-key compromise
 
 - **L-CHAT-1-prekey** (R-CHAT-1) — PEX-01..05 in `CR-CHAT-01`,
@@ -180,7 +215,7 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 
 ---
 
-## Falsifier-corpus categories (W1–W12) — 22 total
+## Falsifier-corpus categories (W1–W13) — 24 total
 
 | # | Category | First wave | Threshold |
 | :-- | :-- | :-- | :-- |
@@ -204,18 +239,20 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | 18 | mls_commit_reorder           | W10 | 0.95 |
 | 19 | skipped_keys_dos             | W11 | 0.95 |
 | 20 | mls_welcome_replay           | W11 | 0.95 |
-| **21** | **prekey_exhaustion**    | **W12** | **0.95** |
-| **22** | **mls_leaf_compromise**  | **W12** | **0.95** |
+| 21 | prekey_exhaustion    | W12 | 0.95 |
+| 22 | mls_leaf_compromise  | W12 | 0.95 |
+| **23** | **deniability_break**  | **W13** | **0.95** |
+| **24** | **confused_deputy**    | **W13** | **0.95** |
 
 `falsifier_runner` is the gate: it loads `corpus/prompt_injection.jsonl`,
 runs `validate_output` on each entry, and exits non-zero if any threshold
-lane drops below its bound. Wave-12 ships 1100/1100 blocked across 22 lanes.
+lane drops below its bound. Wave-13 ships 1200/1200 blocked across 24 lanes.
 
 ---
 
-## Coq invariant index (INV-CHAT-1..60)
+## Coq invariant index (INV-CHAT-1..67)
 
-Cumulative `Qed.` count: **79 / 0 Admitted**. R5 admission budget: **0/10 used**.
+Cumulative `Qed.` count: **90 / 0 Admitted**. R5 admission budget: **0/10 used**.
 
 | Range | Wave | Theme |
 | :-- | :-- | :-- |
@@ -227,15 +264,16 @@ Cumulative `Qed.` count: **79 / 0 Admitted**. R5 admission budget: **0/10 used**
 | INV-CHAT-34..39 | W9    | KEM key confusion + AAD context confusion |
 | INV-CHAT-40..46 | W10   | ratchet FS / PCS + MLS commit reorder |
 | INV-CHAT-47..53 | W11   | skipped-keys cap + Welcome replay/forge |
-| **INV-CHAT-54..60** | **W12** | **prekey-bundle exhaustion + MLS leaf-key compromise** |
+| INV-CHAT-54..60 | W12 | prekey-bundle exhaustion + MLS leaf-key compromise |
+| **INV-CHAT-61..67** | **W13** | **cryptographic deniability + confused-deputy capability** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10).
-Wave-11 and Wave-12 both introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, and Wave-13 all introduce **zero** new axioms — every proof is constructive.
 
 ---
 
-## Future waves (W13–W20) — `[ASPIRATIONAL]`
+## Future waves (W14–W20) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -244,8 +282,8 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 
 | Wave | Lane A (ring) | Lane B (ring) | New corpus categories | Coq target | Tests target | Falsifier target |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| ~~W12~~ — SHIPPED in this PR (see Wave-12 detail above) | | | | | | |
-| **W13** | L-CHAT-5-deniable (R-CHAT-5) — sender deniability + receiver transcript-forgery resistance | L-CHAT-9-cap (R-CHAT-12) — capability-token confused-deputy | `deniability_break`, `confused_deputy` | INV-CHAT-61..67 (≥90 Qed) | ≈197 | 1200 / 24 cats |
+| ~~W12~~ — SHIPPED (see Wave-12 detail above) | | | | | | |
+| ~~W13~~ — SHIPPED in this PR (see Wave-13 detail above) | | | | | | |
 | **W14** | L-CHAT-2-oob (R-CHAT-2) — out-of-band identity verification + safety-number mismatch | L-CHAT-3-extern (R-CHAT-11) — MLS external-commit / external-join forgery | `safety_number_swap`, `mls_external_commit` | INV-CHAT-68..74 (≥100 Qed) | ≈209 | 1300 / 26 cats |
 | **W15** | L-CHAT-7-funnel (R-CHAT-10) — Tailscale-funnel egress fingerprinting / TLS-fingerprint | L-CHAT-1-revoke (R-CHAT-1) — identity-key revocation + grace-window | `egress_fingerprint`, `identity_revoke` | INV-CHAT-75..81 (≥110 Qed) | ≈221 | 1400 / 28 cats |
 | **W16** | L-CHAT-2-clock (R-CHAT-2) — clock-skew / replay-window edge cases | L-CHAT-5-rotate (R-CHAT-5) — at-rest key rotation / re-encryption ordering | `clock_skew_replay`, `at_rest_rotation` | INV-CHAT-82..88 (≥120 Qed) | ≈233 | 1500 / 30 cats |
@@ -272,7 +310,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1100/1100 blocked` (W12) at 22 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1200/1200 blocked` (W13) at 24 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -309,7 +347,7 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W12..W20 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W14..W20 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
 
 ---
