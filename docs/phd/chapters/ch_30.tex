@@ -5,6 +5,13 @@
 
 \chapter{Trinity SAI: Vector Symbolic Architecture and Associative Recall}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_30.jpg}}
+\caption{Ch 30 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 \begin{quote}\itshape
 ``The art of doing mathematics consists in finding that special case which contains all the germs of generality.''
 \upshape --- John Horton Conway, attributed
@@ -15,16 +22,6 @@
 
 Imagine a librarian who can shelve a thousand books in a second, retrieve any one by describing it in a single sentence, and never confuse two books even when their titles differ by a single word. No such human exists. But in 6765 dimensions---the Fibonacci number \(F_{20}\)---random ternary vectors behave almost exactly this way. Two vectors chosen at random from \(\{-1, 0, +1\}^{6765}\) have an expected inner product of zero; their angle is, with overwhelming probability, almost exactly 90 degrees. Pack a thousand such vectors into a memory, and each one remains recoverable from a noisy query. This is the miracle of high-dimensional geometry that Vector Symbolic Architectures exploit, and it is the third pillar of Trinity S\textsuperscript{3}AI.
 
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_30.jpg}}
-\caption{Azbuka triptych: Trinity SAI: Vector Symbolic Architecture and Associative Recall (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
-
-
-
 Conway's insight---that a single special case can carry all the seeds of generality---captures something important about the VSA design here. The ``special case'' is the ternary alphabet \(\{-1, 0, +1\}\), which at first glance seems impoverished compared with floating-point. But the identity \(\varphi^2 + \varphi^{-2} = 3\) reveals why three symbols suffice: the two extreme symbols (\(-1\) and \(+1\)) contribute a squared sum equal to the normalisation constant 3, which is exactly the number of exponent bands in the GoldenFloat substrate. The special case \emph{is} the general case. Binding in this representation is ternary XOR---a mod-3 addition---implementable in a single LUT per dimension. Retrieval is a ternary inner product normalised to \([-1, +1]\).
 
 The dimension \(D = F_{20} = 6765\) was not chosen arbitrarily. It is the largest Fibonacci number below \(2^{13} = 8192\) that fits within one BRAM tile cluster on the XC7A100T (6765 words at 2 bytes each = 13.26 KB). The Lucas pair \(L_7 = 29\) and \(L_8 = 47\) appears in the scheduler time-slots allocated to VSA binding and retrieval operations within the IGLA RACE runtime. These are not decorative numerology; they are engineering choices whose justification traces back to the same \(\varphi\)-arithmetic that governs the rest of the system.
@@ -33,17 +30,24 @@ The rest of this chapter defines the ternary VSA operations formally, proves the
 
 \section{Abstract}\label{abstract}
 
-Trinity SAI (Structured Artificial Intelligence) integrates a Vector Symbolic Architecture (VSA) over ternary hypervectors with an Associative Recall (AR) memory that enables one-shot binding and retrieval within the GoldenFloat arithmetic substrate. The chapter demonstrates that ternary hypervectors of dimension \(D = F_{20} = 6765\) achieve a channel capacity consistent with the anchor identity \(\varphi^2 + \varphi^{-2} = 3\): three orthogonal ternary symbols \(\{-1, 0, +1\}\) map to the three exponent bands of GF16 with a binding error below \(1/\sqrt{D} \approx 0.0121\). The IGLA RACE runtime (Ch.24) hosts the VSA+AR agents under the period-locked scheduler. Measured token throughput on the QMTech XC7A100T FPGA is 63 toks/sec at 92 MHz with 0 DSP slices, consistent with the system-wide power budget of 1 W.
 
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_09.jpg}}
-\caption{Azbuka of the Tridevyatoe — GF vs MXFP4 Ablation (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-31-codex-binding.jpg}}
+\caption{Codex Binding - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
+Trinity SAI (Structured Artificial Intelligence) integrates a Vector Symbolic Architecture (VSA) over ternary hypervectors with an Associative Recall (AR) memory that enables one-shot binding and retrieval within the GoldenFloat arithmetic substrate. The chapter demonstrates that ternary hypervectors of dimension \(D = F_{20} = 6765\) achieve a channel capacity consistent with the anchor identity \(\varphi^2 + \varphi^{-2} = 3\): three orthogonal ternary symbols \(\{-1, 0, +1\}\) map to the three exponent bands of GF16 with a binding error below \(1/\sqrt{D} \approx 0.0121\). The IGLA RACE runtime (Ch.24) hosts the VSA+AR agents under the period-locked scheduler. Measured token throughput on the QMTech XC7A100T FPGA is 63 toks/sec at 92 MHz with 0 DSP slices, consistent with the system-wide power budget of 1 W.
 
 \section{1. Introduction}\label{introduction}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-32-aqueduct.jpg}}
+\caption{Aqueduct - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 The third pillar of the Trinity S³AI architecture is the symbolic layer. The first pillar is the GoldenFloat arithmetic substrate (Ch.6); the second is the IGLA RACE runtime and its formal scheduler (Ch.24); the third is a compositional reasoning capability that allows the system to bind token identities, positional encodings, and role labels into compact hypervectors that can be stored, retrieved, and decoded without gradient descent {[}1,2{]}.
 
 Vector Symbolic Architectures (VSAs) provide this capability through high-dimensional random vectors whose pairwise inner products concentrate near zero in expectation {[}3{]}. The ternary variant---where each vector component is drawn from \(\{-1, 0, +1\}\)---is particularly natural for the Trinity S³AI substrate because the three symbols correspond directly to the three exponent bands induced by the identity
@@ -87,13 +91,6 @@ Each component \(v_i \in \{-1, 0, +1\}\) is stored in GF16 as the canonical cons
 \section{3. Phi-Rotary Position Encoding (phi-RoPE) in VSA Context}\label{phi-rotary-position-encoding-phi-rope-in-vsa-context}
 
 The phi-RoPE encoding (Zenodo Z05 {[}6{]}) assigns to token position \(p\) the angle \(\theta_p = p \cdot 2\pi \cdot \varphi^{-2}\), the golden-angle variant of the standard RoPE rotation. In the VSA context, position encoding is implemented as:
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-K-agent-memory.jpg}}
-\caption{Azbuka of the Tridevyatoe — Deferred chapter: Agent Memory (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
-\end{figure}
 
 \[\mathbf{v}_p = \mathbf{v}_0 \circledast \mathbf{r}^{\circledast p},\]
 

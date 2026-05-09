@@ -5,6 +5,13 @@
 
 \chapter{Energy 3000\(\times\) DARPA}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_34.jpg}}
+\caption{Ch 34 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 \begin{quote}\itshape
 ``There is a pleasure in recognizing old things from a new point of view.''
 \upshape --- Richard P.~Feynman, \textit{The Feynman Lectures on Physics}, Vol.~II (1964)
@@ -15,16 +22,6 @@
 
 DARPA's IGTC solicitation HR001124S0001 sets an energy-efficiency target that reads, at first, like a typo: 3000 times better than a GPU for on-device neural inference. Not 30 times. Not 300 times. Three thousand. The authors of that solicitation were not being careless; they were pointing at a gap that everyone in the field could see but few had a credible path to close.
 
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_34.jpg}}
-\caption{Azbuka triptych: Energy 3000DARPA (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
-
-
-
 The Trinity S\textsuperscript{3}AI system closes it---and the factor of 3000 turns out to be, in retrospect, the most natural number in the world. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) places the integer 3 at the centre of the ternary arithmetic substrate. Three symbols in the weight alphabet \(\{-1, 0, +1\}\). Three exponent bands in GoldenFloat. Three orders of magnitude in energy improvement. The coincidence is structural, not decorative: the same algebraic fact that eliminates DSP multipliers from the FPGA---because ternary multiplication closes without a general multiplier---is the fact that reduces power consumption by the measured ratio.
 
 The arithmetic of the gap is straightforward. The QMTech XC7A100T board delivers 63 tokens per second at 1 W, yielding 63 tokens per joule. An NVIDIA A100 in single-query autoregressive mode---the relevant comparison for edge deployment---delivers roughly 0.021 tokens per joule when its full 210 W system power is counted against its low-throughput token rate. The ratio is \(63 / 0.021 = 3000\). Three compounding mechanisms produce this: ternary quantisation eliminates multiply operations; zero-DSP LUT arithmetic avoids the power-hungry DSP48E1 slices; and the FPGA platform itself consumes three orders of magnitude less active power per operation than a GPU at these batch sizes. The product, after accounting for memory and I/O overhead, lands squarely on the DARPA target.
@@ -33,17 +30,24 @@ Feynman's pleasure in recognising old things from a new angle applies here. The 
 
 \section{Abstract}\label{abstract}
 
-The DARPA Intelligent Generation of Tools and Computations (IGTC) program solicitation HR001124S0001 sets an energy-efficiency target of 3000× improvement over GPU baseline for on-device neural inference. This chapter demonstrates that the Trinity S³AI ternary inference engine, running at 63 tokens/sec on a QMTech XC7A100T FPGA at 1 W (Ch.28), achieves a measured efficiency of 63 tokens/joule against a GPU baseline of approximately 0.021 tokens/joule (NVIDIA A100, batch-1 autoregressive inference at 210 W / 10,000 toks/sec), yielding a ratio of 3000×. The anchor identity \(\phi^2 + \phi^{-2} = 3\) is not merely decorative here: the factor of 3 in the identity corresponds structurally to the three orders of magnitude of energy improvement, and the ternary weight alphabet \(\{-1,0,+1\}\) is the direct mechanism by which DSP-free accumulation eliminates the dominant power consumers in standard floating-point inference accelerators.
 
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_32.jpg}}
-\caption{Azbuka of the Tridevyatoe — UART v6 Protocol (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-36-ship-rigging.jpg}}
+\caption{Ship Rigging - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
+The DARPA Intelligent Generation of Tools and Computations (IGTC) program solicitation HR001124S0001 sets an energy-efficiency target of 3000× improvement over GPU baseline for on-device neural inference. This chapter demonstrates that the Trinity S³AI ternary inference engine, running at 63 tokens/sec on a QMTech XC7A100T FPGA at 1 W (Ch.28), achieves a measured efficiency of 63 tokens/joule against a GPU baseline of approximately 0.021 tokens/joule (NVIDIA A100, batch-1 autoregressive inference at 210 W / 10,000 toks/sec), yielding a ratio of 3000×. The anchor identity \(\phi^2 + \phi^{-2} = 3\) is not merely decorative here: the factor of 3 in the identity corresponds structurally to the three orders of magnitude of energy improvement, and the ternary weight alphabet \(\{-1,0,+1\}\) is the direct mechanism by which DSP-free accumulation eliminates the dominant power consumers in standard floating-point inference accelerators.
 
 \section{1. Introduction}\label{introduction}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-37-mill-stone.jpg}}
+\caption{Mill Stone - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 Energy efficiency is the defining constraint of edge neural inference. GPU-class accelerators deliver high throughput but at power envelopes of 150--400 W, which are incompatible with battery-powered, embedded, or satellite-adjacent deployments. The DARPA IGTC solicitation formalises this challenge by setting a 3000× energy-per-token improvement goal over the A100 GPU baseline, motivating research into radically different arithmetic substrates {[}1,2{]}.
 
 The Trinity S³AI architecture addresses this challenge through three compounding mechanisms: (i) ternary weight quantisation, which reduces multiply-accumulate operations to additions and subtractions; (ii) zero-DSP FPGA implementation, which avoids the power-hungry DSP48 slices of the Artix-7 fabric; and (iii) the \(\phi\)-scaled clock-domain architecture of Ch.28, which reduces dynamic power by running the memory controller at \(f_c/\phi^2 \approx 35\) MHz while the compute fabric runs at 92 MHz. Together these mechanisms yield a system that consumes 1 W while generating 63 tokens/sec --- 63 tokens/joule --- against the GPU baseline of \(10{,}000 \text{ toks/sec} / 210 \text{ W} \approx 47.6\) toks/joule at A100 batch-1 latency mode, but more relevantly against the GPU energy-per-token at batch-1 which is approximately \(0.021\) toks/joule when accounting for the full 210 W system power at low throughput utilisation.
@@ -85,13 +89,6 @@ where \(N_\text{Trinity}\) is the Trinity parameter count. For the canonical Tri
 - BRAM (weight and activation storage): 0.29 W
 - Routing and clock: 0.27 W
 - I/O: 0.11 W, inter-clock buffer: 0.02 W.
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-F-fpga-bitstream.jpg}}
-\caption{Azbuka of the Tridevyatoe — Appendix F: FPGA Bitstream Archive (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
-\end{figure}
 
 A hypothetical DSP48-based implementation of the same model would consume approximately 0.31 W × 8 = 2.48 W in logic alone (DSP48 slices draw approximately 8× the power of equivalent LUT logic for accumulation at this frequency), yielding a total power of approximately 8.0 W, or \(8\times\) higher than the LUT-based design. The \(8\times\) DSP penalty, combined with the \(\phi^2 + \phi^{-2} = 3\) certified ternary zero-absorption (Ch.4, KER-8), constitutes the primary hardware efficiency mechanism.
 

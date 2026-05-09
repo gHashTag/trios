@@ -5,6 +5,13 @@
 
 \chapter{Railway / Trios Orchestration}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_22.jpg}}
+\caption{Ch 22 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 \begin{quote}\itshape
 ``Those tools that are not mastered become masters of their users. The pipeline
 discipline is not about elegance --- it is about keeping humans in the loop.''
@@ -22,16 +29,6 @@ newly started workers satisfy the invariants that the rest of the system
 assumes. A worker pool that violates the inference-rate floor or exceeds the
 worker-count ceiling looks identical to a healthy one until a downstream
 client times out. By then, the incident has already started.
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_22.jpg}}
-\caption{Azbuka of the Tridevyatoe — ch\_22: the book / the page / the letter (Trinity S\textsuperscript{3}AI v5.14, da Vinci codex).}
-\end{figure}
-
-
-
 
 The Railway/Trios orchestration architecture described in this chapter closes
 that gap with a different strategy: instead of checking invariants at incident
@@ -63,17 +60,24 @@ layer to the FPGA-side counterparts described in Ch.28 and Ch.31.
 
 \section{Abstract}\label{abstract}
 
-Deploying a formally verified ternary neural system at scale requires an orchestration layer that can co-ordinate model-serving workers, manage configuration invariants at runtime, and expose falsifiable witnesses for operational properties. This chapter describes the Railway/Trios orchestration architecture, in which worker pools are governed by the composite invariant \texttt{INV-8} (\texttt{WorkerPoolComposite.v}, 10 Qed). Six Coq theorems establish falsification witnesses --- demonstrating that unsafe configurations are provably rejected --- and one satisfaction witness --- demonstrating that the canonical \(\phi\)-scaled configuration is provably accepted. The anchor identity \(\phi^2 + \phi^{-2} = 3\) constrains worker-pool sizing: the ratio of inference workers to embedding workers is targeted at \(\phi^2 : \phi^{-2} = \phi^4 : 1 \approx 6.854 : 1\). The chapter also introduces the \texttt{victory\_not\_yet} predicate, which certifies that the system has not yet reached the operational milestone requiring full Gate-3 compliance.
 
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-16-sacred-ratios.jpg}}
-\caption{Azbuka of the Tridevyatoe — Sacred Ratios: 360-lane Phi-Distance Grid (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-17-mill-wheel.jpg}}
+\caption{Mill Wheel - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
+Deploying a formally verified ternary neural system at scale requires an orchestration layer that can co-ordinate model-serving workers, manage configuration invariants at runtime, and expose falsifiable witnesses for operational properties. This chapter describes the Railway/Trios orchestration architecture, in which worker pools are governed by the composite invariant \texttt{INV-8} (\texttt{WorkerPoolComposite.v}, 10 Qed). Six Coq theorems establish falsification witnesses --- demonstrating that unsafe configurations are provably rejected --- and one satisfaction witness --- demonstrating that the canonical \(\phi\)-scaled configuration is provably accepted. The anchor identity \(\phi^2 + \phi^{-2} = 3\) constrains worker-pool sizing: the ratio of inference workers to embedding workers is targeted at \(\phi^2 : \phi^{-2} = \phi^4 : 1 \approx 6.854 : 1\). The chapter also introduces the \texttt{victory\_not\_yet} predicate, which certifies that the system has not yet reached the operational milestone requiring full Gate-3 compliance.
 
 \section{1. Introduction}\label{introduction}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-18-tetractys.jpg}}
+\caption{Tetractys - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 The Trios codebase organises model training, evaluation, and deployment through a Railway-style service mesh in which each service is a typed actor with formally specified invariants. The formal specification approach --- articulated in the directive for this chapter (\texttt{trios\#408}) --- extends the Coq-certified properties of the kernel and igla layers (Ch.3--Ch.10) up to the orchestration level, ensuring that runtime configuration errors are caught at the proof layer rather than at production incident time {[}1,2{]}.
 
 The \(\phi^2 + \phi^{-2} = 3\) anchor enters orchestration through resource allocation: the trinity identity guarantees that any worker pool sized as a multiple of 3 can be partitioned into a \(\phi^2\)-weighted inference tier and a \(\phi^{-2}\)-weighted embedding tier without fractional workers. For example, a pool of \(3n\) workers allocates \(\lceil \phi^2 n \rceil = \lceil 2.618 n \rceil\) to inference and the remainder to embedding, with the rounding error bounded by 1 worker. This partition is codified in the composite invariant checked by \texttt{composite\_invariant\_holds}.
@@ -116,13 +120,6 @@ Proof: \texttt{inv2\_holds\ (265\ \#\ 100)\ =\ false}, so the conjunction is \te
 \section{3. Satisfaction Witness and Victory Predicate}\label{satisfaction-witness-and-victory-predicate}
 
 The falsification witnesses of Section 2 demonstrate that the invariant system correctly rejects unsafe configurations. The satisfaction witness demonstrates that the canonical \(\phi\)-scaled configuration is accepted.
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-19-fibonacci-tesselation.jpg}}
-\caption{Azbuka of the Tridevyatoe — Fibonacci Tessellation: Welch-t Statistical Analysis (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
-\end{figure}
 
 \textbf{Theorem 3.1 (Valid configuration).} \texttt{composite\_invariant\_holds\ (35\ \#\ 10)\ 256\ (1000\ \#\ 1)\ =\ true}. \emph{Coq theorem \filepath{valid\_config\_satisfies\_composite}.}
 

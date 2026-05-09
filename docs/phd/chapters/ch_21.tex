@@ -5,6 +5,13 @@
 
 \chapter{IGLA RACE (Multi-Agent Fleet)}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_21.jpg}}
+\caption{Ch 21 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 \begin{quote}
 \itshape
 ``Many runners, one finish line. The discipline is in the line, not
@@ -13,15 +20,6 @@ in the runners.''\\
 \end{quote}
 
 \section*{The race format, in one paragraph}
-
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_21.jpg}}
-\caption{Azbuka triptych: IGLA RACE (Multi-Agent Fleet) (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
 
 
 IGLA RACE is the multi-agent training tournament that selects the
@@ -44,17 +42,24 @@ later chapters analyse.
 
 \section{Abstract}\label{abstract}
 
-IGLA RACE is a multi-agent benchmarking protocol in which a fleet of independent training agents compete to satisfy the formally verified victory criterion: BPB \(< 1.85\) (Gate-2) or BPB \(< 1.5\) (Gate-3), achieved with at least three distinct sanctioned seeds, at training step \(\geq 4000\). The criterion is formalised in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v} with 28 Coq theorems under invariant INV-7; six refutation theorems prove that degenerate configurations (too few seeds, insufficient steps, proxy-only wins) cannot be mistaken for a genuine victory. The protocol is grounded in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\), which supplies the Gate thresholds via the spectral constant \(\alpha_\varphi\). The champion configuration --- lr \(= 0.004\), GF16 PHI\_BIAS=60, seed triple \((1597, 2584, 4181)\) --- achieves mean BPB \(= 1.830\) at step 5000, satisfying Gate-2.
 
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-C-golden-benchmark.jpg}}
-\caption{Azbuka of the Tridevyatoe — Appendix C: Golden Benchmark --- GF4/GF8/GF16 Tables (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-15-tree-branch.jpg}}
+\caption{Tree Branch - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
+IGLA RACE is a multi-agent benchmarking protocol in which a fleet of independent training agents compete to satisfy the formally verified victory criterion: BPB \(< 1.85\) (Gate-2) or BPB \(< 1.5\) (Gate-3), achieved with at least three distinct sanctioned seeds, at training step \(\geq 4000\). The criterion is formalised in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v} with 28 Coq theorems under invariant INV-7; six refutation theorems prove that degenerate configurations (too few seeds, insufficient steps, proxy-only wins) cannot be mistaken for a genuine victory. The protocol is grounded in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\), which supplies the Gate thresholds via the spectral constant \(\alpha_\varphi\). The champion configuration --- lr \(= 0.004\), GF16 PHI\_BIAS=60, seed triple \((1597, 2584, 4181)\) --- achieves mean BPB \(= 1.830\) at step 5000, satisfying Gate-2.
 
 \section{1. Introduction}\label{introduction}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-16-honey-comb.jpg}}
+\caption{Honey Comb - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 Single-run training evaluations are vulnerable to seed artefacts, hyperparameter overfitting, and infrastructure variance. IGLA RACE addresses this by requiring a fleet of agents --- each running an independent training job with a distinct seed from the sanctioned pool \(\{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}\) {[}1{]} --- to all pass the same Gate criterion before a champion configuration is declared. The name IGLA (Игла, Russian for ``needle'') reflects the precision required: passing through the narrow Gate-2 window while satisfying three independent constraints simultaneously (BPB, step count, seed diversity).
 
 The formal backbone of IGLA RACE is INV-7, a Coq invariant with 28 theorems {[}2{]}. The six refutation theorems proved here are the most operationally important: they close the six most plausible loopholes by which a degenerate or cheating agent could falsely claim victory. The Rainbow Bridge consistency invariant (INV-7b {[}3{]}) ensures that multi-agent race results are consistent across agents that observe different subsets of the Railway PostgreSQL phd-postgres-ssot leaderboard.
@@ -94,13 +99,6 @@ INV-7b (\texttt{INV7b\_RainbowBridgeConsistency.v} {[}3{]}, 15 Qed) asserts that
 \section{3. Multi-Agent Fleet Architecture}\label{multi-agent-fleet-architecture}
 
 \subsection{3.1 Agent Topology}\label{agent-topology}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-F-fpga-bitstream.jpg}}
-\caption{Azbuka of the Tridevyatoe — Appendix F: FPGA Bitstream Archive (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
-\end{figure}
 
 The IGLA RACE fleet is organised as a star topology: a central Arbiter agent monitors the Railway PostgreSQL phd-postgres-ssot database (Ch.15 {[}5{]}) and a set of Worker agents run training jobs. Each Worker is assigned exactly one seed from the sanctioned pool at launch and is forbidden from using any other seed. The Arbiter polls the \texttt{bpb\_runs} table every 60 seconds for rows with \texttt{step\ \textgreater{}=\ 4000}.
 

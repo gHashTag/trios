@@ -5,6 +5,13 @@
 
 \chapter{KOSCHEI \(\varphi\)-Numeric Coprocessor (ISA)}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_26.jpg}}
+\caption{Ch 26 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 \begin{quote}\itshape
 ``The purpose of computing is insight, not numbers.''
 \upshape --- Richard W.~Hamming, \textit{Numerical Methods for Scientists and Engineers} (1962)
@@ -15,16 +22,6 @@
 
 Seven. That is the whole opcode count of the KOSCHEI \(\varphi\)\nobreakdash-Numeric Coprocessor ISA---fewer opcodes than the fingers on one hand used to program it. To anyone raised on the baroque richness of x86 or the sprawl of RISC-V extensions, seven instructions sounds like a punchline. It is, instead, a theorem.
 
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_26.jpg}}
-\caption{Azbuka triptych: KOSCHEI phi-Numeric Coprocessor (ISA) (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
-
-
-
 The theorem goes like this. Neural-network inference in the ternary weight alphabet \(\{-1, 0, +1\}\) reduces to three arithmetic acts: add, subtract, or do nothing. The golden-ratio normalisation identity \(\varphi^2 + \varphi^{-2} = 3\) closes the algebra---three exponent bands, three symbols, one identity---and every compound operation the Trinity S³AI system needs can be composed from those three acts in at most four steps. Seven opcodes cover that design space completely: \texttt{TF3\_ADD} and \texttt{TF3\_MUL} handle ternary arithmetic; \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, and \texttt{VSA\_BUNDLE} address the symbolic reasoning layer; \texttt{GF16\_QUANT} maps activations into the GoldenFloat exponent grid; \texttt{PHI\_ROPE} encodes positional phase. Nothing is missing. Nothing is redundant.
 
 The deliberate omission is equally striking: zero DSP primitives. The Artix-7 DSP48E1 block is a fine thing for floating-point work, but it introduces hardware paths---18\(\times\)25-bit signed multipliers---that cannot be expressed in the ternary algebra without breaking the chain of Coq proofs that certifies correctness all the way from abstract specification to gate-level behaviour. KOSCHEI solves this by living entirely in LUT fabric. Fourteen thousand LUT6 instances replace what a DSP-heavy design would handle in silicon macrocells, and the proof chain remains unbroken.
@@ -33,17 +30,24 @@ Why does this matter beyond the FPGA lab? Because the argument is constructive: 
 
 \section{Abstract}\label{abstract}
 
-The KOSCHEI coprocessor extends the QMTech XC7A100T FPGA with a φ-numeric instruction set that maps the mathematical structure of Trinity S³AI directly onto LUT fabric with zero DSP primitives. Seven opcodes are defined: \texttt{TF3\_ADD}, \texttt{TF3\_MUL}, \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, \texttt{VSA\_BUNDLE}, \texttt{GF16\_QUANT}, and \texttt{PHI\_ROPE}. Every opcode preserves the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant, certified by Coq modules \texttt{Trinity.Canonical.Kernel.Phi} (16 Qed), \texttt{Trinity.Canonical.Kernel.PhiFloat} (6 Qed), \texttt{Trinity.Canonical.Kernel.Trit}, \texttt{Trinity.Canonical.Kernel.Semantics}, and \texttt{Trinity.Canonical.Kernel.FlowerE8Embedding}. The ISA achieves 63 tokens/sec at 92 MHz and 1 W.
 
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-28-momentum-algebra.jpg}}
-\caption{Azbuka of the Tridevyatoe — Momentum Algebra: QMTech XC7A100T FPGA (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-24-water-mirror.jpg}}
+\caption{Water Mirror - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
+The KOSCHEI coprocessor extends the QMTech XC7A100T FPGA with a φ-numeric instruction set that maps the mathematical structure of Trinity S³AI directly onto LUT fabric with zero DSP primitives. Seven opcodes are defined: \texttt{TF3\_ADD}, \texttt{TF3\_MUL}, \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, \texttt{VSA\_BUNDLE}, \texttt{GF16\_QUANT}, and \texttt{PHI\_ROPE}. Every opcode preserves the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant, certified by Coq modules \texttt{Trinity.Canonical.Kernel.Phi} (16 Qed), \texttt{Trinity.Canonical.Kernel.PhiFloat} (6 Qed), \texttt{Trinity.Canonical.Kernel.Trit}, \texttt{Trinity.Canonical.Kernel.Semantics}, and \texttt{Trinity.Canonical.Kernel.FlowerE8Embedding}. The ISA achieves 63 tokens/sec at 92 MHz and 1 W.
 
 \section{1. Introduction}\label{introduction}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-25-globe-meridian.jpg}}
+\caption{Globe Meridian - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 A coprocessor ISA for φ-numeric computation must satisfy three simultaneous constraints that are not met by any existing FPGA softcore:
 
 \begin{enumerate}
@@ -96,13 +100,6 @@ The 7-bit opcode space allows 128 instructions; the seven φ-numeric opcodes occ
 \section{3. Opcode Specifications}\label{opcode-specifications}
 
 \subsection{3.1 TF3\_ADD --- Ternary Addition}\label{tf3_add-ternary-addition}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-29-lucas-closure.jpg}}
-\caption{Azbuka of the Tridevyatoe — Lucas Closure — Number Theory (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
-\end{figure}
 
 \begin{verbatim}
 TF3_ADD RD, RA, RB

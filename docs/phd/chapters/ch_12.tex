@@ -5,6 +5,13 @@
 
 \chapter{Hardware Bridge (deferred)}
 
+
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_12.jpg}}
+\caption{Ch 12 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\end{figure}
 \begin{quote}\itshape
 ``Make each program do one thing well.  To do a new job, build afresh rather than
 complicate old programs by adding new features.  Expect the output of every
@@ -21,16 +28,6 @@ happens at a row of 16-bit AXI-Lite registers on a QMTech XC7A100T board---
 92~MHz clock, sub-watt power budget, 0 DSP slices.  The Hardware Bridge is the
 two-hundred-line RTL layer that stands between the software proofs and the
 physical pins.  It is deliberately thin.  Thin bridges do not break.
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_12.jpg}}
-\caption{Azbuka triptych: Hardware Bridge (deferred) (Trinity S\textsuperscript{3}AI v5.16, da Vinci codex).}
-\end{figure}
-
-
-
 
 The bridge's three-channel structure is not arbitrary.  The GoldenFloat exponent
 field splits naturally into sub-unity (\(\varphi^{-2}\)), unity, and super-unity
@@ -61,14 +58,14 @@ chapter locks it down.
 
 \section{Abstract}\label{abstract}
 
-The Hardware Bridge chapter specifies the interface layer between the Trinity S³AI software stack and the QMTech XC7A100T FPGA. It defines the AXI-Lite control bus, the UART-V6 token-transfer protocol, and the clock-domain crossing that mediates between the host processor and the 92 MHz FPGA fabric. The bridge is architecturally deferred in the sense that its full formal treatment (Coq register-map correctness and timing-closure proofs) is delegated to Ch.28 and Ch.31; the present chapter establishes the interface contracts, signal naming, and error-handling protocol that those later chapters presuppose. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates the three-channel bridge structure: one channel per exponent band of the GoldenFloat format.
 
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_30.jpg}}
-\caption{Azbuka of the Tridevyatoe — Trinity SAI: Vector Symbolic Architecture and Associative Recall (variant b) (Trinity S\textsuperscript{3}AI v5.19, da Vinci codex).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-03-codex-quill.jpg}}
+\caption{Codex Quill - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
+The Hardware Bridge chapter specifies the interface layer between the Trinity S³AI software stack and the QMTech XC7A100T FPGA. It defines the AXI-Lite control bus, the UART-V6 token-transfer protocol, and the clock-domain crossing that mediates between the host processor and the 92 MHz FPGA fabric. The bridge is architecturally deferred in the sense that its full formal treatment (Coq register-map correctness and timing-closure proofs) is delegated to Ch.28 and Ch.31; the present chapter establishes the interface contracts, signal naming, and error-handling protocol that those later chapters presuppose. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates the three-channel bridge structure: one channel per exponent band of the GoldenFloat format.
 
 \section{1. Introduction}\label{introduction}
 
@@ -129,13 +126,6 @@ These conditions are reported to the IGLA RACE monitor (Ch.24) via a 3-bit inter
 \section{3. Clock-Domain Analysis and Timing}\label{clock-domain-analysis-and-timing}
 
 \subsection{3.1 Frequency Ratios and the Golden Ratio}\label{frequency-ratios-and-the-golden-ratio}
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-33-epilogue.jpg}}
-\caption{Azbuka of the Tridevyatoe — Epilogue: JTAG macOS BLK-001 Resolved (figure b) (Trinity S\textsuperscript{3}AI v5.20, da Vinci codex).}
-\end{figure}
 
 The ratio of the host AXI clock (100 MHz) to the FPGA fabric clock (92 MHz) is \(100/92 \approx 1.087\). This is within 5\% of \(\varphi^{-1} \approx 0.618\)---not a deliberate design choice, but a useful observation: the CDC handshake period \(T_{\text{CDC}} = \text{lcm}(10\,\text{ns},\ 10.87\,\text{ns})\) is approximately \(108.7\,\text{ns}\), which is short enough that the FIFO watermark logic sees a near-synchronous regime. Formal timing closure is verified in Ch.28.
 
