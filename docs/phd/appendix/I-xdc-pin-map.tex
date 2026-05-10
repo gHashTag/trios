@@ -2169,3 +2169,37 @@ address (\texttt{awready} HIGH) at cycle 2, accepts the data
 (\texttt{bvalid} HIGH, \texttt{bresp} = \texttt{OKAY}) at cycle 3.
 Total latency: 3 clock cycles at 100\,MHz = 30\,ns.
 
+
+% ------------------------------------------------------------------
+\section*{I.25 JTAG Boundary Scan and Debug Access}
+\label{sec:jtag-debug}
+% ------------------------------------------------------------------
+
+The Arty A7-100T JTAG interface is routed through the on-board FT2232H
+USB bridge.  The IDCODE for the XC7A100T is \texttt{0x0362D093}
+(bits 1--11 = Xilinx JEDEC \texttt{0x049}, bits 12--27 = \texttt{0x362D},
+revision = 0).
+
+Boundary-scan operations used during bring-up:
+
+\begin{verbatim}
+## Read IDCODE (IEEE 1149.1)
+openocd -f interface/ftdi/arty.cfg \
+        -f target/xilinx_xc7.cfg \
+        -c "init; xc7_read_idcode; shutdown"
+## Expected: 0x0362D093 (XC7A100T rev 0)
+\end{verbatim}
+
+For the Arty Z7-20, the Zynq ARM DAP is also accessible:
+
+\begin{verbatim}
+## Zynq ARM DAP IDCODE: 0x4BA00477 (ARM Cortex-A9)
+openocd -f interface/ftdi/arty_z7.cfg \
+        -f target/zynq_7000.cfg \
+        -c "init; jtag_ntrst_delay 500; targets; shutdown"
+\end{verbatim}
+
+No additional XDC constraints are required for JTAG; the dedicated JTAG
+pins (\texttt{TDI}, \texttt{TDO}, \texttt{TMS}, \texttt{TCK}) are hardwired
+to the configuration logic and are excluded from user I/O.
+
