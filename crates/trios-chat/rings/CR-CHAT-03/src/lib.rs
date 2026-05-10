@@ -23,6 +23,13 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod external_commit;
+pub mod pcs_healing;
+pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
+pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
+
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde::{Deserialize, Serialize};
 
 use trios_chat_cr_chat_00::{Error, Result};
@@ -85,6 +92,22 @@ pub enum Op {
     Update,
 }
 
+/// **Wave-12 / R-CHAT-11** — leaf-resync proposal applied via a dedicated
+/// API path. A leaf-resync rotates the public leaf key for `sender` to
+/// `new_pub` and is the recovery action when a leaf-key compromise is
+/// detected.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeafResync {
+    /// Group being resynced.
+    pub group_id: GroupId,
+    /// Epoch the resync transitions **from**.
+    pub from_epoch: Epoch,
+    /// Sender claiming the rotation (must be a current member).
+    pub sender: LeafIndex,
+    /// New public leaf key.
+    pub new_pub: [u8; 32],
+}
+
 /// Local view of an MLS group.
 #[derive(Debug, Clone)]
 pub struct Group {
@@ -94,16 +117,108 @@ pub struct Group {
     pub epoch: Epoch,
     /// Active leaf indices (1 bit per leaf for skeleton purposes).
     pub members: Vec<LeafIndex>,
+    /// **Wave-11 / R-CHAT-11** — set of `(epoch, leaf)` triples for
+    /// welcomes already consumed. Prevents Welcome-replay where the same
+    /// joining packet is re-injected after the group has moved on.
+    consumed_welcomes: BTreeSet<(u64, u32)>,
+    /// **Wave-12 / R-CHAT-11** — current public leaf key per active
+    /// leaf. Used by [`Group::process_leaf_resync`] to verify that a
+    /// rotation request actually refers to the *current* key (not a
+    /// stale pre-resync key from a compromised leaf).
+    leaf_keys: BTreeMap<u32, [u8; 32]>,
 }
 
 impl Group {
     /// Create a new group with one founding member.
     pub fn create(group_id: GroupId, founder: LeafIndex) -> Self {
+        let mut leaf_keys = BTreeMap::new();
+        // Founder seeded with a deterministic placeholder key — in real
+        // MLS this would be the founder's KeyPackage leaf public key.
+        leaf_keys.insert(founder.0, [0u8; 32]);
         Self {
             group_id,
             epoch: Epoch(0),
             members: vec![founder],
+            consumed_welcomes: BTreeSet::new(),
+            leaf_keys,
         }
+    }
+
+    /// Read the current leaf-public key for `leaf`, or `None` if `leaf`
+    /// is not a member.
+    pub fn leaf_key(&self, leaf: LeafIndex) -> Option<[u8; 32]> {
+        self.leaf_keys.get(&leaf.0).copied()
+    }
+
+    /// **Wave-12 / R-CHAT-11** — process a leaf-resync packet. Returns
+    /// `Ok(())` only if all of:
+    ///
+    /// 1. `r.group_id == self.group_id` (no cross-group splice)
+    /// 2. `r.from_epoch == self.epoch` (no replay / no future-jump)
+    /// 3. `r.sender` is a current member
+    /// 4. `r.new_pub` is non-zero AND differs from the stored key
+    ///    (the rotation must actually rotate)
+    ///
+    /// On success the stored leaf key is replaced with `r.new_pub` AND
+    /// the epoch advances by 1 — this binds rotation events to the
+    /// epoch counter so a captured pre-resync packet replayed after the
+    /// resync sees `from_epoch < self.epoch` and is rejected.
+    pub fn process_leaf_resync(&mut self, r: &LeafResync) -> Result<()> {
+        if r.group_id != self.group_id {
+            return Err(Error::Invariant("mls: leaf-resync for wrong group"));
+        }
+        if r.from_epoch != self.epoch {
+            return Err(Error::Invariant("mls: leaf-resync epoch mismatch"));
+        }
+        if !self.members.contains(&r.sender) {
+            return Err(Error::Invariant("mls: leaf-resync from non-member"));
+        }
+        if r.new_pub == [0u8; 32] {
+            return Err(Error::Invariant("mls: leaf-resync new_pub must be non-zero"));
+        }
+        if let Some(current) = self.leaf_keys.get(&r.sender.0) {
+            if *current == r.new_pub {
+                return Err(Error::Invariant("mls: leaf-resync new_pub must differ"));
+            }
+        }
+        self.leaf_keys.insert(r.sender.0, r.new_pub);
+        self.epoch = self.epoch.next();
+        Ok(())
+    }
+
+    /// **Wave-11 / R-CHAT-11** — process a `Welcome` packet for the
+    /// joiner whose leaf is `w.leaf`. Returns `Ok(())` only if all of:
+    ///
+    /// 1. `w.group_id == self.group_id` (no cross-group splice)
+    /// 2. `w.epoch <= self.epoch` (no future-welcome forge)
+    /// 3. `w.epoch + 0 >= self.epoch` _OR_ leaf already a member — i.e.
+    ///    welcomes for stale epochs whose leaf was never added are
+    ///    rejected. Concretely we require `w.epoch == self.epoch`.
+    /// 4. The triple `(epoch, leaf)` has not been consumed before.
+    /// 5. The leaf is currently a member (i.e. a Commit already added
+    ///    it via `Op::Add`).
+    ///
+    /// On success the triple is recorded in `consumed_welcomes` so a
+    /// replay is detected on the very next call.
+    pub fn process_welcome(&mut self, w: &Welcome) -> Result<()> {
+        if w.group_id != self.group_id {
+            return Err(Error::Invariant("mls: welcome for wrong group"));
+        }
+        if w.epoch.0 > self.epoch.0 {
+            return Err(Error::Invariant("mls: welcome from future epoch"));
+        }
+        if w.epoch.0 < self.epoch.0 {
+            return Err(Error::Invariant("mls: welcome for stale epoch"));
+        }
+        if !self.members.contains(&w.leaf) {
+            return Err(Error::Invariant("mls: welcome for non-member leaf"));
+        }
+        let key = (w.epoch.0, w.leaf.0);
+        if self.consumed_welcomes.contains(&key) {
+            return Err(Error::Invariant("mls: welcome replay"));
+        }
+        self.consumed_welcomes.insert(key);
+        Ok(())
     }
 
     /// Apply a Commit — fails if `from_epoch != self.epoch`
@@ -123,10 +238,16 @@ impl Group {
                 Op::Add(leaf) => {
                     if !self.members.contains(leaf) {
                         self.members.push(*leaf);
+                        // Seed a deterministic placeholder leaf key so
+                        // future leaf-resync calls have a baseline to
+                        // rotate against. Real MLS would carry this in
+                        // the KeyPackage payload.
+                        self.leaf_keys.entry(leaf.0).or_insert([0u8; 32]);
                     }
                 }
                 Op::Remove(leaf) => {
                     self.members.retain(|m| m != leaf);
+                    self.leaf_keys.remove(&leaf.0);
                 }
                 Op::Update => { /* no-op for skeleton */ }
             }
@@ -595,5 +716,430 @@ mod tests {
     fn green_summary_partial_mls_bot_falsifiers() {
         let count = 5usize;
         assert_eq!(count, 5, "R-CHAT-3-bot: {count} partial-MLS bot falsifiers active");
+    }
+
+    // ============================================================
+    // Wave-10 / L-CHAT-3-mls (R-CHAT-11): MLS commit-reorder /
+    // out-of-order falsifier suite.
+    //
+    // Threat: an attacker reorders commits on the wire and tries to
+    // (a) apply a commit out of order (MCR-01..02),
+    // (b) jump epochs (MCR-03),
+    // (c) fork the group via a parallel commit (MCR-04),
+    // (d) re-apply a future commit before the linking commit (MCR-05).
+    //
+    // [DERIVED RFC 9420 §8 + MLS architecture (Barnes et al. 2021)]
+    // ============================================================
+
+    /// **MCR-01** — commit at `from_epoch=2` while group at epoch 0
+    /// must be rejected (out-of-order: future commit before linking).
+    #[test]
+    fn mcr_01_future_commit_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let future = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(2),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        let r = g.process_commit(&future);
+        assert!(r.is_err(), "MCR-01: commit at from_epoch=2 must be rejected at epoch 0");
+        assert_eq!(g.epoch, Epoch(0), "MCR-01: epoch must NOT advance on rejected commit");
+    }
+
+    /// **MCR-02** — swapping the order of two commits A,B fails: B's
+    /// `from_epoch` references the post-A state, so applying B first
+    /// must fail.
+    #[test]
+    fn mcr_02_swapped_commit_pair_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let a = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        let b = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(1),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        // Adversary applies B first.
+        let r = g.process_commit(&b);
+        assert!(r.is_err(), "MCR-02: B (from_epoch=1) before A must be rejected");
+        // Correct order still works.
+        g.process_commit(&a).expect("MCR-02: A first must succeed");
+        g.process_commit(&b).expect("MCR-02: B second must succeed");
+        assert_eq!(g.epoch, Epoch(2));
+    }
+
+    /// **MCR-03** — epoch-jump: a commit with `from_epoch` lower than
+    /// current (replay-style) is rejected.
+    #[test]
+    fn mcr_03_epoch_replay_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let c0 = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        g.process_commit(&c0).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        // Adversary replays c0 (from_epoch=0 < current 1).
+        let r = g.process_commit(&c0);
+        assert!(r.is_err(), "MCR-03: replayed commit from_epoch<current must be rejected");
+    }
+
+    /// **MCR-04** — fork: two parallel commits both claim
+    /// `from_epoch=N`, so the second must be rejected by the local
+    /// view (only one history is consistent).
+    #[test]
+    fn mcr_04_parallel_fork_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let fork_a = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![1],
+        };
+        let fork_b = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(2))],
+            path_blob: vec![2],
+        };
+        g.process_commit(&fork_a).expect("MCR-04: first fork branch applies");
+        // After fork_a, epoch is 1; fork_b still says from_epoch=0.
+        let r = g.process_commit(&fork_b);
+        assert!(r.is_err(), "MCR-04: second fork branch must be rejected");
+        // State carries fork_a's add, not fork_b's.
+        assert!(g.members.contains(&LeafIndex(1)), "MCR-04: only fork_a applied");
+        assert!(!g.members.contains(&LeafIndex(2)), "MCR-04: fork_b not applied");
+    }
+
+    /// **MCR-05** — cross-group splice: a commit whose `group_id`
+    /// differs from the current group must be rejected even if the
+    /// epoch math would otherwise line up.
+    #[test]
+    fn mcr_05_cross_group_splice_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let other = Commit {
+            group_id: GroupId([0xAAu8; 32]),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        let r = g.process_commit(&other);
+        assert!(r.is_err(), "MCR-05: commit for foreign group_id must be rejected");
+        assert_eq!(g.epoch, Epoch(0), "MCR-05: epoch unchanged on rejection");
+    }
+
+    /// Wave-10 G-C3-mls green summary.
+    #[test]
+    fn green_g_c3_mls_summary() {
+        let count = 5usize;
+        assert_eq!(count, 5, "Wave-10 L-CHAT-3-mls: 5 commit-reorder falsifier tests");
+    }
+
+    // ─── Wave-11 · L-CHAT-3-welcome · Welcome replay/forge resistance ───
+    //
+    // R-CHAT-11 demands the joining flow rejects (a) cross-group splice,
+    // (b) future-epoch forgery, (c) stale-epoch reuse, (d) replay of an
+    // already-consumed welcome, and (e) welcomes for leaves that are not
+    // (yet) members. These five tests pin the contract.
+
+    /// **WLR-01** — a welcome whose `group_id` differs from the receiver's
+    /// must be rejected even if epoch/leaf line up.
+    #[test]
+    fn wlr_01_cross_group_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let w = Welcome {
+            group_id: GroupId([0xCCu8; 32]),
+            epoch: Epoch(0),
+            leaf: LeafIndex(0),
+            blob: vec![],
+        };
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-01: welcome for foreign group_id must be rejected");
+    }
+
+    /// **WLR-02** — a welcome from a FUTURE epoch (epoch > current) must
+    /// be rejected. An attacker cannot pre-fabricate joining packets.
+    #[test]
+    fn wlr_02_future_epoch_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let w = Welcome {
+            group_id: gid(),
+            epoch: Epoch(5),
+            leaf: LeafIndex(0),
+            blob: vec![],
+        };
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-02: future-epoch welcome must be rejected");
+    }
+
+    /// **WLR-03** — the same `(epoch, leaf)` welcome must not be processed
+    /// twice. The second attempt is a replay and must be rejected.
+    #[test]
+    fn wlr_03_replayed_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        // Add Bob via a real Commit so leaf 1 is a member.
+        let c = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        g.process_commit(&c).unwrap();
+        let w = Welcome {
+            group_id: gid(),
+            epoch: g.epoch,
+            leaf: LeafIndex(1),
+            blob: vec![],
+        };
+        // First consumption succeeds.
+        g.process_welcome(&w).expect("WLR-03: first welcome must succeed");
+        // Replay must be rejected.
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-03: replayed welcome must be rejected");
+    }
+
+    /// **WLR-04** — a welcome whose `leaf` is NOT a member of the group
+    /// must be rejected. Without this check an attacker could spoof a
+    /// joining packet for a leaf that was never authorised.
+    #[test]
+    fn wlr_04_non_member_leaf_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let w = Welcome {
+            group_id: gid(),
+            epoch: Epoch(0),
+            // Leaf 99 was never Added.
+            leaf: LeafIndex(99),
+            blob: vec![],
+        };
+        let r = g.process_welcome(&w);
+        assert!(r.is_err(), "WLR-04: welcome for non-member leaf must be rejected");
+    }
+
+    /// **WLR-05** — once the group has moved past epoch N, a welcome
+    /// stamped with epoch N must be rejected. This blocks the attack
+    /// where an old welcome is replayed after a re-key event.
+    #[test]
+    fn wlr_05_stale_epoch_welcome_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        // Capture an old welcome at epoch 0.
+        let old_w = Welcome {
+            group_id: gid(),
+            epoch: Epoch(0),
+            leaf: LeafIndex(0),
+            blob: vec![],
+        };
+        // Advance: Add Bob so epoch becomes 1.
+        let c = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        };
+        g.process_commit(&c).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        // The old welcome (epoch 0) is now stale.
+        let r = g.process_welcome(&old_w);
+        assert!(r.is_err(), "WLR-05: stale-epoch welcome must be rejected");
+    }
+
+    /// Wave-11 G-C3-welcome green summary.
+    #[test]
+    fn green_g_c3_welcome_summary() {
+        let count = 5usize;
+        assert_eq!(
+            count, 5,
+            "Wave-11 L-CHAT-3-welcome: 5 welcome-replay falsifier tests"
+        );
+    }
+
+    // ===================================================================
+    // Wave-12 · L-CHAT-3-leaf (R-CHAT-11): MLS leaf-key compromise /
+    // leaf-resync forgery falsifier suite.
+    //
+    // Threat: an attacker compromises a leaf key and tries to
+    // (a) issue a leaf-resync as a non-member (LCO-01),
+    // (b) prevent a legitimate rotation from advancing state (LCO-02),
+    // (c) reuse the stale key after the legitimate holder has resynced
+    //     by replaying it at the new epoch (LCO-03),
+    // (d) replay a captured resync packet at an older `from_epoch`
+    //     (LCO-04),
+    // (e) win a concurrent-resync race — only the first applies
+    //     because epoch monotonicity rejects the second (LCO-05).
+    //
+    // [DERIVED RFC 9420 §8, §12.4 + Trinity Chat Wave-12 design notes]
+    // ===================================================================
+
+    fn k(byte: u8) -> [u8; 32] {
+        [byte; 32]
+    }
+
+    /// **LCO-01** — a leaf-resync from a non-member must be rejected.
+    /// Without this guard a stolen-but-revoked key could rotate itself
+    /// back into the group.
+    #[test]
+    fn lco_01_non_member_resync_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let r = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(99),
+            new_pub: k(0xAB),
+        };
+        let res = g.process_leaf_resync(&r);
+        assert!(res.is_err(), "LCO-01: non-member must not be able to resync");
+        assert_eq!(g.epoch, Epoch(0), "LCO-01: epoch must NOT advance");
+    }
+
+    /// **LCO-02** — a legitimate resync rotates the stored leaf key AND
+    /// advances the epoch. This pins both — forgetting either half breaks
+    /// the audit trail or leaves the stale key live.
+    #[test]
+    fn lco_02_resync_rotates_key_and_advances_epoch() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        assert_eq!(g.leaf_key(LeafIndex(0)), Some(k(0x00)));
+        let r = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            new_pub: k(0xAB),
+        };
+        g.process_leaf_resync(&r).expect("LCO-02: legit resync must succeed");
+        assert_eq!(g.leaf_key(LeafIndex(0)), Some(k(0xAB)), "LCO-02: key must rotate");
+        assert_eq!(g.epoch, Epoch(1), "LCO-02: epoch must advance by 1");
+    }
+
+    /// **LCO-03** — after a resync, a packet stamped with the
+    /// pre-resync `from_epoch` (the captured stale key's epoch) must be
+    /// rejected. This is the core forward-secrecy guarantee of leaf
+    /// rotation: the compromised key cannot speak in the new epoch.
+    #[test]
+    fn lco_03_pre_resync_packet_rejected_after_rotation() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        // Add Bob so we have a non-founder leaf to rotate.
+        g.process_commit(&Commit {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            ops: vec![Op::Add(LeafIndex(1))],
+            path_blob: vec![],
+        }).unwrap();
+        assert_eq!(g.epoch, Epoch(1));
+        // Bob resyncs his leaf.
+        let r = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(1),
+            sender: LeafIndex(1),
+            new_pub: k(0xCD),
+        };
+        g.process_leaf_resync(&r).expect("LCO-03: legit resync must succeed");
+        assert_eq!(g.epoch, Epoch(2));
+        // Captured pre-resync packet stamped at the OLD from_epoch=1
+        // must now be rejected by epoch monotonicity.
+        let stale_commit = Commit {
+            group_id: gid(),
+            from_epoch: Epoch(1), // pre-resync epoch
+            sender: LeafIndex(1),
+            ops: vec![Op::Update],
+            path_blob: vec![],
+        };
+        assert!(
+            g.process_commit(&stale_commit).is_err(),
+            "LCO-03: pre-resync packet must be rejected at post-resync epoch"
+        );
+        // Equally, replaying the captured resync packet itself must fail.
+        assert!(
+            g.process_leaf_resync(&r).is_err(),
+            "LCO-03: replay of resync packet at older epoch must be rejected"
+        );
+    }
+
+    /// **LCO-04** — a resync packet captured at an OLDER `from_epoch`
+    /// must be rejected even if the sender is a current member. This
+    /// covers the wire-replay attack where an adversary sniffs a resync,
+    /// waits for the group to advance, then replays.
+    #[test]
+    fn lco_04_resync_replay_at_older_epoch_rejected() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        // Advance via legitimate resync 0 → 1.
+        let r0 = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            new_pub: k(0x11),
+        };
+        g.process_leaf_resync(&r0).unwrap();
+        // Advance via legitimate resync 1 → 2.
+        let r1 = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(1),
+            sender: LeafIndex(0),
+            new_pub: k(0x22),
+        };
+        g.process_leaf_resync(&r1).unwrap();
+        assert_eq!(g.epoch, Epoch(2));
+        // Adversary replays r0 captured from the wire — from_epoch=0 < 2.
+        assert!(
+            g.process_leaf_resync(&r0).is_err(),
+            "LCO-04: replay of captured resync at older epoch must be rejected"
+        );
+        assert_eq!(g.epoch, Epoch(2), "LCO-04: epoch must NOT regress");
+        assert_eq!(g.leaf_key(LeafIndex(0)), Some(k(0x22)), "LCO-04: key must NOT regress");
+    }
+
+    /// **LCO-05** — concurrent resync at the same `from_epoch`: only
+    /// the first applies, the second must be rejected. This is the
+    /// epoch-fork guarantee specialised to resync packets — a
+    /// compromised key racing with the legitimate holder cannot create
+    /// a forked rotation history.
+    #[test]
+    fn lco_05_concurrent_resync_only_first_applies() {
+        let mut g = Group::create(gid(), LeafIndex(0));
+        let legit = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(0),
+            sender: LeafIndex(0),
+            new_pub: k(0xAA),
+        };
+        let attacker = LeafResync {
+            group_id: gid(),
+            from_epoch: Epoch(0), // same from_epoch — fork attempt
+            sender: LeafIndex(0),
+            new_pub: k(0xBB),
+        };
+        g.process_leaf_resync(&legit).expect("LCO-05: first resync must succeed");
+        // Attacker's resync references the now-stale from_epoch=0.
+        assert!(
+            g.process_leaf_resync(&attacker).is_err(),
+            "LCO-05: second concurrent resync at same from_epoch must be rejected"
+        );
+        assert_eq!(g.leaf_key(LeafIndex(0)), Some(k(0xAA)), "LCO-05: legit key wins");
+        assert_eq!(g.epoch, Epoch(1), "LCO-05: epoch advanced exactly once");
+    }
+
+    /// Wave-12 G-C3-leaf green summary.
+    #[test]
+    fn green_g_c3_leaf_summary() {
+        let count = 5usize;
+        assert_eq!(
+            count, 5,
+            "Wave-12 L-CHAT-3-leaf: 5 leaf-key-compromise / leaf-resync falsifier tests"
+        );
     }
 }

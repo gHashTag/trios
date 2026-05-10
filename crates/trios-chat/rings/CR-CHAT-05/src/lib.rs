@@ -18,6 +18,11 @@ use serde::{Deserialize, Serialize};
 
 use trios_chat_cr_chat_00::{Counter, DestHash, Error, Result, SessionId};
 
+pub mod key_rotation;
+pub use key_rotation::{
+    JournalEntry, KeyEpoch, RotatableRow, RotatingColumn, RotationJournal, Rotator,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

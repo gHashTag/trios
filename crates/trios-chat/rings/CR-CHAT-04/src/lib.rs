@@ -20,6 +20,15 @@
 
 use trios_chat_cr_chat_00::{Error, Result};
 
+pub mod safety_number;
+pub use safety_number::{render as render_safety_number, safety_number, verify as verify_safety_number, IdKey, SafetyDigest};
+
+pub mod padding_class_oracle;
+pub use padding_class_oracle::{
+    check_class_choice, pad_class_checked, smallest_class, unpad_checked, validate_envelope,
+    PaddingOracleError,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

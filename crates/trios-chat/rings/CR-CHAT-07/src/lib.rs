@@ -50,6 +50,19 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod egress_fingerprint;
+pub use egress_fingerprint::{
+    uniform_burst_ms, uniform_length_class, AlpnId, CipherId, EgressFingerprint,
+    EgressObservables, TlsClass, CANONICAL_BURST_GAPS_MS, CANONICAL_LENGTH_CLASSES,
+    CANONICAL_TLS_CLASS,
+};
+
+pub mod jitter_side_channel;
+pub use jitter_side_channel::{
+    validate_history as validate_jitter_history, GapObservation, GapRecorder, JitterError,
+    JitterPolicy, WireKind,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
