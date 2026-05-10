@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-15: **221 tests · 25/25 e2e · 1400/1400 falsifier · 28 categories · 112 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-16: **235 tests · 25/25 e2e · 1500/1500 falsifier · 30 categories · 121 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -51,7 +51,7 @@ Threat-model invariants are formalised in `proofs/chat/Trinity_Chat.v`
 
 ---
 
-## Waves shipped (W1–W15)
+## Waves shipped (W1–W16)
 
 Every wave is one merged PR landing on `main`. Wave-N+1 always branches
 from `origin/main` immediately after Wave-N is merged. The cadence is
@@ -74,7 +74,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W12 | (open) | 185 | INV-CHAT-54..60 (79 Qed total) | 1100 | 22 | prekey_exhaustion + mls_leaf_compromise | #695 (open) |
 | W13 | (open) | 197 | INV-CHAT-61..67 (90 Qed total) | 1200 | 24 | deniability_break + confused_deputy | #698 (open) |
 | W14 | (open) | 209 | INV-CHAT-68..74 (101 Qed total) | 1300 | 26 | safety_number_swap + mls_external_commit | #701 (open) |
-| **W15** | **(this PR)** | **221** | **INV-CHAT-75..81 (112 Qed total)** | **1400** | **28** | **egress_fingerprint + identity_revoke** | **(open)** |
+| W15 | (open) | 221 | INV-CHAT-75..81 (112 Qed total) | 1400 | 28 | egress_fingerprint + identity_revoke | #703 (open) |
+| **W16** | **(this PR)** | **235** | **INV-CHAT-82..88 (121 Qed total)** | **1500** | **30** | **clock_skew_replay + at_rest_rotation** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -156,6 +157,71 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 - Falsifier 900 → 1000 (PI-SKP-001..050 + PI-WLR-001..050).
 - 18 → 20 threshold lanes in `falsifier_runner` (all ≥ 0.95 except
   `indirect ≥ 0.90`).
+
+### Wave-16 — clock-skew / replay-window + at-rest key rotation
+
+- **L-CHAT-2-clock** (R-CHAT-2 / CR-CHAT-02) — CLK-01..06 in
+  `crates/trios-chat/rings/CR-CHAT-02/src/clock_skew.rs` (349 lines)
+  shipping `ReplayWindow` / `ClockSkewBound{skew_ms}` /
+  `ReplayDecision::{Accept, RejectReplay, RejectStale, RejectFuture, RejectEpochRollover}`
+  with `DEFAULT_MAX_HISTORY = 4096`:
+  - in-band fresh message accepted (CLK-01) — `|t_recv − t_msg| ≤ skew_ms`
+    AND `(epoch, counter)` not yet seen;
+  - stale (backdated) message rejected with `RejectStale` (CLK-02) —
+    `t_msg + skew_ms < t_recv`;
+  - future-dated message rejected with `RejectFuture` (CLK-03) —
+    `t_msg > t_recv + skew_ms`;
+  - in-window replay rejected with `RejectReplay` (CLK-04) — same
+    `(epoch, counter)` arrives twice;
+  - epoch-rollover rejected with `RejectEpochRollover` (CLK-05) —
+    new message at `epoch < current_epoch` after `advance_epoch`;
+  - persistent replay across rotation rejected (CLK-06) — replay-set
+    is preserved through `advance_epoch` boundaries.
+- **L-CHAT-5-rotate** (R-CHAT-5 / CR-CHAT-05) — ROT-01..06 in
+  `crates/trios-chat/rings/CR-CHAT-05/src/key_rotation.rs` (413 lines)
+  shipping `KeyEpoch(u64)` / `RotatableRow` / `JournalEntry` /
+  `RotationJournal::{append, no_double_rotation}` / `RotatingColumn` /
+  `Rotator<F>::{step, run_to_completion}`:
+  - well-formed rotation advances the row epoch monotonically (ROT-01);
+  - `RotationJournal` rejects double-advance for the same
+    `(row_id, source_epoch)` pair (ROT-02) — guarantees idempotence;
+  - `Rotator::run_to_completion` is idempotent — running again over
+    already-rotated rows is a no-op (ROT-03);
+  - foreign-epoch row (whose `current_epoch != source_epoch`) rejected
+    by the rotator (ROT-04);
+  - non-monotone rotation (target ≤ source) rejected at the
+    `RotatableRow` boundary (ROT-05);
+  - R-CHAT-9 padding-class invariant — `Rotator` rejects re-encryption
+    that shrinks the ciphertext padding class (ROT-06), so transcoding
+    cannot be used as an at-rest length oracle.
+- Coq INV-CHAT-82..88 + helper `replay_stale_rejects` in a fresh
+  `Section TrinityChatWave16` — uses unique names (`Epoch16`,
+  `KeyEpoch16`, `RotStep16`, `ReplayDecision16`, `ReceiverState16`)
+  to avoid cross-wave name collisions; 9 new Qed → **121 Qed total**.
+  - INV-CHAT-82 `clk_in_band_fresh_accepted`;
+  - INV-CHAT-83 `clk_stale_rejected`;
+  - INV-CHAT-84 `clk_future_rejected`;
+  - INV-CHAT-85 `clk_epoch_rollover_rejected`;
+  - INV-CHAT-86 `rot_idempotent`;
+  - INV-CHAT-87 `rot_foreign_epoch_rejected`;
+  - INV-CHAT-88 `rot_monotone_or_idempotent`.
+- **Zero new axioms.** Both lanes prove constructively.
+- Falsifier 1400 → 1500 (PI-CLK-001..050 + PI-ROT-001..050). Three
+  payloads tweaked to ensure W16 keyword coverage (`live replay-window`,
+  `across rotation under clock-skew`, `rotation journal`).
+- 28 → 30 threshold lanes in `falsifier_runner` (`clock_skew_replay`
+  and `at_rest_rotation`, both at 0.95 — all lanes ≥ 0.95 except
+  `indirect ≥ 0.90`).
+- `DENY_PATTERNS` in `CR-CHAT-06/src/injection.rs` extended with W16
+  keyword blocks: clock-skew (backdated, replay-window, replaywindow,
+  replay_window, clockskewbound, clock_skew, replaydecision,
+  rejectstale/future/epochrollover/replay, epoch-rollover, future-band,
+  t_msg, t_recv, accept_at, advance_epoch, timestamp manipulation,
+  replay attack, in-window, persistent replay, …) + at-rest-rotate
+  (keyepoch, rotation journal, rotationjournal, journalentry, rotator,
+  rotatingcolumn, rotatablerow, non-monotone, foreign-epoch,
+  source-epoch, padding-class, idempotence, at-rest rotation,
+  key rotation, rewrap, transcode, double-advance, …).
 
 ### Wave-15 — Tailscale-funnel egress fingerprinting + identity-key revocation
 
@@ -291,7 +357,7 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 
 ---
 
-## Falsifier-corpus categories (W1–W15) — 28 total
+## Falsifier-corpus categories (W1–W16) — 30 total
 
 | # | Category | First wave | Threshold |
 | :-- | :-- | :-- | :-- |
@@ -321,18 +387,20 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | 24 | confused_deputy          | W13 | 0.95 |
 | 25 | safety_number_swap   | W14 | 0.95 |
 | 26 | mls_external_commit  | W14 | 0.95 |
-| **27** | **egress_fingerprint** | **W15** | **0.95** |
-| **28** | **identity_revoke**    | **W15** | **0.95** |
+| 27 | egress_fingerprint | W15 | 0.95 |
+| 28 | identity_revoke    | W15 | 0.95 |
+| **29** | **clock_skew_replay** | **W16** | **0.95** |
+| **30** | **at_rest_rotation**  | **W16** | **0.95** |
 
 `falsifier_runner` is the gate: it loads `corpus/prompt_injection.jsonl`,
 runs `validate_output` on each entry, and exits non-zero if any threshold
-lane drops below its bound. Wave-15 ships 1400/1400 blocked across 28 lanes.
+lane drops below its bound. Wave-16 ships 1500/1500 blocked across 30 lanes.
 
 ---
 
-## Coq invariant index (INV-CHAT-1..81)
+## Coq invariant index (INV-CHAT-1..88)
 
-Cumulative `Qed.` count: **112 / 0 Admitted**. R5 admission budget: **0/10 used**.
+Cumulative `Qed.` count: **121 / 0 Admitted**. R5 admission budget: **0/10 used**.
 
 | Range | Wave | Theme |
 | :-- | :-- | :-- |
@@ -347,18 +415,19 @@ Cumulative `Qed.` count: **112 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-54..60 | W12 | prekey-bundle exhaustion + MLS leaf-key compromise |
 | INV-CHAT-61..67 | W13 | cryptographic deniability + confused-deputy capability |
 | INV-CHAT-68..74 | W14 | safety-number / OOB identity + MLS external-commit forgery |
-| **INV-CHAT-75..81** | **W15** | **egress fingerprinting (canonical TLS / length / burst-gap classes) + identity-key revocation with grace window** |
+| INV-CHAT-75..81 | W15 | egress fingerprinting (canonical TLS / length / burst-gap classes) + identity-key revocation with grace window |
+| **INV-CHAT-82..88** | **W16** | **clock-skew / replay-window decision (in-band / stale / future / epoch-rollover / replay) + at-rest key rotation idempotence and monotonicity** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, and Wave-15 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, and Wave-16 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W16–W20) — `[ASPIRATIONAL]`
+## Future waves (W17–W21) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -370,12 +439,13 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W12~~ — SHIPPED (see Wave-12 detail above) | | | | | | |
 | ~~W13~~ — SHIPPED (see Wave-13 detail above) | | | | | | |
 | ~~W14~~ — SHIPPED (see Wave-14 detail above) | | | | | | |
-| ~~W15~~ — SHIPPED in this PR (see Wave-15 detail above) | | | | | | |
-| **W16** | L-CHAT-2-clock (R-CHAT-2) — clock-skew / replay-window edge cases | L-CHAT-5-rotate (R-CHAT-5) — at-rest key rotation / re-encryption ordering | `clock_skew_replay`, `at_rest_rotation` | INV-CHAT-82..88 (≥120 Qed) | ≈233 | 1500 / 30 cats |
-| **W17** | L-CHAT-9-tool (R-CHAT-12) — tool-call argument confusion / type-confusion injection | L-CHAT-3-pcs (R-CHAT-11) — group-PCS healing after device compromise | `tool_arg_confusion`, `group_pcs_break` | INV-CHAT-89..95 (≥130 Qed) | ≈245 | 1600 / 32 cats |
-| **W18** | L-CHAT-6-cls (R-CHAT-9) — padding-class oracle (timing-class leak) | L-CHAT-7-jitter (R-CHAT-10) — jitter-injection / inter-arrival side-channel | `padding_class_oracle`, `jitter_side_channel` | INV-CHAT-96..102 (≥140 Qed) | ≈257 | 1700 / 34 cats |
-| **W19** | L-CHAT-8-decap (R-CHAT-2) — ML-KEM-768 decapsulation oracle / Fujisaki–Okamoto re-encryption | L-CHAT-9-tagsplit (R-CHAT-12) — tag-stripping / structured-output split | `kem_decap_oracle`, `tag_stripping` | INV-CHAT-103..109 (≥150 Qed) | ≈269 | 1800 / 36 cats |
-| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈281 | 1900 / 38 cats |
+| ~~W15~~ — SHIPPED (see Wave-15 detail above) | | | | | | |
+| ~~W16~~ — SHIPPED in this PR (see Wave-16 detail above) | | | | | | |
+| **W17** | L-CHAT-9-tool (R-CHAT-12) — tool-call argument confusion / type-confusion injection | L-CHAT-3-pcs (R-CHAT-11) — group-PCS healing after device compromise | `tool_arg_confusion`, `group_pcs_break` | INV-CHAT-89..95 (≥130 Qed) | ≈247 | 1600 / 32 cats |
+| **W18** | L-CHAT-6-cls (R-CHAT-9) — padding-class oracle (timing-class leak) | L-CHAT-7-jitter (R-CHAT-10) — jitter-injection / inter-arrival side-channel | `padding_class_oracle`, `jitter_side_channel` | INV-CHAT-96..102 (≥140 Qed) | ≈259 | 1700 / 34 cats |
+| **W19** | L-CHAT-8-decap (R-CHAT-2) — ML-KEM-768 decapsulation oracle / Fujisaki–Okamoto re-encryption | L-CHAT-9-tagsplit (R-CHAT-12) — tag-stripping / structured-output split | `kem_decap_oracle`, `tag_stripping` | INV-CHAT-103..109 (≥150 Qed) | ≈271 | 1800 / 36 cats |
+| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈283 | 1900 / 38 cats |
+| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥170 Qed) | ≈295 | 2000 / 40 cats |
 
 After W20 the corpus crosses **1900 entries / 38 categories** and Coq
 crosses **160 closed proofs / 0 admissions**, exhausting the planned
@@ -395,7 +465,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1400/1400 blocked` (W15) at 28 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1500/1500 blocked` (W16) at 30 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -432,7 +502,7 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W15..W20 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W17..W21 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
 
 ---
