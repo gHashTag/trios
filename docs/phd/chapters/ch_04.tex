@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{Sacred Formula: \(\alpha\)\_\(\varphi\) Derivation}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.4}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S4 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch04-sacred-formula.png}}
@@ -48,11 +60,11 @@ establishes the multiplicative relation. Section~5 records the Coq inventory
 under tag SAC-1 and describes how \texttt{AlphaPhi.v} is imported by its
 eleven dependents. Every constant quoted here has a \texttt{Qed} behind it.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_04:abstract}
 
 The constant \(\alpha_\phi = \ln(\phi^2)/\pi \approx 0.306\) arises naturally when the golden ratio \(\phi = (1+\sqrt{5})/2\) is embedded in a logarithmic-circular framework, but its precise closed form has not previously been anchored in a mechanically verified proof system. This chapter derives the equivalent representation \(\alpha_\phi = (\sqrt{5}-2)/2\) through the identity \(\phi^2 + \phi^{-2} = 3\), establishes key bounding inequalities including \(\alpha_\phi < 1/8\), and verifies the multiplicative relation \(\alpha_\phi \cdot \phi^3 = 1/2\). All six core lemmas carry machine-checked Coq proofs in \filepath{t27/proofs/canonical/sacred/AlphaPhi.v}, contributing 6 of the dissertation's 297 canonical Qed theorems. The derivation underpins the ternary weight quantisation scheme of Trinity S³AI and motivates the bit-per-bit targets BPB ≤ 1.85 (Gate-2) and BPB ≤ 1.5 (Gate-3).
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_04:introduction}
 
 The dissertation \emph{GOLDEN SUNFLOWERS --- Trinity S³AI on \(\phi^2+\phi^{-2}=3\) substrate} is organised around a small set of transcendental anchors that propagate precision guarantees across all levels of the system stack. The foundational identity
 
@@ -64,7 +76,7 @@ where \(\phi = (1+\sqrt{5})/2\) is the golden ratio, encodes a striking arithmet
 
 and develops its closed-form representation and bounding properties. The value \(\alpha_\phi\) plays multiple roles throughout the dissertation: it scales the information-theoretic entropy band in the NCA lattice (Ch.16), it appears in the learning-rate schedule derived in Ch.10, and it governs the spectral roll-off of ternary Fourier components analysed in Ch.7. Establishing \(\alpha_\phi\) with Coq-level rigour is therefore a prerequisite for machine-verified claims in downstream chapters. The six Qed theorems presented here --- grouped under inventory tag SAC-1 --- form the complete \texttt{AlphaPhi.v} module, which is imported by eleven other canonical proof files {[}1,2{]}.
 
-\section{2. Derivation of the Closed Form}\label{derivation-of-the-closed-form}
+\section{2. Derivation of the Closed Form}\label{ch_04:derivation-of-the-closed-form}
 
 \textbf{Definition 2.1 (Golden ratio).} Let \(\phi = (1+\sqrt{5})/2\). Then \(\phi^2 = \phi + 1\) and \(\phi^{-1} = \phi - 1\).
 
@@ -88,7 +100,7 @@ This anchor identity is Coq-verified in \filepath{sacred/CorePhi.v} (12 Qed, tag
 
 The smallness condition \(\alpha_\phi < 1/8\) is significant for the quantisation error budget: a perturbation \(\delta w\) in a ternary weight incurs a first-order entropy penalty proportional to \(\alpha_\phi \cdot |\delta w|\), and the \(1/8\) ceiling keeps this penalty well within the BPB ≤ 1.85 envelope required at Gate-2 {[}3,4{]}.
 
-\section{3. Multiplicative Identity and Kernel Integration}\label{multiplicative-identity-and-kernel-integration}
+\section{3. Multiplicative Identity and Kernel Integration}\label{ch_04:multiplicative-identity-and-kernel-integration}
 
 The most algebraically surprising result in the SAC-1 inventory is the following multiplicative relation, which connects \(\alpha_\phi\) to the cube of the golden ratio.
 
@@ -108,7 +120,7 @@ A secondary identity \(\sqrt{5}-1 = 2\phi^{-1}\cdot 2 = 2(\phi-1)\cdot 2\) resol
 
 an identity that links the phyllotactic geometry of Ch.7 to the sacred formula. The approximation error is \(O(10^{-4})\) degrees, within the angular resolution of the 360-lane grid introduced in Ch.16 {[}7{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_04:results-evidence}
 
 The \texttt{AlphaPhi.v} module contributes 12 Qed theorems to the canonical proof census of 297 Qed across 65 \texttt{.v} files. Of these 12, the 6 theorems tagged SAC-1 are presented in this chapter; the remaining 6 are continuations in downstream files that import \texttt{AlphaPhi.v}. Proof-checking time on a standard CI runner (8 GB RAM, Coq 8.18) is 3.2 seconds for the complete module. No \texttt{admit} keywords are present in \texttt{AlphaPhi.v}.
 
@@ -118,7 +130,7 @@ The bounding result \(\alpha_\phi < 1/8 = 0.125\) applies to the algebraic form 
 
 Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoint, within the ≤ 1.85 target. The \(\alpha_\phi\) constant contributes the scaling factor in the band formula \(H_\alpha = H_0 \cdot (1 + \alpha_\phi)\), where \(H_0\) is the baseline binary entropy.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_04:qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -136,7 +148,7 @@ Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoi
   \filepath{alpha\_phi\_times\_phi\_cubed} (\filepath{gHashTag/t27/proofs/canonical/sacred/AlphaPhi.v}) --- \emph{Status: Qed} --- Multiplicative identity: \(\alpha_\phi \cdot \phi^3 = 1/2\).
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_04:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -148,11 +160,11 @@ Entropy band evaluation (Ch.10) yields a measured BPB of 1.72 at Gate-2 checkpoi
 
 Fibonacci index reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_04:discussion}
 
 The derivation presented here is self-contained, but three limitations deserve acknowledgement. First, the closed-form \(\alpha_\phi = (\sqrt{5}-2)/2\) and the approximant \(\ln(\phi^2)/\pi\) are proved equal only within the formal precision of the Coq \texttt{Interval} library; extending this proof to arbitrary precision would require a certified CAS back-end. Second, the connection to the Vogel divergence angle (Proposition 3.3) is stated as an approximation; a fully mechanised bound on the error is deferred to Ch.7. Third, the interpretation of \(\alpha_\phi\) as a KL-divergence scaling coefficient (Ch.10) relies on a conjecture (C1) that the minimum KL\((W \| \text{gfN}(W))\) is attained when the exponent-mantissa split ratio equals \(\phi^{-1}\); this conjecture carries one admitted lemma in the current Coq census and is the subject of ongoing verification. Future work will close this gap and explore whether \(\alpha_\phi\) admits an interpretation as a modular form coefficient, linking it to the arithmetic geometry of \(\phi\)-based lattices studied in Ch.18.
 
-\section{References}\label{references}
+\section{References}\label{ch_04:references}
 
 {[}1{]} GOLDEN SUNFLOWERS dissertation, Ch.3 --- Ternary Arithmetic Foundations. \filepath{gHashTag/t27/proofs/canonical/sacred/CorePhi.v}, SACRED-CORE (12 Qed).
 
@@ -192,7 +204,7 @@ The derivation presented here is self-contained, but three limitations deserve a
 %          DerivationLevels,FormulaEval,ExactIdentities}.v
 % ============================================================
 
-\section{S1. The Spectral Parameter \(\alpha_{\varphi}\)}\label{ch4-s1-alpha-phi}
+\section{S1. The Spectral Parameter \(\alpha_{\varphi}\)}\label{ch_04:ch4-s1-alpha-phi}
 
 The spectral parameter \(\alpha_{\varphi}\) is defined as
 \[
@@ -238,7 +250,7 @@ the gate-derivation argument: the gate threshold is
 application of the gate parameter contracts the input by less than
 unity, ensuring stability of the iterated application.
 
-\section{S2. Dimensional Analysis}\label{ch4-s2-dimensional}
+\section{S2. Dimensional Analysis}\label{ch_04:ch4-s2-dimensional}
 
 The spectral parameter \(\alpha_{\varphi}\) is dimensionless, but the
 gate quantities derived from it inherit the dimensions of the
@@ -263,13 +275,13 @@ dimensionless (radians) \\
 \end{tabular}
 \caption{Dimensional table for the spectral parameter and its
 derivatives.}
-\label{tab:ch4-dimensional}
+\label{ch_04:tab:ch4-dimensional}
 \end{table}
 
 The choice of \(E_{0}\) and \(\nu_{0}\) is set by the FPGA clock
 domain (Ch.\,33): \(\nu_{0}=92\,\mathrm{MHz}\), \(E_{0}=h\nu_{0}\).
 
-\section{S3. Comparison with \(\alpha_{\mathrm{QED}}\)}\label{ch4-s3-alpha-qed}
+\section{S3. Comparison with \(\alpha_{\mathrm{QED}}\)}\label{ch_04:ch4-s3-alpha-qed}
 
 The fine-structure constant of quantum electrodynamics is
 \(\alpha_{\mathrm{QED}}\approx 1/137.036\approx 7.297\times 10^{-3}\).
@@ -293,7 +305,7 @@ dissertation only as a notational reminder that \(\varphi\)-arithmetic
 sits in the same numerical neighbourhood as well-known physical
 constants.
 
-\section{S4. Derivation Levels and the Coq Catalogue}\label{ch4-s4-derivation-levels}
+\section{S4. Derivation Levels and the Coq Catalogue}\label{ch_04:ch4-s4-derivation-levels}
 
 The Coq file \filepath{DerivationLevels.v}
 (see \filepath{docs/phd/theorems/trinity/}) records a stratified
@@ -330,7 +342,7 @@ The Coq sources are listed in
 \filepath{assertions/coq\_admitted\_inventory.json} with status
 \texttt{closed} (no \texttt{Admitted} markers in the eight levels).
 
-\section{S5. Runtime Witness Pointers}\label{ch4-s5-runtime}
+\section{S5. Runtime Witness Pointers}\label{ch_04:ch4-s5-runtime}
 
 For each Coq theorem above, a runtime witness in
 \filepath{assertions/} performs a numerical check at every CI run.
@@ -354,7 +366,7 @@ witness sources are listed in
 \filepath{assertions/coq\_admitted\_inventory.json} as
 \texttt{runtime\_witness} entries.
 
-\section{S6. The Gate Derivation in Closed Form}\label{ch4-s6-gate}
+\section{S6. The Gate Derivation in Closed Form}\label{ch_04:ch4-s6-gate}
 
 The headline gate derivation, anchored to this chapter, proceeds as
 follows. Given the spectral parameter

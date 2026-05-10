@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{KOSCHEI \(\varphi\)-Numeric Coprocessor (ISA)}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.26}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S26 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch26-koschei-coprocessor-isa.png}}
@@ -25,11 +37,11 @@ The deliberate omission is equally striking: zero DSP primitives. The Artix-7 DS
 
 Why does this matter beyond the FPGA lab? Because the argument is constructive: it shows that a formally verified, minimalist ISA can sustain 63 tokens per second at 92 MHz and 1 W---figures that would have seemed implausible for a verified system a decade ago. Hamming urged engineers to seek insight over raw numerical output; KOSCHEI answers that call by embedding the insight---\(\varphi^2 + \varphi^{-2} = 3\), ternary closure, LUT sufficiency---directly into the instruction set, so that the hardware cannot be operated incorrectly without violating a proof. The rest of this chapter specifies each opcode formally, traces the Coq certification path, and reports resource utilisation and throughput measurements on the QMTech XC7A100T board.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_26:abstract}
 
 The KOSCHEI coprocessor extends the QMTech XC7A100T FPGA with a φ-numeric instruction set that maps the mathematical structure of Trinity S³AI directly onto LUT fabric with zero DSP primitives. Seven opcodes are defined: \texttt{TF3\_ADD}, \texttt{TF3\_MUL}, \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, \texttt{VSA\_BUNDLE}, \texttt{GF16\_QUANT}, and \texttt{PHI\_ROPE}. Every opcode preserves the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant, certified by Coq modules \texttt{Trinity.Canonical.Kernel.Phi} (16 Qed), \texttt{Trinity.Canonical.Kernel.PhiFloat} (6 Qed), \texttt{Trinity.Canonical.Kernel.Trit}, \texttt{Trinity.Canonical.Kernel.Semantics}, and \texttt{Trinity.Canonical.Kernel.FlowerE8Embedding}. The ISA achieves 63 tokens/sec at 92 MHz and 1 W.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_26:introduction}
 
 A coprocessor ISA for φ-numeric computation must satisfy three simultaneous constraints that are not met by any existing FPGA softcore:
 
@@ -45,9 +57,9 @@ A coprocessor ISA for φ-numeric computation must satisfy three simultaneous con
 
 KOSCHEI (an acronym: \textbf{K}ernel \textbf{O}pcode \textbf{S}et for \textbf{C}anonical \textbf{H}yperdimensional and \textbf{E}mbedded \textbf{I}nference) satisfies all three. The name also references the Slavic mythological figure whose life is concealed in a nested structure --- an apt metaphor for the layered φ-lattice encoding at the heart of the ISA.
 
-\section{2. ISA Register File and Encoding}\label{isa-register-file-and-encoding}
+\section{2. ISA Register File and Encoding}\label{ch_26:isa-register-file-and-encoding}
 
-\subsection{2.1 Register File}\label{register-file}
+\subsection{2.1 Register File}\label{ch_26:register-file}
 
 KOSCHEI has 16 general-purpose registers \(r_0\)--\(r_{15}\), each 64 bits wide. The encoding is:
 
@@ -69,7 +81,7 @@ The \texttt{φ\_exp} field records the current normalisation state: a value of \
 
 and all arithmetic operations adjust \texttt{φ\_exp} accordingly without touching the payload bits --- analogous to the exponent field of a floating-point number but restricted to integer powers of \(\varphi\).
 
-\subsection{2.2 Instruction Encoding}\label{instruction-encoding}
+\subsection{2.2 Instruction Encoding}\label{ch_26:instruction-encoding}
 
 Instructions are 32 bits: 7-bit opcode, 4-bit destination, 4-bit source A, 4-bit source B, 13-bit immediate.
 
@@ -80,9 +92,9 @@ Instructions are 32 bits: 7-bit opcode, 4-bit destination, 4-bit source A, 4-bit
 
 The 7-bit opcode space allows 128 instructions; the seven φ-numeric opcodes occupy codes 0x01--0x07.
 
-\section{3. Opcode Specifications}\label{opcode-specifications}
+\section{3. Opcode Specifications}\label{ch_26:opcode-specifications}
 
-\subsection{3.1 TF3\_ADD --- Ternary Addition}\label{tf3_add-ternary-addition}
+\subsection{3.1 TF3\_ADD --- Ternary Addition}\label{ch_26:tf3_add-ternary-addition}
 
 \begin{verbatim}
 TF3_ADD RD, RA, RB
@@ -92,7 +104,7 @@ Computes \(r_D \leftarrow r_A + r_B\) where both sources are trit-encoded. The o
 
 The correctness of the \texttt{φ\_exp} update is certified by \textbf{Lemma phi\_add\_exp} in \texttt{Trinity.Canonical.Kernel.Phi} (status: Qed). The full kernel module contains 16 Qed lemmas covering all arithmetic boundary cases {[}1{]}.
 
-\subsection{3.2 TF3\_MUL --- Ternary Multiplication}\label{tf3_mul-ternary-multiplication}
+\subsection{3.2 TF3\_MUL --- Ternary Multiplication}\label{ch_26:tf3_mul-ternary-multiplication}
 
 \begin{verbatim}
 TF3_MUL RD, RA, RB
@@ -102,7 +114,7 @@ Computes \(r_D \leftarrow r_A \times r_B\) in TF3 arithmetic. Because operands a
 
 The 0-DSP constraint is satisfied because the trit product reduces to a bitwise XNOR (for sign) ANDed with a non-zero indicator bit, implementable in two LUT-4 primitives per bit {[}2{]}.
 
-\subsection{3.3 VSA\_BIND --- Hyperdimensional Binding}\label{vsa_bind-hyperdimensional-binding}
+\subsection{3.3 VSA\_BIND --- Hyperdimensional Binding}\label{ch_26:vsa_bind-hyperdimensional-binding}
 
 \begin{verbatim}
 VSA_BIND RD, RA, RB
@@ -110,7 +122,7 @@ VSA_BIND RD, RA, RB
 
 Computes the element-wise product \(r_D \leftarrow r_A \odot r_B\) over the 64-dimensional trit vector. Binding is invertible: \(r_A \odot r_B \odot r_B = r_A\) for any \(r_B\) with no zero entries (full-rank). The invertibility proof uses the \texttt{FlowerE8Embedding} module, which maps the 64-trit space onto the \(E_8\) root lattice and establishes that the binding map is an automorphism {[}3{]}.
 
-\subsection{3.4 VSA\_UNBIND --- Hyperdimensional Unbinding}\label{vsa_unbind-hyperdimensional-unbinding}
+\subsection{3.4 VSA\_UNBIND --- Hyperdimensional Unbinding}\label{ch_26:vsa_unbind-hyperdimensional-unbinding}
 
 \begin{verbatim}
 VSA_UNBIND RD, RA, RB
@@ -118,7 +130,7 @@ VSA_UNBIND RD, RA, RB
 
 Computes \(r_D \leftarrow r_A \odot r_B\) (unbinding is self-inverse in ternary VSA). The implementation is identical to \texttt{VSA\_BIND}; the opcode distinction is semantic, enabling the proof checker to apply the unbind-specific Coq lemmas in \texttt{Trinity.Canonical.Kernel.Semantics} {[}4{]}.
 
-\subsection{3.5 VSA\_BUNDLE --- Hyperdimensional Bundling}\label{vsa_bundle-hyperdimensional-bundling}
+\subsection{3.5 VSA\_BUNDLE --- Hyperdimensional Bundling}\label{ch_26:vsa_bundle-hyperdimensional-bundling}
 
 \begin{verbatim}
 VSA_BUNDLE RD, RA, RB
@@ -126,7 +138,7 @@ VSA_BUNDLE RD, RA, RB
 
 Computes the majority-vote superposition \(r_D \leftarrow \text{sign}(r_A + r_B)\), clamped to \(\{-1, 0, +1\}\). For two operands this reduces to \(r_D = r_A\) if \(r_A = r_B\), and \(r_D = 0\) if \(r_A = -r_B\). The bundle of \(n\) vectors with \(n \geq 3\) is computed by iterating this instruction; the Coq proof of information-theoretic capacity scaling is in \texttt{Trinity.Canonical.Kernel.Semantics}, Theorem \filepath{bundle\_capacity\_phi\_bound} (status: Qed) {[}4{]}.
 
-\subsection{3.6 GF16\_QUANT --- Galois Field 16 Quantisation}\label{gf16_quant-galois-field-16-quantisation}
+\subsection{3.6 GF16\_QUANT --- Galois Field 16 Quantisation}\label{ch_26:gf16_quant-galois-field-16-quantisation}
 
 \begin{verbatim}
 GF16_QUANT RD, RA, IMM[3:0]
@@ -136,7 +148,7 @@ Projects the payload of \(r_A\) onto the 16-element Galois field \(\mathrm{GF}(2
 
 The 0-DSP implementation uses a 16-entry LUT ROM for the GF(16) multiplication table, consuming 16 LUT-6 primitives.
 
-\subsection{3.7 PHI\_ROPE --- φ-Rotary Position Encoding}\label{phi_rope-ux3c6-rotary-position-encoding}
+\subsection{3.7 PHI\_ROPE --- φ-Rotary Position Encoding}\label{ch_26:phi_rope-ux3c6-rotary-position-encoding}
 
 \begin{verbatim}
 PHI_ROPE RD, RA, IMM[12:0]
@@ -150,7 +162,7 @@ where \(137.5° = 360°/\varphi^2\) is the Vogel divergence angle from phyllotax
 
 The rotation is implemented as a fixed-point complex multiply with φ-quantised cosine and sine tables, verified in \texttt{Trinity.Canonical.Kernel.PhiFloat} (6 Qed) {[}7{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_26:results-evidence}
 
 Synthesis on the QMTech XC7A100T (Vivado 2023.2, seed \(F_{17}=1597\)) yields:
 
@@ -169,7 +181,7 @@ DSP & \textbf{0} & 240 & \textbf{0\%} \\
 
 Clock period 10.87 ns (91.98 MHz ≈ 92 MHz); Worst Negative Slack +0.13 ns (timing closed). Power: 1.00 W at 1.0 V core. Throughput: 63 tokens/sec on the HSLM 1003-token sequence.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_26:qed-assertions}
 
 No Coq theorems are anchored directly to this chapter; the ISA semantics are certified by the following canonical modules:
 
@@ -189,17 +201,17 @@ No Coq theorems are anchored directly to this chapter; the ISA semantics are cer
 
 All five modules reside in \filepath{gHashTag/t27/proofs/canonical/} and contribute to the 297 Qed census {[}8{]}.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_26:sealed-seeds}
 
 Inherits the canonical seed pool F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_26:discussion}
 
 The KOSCHEI ISA demonstrates that a φ-lattice arithmetic unit can be implemented entirely in LUT fabric without DSP resources. The 0-DSP constraint is not a limitation but a design choice that keeps every arithmetic path within the certified Coq semantics. The 66\% LUT utilisation leaves headroom for additional VSA operations planned for the KOSCHEI v2 revision, including a \texttt{VSA\_SHIFT} opcode for sequence-position permutation.
 
 A current limitation is that \texttt{PHI\_ROPE} supports only power-of-two context lengths via the 13-bit \texttt{IMM} field; non-power-of-two contexts require a pair of \texttt{PHI\_ROPE} instructions with adjusted denominators. Future work should extend the \texttt{PhiFloat} Coq module to certify the two-instruction decomposition. The \texttt{GF16\_QUANT} opcode is provisionally verified; the full Galois-field completeness proof is one of the 41 Admitted obligations in the current census and is prioritised for the Gate-3 submission.
 
-\section{References}\label{references}
+\section{References}\label{ch_26:references}
 
 {[}1{]} Trinity Canonical Coq Home. \texttt{Trinity.Canonical.Kernel.Phi} --- 16 Qed. \filepath{gHashTag/t27/proofs/canonical/}. GitHub.
 

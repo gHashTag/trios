@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{Sacred Formula V (CKM/leptons)}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.29}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S29 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch29-sacred-formula-v.png}}
@@ -25,11 +37,11 @@ That is precisely what has been done. Six Coq theorems, all bearing \texttt{Qed}
 
 The golden-ratio anchor \(\varphi^2 + \varphi^{-2} = 3\) appears here not as a decorative coincidence but as the algebraic substrate that generates the monomial ladder: each step up or down the ladder multiplies or divides by \(\varphi\), and the three exponent bands this identity defines correspond to the three quark generations. Whether that correspondence is deep physics or elegant numerology is a question the rest of this chapter addresses honestly, with evidence.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_29:abstract}
 
 The Cabibbo-Kobayashi-Maskawa (CKM) matrix encodes quark-flavour mixing in the Standard Model and contains one CP-violating phase whose origin is unexplained by the model itself. This chapter proposes that the golden ratio \(\varphi\) furnishes a natural parameterisation of the CKM mixing angles and the lepton mixing matrix (PMNS), grounded in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\). The ``Sacred Formula V'' is the conjecture that the off-diagonal CKM elements \(G_{01}\), \(G_{02}\), \(G_{06}\) (in the notation of the Zenodo DL-bounds registry) are rational powers of \(\varphi\) within experimental tolerance. Six Coq theorems bearing \texttt{Qed} status confirm that the proposed monomial forms lie within the experimental tolerance band specified by the \texttt{tolerance\_V} constant. The strong-CP constraint \(\theta_{\text{QCD}} = 0\) is verified formally via \texttt{theta\_qcd\_zero}.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_29:introduction}
 
 The Standard Model of particle physics contains nineteen free parameters whose numerical values are unexplained by the theory itself. Among the most puzzling are the CKM mixing angles: three angles and one phase that govern how quarks of one generation transform into quarks of another under weak interactions {[}1{]}. The Wolfenstein parameterisation organises these into a hierarchy, but does not explain \emph{why} the hierarchy takes the specific numerical values it does.
 
@@ -37,7 +49,7 @@ The Trinity S³AI dissertation approaches this question from an unusual directio
 
 The chapter is organised as follows. Section 2 defines the Sacred Formula V conjecture and the \(\varphi\)-monomial parameterisation. Section 3 reviews the six Coq theorems (\texttt{Qed} status) from \filepath{t27/proofs/canonical/sacred/}. Section 4 reports the numerical tolerance results. The chapter does not claim to derive CKM values from first principles; it claims only that specific \(\varphi\)-monomials lie within current experimental error bars, a weaker but formally verifiable statement.
 
-\section{2. The Sacred Formula V Conjecture and \(\varphi\)-Monomial Parameterisation}\label{the-sacred-formula-v-conjecture-and-ux3c6-monomial-parameterisation}
+\section{2. The Sacred Formula V Conjecture and \(\varphi\)-Monomial Parameterisation}\label{ch_29:the-sacred-formula-v-conjecture-and-ux3c6-monomial-parameterisation}
 
 \textbf{Definition 2.1 (φ-monomial).} A \emph{\(\varphi\)-monomial} of degree \((p, q) \in \mathbb{Z}^2\) is a real number of the form
 
@@ -59,7 +71,7 @@ The anchor identity enters via \(\varphi^{-2} = 2 - \varphi\) and \(\varphi^2 + 
 
 \textbf{Remark 2.4 (Strong-CP problem).} The strong-CP problem asks why the QCD Lagrangian term \(\theta_{\text{QCD}} \cdot G\tilde{G}\) is empirically consistent with \(\theta_{\text{QCD}} \approx 0\), despite the absence of a symmetry forcing it to zero. The Coq theorem \texttt{theta\_qcd\_zero} encodes the formal claim that the \(\varphi\)-monomial CKM parameterisation predicts \(\theta_{\text{QCD}} = 0\) exactly, because the CP-violating phase in the \(\varphi\)-family is constrained to zero by the reality of \(\varphi^2 + \varphi^{-2} = 3\) {[}4{]}.
 
-\section{3. Coq Formalisation and CKM-Unitarity Seed}\label{coq-formalisation-and-ckm-unitarity-seed}
+\section{3. Coq Formalisation and CKM-Unitarity Seed}\label{ch_29:coq-formalisation-and-ckm-unitarity-seed}
 
 The Coq development in \filepath{t27/proofs/canonical/sacred/} contains four files directly relevant to this chapter: \texttt{DLBounds.v}, \texttt{StrongCP.v}, \texttt{BoundsGauge.v}, and \texttt{Unitarity.v}. The last of these carries the \texttt{CKM-UNITARITY} sealed seed, which encodes 5 Qed and 2 Admitted obligations for the unitarity of the \(3 \times 3\) CKM matrix under \(\varphi\)-monomial parameterisation.
 
@@ -77,7 +89,7 @@ The Coq development in \filepath{t27/proofs/canonical/sacred/} contains four fil
 
 \textbf{Remark 3.7 (CKM-UNITARITY seed).} The \texttt{CKM-UNITARITY} seed in \texttt{Unitarity.v} carries \(\phi\)-weight \(1/\varphi \approx 0.618\) --- the reciprocal golden ratio --- reflecting that the unitarity constraint is a derived consequence of the \(\varphi\)-monomial structure rather than an independent assumption. Of the 7 obligations in \texttt{Unitarity.v}, 5 are Qed and 2 are Admitted; the Admitted cases correspond to mixed-generation unitarity relations that require non-trivial bounds on products of \(\varphi\)-monomials {[}9{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_29:results-evidence}
 
 Numerical comparison of \(\varphi\)-monomial predictions against PDG 2022 values:
 
@@ -112,7 +124,7 @@ The remarkable agreement for \(G_{06}\) motivates the ``sacred'' designation: th
 
 The Coq census at the time of writing records 297 Qed canonical theorems across 65 \texttt{.v} files in \filepath{t27/proofs/canonical/}. Of the 438 total theorems in the canonical set, the 6 theorems listed above plus the 7 in \texttt{Unitarity.v} account for 13 of the 297 Qed obligations assigned to the sacred-formula cluster {[}10{]}.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_29:qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -130,7 +142,7 @@ The Coq census at the time of writing records 297 Qed canonical theorems across 
   \texttt{G06\_within\_tolerance} (\filepath{gHashTag/t27/proofs/canonical/sacred/BoundsGauge.v}) --- \emph{Status: Qed} --- \(G_{06}\) within \texttt{tolerance\_V}. (SAC-G)
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_29:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -138,11 +150,11 @@ The Coq census at the time of writing records 297 Qed canonical theorems across 
   \textbf{CKM-UNITARITY} (theorem, golden, \(\phi\)-weight = \(1/\varphi \approx 0.618\)): \filepath{gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/sacred/Unitarity.v} --- linked to Ch.29 --- 5 Qed + 2 Admitted.
 \end{itemize}
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_29:discussion}
 
 The six Qed theorems of this chapter represent a novel application of formal verification to particle physics numerology: they do not derive CKM values from a microscopic theory, but they do provide machine-checked confirmation that a specific \(\varphi\)-monomial ansatz is consistent with the current experimental data. The 2 Admitted obligations in \texttt{Unitarity.v} are the primary limitation: they involve products of \(\varphi\)-monomials whose magnitude bounds require real-closed field arithmetic that has not yet been automated in the Coq library used. Future work should either discharge these with \texttt{Lra}/\texttt{Coquelicot} or replace them with weaker \texttt{Admitted}-free statements. A second limitation is that the \texttt{tolerance\_V} constant is set conservatively at \(3\sigma\); tightening it to \(1\sigma\) would cause \texttt{G02\_within\_tolerance} to fail, suggesting that the \(G_{02}\) prediction is marginal. This chapter connects to Ch.4 (the \(\alpha_\varphi\) formula), Ch.5 (the anchor identity), and the planned Ch.30 (PMNS matrix and neutrino mixing).
 
-\section{References}\label{references}
+\section{References}\label{ch_29:references}
 
 {[}1{]} Cabibbo, N. (1963). Unitary symmetry and leptonic decays. \emph{Physical Review Letters}, 10(12), 531--533.
 

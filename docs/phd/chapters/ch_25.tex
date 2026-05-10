@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{$\varphi$-Period Cycles}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.25}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S25 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch25-phi-period-cycles.png}}
@@ -55,11 +67,11 @@ periodicity; Section~4 links the cycle structure to the Vogel angle and the
 statistical loss periodicity; and Section~5 discusses the implications for
 long-run training stability and gate compliance.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_25:abstract}
 
 This chapter develops the theory of \(\varphi\)-period cycles --- periodic orbits in the weight and attention manifolds of the TRINITY S³AI model that arise because the quantisation lattice is invariant under multiplication by \(\varphi^2\). The central result is that every trajectory of the gradient-descent dynamics on the \(\varphi\)-quantised weight space is eventually periodic with period dividing \(F_k\) for some \(k\), and that the attractor set is precisely the subset of weights satisfying \(\varphi^2 + \varphi^{-2} = 3\) up to lattice precision. The chapter defines the notion of a \(\varphi\)-cycle formally, classifies cycles of order \(\leq F_{10} = 55\), and connects the cycle structure to the Vogel divergence angle (Ch.7) and the statistical periodicity of the training loss (Ch.19).
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_25:introduction}
 
 Periodic behaviour in gradient-descent optimisation is usually treated as a pathology: limit cycles indicate that the learning rate is too large or the loss landscape has degenerate saddle points. In the TRINITY S³AI framework, by contrast, a restricted class of periodic orbits is not merely tolerated but engineered. The \(\varphi\)-quantised weight lattice \(\Lambda_\varphi\) satisfies
 
@@ -69,7 +81,7 @@ which means that rescaling all weights by \(\varphi^2\) returns them to the same
 
 The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) plays a dual role here. It is the algebraic certificate that \(\Lambda_\varphi\) is closed under the two operations \(\times\varphi^2\) and \(\times\varphi^{-2}\) (since \(\varphi^2 + \varphi^{-2}\) is an integer), and it sets the diameter of the fundamental domain of the quotient torus to exactly 3 lattice units {[}1{]}. This compactness ensures that every orbit visits at most \(3^d\) distinct quantised configurations in \(d\) dimensions before repeating, bounding the cycle length.
 
-\section{\texorpdfstring{2. \(\varphi\)-Lattice Structure and the Cycle Map}{2. \textbackslash varphi-Lattice Structure and the Cycle Map}}\label{varphi-lattice-structure-and-the-cycle-map}
+\section{\texorpdfstring{2. \(\varphi\)-Lattice Structure and the Cycle Map}{2. \textbackslash varphi-Lattice Structure and the Cycle Map}}\label{ch_25:varphi-lattice-structure-and-the-cycle-map}
 
 \textbf{Definition 2.1 (\(\varphi\)-quantised lattice).} The one-dimensional \(\varphi\)-quantised lattice is:
 \[\Lambda_\varphi^{(1)} = \{ a + b\varphi : a, b \in \mathbb{Z} \} \cap [-\varphi^{-1}, \varphi^{-1}],\]
@@ -91,7 +103,7 @@ The \(k\)-th power of \(M\) is \(\begin{pmatrix} F_{k-1} & F_k \\ F_k & F_{k+1} 
 
 \textbf{Corollary 2.6.} The sanctioned seeds \(F_{17}=1597, \ldots, F_{21}=10946\) index cycles whose orders are bounded above by \(F_{21}=10946\), covering all practically relevant orbit lengths.
 
-\section{3. Cycle Classification and Attention Periodicity}\label{cycle-classification-and-attention-periodicity}
+\section{3. Cycle Classification and Attention Periodicity}\label{ch_25:cycle-classification-and-attention-periodicity}
 
 The cycle structure of \(\Phi\) on \(\Lambda_\varphi^{(1)}\) for small lattice sizes is tabulated below. Lattice size \(|\Lambda| = 3\) corresponds to the ternary alphabet \(\{-1, 0, 1\}\).
 
@@ -120,7 +132,7 @@ which uses the same Fibonacci indices as the sanctioned seed pool {[}4{]}. The r
 
 \emph{Proof.} \(\Phi^{F_k}(K) = K\) by the cycle condition, and \(\text{PE}(i+F_k) = \text{PE}(i)\) by the periodicity of the encoding. \(\square\)
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_25:results-evidence}
 
 \textbf{Evidence 1 --- Loss periodicity.} Training loss curves for all three primary replicates (Ch.19) exhibit local minima at gradient steps \(F_k\) for \(k = 10, 11, 12, 13\) (steps 55, 89, 144, 233). The mean dip depth at these steps is \(\Delta\mathcal{L} = 0.0031 \pm 0.0004\) (mean \(\pm\) SE, \(n=3\)), consistent with the model periodically revisiting weight configurations close to \(\varphi\)-cycle attractors.
 
@@ -128,21 +140,21 @@ which uses the same Fibonacci indices as the sanctioned seed pool {[}4{]}. The r
 
 \textbf{Evidence 3 --- Attention periodicity.} Attention entropy \(H(A_i) = -\sum_j A_{ij} \log A_{ij}\) was measured on the held-out partition for all 12 attention heads. Heads 5 and 11 (zero-indexed) exhibited significant periodicity at period \(F_{10}=55\) and \(F_{11}=89\) respectively, as confirmed by a discrete Fourier transform with peak-to-noise ratio \(> 3\). The \(\varphi^2 + \varphi^{-2} = 3\) identity constrains the spectral weight of these peaks: the sum of squared Fourier coefficients at \(F_k\) and \(F_{k-2}\) equals exactly 3 times the mean spectral power (evidence axis 3, \(n=3\), Welch \(t\), \(p = 0.008\)).
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_25:qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_25:sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
 Note: \(L_7 = 29\) and \(L_8 = 47\) are motivated by the cycle census of §4, Evidence 2. The cycle counts at \(|\Lambda| = F_{17}\) are \(L_7\) and \(L_8\) for orders 29 and 47 respectively.
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_25:discussion}
 
 The \(\varphi\)-cycle theory developed here is a novel contribution: to the authors' knowledge, no prior work has exploited the \(\varphi^2\)-invariance of the Fibonacci lattice to engineer beneficial periodicity in attention matrices. The primary limitation is that the periodicity results are proved for the one-dimensional lattice and extended to \(d\) dimensions coordinatewise; interactions between dimensions (cross-cycle interference) are not yet analysed. A second limitation is that the Pisano period theorem (Theorem 2.5) guarantees that cycle orders divide \(F_k\), but does not specify which \(k\); in practice, the relevant \(k\) is determined empirically from the loss-dip census (Evidence 1). Future work includes: (a) formalising Proposition 3.1 as a Coq theorem (filed as CYC-1 in the Golden Ledger), (b) extending the cycle census to \(|\Lambda| = F_{18} = 2584\) and \(F_{19} = 4181\), and (c) investigating whether the Vogel divergence angle \(360°/\varphi^2\) (Ch.7) can be interpreted as the angular step of the one-dimensional cycle map on the unit circle. Connections to Ch.7 (lattice geometry), Ch.13 (seed admissibility), and Ch.19 (loss periodicity) are tight.
 
-\section{References}\label{references}
+\section{References}\label{ch_25:references}
 
 {[}1{]} This dissertation, Ch.7 --- Vogel Phyllotaxis \(137.5° = 360°/\varphi^2\). \(\varphi^2\)-invariance of the Fibonacci lattice.
 

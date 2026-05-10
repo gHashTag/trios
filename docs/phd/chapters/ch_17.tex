@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{Ablation matrix}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.17}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S17 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch17-ablation-matrix.png}}
@@ -54,11 +66,11 @@ full interaction table---so that the seven architectural claims can
 stand on their own factorial evidence, not on the authority of their
 authors.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_17:abstract}
 
 A systematic ablation study isolates the contribution of each architectural decision in the Trinity S³AI pipeline to the aggregate BPB metric. This chapter presents a full \(2^k\) factorial design over \(k=7\) binary factors --- weight ternarity, \(\varphi\)-structured attention, canonical seed selection, golden-ratio positional encoding, MXFP4 quantisation, zero-DSP FPGA scheduling, and the \(\varphi^2 + \varphi^{-2} = 3\) normalisation constraint --- and reports the first-order effects and their interactions. Results confirm that seed selection and the normalisation constraint contribute the largest independent BPB reduction, while the FPGA scheduling factor is orthogonal to BPB but critical for the 1 W energy target. The ablation matrix is the empirical counterpart to the formal Coq proof obligations distributed across the dissertation.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_17:introduction}
 
 Architectural claims in neural network research are frequently confounded: multiple non-independent design choices are adopted simultaneously, and the reported performance improvement is attributed to the combination rather than to any single factor. The Trinity S³AI programme is not immune to this confound. The HSLM benchmarks cited in Ch.28 reflect a fully assembled system running on the QMTech XC7A100T FPGA at 0 DSP slices, 92 MHz, 63 tokens/sec, and 1 W power --- but they do not, by themselves, reveal which of the seven major design choices drives the BPB improvement.
 
@@ -66,7 +78,7 @@ This chapter addresses that gap with a controlled ablation study. The anchor ide
 
 The pre-registration of H₁ (Ch.11) constrains the interpretation: ablation variants that violate the canonical seed constraint (Definition 3.2 of Ch.5) are invalid experiments. All ablated variants in this chapter use at least one canonical seed from the pool \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\).
 
-\section{2. Factor Definitions and Experimental Design}\label{factor-definitions-and-experimental-design}
+\section{2. Factor Definitions and Experimental Design}\label{ch_17:factor-definitions-and-experimental-design}
 
 \textbf{Definition 2.1 (Ablation factors).} The seven binary factors are:
 
@@ -108,7 +120,7 @@ G & \(\varphi^2+\varphi^{-2}=3\) normalisation & LayerNorm & Golden LayerNorm \\
 
 where \(y_i\) is the BPB of run \(i\). Two-factor interactions \(\hat{\beta}_{jk}\) are similarly estimable {[}2{]}.
 
-\section{3. Analysis of Effects and Golden-Ratio Structure}\label{analysis-of-effects-and-golden-ratio-structure}
+\section{3. Analysis of Effects and Golden-Ratio Structure}\label{ch_17:analysis-of-effects-and-golden-ratio-structure}
 
 The full-factorial analysis identifies two dominant first-order effects and one significant two-factor interaction:
 
@@ -141,7 +153,7 @@ where the denominator constant \(\sqrt{3} = \sqrt{\varphi^2 + \varphi^{-2}}\) is
 
 \textbf{Factor F (zero-DSP).} Removing DSP slices (F: \(1 \to 0\) in the convention above, i.e., enabling DSPs) does not change BPB but reduces throughput by a factor of \(1.4\times\) due to routing congestion on the XC7A100T fabric. The zero-DSP target is a hardware efficiency constraint, not a model quality constraint, and has no first-order effect on BPB {[}6{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_17:results-evidence}
 
 Summary of first-order BPB effects (positive = BPB worsens when factor is removed):
 
@@ -175,19 +187,19 @@ Full-system BPB (all factors at level 1, seed \(F_{19}=4181\), \(T=4181\) tokens
 
 Hardware metrics for the full-system run: QMTech XC7A100T FPGA, 0 DSP slices, 92 MHz, 63 tokens/sec, 1 W, 1003 tokens on HSLM benchmark {[}7{]}.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_17:qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_17:sealed-seeds}
 
 Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_17:discussion}
 
 The ablation matrix confirms that the canonical seed selection (factor C) and the golden normalisation constant derived from \(\varphi^2 + \varphi^{-2} = 3\) (factor G) are the two largest independent contributors to BPB reduction. Their positive interaction means that deploying one without the other is less effective than deploying both together --- a pleasing consistency with the mathematical structure of the \(\varphi\) framework. A limitation of the current design is that the evaluation corpus is not yet publicly pinned (see Ch.11 for pre-registration notes); future work should fix the corpus SHA-1 to a public benchmark release. The MXFP4 factor (E) shows no statistically significant BPB effect, which is expected: MXFP4 reduces precision but the golden substrate tolerates quantisation noise because the ternary weights already occupy only three values. This chapter links backward to Ch.11 (pre-registration), Ch.5 (seed formalisation), and Ch.4 (\(\alpha_\varphi\)), and forward to Ch.28 (FPGA hardware detail) and Ch.34 (energy-per-token analysis).
 
-\section{References}\label{references}
+\section{References}\label{ch_17:references}
 
 {[}1{]} GOLDEN SUNFLOWERS Dissertation, Ch.28 --- \emph{FPGA hardware benchmarks}. Zenodo B002. DOI: 10.5281/zenodo.19227867.
 

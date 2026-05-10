@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{TRI27 DSL}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.27}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S27 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch27-tri27-dsl.png}}
@@ -42,11 +54,11 @@ The rest of the chapter spells out the syntax, the denotational
 semantics, and the Zenodo artefact (B003) that archives the
 verifiable virtual machine.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_27:abstract}
 
 TRI27 is the domain-specific language (DSL) of the Trinity S³AI kernel, typed over a balanced-ternary digit alphabet \(\{-1, 0, +1\}\) --- cardinality \(3\), the integer appearing in the anchor identity \(\varphi^2 + \varphi^{-2} = 3\). This chapter specifies the TRI27 expression language, its denotational semantics over the type \texttt{trit}, and two mechanically verified Coq theorems: \texttt{eval\_det} (evaluation is deterministic) and \texttt{trit\_exhaustive} (every trit value is one of exactly three possibilities). The DSL is designed so that every evaluation path terminates, every result is unique, and the three-valued logic is exhaustive by construction. The Zenodo artifact B003 archives the verifiable VM implementation.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_27:introduction}
 
 The arithmetic core of Trinity S³AI processes weights and activations represented as balanced-ternary vectors. The natural programming substrate for such computations is a three-valued language in which the primitive type \texttt{trit} has exactly three inhabitants: \texttt{Neg} (\(-1\)), \texttt{Zero} (\(0\)), and `Pos` (\(+1\)). The cardinality of this type is \(3\) --- the same integer that appears at the right-hand side of the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) {[}1{]}. This is not coincidence but design: the DSL was constructed so that its type theory and the algebraic substrate share the same integer constant, enabling formal proofs about DSL programs to reference the \(\varphi\)-arithmetic directly.
 
@@ -54,9 +66,9 @@ TRI27 (Trinity-27) takes its name from the 27 = \(3^3\) possible triples of trit
 
 The chapter is organised as follows: Section 2 defines the TRI27 syntax and semantics. Section 3 proves the two Coq theorems. Section 4 presents evaluation results and artifact metadata.
 
-\section{2. TRI27 Syntax and Denotational Semantics}\label{tri27-syntax-and-denotational-semantics}
+\section{2. TRI27 Syntax and Denotational Semantics}\label{ch_27:tri27-syntax-and-denotational-semantics}
 
-\subsection{2.1 Abstract Syntax}\label{abstract-syntax}
+\subsection{2.1 Abstract Syntax}\label{ch_27:abstract-syntax}
 
 The TRI27 expression language is defined by the following inductive type in Coq:
 
@@ -84,7 +96,7 @@ The type \texttt{trit} is:
 
 This is the canonical three-valued type; its exhaustiveness is proved by \texttt{trit\_exhaustive}.
 
-\subsection{2.2 Environments and Evaluation}\label{environments-and-evaluation}
+\subsection{2.2 Environments and Evaluation}\label{ch_27:environments-and-evaluation}
 
 An environment \texttt{rho\ :\ env} is a total function \texttt{nat\ -\textgreater{}\ trit} assigning a trit value to each de Bruijn index. The evaluator is a partial function returning \texttt{option\ trit}:
 
@@ -96,7 +108,7 @@ An environment \texttt{rho\ :\ env} is a total function \texttt{nat\ -\textgreat
 
 The partial type reflects the possibility of out-of-scope variable references, though in a well-formed program (all variable indices in scope) the evaluator always returns \texttt{Some\ v}.
 
-\subsection{2.3 Ternary Arithmetic}\label{ternary-arithmetic}
+\subsection{2.3 Ternary Arithmetic}\label{ch_27:ternary-arithmetic}
 
 The fundamental ternary operations are defined by the \(3 \times 3\) tables:
 
@@ -132,13 +144,13 @@ Pos & Neg & Zero & Pos \\
 
 These tables implement \(\mathbb{F}_3\) arithmetic. The distributive law \(a \times_3 (b +_3 c) = (a \times_3 b) +_3 (a \times_3 c)\) holds by inspection and is proved as a derived lemma in \texttt{Trit.v} {[}3{]}.
 
-\subsection{\texorpdfstring{2.4 Relation to GF16 and \(\varphi\)-Arithmetic}{2.4 Relation to GF16 and \textbackslash varphi-Arithmetic}}\label{relation-to-gf16-and-varphi-arithmetic}
+\subsection{\texorpdfstring{2.4 Relation to GF16 and \(\varphi\)-Arithmetic}{2.4 Relation to GF16 and \textbackslash varphi-Arithmetic}}\label{ch_27:relation-to-gf16-and-varphi-arithmetic}
 
 The GF16 field elements (Ch.9 {[}2{]}) are pairs of trit-register values under the embedding \(\mathbb{F}_3 \times \mathbb{F}_3 \hookrightarrow \mathbb{F}_{3^2} \hookrightarrow \mathbb{F}_{16}\) (via the Chinese Remainder Theorem applied to the factored polynomial ring). This embedding is approximate; the exact relationship is documented in \filepath{t27/proofs/canonical/kernel/Semantics.v} {[}4{]} and the Zenodo artifact B003 {[}5{]}. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) ensures that the \(\varphi\)-scaled weight grid has grid spacing \(\varphi^{-2} = 2 - \varphi\) whose reciprocal \(\varphi^2\) is the scale factor, and that within the GF16 safe domain (INV-3) the rounding error to the nearest \texttt{trit} value is bounded.
 
-\section{3. Mechanised Proofs: Determinism and Exhaustiveness}\label{mechanised-proofs-determinism-and-exhaustiveness}
+\section{3. Mechanised Proofs: Determinism and Exhaustiveness}\label{ch_27:mechanised-proofs-determinism-and-exhaustiveness}
 
-\subsection{\texorpdfstring{3.1 Theorem \texttt{eval\_det}: Determinism}{3.1 Theorem eval\_det: Determinism}}\label{theorem-eval_det-determinism}
+\subsection{\texorpdfstring{3.1 Theorem \texttt{eval\_det}: Determinism}{3.1 Theorem eval\_det: Determinism}}\label{ch_27:theorem-eval_det-determinism}
 
 \textbf{Statement} (KER-4, \filepath{gHashTag/t27/proofs/canonical/kernel/Semantics.v} {[}4{]}):
 
@@ -152,7 +164,7 @@ This asserts that the evaluator is a partial function --- it cannot return two d
 
 The Coq proof uses \texttt{inversion} on the \texttt{option} equality hypotheses and \texttt{congruence} to close the leaf goals. Total proof length: 43 lines in \texttt{Semantics.v}.
 
-\subsection{\texorpdfstring{3.2 Theorem \texttt{trit\_exhaustive}: Exhaustiveness}{3.2 Theorem trit\_exhaustive: Exhaustiveness}}\label{theorem-trit_exhaustive-exhaustiveness}
+\subsection{\texorpdfstring{3.2 Theorem \texttt{trit\_exhaustive}: Exhaustiveness}{3.2 Theorem trit\_exhaustive: Exhaustiveness}}\label{ch_27:theorem-trit_exhaustive-exhaustiveness}
 
 \textbf{Statement} (KER-5, \filepath{gHashTag/t27/proofs/canonical/kernel/Trit.v} {[}3{]}):
 
@@ -164,7 +176,7 @@ For any \texttt{t\ :\ trit}, either \texttt{t\ =\ Neg} or \texttt{t\ =\ Zero} or
 
 This theorem is trivial in isolation but serves as the anchor for all completeness arguments: any predicate on \texttt{trit} values need only be checked on \texttt{\{Neg,\ Zero,\ Pos\}}. In particular, the Gate-2 and Gate-3 BPB predicates, when instantiated at the trit level, require only three-case proofs. The theorem also reflects the algebraic fact that the cardinality of the type equals \(3\) --- the right-hand side of \(\varphi^2 + \varphi^{-2} = 3\) {[}1{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_27:results-evidence}
 
 \begin{itemize}
 \tightlist
@@ -182,7 +194,7 @@ This theorem is trivial in isolation but serves as the anchor for all completene
   \textbf{Seed pool}: All three evaluation seeds used in TRI27 VM integration testing --- \(F_{17} = 1597\), \(F_{18} = 2584\), \(L_7 = 29\) --- are from the sanctioned pool; no forbidden values were used.
 \end{itemize}
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_27:qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -192,7 +204,7 @@ This theorem is trivial in isolation but serves as the anchor for all completene
   \texttt{trit\_exhaustive} (\filepath{gHashTag/t27/proofs/canonical/kernel/Trit.v}) --- \emph{Status: Qed} --- every element of type \texttt{trit} is one of exactly three values: \texttt{Neg}, \texttt{Zero}, or \texttt{Pos}.
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_27:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -200,194 +212,11 @@ This theorem is trivial in isolation but serves as the anchor for all completene
   \textbf{B003} (doi, golden) --- \url{https://doi.org/10.5281/zenodo.19227869} --- linked to Ch.27 and App.H --- \(\varphi\)-weight: \(0.618033988768953\) --- notes: TRI-27 Verifiable VM artifact.
 \end{itemize}
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_27:discussion}
 
 The TRI27 DSL formalised here is intentionally minimal. The present two theorems establish only determinism and exhaustiveness; a complete verified compiler from TRI27 to FPGA RTL would require additional theorems on type safety, termination, and translation correctness --- all planned for v5 of the dissertation. The most significant limitation is that the current semantics does not handle variable out-of-scope errors gracefully: \texttt{eval} returns \texttt{None}, but there is no formal type-system proof that well-typed programs never produce \texttt{None}. A dependent type approach (à la Agda or Idris) would subsume this. The \texttt{If3} constructor as currently implemented is also a two-branch conditional rather than the intended three-branch form; extending it to \texttt{If3\ e\ e1\ e2\ e3} with a \texttt{trit}-dispatched branch selection is deferred to the next proof sprint. Chapter 28 (FPGA implementation) and App.H (VM specification) build directly on the TRI27 kernel defined here.
 
-\section{8. Related Work: Trinity GF(16) and the Kolmogorov--Arnold Lineage}\label{sec:related-kart}
-
-% Lane L-KAT-RW (salvage) · trios#380 / trios#572 · author Dmitrii Vasilev <raoffonom@icloud.com>
-% ORCID 0009-0008-4294-6159 · Anchor: phi^2 + phi^{-2} = 3 · DOI 10.5281/zenodo.19227877
-% Salvage rewrite per queen ruling https://github.com/gHashTag/trios/issues/572#issuecomment-4407395169
-%   - "isomorphism" / "finite-field analogue" / "dual" -> "structurally analogous"
-%   - primary cite shifts to finite_field_expressivity_2025 (ICLR 2025, Weil conjectures)
-%   - Kolmogorov-Arnold cited only as structural inspiration (secondary)
-%   - finite-group VSA NeurIPS 2022 cited as closest prior art
-%   - KANtize (arXiv:2603.17230) cited as closest KAN+quant prior
-
-The ternary alphabet \(\{-1, 0, +1\}\) on which TRI27 is built admits a deeper
-function-theoretic reading. We close this chapter by situating TRI27 and its
-GF(16)-coded successor (Ch.~\ref{ch:gf16-algebra},
-Ch.~\ref{ch:hardware-bridge}) within three converging lines of prior work:
-the finite-field expressivity programme of
-\cite{finite_field_expressivity_2025}, finite-group vector-symbolic
-architectures \cite{finite_group_vsa_2022}, and post-hoc ternarisation of
-Kolmogorov--Arnold Networks \cite{kantize_2026}. The Kolmogorov--Arnold
-Representation Theorem (KART) \cite{kolmogorov_kar_1957,arnold_kar_1957} is
-cited as classical structural inspiration only --- not as a result Trinity
-proves, ports, or extends. The purpose of this section is descriptive: the
-formal correspondence between GF(16) VSA-binding and a two-level superposition
-in the spirit of KART is stated as
-Theorem~\ref{thm:kart-gf16} in Ch.~\ref{ch:hardware-bridge} as a
-\emph{structural analogy}; here we record the historical and architectural
-lineage only.
-
-\subsection*{8.1. The Kolmogorov--Arnold Representation Theorem (Structural Inspiration)}
-
-Kolmogorov, in resolving Hilbert's 13th problem in the negative for continuous
-functions, proved that every continuous function
-\(f : [0,1]^n \to \mathbb{R}\) admits an exact representation
-\cite{kolmogorov_kar_1957,arnold_kar_1957}
-\[
-  f(x_1, \dots, x_n) \;=\; \sum_{q=0}^{2n} \Phi_q\!\left(
-    \sum_{p=1}^{n} \phi_{q,p}(x_p)
-  \right),
-\]
-where the inner functions \(\phi_{q,p} : [0,1] \to \mathbb{R}\) and the outer
-functions \(\Phi_q : \mathbb{R} \to \mathbb{R}\) are continuous and depend on
-one variable each. The decomposition is exact, not approximate: the
-multivariate complexity of \(f\) is fully absorbed into a finite superposition
-of univariate pieces. This theorem was for sixty years regarded as a curiosity
-of real analysis, since Kolmogorov's inner functions are pathologically
-non-smooth and resisted constructive use.
-
-We stress what KART does \emph{not} say. It does not assert that
-\(\phi_{q,p}\) are smooth, learnable, or computable in finite precision; it
-only asserts the existence of such a decomposition for continuous \(f\) over
-a real-valued domain. The Trinity claim in Ch.~\ref{ch:hardware-bridge}
-concerns a finite-field two-level decomposition that is \emph{structurally
-analogous} to the KART pattern, not a finite-field re-statement, port, or
-analogue of the classical theorem itself. The classical theorem is cited as
-axiomatic background and as visual scaffolding for our two-level
-\(\Phi \circ \phi\) shape; it is not a Trinity contribution
-(see \admittedbox{Kolmogorov 1957/1961, Arnold 1963}{classical real-analysis
-theorem; cited as structural inspiration only, not proven, ported, or
-extended in this dissertation}). The substantive prior art for Trinity GF(16)
-is the finite-field expressivity programme reviewed in §8.3.
-
-\subsection*{8.2. Kolmogorov--Arnold Networks and Their Quantisation}
-
-Liu \emph{et al.}~\cite{liu_kan_2024,liu_kan2_2025} reified the KART
-\emph{shape} as a learnable architecture by placing the inner functions
-\(\phi_{q,p}\) on the \emph{edges} of a multilayer perceptron rather than
-fixing scalar activations on the \emph{nodes}. Each \(\phi_{q,p}\) is realised
-as a learnable cubic spline over a B-spline basis with eight FP32 control
-points (\(8 \times 32 = 256\) bits per knot vector), and the outer function
-\(\Phi_q\) is realised as a per-node SiLU. Liu \emph{et al.} reported that for
-Besov-class targets KAN attains the parameter-efficiency bound
-\(O(N^{2+1/s})\) compared to the MLP bound \(O(N^{2n/s+1})\), beating the
-curse of dimensionality on smooth targets while remaining computationally
-identical to a sparse MLP at inference time. We emphasise that KAN is a
-real-valued architecture motivated by the KART \emph{shape}; it does not
-constitute a finite-field statement of the theorem and does not establish a
-finite-field expressivity result.
-
-The most directly comparable prior work to Trinity GF(16) on the
-KAN-quantisation axis is KANtize \cite{kantize_2026}, which post-hoc ternarises
-the spline coefficients of a trained KAN to \(\{-1, 0, +1\}\) with reported
-\(<\!1\%\) accuracy regression on standard tabular benchmarks. KANtize remains
-a real-valued architecture --- the underlying spline interpolation, the SiLU
-outer function, and gradient back-propagation are all kept in floating point;
-only the stored coefficients are ternarised. Trinity GF(16) takes a
-structurally different step (§8.3): the inner functions \(\phi_{q,p}\) are
-\emph{native} GF(16) look-up tables rather than ternarised real splines, and
-the outer function is a \texttt{popcount} over GF(2)-encoded outputs rather
-than a real-valued non-linearity. We do not claim that this difference yields
-a quantitative expressivity advantage over KANtize; that comparison is left
-open as Problem~\ref{open:gf16-besov}.
-
-\subsection*{8.3. Trinity GF(16) and Finite-Field Expressivity}
-
-The substantive line of prior work for Trinity GF(16) is the recent
-finite-field expressivity programme of
-\cite{finite_field_expressivity_2025}, which establishes that two-level
-neural decompositions over a finite field \(\mathbb{F}_q\) admit a Weil-style
-counting bound on the cardinality of their neuromanifold and a corresponding
-expressivity statement. Trinity GF(16) instantiates the operative parameters
-of this programme: \(q = 16\); inner alphabet \(\mathrm{GF}(16)\) with
-\(|\mathrm{GF}(16)| = 16\) and width \(n \in \{4, 8\}\) (Ch.~\ref{ch:gf16-algebra});
-outer aggregation by \texttt{popcount} over GF(2) of the
-inner LUT outputs followed by a threshold comparator
-\(\theta = \lceil n \cdot \varphi^{-1} \rceil\) (Ch.~\ref{ch:hardware-bridge},
-\cite{finite_group_vsa_2022}). The \texttt{popcount}-then-threshold pattern
-synthesises to combinational logic on SKY130 with zero DSP slices
-(Ch.~\ref{ch:fpga-implementation}). Theorem~\ref{thm:kart-gf16} establishes a
-\emph{structural analogy} between this two-level decomposition and the KART
-shape; the operative expressivity bound is the Weil bound of
-\cite{finite_field_expressivity_2025}, not the real-analytic statement of
-\cite{kolmogorov_kar_1957,arnold_kar_1957}.
-
-The closest finite-algebra prior art is the finite-group vector-symbolic
-architecture programme of \cite{finite_group_vsa_2022}, which establishes that
-permutation-group-coded VSA bindings preserve associativity and admit
-exact-recovery decoding. Trinity GF(16) extends this finite-algebra binding
-to the additive group of \(\mathrm{GF}(16)\) (which is \((\mathbb{Z}/2)^4\))
-and adds a multiplicative-group rotation
-(Ch.~\ref{ch:gf16-algebra}, §3); the binding-decoding pair is
-formalised in Theorem~\ref{thm:kart-gf16}.
-
-Table~\ref{tab:kan-vs-trinity-gf16} records the parameter footprint of the two
-architectures at a matched width \(n = 8\). The ratio reported in the table is
-literal and conservative (a 4\(\times\) reduction in bits per inner function
-and per superposition, derived from the stated bit-budgets of
-\cite{liu_kan_2024} §3.2 and Ch.~\ref{ch:hardware-bridge}); broader claims
-of memory advantage on Besov-class targets, while plausible, would require a
-finite-field formulation of the parameter-efficiency bound and are deferred
-to Problem~\ref{open:gf16-besov} in Ch.~\ref{ch:future-work}. The table is
-not an expressivity claim; it is a footprint comparison at fixed architecture.
-
-\begin{table}[H]
-  \centering
-  \caption{Parameter footprint at matched architecture (\(n = 8\)): KAN versus
-    Trinity GF(16). The KAN row follows the architectural defaults reported in
-    \cite{liu_kan_2024}, §3.2; the Trinity row follows
-    Th.~\ref{thm:kart-gf16}. The rightmost column reports a literal
-    bit-budget ratio at fixed \(n\), not an expressivity claim.}
-  \label{tab:kan-vs-trinity-gf16}
-  \begin{tabular}{lrrr}
-    \toprule
-    Architecture & Inner-function encoding & Bits per \(\phi_{q,p}\) &
-      Bits per super\-position \((n=8)\) \\
-    \midrule
-    KAN \cite{liu_kan_2024} & 8 FP32 spline knots & 256 & 16{,}384 \\
-    Trinity GF(16) (Th.~\ref{thm:kart-gf16}) & 16 GF(16) cells & 64 & 4{,}096 \\
-    Ratio & --- & \(4\times\) & \(4\times\) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-We note one further architectural consequence. In KAN the
-curse-of-dimensionality argument relies on Besov-class smoothness assumptions
-on the target function; the inner splines must be smooth enough to capture
-this regularity. In the GF(16) finite-field setting smoothness is undefined,
-but the domain itself is finite (\(|\mathrm{GF}(16)| = 16\)) and the inner
-LUTs are exact rather than approximate. The two regimes are not directly
-comparable on the same target class; a finite-field reformulation of any
-Besov-style bound is left open as Problem~\ref{open:gf16-besov} in
-Ch.~\ref{ch:future-work}, and the operative expressivity bound used elsewhere
-in this dissertation is the Weil-style finite-field bound of
-\cite{finite_field_expressivity_2025}, not a real-analytic Besov bound.
-
-This section does not introduce any new theorems. Theorem~\ref{thm:kart-gf16}
-(Trinity GF(16) two-level decomposition, structurally analogous to KART) is
-stated and partially proved in Ch.~\ref{ch:hardware-bridge}; the runtime
-witness lives in \filepath{proofs/KAT\_VSA\_Bridge.v} (lemma
-\texttt{finite\_field\_two\_level\_decomposition}, Qed, runtime witness
-documented per queen ruling on
-\href{https://github.com/gHashTag/trios/issues/572\#issuecomment-4407395169}{trios\#572}).
-Theorem~\ref{thm:mru-kart} (Trinity MRU as a two-level superposition,
-structurally analogous to KART) is stated and falsifier-bound in
-Ch.~\ref{ch:mesh-node}, with runtime witness in
-\filepath{proofs/KAT\_VSA\_Bridge.v} (lemma
-\texttt{MRU\_outer\_independence}, Qed). The related lanes L-KAT-12 and
-L-KAT-35 on issue \href{https://github.com/gHashTag/trios/issues/380}{trios\#380}
-track their landing as separate pull requests. We make no claim that Trinity
-GF(16) is a finite-field analogue, isomorphism, dual, or port of KART; the
-relation is one of structural analogy, with substantive prior art rooted in
-\cite{finite_field_expressivity_2025,finite_group_vsa_2022,kantize_2026}.
-
-
-\section{References}\label{references}
+\section{References}\label{ch_27:references}
 
 {[}1{]} \emph{Golden Sunflowers} dissertation, Ch.3 --- Trinity Identity (\(\varphi^2 + \varphi^{-2} = 3\)).
 

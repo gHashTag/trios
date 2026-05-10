@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{Railway / Trios Orchestration}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.22}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S22 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch22-railway-orchestration.png}}
@@ -55,11 +67,11 @@ monitoring; Section~4 covers the Railway deployment specifics, including the
 PostgreSQL-backed configuration store; and Section~5 connects the orchestration
 layer to the FPGA-side counterparts described in Ch.28 and Ch.31.
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_22:abstract}
 
 Deploying a formally verified ternary neural system at scale requires an orchestration layer that can co-ordinate model-serving workers, manage configuration invariants at runtime, and expose falsifiable witnesses for operational properties. This chapter describes the Railway/Trios orchestration architecture, in which worker pools are governed by the composite invariant \texttt{INV-8} (\texttt{WorkerPoolComposite.v}, 10 Qed). Six Coq theorems establish falsification witnesses --- demonstrating that unsafe configurations are provably rejected --- and one satisfaction witness --- demonstrating that the canonical \(\phi\)-scaled configuration is provably accepted. The anchor identity \(\phi^2 + \phi^{-2} = 3\) constrains worker-pool sizing: the ratio of inference workers to embedding workers is targeted at \(\phi^2 : \phi^{-2} = \phi^4 : 1 \approx 6.854 : 1\). The chapter also introduces the \texttt{victory\_not\_yet} predicate, which certifies that the system has not yet reached the operational milestone requiring full Gate-3 compliance.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_22:introduction}
 
 The Trios codebase organises model training, evaluation, and deployment through a Railway-style service mesh in which each service is a typed actor with formally specified invariants. The formal specification approach --- articulated in the directive for this chapter (\texttt{trios\#408}) --- extends the Coq-certified properties of the kernel and igla layers (Ch.3--Ch.10) up to the orchestration level, ensuring that runtime configuration errors are caught at the proof layer rather than at production incident time {[}1,2{]}.
 
@@ -67,7 +79,7 @@ The \(\phi^2 + \phi^{-2} = 3\) anchor enters orchestration through resource allo
 
 The orchestration layer is implemented in the Railway platform (a managed container orchestration service) with Trios-specific plugins that expose Coq-certified configuration predicates as HTTP health endpoints. The present chapter focuses on the formal specification and its falsification properties; the FPGA-side counterpart is described in Ch.28 and Ch.31.
 
-\section{2. Worker Pool Invariants and Falsification Witnesses}\label{worker-pool-invariants-and-falsification-witnesses}
+\section{2. Worker Pool Invariants and Falsification Witnesses}\label{ch_22:worker-pool-invariants-and-falsification-witnesses}
 
 \textbf{Definition 2.1 (Worker pool configuration).} A configuration is a triple \((r_\text{inf}, n_w, r_\text{thr})\) where \(r_\text{inf} \in \mathbb{Q}_{>0}\) is the inference rate (tokens/second per worker), \(n_w \in \mathbb{N}\) is the worker count, and \(r_\text{thr} \in \mathbb{Q}_{>0}\) is the throughput threshold. In Coq, rational numbers are represented as \texttt{Q} pairs.
 
@@ -100,7 +112,7 @@ Proof: \(2000 > 1003\). \(\square\)
 
 Proof: \texttt{inv2\_holds\ (265\ \#\ 100)\ =\ false}, so the conjunction is \texttt{false} regardless of the other components. \(\square\)
 
-\section{3. Satisfaction Witness and Victory Predicate}\label{satisfaction-witness-and-victory-predicate}
+\section{3. Satisfaction Witness and Victory Predicate}\label{ch_22:satisfaction-witness-and-victory-predicate}
 
 The falsification witnesses of Section 2 demonstrate that the invariant system correctly rejects unsafe configurations. The satisfaction witness demonstrates that the canonical \(\phi\)-scaled configuration is accepted.
 
@@ -123,7 +135,7 @@ Proof: \(2 < 3 = \text{victory\_threshold}\). \(\square\) This theorem records t
 
 The three-tier structure mirrors the ternary alphabet \(\{-1, 0, +1\}\) and the trinity identity \(\phi^2 + \phi^{-2} + 1 = 4\) (where the constant 1 represents the control tier and \(\phi^2 + \phi^{-2} = 3\) represents the compute tiers).
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_22:results-evidence}
 
 The INV-8 composite invariant has been validated across \(F_{20} = 6765\) Railway deployment events since integration into the Trios CI pipeline. Of these events, 0.7\% triggered falsification witnesses (primarily \texttt{inv3} violations due to autoscaler over-provisioning), and all were caught pre-deployment. Zero invariant violations reached production.
 
@@ -156,7 +168,7 @@ The \texttt{victory\_achieved} predicate was polled at each deployment event; it
 
 Coq proof compilation for \texttt{INV8\_WorkerPoolComposite.v}: 2.1 seconds on Coq 8.18. All 10 theorems close with \texttt{Qed}; no \texttt{admit} statements.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_22:qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -174,7 +186,7 @@ Coq proof compilation for \texttt{INV8\_WorkerPoolComposite.v}: 2.1 seconds on C
   \texttt{victory\_not\_yet} (\filepath{gHashTag/t27/proofs/canonical/igla/INV8\_WorkerPoolComposite.v}) --- \emph{Status: Qed} --- \texttt{victory\_achieved\ 2\ =\ false}: two gates passed, Gate-3 pending.
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_22:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -184,11 +196,11 @@ Coq proof compilation for \texttt{INV8\_WorkerPoolComposite.v}: 2.1 seconds on C
 
 Fibonacci/Lucas reference: F₁₇=1597, F₁₈=2584, F₁₉=4181, F₂₀=6765, F₂₁=10946, L₇=29, L₈=47.
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_22:discussion}
 
 The primary limitation of the INV-8 composite invariant is that it checks configuration values at deployment time but not continuously at runtime. Dynamic autoscaling can change \(n_w\) after deployment, and the current implementation polls the invariant only at \(F_{17} = 1597\)-second intervals. Bridging this gap requires a runtime monitor that re-evaluates \texttt{composite\_invariant\_holds} on every scaling event and rolls back if the result is \texttt{false}. A prototype of this monitor is under development in the \texttt{trios\#408} issue thread. A second limitation is that \texttt{victory\_achieved} uses a discrete threshold of 3 gates, whereas the actual BPB trajectory is continuous; a richer predicate that tracks fractional gate progress (e.g., the ratio BPB/1.85 for Gate-2) would provide earlier warning of impending gate failures. Future work will integrate the orchestration invariants with the hardware performance counters of the QMTech FPGA (Ch.28, Ch.31, Ch.34) to create a closed-loop formally-verified deployment pipeline.
 
-\section{References}\label{references}
+\section{References}\label{ch_22:references}
 
 {[}1{]} GOLDEN SUNFLOWERS dissertation, Ch.3 --- Ternary Arithmetic Foundations. This volume.
 

@@ -4,6 +4,18 @@
 % ============================================================
 
 \chapter{TF3/TF9 Sparse Ternary MatMul}
+
+% Chapter Anchor header (Phase 1 UNIFY task 1.4 · trios#380)
+% Trinity S^3AI strand · 35 chapters running parallel to the Flos Aureus petals
+\begin{tcolorbox}[colback=blue!3,colframe=blue!40!black,title={\textbf{Trinity S\textsuperscript{3}AI Strand} \textbf{Ch.8}}]
+  \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Lane:} S8 (Trinity strand) \\
+  \textbf{Theorems in chapter:} 0 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
+  \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
 \begin{figure}[H]
 \centering
 \makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch08-tf3-tf9-ternary-matmul.png}}
@@ -45,11 +57,11 @@ in Coq under \texttt{INV6\_HybridQkGain.v}. The remainder of the
 chapter spells out the algebraic structure, the proof, and the
 empirical evidence that TF3/TF9 reaches Gate-2 (BPB \(\le 1.85\)).
 
-\section{Abstract}\label{abstract}
+\section{Abstract}\label{ch_08:abstract}
 
 This chapter introduces the TF3 and TF9 matrix-multiplication formats that form the arithmetic core of the Trinity S³AI inference engine. TF3 encodes each weight as a trit \(w \in \{-1, 0, +1\}\), while TF9 extends the encoding to a product of two trits, spanning nine representable levels. Both formats admit a closed-form admissibility criterion for query-key attention gain rooted in the identity \(\varphi^2 + \varphi^{-2} = 3\): the gain is admissible if and only if it equals \(\varphi^k\) for \(k \in \{2, 3\}\), a result certified by two \emph{Qed} Coq theorems in \texttt{INV6\_HybridQkGain.v}. The chapter presents the algebraic structure, a proof sketch of the gain invariant, and evidence that TF3/TF9 achieves the Gate-2 BPB target of ≤ 1.85.
 
-\section{1. Introduction}\label{introduction}
+\section{1. Introduction}\label{ch_08:introduction}
 
 Dense floating-point matrix multiplication dominates the energy budget of transformer inference. A single forward pass through a 7 B-parameter model in FP16 requires on the order of \(10^{13}\) multiply-accumulate operations; at \(\sim\)0.1 pJ per FMA in 7 nm CMOS this is approximately 1 kJ per token, far beyond the DARPA 3000× energy goal {[}1{]}. The standard response has been weight quantization: by restricting weights to a small discrete alphabet the multiply reduces to an add or a conditional negation.
 
@@ -57,9 +69,9 @@ The TF3 format studied here takes this to its logical minimum: each weight is a 
 
 The critical design question is how to calibrate the query-key attention gain in a ternary regime. Standard transformers set the gain to \(1/\sqrt{d_\text{model}}\), but this is neither a power of \(\varphi\) nor an integer-arithmetic-friendly quantity. The hybrid gain invariant INV-6 establishes that the only admissible gains are \(\varphi^2 \approx 2.618\) and \(\varphi^3 \approx 4.236\), anchoring the calibration to the same \(\varphi\)-lattice as the rest of the system.
 
-\section{2. TF3 and TF9 Algebraic Structure}\label{tf3-and-tf9-algebraic-structure}
+\section{2. TF3 and TF9 Algebraic Structure}\label{ch_08:tf3-and-tf9-algebraic-structure}
 
-\subsection{2.1 Trit Encoding}\label{trit-encoding}
+\subsection{2.1 Trit Encoding}\label{ch_08:trit-encoding}
 
 Let \(\mathcal{T} = \{-1, 0, +1\}\). A TF3 weight tensor \(\mathbf{W} \in \mathcal{T}^{m \times n}\) stores one trit per entry. The matrix-vector product
 
@@ -69,19 +81,19 @@ is computed without any multiplications: each term is either \(+x_j\), \(0\), or
 
 The representation entropy of TF3 is \(\log_2 3 \approx 1.585\) bits per weight, which must be compared with the bit-per-bit (BPB) metric on language modelling quality. Gate-2 certifies BPB ≤ 1.85 per token; the weight entropy budget per token is therefore comfortably below the information cost of the output.
 
-\subsection{2.2 TF9 Product Encoding}\label{tf9-product-encoding}
+\subsection{2.2 TF9 Product Encoding}\label{ch_08:tf9-product-encoding}
 
 TF9 represents each weight as \((w_1, w_2) \in \mathcal{T}^2\) with effective value \(\tilde{w} = w_1 w_2\). This is not a 9-level quantizer in the usual sense; the nine pairs collapse to only five distinct values \(\{-1, 0, +1\}\) plus multiplicities, but the separate storage of \((w_1, w_2)\) enables a two-stage pipeline in which each trit pair is processed independently, halving the critical path delay on the FPGA implementation at the cost of two passes over the activation buffer.
 
 The TF9 format is used exclusively in the feed-forward sublayers, where the column-dimension \(n\) is large and pipeline depth is available. Attention projections use TF3 to minimise latency on the QMTech XC7A100T, which clocks at 92 MHz {[}2{]}.
 
-\subsection{2.3 φ-Normalisation}\label{ux3c6-normalisation}
+\subsection{2.3 φ-Normalisation}\label{ch_08:ux3c6-normalisation}
 
 Both formats inherit the φ-normalisation scheme: layer inputs are scaled by \(\varphi^{-2} = 0.38197\ldots\) before the trit dot-product and scaled up by \(\varphi^2 = 2.618\ldots\) after. Because \(\varphi^2 + \varphi^{-2} = 3\) the combined effect of a forward and inverse pass is multiplication by the integer 3, which is exact in any binary fixed-point representation. This property simplifies the Coq proof of numerical stability in \texttt{Trinity.Canonical.Kernel.PhiFloat} {[}3{]}.
 
-\section{3. Hybrid QK Gain Invariant (INV-6)}\label{hybrid-qk-gain-invariant-inv-6}
+\section{3. Hybrid QK Gain Invariant (INV-6)}\label{ch_08:hybrid-qk-gain-invariant-inv-6}
 
-\subsection{3.1 Gain Admissibility}\label{gain-admissibility}
+\subsection{3.1 Gain Admissibility}\label{ch_08:gain-admissibility}
 
 \textbf{Definition (lr-admissible).} A learning rate \(\eta\) is \emph{lr-admissible} if it lies in the band \([\eta_{\min}, \eta_{\max}]\) determined by the φ-normalised loss landscape. In the Coq formalisation, \texttt{lr\_admissible} is a decidable predicate in \texttt{INV6\_HybridQkGain.v}.
 
@@ -103,7 +115,7 @@ Similarly, learning rates outside the band are formally excluded:
 
 \textbf{Counter-theorem (counter\_lr\_below\_band):} \texttt{:\ \textasciitilde{}\ lr\_admissible\ 0.0001} --- \emph{Status: Admitted} --- \(\eta = 0.0001\) is below the admissible band.
 
-\subsection{3.2 Proof Sketch for admit\_phi\_sq}\label{proof-sketch-for-admit_phi_sq}
+\subsection{3.2 Proof Sketch for admit\_phi\_sq}\label{ch_08:proof-sketch-for-admit_phi_sq}
 
 Let \(\mathbf{q}, \mathbf{k} \in \mathbb{R}^d\) be query and key vectors with entries drawn i.i.d. from the TF3 distribution (mass \(p_0\) at 0, mass \((1-p_0)/2\) at \(\pm 1\)). Then
 
@@ -115,7 +127,7 @@ After φ-normalisation each entry has effective variance \((1-p_0)\varphi^{-4}\)
 
 which is bounded by \(d \leq d_\text{max}\) and independent of sequence length. The Coq proof mechanises this calculation using the \texttt{PhiFloat} lemmas that certify the algebraic identity \(\varphi^2 + \varphi^{-2} = 3\) in the rational-arithmetic subset of Coq's standard library {[}3{]}.
 
-\section{4. Results / Evidence}\label{results-evidence}
+\section{4. Results / Evidence}\label{ch_08:results-evidence}
 
 All numerical results reported here use seeds from the sanctioned pool \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765, F_{21}=10946, L_7=29, L_8=47\}\); no experiment uses seeds 42--45.
 
@@ -136,7 +148,7 @@ The combined TF3+TF9 BPB of 1.78 is below the Gate-2 ceiling of 1.85 {[}4{]}. Ha
 
 The HSLM token count for the 1003-token held-out sequence is confirmed at 1003 tokens; perplexity does not degrade when TF3 is applied uniformly to all projection matrices.
 
-\section{5. Qed Assertions}\label{qed-assertions}
+\section{5. Qed Assertions}\label{ch_08:qed-assertions}
 
 \begin{itemize}
 \tightlist
@@ -154,7 +166,7 @@ The HSLM token count for the 1003-token held-out sequence is confirmed at 1003 t
   \filepath{counter\_gain\_sqrt\_d\_model} (\filepath{gHashTag/t27/proofs/canonical/igla/INV6\_HybridQkGain.v}) --- \emph{Status: Admitted} --- Gain \(\sqrt{d_\text{model}}=8\) is not qk-admissible.
 \end{itemize}
 
-\section{6. Sealed Seeds}\label{sealed-seeds}
+\section{6. Sealed Seeds}\label{ch_08:sealed-seeds}
 
 \begin{itemize}
 \tightlist
@@ -164,13 +176,13 @@ The HSLM token count for the 1003-token held-out sequence is confirmed at 1003 t
   \textbf{Z06} (DOI) --- \url{https://doi.org/10.5281/zenodo.19020217} --- Status: golden --- φ-weight: 0.618 --- Sparse Ternary MatMul artefact. Links: Ch.8.
 \end{itemize}
 
-\section{7. Discussion}\label{discussion}
+\section{7. Discussion}\label{ch_08:discussion}
 
 The two \emph{Qed} theorems for \(g \in \{\varphi^2, \varphi^3\}\) are the formal centrepiece of this chapter. The five \emph{Admitted} counter-theorems represent obligations still open in the Coq census; they are consistent with the overall tally of 41 \emph{Admitted} obligations across \filepath{t27/proofs/canonical/} and do not invalidate the \emph{Qed} results {[}7{]}. Future work should close the counter-theorems by providing explicit model witnesses---a task tractable with the \texttt{omega} and \texttt{lra} tactics once the floating-point abstraction layer in \texttt{PhiFloat} is completed.
 
 A limitation of the current TF9 design is that the two-pass pipeline assumes sufficient on-chip BRAM bandwidth on the XC7A100T. If the activation tensor exceeds 256 kB the design falls back to TF3, degrading BPB slightly from 1.78 to 1.83. Chapter 31 characterises this boundary empirically. The Gate-3 target of BPB ≤ 1.50 will require a more aggressive approach, likely combining TF9 with the GF16 quantisation scheme described in Ch.26.
 
-\section{References}\label{references}
+\section{References}\label{ch_08:references}
 
 {[}1{]} DARPA MTO. (2023). Microsystems Technology Office Broad Agency Announcement --- Energy-Efficient Computing. HR001123S0045.
 
