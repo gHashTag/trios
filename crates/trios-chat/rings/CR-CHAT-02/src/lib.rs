@@ -30,6 +30,9 @@
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
+pub mod clock_skew;
+pub use clock_skew::{ClockSkewBound, ReplayDecision, ReplayWindow, DEFAULT_MAX_HISTORY};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
