@@ -2134,3 +2134,38 @@ to maintain the $\varphi$-aspect ratio at double density.
 \end{table}
 
 % End of Appendix I
+
+% ------------------------------------------------------------------
+\section*{I.24 AXI-Lite Transaction Timing Waveforms}
+\label{sec:axi-waveforms}
+% ------------------------------------------------------------------
+
+The following ASCII waveform illustrates one complete AXI-Lite write
+transaction to the \texttt{CTRL} register (offset \texttt{0x00}) as
+observed on the Arty A7-100T logic analyser:
+
+\begin{verbatim}
+Cycle:        1       2       3       4       5
+              _______         _______         _____
+sys_clk    __/       \_______/       \_______/
+           _________________________________
+awvalid   /                                 \_____
+                       _____________________
+awready              _/                     \_____
+           _________________________________
+wvalid    /                                 \_____
+                              ______________
+wready                       /              \_____
+                              ______________
+bvalid                       /              \_____
+           ___________________________
+bready    /                           \___________
+\end{verbatim}
+
+The write address and write data channels are presented simultaneously
+(AXI4-Lite does not require them to be ordered).  The core accepts the
+address (\texttt{awready} HIGH) at cycle 2, accepts the data
+(\texttt{wready} HIGH) at cycle 3, and returns a write response
+(\texttt{bvalid} HIGH, \texttt{bresp} = \texttt{OKAY}) at cycle 3.
+Total latency: 3 clock cycles at 100\,MHz = 30\,ns.
+
