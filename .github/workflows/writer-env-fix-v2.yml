@@ -1,0 +1,275 @@
+name: Writer Env Fix v2 (literal MATRIX_DATABASE_URL onto runners)
+
+# Anchor: phi^2 + phi^-2 = 3 · DOI 10.5281/zenodo.19227877
+#
+# Lane: L-WRITER-ENV-FIX-V2 (refs gHashTag/trios#446, gHashTag/trios-railway#127).
+#
+# Why v2: trios-railway#127 used cross-project Railway reference
+# `${{phd-postgres-ssot.DATABASE_URL}}`, but Railway references resolve only
+# inside the same project. The matrix runners live in IGLA / acc2; the new
+# Postgres SoT lives in a different project (49a92e6d-...). Cross-project
+# refs do not resolve, so even if the env had been set, the writer would
+# still fail to connect.
+#
+# v2 strategy: this workflow runs in `gHashTag/trios` (where the
+# already-resolved literal connection string is stored as the
+# `MATRIX_DATABASE_URL` secret) and uses the freshly-rotated `RAILWAY_TOKEN`
+# (2026-05-08) to upsert the LITERAL DSN as `NEON_DATABASE_URL` onto each
+# runner. No cross-project reference; the writer will connect directly to
+# the public TCP proxy.
+#
+# Root cause (unchanged from v1): `src/neon_writer.rs` in
+# `trios-trainer-igla` is a silent no-op when none of `NEON_DATABASE_URL`,
+# `TRIOS_NEON_DSN`, `DATABASE_URL` is set. None of the 19 matrix-runner
+# services had any of these env vars; they have been training silently
+# into /dev/null for ~17h.
+#
+# Skipped (no project access from this token assumed; flag for manual):
+#   acc4 believable-connection (`0247abaa`):
+#     - 8a15af8d trios-mr-acc4-runner
+#     - c78218a5 trios-mr-coverage-c-runner
+#   acc6 robust-radiance (`475a2290`):
+#     - 422b1ffd trios-mr-acc6-runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "PHI" to confirm. Anchor: phi^2 + phi^-2 = 3.'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: writer-env-fix-v2
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: ${{ inputs.confirm == 'PHI' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      MATRIX_DSN: ${{ secrets.MATRIX_DATABASE_URL }}
+      IGLA_PROJECT_ID: e4fe33bb-3b09-4842-9782-7d2dea1abc9b
+      IGLA_ENV_ID: 54e293b9-00a9-4102-814d-db151636d96e
+      ACC2_PROJECT_ID: 12c508c7-1196-468d-b06d-d8de8cb77e93
+      MCP_SERVICE_ID: db786a4b-5a79-4643-b915-e9184680cf97
+
+    steps:
+      - name: Sanity-check secrets
+        run: |
+          set -euo pipefail
+          if [[ -z "${RAILWAY_TOKEN}" ]]; then
+            echo "::error::RAILWAY_TOKEN secret is empty"
+            exit 2
+          fi
+          if [[ -z "${MATRIX_DSN}" ]]; then
+            echo "::error::MATRIX_DATABASE_URL secret is empty"
+            exit 2
+          fi
+          # Probe token by listing projects (no resource mutation, safe)
+          curl -sS -X POST https://backboard.railway.com/graphql/v2 \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $RAILWAY_TOKEN" \
+              -d '{"query":"{ projects { edges { node { id name } } } }"}' \
+              | jq -e '.data.projects.edges' > /dev/null || {
+                echo "::error::token failed sanity check"
+                exit 3
+              }
+          # DSN sanity: must start with postgresql://
+          [[ "$MATRIX_DSN" == postgresql://* ]] || {
+            echo "::error::MATRIX_DATABASE_URL is not a postgresql:// DSN"
+            exit 4
+          }
+          echo "secrets OK"
+
+      - name: Apply fix to all reachable services
+        env:
+          # 17 IGLA non-MCP services. Same list as v1 (verified via TRI MCP).
+          TARGETS_IGLA_NON_MCP: |
+            03f8e518 trios-mr-coverage-a-runner
+            19c85634 trios-mr-seed47-runner
+            22d82210 trios-mr-tier3b-runner
+            32cee577 trios-mr-tier1b-runner
+            43afaa6d trios-mr-seed123-runner
+            5003c8e0 trios-mr-tier3d-runner
+            683c4ece trios-mr-tier2b-runner
+            71f5aac2 trios-mr-priority-runner
+            91ef9d5c trios-matrix-bot
+            94a833e9 trios-train-ONE-v2-acc1-s1597
+            b03133c2 trios-mr-tier3c-runner
+            b0bd370e trios-mr-tier3-runner
+            b20cf052 trios-mr-tier1a-runner
+            c3e27a4f trios-mr-seed89-runner
+            e2c7447c trios-mr-tier2a-runner
+            fe9a7801 trios-mr-seed144-runner
+            066163be trios-postrun-sidecar
+          TARGETS_ACC2: |
+            3f10fc42 trios-mr-acc2-runner
+            70fda6c1 trios-mr-coverage-b-runner
+        run: |
+          set -uo pipefail
+
+          ok_count=0
+          fail_count=0
+
+          # ===== helpers =====
+          gql() {
+            # $1=query  $2=variables_json
+            curl -sS -X POST https://backboard.railway.com/graphql/v2 \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $RAILWAY_TOKEN" \
+              --data "$(jq -nc --arg q "$1" --argjson v "$2" '{query:$q, variables:$v}')"
+          }
+
+          resolve_env() {
+            # $1 = project id; prints production env id
+            local q='query($p:String!){ project(id:$p){ environments{ edges{ node{ id name } } } } }'
+            local v
+            v=$(jq -nc --arg p "$1" '{p:$p}')
+            local resp
+            resp=$(gql "$q" "$v")
+            echo "$resp" | jq -r '.data.project.environments.edges[] | select(.node.name=="production") | .node.id' | head -1
+          }
+
+          upsert_var() {
+            # $1=project $2=env $3=service $4=name $5=value
+            local q='mutation($i:VariableUpsertInput!){ variableUpsert(input:$i) }'
+            local v
+            v=$(jq -nc --arg p "$1" --arg e "$2" --arg s "$3" --arg n "$4" --arg val "$5" \
+                 '{i:{projectId:$p, environmentId:$e, serviceId:$s, name:$n, value:$val}}')
+            local resp
+            resp=$(gql "$q" "$v")
+            if echo "$resp" | jq -e '.errors' > /dev/null; then
+              echo "    upsert $4: ERR — $(echo "$resp" | jq -c '.errors')"
+              return 1
+            fi
+            echo "    upsert $4: OK"
+            return 0
+          }
+
+          redeploy() {
+            # $1=token-not-needed-here $1=service $2=env
+            local q='mutation($s:String!,$e:String!){ serviceInstanceRedeploy(serviceId:$s, environmentId:$e) }'
+            local v
+            v=$(jq -nc --arg s "$1" --arg e "$2" '{s:$s, e:$e}')
+            local resp
+            resp=$(gql "$q" "$v")
+            if echo "$resp" | jq -e '.errors' > /dev/null; then
+              echo "    redeploy: ERR — $(echo "$resp" | jq -c '.errors')"
+              return 1
+            fi
+            echo "    redeploy: OK"
+            return 0
+          }
+
+          # ===================================================================
+          # IGLA non-MCP services
+          # ===================================================================
+          echo "::group::IGLA env"
+          echo "IGLA env (hardcoded): $IGLA_ENV_ID"
+          # Optional verify
+          RESOLVED=$(resolve_env "$IGLA_PROJECT_ID")
+          if [[ -n "$RESOLVED" && "$RESOLVED" != "$IGLA_ENV_ID" ]]; then
+            echo "::warning::IGLA env mismatch: hardcoded $IGLA_ENV_ID, resolved $RESOLVED — using resolved"
+            IGLA_ENV_ID="$RESOLVED"
+          fi
+          echo "::endgroup::"
+
+          while IFS= read -r line; do
+            line="$(echo "$line" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+            [[ -z "$line" ]] && continue
+            SVC_ID="${line%% *}"
+            NAME="${line##* }"
+            echo "::group::IGLA $NAME ($SVC_ID)"
+            ok=1
+            upsert_var "$IGLA_PROJECT_ID" "$IGLA_ENV_ID" "$SVC_ID" "NEON_DATABASE_URL" "$MATRIX_DSN" || ok=0
+            redeploy   "$SVC_ID" "$IGLA_ENV_ID" || ok=0
+            if [[ "$ok" -eq 1 ]]; then
+              echo "[OK] $NAME $SVC_ID"
+              ok_count=$((ok_count + 1))
+            else
+              echo "[FAIL] $NAME $SVC_ID"
+              fail_count=$((fail_count + 1))
+            fi
+            echo "::endgroup::"
+          done <<< "$TARGETS_IGLA_NON_MCP"
+
+          # ===================================================================
+          # acc2 services
+          # ===================================================================
+          echo "::group::resolve acc2 env"
+          ACC2_ENV_ID=$(resolve_env "$ACC2_PROJECT_ID")
+          if [[ -z "$ACC2_ENV_ID" ]]; then
+            echo "::warning::could not resolve acc2 production env; skipping acc2 block"
+          else
+            echo "acc2 env: $ACC2_ENV_ID"
+          fi
+          echo "::endgroup::"
+
+          if [[ -n "$ACC2_ENV_ID" ]]; then
+            while IFS= read -r line; do
+              line="$(echo "$line" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+              [[ -z "$line" ]] && continue
+              SVC_ID="${line%% *}"
+              NAME="${line##* }"
+              echo "::group::acc2 $NAME ($SVC_ID)"
+              ok=1
+              upsert_var "$ACC2_PROJECT_ID" "$ACC2_ENV_ID" "$SVC_ID" "NEON_DATABASE_URL" "$MATRIX_DSN" || ok=0
+              redeploy   "$SVC_ID" "$ACC2_ENV_ID" || ok=0
+              if [[ "$ok" -eq 1 ]]; then
+                echo "[OK] $NAME $SVC_ID"
+                ok_count=$((ok_count + 1))
+              else
+                echo "[FAIL] $NAME $SVC_ID"
+                fail_count=$((fail_count + 1))
+              fi
+              echo "::endgroup::"
+            done <<< "$TARGETS_ACC2"
+          fi
+
+          # ===================================================================
+          # MCP last (also re-set NEON_DATABASE_URL to match new SoT)
+          # ===================================================================
+          echo "::group::IGLA trios-railway-mcp ($MCP_SERVICE_ID) — last"
+          ok=1
+          upsert_var "$IGLA_PROJECT_ID" "$IGLA_ENV_ID" "$MCP_SERVICE_ID" "NEON_DATABASE_URL"    "$MATRIX_DSN" || ok=0
+          upsert_var "$IGLA_PROJECT_ID" "$IGLA_ENV_ID" "$MCP_SERVICE_ID" "RAILWAY_POSTGRES_URL" "$MATRIX_DSN" || ok=0
+          redeploy   "$MCP_SERVICE_ID" "$IGLA_ENV_ID" || ok=0
+          if [[ "$ok" -eq 1 ]]; then
+            echo "[OK] trios-railway-mcp $MCP_SERVICE_ID"
+            ok_count=$((ok_count + 1))
+          else
+            echo "[FAIL] trios-railway-mcp $MCP_SERVICE_ID"
+            fail_count=$((fail_count + 1))
+          fi
+          echo "::endgroup::"
+
+          # ===================================================================
+          # Skipped — manual operator handling
+          # ===================================================================
+          echo "::warning::SKIPPED (no token assumed for these projects):"
+          echo "::warning::  acc4 (0247abaa) — 8a15af8d trios-mr-acc4-runner, c78218a5 trios-mr-coverage-c-runner"
+          echo "::warning::  acc6 (475a2290) — 422b1ffd trios-mr-acc6-runner"
+
+          # ===================================================================
+          # Final verdict
+          # ===================================================================
+          {
+            echo "## Writer Env Fix v2"
+            echo ""
+            echo "- OK:   $ok_count"
+            echo "- FAIL: $fail_count"
+            echo "- SKIPPED (manual): 3 services on acc4/acc6"
+            echo ""
+            echo "Anchor: \`phi^2 + phi^-2 = 3\` · DOI 10.5281/zenodo.19227877"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$fail_count" -gt 0 ]]; then
+            echo "::error::$fail_count service(s) failed; see logs above"
+            exit 1
+          fi
+          echo "all $ok_count services patched + redeployed"
