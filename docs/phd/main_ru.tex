@@ -58,7 +58,7 @@
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
 \usepackage{graphicx}
-\graphicspath{{assets/}{../../assets/illustrations/}}
+\graphicspath{{assets/}{../../assets/illustrations/}{../../assets/illustrations_v516/}}
 \usepackage{microtype}
 \usepackage[htt]{hyphenat}
 \sloppy
@@ -132,6 +132,16 @@
 \usepackage{cleveref}
 
 \usepackage{geometry}
+\usepackage{eso-pic}
+\usepackage{tocloft}
+% Widen ToC number columns so multi-level numbers (16.22) do not overlap titles.
+\setlength{\cftchapnumwidth}{2.6em}
+\setlength{\cftsecnumwidth}{3.4em}
+\setlength{\cftsubsecnumwidth}{4.4em}
+\setlength{\cftsubsubsecnumwidth}{5.4em}
+\setlength{\cftsecindent}{2.6em}
+\setlength{\cftsubsecindent}{6.0em}
+\setlength{\cftsubsubsecindent}{10.4em}
 \usepackage{fancyhdr}
 \usepackage{xcolor}
 
@@ -191,8 +201,20 @@
 
 \begin{document}
 
-% ===== ТИТУЛ =====
+% ===== ОБЛОЖКА (true full-bleed) =====
 \frontmatter
+\begin{titlepage}
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{%
+  \AtPageLowerLeft{%
+    \includegraphics[width=\paperwidth,height=\paperheight,keepaspectratio=false]%
+      {cover_chalkboard.png}%
+  }%
+}
+\null
+\end{titlepage}
+
+% ===== ТИТУЛ =====
 \begin{titlepage}
 \thispagestyle{empty}
 \begin{center}

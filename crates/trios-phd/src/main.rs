@@ -810,6 +810,61 @@ fn mechanical_latex_fixes(s: &str) -> String {
         at_line_start = c == '\n';
         i += 1;
     }
+    // 4. Wrap every standalone `\begin{tabular}...\end{tabular}` in
+    //    `\resizebox{\linewidth}{!}{...}` so wide tables never overflow
+    //    the text width. Idempotent: skips tables already inside
+    //    `\resizebox{\linewidth}{!}{` or `\adjustbox{`. Does NOT touch
+    //    `tabular*`, `tabularx`, or `longtable` — those have their own
+    //    width discipline.
+    out = wrap_wide_tabulars(&out);
+    out
+}
+
+/// Wrap each `\begin{tabular}{...}` ... `\end{tabular}` block in
+/// `\resizebox{\linewidth}{!}{ ... }`. Idempotent.
+fn wrap_wide_tabulars(s: &str) -> String {
+    let begin_tag = "\\begin{tabular}";
+    let end_tag = "\\end{tabular}";
+    let wrap_open = "\\resizebox{\\linewidth}{!}{%\n";
+    let wrap_close = "\n}";
+    let mut out = String::with_capacity(s.len() + 256);
+    let mut cursor = 0usize;
+    let bytes = s.as_bytes();
+    while let Some(rel) = s[cursor..].find(begin_tag) {
+        let abs = cursor + rel;
+        // Reject `\begin{tabular*}` and `\begin{tabularx}` — different envs.
+        let after = abs + begin_tag.len();
+        if after < bytes.len() && (bytes[after] == b'*' || bytes[after] == b'x') {
+            out.push_str(&s[cursor..after]);
+            cursor = after;
+            continue;
+        }
+        // Find matching `\end{tabular}`.
+        let Some(end_rel) = s[after..].find(end_tag) else {
+            out.push_str(&s[cursor..]);
+            return out;
+        };
+        let end_abs = after + end_rel + end_tag.len();
+        // Idempotency: if the ~80 chars before `\begin{tabular}` already
+        // contain `\resizebox{\linewidth}{!}{` with an open brace count >
+        // close brace count, this tabular is already wrapped.
+        let look_back_start = abs.saturating_sub(120);
+        let head = &s[look_back_start..abs];
+        let already_resized = head.contains("\\resizebox{\\linewidth}{!}{")
+            && head.matches('{').count() > head.matches('}').count();
+        let already_adjust = head.contains("\\adjustbox{")
+            && head.matches('{').count() > head.matches('}').count();
+        out.push_str(&s[cursor..abs]);
+        if already_resized || already_adjust {
+            out.push_str(&s[abs..end_abs]);
+        } else {
+            out.push_str(wrap_open);
+            out.push_str(&s[abs..end_abs]);
+            out.push_str(wrap_close);
+        }
+        cursor = end_abs;
+    }
+    out.push_str(&s[cursor..]);
     out
 }
 
