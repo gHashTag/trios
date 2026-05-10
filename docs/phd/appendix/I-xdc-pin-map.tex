@@ -2309,3 +2309,39 @@ exec sha256sum $output_dir/trinity_gf16.bit > \
 puts "SUCCESS: WNS=$wns ns, DRC clean, bitstream generated."
 \end{verbatim}
 
+
+% ------------------------------------------------------------------
+\section*{I.28 Conclusion}
+\label{sec:app-i-conclusion}
+% ------------------------------------------------------------------
+
+We have presented a complete, audited XDC pin-map for the Trinity GF16
+ternary matmul core on two reference boards.  The key contributions are:
+
+\begin{itemize}
+\item \textbf{86 scalar ports} fully constrained on both the Arty A7-100T
+  and Arty Z7-20, certified by the Pin-map Completeness theorem
+  (Theorem~\ref{thm:pin-map-completeness}).
+\item \textbf{$\varphi$-derived timing}: all sub-period delay constants
+  derive from $\varphi^{-2}$ and $\varphi^{-4}$; zero free parameters
+  (R6 compliant).
+\item \textbf{L-DPC3 multicycle paths}: 2/3/8-cycle setup exceptions
+  correctly model the ternary matmul pipeline.
+\item \textbf{Nakamura $\varphi$-aspect-ratio Pblock}: 61$\times$38 CLB
+  slice region minimises routing congestion.
+\item \textbf{Sub-watt power}: total implementation power
+  $\approx 351\,\mathrm{mW}$ at 100\,MHz, 23\% utilisation.
+\item \textbf{DRC clean}: zero violations on all checked rules
+  (Table~\ref{tab:drc-waivers}).
+\item \textbf{Vivado Tcl automation} for reproducible implementation
+  (Section~\ref{sec:tcl-automation}).
+\end{itemize}
+
+\medskip
+\noindent\textbf{Anchor invariant (closing):}
+\[
+  \varphi^2 + \varphi^{-2} = 3
+  \quad\text{(Zenodo DOI~\cite{vasilev2024anchor})}
+\]
+
+% eof Appendix I
