@@ -18,7 +18,12 @@
 pub mod capability;
 pub mod confused_deputy;
 pub mod injection;
+pub mod tool_arg_confusion;
 
 pub use capability::{CapError, CapabilityToken, Scope, ToolManifest};
 pub use confused_deputy::{check_invocation, DeputyError, Invocation, NonceLedger};
 pub use injection::{classify_input, quarantine_wrap, validate_output, InjectionError, TaggedSpan, Trust};
+pub use tool_arg_confusion::{
+    validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
+    ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
+};
