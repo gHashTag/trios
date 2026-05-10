@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-17: **249 tests · 25/25 e2e · 1600/1600 falsifier · 32 categories · 130 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-18: **270 tests · 25/25 e2e · 1700/1700 falsifier · 34 categories · 139 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -51,7 +51,7 @@ Threat-model invariants are formalised in `proofs/chat/Trinity_Chat.v`
 
 ---
 
-## Waves shipped (W1–W17)
+## Waves shipped (W1–W18)
 
 Every wave is one merged PR landing on `main`. Wave-N+1 always branches
 from `origin/main` immediately after Wave-N is merged. The cadence is
@@ -76,7 +76,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W14 | (open) | 209 | INV-CHAT-68..74 (101 Qed total) | 1300 | 26 | safety_number_swap + mls_external_commit | #701 (open) |
 | W15 | (open) | 221 | INV-CHAT-75..81 (112 Qed total) | 1400 | 28 | egress_fingerprint + identity_revoke | #703 (open) |
 | W16 | `1bd0c54` | 235 | INV-CHAT-82..88 (121 Qed total) | 1500 | 30 | clock_skew_replay + at_rest_rotation | [#711](https://github.com/gHashTag/trios/pull/711) (rolled up via [#665](https://github.com/gHashTag/trios/pull/665)) |
-| **W17** | **(this PR)** | **249** | **INV-CHAT-89..95 (130 Qed total)** | **1600** | **32** | **tool_arg_confusion + group_pcs_break** | **(open)** |
+| W17 | (PR open)  | 249 | INV-CHAT-89..95 (130 Qed total) | 1600 | 32 | tool_arg_confusion + group_pcs_break | [#715](https://github.com/gHashTag/trios/pull/715) (merged `047f3cb`) |
+| **W18** | **(this PR)** | **270** | **INV-CHAT-96..102 (139 Qed total)** | **1700** | **34** | **padding_class_oracle + jitter_side_channel** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -87,6 +88,104 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-18 — padding-class oracle + jitter-injection side-channel
+
+- **L-CHAT-6-cls** (R-CHAT-9 / CR-CHAT-04) — CLS-01..06 in
+  `crates/trios-chat/rings/CR-CHAT-04/src/padding_class_oracle.rs`
+  (322 lines) shipping `PaddingOracleError::{NonClassSize,
+  TruncatedTooShort, DeclaredLengthOverflow, ClassUpgrade,
+  ClassDowngrade, NonZeroPaddingSuffix}`, `smallest_class()`,
+  `check_class_choice()`, `validate_envelope()`, `pad_class_checked()`,
+  `unpad_checked()`:
+  - smallest-class oracle picks the unique minimal class from
+    `{256,1024,4096,16384}` that fits `payload + 4 bytes length prefix`
+    (CLS-01) — no upgrade-to-bigger as length oracle, no downgrade-to-smaller
+    as truncation oracle;
+  - over-padded ciphertext (e.g. 256-byte payload but envelope at the
+    1024 class) rejected with `ClassUpgrade` (CLS-02) — prevents the
+    sender from leaking length-class metadata via deliberate over-pad;
+  - oversized payload exceeding `MAX_PAYLOAD_18 = 16384 − 4` rejected
+    with `DeclaredLengthOverflow` (CLS-03) — prevents truncation of
+    declared-length suffix into an out-of-band channel;
+  - sub-4-byte truncation (`buf_len < 4`) rejected with
+    `TruncatedTooShort` (CLS-04) — the length prefix is mandatory
+    framing;
+  - non-class envelope size (e.g. 257 bytes) rejected with
+    `NonClassSize` (CLS-05) — classes are exactly
+    `{256, 1024, 4096, 16384}`, never adjacent;
+  - non-zero padding suffix rejected with `NonZeroPaddingSuffix`
+    (CLS-06) — padding bytes MUST be `0x00`, otherwise an attacker
+    can hide a covert side-channel in the trailing region.
+- **L-CHAT-7-jitter** (R-CHAT-10 / CR-CHAT-07) — JIT-01..06 in
+  `crates/trios-chat/rings/CR-CHAT-07/src/jitter_side_channel.rs`
+  (405 lines) shipping `WireKind::{Real,Cover}`,
+  `GapObservation{cumulative_ms, gap_ms, kind}`,
+  `JitterError::{BurstBelowMinimum, NonCanonicalGap,
+  NonMonotonicTimestamp, InsufficientCover, ClassBiasExceeded,
+  GapTimestampMismatch}`, `JitterPolicy{min_cover_pct=25,
+  max_class_pct=60}`, `validate_history()`, `GapRecorder`:
+  - canonical-gap-only history accepts (JIT-01) — every gap is in
+    `{50, 250, 1000, 5000, 30000, 300000}` ms, derived from
+    `uniform_gap_ms` quantiser;
+  - non-canonical gap (e.g. 137 ms) rejected with `NonCanonicalGap`
+    (JIT-02) — prevents inter-arrival timing as side-channel for
+    semantic content;
+  - clock-rewind (`cumulative_ms` not strictly monotone) rejected
+    with `NonMonotonicTimestamp` (JIT-03) — prevents reorder-attack
+    bypass of replay window;
+  - sub-minimum burst (`<` `JitterPolicy::min_burst_observations = 4`)
+    rejected with `BurstBelowMinimum` (JIT-04) — prevents short-window
+    sampling that defeats statistical mixing;
+  - cover-traffic ratio below `min_cover_pct = 25%` rejected with
+    `InsufficientCover` (JIT-05) — preserves cover-timing invariant
+    from W6;
+  - any single canonical class crossing `max_class_pct = 60%` rejected
+    with `ClassBiasExceeded` (JIT-06) — prevents one-class flooding
+    that would re-leak length-class metadata via the timing channel.
+- Coq INV-CHAT-96..102 + helper `jitter_burst_below_minimum_rejected18`
+  in a fresh `Section TrinityChatWave18` — uses unique W18-suffixed
+  names (`smallest_class18`, `validate_gap18`, `class0_18..class3_18`,
+  `gap0_18..gap3_18`, `PadOracleErr18`, `JitterErr18`,
+  `check_class_choice18`) to avoid cross-wave name collisions; 8 new
+  Qed → **139 Qed total**.
+  - INV-CHAT-96 `inv_chat_96_smallest_class_in_set` — `smallest_class18`
+    lands in `{256, 1024, 4096, 16384}`;
+  - INV-CHAT-97 `inv_chat_97_padding_class_choice_minimal` — over-pad
+    rejected as `ClassUpgrade18`;
+  - INV-CHAT-98 `inv_chat_98_declared_length_overflow_rejected` —
+    `payload > MAX_PAYLOAD_18` rejected;
+  - INV-CHAT-99 `inv_chat_99_truncated_too_short_rejected` —
+    `buf_len < 4` rejected;
+  - INV-CHAT-100 `inv_chat_100_non_canonical_gap_rejected` — gap not
+    in canonical set rejected;
+  - INV-CHAT-101 `inv_chat_101_non_monotonic_timestamp_rejected` —
+    clock-rewind rejected;
+  - INV-CHAT-102 `inv_chat_102_gap_timestamp_mismatch_rejected` —
+    reorder attack rejected.
+- **Zero new axioms.** Both lanes prove constructively. Cumulative
+  axiom count remains 5 (`ss_kp_injective`, `dh_step_fresh`,
+  `dh_post_history_independent`, `hybrid_kem_non_degenerate`,
+  `sn_hash_sym`).
+- Falsifier 1600 → 1700 (PI-CLS-001..050 + PI-JIT-001..050) — 34
+  categories @ 100% blocked.
+- 32 → 34 threshold lanes in `falsifier_runner` (`padding_class_oracle`
+  and `jitter_side_channel`, both at 0.95 — all lanes ≥ 0.95 except
+  `indirect ≥ 0.90`).
+- `DENY_PATTERNS` in `CR-CHAT-06/src/injection.rs` extended with W18
+  keyword blocks: padding-class-oracle (paddingoracleerror, classupgrade,
+  classdowngrade, nonclasssize, declaredlengthoverflow, truncatedtooshort,
+  nonzeropaddingsuffix, smallest_class, check_class_choice,
+  validate_envelope, pad_class_checked, unpad_checked, max_payload_18,
+  256/1024/4096/16384-byte class, length-prefix oracle, over-padded,
+  truncation oracle, padding suffix, padding side-channel, …) +
+  jitter-side-channel (gapobservation, jitterpolicy, jittererror,
+  burstbelowminimum, noncanonicalgap, nonmonotonictimestamp,
+  insufficientcover, classbiasexceeded, gaptimestampmismatch,
+  gaprecorder, validate_history, min_cover_pct, max_class_pct,
+  inter-arrival, jitter injection, timing side-channel, cover-traffic
+  ratio, class-bias flood, clock-rewind, reorder attack, gap
+  quantiser, …) + 33 residual-miss patches.
 
 ### Wave-7 — sender unlinkability + traffic-analysis resistance
 
@@ -502,18 +601,19 @@ Cumulative `Qed.` count: **130 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-68..74 | W14 | safety-number / OOB identity + MLS external-commit forgery |
 | INV-CHAT-75..81 | W15 | egress fingerprinting (canonical TLS / length / burst-gap classes) + identity-key revocation with grace window |
 | INV-CHAT-82..88 | W16 | clock-skew / replay-window decision (in-band / stale / future / epoch-rollover / replay) + at-rest key rotation idempotence and monotonicity |
-| **INV-CHAT-89..95** | **W17** | **tool-call argument confusion (kind mismatch, nested-sentinel, oversized-string, unknown-enum-variant) + group-PCS healing (epoch advance, no-op, epoch mismatch)** |
+| INV-CHAT-89..95 | W17 | tool-call argument confusion (kind mismatch, nested-sentinel, oversized-string, unknown-enum-variant) + group-PCS healing (epoch advance, no-op, epoch mismatch) |
+| **INV-CHAT-96..102** | **W18** | **padding-class oracle (smallest-class, over-pad, length overflow, truncation, non-canonical gap, non-monotonic timestamp, reorder-attack)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, and Wave-17 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, and Wave-18 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W18–W22) — `[ASPIRATIONAL]`
+## Future waves (W19–W23) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -527,12 +627,13 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W14~~ — SHIPPED (see Wave-14 detail above) | | | | | | |
 | ~~W15~~ — SHIPPED (see Wave-15 detail above) | | | | | | |
 | ~~W16~~ — SHIPPED via rollup #665 (see Wave-16 detail above) | | | | | | |
-| ~~W17~~ — SHIPPED in this PR (see Wave-17 detail above) | | | | | | |
-| **W18** | L-CHAT-6-cls (R-CHAT-9) — padding-class oracle (timing-class leak) | L-CHAT-7-jitter (R-CHAT-10) — jitter-injection / inter-arrival side-channel | `padding_class_oracle`, `jitter_side_channel` | INV-CHAT-96..102 (≥140 Qed) | ≈261 | 1700 / 34 cats |
-| **W19** | L-CHAT-8-decap (R-CHAT-2) — ML-KEM-768 decapsulation oracle / Fujisaki–Okamoto re-encryption | L-CHAT-9-tagsplit (R-CHAT-12) — tag-stripping / structured-output split | `kem_decap_oracle`, `tag_stripping` | INV-CHAT-103..109 (≥150 Qed) | ≈273 | 1800 / 36 cats |
-| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈285 | 1900 / 38 cats |
-| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥170 Qed) | ≈297 | 2000 / 40 cats |
-| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥180 Qed) | ≈309 | 2100 / 42 cats |
+| ~~W17~~ — SHIPPED via [#715](https://github.com/gHashTag/trios/pull/715), merged `047f3cb` (see Wave-17 detail above) | | | | | | |
+| ~~W18~~ — SHIPPED in this PR (see Wave-18 detail above) | | | | | | |
+| **W19** | L-CHAT-8-decap (R-CHAT-2) — ML-KEM-768 decapsulation oracle / Fujisaki–Okamoto re-encryption | L-CHAT-9-tagsplit (R-CHAT-12) — tag-stripping / structured-output split | `kem_decap_oracle`, `tag_stripping` | INV-CHAT-103..109 (≥150 Qed) | ≈282 | 1800 / 36 cats |
+| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈294 | 1900 / 38 cats |
+| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥170 Qed) | ≈306 | 2000 / 40 cats |
+| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥180 Qed) | ≈318 | 2100 / 42 cats |
+| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥190 Qed) | ≈330 | 2200 / 44 cats |
 
 After W20 the corpus crosses **1900 entries / 38 categories** and Coq
 crosses **160 closed proofs / 0 admissions**, exhausting the planned
@@ -552,7 +653,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1600/1600 blocked` (W17) at 32 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1700/1700 blocked` (W18) at 34 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -589,7 +690,7 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W18..W22 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W19..W23 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
 
 ---

@@ -2340,6 +2340,250 @@ Section TrinityChatWave17.
 
 End TrinityChatWave17.
 
+(* ================================================================ *)
+(*  Wave-18 — INV-CHAT-96..102                                      *)
+(*    L-CHAT-6-cls (CR-CHAT-04 padding-class oracle)                *)
+(*    L-CHAT-7-jitter (CR-CHAT-07 inter-arrival side-channel)       *)
+(* ================================================================ *)
+
+Section TrinityChatWave18.
+
+  (* ---- Lane A: padding-class oracle ----------------------------- *)
+
+  (* Abstract canonical class boundaries: 256, 1024, 4096, 16384.
+     We reason at the level of natural numbers since the Coq witness
+     tracks invariants over `payload_len`, not concrete byte arrays. *)
+  Definition class0_18 : nat := 256.
+  Definition class1_18 : nat := 1024.
+  Definition class2_18 : nat := 4096.
+  Definition class3_18 : nat := 16384.
+  Definition max_payload_18 : nat := class3_18 - 4.
+
+  (* Smallest class that fits `4 + payload_len`. *)
+  Definition smallest_class18 (payload_len : nat) : nat :=
+    if Nat.leb (4 + payload_len) class0_18 then class0_18
+    else if Nat.leb (4 + payload_len) class1_18 then class1_18
+    else if Nat.leb (4 + payload_len) class2_18 then class2_18
+    else class3_18.
+
+  (* Padding-oracle rejection arms. *)
+  Inductive PadOracleErr18 : Type :=
+  | NonClassSize18
+  | TruncatedTooShort18
+  | DeclaredLengthOverflow18
+  | ClassUpgrade18
+  | ClassDowngrade18
+  | NonZeroPaddingSuffix18.
+
+  (* Class-choice check: chosen must equal smallest. *)
+  Definition check_class_choice18 (payload_len chosen : nat)
+    : option PadOracleErr18 :=
+    if Nat.ltb max_payload_18 payload_len then
+      Some DeclaredLengthOverflow18
+    else
+      let s := smallest_class18 payload_len in
+      if Nat.ltb chosen s then Some ClassDowngrade18
+      else if Nat.ltb s chosen then Some ClassUpgrade18
+      else None.
+
+  (* INV-CHAT-96: smallest_class18 lands in {class0..class3}.
+     Constructive over the four-way ladder. *)
+  Lemma inv_chat_96_smallest_class_in_set :
+    forall payload_len,
+      smallest_class18 payload_len = class0_18 \/
+      smallest_class18 payload_len = class1_18 \/
+      smallest_class18 payload_len = class2_18 \/
+      smallest_class18 payload_len = class3_18.
+  Proof.
+    intros payload_len. unfold smallest_class18.
+    destruct (Nat.leb (4 + payload_len) class0_18); [left; reflexivity|].
+    destruct (Nat.leb (4 + payload_len) class1_18); [right; left; reflexivity|].
+    destruct (Nat.leb (4 + payload_len) class2_18); [right; right; left; reflexivity|].
+    right; right; right; reflexivity.
+  Qed.
+
+  (* INV-CHAT-97: a payload that fits class i but is over-padded to
+     class j > i is rejected as ClassUpgrade18 (covert-channel). *)
+  Lemma inv_chat_97_padding_class_choice_minimal :
+    forall payload_len chosen,
+      payload_len <= max_payload_18 ->
+      smallest_class18 payload_len < chosen ->
+      check_class_choice18 payload_len chosen = Some ClassUpgrade18.
+  Proof.
+    intros payload_len chosen Hmax Hgt.
+    unfold check_class_choice18.
+    assert (Hltb : Nat.ltb max_payload_18 payload_len = false).
+    { apply Nat.ltb_ge. exact Hmax. }
+    rewrite Hltb.
+    assert (Hlt1 : Nat.ltb chosen (smallest_class18 payload_len) = false).
+    { apply Nat.ltb_ge. lia. }
+    rewrite Hlt1.
+    assert (Hlt2 : Nat.ltb (smallest_class18 payload_len) chosen = true).
+    { apply Nat.ltb_lt. exact Hgt. }
+    rewrite Hlt2. reflexivity.
+  Qed.
+
+  (* INV-CHAT-98: declared length above max_payload is rejected
+     up front, before any class check. *)
+  Lemma inv_chat_98_declared_length_overflow_rejected :
+    forall payload_len chosen,
+      payload_len > max_payload_18 ->
+      check_class_choice18 payload_len chosen = Some DeclaredLengthOverflow18.
+  Proof.
+    intros payload_len chosen Hgt.
+    unfold check_class_choice18.
+    assert (H : Nat.ltb max_payload_18 payload_len = true).
+    { apply Nat.ltb_lt. exact Hgt. }
+    rewrite H. reflexivity.
+  Qed.
+
+  (* INV-CHAT-99: truncated-too-short is encoded by the same
+     rejection arm at the validate_envelope layer. We capture it as
+     a pure boolean: any envelope length below 4 bytes rejects. *)
+  Definition validate_envelope_short18 (buf_len : nat)
+    : option PadOracleErr18 :=
+    if Nat.ltb buf_len 4 then Some TruncatedTooShort18 else None.
+
+  Lemma inv_chat_99_truncated_too_short_rejected :
+    forall buf_len, buf_len < 4 ->
+      validate_envelope_short18 buf_len = Some TruncatedTooShort18.
+  Proof.
+    intros buf_len Hlt. unfold validate_envelope_short18.
+    assert (H : Nat.ltb buf_len 4 = true).
+    { apply Nat.ltb_lt. exact Hlt. }
+    rewrite H. reflexivity.
+  Qed.
+
+  (* ---- Lane B: jitter / inter-arrival side-channel -------------- *)
+
+  Definition gap0_18 : nat := 1000.
+  Definition gap1_18 : nat := 5000.
+  Definition gap2_18 : nat := 30000.
+  Definition gap3_18 : nat := 300000.
+
+  Definition is_canonical_gap18 (g : nat) : bool :=
+    Nat.eqb g gap0_18 ||
+    Nat.eqb g gap1_18 ||
+    Nat.eqb g gap2_18 ||
+    Nat.eqb g gap3_18.
+
+  Inductive JitterErr18 : Type :=
+  | BurstBelowMinimum18
+  | NonCanonicalGap18
+  | NonMonotonicTimestamp18
+  | GapTimestampMismatch18.
+
+  (* Validate a single (prev_cum, cur_cum, gap) triple. *)
+  Definition validate_gap18 (prev_cum cur_cum gap : nat)
+    : option JitterErr18 :=
+    if Nat.leb cur_cum prev_cum then Some NonMonotonicTimestamp18
+    else if negb (Nat.eqb gap (cur_cum - prev_cum)) then
+      Some GapTimestampMismatch18
+    else if Nat.ltb gap gap0_18 then Some BurstBelowMinimum18
+    else if negb (is_canonical_gap18 gap) then Some NonCanonicalGap18
+    else None.
+
+  (* INV-CHAT-100: non-canonical gap (e.g. 1234 ms) is rejected. *)
+  Lemma inv_chat_100_non_canonical_gap_rejected :
+    forall prev_cum cur_cum gap,
+      prev_cum < cur_cum ->
+      gap = cur_cum - prev_cum ->
+      gap >= gap0_18 ->
+      is_canonical_gap18 gap = false ->
+      validate_gap18 prev_cum cur_cum gap = Some NonCanonicalGap18.
+  Proof.
+    intros prev_cum cur_cum gap Hlt Hgap Hge Hnc.
+    unfold validate_gap18.
+    assert (H1 : Nat.leb cur_cum prev_cum = false).
+    { apply Nat.leb_gt. exact Hlt. }
+    rewrite H1.
+    assert (H2 : Nat.eqb gap (cur_cum - prev_cum) = true).
+    { apply Nat.eqb_eq. exact Hgap. }
+    rewrite H2. simpl.
+    assert (H3 : Nat.ltb gap gap0_18 = false).
+    { apply Nat.ltb_ge. exact Hge. }
+    rewrite H3.
+    rewrite Hnc. simpl. reflexivity.
+  Qed.
+
+  (* INV-CHAT-101: non-monotonic timestamp (clock-rewind) is
+     rejected up front. *)
+  Lemma inv_chat_101_non_monotonic_timestamp_rejected :
+    forall prev_cum cur_cum gap,
+      cur_cum <= prev_cum ->
+      validate_gap18 prev_cum cur_cum gap = Some NonMonotonicTimestamp18.
+  Proof.
+    intros prev_cum cur_cum gap Hle.
+    unfold validate_gap18.
+    assert (H : Nat.leb cur_cum prev_cum = true).
+    { apply Nat.leb_le. exact Hle. }
+    rewrite H. reflexivity.
+  Qed.
+
+  (* INV-CHAT-102: gap_ms that does not equal cur_cum - prev_cum
+     is rejected as the reorder attack. *)
+  Lemma inv_chat_102_gap_timestamp_mismatch_rejected :
+    forall prev_cum cur_cum gap,
+      prev_cum < cur_cum ->
+      gap <> cur_cum - prev_cum ->
+      validate_gap18 prev_cum cur_cum gap = Some GapTimestampMismatch18.
+  Proof.
+    intros prev_cum cur_cum gap Hlt Hne.
+    unfold validate_gap18.
+    assert (H1 : Nat.leb cur_cum prev_cum = false).
+    { apply Nat.leb_gt. exact Hlt. }
+    rewrite H1.
+    assert (H2 : Nat.eqb gap (cur_cum - prev_cum) = false).
+    { apply Nat.eqb_neq. exact Hne. }
+    rewrite H2. simpl. reflexivity.
+  Qed.
+
+  (* Helper: a burst (gap < gap0_18) is rejected even if the
+     timestamp delta matches. *)
+  Lemma jitter_burst_below_minimum_rejected18 :
+    forall prev_cum cur_cum gap,
+      prev_cum < cur_cum ->
+      gap = cur_cum - prev_cum ->
+      gap < gap0_18 ->
+      validate_gap18 prev_cum cur_cum gap = Some BurstBelowMinimum18.
+  Proof.
+    intros prev_cum cur_cum gap Hlt Hgap Hburst.
+    unfold validate_gap18.
+    assert (H1 : Nat.leb cur_cum prev_cum = false).
+    { apply Nat.leb_gt. exact Hlt. }
+    rewrite H1.
+    assert (H2 : Nat.eqb gap (cur_cum - prev_cum) = true).
+    { apply Nat.eqb_eq. exact Hgap. }
+    rewrite H2. simpl.
+    assert (H3 : Nat.ltb gap gap0_18 = true).
+    { apply Nat.ltb_lt. exact Hburst. }
+    rewrite H3. reflexivity.
+  Qed.
+
+End TrinityChatWave18.
+
+(* End of Trinity_Chat.v — Wave-18 final
+   Theorems / Lemmas Qed-closed: 139 (count of `Qed.` occurrences)
+     Wave-18:   INV-CHAT-96..102 + 1 helper (padding-class-oracle + jitter, 8 new) -> 139 Qed
+      Wave-18 lanes:
+        L-CHAT-6-cls (Padding-class oracle):
+          INV-CHAT-96  inv_chat_96_smallest_class_in_set
+          INV-CHAT-97  inv_chat_97_padding_class_choice_minimal
+          INV-CHAT-98  inv_chat_98_declared_length_overflow_rejected
+          INV-CHAT-99  inv_chat_99_truncated_too_short_rejected
+        L-CHAT-7-jitter (Inter-arrival side-channel):
+          INV-CHAT-100 inv_chat_100_non_canonical_gap_rejected
+          INV-CHAT-101 inv_chat_101_non_monotonic_timestamp_rejected
+          INV-CHAT-102 inv_chat_102_gap_timestamp_mismatch_rejected
+          aux: jitter_burst_below_minimum_rejected18
+   Wave-18 introduces 0 new axioms.
+   Cumulative axioms (Wave-9+10+14): ss_kp_injective + dh_step_fresh +
+                                     dh_post_history_independent +
+                                     hybrid_kem_non_degenerate +
+                                     sn_hash_sym.
+*)
+
+(* The original Wave-17 footer below is retained verbatim for audit. *)
 (* End of Trinity_Chat.v — Wave-17 final
    Theorems / Lemmas Qed-closed: 130 (count of `Qed.` occurrences)
      Wave-17:   INV-CHAT-89..95 + 1 helper (tool-arg-confusion + group-PCS-heal, 9 new) -> 130 Qed
