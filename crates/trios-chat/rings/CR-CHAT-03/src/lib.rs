@@ -24,7 +24,9 @@
 #![warn(missing_docs)]
 
 pub mod external_commit;
+pub mod pcs_healing;
 pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
+pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
 
 use std::collections::{BTreeMap, BTreeSet};
 
