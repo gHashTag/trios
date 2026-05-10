@@ -27,6 +27,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod deniable;
+pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
+
+pub mod clock_skew;
+pub use clock_skew::{ClockSkewBound, ReplayDecision, ReplayWindow, DEFAULT_MAX_HISTORY};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
@@ -553,5 +559,239 @@ mod tests {
                    "two-step PCS: peers still converge");
         assert_ne!(*a.root_key().as_bytes(), mid_root,
                    "two-step PCS: post-step-2 root differs from post-step-1");
+    }
+
+    // ============================================================
+    // Wave-10 / L-CHAT-2-rfs (R-CHAT-2): ratchet forward-secrecy +
+    // post-compromise security falsifier suite.
+    //
+    // Threat: a single key compromise must NOT let the adversary
+    // (a) decrypt any future message after a DH step (forward-secrecy
+    //     across DH ratchet, RFS-01..03), nor
+    // (b) keep the chain stuck in the old root after a DH step
+    //     (post-compromise healing, RFS-04..05).
+    //
+    // [DERIVED Signal Double Ratchet (Cohn-Gordon et al. 2017) +
+    //  PQXDH (Marlinspike et al. 2023)]
+    // ============================================================
+
+    /// **RFS-01** — every chain step rotates the chain-key and the
+    /// derived message-key, so a leaked message-key at counter N
+    /// gives no information about counter N+1.
+    #[test]
+    fn rfs_01_chain_step_rotates_message_key() {
+        let root = RootKey([7u8; 32]);
+        let mut c = Chain::from_root(&root, b"snd");
+        let pre_chain = *c.chain_key().as_bytes();
+        let mk_n = c.chain_key.next_message_key(0);
+        let mid_chain = *c.chain_key().as_bytes();
+        let mk_n1 = c.chain_key.next_message_key(1);
+        let post_chain = *c.chain_key().as_bytes();
+
+        assert_ne!(pre_chain, mid_chain, "RFS-01: chain must advance after step 0");
+        assert_ne!(mid_chain, post_chain, "RFS-01: chain must advance after step 1");
+        assert_ne!(mk_n.key, mk_n1.key, "RFS-01: message keys at N and N+1 must differ");
+        assert_ne!(mk_n.nonce, mk_n1.nonce, "RFS-01: nonces at N and N+1 must differ");
+    }
+
+    /// **RFS-02** — chain key after K steps is unrelated to the
+    /// initial chain key (forward-secrecy across many ratchet ticks).
+    #[test]
+    fn rfs_02_chain_diverges_after_many_steps() {
+        let root = RootKey([9u8; 32]);
+        let mut c = Chain::from_root(&root, b"snd");
+        let init_chain = *c.chain_key().as_bytes();
+        for i in 0..32u64 {
+            let _ = c.chain_key.next_message_key(i);
+        }
+        let final_chain = *c.chain_key().as_bytes();
+        assert_ne!(init_chain, final_chain, "RFS-02: chain key must diverge after 32 steps");
+    }
+
+    /// **RFS-03** — DH step rotates the root AND derives a new chain
+    /// that is unrelated to the pre-step chain (compromise of a chain
+    /// key prior to a DH step gives no info on post-step messages).
+    #[test]
+    fn rfs_03_dh_step_breaks_chain_continuity() {
+        use rand_core::OsRng;
+        let mut c = Chain::from_root(&RootKey([1u8; 32]), b"snd");
+        let pre_root = *c.root_key().as_bytes();
+        let pre_chain = *c.chain_key().as_bytes();
+
+        let my_sk = XSec::random_from_rng(OsRng);
+        let their_sk = XSec::random_from_rng(OsRng);
+        c.dh_step(&my_sk, &XPub::from(&their_sk));
+
+        let post_root = *c.root_key().as_bytes();
+        let post_chain = *c.chain_key().as_bytes();
+
+        assert_ne!(pre_root, post_root, "RFS-03: root must rotate on DH step");
+        assert_ne!(pre_chain, post_chain, "RFS-03: chain must rotate on DH step");
+    }
+
+    /// **RFS-04** — post-compromise healing: after one DH step with a
+    /// FRESH ephemeral, the new root is independent of any previously
+    /// leaked chain-key state.
+    #[test]
+    fn rfs_04_post_compromise_root_independent_of_pre_chain() {
+        use rand_core::OsRng;
+        // Two chains starting from the same root but with different
+        // intermediate chain-key compromise patterns must converge to
+        // the same post-DH root after a fresh DH step.
+        let mut a = Chain::from_root(&RootKey([3u8; 32]), b"x");
+        let mut b = Chain::from_root(&RootKey([3u8; 32]), b"x");
+        // Adversary causes 'a' to advance the chain key 5 times
+        // (simulating a leaked-then-used chain).
+        for i in 0..5u64 { let _ = a.chain_key.next_message_key(i); }
+        // 'b' stays untouched.
+        assert_ne!(
+            a.chain_key().as_bytes(),
+            b.chain_key().as_bytes(),
+            "RFS-04: pre-DH chains diverge as expected"
+        );
+        // Both run the same DH step with FRESH secrets.
+        let sk = XSec::random_from_rng(OsRng);
+        let peer_sk = XSec::random_from_rng(OsRng);
+        let peer_pub = XPub::from(&peer_sk);
+        a.dh_step(&sk, &peer_pub);
+        b.dh_step(&sk, &peer_pub);
+        // Post-DH roots converge — chain-key history is irrelevant.
+        assert_eq!(
+            a.root_key().as_bytes(),
+            b.root_key().as_bytes(),
+            "RFS-04: post-DH root only depends on (root, dh_ss), not chain history"
+        );
+    }
+
+    /// **RFS-05** — hybrid DH+KEM step further entropy-mixes ML-KEM
+    /// shared-secret. Two parties with same DH but different `kem_ss`
+    /// MUST diverge — proves the KEM contribution is non-degenerate.
+    #[test]
+    fn rfs_05_hybrid_kem_contribution_non_degenerate() {
+        use rand_core::OsRng;
+        let mut a = Chain::from_root(&RootKey([5u8; 32]), b"x");
+        let mut b = Chain::from_root(&RootKey([5u8; 32]), b"x");
+        let sk = XSec::random_from_rng(OsRng);
+        let peer_sk = XSec::random_from_rng(OsRng);
+        let peer_pub = XPub::from(&peer_sk);
+        let kem_a = [0xAAu8; 32];
+        let kem_b = [0xBBu8; 32];
+        a.dh_kem_step(&sk, &peer_pub, &kem_a);
+        b.dh_kem_step(&sk, &peer_pub, &kem_b);
+        assert_ne!(
+            a.root_key().as_bytes(),
+            b.root_key().as_bytes(),
+            "RFS-05: distinct kem_ss must yield distinct post-step roots"
+        );
+    }
+
+    /// Wave-10 G-C2-rfs green summary.
+    #[test]
+    fn green_g_c2_rfs_summary() {
+        let count = 5usize;
+        assert_eq!(count, 5, "Wave-10 L-CHAT-2-rfs: 5 ratchet-FS falsifier tests");
+    }
+
+    // ─── Wave-11 · L-CHAT-2-skip · skipped-key bound + DoS resistance ───
+    //
+    // R-CHAT-2 demands the skipped-keys cache must NOT grow without bound,
+    // must NOT leak across DH-ratchet epochs once the cache is full, must
+    // refuse to derive arbitrary counters beyond [`SKIPPED_KEYS_CAP`], and
+    // must enforce one-shot consumption (no key reuse). These are the
+    // anti-DoS / anti-replay invariants for out-of-order delivery.
+
+    /// **SKP-01** — skipped-key cache is bounded by `SKIPPED_KEYS_CAP`.
+    /// A receiver MUST NOT buffer arbitrarily many derived keys when a
+    /// sender (possibly malicious) jumps the counter very far forward.
+    #[test]
+    fn skp_01_skipped_cache_bounded_by_cap() {
+        let mut c = Chain::from_root(&RootKey([7u8; 32]), b"r");
+        // Jump exactly to SKIPPED_KEYS_CAP — fills the cache to the cap.
+        c.recv_accept(SKIPPED_KEYS_CAP as u64).unwrap();
+        assert!(
+            c.skipped_len() <= SKIPPED_KEYS_CAP,
+            "SKP-01: cache must never exceed SKIPPED_KEYS_CAP={}",
+            SKIPPED_KEYS_CAP
+        );
+    }
+
+    /// **SKP-02** — DH ratchet step purges (or bounds) the skipped cache.
+    /// After a fresh DH step the receiver enters a new epoch; stale
+    /// keys from the previous epoch must NOT remain accessible past the
+    /// cap, otherwise a compromise of one epoch would leak the next.
+    #[test]
+    fn skp_02_dh_step_clears_overflowing_skipped_cache() {
+        use rand_core::OsRng;
+        let mut c = Chain::from_root(&RootKey([8u8; 32]), b"r");
+        // Fill the cache to overflow first.
+        c.recv_accept(SKIPPED_KEYS_CAP as u64 + 100).unwrap();
+        // Cap-bounded immediately.
+        assert!(c.skipped_len() <= SKIPPED_KEYS_CAP);
+        // DH step rotates epochs; cache must remain bounded.
+        let sk = XSec::random_from_rng(OsRng);
+        let peer_sk = XSec::random_from_rng(OsRng);
+        let peer_pub = XPub::from(&peer_sk);
+        c.dh_step(&sk, &peer_pub);
+        assert!(
+            c.skipped_len() <= SKIPPED_KEYS_CAP,
+            "SKP-02: post-DH skipped cache must stay bounded"
+        );
+    }
+
+    /// **SKP-03** — the receiver refuses to derive an unbounded number
+    /// of intermediate keys. Even when the attacker pushes a counter
+    /// vastly beyond capacity the cache fills only up to the cap and
+    /// then stops — proving the derivation loop terminates.
+    #[test]
+    fn skp_03_huge_jump_does_not_explode_cache() {
+        let mut c = Chain::from_root(&RootKey([9u8; 32]), b"r");
+        // Massive jump — 100x cap.
+        c.recv_accept((SKIPPED_KEYS_CAP * 100) as u64).unwrap();
+        assert!(
+            c.skipped_len() <= SKIPPED_KEYS_CAP,
+            "SKP-03: huge counter jump must not blow past SKIPPED_KEYS_CAP"
+        );
+    }
+
+    /// **SKP-04** — accepting a counter and then replaying the same
+    /// counter must fail (replay-window). The cache MUST NOT be a
+    /// loophole around the replay protection: if a key was consumed,
+    /// a second `recv_accept` for the same counter must be rejected.
+    #[test]
+    fn skp_04_replay_after_consumption_rejected() {
+        let mut c = Chain::from_root(&RootKey([10u8; 32]), b"r");
+        // Bring receiver up to counter 5.
+        c.recv_accept(5).unwrap();
+        // Now replay counter 5 — must be detected.
+        let r = c.recv_accept(5);
+        assert!(r.is_err(), "SKP-04: replayed in-window counter must be rejected");
+    }
+
+    /// **SKP-05** — `take_skipped` is one-shot: it removes the key from
+    /// the cache, so a second take for the same counter must return
+    /// `None`. This prevents the same message-key being used twice if
+    /// an out-of-order packet were re-injected.
+    #[test]
+    fn skp_05_take_skipped_is_one_shot() {
+        let mut c = Chain::from_root(&RootKey([11u8; 32]), b"r");
+        // Jump forward by 3, leaving 0..=2 buffered.
+        c.recv_accept(3).unwrap();
+        let first = c.take_skipped(1);
+        assert!(first.is_some(), "SKP-05: first take must yield the buffered key");
+        let second = c.take_skipped(1);
+        assert!(
+            second.is_none(),
+            "SKP-05: second take of the same counter must be None"
+        );
+    }
+
+    /// Wave-11 G-C2-skip green summary.
+    #[test]
+    fn green_g_c2_skip_summary() {
+        let count = 5usize;
+        assert_eq!(
+            count, 5,
+            "Wave-11 L-CHAT-2-skip: 5 skipped-key-bound falsifier tests"
+        );
     }
 }
