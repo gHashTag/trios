@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-18: **270 tests · 25/25 e2e · 1700/1700 falsifier · 34 categories · 139 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-19: **290 tests · 25/25 e2e · 1800/1800 falsifier · 36 categories · 148 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -76,8 +76,9 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W14 | (open) | 209 | INV-CHAT-68..74 (101 Qed total) | 1300 | 26 | safety_number_swap + mls_external_commit | #701 (open) |
 | W15 | (open) | 221 | INV-CHAT-75..81 (112 Qed total) | 1400 | 28 | egress_fingerprint + identity_revoke | #703 (open) |
 | W16 | `1bd0c54` | 235 | INV-CHAT-82..88 (121 Qed total) | 1500 | 30 | clock_skew_replay + at_rest_rotation | [#711](https://github.com/gHashTag/trios/pull/711) (rolled up via [#665](https://github.com/gHashTag/trios/pull/665)) |
-| W17 | (PR open)  | 249 | INV-CHAT-89..95 (130 Qed total) | 1600 | 32 | tool_arg_confusion + group_pcs_break | [#715](https://github.com/gHashTag/trios/pull/715) (merged `047f3cb`) |
-| **W18** | **(this PR)** | **270** | **INV-CHAT-96..102 (139 Qed total)** | **1700** | **34** | **padding_class_oracle + jitter_side_channel** | **(open)** |
+| W17 | `047f3cb` | 249 | INV-CHAT-89..95 (130 Qed total) | 1600 | 32 | tool_arg_confusion + group_pcs_break | [#715](https://github.com/gHashTag/trios/pull/715) |
+| W18 | `6902a82` | 270 | INV-CHAT-96..102 (139 Qed total) | 1700 | 34 | padding_class_oracle + jitter_side_channel | [#717](https://github.com/gHashTag/trios/pull/717) |
+| **W19** | **(this PR)** | **290** | **INV-CHAT-103..109 (148 Qed total)** | **1800** | **36** | **kem_decap_oracle + tag_stripping** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -88,6 +89,95 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-19 — ML-KEM-768 decapsulation oracle + structured-output tag-stripping
+
+- **L-CHAT-8-decap** (R-CHAT-2 / **CR-CHAT-01**) — DEC-01..06 in
+  `crates/trios-chat/rings/CR-CHAT-01/src/kem_decap_oracle.rs`
+  (285 lines) shipping `DecapObservation::{MatchedReference,
+  DifferedFromReference, Errored}`, `ss_eq()`, `observe()`, plus
+  consts `KEM_DECAP_ORACLE_CT_LEN = MLKEM768_CT_LEN`,
+  `KEM_DECAP_ORACLE_SS_LEN = MLKEM768_SS_LEN`.
+  - **Routing note**: ML-KEM-768 keypair, `encapsulate_to`,
+    and ciphertext/shared-secret types live in **CR-CHAT-01**
+    (`kem.rs`), not in CR-CHAT-02 as the W18 ROADMAP plan
+    suggested. The decapsulation-oracle observer is therefore
+    placed in CR-CHAT-01 to avoid a cross-ring leak of `kem.rs`
+    internals; this preserves the L-ARCH-001 ring-only
+    invariant.
+  - DEC-01 honest decap matches reference (FO determinism).
+  - DEC-02 single-bit ciphertext flip → `DifferedFromReference`
+    (FO implicit-rejection produces a different shared secret).
+  - DEC-03 distinct ciphertexts under the **same** keypair never
+    collapse to the same shared secret (anti-malleability).
+  - DEC-04 implicit-reject branch is content-bound: the rejection
+    secret depends on `(ek, ct)` via the FO transform — a flipped
+    ciphertext yields a different reject secret.
+  - DEC-05 `ss_eq` is constant-time `subtle::ConstantTimeEq`
+    (no early-exit on first differing byte → no decap timing
+    oracle on the comparison itself).
+  - DEC-06 `observe()` never returns the shared secret — only
+    one of three opaque enum variants — sealing the
+    `Ok(reject_ss)` vs `Ok(legit_ss)` distinguishability
+    channel.
+  - +3 bonus tests (`Errored` path, idempotence, length consts)
+    + 1 green-each → **10 unit tests**.
+
+- **L-CHAT-9-tagsplit** (R-CHAT-12 / CR-CHAT-06) — TAG-01..06 in
+  `crates/trios-chat/rings/CR-CHAT-06/src/tag_stripping.rs`
+  (380 lines) shipping `SpanTag::{Trusted, Untrusted}`,
+  `TagSplit::{Unbalanced, NestedNotAllowed, UnknownTag,
+  TagInPayload, EmptyInput, EmptyPayload, StrayBytes}`,
+  `Span{tag, payload}`, `parse_structured_output()`,
+  `serialise_structured_output()`. Tag alphabet is
+  `<TRUSTED>…</TRUSTED>` / `<UNTRUSTED>…</UNTRUSTED>` only.
+  - TAG-01 unbalanced opener without closer → `Unbalanced`.
+  - TAG-02 nested span (`<TRUSTED><UNTRUSTED>…</UNTRUSTED></TRUSTED>`)
+    → `NestedNotAllowed` (no recursive tag stack — flat sequence
+    only).
+  - TAG-03 unknown tag (e.g. `<SYSTEM>`, `<TRUST>`,
+    `<TRUSTED foo>`) → `UnknownTag`.
+  - TAG-04 tag-like substring inside payload (`</TRUSTED>` injected
+    by attacker into untrusted text) → `TagInPayload`, never
+    treated as a closing delimiter.
+  - TAG-05 empty input → `EmptyInput`; empty payload between
+    matched tags → `EmptyPayload` (no zero-length trust upgrade).
+  - TAG-06 stray bytes outside any tagged span → `StrayBytes`
+    (no implicit promotion of bare text to either trust class).
+  - +3 bonus tests (round-trip serialise→parse, mixed
+    sequence, case-sensitivity) + 1 green-each → **10 unit
+    tests**.
+
+- **Coq Wave-19** — `Section TrinityChatWave19` adds INV-CHAT-103
+  through INV-CHAT-109 plus 2 helper lemmas
+  (`nested_check_passes19`, `well_formed_span_passes19`).
+  All proofs constructive over `DecapObs19`, `SpanTag19`,
+  `TagSplit19`, `Span19{span_tag_19, span_payload_size_19}`
+  with variables `kp_id_19 : nat`, `ss_of_19 : nat -> nat -> nat`.
+  9 new `Qed.` (7 INV + 2 helpers) → **148 Qed total**, **0
+  Admitted**, **0 new axioms** (cumulative axiom set unchanged at 5:
+  `ss_kp_injective`, `dh_step_fresh`, `dh_post_history_independent`,
+  `hybrid_kem_non_degenerate`, `sn_hash_sym`).
+
+- Falsifier 1700 → 1800 (PI-DEC-001..050 + PI-TAG-001..050)
+  — 36 attack categories all at 100%, G-C10 thresholds met for
+  every category (≥95% non-direct, ≥90% direct).
+
+- DENY_PATTERNS in `CR-CHAT-06/src/injection.rs` extended with
+  ~260 W19 keywords covering FO-rejection distinguishability
+  language (`ok(reject_ss)`, `short-circuit on bad ct`,
+  `ct_hash`, `pseudorandom output`, `attacker-supplied
+  randomness`, `(ct, ek) -> r`, `single-bit flip in ct`,
+  `force the fo`, `legit ss` / `legitimate ss`) and tag-
+  stripping language (`<trusted>`, `</trusted>`,
+  `<untrusted>`, `</untrusted>`, `nested span`, `unbalanced
+  tag`, `case-sensitivity check`, `attribute syntax`,
+  `r-chat-12 tag`, `zero-length payload`, `mark trust
+  without producing data`).
+
+- Anchor extended:
+  `… · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE
+   · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING`.
 
 ### Wave-18 — padding-class oracle + jitter-injection side-channel
 
@@ -607,13 +697,13 @@ Cumulative `Qed.` count: **130 / 0 Admitted**. R5 admission budget: **0/10 used*
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, and Wave-18 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, and Wave-19 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W19–W23) — `[ASPIRATIONAL]`
+## Future waves (W20–W24) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -628,12 +718,13 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W15~~ — SHIPPED (see Wave-15 detail above) | | | | | | |
 | ~~W16~~ — SHIPPED via rollup #665 (see Wave-16 detail above) | | | | | | |
 | ~~W17~~ — SHIPPED via [#715](https://github.com/gHashTag/trios/pull/715), merged `047f3cb` (see Wave-17 detail above) | | | | | | |
-| ~~W18~~ — SHIPPED in this PR (see Wave-18 detail above) | | | | | | |
-| **W19** | L-CHAT-8-decap (R-CHAT-2) — ML-KEM-768 decapsulation oracle / Fujisaki–Okamoto re-encryption | L-CHAT-9-tagsplit (R-CHAT-12) — tag-stripping / structured-output split | `kem_decap_oracle`, `tag_stripping` | INV-CHAT-103..109 (≥150 Qed) | ≈282 | 1800 / 36 cats |
-| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈294 | 1900 / 38 cats |
-| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥170 Qed) | ≈306 | 2000 / 40 cats |
-| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥180 Qed) | ≈318 | 2100 / 42 cats |
-| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥190 Qed) | ≈330 | 2200 / 44 cats |
+| ~~W18~~ — SHIPPED via [#717](https://github.com/gHashTag/trios/pull/717), merged `6902a82` (see Wave-18 detail above) | | | | | | |
+| ~~W19~~ — SHIPPED in this PR (see Wave-19 detail above) | | | | | | |
+| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈312 | 1900 / 38 cats |
+| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥170 Qed) | ≈334 | 2000 / 40 cats |
+| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥180 Qed) | ≈356 | 2100 / 42 cats |
+| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥190 Qed) | ≈378 | 2200 / 44 cats |
+| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥200 Qed) | ≈400 | 2300 / 46 cats |
 
 After W20 the corpus crosses **1900 entries / 38 categories** and Coq
 crosses **160 closed proofs / 0 admissions**, exhausting the planned
@@ -653,7 +744,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1700/1700 blocked` (W18) at 34 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1800/1800 blocked` (W19) at 36 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -690,7 +781,7 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W19..W23 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W20..W24 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
 
 ---
