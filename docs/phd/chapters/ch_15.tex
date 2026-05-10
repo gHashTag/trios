@@ -9,8 +9,8 @@
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_15.jpg}}
-\caption{Ch 15 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-12-key-lock.jpg}}
+\caption{Key Lock - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 \begin{quote}
 \itshape
@@ -51,20 +51,13 @@ scaffolding that makes the number believable.
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-07-compass-rose.jpg}}
-\caption{Compass Rose - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-13-spectacle-lens.jpg}}
+\caption{Spectacle Lens - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 This chapter documents the bits-per-byte (BPB) benchmark protocol for Trinity S³AI and the complementary Railway PostgreSQL write-back mechanism that persists training trajectories for audit. The formally verified invariant INV-1 (\texttt{Trinity.Canonical.Igla.INV1\_BpbMonotoneBackward}, nine Qed) certifies that BPB is monotonically non-increasing during backward passes when the learning rate satisfies \(\text{lr} = 0.004\) --- the champion rate identified by the IGLA RACE in Ch.21. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) enters through the Gate-2 threshold (BPB \(\leq 1.85\)) and Gate-3 threshold (BPB \(\leq 1.5\)), which are derived from the spectral parameter \(\alpha_\varphi\). Measurements at training step \(\geq 4000\) confirm BPB \(= 1.82\) (Gate-2 pass) for the M4 (2.7B) model with GF16 PHI\_BIAS=60 weights.
 
 \section{1. Introduction}\label{introduction}
 
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-08-pyramid-section.jpg}}
-\caption{Pyramid Section - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
-\end{figure}
 Bits per byte (BPB) is the primary accuracy metric for language modelling in this dissertation. It is related to perplexity by BPB \(= \log_2(\text{PPL}) / \log_2(e)\) and measures the average information cost of predicting each byte of a held-out test corpus. BPB is preferred over perplexity because it is tokeniser-independent and because its theoretical lower bound under an optimal compressor is the Shannon entropy of the byte distribution --- a quantity that can be bounded using the \(\varphi\)-substrate identity \(\varphi^2 + \varphi^{-2} = 3\) {[}1{]}.
 
 The Gate-2 target BPB \(\leq 1.85\) and Gate-3 target BPB \(\leq 1.5\) were derived in Ch.4 {[}2{]} from the spectral constant \(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\) (note: this is the Ch.4 definition; the alternative normalisation \(\alpha_\varphi \approx 0.118034\) used in Ch.9 is a different scaling). The passage through Gate-2 is necessary for hardware deployment (Ch.28 {[}3{]}); Gate-3 passage is required for DARPA energy-goal certification {[}4{]}.

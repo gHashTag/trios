@@ -9,8 +9,8 @@
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_24.jpg}}
-\caption{Ch 24 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-30-mosaic-tile.jpg}}
+\caption{Mosaic Tile - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 \begin{quote}
 \itshape
@@ -47,20 +47,13 @@ agent's accumulator --- are \texttt{Qed}-proved.
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-20-orrery.jpg}}
-\caption{Orrery - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-31-codex-binding.jpg}}
+\caption{Codex Binding - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 The Period-Locked Runtime Monitor (PLRM) is a scheduling and watchdog component of the IGLA RACE multi-agent system that enforces timing invariants derived from the Golden Sunflowers substrate. The monitor uses two Lucas sentinels---\(L_7 = 29\) and \(L_8 = 47\)---as period bounds for the two principal agent classes (arithmetic and orchestration agents), ensuring that no agent can monopolise the GF16 arithmetic pipeline for more than 29 or 47 clock cycles respectively. The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) motivates the period ratio \(47/29 \approx 1.621 \approx \varphi\), which guarantees that the two agent classes interleave without resonance. The formal treatment of PLRM liveness currently carries 9 Admitted stubs pending Iris integration (Ch.18); all safety properties are Qed-proved.
 
 \section{1. Introduction}\label{introduction}
 
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-21-loom-warp.jpg}}
-\caption{Loom Warp - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
-\end{figure}
 A multi-agent inference runtime operating on shared hardware must guarantee two properties simultaneously: \emph{safety} (no agent corrupts another agent's arithmetic state) and \emph{liveness} (the hardware pipeline is never permanently starved). The IGLA RACE architecture (Inference Graph Lattice Architecture --- Robust Agent Computation Engine) achieves safety via memory isolation and formal invariants; liveness is the harder problem, because it requires reasoning about infinite execution traces {[}1{]}.
 
 The Period-Locked Runtime Monitor addresses liveness by converting it into a bounded-time problem. Every agent in IGLA RACE is assigned a \emph{period}: a maximum number of consecutive FPGA clock cycles it may hold the GF16 MAC unit. When an agent's period expires, the PLRM asserts a preemption signal, and the scheduler selects the next agent from a priority queue ordered by \(\varphi\)-weighted urgency scores.

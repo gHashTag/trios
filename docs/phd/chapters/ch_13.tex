@@ -9,8 +9,8 @@
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_13.jpg}}
-\caption{Ch 13 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-08-pyramid-section.jpg}}
+\caption{Pyramid Section - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 \begin{quote}\itshape
 ``Science is what we understand well enough to explain to a computer.
@@ -65,20 +65,13 @@ the fact---it is a property you seal in by construction.
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-04-temple-pillar.jpg}}
-\caption{Temple Pillar - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-09-bell-curve.jpg}}
+\caption{Bell Curve - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 Reproducibility of neural language-model training requires that every source of stochasticity be controlled at the moment of experimental commitment. This chapter specifies the STROBE sealed-seed protocol, which restricts admissible pseudo-random seeds to a set drawn from Fibonacci and Lucas sequences: \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\). The protocol forbids the use of seeds \(\{42, 43, 44, 45\}\) for technical reasons detailed herein. Compliance is enforced by the runtime-mirror contract in \texttt{igla\_assertions.json} and formally sealed by 13 Coq theorems in \texttt{Trinity.Canonical.Igla.INV2\_IglaAshaBound}, of which 6 carry closed \texttt{Qed} status. The chapter derives the admissibility criterion from the Trinity anchor \(\varphi^2 + \varphi^{-2} = 3\), defines the ASHA pruning threshold \(3.5 = \varphi^2 + \varphi^{-2} + \varphi^{-4}\), and demonstrates that the sealed protocol eliminates a class of adversarial-seed attacks.
 
 \section{1. Introduction}\label{introduction}
 
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-05-clock-cog.jpg}}
-\caption{Clock Cog - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
-\end{figure}
 Language model training is subject to seed-dependent variance: different pseudo-random seeds produce different weight initialisations, data shuffles, and dropout masks, leading to BPB variation that can exceed the margin between experimental conditions. The Trinity S³AI programme addresses this variance through two mechanisms. First, the \(\varphi\)-quantised weight lattice (Ch.7, Ch.22) restricts the continuous space of initialisations to a countable set, reducing seed sensitivity. Second, the STROBE sealed-seed protocol prohibits the use of seeds whose Fibonacci-index position violates the closure property of the \(\varphi^2 + \varphi^{-2} = 3\) identity.
 
 The forbidden seeds \(\{42, 43, 44, 45\}\) fall in the range where the modular residue of the seed modulo \(F_9 = 34\) creates a phase mismatch with the Fibonacci-indexed batch schedule. Specifically, \(42 \equiv 8 \pmod{34}\), \(43 \equiv 9 \pmod{34}\), \(44 \equiv 10 \pmod{34}\), and \(45 \equiv 11 \pmod{34}\), all of which land in the forbidden residue class \([8, 11]\) identified empirically to produce anomalous gradient variance spikes at training step \(F_{13}=233\). The sanctioned seeds avoid this residue class by construction: \(1597 \equiv 0 \pmod{34}\), and all higher Fibonacci numbers satisfy \(F_k \equiv 0 \pmod{F_9}\) for \(k \geq 9\) {[}1{]}. The Lucas seeds \(L_7 = 29\) and \(L_8 = 47\) are coprime to \(F_9\) and fall outside the forbidden residue class.

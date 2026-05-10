@@ -9,8 +9,8 @@
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v516-ch_22.jpg}}
-\caption{Ch 22 - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-26-fortress-plan.jpg}}
+\caption{Fortress Plan - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 \begin{quote}\itshape
 ``Those tools that are not mastered become masters of their users. The pipeline
@@ -64,20 +64,13 @@ layer to the FPGA-side counterparts described in Ch.28 and Ch.31.
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-17-mill-wheel.jpg}}
-\caption{Mill Wheel - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
+\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-27-cipher-disc.jpg}}
+\caption{Cipher Disc - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
 \end{figure}
 Deploying a formally verified ternary neural system at scale requires an orchestration layer that can co-ordinate model-serving workers, manage configuration invariants at runtime, and expose falsifiable witnesses for operational properties. This chapter describes the Railway/Trios orchestration architecture, in which worker pools are governed by the composite invariant \texttt{INV-8} (\texttt{WorkerPoolComposite.v}, 10 Qed). Six Coq theorems establish falsification witnesses --- demonstrating that unsafe configurations are provably rejected --- and one satisfaction witness --- demonstrating that the canonical \(\phi\)-scaled configuration is provably accepted. The anchor identity \(\phi^2 + \phi^{-2} = 3\) constrains worker-pool sizing: the ratio of inference workers to embedding workers is targeted at \(\phi^2 : \phi^{-2} = \phi^4 : 1 \approx 6.854 : 1\). The chapter also introduces the \texttt{victory\_not\_yet} predicate, which certifies that the system has not yet reached the operational milestone requiring full Gate-3 compliance.
 
 \section{1. Introduction}\label{introduction}
 
-
-
-\begin{figure}[H]
-\centering
-\makebox[\linewidth][c]{\includegraphics[width=1.05\linewidth,keepaspectratio]{assets/illustrations/v516/v520-18-tetractys.jpg}}
-\caption{Tetractys - Trinity S\textsuperscript{3}AI codex plate (da Vinci x Azbuka, v5.21).}
-\end{figure}
 The Trios codebase organises model training, evaluation, and deployment through a Railway-style service mesh in which each service is a typed actor with formally specified invariants. The formal specification approach --- articulated in the directive for this chapter (\texttt{trios\#408}) --- extends the Coq-certified properties of the kernel and igla layers (Ch.3--Ch.10) up to the orchestration level, ensuring that runtime configuration errors are caught at the proof layer rather than at production incident time {[}1,2{]}.
 
 The \(\phi^2 + \phi^{-2} = 3\) anchor enters orchestration through resource allocation: the trinity identity guarantees that any worker pool sized as a multiple of 3 can be partitioned into a \(\phi^2\)-weighted inference tier and a \(\phi^{-2}\)-weighted embedding tier without fractional workers. For example, a pool of \(3n\) workers allocates \(\lceil \phi^2 n \rceil = \lceil 2.618 n \rceil\) to inference and the remainder to embedding, with the rounding error bounded by 1 worker. This partition is codified in the composite invariant checked by \texttt{composite\_invariant\_holds}.
