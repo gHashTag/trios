@@ -1,0 +1,15 @@
+# Railway config for Node-0 (seed=0, bootstrap node)
+# φ-anchor: first node in the mesh — the "zero" of GF16
+[build]
+builder       = "DOCKERFILE"
+dockerfilePath = "crates/trios-mesh-node/Dockerfile"
+
+[deploy]
+startCommand       = "mesh-node"
+restartPolicyType  = "ALWAYS"
+healthcheckPath    = "/health"
+
+[env]
+MESH_SEED       = "0"
+MESH_NODE_NAME  = "trinity-node-0"
+RUST_LOG        = "trios_mesh_node=info"

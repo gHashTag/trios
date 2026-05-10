@@ -1,0 +1,119 @@
+name: Trinity Mesh Node — CI + Railway Deploy
+# φ² + φ⁻² = 3
+
+on:
+  push:
+    paths:
+      - 'crates/trios-mesh/**'
+      - 'crates/trios-mesh-node/**'
+      - '.github/workflows/mesh-node.yml'
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.86"
+
+jobs:
+  test:
+    name: "🧪 trios-mesh unit tests + smoke"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-mesh-${{ hashFiles('crates/trios-mesh/Cargo.toml', 'crates/trios-mesh-node/Cargo.toml') }}
+
+      - name: 🧪 Run trios-mesh tests (incl. ETX routing, L-E2E-2)
+        run: cargo test -p trios-mesh --features std
+
+      - name: 📦 Build mesh-node binary (no_persist for CI speed)
+        run: cargo build --release -p trios-mesh-node --no-default-features
+
+      - name: 🧪 25-test E2E suite (L-E2E-1, trinity-fpga#23) — Rust-only, L1 compliant
+        run: cargo run --release -p trios-mesh-node --bin e2e_25 --no-default-features
+        env:
+          BIN: ./target/release/mesh-node
+
+      - name: 📊 Run benchmarks (criterion, L-E2E-5, no plots in CI)
+        run: cargo bench -p trios-mesh --features std -- --quick --noplot
+        continue-on-error: true
+
+      - name: 📄 Upload bench results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trios-mesh-bench-${{ github.sha }}
+          path: target/criterion/
+          if-no-files-found: ignore
+
+  deploy:
+    name: "🚂 Deploy 3 nodes to Railway"
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    continue-on-error: true
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: 🚂 Deploy trinity-node-0
+        run: |
+          railway up \
+            --service trinity-node-0 \
+            --project-id "$RAILWAY_PROJECT_ID" \
+            --detach
+        working-directory: crates/trios-mesh-node
+        env:
+          MESH_SEED: "0"
+          MESH_NODE_NAME: "trinity-node-0"
+          RUST_LOG: "info"
+
+      - name: 🚂 Deploy trinity-node-1
+        run: |
+          railway up \
+            --service trinity-node-1 \
+            --project-id "$RAILWAY_PROJECT_ID" \
+            --detach
+        working-directory: crates/trios-mesh-node
+        env:
+          MESH_SEED: "1"
+          MESH_NODE_NAME: "trinity-node-1"
+          RUST_LOG: "info"
+
+      - name: 🚂 Deploy trinity-node-2
+        run: |
+          railway up \
+            --service trinity-node-2 \
+            --project-id "$RAILWAY_PROJECT_ID" \
+            --detach
+        working-directory: crates/trios-mesh-node
+        env:
+          MESH_SEED: "2"
+          MESH_NODE_NAME: "trinity-node-2"
+          RUST_LOG: "info"
+
+      - name: ✅ Summary
+        run: |
+          echo "## 🔺 Trinity CPU Mesh Network" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Node | Seed | Endpoints |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-0 | 0 | /info /health /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-1 | 1 | /info /health /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "| trinity-node-2 | 2 | /info /health /announce /next-hop |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "φ² + φ⁻² = 3 | CPU ~800mW | ASIC target <25mW (TTIHP27a Q4 2026)" >> $GITHUB_STEP_SUMMARY
