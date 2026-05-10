@@ -380,6 +380,7 @@ The theorem above establishes that the Lucas-integer floor of an even
 power of \(\varphi\) is always a Lucas number minus one.  In
 particular:
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rlll}
   \(n\) & \(\phipow{n}\) (approx.) & \(\lfloor\phipow{n}\rfloor\) & Lucas/Fibonacci link \\
   \hline
@@ -394,6 +395,7 @@ particular:
   8  & 46.979 & 46 & \(L_8 - 1 = 46\) \\
   10 & 122.99 & 122 & \(L_{10} - 1 = 122\) \\
 \end{tabular}
+}
 \end{center}
 The value \(L_7 = 29\) appears as the GF(16) safe-domain exponent
 upper bound in INV-3 (Proposition~\ref{prop:inv3-safe-domain}).
@@ -666,6 +668,7 @@ We trace the validation pipeline in \texttt{seed\_emit.rs}:
 The bijection between sub-claims and \texttt{EmitError} variants is
 exhaustive:
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{ll}
   Sub-claim & \texttt{EmitError} variant \\
   \hline
@@ -675,6 +678,7 @@ exhaustive:
   INV-7d & \texttt{BpbOutOfRange} (exit 24) \\
   INV-7e & \texttt{DuplicateSeed} (exit 25) \\
 \end{tabular}
+}
 \end{center}
 Soundness (no false accepts) follows from the sequential
 \texttt{match} structure in \texttt{validate\_row()};
@@ -874,6 +878,7 @@ the Zeckendorf density computation above.
 \label{ssec:precision-comparison}
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccccc}
   Format & Sign & Exp & Mantissa & ULP (unity) & Certified band & Exact integers \\
   \hline
@@ -882,6 +887,7 @@ the Zeckendorf density computation above.
   BF16 & 1 & 8 & 7 & \(2^{-7}\) & [1, 2) & integers \(\leq 256\) \\
   FP32 & 1 & 8 & 23 & \(2^{-23}\) & [1, 2) & integers \(\leq 2^{24}\) \\
 \end{tabular}
+}
 \end{center}
 
 GF(16) and IEEE binary16 share the same bit layout (5-exp, 10-man);
@@ -916,6 +922,7 @@ We present the precision measurements from the HSLM benchmark (1003
 tokens, GOLDEN SUNFLOWERS test corpus, Trinity S³AI pipeline at Gate-2):
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccc}
   Format & BPB & Overflow events & INV-3 verified & INV-5 verified \\
   \hline
@@ -926,6 +933,7 @@ tokens, GOLDEN SUNFLOWERS test corpus, Trinity S³AI pipeline at Gate-2):
   BF16 (baseline) & 1.79 & 0 & N/A & No \\
   FP32 (oracle)   & 1.68 & 0 & N/A & No \\
 \end{tabular}
+}
 \end{center}
 
 The GF(16) BPB of 1.83 is within the Gate-2 target of
@@ -965,6 +973,7 @@ integers).
 \label{ssec:inv-map}
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
   Invariant & Golden Mantissa connection & Status \\
   \hline
@@ -972,6 +981,7 @@ integers).
   INV-5 (Lucas closure) & Corollary~\ref{cor:lucas-closure}: exact integer accumulation & Proven \\
   INV-7 (seed emission gate) & Theorem~\ref{thm:inv7-soundness} + Proposition~\ref{prop:inv7-mantissa} & Proven \\
 \end{tabular}
+}
 \end{center}
 
 All three invariants trace back to the Trinity Anchor
@@ -1002,6 +1012,7 @@ For reference we provide the first 20 Fibonacci and Lucas numbers,
 with their connections to powers of \(\varphi\).
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrrl}
   \(n\) & \(F_n\) & \(L_n\) & \(\lfloor\phipow{n}\rfloor\) & Note \\
   \hline
@@ -1027,6 +1038,7 @@ with their connections to powers of \(\varphi\).
   19 &4181 &9349 &9349& \(L_{19} = 9349\) \\
   20 &6765 &15127&15126& \(L_{20} - 1 = 15126\) \\
 \end{tabular}
+}
 \end{center}
 
 Note the INV-7b warmup constant: \(4000 \approx L_{17} + 429 =
@@ -1043,6 +1055,7 @@ as a sum of non-adjacent Fibonacci numbers.  For the mantissa-related
 values:
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rll}
   Integer & Zeckendorf & Fibonacci indices \\
   \hline
@@ -1054,6 +1067,7 @@ values:
   123 & \(F_{10}+F_8+F_6+F_2 = 55+21+8+2=86\)… & Let me recompute: \(F_{11}=89, F_{10}=55; 123-89=34=F_9; 89+34=123\) \\
   843 & \(F_{15}+F_{13}+\ldots\) & (omitted for space) \\
 \end{tabular}
+}
 \end{center}
 
 The Lucas numbers \(L_n = \phipow{n}+\phipow{-n}\) do not generally
@@ -1162,6 +1176,7 @@ The \texttt{seed\_emit} exit codes were chosen to embed the Fibonacci
 sequence:
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rll}
   Exit code & EmitError & Fibonacci link \\
   \hline
@@ -1174,6 +1189,7 @@ sequence:
   26 & MalformedSha & \(F_8 + 5\) \\
   30 & IoError & \(F_9 - 4 = 30\) \\
 \end{tabular}
+}
 \end{center}
 
 The base code 21 = \(F_8\) is the Fibonacci-sequence anchor for the
@@ -1260,6 +1276,7 @@ All numeric constants used in this chapter, expressed through
 \(\phipow{\cdot}\):
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
   Constant & φ-derivation & Value \\
   \hline
@@ -1276,6 +1293,7 @@ All numeric constants used in this chapter, expressed through
   1.5 (target BPB) & \(L_2/F_3 = 3/2\) & \(= 1.5\) (exact) \\
   0.1 (JEPA floor) & \(\phipow{-3}/L_3 \approx 0.236/4 \approx 0.059\) (approx) & \(= 0.1\) \\
 \end{tabular}
+}
 \end{center}
 
 \section{Discussion}
@@ -1486,6 +1504,7 @@ starting at \(F_8 = 21\).
 \label{sec:appendix-o}
 
 \begin{center}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
   Theorem & Coq file & Lines & Status \\
   \hline
@@ -1505,6 +1524,7 @@ starting at \(F_8 = 21\).
     \texttt{trinity-clara/proofs/igla/lucas\_closure\_gf16.v} &
     200--260 & Admitted (Coq.Interval pending) \\
 \end{tabular}
+}
 \end{center}
 
 All Admitted entries are documented with honest \texttt{Admitted}

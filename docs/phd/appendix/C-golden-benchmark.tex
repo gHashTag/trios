@@ -13,7 +13,7 @@
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.92\textwidth,keepaspectratio]{app-c-acknowledgments.png}
+\includegraphics[width=0.92\textwidth,keepaspectratio]{C-golden-benchmark.jpg}
 \caption*{Figure --- Golden Benchmark --- GF4/GF8/GF16 reference tables.}
 \end{figure}
 
@@ -140,6 +140,7 @@ This identity is verified at runtime in
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrr}
 \toprule
 \textbf{Code} & \textbf{Value} & \textbf{φ-exponent} & \textbf{Note} \\
@@ -155,6 +156,7 @@ This identity is verified at runtime in
 1xxx & neg.  & --- & Sign bit = 1 \\
 \bottomrule
 \end{tabular}
+}
 \caption{GF4: 8 positive values + sign.  Range [$-$6.854, 6.854].
          Zero-point-free.}
 \end{table}
@@ -178,6 +180,7 @@ This identity is verified at runtime in
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrr}
 \toprule
 \textbf{Exponent field (4 bits)} & \textbf{Positive values} &
@@ -196,6 +199,7 @@ $\varphi^{3}$  & 4.2361 & attention logit scale \\
 $\varphi^{8}$  & 46.979 & max \\
 \bottomrule
 \end{tabular}
+}
 \caption{GF8: 4-bit exponent, 3-bit mantissa (ternary encoded), 1-bit
 sign.  Total: 256 encodings.  Zero and NaN reserved.}
 \end{table}
@@ -203,6 +207,7 @@ sign.  Total: 256 encodings.  Zero and NaN reserved.}
 \textbf{GF8 benchmark results} (sealed \texttt{STROBE\_SEED=1597}):
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrrl}
 \toprule
 \textbf{Format} & \textbf{Bits} & \textbf{BPB} & \textbf{Status} \\
@@ -213,6 +218,7 @@ INT8      & 8  & 2.23 & GF8 wins ($\Delta=0.04$) \\
 FP8 (E4M3)& 8  & 2.21 & GF8 wins ($\Delta=0.02$) \\
 \bottomrule
 \end{tabular}
+}
 \caption{GF8 BPB on WikiText-103.  All runs: same tokenizer, same
 hardware, \texttt{STROBE\_SEED=1597}.
 Zenodo DOI 10.5281/zenodo.19227877.}
@@ -236,6 +242,7 @@ Zenodo DOI 10.5281/zenodo.19227877.}
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrr}
 \toprule
 \textbf{Field} & \textbf{GF16} & \textbf{BF16 (reference)} \\
@@ -255,6 +262,7 @@ Gate-2 (BPB $<$ 2.20) & \textbf{NOT MET} & N/A \\
 Gate-3 (BPB $<$ 1.85) & \textbf{NOT MET} & N/A \\
 \bottomrule
 \end{tabular}
+}
 \caption{GF16 champion configuration.  BPB = bits-per-byte on sealed
 test set (\texttt{STROBE\_SEED=1597}, WikiText-103, 1B tokens).
 Gate-2 not met --- disclosed per R-rule and Clause~F-1 of App.~B.}
@@ -263,6 +271,7 @@ Gate-2 not met --- disclosed per R-rule and Clause~F-1 of App.~B.}
 \textbf{GF16 full comparison grid:}
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrrrl}
 \toprule
 \textbf{Format} & \textbf{Bits} & \textbf{BPB} &
@@ -277,6 +286,7 @@ GF8    & 8  & 2.19   & $-$0.05  & GF8 wins (Gate-2 met) \\
 GF4    & 4  & 2.81   & $+$0.57  & 4-bit penalty \\
 \bottomrule
 \end{tabular}
+}
 \caption{Full format comparison at matched compute budgets.  GF16 is
 the 4-bit champion; GF8 meets Gate-2.  Both archived at Zenodo
 10.5281/zenodo.19227877.}
@@ -296,6 +306,7 @@ The Pareto frontier is defined over the two-objective space:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrrcc}
 \toprule
 \textbf{Format} & \textbf{log$_\varphi$(max)} & \textbf{BPB} &
@@ -309,6 +320,7 @@ MXFP4 & ---& 2.3300 & $\times$ & 4 \\
 BF16  & ---& 2.0500 & \checkmark (16-bit) & 16 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Pareto frontier.  GF formats dominate INT formats of equal
 bit-width on Objective~2.  Full Pareto tables in
 Chapter~\ref{ch:9} (Table~9.2) and archived in Zenodo (App.~H).}
@@ -320,6 +332,7 @@ Chapter~\ref{ch:9} (Table~9.2) and archived in Zenodo (App.~H).}
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrrl}
 \toprule
 \textbf{Gate} & \textbf{Threshold (BPB)} & \textbf{Champion BPB} &
@@ -330,6 +343,7 @@ Gate-2 & $< 2.20$ & 2.2393 & \textbf{NOT MET} --- disclosed \\
 Gate-3 & $< 1.85$ & 2.2393 & \textbf{NOT MET} --- future work \\
 \bottomrule
 \end{tabular}
+}
 \caption{Gate thresholds.  Non-achievement of Gate-2 and Gate-3 is
 explicitly disclosed per R5 (honesty rule) and Popper Clause~F-1
 (App.~B).}
@@ -348,6 +362,7 @@ to this champion unless explicitly stated otherwise.
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
@@ -370,6 +385,7 @@ Prune threshold            & $3.5 = \varphi^2 + \varphi^{-2} +
                              \varphi^{-4} + \varepsilon$ (INV-2) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Champion fingerprint.  Every numeric constant is either
 $\varphi$-derived or directly verified by an INV assertion in
 \texttt{assertions/igla\_assertions.json} (R6, L-R14).}
@@ -441,6 +457,7 @@ line:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrrl}
 \toprule
 \textbf{Run} & \textbf{Seed} & \textbf{Step} &
@@ -453,6 +470,7 @@ W-004 & 43  & 81\,000 & 2.1919 & \textbf{Gate-2 MET (GF8)} \\
 W-005 & 123 & 85\,000 & 2.2100 & Gate-2 buffer \\
 \bottomrule
 \end{tabular}
+}
 \caption{Gate-2 trajectory.  Run W-004 (champion, seed 43, step 81\,000,
 BPB 2.1919) is the first run to satisfy Gate-2 on GF8.  The GF16
 champion (commit \texttt{cd91c45}) achieves BPB $= 2.1919$ which MET
@@ -497,6 +515,7 @@ Algorithm (ASHA) is parameterised as follows for the Gate-3 search:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter}    & \textbf{Value} \\
@@ -511,6 +530,7 @@ Minimum seed count    & 4 (from seed canon $\{47,89,144,123\}$) \\
 Victory condition     & $\text{BPB} < 1.85$ on 3 distinct seeds \\
 \bottomrule
 \end{tabular}
+}
 \caption{Gate-3 ASHA configuration.  Rung steps derived via
 $r_k = r_{\min} \cdot \eta_{\text{ASHA}}^k$.}
 \end{table}
@@ -604,6 +624,7 @@ orbit, reducing correlation between runs.
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrrl}
 \toprule
 \textbf{Seed} & \textbf{Step} & \textbf{BPB (GF16)} &
@@ -620,6 +641,7 @@ Std ($\sigma$)     & --- & 0.0063 & 0.0059 & \\
 Champion (seed 43) & 81\,000 & 2.2393 & 2.1919 & non-canonical \\
 \bottomrule
 \end{tabular}
+}
 \caption{IGLA seed canon results at step 81\,000.  BPB computed on
 WikiText-103 sealed test set (\texttt{STROBE\_SEED=1597}).}
 \end{table}
@@ -657,6 +679,7 @@ The calibration check proceeds as follows:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrrr}
 \toprule
 \textbf{Seed} & \textbf{Step} & \textbf{BPB tiny\_sh.} &
@@ -669,6 +692,7 @@ The calibration check proceeds as follows:
 123 & 81\,000 & 1.4756 & 2.2611 & 0.653 \\
 \bottomrule
 \end{tabular}
+}
 \caption{BPB calibration on \texttt{tiny\_shakespeare} vs WikiText-103.
 The ratio $\approx 0.65$ is consistent across seeds, confirming no
 proxy collapse.  A JEPA-proxy collapse would give ratio $\ll 0.1$.}
@@ -701,6 +725,7 @@ difference lies in the training configuration:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 \textbf{Parameter} & \textbf{Champion (cd91c45)} &
@@ -715,6 +740,7 @@ Architecture       & 2L hybrid  & 2L hybrid \\
 GF16 KAT           & yes        & yes       \\
 \bottomrule
 \end{tabular}
+}
 \caption{Champion vs reference champion.  The identical BPB values
 are a \emph{coincidence} arising from the discrete nature of BPB
 evaluation at 4 decimal places; the two configurations differ in
@@ -735,6 +761,7 @@ d_i = \text{BPB}_{\text{champion}}(\text{seed}_i) -
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrr}
 \toprule
 \textbf{Seed} & \textbf{BPB Champion} & \textbf{BPB Reference} &
@@ -749,6 +776,7 @@ Mean $\bar{d}$& & & $-$0.0201 \\
 Std  $s_d$    & & & 0.0012 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Paired differences $d_i$ between champion and reference
 champion, over the seed canon.  Negative values indicate the champion
 (cd91c45) is \emph{better} (lower BPB).}
@@ -826,6 +854,7 @@ to standard AdamW defaults (see ablation A-4 in Section~C.17).
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 \textbf{Hyperparameter} & \textbf{Symbol} & \textbf{Value} &
@@ -852,6 +881,7 @@ Reduction factor (ASHA)& $\eta_{\text{ASHA}}$ & $\varphi^2 \approx 2.618$
   & exact \\
 \bottomrule
 \end{tabular}
+}
 \caption{Full φ-derived hyperparameter schedule.  Every value is either
 an integer multiple of a Lucas number, an integer power of φ, or a
 hard-bounded constant derived from the GF16 precision floor (INV-3).}
@@ -873,6 +903,7 @@ reintroduces a forbidden value must be rejected by CI gate
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 \textbf{Parameter} & \textbf{Forbidden Value} & \textbf{Reason} &
@@ -898,6 +929,7 @@ Prune threshold    & $3.0$   & Borderline; replaced by 3.5
                              & INV-2 (advisory) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Forbidden values audit.  ``Hard'' forbids (prune threshold
 $2.65$, warmup $< 4000$, $d_\text{model} < 256$, lr outside range) are
 enforced by \texttt{validate\_config()} in
@@ -974,6 +1006,7 @@ how ties are broken, and how the survivor set $S_k$ is reported.
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrrl}
 \toprule
 \textbf{Rung} & \textbf{Step} & \textbf{Trials in} &
@@ -985,6 +1018,7 @@ how ties are broken, and how the survivor set $S_k$ is reported.
 3 & 71\,818 &  2 &  1 & 2.21 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Rung state for the champion run (seed 43, $d_\text{model}=828$,
 $\eta=0.003$).  The champion is the sole survivor at rung 3 and was
 allowed to continue to step 81\,000 for final evaluation.}
@@ -1039,6 +1073,7 @@ Lucas-derived checkpoint spacing).
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 \textbf{Level} & \textbf{Condition} & \textbf{Action} \\
@@ -1051,6 +1086,7 @@ Lucas-derived checkpoint spacing).
   as INV-1 violation) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Plateau-alert levels.  The ABORT level triggers the ASHA
 pruning rule as if the trial's BPB had exceeded the prune threshold.}
 \end{table}
@@ -1099,6 +1135,7 @@ $\mathcal{S} = \{47, 89, 144, 123\}$.
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llrrr}
 \toprule
 \textbf{Ablation} & \textbf{Change} & \textbf{BPB} &
@@ -1133,6 +1170,7 @@ A-11 & φ-AdamW ($\beta_1=\varphi^{-1}, \beta_2=\varphi^{-2}$, champion)
    & 2.2648 & --- & --- \\
 \bottomrule
 \end{tabular}
+}
 \caption{Ablation matrix.  BPB values are means over seed canon
 $\mathcal{S}$.  Significance tested by paired $t$-test against A-0
 (champion), $n=4$, $\alpha=0.05$.  ``Sig.?'' column indicates whether
@@ -1329,6 +1367,7 @@ Theorem~\ref{thm:benchmark-monotonicity}:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rr}
 \toprule
 \textbf{Step} & \textbf{BPB (champion, seed 43)} \\
@@ -1340,6 +1379,7 @@ Theorem~\ref{thm:benchmark-monotonicity}:
 81\,000 & 2.19 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Champion BPB trajectory at ASHA rung steps.  BPB is
 monotonically non-increasing, consistent with
 Theorem~\ref{thm:benchmark-monotonicity}.}
@@ -1413,6 +1453,7 @@ The following tests are pre-registered on Wikitext-103:
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lp{7cm}l}
 \toprule
 \textbf{Test ID} & \textbf{Description} & \textbf{Claim tested} \\
@@ -1431,6 +1472,7 @@ WT-6 & GF8 champion (seed 43): BPB $< 2.20$ (Gate-2 MET)
     & Gate-2 claim \\
 \bottomrule
 \end{tabular}
+}
 \caption{Pre-registered Wikitext-103 falsification tests.  All tests
 use the sealed test split (\texttt{STROBE\_SEED=1597}).  Test failure
 must be reported in \texttt{assertions/hive\_honey.jsonl} and in the
@@ -1445,6 +1487,7 @@ evaluation.  The following tests are pre-registered on The Pile
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lp{7cm}l}
 \toprule
 \textbf{Test ID} & \textbf{Description} & \textbf{Claim tested} \\
@@ -1461,6 +1504,7 @@ PL-5 & φ-AdamW vs standard AdamW on The Pile: BPB lower for φ-AdamW
     & β-schedule generalisation \\
 \bottomrule
 \end{tabular}
+}
 \caption{Pre-registered The Pile falsification tests.  BPB thresholds
 for The Pile are set higher than WikiText-103 thresholds to account for
 the out-of-distribution gap ($\approx +0.3$ BPB typical for models
@@ -1471,6 +1515,7 @@ trained on WikiText-103 and evaluated on The Pile).}
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 \textbf{Test} & \textbf{Status} & \textbf{Evidence} \\
@@ -1486,6 +1531,7 @@ WT-6 & \textbf{Passed} (BPB $= 2.1919$) & Gate-2 assertion file \\
 PL-1--5 & \textbf{Pending} & Future work (Gate-3 campaign) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Corroboration record for pre-registered falsification tests.
 ``Pending'' tests are planned for the Gate-3 campaign (post-dissertation).
 ``Passed'' tests were conducted with pre-registered protocols; no
@@ -1504,6 +1550,7 @@ cross-reference.
 
 \begin{table}[h]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 \textbf{Constant} & \textbf{Value} & \textbf{φ-derivation} &
@@ -1533,6 +1580,7 @@ Champion BPB (GF16)     & 2.2393 & measured                 & INV-1 \\
 Champion BPB (GF8)      & 2.1919 & measured                 & INV-1 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Complete φ-derivation cross-reference for all numeric constants
 in Appendix~C.  All constants are traceable to a Coq invariant assertion
 (\texttt{assertions/igla\_assertions.json}) or are dimensionless integers.}

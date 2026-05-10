@@ -13,7 +13,7 @@
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{ch25-phi-period-cycles.png}}
+\makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{25-benchmarks.png}}
 \caption*{Figure~25.0 --- Benchmarks: BPB trajectory from baseline (commit \texttt{2446855},
 BPB\,=\,2.2393) to champion (commit \texttt{cd91c45}, BPB\,=\,2.1919) and the two
 high-water-mark gates anchored by $\varphi^2+\varphi^{-2}=3$.}
@@ -141,6 +141,7 @@ checkpoints encountered in this chapter.
   ($\bar{b}=1$, $\mathrm{PPL}=2^{\mathrm{BPB}}$).
   The champion checkpoint (\texttt{cd91c45}) appears in bold.}
 \label{tab:ppl-bpb}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllll}
 \toprule
 Commit & Step & BPB & PPL & Gate\\
@@ -153,6 +154,7 @@ Commit & Step & BPB & PPL & Gate\\
 —               & (target)  & 1.50   & 2.83 & Gate-3\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 The champion BPB of 2.1919 corresponds to perplexity 4.56 on
@@ -311,6 +313,7 @@ The architecture identifier is \texttt{2L\_hybrid\_attn\_relu²}.
   hidden=828, 2L hybrid attention + ReLU²). Step 81\,000 is the
   definitive champion. Forbidden-value audit: none present.}
 \label{tab:bpb-calibration}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rlrlll}
 \toprule
 Step & BPB & $\Delta$BPB & PPL & ARCH HWM & Notes\\
@@ -333,6 +336,7 @@ Step & BPB & $\Delta$BPB & PPL & ARCH HWM & Notes\\
 —       & 1.50  & —       & 2.83 & Gate-3 target & $\approx 3\varphi^{-1}$\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \subsubsection{Forbidden-Value Audit}
@@ -347,6 +351,7 @@ from all runs in this chapter:
 \caption{Forbidden-value audit (R6 + INV-1/2/3). All forbidden values
   are absent from the champion run and all calibration checkpoints.}
 \label{tab:forbidden-audit}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 Forbidden value & Rule & Why forbidden\\
@@ -360,6 +365,7 @@ seed $= 44$ (pre-Gate-2) & Pre-reg & Same reasoning as seed~42\\
 BPB $= 0.014$ & INV-7 & JEPA-MSE proxy artefact; refused by \texttt{validate\_bpb()}\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % ============================================================
@@ -554,6 +560,7 @@ anchored by Fibonacci steps:
   All step counts are Fibonacci or $\varphi$-derived.
   INV-12: rung steps strictly increasing, rung-0 is warmup.}
 \label{tab:asha-rungs}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 Rung & Step & $\approx\varphi^k$ & Fraction of full run\\
@@ -567,6 +574,7 @@ Rung & Step & $\approx\varphi^k$ & Fraction of full run\\
 6 (final)  & 81\,000 & $3^4\cdot 10^3$   & 100\%\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 %
 Rung-6 at step~81\,000 is the champion evaluation point.
@@ -677,6 +685,7 @@ we state the champion record in a single self-contained block:
   INV-1 (BPB monotone), INV-2 (ASHA pruning), INV-3 (d\_model $\ge 256$),
   INV-12 (rung ordering) all satisfied.}
 \label{tab:champion-record}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{ll}
 \toprule
 Hyperparameter & Value\\
@@ -698,6 +707,7 @@ Corpus & \texttt{tiny\_shakespeare} (1.06 MB, 1 byte/token)\\
 Prune threshold & $3.5 = \varphi^2+\varphi^{-2}+\varphi^{-4}+\varepsilon$\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \subsection{5.2 Baseline Comparator Record: \texttt{2446855}}
@@ -864,6 +874,7 @@ at step~81\,000, controlling for random initialisation variance.
 \centering
 \caption{Corroboration status as of commit \texttt{cd91c45} (2026-05-07).}
 \label{tab:corroboration}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllll}
 \toprule
 Falsification axis & Predicate & Status & Evidence & Date\\
@@ -876,6 +887,7 @@ Quaternary (seed canon) & $|\mathrm{BPB}-2.1919|<0.05$ & \textbf{pending} & seed
 BPB lower bound        & $\mathrm{BPB}\ge H_\infty\ge 0$ & Functional & Theorem~\ref{thm:bpb-lb}, \texttt{BPB\_LowerBound.v} & 2026-05-07\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 Pending falsification tests are the open empirical obligations of
@@ -923,6 +935,7 @@ runtime invariants from \texttt{assertions/igla\_assertions.json}:
 \centering
 \caption{L-R14 traceability: numeric constants in this chapter.}
 \label{tab:r14-trace}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 Constant & Rust target & JSON entry & Coq file\\
@@ -934,6 +947,7 @@ $d_{\min} = 256$ & \texttt{invariants.rs::d\_model\_min\_gf16} & INV-3 & \texttt
 $\mathrm{BPB}_{\mathrm{champ}} = 2.1919$ & \texttt{bpb.rs::CHAMPION\_BPB} & INV-7 & \texttt{BPB\_LowerBound.v}\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % ============================================================
@@ -1040,6 +1054,7 @@ This chapter has:
 \centering
 \caption{Open obligations for this chapter.}
 \label{tab:open-obligations}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 ID & Obligation & Ledger row & Priority\\
@@ -1054,6 +1069,7 @@ COQ-25-1 & Close \texttt{Admitted} in \texttt{BPB\_LowerBound.v} & Golden Ledger
 FUT-25-1 & $\varphi$-Chinchilla exponent conjecture & Future Work Ch.31 & P3\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % ============================================================
@@ -1167,6 +1183,7 @@ variational treatment; this is left as FUT-25-2.
 \caption{Theorem ledger for Chapter~25.  R5-honest: Admitted theorems
   not relabeled as Proven.}
 \label{tab:theorem-ledger}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 ID & Theorem & Status & Coq file (if any)\\
@@ -1180,6 +1197,7 @@ THM-25-6 & BPB–Attention Entropy Decomp (Theorem~\ref{thm:bpb-attention}) & Ad
 CYC-1    & Phase alignment Prop.~3.1 & Admitted & filed Golden Ledger\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % ============================================================
@@ -1382,6 +1400,7 @@ independent verification.
   \texttt{assertions/igla\_assertions.json} and
   \texttt{crates/trios-train-cpu/src/bin/hybrid\_train.rs}.}
 \label{tab:full-hyperparams}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 Parameter & Value & $\varphi$-derivation\\
@@ -1421,6 +1440,7 @@ Warmup blind & 4\,000 steps & INV-2\\
 Distinct seeds required & 3 (Gate-3: INV-7) & integer\\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \subsection{14.2 Reproducibility Command and Seed Lock}

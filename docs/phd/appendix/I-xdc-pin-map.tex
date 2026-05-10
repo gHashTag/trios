@@ -12,7 +12,7 @@
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.92\textwidth,keepaspectratio]{app-i-xdc-pin-map.png}
+\includegraphics[width=0.92\textwidth,keepaspectratio]{I-xdc-pin-map.jpg}
 \caption*{Figure I.0 — Trinity GF16 ternary matmul pin assignments on the Arty
   A7-100T (Artix-7 XC7A100T-1CSG324C) and Arty Z7-20 (Zynq-7020
   XC7Z020-1CLG400C). Every RTL port from \texttt{vsa\_matmul.v} and
@@ -93,6 +93,7 @@ matmul design are listed in Table~\ref{tab:arty-a7-resources}.
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrr}
 \toprule
 \textbf{Resource} & \textbf{Available} & \textbf{Used (GF16 matmul)} \\
@@ -107,6 +108,7 @@ MMCM              &       5            &      1   (20.0\%) \\
 IOB               &     210            &    108   (51.4\%) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Arty A7-100T resource utilisation — Trinity GF16 ternary matmul,
   Vivado 2023.2 post-implementation report.}
 \label{tab:arty-a7-resources}
@@ -139,6 +141,7 @@ applied to the \texttt{FCLK\_CLK0\_PS} net.
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrr}
 \toprule
 \textbf{Resource} & \textbf{Available (PL)} & \textbf{Used (GF16 matmul)} \\
@@ -152,6 +155,7 @@ BUFG              &      32            &      4   (12.5\%) \\
 IOB               &     200            &     64   (32.0\%) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Arty Z7-20 PL resource utilisation — Trinity GF16 ternary matmul,
   Vivado 2023.2 post-implementation report.}
 \label{tab:arty-z7-resources}
@@ -172,6 +176,7 @@ The list is derived by parsing the top-level module declarations in
 \begin{table}[H]
 \centering
 \footnotesize
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 \textbf{Port name} & \textbf{Width} & \textbf{Direction} & \textbf{Description} \\
@@ -228,6 +233,7 @@ The list is derived by parsing the top-level module declarations in
 \texttt{uart\_rx}          & 1   & input  & UART receive  (115200 8N1) \\
 \bottomrule
 \end{tabular}
+}
 \caption{Complete port list of \texttt{trinity\_top.v}.  Total: 86 scalar
   signals.  All ports appear in the XDC files of
   Sections~\ref{sec:xdc-a7} and~\ref{sec:xdc-z7}.}
@@ -239,6 +245,7 @@ The list is derived by parsing the top-level module declarations in
 \begin{table}[H]
 \centering
 \footnotesize
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllp{5cm}}
 \toprule
 \textbf{Port name} & \textbf{Width} & \textbf{Direction} & \textbf{Description} \\
@@ -253,6 +260,7 @@ The list is derived by parsing the top-level module declarations in
 \texttt{ready}         & 1   & output & Ready \\
 \bottomrule
 \end{tabular}
+}
 \caption{Port list of \texttt{vsa\_matmul.v}.  All ports are internal
   fabric connections; they are constrained indirectly through their
   promotion in \texttt{trinity\_top.v}.  The bijection between
@@ -295,6 +303,7 @@ PLL wrapper \texttt{trinity\_pll.v} to produce:
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllll}
 \toprule
 \textbf{Output port} & \textbf{Freq (MHz)} & \textbf{Period (ns)} & \textbf{Duty (\%)} & \textbf{BUFG} \\
@@ -305,6 +314,7 @@ PLL wrapper \texttt{trinity\_pll.v} to produce:
 \texttt{clk\_wb}  &  25.000 & 40.000 & 50.0 & BUFG\_3 \\
 \bottomrule
 \end{tabular}
+}
 \caption{MMCM output clocks.  \texttt{clk\_100} feeds the matmul datapath;
   \texttt{clk\_200} feeds the BRAM read port; \texttt{clk\_50} feeds UART;
   \texttt{clk\_wb} feeds the Wishbone debug bridge.}
@@ -514,6 +524,7 @@ and~\ref{tab:axi-lite-output} detail the mapping.
 \begin{table}[H]
 \centering
 \footnotesize
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 \textbf{AXI-Lite input port} & \textbf{Pmod} & \textbf{Pmod pin} & \textbf{FPGA package pin} \\
@@ -552,6 +563,7 @@ and~\ref{tab:axi-lite-output} detail the mapping.
 \texttt{s\_axi\_wvalid}     & JC & 10 & U13 \\
 \bottomrule
 \end{tabular}
+}
 \caption{AXI-Lite input ports — Arty A7-100T Pmod assignment.}
 \label{tab:axi-lite-input}
 \end{table}
@@ -599,6 +611,7 @@ set_property IOSTANDARD LVCMOS33 [get_ports s_axi_*]
 \begin{table}[H]
 \centering
 \footnotesize
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{llll}
 \toprule
 \textbf{AXI-Lite output port} & \textbf{Pmod} & \textbf{Pmod pin} & \textbf{FPGA package pin} \\
@@ -632,6 +645,7 @@ set_property IOSTANDARD LVCMOS33 [get_ports s_axi_*]
 \texttt{s\_axi\_rready}     & JD out-exp & ext-10& L13 \\
 \bottomrule
 \end{tabular}
+}
 \caption{AXI-Lite output ports — Arty A7-100T assignment.}
 \label{tab:axi-lite-output}
 \end{table}
@@ -931,6 +945,7 @@ $T = 10\,\mathrm{ns}$ and powers of $\varphi$.
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 \textbf{Parameter} & \textbf{Value (ns)} & \textbf{Derivation} \\
@@ -946,6 +961,7 @@ Jitter (MMCM output)     & 0.080  & Vivado measured \\
 MMCM lock time           & 50{,}000 & 50 ms worst-case \\
 \bottomrule
 \end{tabular}
+}
 \caption{Timing budget summary.  All constants are either FPGA vendor
   parameters or $\varphi$-derived (R6 compliant).}
 \label{tab:timing-budget}
@@ -1015,6 +1031,7 @@ set_multicycle_path 7 -hold \
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllll}
 \toprule
 \textbf{Bank} & \textbf{VCCO (V)} & \textbf{Clock region} & \textbf{BUFG hops} & \textbf{Signals} \\
@@ -1026,6 +1043,7 @@ set_multicycle_path 7 -hold \
 16 & 3.3 & X1Y1 & 0 & JD (dout[31:0]) \\
 \bottomrule
 \end{tabular}
+}
 \caption{I/O bank assignments, Arty A7-100T.  BUFG hops are counted from
   the MMCM in clock region X1Y0 to the consuming bank.  A hop of 1
   indicates one BUFG traversal across a clock region boundary.}
@@ -1041,6 +1059,7 @@ view.
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllll}
 \toprule
 \textbf{Bank} & \textbf{VCCO (V)} & \textbf{Clock region} & \textbf{BUFG hops} & \textbf{Signals} \\
@@ -1050,6 +1069,7 @@ view.
 PS  & — & PS domain & — & AXI GP0, FCLK \\
 \bottomrule
 \end{tabular}
+}
 \caption{I/O bank assignments, Arty Z7-20.}
 \label{tab:bank-z7}
 \end{table}
@@ -1155,6 +1175,7 @@ tapeout (bitstream generation).
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lp{6cm}l}
 \toprule
 \textbf{DRC code} & \textbf{Description} & \textbf{Disposition} \\
@@ -1166,6 +1187,7 @@ tapeout (bitstream generation).
 \texttt{HDPR-1}   & High-density pack ratio exceeded            & \textit{Mitigated by phi-aspect Pblock} \\
 \bottomrule
 \end{tabular}
+}
 \caption{DRC waiver record.  DRC codes from Vivado 2023.2
   \textit{DRC Violations Report}.  ``Fix'' items were resolved before
   bitstream generation; ``N/A'' items do not apply to this design.}
@@ -1749,6 +1771,7 @@ Per rule R14, every numeric constant in this appendix is traced to a
 \begin{table}[H]
 \centering
 \footnotesize
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 \textbf{Constant} & \textbf{Value} & \textbf{Coq source} \\
@@ -1760,6 +1783,7 @@ Pipeline depth 3 & matmul cycles & \texttt{gf16\_precision.v::gf16\_pipeline\_de
 \texttt{MAX\_FANOUT 100} & power guard & \texttt{igla\_asha\_bound.v::rung\_zero\_is\_warmup} \\
 \bottomrule
 \end{tabular}
+}
 \caption{R14 constant-to-Coq traceability table.  All numeric
   constants trace to the \texttt{trinity-clara/proofs/igla/} proof
   chain; no free parameters (R6).}
@@ -1881,6 +1905,7 @@ The MMIO register map for the Trinity GF16 core is:
 \begin{table}[H]
 \centering
 \footnotesize
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lllp{4.5cm}}
 \toprule
 \textbf{Offset} & \textbf{Name} & \textbf{R/W} & \textbf{Description} \\
@@ -1899,6 +1924,7 @@ The MMIO register map for the Trinity GF16 core is:
 \texttt{0x2C} & \texttt{PHI\_ID} & RO  & Design identifier: \texttt{0x\(\varphi\)161803} \\
 \bottomrule
 \end{tabular}
+}
 \caption{AXI-Lite MMIO register map.  Base address determined by the
   Zynq PS address map (default: \texttt{0x4000\_0000}) or by the Pmod
   address decoder on the A7 board (base: \texttt{0x0000\_0000}).}
@@ -2118,6 +2144,7 @@ to maintain the $\varphi$-aspect ratio at double density.
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lp{2cm}p{7cm}}
 \toprule
 \textbf{Date} & \textbf{Author} & \textbf{Change} \\
@@ -2129,6 +2156,7 @@ to maintain the $\varphi$-aspect ratio at double density.
                            R6/R10/R14 audit. 1964 lines. \\
 \bottomrule
 \end{tabular}
+}
 \caption{Change log for Appendix~I.}
 \label{tab:changelog}
 \end{table}
@@ -2214,6 +2242,7 @@ Vivado power analysis (XPE model, worst case: 85$^\circ$C junction,
 
 \begin{table}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrr}
 \toprule
 \textbf{Component} & \textbf{Dynamic (mW)} & \textbf{Static (mW)} \\
@@ -2228,6 +2257,7 @@ Device static          &   0 & 77 \\
 \textbf{Total}         & \textbf{274} & \textbf{77} = \textbf{351 mW} \\
 \bottomrule
 \end{tabular}
+}
 \caption{Vivado XPE power estimate, Arty A7-100T, 100\,MHz,
   23\% LUT utilisation, 12.5\% toggle rate.  Total $\approx 351\,\mathrm{mW}$,
   well below the 1\,W sub-watt target.}

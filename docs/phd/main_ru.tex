@@ -56,7 +56,12 @@
 \newunicodechar{∇}{\ensuremath{\nabla}}
 
 \usepackage{tikz}
-\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
+\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns,cd}
+\usepackage{tikz-cd}
+% Russian babel makes " an active shorthand; switch it off so tikzcd labels with quotes work.
+\AtBeginDocument{%
+  \ifcsname shorthandoff\endcsname\shorthandoff{"}\fi%
+}
 \usepackage{graphicx}
 \graphicspath{{assets/}{../../assets/illustrations/}{../../assets/illustrations_v516/}}
 \usepackage{microtype}
@@ -133,6 +138,26 @@
 
 \usepackage{geometry}
 \usepackage{eso-pic}
+\usepackage{gensymb}
+\providecommand{\doi}[1]{\href{https://doi.org/#1}{doi:\detokenize{#1}}}
+\providecommand{\coqcite}[4]{\par\noindent\textsc{Coq:}~\texttt{\detokenize{#1}} \textit{(\detokenize{#2}, lines #3, #4)}\par}
+\providecommand{\argmax}{}\renewcommand{\argmax}{\mathop{\mathrm{arg\,max}}\limits}
+\providecommand{\argmin}{}\renewcommand{\argmin}{\mathop{\mathrm{arg\,min}}\limits}
+\providecommand{\sgn}{\mathop{\mathrm{sgn}}}
+\providecommand{\Tr}{}\renewcommand{\Tr}{\mathop{\mathrm{Tr}}}
+\providecommand{\rank}{\mathop{\mathrm{rank}}}
+\providecommand{\im}{\mathop{\mathrm{im}}}
+\providecommand{\phipow}[1]{\varphi^{#1}}
+\providecommand{\zphi}{\mathbb{Z}{[}\varphi{]}}
+\providecommand{\qphi}{\mathbb{Q}{(}\varphi{)}}
+\providecommand{\bpb}{\text{BPB}}
+\providecommand{\bpc}{\text{BPC}}
+\providecommand{\lr}{L\text{-R}}
+\providecommand{\refsection}[1]{}
+\providecommand{\coqcitebox}[1]{\par\fbox{\parbox{\dimexpr\linewidth-2\fboxsep}{\small #1}}\par}
+\makeatletter
+\@ifundefined{refsection}{\newenvironment{refsection}[1][]{}{}}{}
+\makeatother
 \usepackage{tocloft}
 % Widen ToC number columns so multi-level numbers (16.22) do not overlap titles.
 \setlength{\cftchapnumwidth}{2.6em}
@@ -174,6 +199,22 @@
 \newtheorem{example}[theorem]{Пример}
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Замечание}
+\newtheorem{claim}[theorem]{Утверждение}
+\newtheorem{fact}[theorem]{Факт}
+\newtheorem{observation}[theorem]{Наблюдение}
+\newtheorem{hypothesis}[theorem]{Гипотеза}
+\newtheorem{assumption}[theorem]{Предположение}
+\newtheorem{question}[theorem]{Вопрос}
+\newtheorem{principle}[theorem]{Принцип}
+\newtheorem{invariant}[theorem]{Инвариант}
+\newtheorem{guarantee}[theorem]{Гарантия}
+\newtheorem{convention}[theorem]{Конвенция}
+\newtheorem{terminology}[theorem]{Термин}
+\newtheorem{property}[theorem]{Свойство}
+\newtheorem{protocol}[theorem]{Протокол}
+\newtheorem{notation}[theorem]{Обозначение}
+\newtheorem{conjecture}[theorem]{Гипотеза~(Открытая)}
+\newtheorem{axiom}[theorem]{Аксиома}
 \renewcommand{\proofname}{Доказательство}
 \renewcommand{\qedsymbol}{}
 \providecommand{\admittedbox}[1]{\fcolorbox{red}{red!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{[Допущено]:} #1}}}

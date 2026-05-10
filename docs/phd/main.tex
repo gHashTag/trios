@@ -76,7 +76,8 @@
 
 % Graphics and figures
 \usepackage{tikz}
-\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
+\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns,cd}
+\usepackage{tikz-cd}
 \usepackage{graphicx}
 \graphicspath{{assets/}{../../assets/illustrations/}{../../assets/illustrations_v516/}}
 % Universal margin / line-breaking discipline (fixes 95% of Overfull \hbox).
@@ -154,6 +155,27 @@
 % Layout
 \usepackage{geometry}
 \usepackage{eso-pic}
+\usepackage{gensymb} % \degree, \celsius
+\providecommand{\doi}[1]{\href{https://doi.org/#1}{doi:\detokenize{#1}}}
+\providecommand{\coqcite}[4]{\par\noindent\textsc{Coq:}~\texttt{\detokenize{#1}} \textit{(\detokenize{#2}, lines #3, #4)}\par}
+\providecommand{\argmax}{}\renewcommand{\argmax}{\mathop{\mathrm{arg\,max}}\limits}
+\providecommand{\argmin}{}\renewcommand{\argmin}{\mathop{\mathrm{arg\,min}}\limits}
+\providecommand{\sgn}{\mathop{\mathrm{sgn}}}
+\providecommand{\Tr}{}\renewcommand{\Tr}{\mathop{\mathrm{Tr}}}
+\providecommand{\rank}{\mathop{\mathrm{rank}}}
+\providecommand{\im}{\mathop{\mathrm{im}}}
+\providecommand{\phipow}[1]{\varphi^{#1}}
+\providecommand{\zphi}{\mathbb{Z}{[}\varphi{]}}
+\providecommand{\qphi}{\mathbb{Q}{(}\varphi{)}}
+\providecommand{\bpb}{\text{BPB}}
+\providecommand{\bpc}{\text{BPC}}
+\providecommand{\lr}{L\text{-R}}
+% biblatex refsection fallback when biblatex not loaded
+\providecommand{\refsection}[1]{}
+\providecommand{\coqcitebox}[1]{\par\fbox{\parbox{\dimexpr\linewidth-2\fboxsep}{\small #1}}\par}
+\makeatletter
+\@ifundefined{refsection}{\newenvironment{refsection}[1][]{}{}}{}
+\makeatother
 \usepackage{tocloft}
 % Widen ToC number columns so 3-digit / multi-level numbers (e.g. 16.22) do not overlap titles.
 \setlength{\cftchapnumwidth}{2.6em}
@@ -224,6 +246,20 @@
 \newtheorem{conjecture}[theorem]{Conjecture}
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{fact}[theorem]{Fact}
+\newtheorem{observation}[theorem]{Observation}
+\newtheorem{hypothesis}[theorem]{Hypothesis}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{question}[theorem]{Question}
+\newtheorem{principle}[theorem]{Principle}
+\newtheorem{invariant}[theorem]{Invariant}
+\newtheorem{guarantee}[theorem]{Guarantee}
+\newtheorem{convention}[theorem]{Convention}
+\newtheorem{terminology}[theorem]{Terminology}
+\newtheorem{property}[theorem]{Property}
+\newtheorem{protocol}[theorem]{Protocol}
+\newtheorem{notation}[theorem]{Notation}
 
 % Proof environment — must be ensuremath, otherwise \end{proof} crashes
 \renewcommand{\qedsymbol}{}
