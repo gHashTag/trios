@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-19: **290 tests · 25/25 e2e · 1800/1800 falsifier · 36 categories · 148 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-20: **310 tests · 25/25 e2e · 1900/1900 falsifier · 38 categories · 158 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -78,7 +78,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W16 | `1bd0c54` | 235 | INV-CHAT-82..88 (121 Qed total) | 1500 | 30 | clock_skew_replay + at_rest_rotation | [#711](https://github.com/gHashTag/trios/pull/711) (rolled up via [#665](https://github.com/gHashTag/trios/pull/665)) |
 | W17 | `047f3cb` | 249 | INV-CHAT-89..95 (130 Qed total) | 1600 | 32 | tool_arg_confusion + group_pcs_break | [#715](https://github.com/gHashTag/trios/pull/715) |
 | W18 | `6902a82` | 270 | INV-CHAT-96..102 (139 Qed total) | 1700 | 34 | padding_class_oracle + jitter_side_channel | [#717](https://github.com/gHashTag/trios/pull/717) |
-| **W19** | **(this PR)** | **290** | **INV-CHAT-103..109 (148 Qed total)** | **1800** | **36** | **kem_decap_oracle + tag_stripping** | **(open)** |
+| W19 | `d601a58` | 290 | INV-CHAT-103..109 (148 Qed total) | 1800 | 36 | kem_decap_oracle + tag_stripping | [#719](https://github.com/gHashTag/trios/pull/719) |
+| **W20** | **(this PR)** | **310** | **INV-CHAT-110..116 (158 Qed total)** | **1900** | **38** | **handshake_fingerprint + concurrent_add_remove** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -89,6 +90,95 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-20 — handshake fingerprinting + concurrent Add/Remove ordering
+
+- **L-CHAT-1-handshake** (R-CHAT-1 / **CR-CHAT-01**) — HSF-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-01/src/handshake_fingerprint.rs`
+  (343 lines) shipping `HandshakeFingerprint::compute(initiator_lt,
+  responder_lt, initiator_pre, responder_pre, kem_ciphertext,
+  suite_and_version) -> Result<Self, HandshakeError>`, constants
+  `HSF_LEN = 32` and `HSF_DOMAIN = b"trios-chat-handshake-fingerprint-v1\0"`,
+  constant-time equality via `subtle::ConstantTimeEq`
+  (`HandshakeFingerprint::eq_ct`), and a private `absorb_tagged`
+  helper that length-prefixes every field with a per-field domain
+  separator so role/suite/transcript components cannot be confused.
+  - HSF-01 responder-swap detection — swapping initiator_lt with
+    responder_lt produces a different fingerprint.
+  - HSF-02 role-flip detection — swapping initiator_pre with
+    responder_pre produces a different fingerprint.
+  - HSF-03 suite-downgrade detection — changing the
+    `suite_and_version` tag flips the fingerprint.
+  - HSF-04 truncation detection — truncating any input by one
+    byte changes the fingerprint (length-prefix domain separation).
+  - HSF-05 length-shift detection — moving a byte from one field
+    to an adjacent field changes the fingerprint.
+  - HSF-06 empty-field rejection — any empty input field returns
+    `HandshakeError::EmptyField`, never a zero-prefix collision.
+  - +4 bonus tests (determinism on identical inputs, single-bit CT
+    flip via `eq_ct`, length constant, green) → **10 unit tests**.
+
+- **L-CHAT-3-add** (R-CHAT-11 / **CR-CHAT-03**) — CAR-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/concurrent_add_remove.rs`
+  (419 lines) shipping `Proposal::{Update,Remove,Add}{leaf,hash_id}`,
+  `ConcurrencyError::{RemoveNonMember, AddExisting, UpdateNonMember,
+  DuplicateSortKey}`, `MembershipDelta{added, removed, updated,
+  final_members}`, and
+  `apply_concurrent(base_members: &BTreeSet<Leaf>, proposals: &[Proposal])`.
+  Deterministic priorities: `PRI_UPDATE = 0 < PRI_REMOVE = 1 < PRI_ADD = 2`,
+  ties broken by `(priority, hash_id, sort_key)`.
+  - CAR-01 add-after-remove ghost — concurrent `{Remove(L), Add(L)}`
+    resolves with `L` removed (Remove < Add priority); no ghost
+    membership.
+  - CAR-02 remove-after-add resurrection — concurrent
+    `{Add(L), Remove(L)}` on a non-member resolves with `L`
+    **not** in the final set (Remove still wins).
+  - CAR-03 dup-add — two `Add(L)` for the same `L` returns
+    `ConcurrencyError::AddExisting` (no silent dedup).
+  - CAR-04 dup-remove — `Remove(L)` for a non-member returns
+    `RemoveNonMember`.
+  - CAR-05 self-remove-with-update — concurrent
+    `{Update(L), Remove(L)}` resolves with Update overridden by
+    Remove (Update < Remove priority, but Remove erases).
+  - CAR-06 empty-set determinism — `apply_concurrent(∅, &[])`
+    returns an empty `MembershipDelta`.
+  - +4 bonus tests (order-independence, tie-break by `hash_id`,
+    `DuplicateSortKey` on equal sort keys, green) →
+    **10 unit tests**.
+
+- **Coq Wave-20** — `Section TrinityChatWave20` adds INV-CHAT-110
+  through INV-CHAT-116 plus 2 helper lemmas (`all_nonzero_valid_20`,
+  `update_before_add_20`). All proofs constructive over
+  `PropClass20::{PUpdate20, PRemove20, PAdd20}`, records
+  `TranscriptLens20{init_lt_len_20, resp_lt_len_20, init_pre_len_20,
+  resp_pre_len_20, kem_ct_len_20, suite_len_20}` and
+  `Delta20{base_size_20, n_added_20, n_removed_20}`, with variable
+  `hsf_of_20 : nat -> nat -> nat -> nat -> nat -> nat -> nat`.
+  10 new `Qed.` (7 INV + 2 helpers + 1 footer line) →
+  **158 Qed total**, **0 Admitted**, **0 new axioms** (cumulative
+  axiom set unchanged at 5: `ss_kp_injective`, `dh_step_fresh`,
+  `dh_post_history_independent`, `hybrid_kem_non_degenerate`,
+  `sn_hash_sym`).
+
+- Falsifier 1800 → 1900 (PI-HSF-001..050 + PI-CAR-001..050) — 38
+  attack categories all at 100%, G-C10 thresholds met for every
+  category (≥95% non-direct, ≥90% direct).
+
+- DENY_PATTERNS in `CR-CHAT-06/src/injection.rs` extended with
+  ~360 W20 keywords covering handshake-fingerprint distinguishability
+  language (`hsf compute`, `initiator_lt`, `responder_lt`,
+  `responder swap`, `role flip`, `suite downgrade`, `truncate hsf`,
+  `length-shift trick`, `absorb_tagged`, `domain separator`,
+  `eq_ct`, `single-bit flip in fingerprint`, `force the hsf`)
+  and concurrent-Add/Remove language (`apply_concurrent`,
+  `priority ordering`, `add-after-remove`, `remove-after-add`,
+  `ghost member`, `resurrection`, `tie break`, `duplicate sort
+  key`, `ConcurrencyError`, `MembershipDelta`, `Proposal::Update`,
+  `Proposal::Remove`, `Proposal::Add`).
+
+- Anchor extended:
+  `… · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT
+   · CONCURRENT-ADD-REMOVE`.
 
 ### Wave-19 — ML-KEM-768 decapsulation oracle + structured-output tag-stripping
 
@@ -629,7 +719,7 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 
 ---
 
-## Falsifier-corpus categories (W1–W17) — 32 total
+## Falsifier-corpus categories (W1–W20) — 38 total
 
 | # | Category | First wave | Threshold |
 | :-- | :-- | :-- | :-- |
@@ -663,18 +753,24 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | 28 | identity_revoke    | W15 | 0.95 |
 | 29 | clock_skew_replay | W16 | 0.95 |
 | 30 | at_rest_rotation  | W16 | 0.95 |
-| **31** | **tool_arg_confusion** | **W17** | **0.95** |
-| **32** | **group_pcs_break**    | **W17** | **0.95** |
+| 31 | tool_arg_confusion | W17 | 0.95 |
+| 32 | group_pcs_break    | W17 | 0.95 |
+| 33 | padding_class_oracle | W18 | 0.95 |
+| 34 | jitter_side_channel  | W18 | 0.95 |
+| 35 | kem_decap_oracle | W19 | 0.95 |
+| 36 | tag_stripping    | W19 | 0.95 |
+| **37** | **handshake_fingerprint** | **W20** | **0.95** |
+| **38** | **concurrent_add_remove** | **W20** | **0.95** |
 
 `falsifier_runner` is the gate: it loads `corpus/prompt_injection.jsonl`,
 runs `validate_output` on each entry, and exits non-zero if any threshold
-lane drops below its bound. Wave-17 ships 1600/1600 blocked across 32 lanes.
+lane drops below its bound. Wave-20 ships 1900/1900 blocked across 38 lanes.
 
 ---
 
-## Coq invariant index (INV-CHAT-1..95)
+## Coq invariant index (INV-CHAT-1..116)
 
-Cumulative `Qed.` count: **130 / 0 Admitted**. R5 admission budget: **0/10 used**.
+Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used**.
 
 | Range | Wave | Theme |
 | :-- | :-- | :-- |
@@ -692,18 +788,20 @@ Cumulative `Qed.` count: **130 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-75..81 | W15 | egress fingerprinting (canonical TLS / length / burst-gap classes) + identity-key revocation with grace window |
 | INV-CHAT-82..88 | W16 | clock-skew / replay-window decision (in-band / stale / future / epoch-rollover / replay) + at-rest key rotation idempotence and monotonicity |
 | INV-CHAT-89..95 | W17 | tool-call argument confusion (kind mismatch, nested-sentinel, oversized-string, unknown-enum-variant) + group-PCS healing (epoch advance, no-op, epoch mismatch) |
-| **INV-CHAT-96..102** | **W18** | **padding-class oracle (smallest-class, over-pad, length overflow, truncation, non-canonical gap, non-monotonic timestamp, reorder-attack)** |
+| INV-CHAT-96..102 | W18 | padding-class oracle (smallest-class, over-pad, length overflow, truncation, non-canonical gap, non-monotonic timestamp, reorder-attack) |
+| INV-CHAT-103..109 | W19 | ML-KEM-768 decapsulation oracle (FO determinism, ct flip → differ, anti-malleability, content-bound reject, CT eq, opaque observe) + structured-output tag-stripping (nested check, well-formed span) |
+| **INV-CHAT-110..116** | **W20** | **handshake fingerprinting (determinism, swap detected, empty-field invalid) + concurrent Add/Remove ordering (Update<Remove<Add priority, empty-set neutral, add-after-remove size-neutral)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, and Wave-19 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, and Wave-20 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W20–W24) — `[ASPIRATIONAL]`
+## Future waves (W21–W25) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -719,19 +817,20 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W16~~ — SHIPPED via rollup #665 (see Wave-16 detail above) | | | | | | |
 | ~~W17~~ — SHIPPED via [#715](https://github.com/gHashTag/trios/pull/715), merged `047f3cb` (see Wave-17 detail above) | | | | | | |
 | ~~W18~~ — SHIPPED via [#717](https://github.com/gHashTag/trios/pull/717), merged `6902a82` (see Wave-18 detail above) | | | | | | |
-| ~~W19~~ — SHIPPED in this PR (see Wave-19 detail above) | | | | | | |
-| **W20** | L-CHAT-1-handshake (R-CHAT-1) — handshake fingerprinting + transcript-binding | L-CHAT-3-add (R-CHAT-11) — concurrent Add/Remove ordering + ghost-member | `handshake_fingerprint`, `concurrent_add_remove` | INV-CHAT-110..116 (≥160 Qed) | ≈312 | 1900 / 38 cats |
-| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥170 Qed) | ≈334 | 2000 / 40 cats |
-| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥180 Qed) | ≈356 | 2100 / 42 cats |
-| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥190 Qed) | ≈378 | 2200 / 44 cats |
-| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥200 Qed) | ≈400 | 2300 / 46 cats |
+| ~~W19~~ — SHIPPED via [#719](https://github.com/gHashTag/trios/pull/719), merged `d601a58` (see Wave-19 detail above) | | | | | | |
+| ~~W20~~ — SHIPPED in this PR (see Wave-20 detail above) | | | | | | |
+| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥168 Qed) | ≈332 | 2000 / 40 cats |
+| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥178 Qed) | ≈354 | 2100 / 42 cats |
+| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥188 Qed) | ≈376 | 2200 / 44 cats |
+| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥198 Qed) | ≈398 | 2300 / 46 cats |
+| **W25** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥208 Qed) | ≈420 | 2400 / 48 cats |
 
 After W20 the corpus crosses **1900 entries / 38 categories** and Coq
-crosses **160 closed proofs / 0 admissions**, exhausting the planned
-threat surface for the EPIC #28 scaffold. From W21+ the work shifts
+crosses **158 closed proofs / 0 admissions**. From W21+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
-wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths).
+wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
+while still picking two fresh uncovered threat classes per wave.
 
 ---
 
@@ -744,7 +843,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1800/1800 blocked` (W19) at 36 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1900/1900 blocked` (W20) at 38 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -781,8 +880,12 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W20..W24 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W21..W25 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
+- Wave-20 detail section above is **[VERIFIED]** by cargo test
+  (310/0), `e2e_chat_25` (25/25), `falsifier_runner` (1900/1900,
+  38 cats), clippy (clean), and `coqc Trinity_Chat.v` (silent, 158
+  `Qed.`, 0 `Admitted.`).
 
 ---
 

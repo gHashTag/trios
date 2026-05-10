@@ -23,8 +23,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod concurrent_add_remove;
 pub mod external_commit;
 pub mod pcs_healing;
+pub use concurrent_add_remove::{
+    apply_concurrent, ConcurrencyError, HashId, Leaf, MembershipDelta, Proposal,
+};
 pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
 pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
 
