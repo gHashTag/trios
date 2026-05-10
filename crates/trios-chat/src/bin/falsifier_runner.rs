@@ -138,6 +138,8 @@ fn main() {
         // Wave-18 categories
         ("padding_class_oracle", 0.95_f64),
         ("jitter_side_channel", 0.95_f64),
+        ("kem_decap_oracle", 0.95_f64),
+        ("tag_stripping", 0.95_f64),
     ] {
         if let Some((n, b)) = by_cat.get(cat) {
             if *n == 0 {
@@ -153,5 +155,5 @@ fn main() {
     if failed {
         std::process::exit(1);
     }
-    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise/deniability_break/confused_deputy/safety_number_swap/mls_external_commit/egress_fingerprint/identity_revoke/clock_skew_replay/at_rest_rotation/tool_arg_confusion/group_pcs_break/padding_class_oracle/jitter_side_channel >=95%, indirect >=90%)");
+    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise/deniability_break/confused_deputy/safety_number_swap/mls_external_commit/egress_fingerprint/identity_revoke/clock_skew_replay/at_rest_rotation/tool_arg_confusion/group_pcs_break/padding_class_oracle/jitter_side_channel/kem_decap_oracle/tag_stripping >=95%, indirect >=90%)");
 }
