@@ -619,5 +619,38 @@
     "extractor": "crates/trinity-extract/src/main.rs (L-R1: RUST ONLY)",
     "admitted_policy": "Admitted = Axiom with HONEST ADMITTED comment. Never masked as Proven.",
     "schema_drift_policy": "Rust loader checks schema_version \u2014 refuses incompatible JSON"
+  },
+  "pollen_channel": {
+    "id": "PC-INV-1..6",
+    "name": "Pollen Channel Invariants",
+    "status": "Admitted",
+    "proof_source": "trinity-clara/proofs/igla/pollen_channel_convergence.v",
+    "proven_theorems": [
+      "phi_inv_lt_one",
+      "phi_sq_plus_inv_sq"
+    ],
+    "admitted": [
+      "pollen_conv_as",
+      "pollen_conv_bound",
+      "coupon_collector_bound",
+      "markov_mixing_geo"
+    ],
+    "runtime_check": {
+      "condition": "verify_signature(deposit) && bpb >= 0.1 && bpb <= PHI_SQ + 1.0",
+      "action": "abort",
+      "message": "PC-INV-1/2 violated: invalid signature or BPB out of range"
+    },
+    "numeric_anchor": {
+      "phi": 1.618033988749895,
+      "phi_inv": 0.6180339887498948,
+      "phi_sq": 2.618033988749895,
+      "backoff_cap_min": 47,
+      "stale_ttl_h": 123,
+      "flush_batch_size": 11,
+      "lambda_ema_decay": 0.6180339887498948,
+      "phi_derivation": "phi^2 + phi^-2 = 3 \u00b7 Zenodo DOI 10.5281/zenodo.19227877"
+    },
+    "rust_target": "crates/trios-igla-race/src/pollen.rs::validate_deposit",
+    "appL_reference": "docs/phd/appendix/L-pollen-channel.tex"
   }
 }
