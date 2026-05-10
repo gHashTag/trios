@@ -2239,3 +2239,73 @@ approximately 8\% compared to unconstrained placement (measured by
 comparing Vivado XPE reports with and without the Pblock), because
 shorter routes have lower capacitance.
 
+
+% ------------------------------------------------------------------
+\section*{I.27 Vivado Tcl Automation}
+\label{sec:tcl-automation}
+% ------------------------------------------------------------------
+
+The following Tcl script automates the complete implementation flow
+from synthesis to bitstream, incorporating all constraints in this
+appendix:
+
+\begin{verbatim}
+## ============================================================
+## trinity_impl.tcl — full implementation flow
+## Usage: vivado -mode batch -source trinity_impl.tcl
+## ============================================================
+set part "xc7a100tcsg324-1"
+set board "digilentinc.com:arty-a7-100:part0:1.0"
+set proj_name "trinity_gf16"
+set output_dir "./output"
+
+# Create project
+create_project $proj_name ./$proj_name \
+  -part $part -force
+set_property board_part $board [current_project]
+
+# Add sources
+add_files -norecurse {
+  ../rtl/trinity_top.v
+  ../rtl/vsa_matmul.v
+  ../rtl/trinity_pll.v
+  ../rtl/axi_lite_ctrl.v
+}
+
+# Add constraints (this appendix)
+add_files -fileset constrs_1 -norecurse {
+  ../constraints/trinity_a7.xdc
+}
+
+# Synthesis
+launch_runs synth_1 -jobs 8
+wait_on_run synth_1
+
+# Implementation
+launch_runs impl_1 -jobs 8
+wait_on_run impl_1
+
+# DRC check
+open_run impl_1
+set drc_n [get_drc_violations -count]
+if {$drc_n > 0} {
+  error "DRC FAIL: $drc_n violations"
+}
+
+# Timing check
+set wns [get_property STATS.WNS [get_runs impl_1]]
+if {$wns < 0} {
+  error "TIMING FAIL: WNS = $wns ns"
+}
+
+# Generate bitstream
+launch_runs impl_1 -to_step write_bitstream -jobs 4
+wait_on_run impl_1
+
+# Record SHA-256
+exec sha256sum $output_dir/trinity_gf16.bit > \
+     $output_dir/trinity_gf16.bit.sha256
+
+puts "SUCCESS: WNS=$wns ns, DRC clean, bitstream generated."
+\end{verbatim}
+
