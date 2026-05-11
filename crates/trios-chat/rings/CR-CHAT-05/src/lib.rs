@@ -23,6 +23,11 @@ pub use key_rotation::{
     JournalEntry, KeyEpoch, RotatableRow, RotatingColumn, RotationJournal, Rotator,
 };
 
+pub mod welcome_keypackage_pinning;
+pub use welcome_keypackage_pinning::{
+    KeyPackageHash, KeyPackagePin, WelcomeError, WKP_DOMAIN, WKP_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
