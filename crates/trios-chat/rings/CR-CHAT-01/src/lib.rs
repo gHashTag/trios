@@ -26,6 +26,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod handshake_fingerprint;
 pub mod identity;
 pub mod kem;
 pub mod kem_decap_oracle;
@@ -33,6 +34,9 @@ pub mod otpk;
 pub mod revocation;
 pub mod sealed;
 
+pub use handshake_fingerprint::{
+    HandshakeError, HandshakeFingerprint, HSF_DOMAIN, HSF_LEN,
+};
 pub use identity::{Identity, PrekeyBundle, PrekeyBundleBody, MLKEM_PUB_LEN, MLKEM_SEC_LEN};
 pub use kem::{encapsulate_to, MlKem768Keypair, MLKEM768_CT_LEN, MLKEM768_EK_LEN, MLKEM768_SS_LEN};
 pub use kem_decap_oracle::{observe as observe_decap, ss_eq as decap_ss_eq, DecapObservation, KEM_DECAP_ORACLE_CT_LEN, KEM_DECAP_ORACLE_SS_LEN};
