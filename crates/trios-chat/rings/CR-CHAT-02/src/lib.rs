@@ -33,6 +33,11 @@ pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_ver
 pub mod clock_skew;
 pub use clock_skew::{ClockSkewBound, ReplayDecision, ReplayWindow, DEFAULT_MAX_HISTORY};
 
+pub mod epoch_authentication_failure;
+pub use epoch_authentication_failure::{
+    check_epoch, EpochAuthenticationFailed, EpochVerdict, EPOCH_GRACE_WINDOW,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

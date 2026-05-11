@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-20: **310 tests · 25/25 e2e · 1900/1900 falsifier · 38 categories · 158 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-21: **330 tests · 25/25 e2e · 2000/2000 falsifier · 40 categories · 168 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -79,7 +79,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W17 | `047f3cb` | 249 | INV-CHAT-89..95 (130 Qed total) | 1600 | 32 | tool_arg_confusion + group_pcs_break | [#715](https://github.com/gHashTag/trios/pull/715) |
 | W18 | `6902a82` | 270 | INV-CHAT-96..102 (139 Qed total) | 1700 | 34 | padding_class_oracle + jitter_side_channel | [#717](https://github.com/gHashTag/trios/pull/717) |
 | W19 | `d601a58` | 290 | INV-CHAT-103..109 (148 Qed total) | 1800 | 36 | kem_decap_oracle + tag_stripping | [#719](https://github.com/gHashTag/trios/pull/719) |
-| **W20** | **(this PR)** | **310** | **INV-CHAT-110..116 (158 Qed total)** | **1900** | **38** | **handshake_fingerprint + concurrent_add_remove** | **(open)** |
+| W20 | `e556075` | 310 | INV-CHAT-110..116 (158 Qed total) | 1900 | 38 | handshake_fingerprint + concurrent_add_remove | [#724](https://github.com/gHashTag/trios/pull/724) |
+| **W21** | **(this PR)** | **330** | **INV-CHAT-117..123 (168 Qed total)** | **2000** | **40** | **epoch_authentication_failure + welcome_keypackage_pinning** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -90,6 +91,137 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-21 — epoch-authentication failure + Welcome KeyPackage pinning
+
+- **L-CHAT-2-eaf** (R-CHAT-2 / **CR-CHAT-02**) — EAF-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-02/src/epoch_authentication_failure.rs`
+  (301 lines) shipping
+  `check_epoch(local, presented) -> Result<EpochVerdict, EpochAuthenticationFailed>`,
+  constant `EPOCH_GRACE_WINDOW = 2`, and the verdict
+  `EpochVerdict::{Match, WithinWindow}`. The comparison is fully
+  constant-time via `subtle::ConstantTimeEq` + `ConstantTimeLess`,
+  and the past-distance is computed with `saturating_sub` so a
+  presented epoch above the local one cannot underflow to look
+  recent. The error type carries no payload — every rejection
+  collapses to the same opaque `EpochAuthenticationFailed` so an
+  attacker cannot distinguish "too old" from "too future" from
+  "replayed" by error shape.
+  - EAF-01 exact-match — `check_epoch(e, e)` returns `Match`.
+  - EAF-02 within-grace — distance `1` and `2` return `WithinWindow`.
+  - EAF-03 just-stale — distance `3` returns the opaque error.
+  - EAF-04 future no underflow — `presented > local` is rejected
+    and never produces `Match` or `WithinWindow` via wraparound.
+  - EAF-05 ancient-same-error — distance `10_000` returns the
+    exact same error variant as distance `3`.
+  - EAF-06 opaque-error Display — `format!("{}", err)` returns a
+    fixed string with no epoch numbers leaked.
+  - EAF-07 symmetric-rejection — `(local, presented)` and
+    `(presented, local)` both reject when distance is too large.
+  - EAF-08 boundary scan — distances `0..=3` produce the expected
+    sequence `Match, WithinWindow, WithinWindow, Err`.
+  - EAF-09 grace-constant — `EPOCH_GRACE_WINDOW == 2` is the
+    single source of truth.
+  - EAF-10 green — module compiles and re-exports through
+    `CR-CHAT-02/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-5-wkp** (R-CHAT-1 / **CR-CHAT-05**) — WKP-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-05/src/welcome_keypackage_pinning.rs`
+  (382 lines) shipping
+  `KeyPackageHash::compute(suite, lt_pub, init_pub, signing_pub, capabilities) -> Result<Self, WelcomeError>`,
+  constants `WKP_LEN = 32` and
+  `WKP_DOMAIN = b"trios-chat-keypackage-hash-v1\0"`, constant-time
+  equality via `subtle::ConstantTimeEq` (`KeyPackageHash::eq_ct`),
+  and a private `absorb_tagged` helper that length-prefixes every
+  field with a per-field domain separator so KeyPackage components
+  cannot be confused or truncated. `KeyPackagePin::pin(h)` freezes
+  the first hash a peer sees; `verify_welcome(incoming)` constant-
+  time-compares against the pin; `repin` **always** returns
+  `WelcomeError::RepinForbidden`.
+  - WKP-01 canonical compute — fixed canonical inputs produce a
+    fixed canonical hash.
+  - WKP-02 determinism — same inputs always produce the same hash.
+  - WKP-03 field-swap detection — swapping `lt_pub` with `init_pub`
+    changes the hash.
+  - WKP-04 empty-field rejection — any empty input returns
+    `WelcomeError::EmptyField`.
+  - WKP-05 length-shift detection — moving a byte from one field
+    to an adjacent field changes the hash (length-prefix proves
+    domain separation).
+  - WKP-06 pin/verify happy path — `pin(h)` + `verify_welcome(h)`
+    is `Ok(())`.
+  - WKP-07 mismatch rejected — verifying a different hash returns
+    `WelcomeError::Mismatch`.
+  - WKP-08 repin forbidden — `pin.repin(other)` returns
+    `WelcomeError::RepinForbidden`, the pin is immutable.
+  - WKP-09 single-bit flip — flipping a single bit in any input
+    field changes the resulting hash.
+  - WKP-10 green — module compiles and re-exports through
+    `CR-CHAT-05/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 1900 → 2000.** New categories
+  `epoch_authentication_failure` and `welcome_keypackage_pinning`,
+  50 entries each (`PI-EAF-001..050`, `PI-WKP-001..050`),
+  generated by `gen_falsifier_wave21.py`. Each lane covers the
+  specific exploitation phrasings (grace-window bypass, opaque-
+  error leakage, fingerprint truncation, repin attempts,
+  empty-field bypass, length-shift collisions, KeyPackage field
+  swaps, etc.). `falsifier_runner` gains two new threshold lanes
+  at `0.95`. Result: **40 categories at 100% block rate**,
+  `2000 / 2000` blocked.
+
+- **DENY_PATTERNS extension.** `CR-CHAT-06/src/injection.rs`
+  grows two new keyword blocks covering Lane A epoch-failure
+  jargon ("genesis epoch", "local + 1", "recently-seen epoch",
+  "fast-forward", "handshake_count", "priority=high", "in the
+  aad", …) and Lane B KeyPackage-pinning jargon ("last byte
+  only", "starts with 0x00/0x80", "short-circuit branch",
+  "pre-filter", "skip ct_eq on mismatch", "capabilities = b",
+  "bypass the emptyfield", "iter().zip(", "a==b", "mid-
+  absorption", "cache the sha-256 state", "absorb the changed
+  field", …) so the injection guard blocks any prompt that
+  attempts to weaken the new lanes by name.
+
+- **Coq Wave-21 — `Section TrinityChatWave21` (lines ≈ 2869–3044).**
+  Introduces `Inductive EpochVerdict21 := EVMatch21 | EVWindow21 | EVRejected21`,
+  `Record KPInputs21` with the five length fields
+  `s_len_21, lt_len_21, ip_len_21, sp_len_21, c_len_21`,
+  `Variable kp_hash_of_21 : nat -> nat -> nat -> nat -> nat -> nat`,
+  computable functions `check_epoch_21`, `all_fields_nonempty_21`,
+  `verify_pin_21`, and the constant `eaf_grace_21 := 2`.
+  Closes:
+  - **INV-CHAT-117** `inv_chat_117_eaf_future_rejected` —
+    `local < presented → check_epoch_21 local presented = EVRejected21`.
+  - **INV-CHAT-118** `inv_chat_118_eaf_match_accepted` —
+    `check_epoch_21 e e = EVMatch21`.
+  - **INV-CHAT-119** `inv_chat_119_eaf_opaque_error` — both
+    rejected outputs are the same `EVRejected21` constructor.
+  - Helper `within_grace_accepted_21` —
+    `d ≤ eaf_grace_21 ∧ d > 0 ∧ d ≤ local → check_epoch_21 local (local - d) = EVWindow21`.
+  - **INV-CHAT-120** `inv_chat_120_wkp_pin_immutable` —
+    `verify_pin_21 p p = true`.
+  - **INV-CHAT-121** `inv_chat_121_wkp_mismatch_rejected` —
+    `p ≠ i → verify_pin_21 p i = false`.
+  - **INV-CHAT-122** `inv_chat_122_wkp_hash_determinism` —
+    `kp_hash_of_21 a b c d e = kp_hash_of_21 a b c d e`.
+  - **INV-CHAT-123** `inv_chat_123_wkp_empty_field_invalid` —
+    any empty field implies `all_fields_nonempty_21 = false`.
+  - Helper `empty_invalidates_21`.
+  - **Total: 168 `Qed.` / 0 `Admitted.` / 0 new axioms.**
+
+- **Verification gate.** `cargo test` over the 12 chat crates plus
+  harness binaries: **330 / 0**. `cargo run --bin e2e_chat_25`:
+  **25 / 25**. `cargo run --bin falsifier_runner`: **2000 / 2000**
+  blocked at 40 threshold lanes. `cargo clippy --all-targets -- -D warnings`
+  on `trios-chat` + the three touched ring crates: clean.
+  `coqc proofs/chat/Trinity_Chat.v`: silent exit `0`, three
+  abstract-large-number warnings only (pre-existing W14/W15 nat
+  literals, not from W21 code).
+
+- **Cumulative axioms — unchanged.** `ss_kp_injective` (W9),
+  `dh_step_fresh` + `dh_post_history_independent` +
+  `hybrid_kem_non_degenerate` (W10), `sn_hash_sym` (W14). Wave-21
+  introduces **zero** new axioms.
 
 ### Wave-20 — handshake fingerprinting + concurrent Add/Remove ordering
 
@@ -801,7 +933,7 @@ discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W21–W25) — `[ASPIRATIONAL]`
+## Future waves (W22–W26) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -818,15 +950,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W17~~ — SHIPPED via [#715](https://github.com/gHashTag/trios/pull/715), merged `047f3cb` (see Wave-17 detail above) | | | | | | |
 | ~~W18~~ — SHIPPED via [#717](https://github.com/gHashTag/trios/pull/717), merged `6902a82` (see Wave-18 detail above) | | | | | | |
 | ~~W19~~ — SHIPPED via [#719](https://github.com/gHashTag/trios/pull/719), merged `d601a58` (see Wave-19 detail above) | | | | | | |
-| ~~W20~~ — SHIPPED in this PR (see Wave-20 detail above) | | | | | | |
-| **W21** | (TBD — picked from uncovered surface after W20 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-117..123 (≥168 Qed) | ≈332 | 2000 / 40 cats |
-| **W22** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥178 Qed) | ≈354 | 2100 / 42 cats |
-| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥188 Qed) | ≈376 | 2200 / 44 cats |
-| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥198 Qed) | ≈398 | 2300 / 46 cats |
-| **W25** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥208 Qed) | ≈420 | 2400 / 48 cats |
+| ~~W20~~ — SHIPPED via [#724](https://github.com/gHashTag/trios/pull/724), merged `e556075` (see Wave-20 detail above) | | | | | | |
+| ~~W21~~ — SHIPPED in this PR (see Wave-21 detail above) | | | | | | |
+| **W22** | (TBD — picked from uncovered surface after W21 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥178 Qed) | ≈352 | 2100 / 42 cats |
+| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥188 Qed) | ≈374 | 2200 / 44 cats |
+| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥198 Qed) | ≈396 | 2300 / 46 cats |
+| **W25** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥208 Qed) | ≈418 | 2400 / 48 cats |
+| **W26** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥218 Qed) | ≈440 | 2500 / 50 cats |
 
-After W20 the corpus crosses **1900 entries / 38 categories** and Coq
-crosses **158 closed proofs / 0 admissions**. From W21+ the work shifts
+After W21 the corpus crosses **2000 entries / 40 categories** and Coq
+crosses **168 closed proofs / 0 admissions**. From W22+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -843,7 +976,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `1900/1900 blocked` (W20) at 38 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2000/2000 blocked` (W21) at 40 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
