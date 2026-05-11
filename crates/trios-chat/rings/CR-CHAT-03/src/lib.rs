@@ -26,11 +26,16 @@
 pub mod concurrent_add_remove;
 pub mod external_commit;
 pub mod pcs_healing;
+pub mod proposal_validation;
 pub use concurrent_add_remove::{
     apply_concurrent, ConcurrencyError, HashId, Leaf, MembershipDelta, Proposal,
 };
 pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
 pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
+pub use proposal_validation::{
+    validate_bundle, ProposalBundle, ProposalEntry, ProposalKind, ProposalValidationError,
+    MAX_PROPOSALS_PER_COMMIT,
+};
 
 use std::collections::{BTreeMap, BTreeSet};
 

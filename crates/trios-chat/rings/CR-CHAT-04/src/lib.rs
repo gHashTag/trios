@@ -23,6 +23,9 @@ use trios_chat_cr_chat_00::{Error, Result};
 pub mod safety_number;
 pub use safety_number::{render as render_safety_number, safety_number, verify as verify_safety_number, IdKey, SafetyDigest};
 
+pub mod mac_truncation;
+pub use mac_truncation::{split_frame, verify_mac, MacError, MacTag, MAC_TAG_LEN};
+
 pub mod padding_class_oracle;
 pub use padding_class_oracle::{
     check_class_choice, pad_class_checked, smallest_class, unpad_checked, validate_envelope,
