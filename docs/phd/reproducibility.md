@@ -83,7 +83,7 @@ which is the final pre-submission step.
 | Trinity B007 software stub (anchor identity φ²+φ⁻²=3) | <https://doi.org/10.5281/zenodo.19227877> |
 | Trinity v2.0.2 FPGA archive (real code artefact) | <https://doi.org/10.5281/zenodo.18947017> |
 | Trinity S³AI Framework collection (software description stub, index) | <https://doi.org/10.5281/zenodo.19227879> |
-| Coq witness (audited 2026-05-12: 48 statements, 35 Proven, 0 Admitted) | <https://github.com/gHashTag/t27/tree/main/coq> |
+| Coq witness (audited 2026-05-12: 218 statements, 162 Qed, 32 Admitted, 11 Abort) | <https://github.com/gHashTag/t27/tree/main/coq> |
 | Source repository           | <https://github.com/gHashTag/trios>, tag `phd/v1.0` |
 
 ## Contact

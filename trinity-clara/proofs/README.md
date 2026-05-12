@@ -1,6 +1,7 @@
 # trinity-clara/proofs — Coq Invariants (IGLA-INV-001..005)
 
-> φ² + φ⁻² = 3 | 84 + 5 = **89 theorems** (F₁₁ = 89, Fibonacci prime)
+> φ² + φ⁻² = 3 | 5 IGLA invariants (INV-1…INV-5) + audited Trinity Coq corpus
+> (gHashTag/t27: 218 statements / 162 Qed / 32 Admitted on 2026-05-12)
 
 ## L-R14 (RACE LAW)
 
@@ -41,15 +42,21 @@ coqc igla_asha_bound.v
 
 All 5 must exit `0`. Then L-R14 = SATISFIED.
 
-## Connection to Existing 84 Theorems
+## Connection to the Audited Trinity Coq Corpus
 
 ```
-Axioms (T1–T3)         trinity-clara/proofs/axioms.v         [pending]
-Parametrizations (42)  trinity-clara/proofs/parametrizations.v [pending]
-ML Invariants (5 new)  trinity-clara/proofs/igla_*.v + lr_*.v + lucas_*.v
-                       ─────────────────────────────────────
-                       Total: 84 + 5 = 89 (Fibonacci prime F₁₁)
+Audited Trinity Coq corpus  gHashTag/t27/coq + t27/proofs       [audited 2026-05-12]
+                            28 .v files
+                            218 statements (122 Theorem + 96 Lemma)
+                            162 Qed | 32 Admitted | 11 Abort
+ML Invariants (5 new)       trinity-clara/proofs/igla_*.v + lr_*.v + lucas_*.v
 ```
+
+The earlier "84 + 5 = 89 (F₁₁ Fibonacci prime)" framing was retired in the
+2026-05-12 R5-honest sweep: the actual t27 corpus is 218 statements
+(≫ 84), and the cosmetic Fibonacci-prime equality no longer reflects the
+verified state of the repository. The 5 IGLA invariants below remain the
+focal scope of this directory.
 
 ## Scientific Principle
 

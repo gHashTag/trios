@@ -1,3 +1,27 @@
+> **[SUPERSEDED — 2026-05-12 R5-honest sweep]**
+>
+> This appendix described an authoritative "Golden Ledger" of **297 Qed canonical
+> proofs across 65 `.v` files in `t27/proofs/canonical/`** with a SHA-1 manifest
+> in `t27/proofs/canonical/_Manifest.json`. An audit of `gHashTag/t27` on
+> 2026-05-12 found:
+>
+> - **No `t27/proofs/canonical/` directory** exists.
+> - **No `_Manifest.json`** exists in the repository.
+> - The actual Coq corpus in `t27/coq/` + `t27/proofs/` is **28 .v files**,
+>   **218 statements** (122 Theorem + 96 Lemma), **162 Qed**, **32 Admitted**,
+>   **11 Abort** — *not* 297/438 across 65 files.
+>
+> The numbers and the manifest schema below are therefore **unverified**. The
+> document is retained for provenance only and **must not** be cited as
+> evidence in the monograph until the Coq corpus actually contains a
+> `proofs/canonical/` cluster with the manifest infrastructure it describes.
+> The R5-honest replacement is the audit row in
+> [`docs/phd/appendix/G-data-availability.tex`](../phd/appendix/G-data-availability.tex)
+> and [`docs/phd/reproducibility.md`](../phd/reproducibility.md), both of
+> which now cite the audited 218/162/32 counts.
+
+---
+
 ![Golden Ledger (297 Qed canonical + SHA-1)](https://raw.githubusercontent.com/gHashTag/trios/feat/illustrations/assets/illustrations/app-b-golden-ledger.png)
 
 *Figure — App.B: Golden Ledger (297 Qed canonical + SHA-1) (scientific triptych, 1200×800).*
