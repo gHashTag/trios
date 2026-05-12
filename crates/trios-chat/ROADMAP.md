@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-24: **375 tests · 25/25 e2e · 2300/2300 falsifier · 46 categories · 203 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-25: **397 tests · 25/25 e2e · 2400/2400 falsifier · 48 categories · 215 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -83,7 +83,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W21 | `35b3ef6` | 330 | INV-CHAT-117..123 (168 Qed total) | 2000 | 40 | epoch_authentication_failure + welcome_keypackage_pinning | [#730](https://github.com/gHashTag/trios/pull/730) |
 | W22 | `119f0fe` | 335 | INV-CHAT-124..130 (181 Qed total) | 2100 | 42 | proposal_validation + mac_truncation | [#732](https://github.com/gHashTag/trios/pull/732) |
 | W23 | `1d6f910` | 355 | INV-CHAT-131..137 (191 Qed total) | 2200 | 44 | reinit_freshness + appack_replay | [#734](https://github.com/gHashTag/trios/pull/734) |
-| **W24** | **(this PR)** | **375** | **INV-CHAT-138..144 (203 Qed total)** | **2300** | **46** | **commit_signature_forge + prekey_signature_chain** | **(open)** |
+| W24 | `81ef050` | 375 | INV-CHAT-138..144 (203 Qed total) | 2300 | 46 | commit_signature_forge + prekey_signature_chain | [#738](https://github.com/gHashTag/trios/pull/738) |
+| **W25** | **(this PR)** | **397** | **INV-CHAT-145..151 (215 Qed total)** | **2400** | **48** | **padding_oracle_chosen_ct + cover_traffic_starvation** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -94,6 +95,127 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-25 — Padding-oracle chosen-ciphertext defense + Cover-traffic starvation defense
+
+- **L-CHAT-6-cct** (R-CHAT-9 / **CR-CHAT-04**) — CCT-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-04/src/padding_oracle_chosen_ct.rs`
+  (309 lines) shipping
+  `verify_probe(buf: &[u8], ledger: &mut VerdictLedger) -> Result<usize, PaddingOracleCtError>`.
+  Types: `VerdictLedger { budget_used: u32, last_seed: [u8; 32] }`,
+  const `PROBE_BUDGET = 16`, error enum `PaddingOracleCtError`
+  (`#[non_exhaustive]` with variants `NotACanonicalClass`,
+  `BufferTooShort`, `DeclaredLengthOverflow`, `ProbeBudgetExceeded`).
+  Four rules enforced in fixed order: (1) reject class index outside
+  the canonical `CLASSES` set (`NotACanonicalClass` — blocks the
+  off-table-class oracle), (2) reject buffer shorter than the
+  length-tag header (`BufferTooShort` — blocks the tail-byte probe),
+  (3) reject declared length exceeding remaining buffer
+  (`DeclaredLengthOverflow` — blocks the length-tag forge), (4)
+  reject probe attempts after `PROBE_BUDGET` failures
+  (`ProbeBudgetExceeded` — blocks the budget-exhaustion adaptive
+  oracle). Accepted probes reset the streak; rejected probes increment
+  it. `VerdictLedger::new([u8; 32])` seeds the per-session counter.
+  - CCT-01 valid canonical-class probe accepted.
+  - CCT-02 length-tag forge rejected — `DeclaredLengthOverflow`.
+  - CCT-03 tail-byte probe rejected — `BufferTooShort`.
+  - CCT-04 class-edge collision rejected — `NotACanonicalClass`.
+  - CCT-05 multi-class span rejected via class-index check.
+  - CCT-06 zero-length forgery rejected — `BufferTooShort`.
+  - CCT-07 probe-budget lockout after 16 failures — `ProbeBudgetExceeded`.
+  - CCT-08 accept resets streak (success after 15 failures keeps budget).
+  - CCT-09 over-budget probe rejected even when payload itself valid.
+  - CCT-10 green — module compiles and re-exports through
+    `CR-CHAT-04/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-7-cts** (R-CHAT-10 / **CR-CHAT-07**) — CTS-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-07/src/cover_traffic_starvation.rs`
+  (320 lines) shipping
+  `validate_window(window: &[Emission], gaps_ms: &[u64]) -> Result<(), CoverStarvationError>`,
+  consts `WINDOW_MIN_EMISSIONS = 4`, `MIN_COVER_RATIO_NUM = 1`,
+  `MIN_COVER_RATIO_DEN = 4` (i.e. ≥ 25% cover-floor). Error enum
+  `CoverStarvationError` (`#[non_exhaustive]` with variants
+  `WindowTooShort`, `MismatchedGapLength`, `NonCanonicalGap`,
+  `CoverFloorBreached`). Four rules enforced in fixed order: (1)
+  reject windows with fewer than 4 emissions (`WindowTooShort`), (2)
+  reject `gaps_ms.len() != window.len()` (`MismatchedGapLength`), (3)
+  reject any gap not present in the `CANONICAL_GAPS_MS` set
+  (`NonCanonicalGap` — blocks the jitter-skip attack), (4) reject
+  `cover_count * 4 < window.len() * 1` (`CoverFloorBreached` —
+  blocks the starvation attack where the adversary forces too few
+  cover-traffic emissions in a window).
+  - CTS-01 uniform window with 50% cover-floor accepted.
+  - CTS-02 off-canonical gap rejected — `NonCanonicalGap`.
+  - CTS-03 empty window rejected — `WindowTooShort`.
+  - CTS-04 all-Real (cover floor 0/N) rejected — `CoverFloorBreached`.
+  - CTS-05 all-Cover window accepted at 100% cover-floor.
+  - CTS-06 exactly-at-floor window (1/4) accepted.
+  - CTS-07 below-floor window (1/8) rejected — `CoverFloorBreached`.
+  - CTS-08 mismatched gap length rejected — `MismatchedGapLength`.
+  - CTS-09 non-canonical gap index rejected — `NonCanonicalGap`.
+  - CTS-10 green — module compiles and re-exports through
+    `CR-CHAT-07/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 2300 → 2400.** New categories
+  `padding_oracle_chosen_ct` and `cover_traffic_starvation`, 50
+  entries each (`PI-CCT-001..050`, `PI-CTS-001..050`). Each lane
+  covers the specific exploitation phrasings (`accept a buffer
+  shorter than the length-tag header`, `treat the declared length as
+  trustworthy`, `accept an off-table padding class`, `skip the probe
+  budget check`, `let the adaptive oracle keep guessing`, `accept a
+  window with three emissions`, `accept a non-canonical gap`,
+  `accept a cover-floor of zero`, `treat the jitter-skip as routine`,
+  `accept a starved window as a normal idle`, …).
+  `falsifier_runner` gains two new threshold lanes
+  `padding_oracle_chosen_ct` and `cover_traffic_starvation` at
+  `0.95`. Result: **48 categories at 100% block rate**, `2400 / 2400`
+  blocked.
+
+- **DENY_PATTERNS extension.** `CR-CHAT-06/src/injection.rs` grows two
+  new keyword blocks covering Lane A padding-oracle-chosen-ct jargon
+  (`length-tag forge`, `tail-byte probe`, `class-edge collision`,
+  `multi-class span`, `probe budget exceeded`, `adaptive oracle`,
+  `chosen-ciphertext probe`, `off-table padding class`, …) and Lane B
+  cover-traffic-starvation jargon (`cover floor breach`,
+  `non-canonical gap`, `jitter skip`, `starve the cover stream`,
+  `mismatched gap length`, `below-floor window`, `cover ratio 0/N`,
+  …) so the injection guard blocks any prompt that attempts to
+  weaken the new lanes by name. 132 new unique patterns added.
+
+- **Coq Wave-25 — `Section TrinityChatWave25`.**
+  Predicates `probe_canonical_class_accepted_25`,
+  `probe_within_budget_accepted_25`,
+  `window_long_enough_accepted_25`, `gap_length_match_accepted_25`.
+  Lemmas:
+  - **INV-CHAT-145** `inv_chat_145_probe_non_canonical_class_rejected`
+    — `num <= cls -> Nat.leb num cls = true` via `Nat.leb_le`.
+  - **INV-CHAT-146** `inv_chat_146_probe_buffer_too_short_rejected`
+    — `buf < header -> Nat.ltb buf header = true` via `Nat.ltb_lt`.
+  - **INV-CHAT-147** `inv_chat_147_probe_declared_length_overflow_rejected`
+    — `remaining < declared -> Nat.ltb remaining declared = true`.
+  - **INV-CHAT-148** `inv_chat_148_probe_budget_exceeded_rejected`
+    — `budget < used -> Nat.ltb budget used = true`.
+  - `probe_canonical_class_accepted_25` — helper proving in-range
+    class indices pass (`cls < num -> Nat.leb num cls = false`).
+  - `probe_within_budget_accepted_25` — helper proving the
+    at-budget edge accepts (`Nat.ltb u u = false` by `Nat.ltb_irrefl`).
+  - **INV-CHAT-149** `inv_chat_149_window_too_short_rejected` —
+    `n < min_n -> Nat.ltb n min_n = true`.
+  - **INV-CHAT-150** `inv_chat_150_cover_floor_breached_rejected`
+    — `cover * den < window * num -> Nat.ltb (cover*den) (window*num) = true`.
+  - **INV-CHAT-151** `inv_chat_151_mismatched_gap_length_rejected`
+    — `gap_len <> expected -> Nat.eqb gap_len expected = false` via
+    `Nat.eqb_neq`.
+  - `window_long_enough_accepted_25` and
+    `gap_length_match_accepted_25` — helper lemmas proving the
+    well-formed cases reduce to `false` rejection.
+  Compiles **clean exit 0** with **215 Qed / 0 Admitted /
+  5 axioms (unchanged: `ss_kp_injective` (W2), `dh_step_fresh` (W3),
+  `dh_post_history_independent` (W3), `hybrid_kem_non_degenerate`
+  (W10), `sn_hash_sym` (W14))**. Wave-25 introduces **zero new
+  axioms** — every lemma is constructive.
+
+---
 
 ### Wave-24 — MLS commit signature forgery + Prekey signature chain binding
 
@@ -1340,12 +1462,13 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-117..123 | W21 | epoch-authentication failure (future rejected, match accepted, opaque error, grace-window accepted) + Welcome KeyPackage pinning (immutable pin, mismatch rejected, hash determinism, empty-field invalid) |
 | INV-CHAT-124..130 | W22 | MLS proposal-bundle validation (empty rejected, oversized rejected, self-remove-only rejected, monotonic-indices required) + MAC tag truncation defense (short rejected, full-match accepted, full-mismatch rejected, split total-length preserved) |
 | INV-CHAT-131..137 | W23 | ReInit ceremony freshness (empty GID rejected, stale GID reuse rejected, protocol downgrade rejected, unsupported version leap rejected) + AppAck replay attestation (inverted range rejected, singleton accepted, stale/shrinking rejected, atomic-on-failure) |
-| **INV-CHAT-138..144** | **W24** | **MLS commit signature forgery defense (empty sig rejected, zero-blob rejected, group-id splice rejected, epoch mismatch rejected) + Prekey signature chain binding (self-loop rejected, missing intermediate rejected, revoked identity rejected)** |
+| INV-CHAT-138..144 | W24 | MLS commit signature forgery defense (empty sig rejected, zero-blob rejected, group-id splice rejected, epoch mismatch rejected) + Prekey signature chain binding (self-loop rejected, missing intermediate rejected, revoked identity rejected) |
+| **INV-CHAT-145..151** | **W25** | **Padding-oracle chosen-ciphertext defense (non-canonical class rejected, buffer-too-short rejected, declared-length overflow rejected, probe-budget exceeded rejected) + Cover-traffic starvation defense (window-too-short rejected, cover-floor breached rejected, mismatched gap-length rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, and Wave-24 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, and Wave-25 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
@@ -1372,15 +1495,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W21~~ — SHIPPED via [#730](https://github.com/gHashTag/trios/pull/730), merged `35b3ef6` (see Wave-21 detail above) | | | | | | |
 | ~~W22~~ — SHIPPED via [#732](https://github.com/gHashTag/trios/pull/732), merged `119f0fe` (see Wave-22 detail above) | | | | | | |
 | ~~W23~~ — SHIPPED via [#734](https://github.com/gHashTag/trios/pull/734), merged `1d6f910` (see Wave-23 detail above) | | | | | | |
-| ~~W24~~ — SHIPPED in this PR (see Wave-24 detail above) | | | | | | |
-| **W25** | (TBD — picked from uncovered surface after W24 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥213 Qed) | ≈397 | 2400 / 48 cats |
-| **W26** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥223 Qed) | ≈419 | 2500 / 50 cats |
-| **W27** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥233 Qed) | ≈441 | 2600 / 52 cats |
-| **W28** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥243 Qed) | ≈463 | 2700 / 54 cats |
-| **W29** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥253 Qed) | ≈485 | 2800 / 56 cats |
+| ~~W24~~ — SHIPPED via [#738](https://github.com/gHashTag/trios/pull/738), merged `81ef050` (see Wave-24 detail above) | | | | | | |
+| ~~W25~~ — SHIPPED in this PR (see Wave-25 detail above) | | | | | | |
+| **W26** | (TBD — picked from uncovered surface after W25 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥225 Qed) | ≈419 | 2500 / 50 cats |
+| **W27** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥235 Qed) | ≈441 | 2600 / 52 cats |
+| **W28** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥245 Qed) | ≈463 | 2700 / 54 cats |
+| **W29** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥255 Qed) | ≈485 | 2800 / 56 cats |
+| **W30** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥265 Qed) | ≈507 | 2900 / 58 cats |
 
-After W24 the corpus crosses **2300 entries / 46 categories** and Coq
-crosses **203 closed proofs / 0 admissions**. From W25+ the work shifts
+After W25 the corpus crosses **2400 entries / 48 categories** and Coq
+crosses **215 closed proofs / 0 admissions**. From W26+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -1397,7 +1521,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2300/2300 blocked` (W24) at 46 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2400/2400 blocked` (W25) at 48 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -1434,8 +1558,9 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W25..W29 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W26..W30 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
+- Wave-25 detail section above is **[VERIFIED]** by cargo test (397/0), `coqc` (215 Qed / 0 Admitted), `falsifier_runner` (2400/2400, 48 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-24 detail section above is **[VERIFIED]** by cargo test (375/0), `coqc` (203 Qed / 0 Admitted), `falsifier_runner` (2300/2300, 46 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-23 detail section above is **[VERIFIED]** by cargo test (355/0), `coqc` (191 Qed / 0 Admitted), `falsifier_runner` (2200/2200), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-22 detail section above is **[VERIFIED]** by cargo test

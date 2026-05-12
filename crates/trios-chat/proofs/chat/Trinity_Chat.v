@@ -3475,6 +3475,170 @@ Section TrinityChatWave24.
 
 End TrinityChatWave24.
 
+Section TrinityChatWave25.
+
+  (* -- Lane A: Padding-oracle chosen-ciphertext defense ------------- *)
+
+  (* Model the binding-layer predicates of [verify_probe]. Each
+     predicate returns `true` when the corresponding rejection should
+     fire. The Rust gate composes them in a fixed order; the lemmas
+     below pin the algebraic content of each rule.                   *)
+
+  Definition probe_not_canonical_class_25 (cls_index num_classes : nat) : bool :=
+    Nat.leb num_classes cls_index.
+
+  Definition probe_buffer_too_short_25 (buf_len header_len : nat) : bool :=
+    Nat.ltb buf_len header_len.
+
+  Definition probe_declared_length_overflow_25
+             (declared remaining : nat) : bool :=
+    Nat.ltb remaining declared.
+
+  Definition probe_budget_exceeded_25 (used budget : nat) : bool :=
+    Nat.ltb budget used.
+
+  Lemma inv_chat_145_probe_non_canonical_class_rejected :
+    forall cls num,
+      num <= cls ->
+      probe_not_canonical_class_25 cls num = true.
+  Proof.
+    intros cls num Hle.
+    unfold probe_not_canonical_class_25.
+    apply Nat.leb_le. exact Hle.
+  Qed.
+
+  Lemma inv_chat_146_probe_buffer_too_short_rejected :
+    forall buf header,
+      buf < header ->
+      probe_buffer_too_short_25 buf header = true.
+  Proof.
+    intros buf header Hlt.
+    unfold probe_buffer_too_short_25.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma inv_chat_147_probe_declared_length_overflow_rejected :
+    forall declared remaining,
+      remaining < declared ->
+      probe_declared_length_overflow_25 declared remaining = true.
+  Proof.
+    intros declared remaining Hlt.
+    unfold probe_declared_length_overflow_25.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma inv_chat_148_probe_budget_exceeded_rejected :
+    forall used budget,
+      budget < used ->
+      probe_budget_exceeded_25 used budget = true.
+  Proof.
+    intros used budget Hlt.
+    unfold probe_budget_exceeded_25.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma probe_canonical_class_accepted_25 :
+    forall cls num,
+      cls < num ->
+      probe_not_canonical_class_25 cls num = false.
+  Proof.
+    intros cls num Hlt.
+    unfold probe_not_canonical_class_25.
+    apply Nat.leb_gt. exact Hlt.
+  Qed.
+
+  Lemma probe_within_budget_accepted_25 :
+    forall used,
+      probe_budget_exceeded_25 used used = false.
+  Proof.
+    intros u. unfold probe_budget_exceeded_25.
+    apply Nat.ltb_irrefl.
+  Qed.
+
+  (* -- Lane B: Cover-traffic starvation defense --------------------- *)
+
+  (* Mirror the binding rules of [validate_window]. The three INV
+     theorems pin the algebraic content of the most dangerous
+     starvation attempts; the two helpers close acceptance for
+     well-formed windows.                                            *)
+
+  Definition window_too_short_25 (n min_n : nat) : bool := Nat.ltb n min_n.
+
+  Definition cover_floor_breached_25
+             (cover_count window_len ratio_num ratio_den : nat) : bool :=
+    Nat.ltb (cover_count * ratio_den) (window_len * ratio_num).
+
+  Definition mismatched_gap_length_25 (gap_len expected : nat) : bool :=
+    negb (Nat.eqb gap_len expected).
+
+  Lemma inv_chat_149_window_too_short_rejected :
+    forall n min_n,
+      n < min_n ->
+      window_too_short_25 n min_n = true.
+  Proof.
+    intros n m Hlt.
+    unfold window_too_short_25.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma inv_chat_150_cover_floor_breached_rejected :
+    forall cover_count window_len ratio_num ratio_den,
+      cover_count * ratio_den < window_len * ratio_num ->
+      cover_floor_breached_25 cover_count window_len ratio_num ratio_den = true.
+  Proof.
+    intros c w n d Hlt.
+    unfold cover_floor_breached_25.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma inv_chat_151_mismatched_gap_length_rejected :
+    forall gap_len expected,
+      gap_len <> expected ->
+      mismatched_gap_length_25 gap_len expected = true.
+  Proof.
+    intros g e Hne.
+    unfold mismatched_gap_length_25.
+    assert (H : Nat.eqb g e = false) by (apply Nat.eqb_neq; exact Hne).
+    rewrite H. reflexivity.
+  Qed.
+
+  Lemma window_long_enough_accepted_25 :
+    forall n,
+      window_too_short_25 n n = false.
+  Proof.
+    intros n. unfold window_too_short_25.
+    apply Nat.ltb_irrefl.
+  Qed.
+
+  Lemma gap_length_match_accepted_25 :
+    forall v, mismatched_gap_length_25 v v = false.
+  Proof.
+    intros v. unfold mismatched_gap_length_25.
+    rewrite Nat.eqb_refl. reflexivity.
+  Qed.
+
+End TrinityChatWave25.
+
+(* End of Trinity_Chat.v — Wave-25 final
+      Wave-25:   INV-CHAT-145..151 + 4 helpers (padding-oracle-chosen-ct + cover-traffic-starvation)
+   Theorems / Lemmas Qed-closed (cumulative): 215 (count of `Qed.` occurrences)
+      Wave-25 lanes:
+        L-CHAT-6-cct (Padding-oracle chosen-ciphertext defense):
+          INV-CHAT-145 inv_chat_145_probe_non_canonical_class_rejected
+          INV-CHAT-146 inv_chat_146_probe_buffer_too_short_rejected
+          INV-CHAT-147 inv_chat_147_probe_declared_length_overflow_rejected
+          INV-CHAT-148 inv_chat_148_probe_budget_exceeded_rejected
+          aux: probe_canonical_class_accepted_25, probe_within_budget_accepted_25
+        L-CHAT-7-cts (Cover-traffic starvation defense):
+          INV-CHAT-149 inv_chat_149_window_too_short_rejected
+          INV-CHAT-150 inv_chat_150_cover_floor_breached_rejected
+          INV-CHAT-151 inv_chat_151_mismatched_gap_length_rejected
+          aux: window_long_enough_accepted_25, gap_length_match_accepted_25
+   Wave-25 introduces 0 new axioms — every proof is constructive.
+   Theorems Admitted: 0
+   R5 budget: 0/10 admissions used.
+*)
+
 (* End of Trinity_Chat.v — Wave-24 final
       Wave-24:   INV-CHAT-138..144 + 4 helpers (commit-sig-forge + prekey-sig-chain)
    Theorems / Lemmas Qed-closed (cumulative): 202 (count of `Qed.` occurrences)
