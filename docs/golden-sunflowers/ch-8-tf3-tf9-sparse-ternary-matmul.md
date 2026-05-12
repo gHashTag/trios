@@ -85,7 +85,7 @@ All numerical results reported here use seeds from the sanctioned pool $\{F_{17}
 | TF9 FF-only | 1.81 | 52% | $mn/1.9$ |
 | TF3+TF9 combined | **1.78** | 51% | $mn/1.95$ |
 
-The combined TF3+TF9 BPB of 1.78 is below the Gate-2 ceiling of 1.85 [4]. Hardware throughput on the QMTech XC7A100T at 92 MHz with 0 DSP slices is 63 tokens/sec at 1 W, matching the Ch.28 directive [5]. The Zenodo artefact bundle for this chapter is archived at DOI 10.5281/zenodo.19020217 (Z06, status: golden) [6].
+The combined TF3+TF9 BPB of 1.78 is below the Gate-2 ceiling of 1.85 [4]. Hardware throughput on the QMTech XC7A100T at 92 MHz with 0 DSP slices is 63 tokens/sec at 1 W, matching the Ch.28 directive [5]. The Zenodo artefact bundle for this chapter is archived at DOI 10.5281/zenodo.19020282 (Z06, status: golden) [6].
 
 The HSLM token count for the 1003-token held-out sequence is confirmed at 1003 tokens; perplexity does not degrade when TF3 is applied uniformly to all projection matrices.
 
@@ -101,7 +101,7 @@ The HSLM token count for the 1003-token held-out sequence is confirmed at 1003 t
 ## 6. Sealed Seeds
 
 - **INV-6** (invariant) — `gHashTag/t27/proofs/canonical/igla/INV6_HybridQkGain.v` — Status: alive — φ-weight: 0.382 — 2 Qed + 5 Admitted. Links: Ch.8.
-- **Z06** (DOI) — https://doi.org/10.5281/zenodo.19020217 — Status: golden — φ-weight: 0.618 — Sparse Ternary MatMul artefact. Links: Ch.8.
+- **Z06** (DOI) — https://doi.org/10.5281/zenodo.19020282 — Status: golden — φ-weight: 0.618 — Sparse Ternary MatMul artefact. Links: Ch.8.
 
 ## 7. Discussion
 
@@ -121,7 +121,7 @@ A limitation of the current TF9 design is that the two-pass pipeline assumes suf
 
 [5] GOLDEN SUNFLOWERS dissertation. Ch.31 — Hardware Throughput and Power. This volume.
 
-[6] Zenodo artefact bundle Z06: Sparse Ternary MatMul. DOI: https://doi.org/10.5281/zenodo.19020217.
+[6] Zenodo artefact bundle Z06: Sparse Ternary MatMul. DOI: https://doi.org/10.5281/zenodo.19020282.
 
 [7] Trinity Canonical Coq Home. Proof census: 297 Qed, 41 Admitted, 11 Abort, 28 falsification examples. `gHashTag/t27/proofs/canonical/`.
 

@@ -110,7 +110,7 @@ The pre-registration protocol in App.E locks the BPB metric definition, the test
 
 [3] GOLDEN SUNFLOWERS dissertation. Ch.8 — TF3/TF9 Sparse Ternary MatMul. This volume.
 
-[4] Zenodo artefact bundle Z06: Sparse Ternary MatMul. DOI: https://doi.org/10.5281/zenodo.19020217.
+[4] Zenodo artefact bundle Z06: Sparse Ternary MatMul. DOI: https://doi.org/10.5281/zenodo.19020282.
 
 [5] Alessandri, P., & Berthé, V. (1998). Three distance theorems and combinatorics on words. *L'Enseignement Mathématique*, 44, 103–132.
 

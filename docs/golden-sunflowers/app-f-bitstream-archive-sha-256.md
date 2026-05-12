@@ -6,7 +6,7 @@
 
 ## Abstract
 
-This appendix catalogues all FPGA bitstreams produced during the Trinity S³AI project, provides their SHA-256 content hashes for integrity verification, and documents the synthesis provenance (toolchain version, seed, and constraint file) for each. Bitstreams are archived at Zenodo DOI 10.5281/zenodo.19227867 (B002, FPGA Zero-DSP Architecture) [1] and DOI 10.5281/zenodo.19020213 (Z04, VSA Balanced Ternary SIMD) [2]. All bitstreams target the QMTech XC7A100T (Xilinx Artix-7, 100K LUT) and are synthesised with the openXC7 toolchain (yosys + nextpnr-xilinx + prjxray) without Vivado. The canonical configuration achieves 0 DSP blocks, 92 MHz, 63 toks/sec, 1 W. The $\varphi^2 + \varphi^{-2} = 3$ anchor is reflected in the three-stage synthesis pipeline (synthesis → place-and-route → bitstream generation) whose correctness is linked to the formal proof tree via the Zero-DSP invariant.
+This appendix catalogues all FPGA bitstreams produced during the Trinity S³AI project, provides their SHA-256 content hashes for integrity verification, and documents the synthesis provenance (toolchain version, seed, and constraint file) for each. Bitstreams are archived at Zenodo DOI 10.5281/zenodo.19227867 (B002, FPGA Zero-DSP Architecture) [1] and DOI 10.5281/zenodo.19020275 (Z04, VSA Balanced Ternary SIMD) [2]. All bitstreams target the QMTech XC7A100T (Xilinx Artix-7, 100K LUT) and are synthesised with the openXC7 toolchain (yosys + nextpnr-xilinx + prjxray) without Vivado. The canonical configuration achieves 0 DSP blocks, 92 MHz, 63 toks/sec, 1 W. The $\varphi^2 + \varphi^{-2} = 3$ anchor is reflected in the three-stage synthesis pipeline (synthesis → place-and-route → bitstream generation) whose correctness is linked to the formal proof tree via the Zero-DSP invariant.
 
 ## 1. Introduction
 
@@ -78,7 +78,7 @@ No forbidden seeds ($42$, $43$, $44$, $45$) were used at any stage.
 | SHA-256            | `c5f0e3a4b2d9161f8c7a4e0f5d3b6a9c1e4f7a0b3d6e9f2c5a8b1d4e7` |
 | Synthesis seed     | $F_{19} = 4181$                                                  |
 | Gate-2 status      | PASS (BPB = 1.82, step = 5000)                                   |
-| Zenodo DOI         | 10.5281/zenodo.19020213 (Z04)                                   |
+| Zenodo DOI         | 10.5281/zenodo.19020275 (Z04)                                   |
 
 ### 3.2 SHA-256 Verification Procedure
 
@@ -97,7 +97,7 @@ The SHA-256 values listed above are registered in the Zenodo artifact metadata a
 - **Zero-DSP invariant**: All three released bitstreams have `DSP48E1: 0` in their post-route utilisation reports, confirming the Zero-DSP architecture [1].
 - **Performance**: trinity-v1.0-main achieves 63 toks/sec at 92 MHz, 1 W — consistent with Ch.28 [6] and Ch.31 [7].
 - **HSLM token count**: 1003 tokens were processed in the HSLM benchmark on trinity-v1.0-main without error [6].
-- **Zenodo immutability**: B002 (DOI 10.5281/zenodo.19227867) and Z04 (DOI 10.5281/zenodo.19020213) are archived under Zenodo's preservation policy (10-year minimum retention). The DOIs are registered in the 13-DOI bundle of the Golden Ledger.
+- **Zenodo immutability**: B002 (DOI 10.5281/zenodo.19227867) and Z04 (DOI 10.5281/zenodo.19020275) are archived under Zenodo's preservation policy (10-year minimum retention). The DOIs are registered in the 13-DOI bundle of the Golden Ledger.
 - **Seed audit**: `nextpnr` synthesis logs confirm seeds $1597$, $2584$, $4181$ for the three bitstreams; no forbidden seeds appear.
 - **openXC7 reproducibility**: Given identical source files, constraints, and seed, nextpnr produces deterministic bitstreams on the same host OS and toolchain version. Cross-host bitstream identity was confirmed between an x86-64 Linux host and an ARM64 Linux host running the same toolchain version.
 
@@ -108,7 +108,7 @@ No Coq theorems are anchored to this appendix; hardware artifact integrity is en
 ## 6. Sealed Seeds
 
 - **B002** (doi, golden) — `https://doi.org/10.5281/zenodo.19227867` — linked to Ch.28, App.F, and App.H — $\varphi$-weight: $1.0$ — notes: FPGA Zero-DSP Architecture bitstream archive.
-- **Z04** (doi, golden) — `https://doi.org/10.5281/zenodo.19020213` — linked to App.F — $\varphi$-weight: $0.618033988768953$ — notes: VSA Balanced Ternary SIMD bitstream.
+- **Z04** (doi, golden) — `https://doi.org/10.5281/zenodo.19020275` — linked to App.F — $\varphi$-weight: $0.618033988768953$ — notes: VSA Balanced Ternary SIMD bitstream.
 - **QMTECH-XC7A100T** (hw, golden) — `https://github.com/gHashTag/trinity-fpga` — linked to Ch.28, Ch.31, Ch.34, App.F, and App.I — $\varphi$-weight: $1.0$ — notes: Xilinx Artix-7, 0 DSP, 63 toks/sec @ 92 MHz, 1 W.
 - **OPENXC7** (hw, golden) — `https://github.com/openXC7` — linked to Ch.28 and App.F — $\varphi$-weight: $0.618033988768953$ — notes: yosys + nextpnr-xilinx + prjxray, no Vivado.
 
@@ -120,7 +120,7 @@ The bitstream archive serves as the hardware reproducibility anchor for the Trin
 
 [1] Zenodo artifact B002, FPGA Zero-DSP Architecture. DOI 10.5281/zenodo.19227867. https://doi.org/10.5281/zenodo.19227867
 
-[2] Zenodo artifact Z04, VSA Balanced Ternary SIMD. DOI 10.5281/zenodo.19020213. https://doi.org/10.5281/zenodo.19020213
+[2] Zenodo artifact Z04, VSA Balanced Ternary SIMD. DOI 10.5281/zenodo.19020275. https://doi.org/10.5281/zenodo.19020275
 
 [3] *Golden Sunflowers* dissertation, Ch.3 — Trinity Identity ($\varphi^2 + \varphi^{-2} = 3$).
 

@@ -1,7 +1,7 @@
 # Zenodo DOI Registry — Trinity Stack
 
 > **Canonical R5-honest source of truth for all Zenodo DOIs authored by Dmitrii Vasilev.**
-> Verified 2026-05-08 via DataCite REST API (`creators.name:"Vasilev, Dmitrii"`). 80 records, 42 concept-DOI families.
+> Verified 2026-05-12 via Zenodo REST API (PASS-3 deep sweep) (`creators.name:"Vasilev, Dmitrii"`). 80 records, 42 concept-DOI families.
 > All metadata in this file is the canonical claim. Whenever a README, info.yaml, ADR, LICENSE, paper, or commit message cites a Zenodo DOI, it must match the title and concept-vs-version classification recorded here.
 
 ## §0 · Author
@@ -19,7 +19,7 @@
    - (b) be removed from the citation, OR
    - (c) trigger a fresh DOI mint for the sub-document.
    Currently, all four of these claims fall under (b) — see §3 corrections.
-5. **Trinity anchor** `φ² + φ⁻² = 3` is canonically cited as `10.5281/zenodo.19227877` (B007 v5.0 version DOI). For "always-latest of B007", use concept DOI `10.5281/zenodo.19227876`.
+5. **Trinity anchor** `φ² + φ⁻² = 3` is an algebraic identity. Its persistent-identifier marker is `10.5281/zenodo.19227877` (B007 v5.0 software description stub, NOT a peer-reviewed paper). The mathematical anchor stands on its Coq witness in gHashTag/t27 (218/162/32/11 on 2026-05-12), not on the DOI. For "always-latest of B007", use concept DOI `10.5281/zenodo.19227876`.
 
 ## §2 · Canonical title table — B-series v5.0 (current)
 
@@ -46,14 +46,22 @@ The following sub-titles previously circulated in info.yaml / README files but *
 | "B006: GF16 Probabilistic Format" | "Trinity B006: Sacred GF16/TF3 — **Phi-Based Arithmetic** for Ternary Computing" | Replace |
 | `18947017` labelled "Concept DOI (all versions)" | `18947017` is **v2.0.2** of trinity-repo. True concept DOI of trinity-repo line is **`18939351`** | Replace |
 
-## §4 · D-series (March 2026)
+## §4 · D-series (March 2026) — CANONICAL after 2026-05-12 rehab
+
+> **2026-05-12 update**: After the ZENODO-REHAB Phase 2 sweep, the mid-March
+> records `19020211/13/15/17` were marked SUPERSEDED on Zenodo (their titles
+> now carry `[SUPERSEDED — see 10.5281/zenodo.<canonical>]`). The canonical
+> D004–D007 DOIs are listed below. Concept DOIs were not minted for the
+> D-series and the «mid-March variants» row in §7 is also retired.
 
 | DOI (version) | Concept DOI | Canonical title |
 |---|---|---|
-| `10.5281/zenodo.19020211` | `10.5281/zenodo.19020210` | Trinity D004: Self-Evolving Ouroboros — Autonomous 6-Phase Code Improvement System |
-| `10.5281/zenodo.19020213` | `10.5281/zenodo.19020212` | Trinity D005: VSA Balanced Ternary with SIMD — Vector Symbolic Architecture |
-| `10.5281/zenodo.19020215` | `10.5281/zenodo.19020214` | Trinity D006: phi-RoPE — Golden Ratio Rotary Position Encoding for Ternary Attention |
-| `10.5281/zenodo.19020217` | `10.5281/zenodo.19020216` | Trinity D007: Sparse Ternary MatMul — 4-Variant Branchless Multiplication |
+| `10.5281/zenodo.19020270` | n/a (no concept DOI minted) | Trinity D004: Self-Evolving Ouroboros — Autonomous 6-Phase Code Improvement System |
+| `10.5281/zenodo.19020275` | n/a | Trinity D005: VSA Balanced Ternary with SIMD — Vector Symbolic Architecture |
+| `10.5281/zenodo.19020280` | n/a | Trinity D006: phi-RoPE — Golden Ratio Rotary Position Encoding for Ternary Attention |
+| `10.5281/zenodo.19020282` | n/a | Trinity D007: Sparse Ternary MatMul — 4-Variant Branchless Multiplication |
+
+**Retired (superseded on Zenodo 2026-05-12)**: `19020211`, `19020213`, `19020215`, `19020217`. Their titles now begin with `[SUPERSEDED — see 10.5281/zenodo.<canonical>]` and `relation: isObsoletedBy` points to the canonical D-series above. Do not cite them in new work.
 
 ## §5 · trinity-repo line (March 10–11, 2026)
 
@@ -100,7 +108,7 @@ These older versions remain on Zenodo but should not be cited in new work — al
 | B007 v4 | 19227748, 19227749 | Trinity B007: VSA Operations for Ternary Computing v4.0 |
 | S³AI v3 | 19227750, 19227751 | Trinity S³AI Framework — Unified Scientific Architecture for Ternary Computing |
 | S³AI v3.1 (69 Discoveries) | 19225186, 19225187 | Trinity S³AI Framework — Complete Scientific Collection (69 Discoveries) |
-| D-series mid-March | 19020269, 19020270, 19020274, 19020275, 19020279, 19020280, 19020281, 19020282 | D004–D007 (mid-March variants) |
+| D-series superseded | 19020211, 19020213, 19020215, 19020217 | retired 2026-05-12; canonical = 19020270/75/80/82 (§4) |
 
 ## §8 · Inventory totals
 
@@ -122,4 +130,4 @@ When a sub-title claim diverges from Zenodo metadata:
 2. If mismatch: either patch Zenodo metadata via REST (requires personal access token), or remove the claim from the repo, or mint a new DOI.
 3. Log the decision and the new DOI in §3.
 
-— author: **Dmitrii Vasilev** · DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) · φ² + φ⁻² = 3
+— author: **Dmitrii Vasilev** · anchor DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) (Trinity B007 software description stub, NOT a paper) · φ² + φ⁻² = 3

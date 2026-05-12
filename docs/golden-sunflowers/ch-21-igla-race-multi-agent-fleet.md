@@ -103,7 +103,7 @@ All three seeds satisfy `victory_acceptable(3, b, 5000)` with $b < 1.85$. INV-7 
 
 - **INV-7** (invariant, golden) — `https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV7_IglaFoundCriterion.v` — linked to Ch.21 and Ch.11 — $\varphi$-weight: $1.0$ — notes: $\geq 3$ distinct seeds, BPB $< 1.5$, step $\geq 4000$ (28 Qed).
 - **INV-7b** (invariant, golden) — `https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV7b_RainbowBridgeConsistency.v` — linked to Ch.21 — $\varphi$-weight: $0.618033988768953$ — notes: Rainbow Bridge consistency (15 Qed).
-- **Z03** (doi, golden) — `https://doi.org/10.5281/zenodo.19020211` — linked to Ch.21 — $\varphi$-weight: $0.618033988768953$ — notes: Self-Evolving Ouroboros.
+- **Z03** (doi, golden) — `https://doi.org/10.5281/zenodo.19020270` — linked to Ch.21 — $\varphi$-weight: $0.618033988768953$ — notes: Self-Evolving Ouroboros.
 - **IGLA-RACE** (branch, alive) — `https://github.com/gHashTag/trios/issues/143` — linked to Ch.21 and Ch.11 — $\varphi$-weight: $1.0$ — notes: multi-agent BPB $< 1.85$ race.
 
 ## 7. Discussion
@@ -122,7 +122,7 @@ IGLA RACE provides the first formally verified multi-agent training protocol in 
 
 [5] *Golden Sunflowers* dissertation, Ch.15 — BPB Benchmark and Neon Write-Back.
 
-[6] Zenodo Self-Evolving Ouroboros, DOI 10.5281/zenodo.19020211. https://doi.org/10.5281/zenodo.19020211
+[6] Zenodo Self-Evolving Ouroboros, DOI 10.5281/zenodo.19020270. https://doi.org/10.5281/zenodo.19020270
 
 [7] *Golden Sunflowers* dissertation, Ch.28 — FPGA Implementation: QMTech XC7A100T, 0 DSP, 92 MHz, 63 toks/sec, 1 W.
 
