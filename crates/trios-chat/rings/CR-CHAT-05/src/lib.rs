@@ -28,6 +28,12 @@ pub use welcome_keypackage_pinning::{
     KeyPackageHash, KeyPackagePin, WelcomeError, WKP_DOMAIN, WKP_LEN,
 };
 
+pub mod welcome_secret_treekem_pruning;
+pub use welcome_secret_treekem_pruning::{
+    validate_welcome_path, UpdatePathNode, WelcomeTreeError, WelcomeTreeView,
+    WelcomeUpdatePath, WST_JOINER_LABEL,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -28,6 +28,7 @@ pub mod concurrent_add_remove;
 pub mod external_commit;
 pub mod pcs_healing;
 pub mod proposal_validation;
+pub mod psk_external_injection;
 pub mod reinit_freshness;
 pub use commit_signature::{
     verify_commit_signature, CommitSigError, CommitTranscript, CommitVerifierView, SignedCommit,
@@ -40,6 +41,9 @@ pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
 pub use proposal_validation::{
     validate_bundle, ProposalBundle, ProposalEntry, ProposalKind, ProposalValidationError,
     MAX_PROPOSALS_PER_COMMIT,
+};
+pub use psk_external_injection::{
+    validate_psk_ref, PskInjectionError, PskInjectionView, PskRef, PskType, PSK_NONCE_LEN,
 };
 pub use reinit_freshness::{
     validate_reinit, Ciphersuite as ReInitCiphersuite, GroupId as ReInitGroupId,
