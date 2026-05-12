@@ -25,6 +25,7 @@
 
 pub mod commit_signature;
 pub mod concurrent_add_remove;
+pub mod confirmation_tag_chain;
 pub mod external_commit;
 pub mod pcs_healing;
 pub mod proposal_validation;
@@ -32,6 +33,10 @@ pub mod psk_external_injection;
 pub mod reinit_freshness;
 pub use commit_signature::{
     verify_commit_signature, CommitSigError, CommitTranscript, CommitVerifierView, SignedCommit,
+};
+pub use confirmation_tag_chain::{
+    validate_confirmation_chain, ConfirmationChainError, ConfirmationChainView, ConfirmedCommit,
+    CONFIRMATION_TAG_LEN, INTERIM_TRANSCRIPT_HASH_LEN,
 };
 pub use concurrent_add_remove::{
     apply_concurrent, ConcurrencyError, HashId, Leaf, MembershipDelta, Proposal,

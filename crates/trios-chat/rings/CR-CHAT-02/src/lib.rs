@@ -38,6 +38,13 @@ pub use epoch_authentication_failure::{
     check_epoch, EpochAuthenticationFailed, EpochVerdict, EPOCH_GRACE_WINDOW,
 };
 
+pub mod sender_data_header_encryption;
+pub use sender_data_header_encryption::{
+    validate_sender_data_header, ContentType as SenderDataContentType, EncryptedSenderData,
+    SenderDataAad, SenderDataHeaderError, SenderDataView, MIN_SENDER_DATA_CT_LEN,
+    SENDER_DATA_NONCE_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
