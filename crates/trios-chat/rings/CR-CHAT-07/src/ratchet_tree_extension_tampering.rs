@@ -125,15 +125,26 @@ pub fn validate_ratchet_tree_extension(
     if ext.nodes.is_empty() {
         return Err(RatchetTreeExtError::EmptyExtension);
     }
-    // Rule 4: derive valid index range.
+    // Rule 2 (pre-pass): leaf count must match the GroupContext.
+    // Counted before per-node traversal because RFC 9420 §12.4.3.3
+    // requires the tree-size header to validate before any index
+    // arithmetic is meaningful.
     if view.expected_leaf_count < RTX_MIN_LEAVES {
         return Err(RatchetTreeExtError::LeafCountMismatch);
     }
+    let counted_leaves: u32 = ext
+        .nodes
+        .iter()
+        .filter(|n| matches!(n, RatchetTreeNode::Leaf { .. }))
+        .count() as u32;
+    if counted_leaves != view.expected_leaf_count {
+        return Err(RatchetTreeExtError::LeafCountMismatch);
+    }
+    // Rule 4: derive valid index range from validated leaf count.
     let node_count = 2u32
         .saturating_mul(view.expected_leaf_count)
         .saturating_sub(1);
     let mut seen_indices: BTreeSet<u32> = BTreeSet::new();
-    let mut leaves_seen: u32 = 0;
     for node in &ext.nodes {
         match node {
             RatchetTreeNode::Leaf { index, signature_blob } => {
@@ -149,7 +160,6 @@ pub fn validate_ratchet_tree_extension(
                 if signature_blob.is_empty() {
                     return Err(RatchetTreeExtError::UnsignedLeafNode);
                 }
-                leaves_seen = leaves_seen.saturating_add(1);
             }
             RatchetTreeNode::Parent { index } => {
                 if *index >= node_count {
@@ -163,10 +173,6 @@ pub fn validate_ratchet_tree_extension(
                 // Blank entries hold no index claim — skipped.
             }
         }
-    }
-    // Rule 2: leaf count must match.
-    if leaves_seen != view.expected_leaf_count {
-        return Err(RatchetTreeExtError::LeafCountMismatch);
     }
     Ok(())
 }
