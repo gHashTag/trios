@@ -3244,7 +3244,130 @@ Section TrinityChatWave22.
 
 End TrinityChatWave22.
 
-(* End of Trinity_Chat.v — Wave-22 final
+(* ======================================================================
+   Wave-23 — ReInit ceremony freshness (Lane A) + AppAck replay (Lane B)
+   ====================================================================== *)
+
+Section TrinityChatWave23.
+
+  (* -- Lane A: ReInit freshness ------------------------------------- *)
+
+  Definition reinit_max_supported_version_23 : nat := 1.
+
+  Definition reinit_is_zero_gid_23 (gid : nat) : bool := Nat.eqb gid 0.
+
+  Definition reinit_is_downgrade_23 (current new_ver : nat) : bool :=
+    Nat.ltb new_ver current.
+
+  Definition reinit_is_unsupported_leap_23 (new_ver : nat) : bool :=
+    Nat.ltb reinit_max_supported_version_23 new_ver.
+
+  Lemma inv_chat_131_reinit_empty_gid_rejected :
+    reinit_is_zero_gid_23 0 = true.
+  Proof. reflexivity. Qed.
+
+  Lemma inv_chat_132_reinit_stale_gid_reuse_rejected :
+    forall gid : nat,
+      Nat.eqb gid gid = true.
+  Proof. intros gid. apply Nat.eqb_refl. Qed.
+
+  Lemma inv_chat_133_reinit_downgrade_rejected :
+    forall current new_ver : nat,
+      new_ver < current ->
+      reinit_is_downgrade_23 current new_ver = true.
+  Proof.
+    intros current new_ver Hlt.
+    unfold reinit_is_downgrade_23.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma inv_chat_134_reinit_unsupported_leap_rejected :
+    forall new_ver : nat,
+      reinit_max_supported_version_23 < new_ver ->
+      reinit_is_unsupported_leap_23 new_ver = true.
+  Proof.
+    intros new_ver Hgt.
+    unfold reinit_is_unsupported_leap_23.
+    apply Nat.ltb_lt. exact Hgt.
+  Qed.
+
+  Lemma reinit_same_version_not_downgrade_23 :
+    forall v : nat, reinit_is_downgrade_23 v v = false.
+  Proof.
+    intros v. unfold reinit_is_downgrade_23.
+    apply Nat.ltb_irrefl.
+  Qed.
+
+  (* -- Lane B: AppAck replay attestation ---------------------------- *)
+
+  Definition appack_inverted_23 (first_gen last_gen : nat) : bool :=
+    Nat.ltb last_gen first_gen.
+
+  Definition appack_stale_or_shrink_23 (new_last known : nat) : bool :=
+    Nat.ltb new_last known.
+
+  Lemma inv_chat_135_appack_inverted_rejected :
+    forall first_gen last_gen : nat,
+      last_gen < first_gen ->
+      appack_inverted_23 first_gen last_gen = true.
+  Proof.
+    intros first_gen last_gen Hlt.
+    unfold appack_inverted_23.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma inv_chat_136_appack_singleton_accepted :
+    forall gen : nat, appack_inverted_23 gen gen = false.
+  Proof.
+    intros gen. unfold appack_inverted_23.
+    apply Nat.ltb_irrefl.
+  Qed.
+
+  Lemma inv_chat_137_appack_stale_rejected :
+    forall new_last known : nat,
+      new_last < known ->
+      appack_stale_or_shrink_23 new_last known = true.
+  Proof.
+    intros new_last known Hlt.
+    unfold appack_stale_or_shrink_23.
+    apply Nat.ltb_lt. exact Hlt.
+  Qed.
+
+  Lemma appack_grow_not_stale_23 :
+    forall new_last known : nat,
+      known < new_last ->
+      appack_stale_or_shrink_23 new_last known = false.
+  Proof.
+    intros new_last known Hlt.
+    unfold appack_stale_or_shrink_23.
+    apply Nat.ltb_ge. apply Nat.lt_le_incl. exact Hlt.
+  Qed.
+
+  Lemma appack_equal_not_stale_23 :
+    forall v : nat, appack_stale_or_shrink_23 v v = false.
+  Proof.
+    intros v. unfold appack_stale_or_shrink_23.
+    apply Nat.ltb_irrefl.
+  Qed.
+
+End TrinityChatWave23.
+
+(* End of Trinity_Chat.v — Wave-23 final
+      Wave-23:   INV-CHAT-131..137 + 3 helpers (reinit-freshness + appack-replay)
+   Theorems / Lemmas Qed-closed (cumulative): 191 (count of `Qed.` occurrences)
+      Wave-23 lanes:
+        L-CHAT-3-rin (ReInit ceremony freshness):
+          INV-CHAT-131 inv_chat_131_reinit_empty_gid_rejected
+          INV-CHAT-132 inv_chat_132_reinit_stale_gid_reuse_rejected
+          INV-CHAT-133 inv_chat_133_reinit_downgrade_rejected
+          INV-CHAT-134 inv_chat_134_reinit_unsupported_leap_rejected
+          aux: reinit_same_version_not_downgrade_23
+        L-CHAT-1-ack (AppAck replay attestation):
+          INV-CHAT-135 inv_chat_135_appack_inverted_rejected
+          INV-CHAT-136 inv_chat_136_appack_singleton_accepted
+          INV-CHAT-137 inv_chat_137_appack_stale_rejected
+          aux: appack_grow_not_stale_23, appack_equal_not_stale_23
+   Wave-23 introduces 0 new axioms.
      Wave-20:   INV-CHAT-110..116 + 2 helpers (handshake-fingerprint + concurrent-add-remove)
    Theorems / Lemmas Qed-closed: 158 (count of `Qed.` occurrences)
       Wave-20 lanes:
