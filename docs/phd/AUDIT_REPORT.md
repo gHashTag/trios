@@ -41,7 +41,7 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
 |---|---|---|
 | C — Golden Benchmark | `C-golden-benchmark.tex` | `app-c-acknowledgments.png` (есть в репо, не подключена) |
 | F — FPGA Bitstream | `F-fpga-bitstream.tex` | требуется новая (макет bitstream-архива) |
-| H — Zenodo DOI | `H-zenodo-doi.tex` | `app-h-zenodo-doi-registry.png` (есть в репо, не подключена) |
+| N — Zenodo DOI | `N-zenodo-doi.tex` | `app-h-zenodo-doi-registry.png` (лежит на ветке `feat/illustrations`, не в `main`; в PASS-7 R5-honest `\includegraphics` убран во избежание silent-drop в tectonic — см. `N-zenodo-doi.tex`) |
 | K — Agent Memory | `K-agent-memory.tex` | требуется новая (схема памяти 27-агентного улья) |
 | L — Pollen Channel | `L-pollen-channel.tex` | требуется новая (Pollen-канал ↔ Railway flow) |
 
