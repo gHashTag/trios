@@ -1,45 +1,38 @@
-//! `rag_search` — pure-Rust lexical RAG retrieval over the Trinity SSOT.
+//! `rag_search` — pure-Rust RAG retrieval over `ssot.embeddings`.
 //!
 //! Anchor: phi^2 + phi^-2 = 3.  Author: Дмитрий Васильев (ORCID 0009-0008-4294-6159).
 //!
-//! ## Why a separate binary
+//! ## Modes
 //!
-//! `embed_rag` writes BGE-M3 dense vectors into `ssot.embeddings`. That table
-//! requires `CREATE EXTENSION vector` and a DDL migration that the Pipedream
-//! MCP connector silently refuses to execute. Until the operator installs
-//! pgvector through the Railway UI, we expose a **lexical fallback** that:
-//!
-//!   * reads chunks from `public.strategy_queue` (status='rag_chunk'), which is
-//!     the **canonical SSOT** populated 2026-05-12 by Perplexity Computer (rows
-//!     41–90 at present);
-//!   * matches the query with ILIKE plus a simple normalised-edit score so we
-//!     keep behaviour deterministic and Coq-friendly (no hidden ML);
-//!   * never silently degrades: if `public.strategy_queue` is missing the
-//!     `rag_chunk` rows, we exit non-zero with a clear message.
+//! * **Lexical** (default) — pg_trgm + ILIKE over `chunk_text`. Deterministic,
+//!   no model weights required, available as soon as `migrate_rag` has run.
+//! * **Dense** (`--dense`) — cosine similarity over `vector(1024)` embeddings
+//!   produced by the sibling `embed_rag` binary (BGE-M3). Requires
+//!   `ssot.embeddings.embedding IS NOT NULL` for the rows in scope; otherwise
+//!   the binary tells you and exits non-zero (R5 — no silent fallback).
 //!
 //! ## R-Constitutional alignment
 //!
-//! * R1 (CROWN): Rust-only — no Python bridge.
-//! * R5 (HONEST): retrieval results are scored, never invented; empty hits stay
-//!   empty.
-//! * R6 (SSOT): the only source of truth is Railway Postgres `public.strategy_queue`.
-//! * R7 (ANCHOR): the binary echoes `phi^2 + phi^-2 = 3` in `--version` output
-//!   so the anchor lives next to the executable, not only in docs.
+//! * R1 (CROWN) — Rust only.
+//! * R5 (HONEST) — explicit errors when the SSOT is empty or unembedded.
+//! * R6 (SSOT) — only reads from `ssot.embeddings`; no side caches.
+//! * R7 (ANCHOR) — `phi^2 + phi^-2 = 3` echoed in help and JSON output.
 //!
 //! ## Usage
 //!
 //! ```bash
 //! export DATABASE_URL="$RAILWAY_SSOT_URL"
+//! # lexical (no model):
 //! cargo run -p trios-phd --features rag --release --bin rag_search -- \
 //!     --query "phi^2 + phi^-2 = 3" --limit 5
+//! # dense (BGE-M3 embeddings; embed_rag must have populated the column):
+//! cargo run -p trios-phd --features rag --release --bin rag_search -- \
+//!     --query "trit exhaustive" --dense --limit 10 --kind chapter --json
 //! ```
-//!
-//! Once `CREATE EXTENSION vector;` is applied and `ssot.embeddings` populated,
-//! a follow-up commit will add a `--dense` flag that switches to cosine
-//! similarity over BGE-M3. The lexical path remains as a fallback.
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 use serde::Serialize;
 use std::env;
 use tokio_postgres::NoTls;
@@ -49,142 +42,206 @@ const ANCHOR: &str = "phi^2 + phi^-2 = 3";
 #[derive(Parser, Debug)]
 #[command(
     author = "Dmitrii Vasilev <ORCID 0009-0008-4294-6159>",
-    about = "Lexical RAG retrieval over public.strategy_queue (status='rag_chunk').",
-    long_about = "Fallback path while pgvector is not yet installed. \
-                  Anchor: phi^2 + phi^-2 = 3."
+    about = "RAG retrieval over ssot.embeddings (lexical or dense BGE-M3).",
+    long_about = "Anchor: phi^2 + phi^-2 = 3"
 )]
 struct Cli {
-    /// PostgreSQL connection string. Falls back to DATABASE_URL.
-    #[arg(long)]
-    database_url: Option<String>,
-
-    /// Free-text query string.
+    /// Free-text query.
     #[arg(long, short = 'q')]
     query: String,
 
-    /// Max number of hits to return.
-    #[arg(long, default_value_t = 5)]
-    limit: i64,
+    /// Use dense (cosine over BGE-M3 vector(1024)) retrieval.
+    #[arg(long, default_value_t = false)]
+    dense: bool,
 
-    /// Restrict to a particular chapter kind (frontmatter, chapter, appendix).
+    /// Restrict to a chunk kind.
     #[arg(long)]
     kind: Option<String>,
 
-    /// Emit JSON instead of human-readable table.
+    /// Max hits.
+    #[arg(long, default_value_t = 5)]
+    limit: i64,
+
+    /// JSON output.
     #[arg(long, default_value_t = false)]
     json: bool,
+
+    /// Override DATABASE_URL.
+    #[arg(long)]
+    database_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 struct Hit {
     id: i64,
-    canon_name: String,
-    file: String,
-    kind: String,
+    chapter_slug: String,
+    chunk_index: i32,
+    chunk_kind: String,
     preview: String,
+    score: f64,
+}
+
+fn validate_kind(k: &str) -> Result<&str> {
+    match k {
+        "frontmatter" | "chapter" | "appendix" => Ok(k),
+        other => Err(anyhow!("--kind must be frontmatter|chapter|appendix, got `{other}`")),
+    }
+}
+
+fn format_pg_vector(v: &[f32]) -> String {
+    let mut s = String::with_capacity(v.len() * 8 + 2);
+    s.push('[');
+    for (i, x) in v.iter().enumerate() {
+        if i > 0 {
+            s.push(',');
+        }
+        s.push_str(&format!("{:.6}", x));
+    }
+    s.push(']');
+    s
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let database_url = cli
+    if cli.query.trim().is_empty() {
+        return Err(anyhow!("--query must be non-empty"));
+    }
+
+    let dsn = cli
         .database_url
         .clone()
         .or_else(|| env::var("DATABASE_URL").ok())
         .ok_or_else(|| anyhow!("--database-url or DATABASE_URL is required"))?;
 
-    if cli.query.trim().is_empty() {
-        return Err(anyhow!("--query must be non-empty"));
-    }
-
-    eprintln!("[rag_search] connecting to Railway Postgres (anchor: {ANCHOR})");
-    let (db, conn) = tokio_postgres::connect(&database_url, NoTls)
+    eprintln!("[rag_search] anchor: {ANCHOR}");
+    let (db, conn) = tokio_postgres::connect(&dsn, NoTls)
         .await
-        .with_context(|| "connect to DATABASE_URL")?;
+        .context("connect to DATABASE_URL")?;
     tokio::spawn(async move {
         if let Err(e) = conn.await {
             eprintln!("[rag_search] postgres connection error: {e}");
         }
     });
 
-    // Sanity-check: the canonical SSOT must contain RAG chunks.
-    let total_row = db
-        .query_one(
-            "SELECT COUNT(*)::int8 AS n FROM public.strategy_queue \
-             WHERE status='rag_chunk'",
-            &[],
-        )
+    let row = db
+        .query_one("SELECT total_chunks::int8, embedded_chunks::int8 FROM ssot.rag_status", &[])
         .await
-        .with_context(|| "count rag_chunk rows")?;
-    let total: i64 = total_row.get("n");
+        .context("read ssot.rag_status (did you run migrate_rag?)")?;
+    let total: i64 = row.get(0);
+    let embedded: i64 = row.get(1);
     if total == 0 {
         return Err(anyhow!(
-            "public.strategy_queue has zero rows with status='rag_chunk' — \
-             SSOT is empty. Run the ingestion pipeline first."
+            "ssot.embeddings is empty — run `ingest_rag_chunks` first"
         ));
     }
-    eprintln!("[rag_search] SSOT inventory: {total} rag_chunk rows available");
+    eprintln!("[ssot] total={total} embedded={embedded}");
 
-    // Build the SQL. We pass the query as a positional parameter so the
-    // database driver handles escaping; we add a `length(text)` tie-breaker so
-    // shorter, denser matches surface first.
-    let pattern = format!("%{}%", cli.query);
-    let mut sql = String::from(
-        "SELECT id, canon_name, \
-                COALESCE(config->>'file', '?') AS file, \
-                COALESCE(config->>'kind', 'unknown') AS kind, \
-                substring(config->>'text', 1, 320) AS preview \
-         FROM public.strategy_queue \
-         WHERE status='rag_chunk' \
-           AND config->>'text' ILIKE $1",
-    );
-    if let Some(ref k) = cli.kind {
-        // Whitelist the kind values to avoid any injection foothold.
-        let safe = match k.as_str() {
-            "frontmatter" | "chapter" | "appendix" => k.as_str(),
-            other => return Err(anyhow!("--kind must be frontmatter|chapter|appendix, got `{other}`")),
-        };
-        sql.push_str(&format!(" AND config->>'kind' = '{safe}'"));
-    }
-    sql.push_str(" ORDER BY length(config->>'text') ASC, id ASC LIMIT $2");
+    let hits: Vec<Hit> = if cli.dense {
+        if embedded == 0 {
+            return Err(anyhow!(
+                "ssot.embeddings.embedding is NULL for all rows — run `embed_rag` first"
+            ));
+        }
+        let cache = env::var("FASTEMBED_CACHE").unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+            format!("{home}/.cache/fastembed")
+        });
+        std::fs::create_dir_all(&cache).ok();
+        let opts = InitOptions::new(EmbeddingModel::BGEM3)
+            .with_cache_dir(cache.into())
+            .with_show_download_progress(false);
+        let mut model = TextEmbedding::try_new(opts).context("load BGE-M3 for query embedding")?;
+        let qv = model
+            .embed(vec![cli.query.clone()], None)
+            .context("embed query")?
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("BGE-M3 returned no embedding"))?;
+        if qv.len() != 1024 {
+            return Err(anyhow!("BGE-M3 returned dim {} (expected 1024)", qv.len()));
+        }
+        let qv_pg = format_pg_vector(&qv);
 
-    let rows = db
-        .query(&sql, &[&pattern, &cli.limit])
-        .await
-        .with_context(|| "execute lexical retrieval")?;
-
-    let hits: Vec<Hit> = rows
-        .iter()
-        .map(|r| Hit {
-            id: r.get::<_, i64>("id"),
-            canon_name: r.get::<_, String>("canon_name"),
-            file: r.get::<_, String>("file"),
-            kind: r.get::<_, String>("kind"),
-            preview: r.get::<_, Option<String>>("preview").unwrap_or_default(),
-        })
-        .collect();
+        let mut sql = String::from(
+            "SELECT id, chapter_slug, chunk_index, chunk_kind, \
+                    substring(chunk_text, 1, 320) AS preview, \
+                    1.0 - (embedding <=> ($1::text)::vector) AS score \
+             FROM ssot.embeddings \
+             WHERE embedding IS NOT NULL",
+        );
+        if let Some(ref k) = cli.kind {
+            let safe = validate_kind(k)?;
+            sql.push_str(&format!(" AND chunk_kind = '{safe}'"));
+        }
+        sql.push_str(" ORDER BY embedding <=> ($1::text)::vector ASC LIMIT $2");
+        let rows = db.query(&sql, &[&qv_pg, &cli.limit]).await?;
+        rows.iter()
+            .map(|r| Hit {
+                id: r.get::<_, i64>("id"),
+                chapter_slug: r.get::<_, String>("chapter_slug"),
+                chunk_index: r.get::<_, i32>("chunk_index"),
+                chunk_kind: r.get::<_, String>("chunk_kind"),
+                preview: r.get::<_, Option<String>>("preview").unwrap_or_default(),
+                score: r.get::<_, f64>("score"),
+            })
+            .collect()
+    } else {
+        // Lexical via pg_trgm similarity, fallback to ILIKE substring score.
+        let pattern = format!("%{}%", cli.query);
+        let mut sql = String::from(
+            "SELECT id, chapter_slug, chunk_index, chunk_kind, \
+                    substring(chunk_text, 1, 320) AS preview, \
+                    similarity(chunk_text, $2)::float8 AS score \
+             FROM ssot.embeddings \
+             WHERE chunk_text ILIKE $1",
+        );
+        if let Some(ref k) = cli.kind {
+            let safe = validate_kind(k)?;
+            sql.push_str(&format!(" AND chunk_kind = '{safe}'"));
+        }
+        sql.push_str(" ORDER BY score DESC, length(chunk_text) ASC LIMIT $3");
+        let rows = db.query(&sql, &[&pattern, &cli.query, &cli.limit]).await?;
+        rows.iter()
+            .map(|r| Hit {
+                id: r.get::<_, i64>("id"),
+                chapter_slug: r.get::<_, String>("chapter_slug"),
+                chunk_index: r.get::<_, i32>("chunk_index"),
+                chunk_kind: r.get::<_, String>("chunk_kind"),
+                preview: r.get::<_, Option<String>>("preview").unwrap_or_default(),
+                score: r.get::<_, f64>("score"),
+            })
+            .collect()
+    };
 
     if cli.json {
         let payload = serde_json::json!({
             "anchor": ANCHOR,
             "query": cli.query,
+            "mode": if cli.dense { "dense_bge_m3" } else { "lexical_pg_trgm" },
             "limit": cli.limit,
-            "total_chunks_in_ssot": total,
+            "total_chunks": total,
+            "embedded_chunks": embedded,
             "hits": hits,
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
     } else {
         println!("# rag_search — anchor {ANCHOR}");
-        println!("# query: {}", cli.query);
-        println!("# hits: {}/{}", hits.len(), total);
+        println!(
+            "# query: {}  mode: {}",
+            cli.query,
+            if cli.dense { "dense (BGE-M3)" } else { "lexical (pg_trgm)" }
+        );
+        println!("# hits: {}/{}  (embedded {} of {})", hits.len(), cli.limit, embedded, total);
         for (i, h) in hits.iter().enumerate() {
             println!(
-                "\n[{}] id={}  canon={}\n     file={}  kind={}\n     {}",
+                "\n[{}] id={}  {}#{:03}  kind={}  score={:.4}\n     {}",
                 i + 1,
                 h.id,
-                h.canon_name,
-                h.file,
-                h.kind,
+                h.chapter_slug,
+                h.chunk_index,
+                h.chunk_kind,
+                h.score,
                 h.preview.replace('\n', " ")
             );
         }

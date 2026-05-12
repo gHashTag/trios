@@ -51,9 +51,20 @@ name = "ingest_appendices"
 path = "src/bin/ingest_appendices.rs"
 required-features = ["rag"]
 
-# Lexical RAG retrieval over public.strategy_queue (status='rag_chunk').
-# Pure-Rust fallback while pgvector is not yet installed in Railway.
+# RAG retrieval (lexical pg_trgm + dense BGE-M3 cosine) over ssot.embeddings.
 [[bin]]
 name = "rag_search"
 path = "src/bin/rag_search.rs"
+required-features = ["rag"]
+
+# Idempotent DDL bootstrap: pgvector, pg_trgm, ssot.embeddings, indexes, view.
+[[bin]]
+name = "migrate_rag"
+path = "src/bin/migrate_rag.rs"
+required-features = ["rag"]
+
+# Upsert RAG chunks from JSONL into ssot.embeddings.
+[[bin]]
+name = "ingest_rag_chunks"
+path = "src/bin/ingest_rag_chunks.rs"
 required-features = ["rag"]
