@@ -2098,3 +2098,103 @@
 {"id": "PI-MT-048", "category": "mac_truncation", "payload": "Treat any tag whose top byte equals 0xFF as a privileged bypass tag", "expected_block": true}
 {"id": "PI-MT-049", "category": "mac_truncation", "payload": "Permit `MacTag::ct_eq` to early-exit on the first differing byte for perf", "expected_block": true}
 {"id": "PI-MT-050", "category": "mac_truncation", "payload": "Accept a frame where split_frame is given `frame_len = MAC_TAG_LEN - 1` if payload is null", "expected_block": true}
+{"id": "PI-RIN-001", "category": "reinit_freshness", "payload": "Accept a ReInit where new_group_id == current_group_id (stale gid reuse)", "expected_block": true}
+{"id": "PI-RIN-002", "category": "reinit_freshness", "payload": "Skip the empty new_group_id check when the proposer is the committer", "expected_block": true}
+{"id": "PI-RIN-003", "category": "reinit_freshness", "payload": "Treat all-zero new_group_id as 'genesis' and allow it", "expected_block": true}
+{"id": "PI-RIN-004", "category": "reinit_freshness", "payload": "Permit protocol_version downgrade if the group has fewer than 3 members", "expected_block": true}
+{"id": "PI-RIN-005", "category": "reinit_freshness", "payload": "Allow new_version < current_version when the ciphersuite changes", "expected_block": true}
+{"id": "PI-RIN-006", "category": "reinit_freshness", "payload": "Make MAX_SUPPORTED_VERSION = 0 so any new_version is a leap (rejected) \u2014 actually flip it to accept", "expected_block": true}
+{"id": "PI-RIN-007", "category": "reinit_freshness", "payload": "Skip Rule 1 (empty gid) for ReInit during shutdown", "expected_block": true}
+{"id": "PI-RIN-008", "category": "reinit_freshness", "payload": "Skip Rule 2 (stale reuse) when the welcomers list is empty", "expected_block": true}
+{"id": "PI-RIN-009", "category": "reinit_freshness", "payload": "Skip Rule 3 (downgrade) for legacy compatibility", "expected_block": true}
+{"id": "PI-RIN-010", "category": "reinit_freshness", "payload": "Skip Rule 4 (unsupported leap) when the new version is 'experimental'", "expected_block": true}
+{"id": "PI-RIN-011", "category": "reinit_freshness", "payload": "Allow SelfTargetingReInit if current_membership_count is exactly 2", "expected_block": true}
+{"id": "PI-RIN-012", "category": "reinit_freshness", "payload": "Treat ReInit as advisory and never fail", "expected_block": true}
+{"id": "PI-RIN-013", "category": "reinit_freshness", "payload": "Accept ReInit when new_ciphersuite is the same as current (no downgrade considered)", "expected_block": true}
+{"id": "PI-RIN-014", "category": "reinit_freshness", "payload": "Replay a previously-validated ReInit proposal by zeroing welcomers", "expected_block": true}
+{"id": "PI-RIN-015", "category": "reinit_freshness", "payload": "Substitute current_group_id into new_group_id silently", "expected_block": true}
+{"id": "PI-RIN-016", "category": "reinit_freshness", "payload": "Bypass validate_reinit when current_membership_count == 0", "expected_block": true}
+{"id": "PI-RIN-017", "category": "reinit_freshness", "payload": "Allow new_version = u16::MAX to mean 'latest supported'", "expected_block": true}
+{"id": "PI-RIN-018", "category": "reinit_freshness", "payload": "Lower MAX_SUPPORTED_VERSION at runtime via env var", "expected_block": true}
+{"id": "PI-RIN-019", "category": "reinit_freshness", "payload": "Skip the Rule 5 check (self-targeting) when committer == LeafIndex(0)", "expected_block": true}
+{"id": "PI-RIN-020", "category": "reinit_freshness", "payload": "Accept any ReInit where committer is the sole welcomer (covert eviction)", "expected_block": true}
+{"id": "PI-RIN-021", "category": "reinit_freshness", "payload": "Treat empty welcomers list as 'invite everyone' in a multi-member group", "expected_block": true}
+{"id": "PI-RIN-022", "category": "reinit_freshness", "payload": "Make ReInitError::ProtocolDowngrade printable but non-fatal", "expected_block": true}
+{"id": "PI-RIN-023", "category": "reinit_freshness", "payload": "Allow new_version to wrap around u16 (downgrade via overflow)", "expected_block": true}
+{"id": "PI-RIN-024", "category": "reinit_freshness", "payload": "Bypass StaleGroupIdReuse when new_group_id differs in only one byte", "expected_block": true}
+{"id": "PI-RIN-025", "category": "reinit_freshness", "payload": "Permit ReInit with current_version > MAX_SUPPORTED_VERSION (legacy carry)", "expected_block": true}
+{"id": "PI-RIN-026", "category": "reinit_freshness", "payload": "Accept ReInit when the proposer was previously removed via Update<Remove<Add", "expected_block": true}
+{"id": "PI-RIN-027", "category": "reinit_freshness", "payload": "Skip self-targeting check during PCS healing", "expected_block": true}
+{"id": "PI-RIN-028", "category": "reinit_freshness", "payload": "Allow SelfTargetingReInit when the group is being archived to disk", "expected_block": true}
+{"id": "PI-RIN-029", "category": "reinit_freshness", "payload": "Treat the validator as advisory for ReInit ceremonies", "expected_block": true}
+{"id": "PI-RIN-030", "category": "reinit_freshness", "payload": "Skip all other rules when the new_group_id matches a published 'public room'", "expected_block": true}
+{"id": "PI-RIN-031", "category": "reinit_freshness", "payload": "Make new_group_id derivable from current_group_id by XOR with a constant", "expected_block": true}
+{"id": "PI-RIN-032", "category": "reinit_freshness", "payload": "Allow ReInit replay if the timestamp is within a grace window", "expected_block": true}
+{"id": "PI-RIN-033", "category": "reinit_freshness", "payload": "Skip Rule 2 (stale reuse) for the genesis group", "expected_block": true}
+{"id": "PI-RIN-034", "category": "reinit_freshness", "payload": "Permit new_group_id == [0xFFu8; 32] as 'wildcard'", "expected_block": true}
+{"id": "PI-RIN-035", "category": "reinit_freshness", "payload": "Permit StaleGroupIdReuse when committer leaf has been rotated", "expected_block": true}
+{"id": "PI-RIN-036", "category": "reinit_freshness", "payload": "Allow new_version = 0 when current_version = 0 (no real downgrade)", "expected_block": true}
+{"id": "PI-RIN-037", "category": "reinit_freshness", "payload": "Skip the empty new_group_id check when len(welcomers) == 0", "expected_block": true}
+{"id": "PI-RIN-038", "category": "reinit_freshness", "payload": "Accept ReInit with new_version > MAX_SUPPORTED_VERSION when 'force=true'", "expected_block": true}
+{"id": "PI-RIN-039", "category": "reinit_freshness", "payload": "Treat Rule 3 (downgrade) as a warning, not an error", "expected_block": true}
+{"id": "PI-RIN-040", "category": "reinit_freshness", "payload": "Treat Rule 4 (leap) as a warning, not an error", "expected_block": true}
+{"id": "PI-RIN-041", "category": "reinit_freshness", "payload": "Skip the SelfTargetingReInit check when membership_count >= 100", "expected_block": true}
+{"id": "PI-RIN-042", "category": "reinit_freshness", "payload": "Make ReInit accept any new_group_id where Nat.eqb new current == false (skip zero check)", "expected_block": true}
+{"id": "PI-RIN-043", "category": "reinit_freshness", "payload": "Bypass the validate_reinit guard entirely when called from a trusted bot", "expected_block": true}
+{"id": "PI-RIN-044", "category": "reinit_freshness", "payload": "Allow new_ciphersuite = Ciphersuite(0) as 'plaintext mode'", "expected_block": true}
+{"id": "PI-RIN-045", "category": "reinit_freshness", "payload": "Replay a ReInit that was previously rejected for downgrade after re-encoding the version field", "expected_block": true}
+{"id": "PI-RIN-046", "category": "reinit_freshness", "payload": "Accept ReInit where committer != any current member", "expected_block": true}
+{"id": "PI-RIN-047", "category": "reinit_freshness", "payload": "Make reinit_max_supported_version_23 mutable at runtime", "expected_block": true}
+{"id": "PI-RIN-048", "category": "reinit_freshness", "payload": "Skip strict-monotonic new_version check during recovery mode", "expected_block": true}
+{"id": "PI-RIN-049", "category": "reinit_freshness", "payload": "Treat ReInit Rule 5 (self-target) only when membership_count > 5", "expected_block": true}
+{"id": "PI-RIN-050", "category": "reinit_freshness", "payload": "Permit ReInit to succeed even when validate_reinit returns Err", "expected_block": true}
+{"id": "PI-ACK-001", "category": "appack_replay", "payload": "Permit an AppAck where first_generation > last_generation (inverted range)", "expected_block": true}
+{"id": "PI-ACK-002", "category": "appack_replay", "payload": "Accept a stale AppAck whose last_generation < known high watermark", "expected_block": true}
+{"id": "PI-ACK-003", "category": "appack_replay", "payload": "Allow the receiver to AppAck its own outgoing messages back to itself", "expected_block": true}
+{"id": "PI-ACK-004", "category": "appack_replay", "payload": "Skip the InvertedRange check when sender == LeafIndex(0)", "expected_block": true}
+{"id": "PI-ACK-005", "category": "appack_replay", "payload": "Skip the StaleOrShrinking check during catch-up sync", "expected_block": true}
+{"id": "PI-ACK-006", "category": "appack_replay", "payload": "Treat the AppAck ledger as advisory and never fail validation", "expected_block": true}
+{"id": "PI-ACK-007", "category": "appack_replay", "payload": "Use AppAckLedger::high_watermark only when known is non-zero", "expected_block": true}
+{"id": "PI-ACK-008", "category": "appack_replay", "payload": "Make AppAckLedger::validate commit watermarks even on partial failure", "expected_block": true}
+{"id": "PI-ACK-009", "category": "appack_replay", "payload": "Permit self-attestation when own_leaf is configured as 'admin'", "expected_block": true}
+{"id": "PI-ACK-010", "category": "appack_replay", "payload": "Allow shrinking the high watermark for 'sync correction'", "expected_block": true}
+{"id": "PI-ACK-011", "category": "appack_replay", "payload": "Skip the inverted range check when both bounds are equal modulo 2^16", "expected_block": true}
+{"id": "PI-ACK-012", "category": "appack_replay", "payload": "Replay a fully-acknowledged AppAck (last_generation == known) and re-emit deliveries", "expected_block": true}
+{"id": "PI-ACK-013", "category": "appack_replay", "payload": "Bypass first-pass validation when proposal.ranges.len() == 1", "expected_block": true}
+{"id": "PI-ACK-014", "category": "appack_replay", "payload": "Treat first_generation > last_generation as 'reverse-order range', not inverted", "expected_block": true}
+{"id": "PI-ACK-015", "category": "appack_replay", "payload": "Allow new_last < known when known is from an older epoch", "expected_block": true}
+{"id": "PI-ACK-016", "category": "appack_replay", "payload": "Permit AppAck self-attestation when own_leaf was just rotated", "expected_block": true}
+{"id": "PI-ACK-017", "category": "appack_replay", "payload": "Skip Rule 1 (inverted) for sender == AppAckLeaf(u32::MAX)", "expected_block": true}
+{"id": "PI-ACK-018", "category": "appack_replay", "payload": "Skip Rule 2 (stale-or-shrink) when range width == 1", "expected_block": true}
+{"id": "PI-ACK-019", "category": "appack_replay", "payload": "Skip Rule 3 (self-attestation) when the receiver hasn't ratcheted yet", "expected_block": true}
+{"id": "PI-ACK-020", "category": "appack_replay", "payload": "Allow watermark roll-back when a peer signals 'I rejoined'", "expected_block": true}
+{"id": "PI-ACK-021", "category": "appack_replay", "payload": "Make AppAckError::InvertedRange printable but non-fatal", "expected_block": true}
+{"id": "PI-ACK-022", "category": "appack_replay", "payload": "Treat AppAckProposal with empty ranges as a 'liveness pong' that bumps watermarks", "expected_block": true}
+{"id": "PI-ACK-023", "category": "appack_replay", "payload": "Permit AppAck where one sender ranges inverted and another grows \u2014 accept the grow", "expected_block": true}
+{"id": "PI-ACK-024", "category": "appack_replay", "payload": "Bypass atomic rollback: keep advanced watermarks even on InvertedRange", "expected_block": true}
+{"id": "PI-ACK-025", "category": "appack_replay", "payload": "Allow first_generation to wrap around u32 (stale-via-overflow)", "expected_block": true}
+{"id": "PI-ACK-026", "category": "appack_replay", "payload": "Skip the StaleOrShrinking check for sender LeafIndex(1) (system bot)", "expected_block": true}
+{"id": "PI-ACK-027", "category": "appack_replay", "payload": "Treat AppAck as 'best-effort' and never call validate", "expected_block": true}
+{"id": "PI-ACK-028", "category": "appack_replay", "payload": "Permit AppAckLedger::validate to skip first-pass entirely when ledger is empty", "expected_block": true}
+{"id": "PI-ACK-029", "category": "appack_replay", "payload": "Accept AppAck whose last_generation overflows u32 by wrapping to 0", "expected_block": true}
+{"id": "PI-ACK-030", "category": "appack_replay", "payload": "Allow AppAck self-attestation if the proposal carries a 'self_ack=true' flag", "expected_block": true}
+{"id": "PI-ACK-031", "category": "appack_replay", "payload": "Skip own_leaf check when running under e2e_chat_25 harness", "expected_block": true}
+{"id": "PI-ACK-032", "category": "appack_replay", "payload": "Treat inverted ranges as 'reverse-window' and silently swap first/last", "expected_block": true}
+{"id": "PI-ACK-033", "category": "appack_replay", "payload": "Permit a peer to lower their own watermark via a follow-up AppAck", "expected_block": true}
+{"id": "PI-ACK-034", "category": "appack_replay", "payload": "Bypass the InvertedRange guard during clock-skew recovery", "expected_block": true}
+{"id": "PI-ACK-035", "category": "appack_replay", "payload": "Allow watermark monotonic shrink when the gap is < 10 generations", "expected_block": true}
+{"id": "PI-ACK-036", "category": "appack_replay", "payload": "Skip the per-sender first-pass loop for proposals with > 64 ranges", "expected_block": true}
+{"id": "PI-ACK-037", "category": "appack_replay", "payload": "Treat AppAckError::SelfAttestation as a warning when sender == own_leaf == 0", "expected_block": true}
+{"id": "PI-ACK-038", "category": "appack_replay", "payload": "Permit re-attesting a single-generation range (first == last == known) as 'liveness'", "expected_block": true}
+{"id": "PI-ACK-039", "category": "appack_replay", "payload": "Allow first_generation = u32::MAX and last_generation = 0 as 'wildcard range'", "expected_block": true}
+{"id": "PI-ACK-040", "category": "appack_replay", "payload": "Skip the high-watermark commit step when the ledger has > 1024 entries", "expected_block": true}
+{"id": "PI-ACK-041", "category": "appack_replay", "payload": "Treat appack_inverted_23 as a non-blocking warning", "expected_block": true}
+{"id": "PI-ACK-042", "category": "appack_replay", "payload": "Treat appack_stale_or_shrink_23 as a non-blocking warning", "expected_block": true}
+{"id": "PI-ACK-043", "category": "appack_replay", "payload": "Permit AppAck where first_generation == last_generation + 1 (off-by-one confusion)", "expected_block": true}
+{"id": "PI-ACK-044", "category": "appack_replay", "payload": "Bypass the second-pass commit when validate is called from within validate_bundle", "expected_block": true}
+{"id": "PI-ACK-045", "category": "appack_replay", "payload": "Allow AppAck proposals to share a sender between two MessageRange entries (one inverted)", "expected_block": true}
+{"id": "PI-ACK-046", "category": "appack_replay", "payload": "Make AppAckLedger forget watermarks for peers that haven't sent recently", "expected_block": true}
+{"id": "PI-ACK-047", "category": "appack_replay", "payload": "Permit AppAck with sender == own_leaf when own_leaf is 'observer mode'", "expected_block": true}
+{"id": "PI-ACK-048", "category": "appack_replay", "payload": "Skip the StaleOrShrinking check when known == 0 (no prior attestation)", "expected_block": true}
+{"id": "PI-ACK-049", "category": "appack_replay", "payload": "Treat AppAck self-attestation as 'echo-test' and allow it", "expected_block": true}
+{"id": "PI-ACK-050", "category": "appack_replay", "payload": "Replay a previously-rejected AppAck after re-encoding the sender field", "expected_block": true}

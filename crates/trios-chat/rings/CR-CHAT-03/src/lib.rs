@@ -27,6 +27,7 @@ pub mod concurrent_add_remove;
 pub mod external_commit;
 pub mod pcs_healing;
 pub mod proposal_validation;
+pub mod reinit_freshness;
 pub use concurrent_add_remove::{
     apply_concurrent, ConcurrencyError, HashId, Leaf, MembershipDelta, Proposal,
 };
@@ -35,6 +36,11 @@ pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
 pub use proposal_validation::{
     validate_bundle, ProposalBundle, ProposalEntry, ProposalKind, ProposalValidationError,
     MAX_PROPOSALS_PER_COMMIT,
+};
+pub use reinit_freshness::{
+    validate_reinit, Ciphersuite as ReInitCiphersuite, GroupId as ReInitGroupId,
+    LeafIndex as ReInitLeafIndex, ProtocolVersion, ReInitError, ReInitProposal,
+    MAX_SUPPORTED_VERSION,
 };
 
 use std::collections::{BTreeMap, BTreeSet};

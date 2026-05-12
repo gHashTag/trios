@@ -26,6 +26,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod appack_replay;
 pub mod handshake_fingerprint;
 pub mod identity;
 pub mod kem;
@@ -33,6 +34,10 @@ pub mod kem_decap_oracle;
 pub mod otpk;
 pub mod revocation;
 pub mod sealed;
+
+pub use appack_replay::{
+    AppAckError, AppAckLeaf, AppAckLedger, AppAckProposal, Generation, MessageRange,
+};
 
 pub use handshake_fingerprint::{
     HandshakeError, HandshakeFingerprint, HSF_DOMAIN, HSF_LEN,
