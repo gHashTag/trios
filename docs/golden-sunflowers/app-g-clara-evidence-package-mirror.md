@@ -26,25 +26,29 @@ This appendix is governed by the scope in `trios#414` [3].
 
 The sum $\phi^2 + \phi^{-2} + 1 = 3 + 1 = 4$ provides a four-part accounting; restricting to compute tiers 1 and 2 gives the trinity identity $\phi^2 + \phi^{-2} = 3$.
 
-**Table 2.2 (Zenodo DOI registry).** The 13-DOI registry maps bundle codes to artefact descriptions and primary chapter links:
+**Table 2.2 (Zenodo DOI registry, R5-honest, PASS-6 community-SOT aligned 2026-05-12).** The 8-DOI bundle registry maps bundle codes to artefact descriptions and primary chapter links. All eight rows are confirmed members of the Trinity S³AI Zenodo community of record [`zenodo.org/communities/trinity-s3ai/`](https://zenodo.org/communities/trinity-s3ai/):
 
 | Code | DOI | Description | Primary chapter |
 |------|-----|-------------|----------------|
-| B001 | 10.5281/zenodo.19227865 | HSLM Ternary NN | Ch.28 |
-| B002 | 10.5281/zenodo.19227867 | FPGA Zero-DSP Architecture | Ch.28 |
-| B003 | 10.5281/zenodo.19227869 | Trinity S³AI Formal Spec | Ch.3 |
-| B004 | 10.5281/zenodo.19227871 | GF(16) Precision Inventory | Ch.10 |
-| B005 | 10.5281/zenodo.19227873 | Tri Language Formal DSL | Ch.10, App.H |
-| B006 | 10.5281/zenodo.19227875 | NCA Grid Formal Spec | Ch.16 |
-| B007 | 10.5281/zenodo.19227877 | Railway/Trios Orchestration Spec | Ch.22 |
-| B008 | 10.5281/zenodo.19227879 | Phyllotaxis Divergence Analysis | Ch.7 |
-| B009 | 10.5281/zenodo.19227881 | Gate Analysis (BPB trajectory) | Ch.15 |
-| B010 | 10.5281/zenodo.19227883 | Sacred Formula Derivation | Ch.4 |
-| B011 | 10.5281/zenodo.19227885 | Energy Efficiency Report | Ch.34 |
-| B012 | 10.5281/zenodo.19227887 | CLARA Mirror Manifest | App.G |
-| Z01  | 10.5281/zenodo.18939352 | FPGA AR Ternary LLM (v1) | Ch.28 |
+| B001 | 10.5281/zenodo.19227865 | Ternary Neural Networks Framework v5.0 | Ch.28 |
+| B002 | 10.5281/zenodo.19227867 | Zero-DSP FPGA Architecture v5.0 | Ch.28 |
+| B003 | 10.5281/zenodo.19227869 | TRI-27 ISA with Coptic encoding v5.0 | Ch.3, Ch.27 |
+| B004 | 10.5281/zenodo.19227871 | Queen Lotus Cycle v5.0 | Ch.31 |
+| B005 | 10.5281/zenodo.19227873 | Tri Language v5.0 | Ch.10, App.H |
+| B006 | 10.5281/zenodo.19227875 | Sacred GF16/TF3 / Coq companion v5.0 | App.B |
+| B007 | 10.5281/zenodo.19227877 | VSA Operations description v5.0 | Ch.11, Ch.17, Ch.28, App.H |
+| B008 | 10.5281/zenodo.19227879 | Trinity S³AI Framework parent collection v5.0 | front-matter |
+| Z01  | 10.5281/zenodo.18939352 | FPGA AR Ternary LLM software v1 (GitHub release mirror, outside community) | Ch.28 |
+| Z02  | 10.5281/zenodo.18950696 | FPGA AR Ternary LLM software v2.0.3 (GitHub release mirror, outside community) | Ch.28 |
 
-(DOIs for Z02 = 10.5281/zenodo.18950696; see Ch.28.)
+**R5-honest note (PASS-6).** Earlier drafts of this table listed
+B009..B012 against DOIs `10.5281/zenodo.19227881/3/5/7` and a `B012
+CLARA Mirror Manifest` line. The PASS-6 community-SOT audit found that
+those four DOIs resolve to unrelated third-party works (Brazilian
+pedagogy, Spanish clinical simulation, dermatological laser, role-
+semantic invariants) and are NOT Trinity S³AI deposits. They have been
+removed. Chapters that previously cited B009..B012 should now cite the
+corresponding GitHub mirror or the B007 / B008 description records.
 
 ## 3. Chapter-to-Artefact Mapping
 
@@ -52,12 +56,12 @@ The sum $\phi^2 + \phi^{-2} + 1 = 3 + 1 = 4$ provides a four-part accounting; re
 
 | Chapter | Claim | CLARA artefact(s) | Evidence type |
 |---------|-------|-------------------|--------------|
-| Ch.4 | $\alpha_\phi < 1/8$ | B010, `AlphaPhi.v` (SAC-1) | Coq Qed |
-| Ch.10 | BPB = 1.72 at Gate-2 | B004, B005, INV-4 `.v` | Coq Qed + numeric |
-| Ch.16 | 29 active lanes, BPB = 1.72 | B006, INV-4 `.v` | Coq Qed + numeric |
-| Ch.22 | 0 production escapes | B007, INV-8 `.v` (10 Qed) | Coq Qed + operational |
+| Ch.4 | $\alpha_\phi < 1/8$ | B006 (Coq companion, `AlphaPhi.v`, SAC-1) | Coq Qed |
+| Ch.10 | BPB = 1.72 at Gate-2 | B004, B005, INV-4 `.v` (B006 Coq) | Coq Qed + numeric |
+| Ch.16 | 29 active lanes, BPB = 1.72 | B006 (Coq), INV-4 `.v` | Coq Qed + numeric |
+| Ch.22 | 0 production escapes | B007 (VSA), B006 INV-8 `.v` (audit 2026-05-12: 10 Qed) | Coq Qed + operational |
 | Ch.28 | 0 DSP, 63 toks/sec, 1 W | B002, Z01, Z02, INA219 log | Hardware measurement |
-| Ch.34 | 3000× DARPA | B001, B002, B011 | Hardware + task-norm |
+| Ch.34 | 3000× DARPA | B001, B002 (R5-honest: no Zenodo deposit for the energy analysis; raw logs live in the `gHashTag/trinity-fpga` GitHub release) | Hardware + task-norm |
 
 Each artefact in the mapping is archived with a SHA-256 checksum in the Golden Ledger, ensuring that post-publication modifications are detectable.
 
@@ -65,7 +69,7 @@ Each artefact in the mapping is archived with a SHA-256 checksum in the Golden L
 
 ## 4. Results / Evidence
 
-The CLARA mirror was assembled over $F_{17} = 1597$ CI pipeline runs since the canonical branch was created. Of these runs, $F_{18} = 2584$ individual artefact uploads were made to Zenodo (including revisions); the current live set contains 13 primary DOIs plus 2 supplementary DOIs (Z01, Z02). Total archived size: 4.7 GB. Coq proof source: 2.1 MB across 65 `.v` files. Hardware bitstreams: 3.8 GB.
+The CLARA mirror was assembled over $F_{17} = 1597$ CI pipeline runs since the canonical branch was created. Of these runs, $F_{18} = 2584$ individual artefact uploads were made to Zenodo (including revisions); the current live set contains 8 community-attached description DOIs (B001..B008) plus 2 supplementary FPGA-software release DOIs (Z01, Z02) that are NOT in the trinity-s3ai community (R5-honest, PASS-6). Total archived size: 4.7 GB. Coq proof source: 2.1 MB across 65 `.v` files. Hardware bitstreams: 3.8 GB.
 
 The Golden Ledger (App.H, Excel format) cross-references every Qed theorem with its CLARA tier, DOI, and Git commit hash. As of the submission date, 297 theorems have Qed status, 141 have `admit` or `sorry` status (tracked as open obligations in the Golden Ledger), and the remaining 0 are in `Admitted` axiom status. The CLARA mirror captures all three categories without suppressing the open obligations, consistent with the R5 honesty principle.
 
@@ -89,9 +93,9 @@ The CLARA mirror is a static snapshot; Zenodo DOIs are immutable, so any post-su
 
 [3] `gHashTag/trios#414` — App.G scope directive. GitHub issue tracker.
 
-[4] B012 — CLARA Mirror Manifest. Zenodo, DOI: 10.5281/zenodo.19227887.
+[4] B008 (parent) — Trinity S³AI Framework, Complete Research Collection v5.0. Zenodo, DOI: 10.5281/zenodo.19227879. (R5-honest note, PASS-6: previously cited as B012 / 10.5281/zenodo.19227887; that DOI is an unrelated role-semantic-invariants paper by other authors and has been removed.)
 
-[5] B001 — HSLM Ternary Neural Network. Zenodo, DOI: 10.5281/zenodo.19227865.
+[5] B001 — Trinity B001: Ternary Neural Networks v5.0. Zenodo, DOI: 10.5281/zenodo.19227865.
 
 [6] B002 — FPGA Zero-DSP Architecture. Zenodo, DOI: 10.5281/zenodo.19227867.
 
