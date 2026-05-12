@@ -1409,7 +1409,7 @@ reverifies. A wave PR must keep all of them green.
 ## Cross-wave conventions
 
 - **Branch naming**: `feat/trios-chat-wave<N>` from the latest `origin/main`.
-- **Commit identity**: `Trinity Chat Wave-N <trinity-chat@gHashTag.io>` per wave.
+- **Commit identity**: `Dmitrii Vasilev <admin@t27.ai>` (canonical maintainer).
 - **Sub-tracker issue**: every wave opens a fresh issue (`Wave-N sub-tracker`)
   closed by the wave PR (`Closes gHashTag/trios#NNN`).
 - **PR body format**: starts with `Closes #NNN` on the very first line,
