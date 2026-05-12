@@ -140,7 +140,7 @@ Seed pool reference: the Fibonacci indices $F_{17}=1597$, $F_{18}=2584$, $F_{19}
 
 - **B006** (`doi`) — GF16 Probabilistic Format — [10.5281/zenodo.19227875](https://doi.org/10.5281/zenodo.19227875) — *Status: golden* — Linked: Ch.6, App.H.
 
-- **Z05** (`doi`) — phi-RoPE Attention — [10.5281/zenodo.19020215](https://doi.org/10.5281/zenodo.19020215) — *Status: golden* — Linked: Ch.6.
+- **Z05** (`doi`) — phi-RoPE Attention — [10.5281/zenodo.19020280](https://doi.org/10.5281/zenodo.19020280) — *Status: golden* — Linked: Ch.6.
 
 - **LUCAS-CLOSURE** (`theorem`) — 10 Qed lemmas — [INV5_LucasClosureGf16.v](https://github.com/gHashTag/t27/blob/feat/canonical-coq-home/proofs/canonical/igla/INV5_LucasClosureGf16.v) — *Status: golden* — Linked: Ch.6.
 
@@ -166,7 +166,7 @@ Future work includes GF128 (sub-1-bit effective width via block-floating-point a
 
 [7] Zenodo DOI bundle B006, 10.5281/zenodo.19227875 — GF16 Probabilistic Format archive.
 
-[8] Zenodo DOI bundle Z05, 10.5281/zenodo.19020215 — phi-RoPE Attention dataset.
+[8] Zenodo DOI bundle Z05, 10.5281/zenodo.19020280 — phi-RoPE Attention dataset.
 
 [9] `gHashTag/trios#385` — Ch.6 one-shot issue, comment 4351384702.
 

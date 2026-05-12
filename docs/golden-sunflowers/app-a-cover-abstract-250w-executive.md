@@ -85,7 +85,7 @@ This appendix serves as the executive entry-point to a large, formally grounded 
 
 [5] This dissertation, Ch.28: FPGA Synthesis and Timing Closure.
 
-[6] Zenodo DOI bundle B001, 10.5281/zenodo.19020215 — phi-RoPE Attention dataset.
+[6] Zenodo DOI bundle B001, 10.5281/zenodo.19020280 — phi-RoPE Attention dataset.
 
 [7] Zenodo DOI bundle B006, 10.5281/zenodo.19227875 — GF16 Probabilistic Format archive.
 

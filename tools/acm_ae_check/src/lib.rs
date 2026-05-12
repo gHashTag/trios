@@ -32,7 +32,7 @@
 //! | Anchor                | Value                | Source theorem / file        |
 //! |-----------------------|----------------------|------------------------------|
 //! | `TRINITY_ANCHOR`      | `phi^2 + phi^-2 = 3` | `lucas_closure_gf16.v::lucas_2_eq_3` (Proven) |
-//! | `ZENODO_DOI`          | `10.5281/zenodo.19227877` | TRI-27 anchor DOI       |
+//! | `ZENODO_DOI`          | `10.5281/zenodo.19227877` | Trinity B007 software description stub (NOT a paper) |
 //! | `PRUNE_THRESHOLD`     | `3.5`                | INV-2 `igla_asha_bound.v::prune_threshold_from_trinity` (Proven) |
 //! | `WARMUP_BLIND_STEPS`  | `4000`               | INV-2 (≈ φ¹⁶ structural)     |
 //! | `D_MODEL_MIN`         | `256`                | INV-3 `gf16_precision.v` (Adm/n=1,2 Proven) |
@@ -55,7 +55,11 @@ use thiserror::Error;
 
 /// Trinity Anchor identity, mirror of `lucas_closure_gf16.v::lucas_2_eq_3`.
 pub const TRINITY_ANCHOR: &str = "phi^2 + phi^-2 = 3";
-/// TRI-27 anchor Zenodo DOI for ACM AE Available badge.
+/// Zenodo persistent identifier for the Trinity B007 software description stub
+/// (NOT a peer-reviewed paper). Used as the ACM AE Available-badge target.
+/// The mathematical anchor `phi^2 + phi^-2 = 3` is an algebraic identity whose
+/// Coq witness lives in gHashTag/t27 (audited 2026-05-12: 218 statements,
+/// 162 Qed, 32 Admitted, 11 Abort across 28 .v files).
 pub const ZENODO_DOI: &str = "10.5281/zenodo.19227877";
 /// Pre-registered minimum page count (mirror of `page_gate::MIN_PAGES`).
 pub const MIN_PAGES: u32 = 250;

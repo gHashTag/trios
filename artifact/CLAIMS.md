@@ -104,8 +104,11 @@ failure) that this file cites:
 - The Trinity Anchor identity **`phi^2 + phi^-2 = 3`** — the central
   algebraic claim of the monograph, mirrored byte-for-byte in
   `trinity-clara/proofs/igla/lucas_closure_gf16.v::lucas_2_eq_3` (Proven).
-- The persistent DOI **`10.5281/zenodo.19227877`** — Zenodo deposit of the
-  Trinity Anchor record (TRI-27 series).
+- The persistent DOI **`10.5281/zenodo.19227877`** — Zenodo deposit
+  identified as a *software description stub* for Trinity B007 (NOT a
+  peer-reviewed paper). The mathematical anchor itself is an algebraic
+  identity; its Coq witness lives in gHashTag/t27 (audited 2026-05-12:
+  218 statements, 162 Qed, 32 Admitted, 11 Abort across 28 .v files).
 
 Additional persistent identifiers cited across the monograph:
 

@@ -115,7 +115,7 @@ A second limitation is the AR memory capacity of $M = L_8 = 47$ hypervectors, co
 
 [5] `gHashTag/t27/proofs/canonical/igla/INV3_Gf16Precision.v` — INV-3: GF16 safe domain.
 
-[6] Zenodo DOI bundle Z05, 10.5281/zenodo.19020215 — phi-RoPE Attention dataset.
+[6] Zenodo DOI bundle Z05, 10.5281/zenodo.19020280 — phi-RoPE Attention dataset.
 
 [7] This dissertation, Ch.28: FPGA Synthesis — QMTech XC7A100T, 0 DSP, 63 toks/sec, 92 MHz, 1 W.
 

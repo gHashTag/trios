@@ -96,7 +96,7 @@ This work demonstrates that **AI architecture search can be guided by formal the
 
 ## References
 
-- [Trinity Coq Proof Base](../trinity/) — 84 theorems, φ-identities
+- [Trinity Coq Proof Base](../trinity/) — audited 2026-05-12: 218 statements, 162 Qed, 32 Admitted, 11 Abort in [gHashTag/t27/coq](https://github.com/gHashTag/t27/tree/main/coq); φ-identities
 - [trinity-clara](https://github.com/gHashTag/trinity-clara) — DARPA CLARA submission
 - [IGLA RACE Issue #143](https://github.com/gHashTag/trios/issues/143)
 - [NASA P10 Rules](https://en.wikipedia.org/wiki/The_Power_of_10:_Rules_for_Developing_Safety-Critical_Code)
