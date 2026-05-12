@@ -141,4 +141,4 @@ is mirrored byte-for-byte in:
 
 If any divergence is found, `acm-ae-check run` exits **74** (mismatch).
 
-DOI of the persistent record: [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877).
+DOI of the persistent record: [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) (Zenodo software deposit `Trinity B007: VSA Operations for Ternary Computing v5.0` — description stub, NOT a peer-reviewed paper; audit 2026-05-12). Mathematical anchor itself is proven in `trinity-clara/proofs/igla/lucas_closure_gf16.v::lucas_2_eq_3` (Proven) and reproduced byte-for-byte across the L-R14 chain. The Coq witness corpus lives at [gHashTag/t27/coq](https://github.com/gHashTag/t27/tree/main/coq) — 48 statements (6 Theorem + 42 Lemma), 35 Qed-proven, 0 Admitted as of audit 2026-05-12.

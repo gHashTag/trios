@@ -15,7 +15,7 @@ metadata:
   related_skills:
     - tri-gardener-runbook
     - autonomous-research-loop
-  ssot_doi: 10.5281/zenodo.19227877
+  ssot_zenodo_provenance: "10.5281/zenodo.19227877 (B007 VSA description stub, audit 2026-05-12 — NOT a paper)"
   ssot_label: B007 HSLM Benchmark Corpus
   root_anchor: phi^2 + phi^-2 = 3
   cardinality: 27 = 3^3 = phi^6 - phi^4 + 1 (Lucas)

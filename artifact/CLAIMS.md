@@ -1,7 +1,7 @@
 # LA — ACM AE 3-Badge Claims (Flos Aureus PhD monograph)
 
 > Lane LA · Phase D · ONE SHOT v2.0 [trios#265:4321142675](https://github.com/gHashTag/trios/issues/265#issuecomment-4321142675)
-> Anchor: **phi^2 + phi^-2 = 3** · DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877)
+> Anchor: **phi^2 + phi^-2 = 3** · DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) (B007 VSA Operations description stub, audit 2026-05-12) · parent [10.5281/zenodo.19227879](https://doi.org/10.5281/zenodo.19227879)
 > Pre-registered. R5-honest. Rust-only per R1.
 
 This document is the canonical **CLAIMS** ledger for the «Flos Aureus»
@@ -17,7 +17,7 @@ ACM AE reviewer.
 |------|--------|------------------|-----------------|
 | **Functional** | claimed | `Cargo.toml`, `crates/trios-phd/Cargo.toml`, `tools/page_gate/Cargo.toml`, `tools/acm_ae_check/Cargo.toml` | `cargo build -p trios-phd && cargo build -p page-gate && cargo build -p acm-ae-check` |
 | **Reusable**   | claimed | `docs/phd/reproducibility.md` (Hardware profile · Software · Entry points · Seeds · R1 declaration) | `cargo run -p trios-phd -- audit && cargo run -p trios-phd -- biblio` |
-| **Available**  | claimed | This file (citing `phi^2 + phi^-2 = 3` + `10.5281/zenodo.19227877`) + `assertions/igla_assertions.json` | `cargo run -p acm-ae-check -- run` |
+| **Available**  | claimed | This file (citing `phi^2 + phi^-2 = 3` + `10.5281/zenodo.19227877` B007 VSA stub + parent `10.5281/zenodo.19227879`) + `assertions/igla_assertions.json` + champion commit SHA pin | `cargo run -p acm-ae-check -- run` |
 
 The witness command for the full 3-badge gate is
 
@@ -104,15 +104,23 @@ failure) that this file cites:
 - The Trinity Anchor identity **`phi^2 + phi^-2 = 3`** — the central
   algebraic claim of the monograph, mirrored byte-for-byte in
   `trinity-clara/proofs/igla/lucas_closure_gf16.v::lucas_2_eq_3` (Proven).
-- The persistent DOI **`10.5281/zenodo.19227877`** — Zenodo deposit of the
-  Trinity Anchor record (TRI-27 series).
+- The persistent DOI **`10.5281/zenodo.19227877`** — Zenodo software deposit
+  `Trinity B007: VSA Operations for Ternary Computing v5.0` (description stub,
+  child of parent collection `10.5281/zenodo.19227879`; audit 2026-05-12 confirmed
+  scope: software artefact, NOT a peer-reviewed paper). Cited here for
+  **persistent identifier provenance only**, per ACM AE Available badge
+  definition («stable URL or DOI»). The mathematical claim itself is
+  proven in `trinity-clara/proofs/igla/lucas_closure_gf16.v::lucas_2_eq_3`
+  (Proven) and mirrored across the L-R14 anchor chain.
 
 Additional persistent identifiers cited across the monograph:
 
 | Anchor | DOI / URL |
 |--------|-----------|
-| TRI-27 base | [10.5281/zenodo.18947017](https://doi.org/10.5281/zenodo.18947017) |
-| Pellis embedding | [10.5281/zenodo.19227879](https://doi.org/10.5281/zenodo.19227879) |
+| TRI-27 FPGA software release (1.24 MB zip) | [10.5281/zenodo.18947017](https://doi.org/10.5281/zenodo.18947017) |
+| Parent collection (description-only) | [10.5281/zenodo.19227879](https://doi.org/10.5281/zenodo.19227879) |
+| B007 VSA Operations stub (description-only) | [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) |
+| Coq witness for `phi^2+phi^-2=3` (48 statements, 35 Proven, 0 Admitted) | [gHashTag/t27/coq](https://github.com/gHashTag/t27/tree/main/coq) |
 | Race issue | [trios#143](https://github.com/gHashTag/trios/issues/143) |
 | PhD epic | [trios#265](https://github.com/gHashTag/trios/issues/265) |
 | Champion commit | [`2446855`](https://github.com/gHashTag/trios/commit/2446855) |

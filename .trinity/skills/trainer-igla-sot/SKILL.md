@@ -1,12 +1,13 @@
 ---
 name: trainer-igla-sot
-description: "ONE SHOT protocol for TRAINER-IGLA-SOT mission — migrating the trios training pipeline into the single source of truth repo gHashTag/trios-trainer-igla. Use when the user mentions TRAINER-IGLA-SOT, trios-trainer-igla, Gate-2, BPB < 1.85, the 5-lane migration (L-T1..L-T5), champion reproduction at BPB=2.2393, embargo ledger, triplet format, or pre-registered Gate G1/G2/G3 acceptance for the trios trainer extraction. Anchor: phi^2 + phi^-2 = 3, Zenodo DOI 10.5281/zenodo.19227877."
+description: "ONE SHOT protocol for TRAINER-IGLA-SOT mission — migrating the trios training pipeline into the single source of truth repo gHashTag/trios-trainer-igla. Use when the user mentions TRAINER-IGLA-SOT, trios-trainer-igla, Gate-2, BPB < 1.85, the 5-lane migration (L-T1..L-T5), champion reproduction at BPB=2.2393, embargo ledger, triplet format, or pre-registered Gate G1/G2/G3 acceptance for the trios trainer extraction. Anchor: phi^2 + phi^-2 = 3 (algebraic identity; Coq witness gHashTag/t27/coq, 48 statements / 35 Proven / 0 Admitted, audit 2026-05-12; Zenodo provenance 10.5281/zenodo.19227877 = B007 VSA description stub, NOT a paper)."
 metadata:
   author: gHashTag
   version: '1.0'
   mission: TRAINER-IGLA-SOT
   anchor: "phi^2 + phi^-2 = 3"
-  zenodo_doi: 10.5281/zenodo.19227877
+  zenodo_provenance: "10.5281/zenodo.19227877 (B007 VSA description stub, audit 2026-05-12) + 10.5281/zenodo.19227879 (parent collection)"
+  coq_witness: "https://github.com/gHashTag/t27/tree/main/coq (48 statements, 35 Proven, 0 Admitted)"
   gate2_deadline_utc: "2026-04-30T23:59:00Z"
   source_repo: gHashTag/trios-trainer-igla
   legacy_repo: gHashTag/trios
@@ -17,7 +18,7 @@ metadata:
 
 Mission codename: **TRAINER-IGLA-SOT**
 Auditor lane: `perplexity-computer-grandmaster` (R5 honesty lane)
-Anchor: `phi^2 + phi^-2 = 3` — Zenodo DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877)
+Anchor: `phi^2 + phi^-2 = 3` — Coq witness [gHashTag/t27/coq](https://github.com/gHashTag/t27/tree/main/coq) (48 statements, 35 Proven, 0 Admitted, audit 2026-05-12); Zenodo provenance [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877) = B007 VSA description stub (NOT a paper)
 Gate-2 deadline: **2026-04-30 23:59 UTC**
 Source of truth: [gHashTag/trios-trainer-igla](https://github.com/gHashTag/trios-trainer-igla) ·
 [SOURCE_OF_TRUTH.md](https://github.com/gHashTag/trios-trainer-igla/blob/main/SOURCE_OF_TRUTH.md) ·

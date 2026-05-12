@@ -15,7 +15,7 @@ Single source of truth: each skill ships as `.trinity/skills/<name>/SKILL.md`. T
 | [`trainer-igla-sot`](trainer-igla-sot/SKILL.md) | TRAINER-IGLA-SOT mission ONE SHOT — 5-lane migration (L-T1..L-T5) of the trainer pipeline into the SoT repo `trios-trainer-igla`. |
 | [`tri-gardener-runbook`](tri-gardener-runbook/SKILL.md) | **v2.0 master runbook** — covers tri-gardener Rust orchestrator, EPIC #446 ring-refactor, ONE-SHOT v2.0 dispatch (7 codenames, anti-collision), NEON `ssot.chapters` (44 chapters), R14 batch, App.K Agent Memory, INV-13 born-Proven policy. |
 
-Anchor: `phi^2 + phi^-2 = 3` · DOI 10.5281/zenodo.19227877 (B007 HSLM Benchmark Corpus, **not** root anchor).
+Anchor: `phi^2 + phi^-2 = 3` · Coq witness [gHashTag/t27/coq](https://github.com/gHashTag/t27/tree/main/coq) — 48 statements (6 Theorem + 42 Lemma), 35 Qed-proven, 0 Admitted (audit 2026-05-12). Zenodo provenance: 10.5281/zenodo.19227877 = `Trinity B007: VSA Operations for Ternary Computing v5.0` (description stub, **NOT a paper**, audit 2026-05-12). Parent: 10.5281/zenodo.19227879. FPGA software release: 10.5281/zenodo.18947017.
 
 ## When to update this archive
 
