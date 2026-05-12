@@ -32,6 +32,7 @@ pub mod identity;
 pub mod kem;
 pub mod kem_decap_oracle;
 pub mod otpk;
+pub mod prekey_signature_chain;
 pub mod revocation;
 pub mod sealed;
 
@@ -46,6 +47,10 @@ pub use identity::{Identity, PrekeyBundle, PrekeyBundleBody, MLKEM_PUB_LEN, MLKE
 pub use kem::{encapsulate_to, MlKem768Keypair, MLKEM768_CT_LEN, MLKEM768_EK_LEN, MLKEM768_SS_LEN};
 pub use kem_decap_oracle::{observe as observe_decap, ss_eq as decap_ss_eq, DecapObservation, KEM_DECAP_ORACLE_CT_LEN, KEM_DECAP_ORACLE_SS_LEN};
 pub use otpk::{JoinStrategy, Otpk, OtpkPool};
+pub use prekey_signature_chain::{
+    validate_prekey_chain, ChainBindingTag, PrekeyChainBundle, PrekeyChainError, PrekeyChainKey,
+    PrekeyChainView,
+};
 pub use revocation::{verify_identity_with_grace, RevocationCert, RevocationLedger, RevocationReason};
 pub use sealed::{dest_hash, SealedEnvelope};
 

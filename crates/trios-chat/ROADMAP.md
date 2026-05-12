@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-23: **355 tests · 25/25 e2e · 2200/2200 falsifier · 44 categories · 191 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-24: **375 tests · 25/25 e2e · 2300/2300 falsifier · 46 categories · 203 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -82,7 +82,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W20 | `e556075` | 310 | INV-CHAT-110..116 (158 Qed total) | 1900 | 38 | handshake_fingerprint + concurrent_add_remove | [#724](https://github.com/gHashTag/trios/pull/724) |
 | W21 | `35b3ef6` | 330 | INV-CHAT-117..123 (168 Qed total) | 2000 | 40 | epoch_authentication_failure + welcome_keypackage_pinning | [#730](https://github.com/gHashTag/trios/pull/730) |
 | W22 | `119f0fe` | 335 | INV-CHAT-124..130 (181 Qed total) | 2100 | 42 | proposal_validation + mac_truncation | [#732](https://github.com/gHashTag/trios/pull/732) |
-| **W23** | **(this PR)** | **355** | **INV-CHAT-131..137 (191 Qed total)** | **2200** | **44** | **reinit_freshness + appack_replay** | **(open)** |
+| W23 | `1d6f910` | 355 | INV-CHAT-131..137 (191 Qed total) | 2200 | 44 | reinit_freshness + appack_replay | [#734](https://github.com/gHashTag/trios/pull/734) |
+| **W24** | **(this PR)** | **375** | **INV-CHAT-138..144 (203 Qed total)** | **2300** | **46** | **commit_signature_forge + prekey_signature_chain** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -93,6 +94,135 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-24 — MLS commit signature forgery + Prekey signature chain binding
+
+- **L-CHAT-3-csig** (R-CHAT-3 / **CR-CHAT-03**) — CSF-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/commit_signature.rs`
+  (343 lines) shipping
+  `verify_commit_signature(sc: &SignedCommit, view: &CommitVerifierView)
+  -> Result<(), CommitSigError>`. Types: `CommitTranscript {
+  group_id, epoch, signer_leaf, blob }`, `SignedCommit { transcript,
+  signature_blob }`, `CommitVerifierView { group_id, current_epoch,
+  active_signer_keys: BTreeSet<u32> }`, `CommitSigError`
+  (`#[non_exhaustive]` with variants `EmptySignature`,
+  `StaleSignerKey`, `GroupIdSplice`, `EpochMismatch { current, claimed
+  }`, `NonMemberSigner`, `TranscriptMismatch`). Five rules enforced in
+  fixed order: (1) reject empty `signature_blob` (`EmptySignature`),
+  (2) reject zero-bytes signature blob (`StaleSignerKey` — catches
+  the null-signer forge), (3) reject `transcript.group_id !=
+  view.group_id` (`GroupIdSplice`), (4) reject `transcript.epoch !=
+  view.current_epoch` (`EpochMismatch`), (5) reject signer not in
+  `active_signer_keys` (`NonMemberSigner`) — covers stale and
+  removed-leaf signer forges.
+  - CSF-01 valid signed commit accepted.
+  - CSF-02 empty signature blob rejected — `EmptySignature`.
+  - CSF-03 zero-bytes blob rejected — `StaleSignerKey`.
+  - CSF-04 group-id splice rejected — `GroupIdSplice`.
+  - CSF-05 stale-epoch commit rejected — `EpochMismatch { current,
+    claimed }`.
+  - CSF-06 future-epoch commit rejected — same `EpochMismatch`.
+  - CSF-07 non-member signer rejected — `NonMemberSigner`.
+  - CSF-08 removed-leaf signer rejected after epoch advance.
+  - CSF-09 cross-commit splice rejected via group-id mismatch.
+  - CSF-10 green — module compiles and re-exports through
+    `CR-CHAT-03/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-1-psig** (R-CHAT-1 / **CR-CHAT-01**) — PSC-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-01/src/prekey_signature_chain.rs`
+  (373 lines) shipping
+  `validate_prekey_chain(bundle: &PrekeyChainBundle, view:
+  &PrekeyChainView) -> Result<(), PrekeyChainError>`. Types:
+  `PrekeyChainKey([u8; 32])`, `ChainBindingTag([u8; 32])`,
+  `PrekeyChainBundle { identity_key, spk, spk_sig_blob, spk_binding,
+  opk, opk_sig_blob, opk_binding }` (renamed from `PrekeyBundle` to
+  avoid collision with existing `identity::PrekeyBundle`),
+  `PrekeyChainView { identity_key, identity_revoked,
+  expected_spk_binding, expected_opk_binding }`, `PrekeyChainError`
+  (`#[non_exhaustive]` with variants `EmptySignature`, `SelfLoop`,
+  `OpkSelfLoop`, `MissingIntermediate`, `IdentityRevoked`,
+  `SpkBindingMismatch`, `OpkBindingMismatch`). Eight binding rules
+  enforced in fixed order over the IK → SPK → OPK chain:
+  (1) reject empty `spk_sig_blob` / `opk_sig_blob` (`EmptySignature`),
+  (2) reject `spk == identity_key` (`SelfLoop`), (3) reject `opk ==
+  spk` (`OpkSelfLoop`), (4) reject missing intermediate when
+  `opk_sig_blob` present but `spk_sig_blob` empty
+  (`MissingIntermediate`), (5) reject `view.identity_revoked`
+  (`IdentityRevoked`), (6) reject `spk_binding !=
+  expected_spk_binding` (`SpkBindingMismatch`), (7) reject `opk_binding
+  != expected_opk_binding` (`OpkBindingMismatch`), (8) reject
+  `view.identity_key != bundle.identity_key` (`SelfLoop` again, by
+  identity-key disagreement). On all valid inputs returns `Ok(())`.
+  - PSC-01 valid IK→SPK→OPK chain accepted.
+  - PSC-02 empty SPK signature rejected — `EmptySignature`.
+  - PSC-03 empty OPK signature rejected — `EmptySignature`.
+  - PSC-04 SPK == IK rejected — `SelfLoop`.
+  - PSC-05 OPK == SPK rejected — `OpkSelfLoop`.
+  - PSC-06 missing intermediate rejected — `MissingIntermediate`.
+  - PSC-07 revoked identity rejected — `IdentityRevoked`.
+  - PSC-08 SPK binding mismatch rejected — `SpkBindingMismatch`.
+  - PSC-09 OPK binding mismatch rejected — `OpkBindingMismatch`.
+  - PSC-10 green — module compiles and re-exports through
+    `CR-CHAT-01/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 2200 → 2300.** New categories
+  `commit_signature_forge` and `prekey_signature_chain`, 50 entries
+  each (`PI-CSF-001..050`, `PI-PSC-001..050`). Each lane covers the
+  specific exploitation phrasings (`accept empty signature blob`,
+  `treat zero-bytes signature as a valid signer key`, `splice a commit
+  from another group_id`, `accept commit with stale epoch as forward-
+  compatible`, `treat a removed-leaf signer as still active`,
+  `accept a chain where SPK equals identity_key`, `accept OPK equal
+  to SPK`, `skip the missing-intermediate check`, `commit OPK without
+  SPK signature`, `accept binding mismatch as routine`, …).
+  `falsifier_runner` gains two new threshold lanes
+  `commit_signature_forge` and `prekey_signature_chain` at `0.95`.
+  Result: **46 categories at 100% block rate**, `2300 / 2300` blocked.
+
+- **DENY_PATTERNS extension.** `CR-CHAT-06/src/injection.rs` grows two
+  new keyword blocks covering Lane A commit-signature-forge jargon
+  (`empty signature blob`, `zero-bytes signature`, `null signer key`,
+  `group_id splice`, `cross-commit splice`, `stale epoch commit`,
+  `removed-leaf signer`, `non-member signer accepted`,
+  `transcript mismatch ignored`, …) and Lane B prekey-signature-chain
+  jargon (`SPK equals identity_key`, `OPK equals SPK`, `self-loop
+  prekey`, `missing intermediate signature`, `revoked identity
+  accepted`, `binding mismatch routine`, `skip SPK signature`,
+  `OPK without intermediate`, …) so the injection guard blocks any
+  prompt that attempts to weaken the new lanes by name.
+
+- **Coq Wave-24 — `Section TrinityChatWave24`.**
+  Predicates `commit_groupid_agreement_24`,
+  `prekey_binding_agreement_24`,
+  `prekey_not_missing_when_spk_present_24`. Lemmas:
+  - **INV-CHAT-138** `inv_chat_138_commit_empty_sig_rejected` —
+    empty signature blob is rejected (`Nat.eqb 0 0 = true`).
+  - **INV-CHAT-139** `inv_chat_139_commit_zero_blob_rejected` —
+    zero-bytes signature blob is rejected (constructive).
+  - **INV-CHAT-140** `inv_chat_140_commit_groupid_splice_rejected` —
+    `view_gid <> trans_gid -> Nat.eqb view_gid trans_gid = false`
+    via `Nat.eqb_neq`.
+  - **INV-CHAT-141** `inv_chat_141_commit_epoch_mismatch_rejected` —
+    `claimed <> current -> Nat.eqb current claimed = false`.
+  - `commit_groupid_agreement_24` — helper proving group-id equality
+    is reflexive and symmetric.
+  - **INV-CHAT-142** `inv_chat_142_prekey_self_loop_rejected` —
+    `spk = identity_key -> SelfLoop` (constructive via `Nat.eqb_refl`).
+  - **INV-CHAT-143** `inv_chat_143_prekey_missing_intermediate_rejected`
+    — OPK present but SPK signature empty is rejected.
+  - **INV-CHAT-144** `inv_chat_144_prekey_identity_revoked_rejected` —
+    `view.identity_revoked = true -> IdentityRevoked` (reflexivity).
+  - `prekey_binding_agreement_24` and
+    `prekey_not_missing_when_spk_present_24` — helper lemmas
+    proving the binding-tag equality is reflexive and that an SPK
+    signature precludes the missing-intermediate error.
+  Compiles **clean exit 0** with **203 Qed / 0 Admitted /
+  5 axioms (unchanged: `ss_kp_injective` (W2), `dh_step_fresh` (W3),
+  `dh_post_history_independent` (W3), `hybrid_kem_non_degenerate`
+  (W10), `sn_hash_sym` (W14))**. Wave-24 introduces **zero new
+  axioms** — every lemma is constructive.
+
+---
 
 ### Wave-23 — ReInit ceremony freshness + AppAck replay attestation
 
@@ -1209,18 +1339,19 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-110..116 | W20 | handshake fingerprinting (determinism, swap detected, empty-field invalid) + concurrent Add/Remove ordering (Update<Remove<Add priority, empty-set neutral, add-after-remove size-neutral) |
 | INV-CHAT-117..123 | W21 | epoch-authentication failure (future rejected, match accepted, opaque error, grace-window accepted) + Welcome KeyPackage pinning (immutable pin, mismatch rejected, hash determinism, empty-field invalid) |
 | INV-CHAT-124..130 | W22 | MLS proposal-bundle validation (empty rejected, oversized rejected, self-remove-only rejected, monotonic-indices required) + MAC tag truncation defense (short rejected, full-match accepted, full-mismatch rejected, split total-length preserved) |
-| **INV-CHAT-131..137** | **W23** | **ReInit ceremony freshness (empty GID rejected, stale GID reuse rejected, protocol downgrade rejected, unsupported version leap rejected) + AppAck replay attestation (inverted range rejected, singleton accepted, stale/shrinking rejected, atomic-on-failure)** |
+| INV-CHAT-131..137 | W23 | ReInit ceremony freshness (empty GID rejected, stale GID reuse rejected, protocol downgrade rejected, unsupported version leap rejected) + AppAck replay attestation (inverted range rejected, singleton accepted, stale/shrinking rejected, atomic-on-failure) |
+| **INV-CHAT-138..144** | **W24** | **MLS commit signature forgery defense (empty sig rejected, zero-blob rejected, group-id splice rejected, epoch mismatch rejected) + Prekey signature chain binding (self-loop rejected, missing intermediate rejected, revoked identity rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, and Wave-23 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, and Wave-24 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W23–W27) — `[ASPIRATIONAL]`
+## Future waves (W25–W29) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -1240,15 +1371,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W20~~ — SHIPPED via [#724](https://github.com/gHashTag/trios/pull/724), merged `e556075` (see Wave-20 detail above) | | | | | | |
 | ~~W21~~ — SHIPPED via [#730](https://github.com/gHashTag/trios/pull/730), merged `35b3ef6` (see Wave-21 detail above) | | | | | | |
 | ~~W22~~ — SHIPPED via [#732](https://github.com/gHashTag/trios/pull/732), merged `119f0fe` (see Wave-22 detail above) | | | | | | |
-| ~~W23~~ — SHIPPED in this PR (see Wave-23 detail above) | | | | | | |
-| **W24** | (TBD — picked from uncovered surface after W23 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥201 Qed) | ≈377 | 2300 / 46 cats |
-| **W25** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥211 Qed) | ≈399 | 2400 / 48 cats |
-| **W26** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥221 Qed) | ≈421 | 2500 / 50 cats |
-| **W27** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥231 Qed) | ≈443 | 2600 / 52 cats |
-| **W28** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥241 Qed) | ≈465 | 2700 / 54 cats |
+| ~~W23~~ — SHIPPED via [#734](https://github.com/gHashTag/trios/pull/734), merged `1d6f910` (see Wave-23 detail above) | | | | | | |
+| ~~W24~~ — SHIPPED in this PR (see Wave-24 detail above) | | | | | | |
+| **W25** | (TBD — picked from uncovered surface after W24 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥213 Qed) | ≈397 | 2400 / 48 cats |
+| **W26** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥223 Qed) | ≈419 | 2500 / 50 cats |
+| **W27** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥233 Qed) | ≈441 | 2600 / 52 cats |
+| **W28** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥243 Qed) | ≈463 | 2700 / 54 cats |
+| **W29** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥253 Qed) | ≈485 | 2800 / 56 cats |
 
-After W22 the corpus crosses **2100 entries / 42 categories** and Coq
-crosses **181 closed proofs / 0 admissions**. From W23+ the work shifts
+After W24 the corpus crosses **2300 entries / 46 categories** and Coq
+crosses **203 closed proofs / 0 admissions**. From W25+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -1265,7 +1397,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2100/2100 blocked` (W22) at 42 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2300/2300 blocked` (W24) at 46 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -1302,8 +1434,9 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W24..W28 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W25..W29 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
+- Wave-24 detail section above is **[VERIFIED]** by cargo test (375/0), `coqc` (203 Qed / 0 Admitted), `falsifier_runner` (2300/2300, 46 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-23 detail section above is **[VERIFIED]** by cargo test (355/0), `coqc` (191 Qed / 0 Admitted), `falsifier_runner` (2200/2200), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-22 detail section above is **[VERIFIED]** by cargo test
   (335/0), `e2e_chat_25` (25/25), `falsifier_runner` (2100/2100,
