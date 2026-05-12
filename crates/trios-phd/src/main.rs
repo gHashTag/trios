@@ -704,6 +704,9 @@ fn regex_lite_global(s: &str, needle: &str) -> Vec<usize> {
 
 fn fix_common_latex(phd_root: &Path) -> Result<()> {
     let mut total = 0usize;
+    let mut hero_inserted = 0usize;
+    let illus = phd_root.join("../../assets/illustrations");
+    let illus_v516 = phd_root.join("../../assets/illustrations_v516");
     for sub in ["chapters", "appendix"] {
         let dir = phd_root.join(sub);
         if !dir.is_dir() {
@@ -716,7 +719,33 @@ fn fix_common_latex(phd_root: &Path) -> Result<()> {
             }
             let original = std::fs::read_to_string(&p)
                 .with_context(|| format!("read {}", p.display()))?;
-            let fixed = mechanical_latex_fixes(&original);
+            let mut fixed = mechanical_latex_fixes(&original);
+            // 5. Hero figure: every chapter/appendix gets a canonical
+            //    full-width opener illustration if one exists in assets/.
+            let fname = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if sub == "chapters" {
+                if let Some(stem) = parse_chapter_stem(fname) {
+                    let asset = illus.join(format!("{}.png", stem));
+                    if asset.is_file() {
+                        let next = ensure_chapter_hero_figure(&fixed, &stem, "png");
+                        if next != fixed {
+                            fixed = next;
+                            hero_inserted += 1;
+                        }
+                    }
+                }
+            } else if sub == "appendix" {
+                if let Some(stem) = parse_appendix_stem(fname) {
+                    let asset = illus_v516.join(format!("{}.jpg", stem));
+                    if asset.is_file() {
+                        let next = ensure_chapter_hero_figure(&fixed, &stem, "jpg");
+                        if next != fixed {
+                            fixed = next;
+                            hero_inserted += 1;
+                        }
+                    }
+                }
+            }
             if fixed != original {
                 std::fs::write(&p, &fixed)
                     .with_context(|| format!("write {}", p.display()))?;
@@ -725,8 +754,112 @@ fn fix_common_latex(phd_root: &Path) -> Result<()> {
             }
         }
     }
-    eprintln!("fix-common-latex: rewrote {} file(s)", total);
+    eprintln!("fix-common-latex: rewrote {} file(s), inserted {} hero figure(s)", total, hero_inserted);
     Ok(())
+}
+
+/// Extract `NN-slug` from a chapter file name like `12-flower-of-life.tex`.
+fn parse_chapter_stem(fname: &str) -> Option<String> {
+    let stem = fname.strip_suffix(".tex")?;
+    let (num, rest) = stem.split_once('-')?;
+    if num.len() != 2 || !num.chars().all(|c| c.is_ascii_digit()) || rest.is_empty() {
+        return None;
+    }
+    Some(stem.to_string())
+}
+
+/// Extract `L-slug` from an appendix file name like `F-coq-citation-map.tex`.
+fn parse_appendix_stem(fname: &str) -> Option<String> {
+    let stem = fname.strip_suffix(".tex")?;
+    let (letter, rest) = stem.split_once('-')?;
+    if letter.len() != 1 || !letter.chars().all(|c| c.is_ascii_uppercase()) || rest.is_empty() {
+        return None;
+    }
+    Some(stem.to_string())
+}
+
+/// Insert a canonical hero `\begin{figure}` block right after the first
+/// `\chapter{...}` (or `\chapter*{...}` / `\section*{...}`) command and
+/// its immediately-following `\label{...}` lines.
+///
+/// Idempotent: if the source already contains a `\includegraphics`
+/// directive anywhere, returns the source unchanged. Handles multi-line
+/// chapter-title arguments via balanced-brace matching.
+fn ensure_chapter_hero_figure(src: &str, slug_stem: &str, ext: &str) -> String {
+    if src.contains("\\includegraphics") {
+        return src.to_string();
+    }
+    // Find the first \chapter / \chapter* / \section* command.
+    let header_starts: [&str; 4] = [
+        "\\chapter{", "\\chapter*{", "\\section{", "\\section*{",
+    ];
+    let mut best: Option<(usize, usize)> = None; // (start, open-brace-index)
+    for needle in header_starts.iter() {
+        if let Some(pos) = src.find(needle) {
+            let open_brace = pos + needle.len() - 1;
+            if best.map(|(p, _)| pos < p).unwrap_or(true) {
+                best = Some((pos, open_brace));
+            }
+        }
+    }
+    let Some((_, open_brace)) = best else { return src.to_string(); };
+    let Some(after_title) = match_balanced_brace(src, open_brace) else {
+        return src.to_string();
+    };
+    // Gobble subsequent \label{...} lines (allowing surrounding whitespace).
+    let mut pos = after_title;
+    loop {
+        let rest = &src[pos..];
+        // skip a newline plus optional whitespace
+        let mut k = 0;
+        let b = rest.as_bytes();
+        while k < b.len() && (b[k] == b' ' || b[k] == b'\t') { k += 1; }
+        if k >= b.len() || b[k] != b'\n' { break; }
+        k += 1;
+        while k < b.len() && (b[k] == b' ' || b[k] == b'\t') { k += 1; }
+        if rest[k..].starts_with("\\label{") {
+            let label_open = pos + k + "\\label".len();
+            if let Some(label_end) = match_balanced_brace(src, label_open) {
+                pos = label_end;
+                continue;
+            }
+        }
+        break;
+    }
+    let figure = format!(
+        "\n\n\\begin{{figure}}[H]\n\\centering\n\\makebox[\\linewidth][c]{{\\includegraphics[width=1.18\\linewidth,keepaspectratio]{{{}.{}}}}}\n\\end{{figure}}\n",
+        slug_stem, ext
+    );
+    let mut out = String::with_capacity(src.len() + figure.len());
+    out.push_str(&src[..pos]);
+    out.push_str(&figure);
+    out.push_str(&src[pos..]);
+    out
+}
+
+/// Given the index of an opening `{`, return the index immediately AFTER
+/// the matching `}`. Counts braces, treats `\{` and `\}` as literals.
+/// Returns None on unbalanced input.
+fn match_balanced_brace(src: &str, open_pos: usize) -> Option<usize> {
+    let bytes = src.as_bytes();
+    if open_pos >= bytes.len() || bytes[open_pos] != b'{' {
+        return None;
+    }
+    let mut depth: i32 = 1;
+    let mut i = open_pos + 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if i + 1 < bytes.len() => { i += 2; continue; }
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 { return Some(i + 1); }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Apply mechanical, line-oriented LaTeX-syntax fixes.
@@ -848,7 +981,11 @@ fn wrap_wide_tabulars(s: &str) -> String {
         // Idempotency: if the ~80 chars before `\begin{tabular}` already
         // contain `\resizebox{\linewidth}{!}{` with an open brace count >
         // close brace count, this tabular is already wrapped.
-        let look_back_start = abs.saturating_sub(120);
+        // Use char-aware floor to avoid splitting a multi-byte UTF-8 codepoint.
+        let mut look_back_start = abs.saturating_sub(120);
+        while look_back_start > 0 && !s.is_char_boundary(look_back_start) {
+            look_back_start -= 1;
+        }
         let head = &s[look_back_start..abs];
         let already_resized = head.contains("\\resizebox{\\linewidth}{!}{")
             && head.matches('{').count() > head.matches('}').count();
@@ -1443,5 +1580,121 @@ mod tests {
         std::fs::write(d.path().join("bibliography.bib"), "").unwrap();
         let n = count_bib_entries(&d.path().join("bibliography.bib")).unwrap();
         assert_eq!(n, 0);
+    }
+
+    // ---------------- hero-figure tests ----------------
+
+    #[test]
+    fn test_parse_chapter_stem_ok() {
+        assert_eq!(parse_chapter_stem("00-monad.tex").as_deref(), Some("00-monad"));
+        assert_eq!(
+            parse_chapter_stem("12-flower-of-life.tex").as_deref(),
+            Some("12-flower-of-life")
+        );
+    }
+
+    #[test]
+    fn test_parse_chapter_stem_rejects_garbage() {
+        assert!(parse_chapter_stem("README.md").is_none());
+        assert!(parse_chapter_stem("X-something.tex").is_none());
+        assert!(parse_chapter_stem("1-short.tex").is_none());
+    }
+
+    #[test]
+    fn test_parse_appendix_stem_ok() {
+        assert_eq!(
+            parse_appendix_stem("F-coq-citation-map.tex").as_deref(),
+            Some("F-coq-citation-map")
+        );
+    }
+
+    #[test]
+    fn test_parse_appendix_stem_rejects_chapter() {
+        assert!(parse_appendix_stem("00-monad.tex").is_none());
+    }
+
+    #[test]
+    fn test_match_balanced_brace_simple() {
+        let s = "hello{world}";
+        let open = s.find('{').unwrap();
+        assert_eq!(match_balanced_brace(s, open), Some(s.len()));
+    }
+
+    #[test]
+    fn test_match_balanced_brace_nested() {
+        let s = "x{a{b}c{d}e}y";
+        let open = s.find('{').unwrap();
+        let close = match_balanced_brace(s, open).unwrap();
+        assert_eq!(&s[open..close], "{a{b}c{d}e}");
+    }
+
+    #[test]
+    fn test_match_balanced_brace_unbalanced() {
+        assert_eq!(match_balanced_brace("x{abc", 1), None);
+    }
+
+    #[test]
+    fn test_ensure_hero_idempotent_when_includegraphics_present() {
+        let src = "\\chapter{X}\n\\label{ch:x}\n\n\\includegraphics{foo.png}\n";
+        let out = ensure_chapter_hero_figure(src, "00-monad", "png");
+        assert_eq!(out, src);
+    }
+
+    #[test]
+    fn test_ensure_hero_inserts_after_chapter_label() {
+        let src = "\\chapter{Title}\n\\label{ch:t}\n\nBody\n";
+        let out = ensure_chapter_hero_figure(src, "00-monad", "png");
+        assert!(out.contains("\\chapter{Title}\n\\label{ch:t}\n\n\\begin{figure}[H]"));
+        assert!(out.contains("\\includegraphics[width=1.18\\linewidth,keepaspectratio]{00-monad.png}"));
+        assert!(out.ends_with("Body\n"));
+    }
+
+    #[test]
+    fn test_ensure_hero_handles_multi_line_chapter_title() {
+        // Regression: \chapter{...} can span multiple lines.
+        let src = "\\chapter{Flower of Life: Hexagonal Geometry, A\\textsubscript{2} Lattice,\n         and Optimal Sphere Packing}\n\\label{ch:flower}\n\nFirst sentence.\n";
+        let out = ensure_chapter_hero_figure(src, "12-flower-of-life", "png");
+        // The figure must appear AFTER the closing `}` of the chapter title,
+        // never inside the title.
+        let chapter_end = out.find("Optimal Sphere Packing}").unwrap()
+            + "Optimal Sphere Packing}".len();
+        let figure_pos = out.find("\\begin{figure}").unwrap();
+        assert!(figure_pos > chapter_end, "figure must be after chapter title");
+        // And after the \label{...}.
+        let label_pos = out.find("\\label{ch:flower}").unwrap();
+        assert!(figure_pos > label_pos, "figure must be after \\label");
+    }
+
+    #[test]
+    fn test_ensure_hero_handles_chapter_star() {
+        // Appendix uses \chapter*{...}.
+        let src = "\\chapter*{Appendix E\\quad Master Glossary}\n\nText\n";
+        let out = ensure_chapter_hero_figure(src, "E-lexicon", "jpg");
+        assert!(out.contains("\\includegraphics[width=1.18\\linewidth,keepaspectratio]{E-lexicon.jpg}"));
+        let figure_pos = out.find("\\begin{figure}").unwrap();
+        let chapter_end = out.find("Master Glossary}").unwrap() + "Master Glossary}".len();
+        assert!(figure_pos > chapter_end);
+    }
+
+    #[test]
+    fn test_wrap_wide_tabulars_handles_utf8_in_lookback() {
+        // Regression: look-back window must not split a multi-byte codepoint.
+        // The em-dash `─` (3 bytes in UTF-8) appears within 120 bytes before
+        // \begin{tabular} in appendix D-golden-mirror.
+        let mut s = String::new();
+        // 100 bytes of multibyte chars followed by tabular.
+        for _ in 0..40 { s.push('─'); } // 40 * 3 = 120 bytes
+        s.push_str("\n\\begin{tabular}{cc}\na & b \\\\\n\\end{tabular}\n");
+        let out = wrap_wide_tabulars(&s);
+        assert!(out.contains("\\resizebox{\\linewidth}{!}{"));
+    }
+
+    #[test]
+    fn test_ensure_hero_gobbles_multiple_labels() {
+        let src = "\\chapter{X}\n\\label{ch:1}\n\\label{ch:golden-egg}\n\\label{ch:alt}\n\nBody\n";
+        let out = ensure_chapter_hero_figure(src, "01-golden-egg", "png");
+        let last_label = out.rfind("\\label{ch:alt}").unwrap();
+        let figure_pos = out.find("\\begin{figure}").unwrap();
+        assert!(figure_pos > last_label, "figure must come AFTER all \\label lines");
     }
 }
