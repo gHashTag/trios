@@ -1121,6 +1121,50 @@ reported in Chapter~\ref{ch:34}.
 \label{sec:anti-numerology}
 % ============================================================
 
+\subsection*{Clause F-5 — KART-Shaped Decomposition over GF(16) (L-KAT-12, L-KAT-35)}
+\label{sec:falsifier-kart-gf16}
+
+\begin{tcolorbox}[colback=red!5,colframe=red!40,title=Falsifier F-5]
+\textbf{Claim:} The Trinity GF(16) cell algebra (Theorem~12.7,
+\texttt{kart\_gf16\_exact}) and the deployment-cell Mesh-Resolution-Unit
+(Theorem~35.13, \texttt{mru\_kart\_decomposition\_eq}) realise a
+Kolmogorov–Arnold-shaped two-layer decomposition: outer-layer width
+$2n+1$, inner layer is the \texttt{vsa\_matmul} of
+$\mathrm{GF}(16)^n$, outer threshold is the φ-popcount aggregator at
+$\theta = \lceil n \cdot \varphi^{-1} \rceil$. Memory footprint at
+$n = 8$ is $4\times$ smaller than a continuous-spline KAN realising the
+same function class (ch.\ 27 \S 8.3, Table~27.4).
+
+\textbf{Falsified if:} Any witnessed input pair $(x, x') \in
+\mathrm{GF}(16)^n \times \mathrm{GF}(16)^n$ for which the MRU forward
+pass deviates from the structural KART decomposition by more than
+$\theta = \lceil n \cdot \varphi^{-1} \rceil$. Brute-force witness covers
+$n \in \{2, 4\}$ via
+\filepath{crates/trios-golden-float/tests/kart\_gf16\_witness.rs}
+($16^4 = 65{,}536$ pairs at $n=2$, default; $16^8 \approx 4.3 \cdot 10^9$
+pairs at $n=4$, \texttt{\#[ignore]}). For $n > 4$ exhaustive enumeration
+is structurally infeasible ($16^{2n} > 10^{19}$ at $n = 8$); the Coq
+theorems \texttt{kart\_gf16\_exact} and
+\texttt{mru\_kart\_decomposition\_eq} stay \textbf{Admitted} in honest
+agreement with that gap (R5).
+
+\textbf{Non-φ control:} A continuous-spline Kolmogorov–Arnold Network
+(KAN, \cite{liu2024kan}) realises the same function class with
+$\geq 256$ bits per knot at the same accuracy; the Trinity GF(16) cell
+requires $64$ bits per $16$-cell tensor, giving the literal $4\times$
+memory ratio (ch.\ 27, Table~27.4) at $n=8$ — not the speculative
+$100\times$ or $2600\times$ figures rejected during the L-KAT-RW R5
+audit.
+
+\textbf{Status:} Theorem 12.7 (Ch.~12 \S 5) and Theorem 35.13 (Ch.~35
+\S 13) both stay Admitted; the missing finite-field analogue of
+Schmidt-Hieber's KART bound~\cite{schmidt-hieber2020nonparametric} is the
+named gap blocking $\Qed$. Corroboration row Ch.35-MRU-KART is in
+\textbf{pending CI} state until \texttt{phd-build.yml} runs the
+\texttt{n=2} default test.
+\end{tcolorbox}
+
+
 All falsifier-clauses above satisfy the following anti-numerology criteria:
 
 \begin{enumerate}
