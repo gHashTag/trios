@@ -128,9 +128,16 @@
 \usepackage{url}
 \Urlmuskip=0mu plus 1mu
 \usepackage[numbers,sort&compress]{natbib}
-\providecommand{\textcite}[1]{\citet{#1}}
-\providecommand{\autocite}[1]{\citep{#1}}
-\providecommand{\parencite}[1]{\citep{#1}}
+\usepackage{xparse}
+\providecommand{\textcite}{}
+\RenewDocumentCommand{\textcite}{o m}{\IfNoValueTF{#1}{\citet{#2}}{\citet[#1]{#2}}}
+\providecommand{\autocite}{}
+\RenewDocumentCommand{\autocite}{o m}{\IfNoValueTF{#1}{\citep{#2}}{\citep[#1]{#2}}}
+\providecommand{\parencite}{}
+\RenewDocumentCommand{\parencite}{o m}{\IfNoValueTF{#1}{\citep{#2}}{\citep[#1]{#2}}}
+\providecommand{\bibentry}[1]{\cite{#1}}
+\providecommand{\filepath}[1]{\texttt{\detokenize{#1}}}
+\providecommand{\citetheorem}[1]{\texttt{\detokenize{#1}}}
 \providecommand{\addbibresource}[1]{}
 \providecommand{\printbibliography}{\bibliographystyle{plainnat}\bibliography{bibliography}}
 \usepackage{hyperref}
@@ -140,7 +147,7 @@
 \usepackage{eso-pic}
 \usepackage{gensymb}
 \providecommand{\doi}[1]{\href{https://doi.org/#1}{doi:\detokenize{#1}}}
-\providecommand{\coqcite}[4]{\par\noindent\textsc{Coq:}~\texttt{\detokenize{#1}} \textit{(\detokenize{#2}, lines #3, #4)}\par}
+\providecommand{\coqcite}[4]{\par\noindent\textsc{Coq:}~{\ttfamily\detokenize{#1}}\quad{\itshape(\detokenize{#2}, lines~\detokenize{#3},~\detokenize{#4})}\par}
 \providecommand{\argmax}{}\renewcommand{\argmax}{\mathop{\mathrm{arg\,max}}\limits}
 \providecommand{\argmin}{}\renewcommand{\argmin}{\mathop{\mathrm{arg\,min}}\limits}
 \providecommand{\sgn}{\mathop{\mathrm{sgn}}}
@@ -217,7 +224,8 @@
 \newtheorem{axiom}[theorem]{Аксиома}
 \renewcommand{\proofname}{Доказательство}
 \renewcommand{\qedsymbol}{}
-\providecommand{\admittedbox}[1]{\fcolorbox{red}{red!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{[Допущено]:} #1}}}
+\providecommand{\admittedbox}[2]{\fcolorbox{red}{red!10}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{[Допущено: \texttt{\detokenize{#1}}]} --- #2}}}
+\newenvironment{admittedboxenv}{\par\noindent\begin{minipage}{\linewidth}\color{red!70!black}\rule{\linewidth}{0.4pt}\par\small}{\par\rule{\linewidth}{0.4pt}\end{minipage}\par}
 
 % --- Russian babel-like names ---
 \renewcommand{\contentsname}{Содержание}
@@ -457,43 +465,6 @@ Coq-теоремы и runtime callsite в \filepath{crates/trios-*/src/}.
 \include{chapters/31-philosophy}
 \include{chapters/32-conclusion}
 \include{chapters/33-epilogue}
-
-\part{Поток Trinity S\textsuperscript{3}AI}
-\include{chapters/ch_00}
-\include{chapters/ch_01}
-\include{chapters/ch_02}
-\include{chapters/ch_03}
-\include{chapters/ch_04}
-\include{chapters/ch_05}
-\include{chapters/ch_06}
-\include{chapters/ch_07}
-\include{chapters/ch_08}
-\include{chapters/ch_09}
-\include{chapters/ch_10}
-\include{chapters/ch_11}
-\include{chapters/ch_12}
-\include{chapters/ch_13}
-\include{chapters/ch_14}
-\include{chapters/ch_15}
-\include{chapters/ch_16}
-\include{chapters/ch_17}
-\include{chapters/ch_18}
-\include{chapters/ch_19}
-\include{chapters/ch_20}
-\include{chapters/ch_21}
-\include{chapters/ch_22}
-\include{chapters/ch_23}
-\include{chapters/ch_24}
-\include{chapters/ch_25}
-\include{chapters/ch_26}
-\include{chapters/ch_27}
-\include{chapters/ch_28}
-\include{chapters/ch_29}
-\include{chapters/ch_30}
-\include{chapters/ch_31}
-\include{chapters/ch_32}
-\include{chapters/ch_33}
-\include{chapters/ch_34}
 
 \appendix
 \part{Приложения}
