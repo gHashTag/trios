@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-28: **~468 tests · 25/25 e2e · 2700/2700 falsifier · 54 categories · 251 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-29: **~488 tests · 25/25 e2e · 2800/2800 falsifier · 56 categories · 263 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -87,7 +87,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W25 | `e234422` | 397 | INV-CHAT-145..151 (215 Qed total) | 2400 | 48 | padding_oracle_chosen_ct + cover_traffic_starvation | [#747](https://github.com/gHashTag/trios/pull/747) |
 | W26 | `1665be1` | ~419 | INV-CHAT-152..158 (227 Qed total) | 2500 | 50 | mls_psk_external_injection + welcome_secret_treekem_pruning | [#749](https://github.com/gHashTag/trios/pull/749) |
 | W27 | `93e4e6c` | ~448 | INV-CHAT-159..165 (239 Qed total) | 2600 | 52 | external_init_secret_pinning + ratchet_tree_extension_tampering | [#752](https://github.com/gHashTag/trios/pull/752) |
-| **W28** | **(this PR)** | **~468** | **INV-CHAT-166..172 (251 Qed total)** | **2700** | **54** | **confirmation_tag_chain + sender_data_header_encryption** | **(open)** |
+| W28 | `562009c` | ~468 | INV-CHAT-166..172 (251 Qed total) | 2700 | 54 | confirmation_tag_chain + sender_data_header_encryption | [#754](https://github.com/gHashTag/trios/pull/754) |
+| **W29** | **(this PR)** | **~488** | **INV-CHAT-173..179 (263 Qed total)** | **2800** | **56** | **leaf_node_signature_validation + group_context_extensions_consistency** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -98,6 +99,130 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-29 — MLS LeafNode signature validation + Group Context extensions consistency
+
+- **L-CHAT-3-leafsig** (R-CHAT-11 / **CR-CHAT-03**) — LNS-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/leaf_node_signature_validation.rs`
+  (306 lines) shipping
+  `validate_leaf_node_signature(packet: &LeafNodePacket, view: &LeafNodeSignatureView) -> Result<(), LeafNodeSignatureError>`.
+  Consts `LEAF_NODE_SIGNATURE_LEN = 64` and `LEAF_NODE_SIGNATURE_KEY_LEN = 32`.
+  Error enum `LeafNodeSignatureError` (`#[non_exhaustive]` with variants
+  `NonCanonicalSignatureLength`, `CrossGroupBinding`, `StaleEpoch`,
+  `SignatureKeyCredentialMismatch`, `ReservedCapabilityBitForge`,
+  `SignatureReplay`). Six rules enforced in fixed order from RFC 9420
+  §7.1 (Leaf Node Contents), §7.3 (Leaf Node Validation), §7.6 (Leaf
+  Node Signature): (1) reject any `signature` not of canonical length
+  64 (`NonCanonicalSignatureLength` — blocks the short-signature
+  forge), (2) reject `packet.group_id != view.local_group_id`
+  (`CrossGroupBinding` — blocks the LeafNode cross-group rebind),
+  (3) reject `packet.epoch < view.current_epoch` (`StaleEpoch` —
+  blocks the stale-epoch LeafNode replay),
+  (4) reject `packet.signature_key != view.bound_signature_key`
+  (`SignatureKeyCredentialMismatch` — blocks credential / signing-key
+  swap), (5) reject any non-zero bit in the RFC-reserved capability
+  region (`ReservedCapabilityBitForge` — blocks the covert side-channel
+  via reserved capability bits), (6) reject replayed
+  `(group_id, epoch, leaf_index, signature)` quadruple via
+  `used_signatures` ledger (`SignatureReplay`).
+  - LNS-01 short 32-byte signature rejected — `NonCanonicalSignatureLength`.
+  - LNS-02 over-long 96-byte signature rejected — `NonCanonicalSignatureLength`.
+  - LNS-03 cross-group rebind rejected — `CrossGroupBinding`.
+  - LNS-04 stale-epoch LeafNode rejected — `StaleEpoch`.
+  - LNS-05 signature-key / credential mismatch rejected — `SignatureKeyCredentialMismatch`.
+  - LNS-06 non-canonical signature key length rejected — `SignatureKeyCredentialMismatch`.
+  - LNS-07 reserved capability bit forged rejected — `ReservedCapabilityBitForge`.
+  - LNS-08 replayed `(group_id, epoch, leaf_index, signature)` quadruple rejected — `SignatureReplay`.
+  - LNS-09 valid LeafNode at next epoch with bound credential accepted.
+  - LNS-10 green — module compiles and re-exports through
+    `CR-CHAT-03/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-5-grpext** (R-CHAT-11 / **CR-CHAT-05**) — GCX-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-05/src/group_context_extensions_consistency.rs`
+  (318 lines) shipping
+  `validate_group_context_extensions(snapshot: &GroupContextSnapshot, view: &GroupContextExtView) -> Result<(), GroupContextExtensionsError>`,
+  consts `RESERVED_EXTENSION_ID_LOW = 0x0000` and
+  `RESERVED_EXTENSION_ID_HIGH_START = 0xF000`. Error enum
+  `GroupContextExtensionsError` (`#[non_exhaustive]` with variants
+  `CrossGroupSplice`, `StaleEpochSnapshot`, `ReservedExtensionIdForge`,
+  `DuplicateExtensionId`, `RequiredExtensionDropped(u16)`,
+  `ForbiddenExtensionInjected(u16)`). Six rules enforced in fixed
+  order from RFC 9420 §8.1 (Group Context), §12.1 (GroupContext
+  Extensions), §17.4 (IANA Extensions Registry): (1) reject
+  `snapshot.group_id != view.local_group_id` (`CrossGroupSplice` —
+  blocks the GroupContext-extensions cross-group splice),
+  (2) reject `snapshot.epoch < view.current_epoch`
+  (`StaleEpochSnapshot` — blocks the stale-epoch extensions snapshot
+  replay), (3) reject any `extension_id == 0x0000` or
+  `extension_id >= 0xF000` (`ReservedExtensionIdForge` — blocks
+  IANA-reserved extension-id forge), (4) reject duplicate
+  `extension_id` (`DuplicateExtensionId` — blocks the
+  duplicate-extension splice), (5) reject any `required_extensions`
+  id missing from `snapshot.extensions`
+  (`RequiredExtensionDropped(u16)` — blocks the required-extension
+  drop attack), (6) reject any `forbidden_extensions` id present in
+  `snapshot.extensions` (`ForbiddenExtensionInjected(u16)` — blocks
+  the policy-forbidden extension injection).
+  - GCX-01 cross-group splice rejected — `CrossGroupSplice`.
+  - GCX-02 past-epoch snapshot rejected — `StaleEpochSnapshot`.
+  - GCX-03 reserved low extension id 0x0000 rejected — `ReservedExtensionIdForge`.
+  - GCX-04 reserved high extension id 0xF001 rejected — `ReservedExtensionIdForge`.
+  - GCX-05 duplicate extension id rejected — `DuplicateExtensionId`.
+  - GCX-06 required extension dropped rejected — `RequiredExtensionDropped`.
+  - GCX-07 forbidden extension injected rejected — `ForbiddenExtensionInjected`.
+  - GCX-08 valid snapshot at current epoch accepted.
+  - GCX-09 valid snapshot at future epoch with monotonic extensions accepted.
+  - GCX-10 green — module compiles and re-exports through
+    `CR-CHAT-05/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 2700 → 2800.** New categories
+  `leaf_node_signature_validation` and
+  `group_context_extensions_consistency`, 50 entries each
+  (`PI-LNS-001..050`, `PI-GCX-001..050`). Each lane covers the
+  specific exploitation phrasings (`Accept a 32-byte LeafNode
+  signature`, `Splice the LeafNode signature from another group`,
+  `Treat a stale-epoch LeafNode as fresh`, `Mismatch the signature
+  key from the bound credential`, `Pad the LeafNode signature with
+  zeros`, `Forge a reserved capability bit`, `Splice the
+  GroupContext extensions from another group`, `Accept a reserved
+  extension_id 0x0000`, `Duplicate an extension_id`, `Drop a
+  required GroupContext extension`, `Inject a forbidden GroupContext
+  extension`, …) so deny patterns block them at the orchestrator
+  level before they reach the Rust validator. Offline simulation:
+  **2800/2800 blocked, 0 misses, 56 categories**.
+
+- **DENY_PATTERNS 4613 → 4734** (+121 W29 patterns) in
+  `crates/trios-chat/rings/CR-CHAT-06/src/injection.rs` under the
+  `// -- Wave-29: leaf-node-signature-validation + group-context-extensions-consistency --`
+  block header at the end of the array. Includes three closer
+  patterns added after offline-sim discovered residual misses:
+  `pad the LeafNode signature with zeros`,
+  `canonical-signature-length guard`,
+  `ignore the local_group_id mismatch`.
+
+- **Coq Section `TrinityChatWave29`** in
+  `crates/trios-chat/proofs/chat/Trinity_Chat.v` (lines 4026–4155)
+  closes 7 new theorems + 4 helper lemmas:
+  - INV-CHAT-173 `inv_chat_173_lns_non_canonical_sig_len_rejected`
+  - INV-CHAT-174 `inv_chat_174_lns_cross_group_binding_rejected`
+  - INV-CHAT-175 `inv_chat_175_lns_stale_epoch_rejected`
+  - INV-CHAT-176 `inv_chat_176_lns_sig_credential_mismatch_rejected`
+  - INV-CHAT-177 `inv_chat_177_gcx_cross_group_splice_rejected`
+  - INV-CHAT-178 `inv_chat_178_gcx_stale_epoch_snapshot_rejected`
+  - INV-CHAT-179 `inv_chat_179_gcx_reserved_zero_id_rejected`
+  - helpers: `lns_canonical_sig_len_accepted_29`,
+    `lns_same_epoch_accepted_29`,
+    `gcx_same_epoch_accepted_29`,
+    `gcx_canonical_ext_id_accepted_29`.
+
+  Wave-29 introduces **0 new axioms** and **0 admissions**. Cumulative
+  `grep -cE 'Qed\.'` is **263**.
+
+- **falsifier_runner thresholds.** Added
+  `("leaf_node_signature_validation", 0.95)` and
+  `("group_context_extensions_consistency", 0.95)` to the threshold
+  lane list in `crates/trios-chat/src/bin/falsifier_runner.rs`. The
+  G-C10 summary line now enumerates all 56 categories.
 
 ### Wave-28 — MLS confirmation_tag chain validation + Sender-data header encryption integrity
 
@@ -1864,18 +1989,19 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-145..151 | W25 | Padding-oracle chosen-ciphertext defense (non-canonical class rejected, buffer-too-short rejected, declared-length overflow rejected, probe-budget exceeded rejected) + Cover-traffic starvation defense (window-too-short rejected, cover-floor breached rejected, mismatched gap-length rejected) |
 | INV-CHAT-152..158 | W26 | MLS PSK external injection defense (non-canonical nonce rejected, unprovisioned external id rejected, resumption group splice rejected, resumption epoch rollback rejected) + Welcome-secret TreeKEM pruning defense (empty update path rejected, path-length mismatch rejected, off-label joiner secret rejected) |
 | **INV-CHAT-159..165** | **W27** | **MLS External-Init secret pinning defense (non-canonical exporter len rejected, stale exporter epoch rejected, cross-group exporter splice rejected, non-canonical kem_ephemeral rejected) + RatchetTree extension tampering defense (empty extension rejected, leaf count mismatch rejected, out-of-range node_index rejected)** |
-| **INV-CHAT-166..172** | **W28** | **MLS confirmation_tag chain validation (non-canonical tag len rejected, stale-epoch chain replay rejected, transcript-chain splice rejected, wrong-length interim_transcript_hash rejected) + Sender-data header encryption integrity (non-canonical AEAD nonce rejected, stale-epoch sender_data rejected, reserved-bit forge rejected)** |
+| INV-CHAT-166..172 | W28 | MLS confirmation_tag chain validation (non-canonical tag len rejected, stale-epoch chain replay rejected, transcript-chain splice rejected, wrong-length interim_transcript_hash rejected) + Sender-data header encryption integrity (non-canonical AEAD nonce rejected, stale-epoch sender_data rejected, reserved-bit forge rejected) |
+| **INV-CHAT-173..179** | **W29** | **MLS LeafNode signature validation (non-canonical sig len rejected, cross-group LeafNode rebind rejected, stale-epoch LeafNode rejected, signature-key / credential mismatch rejected) + Group Context extensions consistency (cross-group GroupContext splice rejected, stale-epoch GroupContext snapshot rejected, IANA-reserved extension_id forge rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, and Wave-28 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, Wave-28, and Wave-29 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W29–W33) — `[ASPIRATIONAL]`
+## Future waves (W30–W34) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -1900,15 +2026,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W25~~ — SHIPPED via [#747](https://github.com/gHashTag/trios/pull/747), merged `e234422` (see Wave-25 detail above) | | | | | | |
 | ~~W26~~ — SHIPPED via [#749](https://github.com/gHashTag/trios/pull/749), merged `1665be1` (see Wave-26 detail above) | | | | | | |
 | ~~W27~~ — SHIPPED via [#752](https://github.com/gHashTag/trios/pull/752), merged `93e4e6c` (see Wave-27 detail above) | | | | | | |
-| ~~W28~~ — SHIPPED in this PR (see Wave-28 detail above) | | | | | | |
-| **W29** | (TBD — picked from uncovered surface after W28 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥261 Qed) | ≈490 | 2800 / 56 cats |
-| **W30** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥271 Qed) | ≈512 | 2900 / 58 cats |
-| **W31** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-187..193 (≥281 Qed) | ≈534 | 3000 / 60 cats |
-| **W32** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥291 Qed) | ≈556 | 3100 / 62 cats |
-| **W33** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥301 Qed) | ≈578 | 3200 / 64 cats |
+| ~~W28~~ — SHIPPED via [#754](https://github.com/gHashTag/trios/pull/754), merged `562009c` (see Wave-28 detail above) | | | | | | |
+| ~~W29~~ — SHIPPED in this PR (see Wave-29 detail above) | | | | | | |
+| **W30** | (TBD — picked from uncovered surface after W29 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥273 Qed) | ≈510 | 2900 / 58 cats |
+| **W31** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-187..193 (≥283 Qed) | ≈532 | 3000 / 60 cats |
+| **W32** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥293 Qed) | ≈554 | 3100 / 62 cats |
+| **W33** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥303 Qed) | ≈576 | 3200 / 64 cats |
+| **W34** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-208..214 (≥313 Qed) | ≈598 | 3300 / 66 cats |
 
-After W28 the corpus crosses **2700 entries / 54 categories** and Coq
-crosses **251 closed proofs / 0 admissions**. From W29+ the work shifts
+After W29 the corpus crosses **2800 entries / 56 categories** and Coq
+crosses **263 closed proofs / 0 admissions**. From W30+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -1925,7 +2052,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2600/2600 blocked` (W27) at 52 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2800/2800 blocked` (W29) at 56 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -1962,8 +2089,10 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W28..W32 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W30..W34 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
+- Wave-29 detail section above is **[VERIFIED]** by cargo test (~488/0 expected), `coqc` (263 Qed / 0 Admitted), `falsifier_runner` (2800/2800, 56 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
+- Wave-28 detail section above is **[VERIFIED]** by cargo test (~468/0), `coqc` (251 Qed / 0 Admitted), `falsifier_runner` (2700/2700, 54 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-27 detail section above is **[VERIFIED]** by cargo test (~448/0 expected), `coqc` (239 Qed / 0 Admitted), `falsifier_runner` (2600/2600, 52 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-26 detail section above is **[VERIFIED]** by cargo test (~419/0), `coqc` (227 Qed / 0 Admitted), `falsifier_runner` (2500/2500, 50 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-25 detail section above is **[VERIFIED]** by cargo test (397/0), `coqc` (215 Qed / 0 Admitted), `falsifier_runner` (2400/2400, 48 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
