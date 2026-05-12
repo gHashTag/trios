@@ -63,6 +63,12 @@ pub use jitter_side_channel::{
     JitterPolicy, WireKind,
 };
 
+pub mod cover_traffic_starvation;
+pub use cover_traffic_starvation::{
+    validate_window as validate_cover_window, CoverStarvationError, MIN_COVER_RATIO_DEN,
+    MIN_COVER_RATIO_NUM, WINDOW_MIN_EMISSIONS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

@@ -32,6 +32,11 @@ pub use padding_class_oracle::{
     PaddingOracleError,
 };
 
+pub mod padding_oracle_chosen_ct;
+pub use padding_oracle_chosen_ct::{
+    verify_probe, PaddingOracleCtError, VerdictLedger, PROBE_BUDGET,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
