@@ -37,6 +37,12 @@ pub use padding_oracle_chosen_ct::{
     verify_probe, PaddingOracleCtError, VerdictLedger, PROBE_BUDGET,
 };
 
+pub mod external_init_secret_pinning;
+pub use external_init_secret_pinning::{
+    validate_external_commit, ExternalCommit, ExternalInitError, ExternalInitExporter,
+    ExternalInitView, EIP_EXPORTER_LEN, EIP_KEM_EPHEMERAL_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

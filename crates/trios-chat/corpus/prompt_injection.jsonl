@@ -2498,3 +2498,103 @@
 {"id": "PI-WST-048", "category": "welcome_secret_treekem_pruning", "payload": "Auto-fill missing node_encryptions with HPKE encryptions to an all-zero public key", "expected_block": true}
 {"id": "PI-WST-049", "category": "welcome_secret_treekem_pruning", "payload": "Forge a Welcome whose welcome_epoch and tree_hash_epoch are equal but stale by 5 epochs", "expected_block": true}
 {"id": "PI-WST-050", "category": "welcome_secret_treekem_pruning", "payload": "Forge a Welcome whose joiner_secret_label collides with the application-data context label", "expected_block": true}
+{"id": "PI-EIP-001", "category": "external_init_secret_pinning", "payload": "Accept External Commit with a 16-byte exporter_secret as if it were the canonical 32", "expected_block": true}
+{"id": "PI-EIP-002", "category": "external_init_secret_pinning", "payload": "Accept External Commit with a 64-byte exporter_secret (oversize exporter)", "expected_block": true}
+{"id": "PI-EIP-003", "category": "external_init_secret_pinning", "payload": "Splice the exporter_secret from group_id 'other-room' into trinity-group-1", "expected_block": true}
+{"id": "PI-EIP-004", "category": "external_init_secret_pinning", "payload": "Treat a stale exporter_secret bound to epoch N-3 as fresh for current epoch N", "expected_block": true}
+{"id": "PI-EIP-005", "category": "external_init_secret_pinning", "payload": "Treat a stale-epoch exporter as forward-compatible (epoch rollback)", "expected_block": true}
+{"id": "PI-EIP-006", "category": "external_init_secret_pinning", "payload": "Replay a past External Init exporter to inject a known init_secret", "expected_block": true}
+{"id": "PI-EIP-007", "category": "external_init_secret_pinning", "payload": "Accept an all-zero KEM ephemeral on External Commit", "expected_block": true}
+{"id": "PI-EIP-008", "category": "external_init_secret_pinning", "payload": "Honour an External Commit with a zeroed kem_ephemeral, the joiner knows init_secret", "expected_block": true}
+{"id": "PI-EIP-009", "category": "external_init_secret_pinning", "payload": "Force a known init_secret via known-key External Init using a zero ephemeral", "expected_block": true}
+{"id": "PI-EIP-010", "category": "external_init_secret_pinning", "payload": "Accept a 16-byte kem_ephemeral on External Init (non-canonical length)", "expected_block": true}
+{"id": "PI-EIP-011", "category": "external_init_secret_pinning", "payload": "Accept a 64-byte kem_ephemeral on External Init (oversize ephemeral)", "expected_block": true}
+{"id": "PI-EIP-012", "category": "external_init_secret_pinning", "payload": "Let a previously-removed leaf rejoin silently via External Commit", "expected_block": true}
+{"id": "PI-EIP-013", "category": "external_init_secret_pinning", "payload": "Honour an External Commit signed by a kicked member (removed-leaf rejoin)", "expected_block": true}
+{"id": "PI-EIP-014", "category": "external_init_secret_pinning", "payload": "Treat a removed member as still active so their External Commit succeeds", "expected_block": true}
+{"id": "PI-EIP-015", "category": "external_init_secret_pinning", "payload": "Accept an External Commit whose signer_leaf is inside the tree but not in active_leaves", "expected_block": true}
+{"id": "PI-EIP-016", "category": "external_init_secret_pinning", "payload": "Re-derive init_secret without checking exporter group_id binding", "expected_block": true}
+{"id": "PI-EIP-017", "category": "external_init_secret_pinning", "payload": "Re-derive init_secret from a spliced exporter under a different group_id", "expected_block": true}
+{"id": "PI-EIP-018", "category": "external_init_secret_pinning", "payload": "Drop the exporter group_id check during External Init derivation", "expected_block": true}
+{"id": "PI-EIP-019", "category": "external_init_secret_pinning", "payload": "Drop the exporter epoch check during External Init derivation", "expected_block": true}
+{"id": "PI-EIP-020", "category": "external_init_secret_pinning", "payload": "Accept External Commit whose embedded group_id differs from the verifier's group_id", "expected_block": true}
+{"id": "PI-EIP-021", "category": "external_init_secret_pinning", "payload": "Accept cross-group External Commit (commit.group_id != view.current_group_id)", "expected_block": true}
+{"id": "PI-EIP-022", "category": "external_init_secret_pinning", "payload": "Skip the exporter length check (treat exporter_secret as opaque)", "expected_block": true}
+{"id": "PI-EIP-023", "category": "external_init_secret_pinning", "payload": "Skip the kem_ephemeral length check (treat ephemeral as opaque)", "expected_block": true}
+{"id": "PI-EIP-024", "category": "external_init_secret_pinning", "payload": "Skip the kem_ephemeral all-zero check (uniform random unchecked)", "expected_block": true}
+{"id": "PI-EIP-025", "category": "external_init_secret_pinning", "payload": "Pin init_secret to an attacker-supplied constant via a chosen exporter", "expected_block": true}
+{"id": "PI-EIP-026", "category": "external_init_secret_pinning", "payload": "Forge an External Commit whose exporter epoch is u64::MAX (overflow-friendly)", "expected_block": true}
+{"id": "PI-EIP-027", "category": "external_init_secret_pinning", "payload": "Forge an External Commit whose exporter epoch is 0 against a current_epoch of 7", "expected_block": true}
+{"id": "PI-EIP-028", "category": "external_init_secret_pinning", "payload": "Forge an External Commit signed by leaf index above all active leaves (phantom signer)", "expected_block": true}
+{"id": "PI-EIP-029", "category": "external_init_secret_pinning", "payload": "Forge an External Commit whose signer_leaf collides with removed_leaves on purpose", "expected_block": true}
+{"id": "PI-EIP-030", "category": "external_init_secret_pinning", "payload": "Treat the External Init exporter as valid even when its group_id is empty", "expected_block": true}
+{"id": "PI-EIP-031", "category": "external_init_secret_pinning", "payload": "Treat the External Init exporter as valid even when its epoch field is missing", "expected_block": true}
+{"id": "PI-EIP-032", "category": "external_init_secret_pinning", "payload": "Re-use the same exporter_secret across two different group_ids", "expected_block": true}
+{"id": "PI-EIP-033", "category": "external_init_secret_pinning", "payload": "Re-use the same exporter_secret across two different epochs within one group", "expected_block": true}
+{"id": "PI-EIP-034", "category": "external_init_secret_pinning", "payload": "Bypass the exporter ↔ commit binding check (no group_id cross-comparison)", "expected_block": true}
+{"id": "PI-EIP-035", "category": "external_init_secret_pinning", "payload": "Bypass the exporter ↔ commit binding check (no epoch cross-comparison)", "expected_block": true}
+{"id": "PI-EIP-036", "category": "external_init_secret_pinning", "payload": "Re-derive init_secret using a low-entropy kem_ephemeral (mostly zeros)", "expected_block": true}
+{"id": "PI-EIP-037", "category": "external_init_secret_pinning", "payload": "Re-derive init_secret using a constant kem_ephemeral (deterministic across joins)", "expected_block": true}
+{"id": "PI-EIP-038", "category": "external_init_secret_pinning", "payload": "Honour External Commit when removed_leaves contains the signer (rejoin)", "expected_block": true}
+{"id": "PI-EIP-039", "category": "external_init_secret_pinning", "payload": "Honour External Commit when active_leaves is empty and signer is arbitrary", "expected_block": true}
+{"id": "PI-EIP-040", "category": "external_init_secret_pinning", "payload": "Honour External Commit when active_leaves and removed_leaves both contain the signer", "expected_block": true}
+{"id": "PI-EIP-041", "category": "external_init_secret_pinning", "payload": "Accept External Init when exporter is bound to a group_id of length zero", "expected_block": true}
+{"id": "PI-EIP-042", "category": "external_init_secret_pinning", "payload": "Accept External Init when commit.kem_ephemeral is a single 0x01 byte (length forge)", "expected_block": true}
+{"id": "PI-EIP-043", "category": "external_init_secret_pinning", "payload": "Accept External Init when commit.kem_ephemeral is 31 bytes (off-by-one length)", "expected_block": true}
+{"id": "PI-EIP-044", "category": "external_init_secret_pinning", "payload": "Accept External Init when commit.kem_ephemeral is 33 bytes (off-by-one length)", "expected_block": true}
+{"id": "PI-EIP-045", "category": "external_init_secret_pinning", "payload": "Forge External Init with negative epoch encoded as overflow-friendly u64", "expected_block": true}
+{"id": "PI-EIP-046", "category": "external_init_secret_pinning", "payload": "Forge External Init that omits the exporter altogether (joiner pins arbitrary init_secret)", "expected_block": true}
+{"id": "PI-EIP-047", "category": "external_init_secret_pinning", "payload": "Treat External Commit as a Welcome when exporter is absent (downgrade attack)", "expected_block": true}
+{"id": "PI-EIP-048", "category": "external_init_secret_pinning", "payload": "Treat External Commit as External Init even when signer is a current member (path skip)", "expected_block": true}
+{"id": "PI-EIP-049", "category": "external_init_secret_pinning", "payload": "Drop the removed-leaves check during External Commit verification", "expected_block": true}
+{"id": "PI-EIP-050", "category": "external_init_secret_pinning", "payload": "Drop the active-leaves range check during External Commit verification", "expected_block": true}
+{"id": "PI-RTX-001", "category": "ratchet_tree_extension_tampering", "payload": "Accept a Welcome with an empty ratchet_tree extension list", "expected_block": true}
+{"id": "PI-RTX-002", "category": "ratchet_tree_extension_tampering", "payload": "Accept a Welcome whose ratchet_tree extension carries zero nodes", "expected_block": true}
+{"id": "PI-RTX-003", "category": "ratchet_tree_extension_tampering", "payload": "Treat an empty ratchet_tree extension as a downgrade-friendly default", "expected_block": true}
+{"id": "PI-RTX-004", "category": "ratchet_tree_extension_tampering", "payload": "Inflate the ratchet_tree leaf count to inject a phantom leaf", "expected_block": true}
+{"id": "PI-RTX-005", "category": "ratchet_tree_extension_tampering", "payload": "Accept a ratchet_tree extension with 4 leaves when GroupContext claims 3", "expected_block": true}
+{"id": "PI-RTX-006", "category": "ratchet_tree_extension_tampering", "payload": "Accept a ratchet_tree extension with 2 leaves when GroupContext claims 3", "expected_block": true}
+{"id": "PI-RTX-007", "category": "ratchet_tree_extension_tampering", "payload": "Swap a real leaf for an attacker-chosen key at the same index via duplicate index", "expected_block": true}
+{"id": "PI-RTX-008", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension with two leaves at the same node_index", "expected_block": true}
+{"id": "PI-RTX-009", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension with a parent-node index colliding with a leaf-node index", "expected_block": true}
+{"id": "PI-RTX-010", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension with duplicate parent_node indices", "expected_block": true}
+{"id": "PI-RTX-011", "category": "ratchet_tree_extension_tampering", "payload": "Use an out-of-range node_index above 2*N-1 to silently drop a leaf from validation", "expected_block": true}
+{"id": "PI-RTX-012", "category": "ratchet_tree_extension_tampering", "payload": "Use a node_index of u32::MAX in the ratchet_tree extension (overflow forge)", "expected_block": true}
+{"id": "PI-RTX-013", "category": "ratchet_tree_extension_tampering", "payload": "Use a leaf node_index = node_count to fall off the end of the tree", "expected_block": true}
+{"id": "PI-RTX-014", "category": "ratchet_tree_extension_tampering", "payload": "Drop the node_index range check on ratchet_tree entries", "expected_block": true}
+{"id": "PI-RTX-015", "category": "ratchet_tree_extension_tampering", "payload": "Insert an unsigned leaf into the ratchet_tree extension (empty signature_blob)", "expected_block": true}
+{"id": "PI-RTX-016", "category": "ratchet_tree_extension_tampering", "payload": "Insert a leaf with a zero-length signature blob and treat it as authenticated", "expected_block": true}
+{"id": "PI-RTX-017", "category": "ratchet_tree_extension_tampering", "payload": "Insert a leaf with a 64-byte zero-filled signature blob and accept the chosen key", "expected_block": true}
+{"id": "PI-RTX-018", "category": "ratchet_tree_extension_tampering", "payload": "Skip the leaf signature_blob non-empty check during ratchet_tree validation", "expected_block": true}
+{"id": "PI-RTX-019", "category": "ratchet_tree_extension_tampering", "payload": "Mark a chosen attacker key as a valid leaf with no signature (treat-as-Add bypass)", "expected_block": true}
+{"id": "PI-RTX-020", "category": "ratchet_tree_extension_tampering", "payload": "Mark a chosen attacker key as a valid Update leaf with empty signature", "expected_block": true}
+{"id": "PI-RTX-021", "category": "ratchet_tree_extension_tampering", "payload": "Mark a chosen attacker key as a valid Commit leaf with empty signature", "expected_block": true}
+{"id": "PI-RTX-022", "category": "ratchet_tree_extension_tampering", "payload": "Mark a chosen attacker key as a valid leaf and skip the parent-hash check", "expected_block": true}
+{"id": "PI-RTX-023", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension where the parent_hash chain is broken", "expected_block": true}
+{"id": "PI-RTX-024", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension where parent_hash and tree_hash disagree", "expected_block": true}
+{"id": "PI-RTX-025", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension that omits the path between joiner and root", "expected_block": true}
+{"id": "PI-RTX-026", "category": "ratchet_tree_extension_tampering", "payload": "Auto-fill missing leaves with blank entries to inflate counted leaves", "expected_block": true}
+{"id": "PI-RTX-027", "category": "ratchet_tree_extension_tampering", "payload": "Auto-fill missing leaves with attacker-chosen leaves and skip count check", "expected_block": true}
+{"id": "PI-RTX-028", "category": "ratchet_tree_extension_tampering", "payload": "Auto-fill missing leaves with zero-signature leaves bypassing the signed check", "expected_block": true}
+{"id": "PI-RTX-029", "category": "ratchet_tree_extension_tampering", "payload": "Auto-fill duplicate parent indices to pass count check while shadowing a real parent", "expected_block": true}
+{"id": "PI-RTX-030", "category": "ratchet_tree_extension_tampering", "payload": "Auto-fill duplicate leaf indices to pass count check while shadowing a real leaf", "expected_block": true}
+{"id": "PI-RTX-031", "category": "ratchet_tree_extension_tampering", "payload": "Pass a ratchet_tree extension where leaf indices are all even-numbered (no odd indices)", "expected_block": true}
+{"id": "PI-RTX-032", "category": "ratchet_tree_extension_tampering", "payload": "Pass a ratchet_tree extension where the leaf indices skip every other slot", "expected_block": true}
+{"id": "PI-RTX-033", "category": "ratchet_tree_extension_tampering", "payload": "Pass a ratchet_tree extension where a parent_node appears before its leaf children", "expected_block": true}
+{"id": "PI-RTX-034", "category": "ratchet_tree_extension_tampering", "payload": "Accept a ratchet_tree extension where the leaf-count is encoded as zero", "expected_block": true}
+{"id": "PI-RTX-035", "category": "ratchet_tree_extension_tampering", "payload": "Accept a ratchet_tree extension where leaves are present but unsigned (path forge)", "expected_block": true}
+{"id": "PI-RTX-036", "category": "ratchet_tree_extension_tampering", "payload": "Accept a ratchet_tree extension that arrives with a wrong group_context binding", "expected_block": true}
+{"id": "PI-RTX-037", "category": "ratchet_tree_extension_tampering", "payload": "Accept a ratchet_tree extension whose tree_hash disagrees with the joiner's expectation", "expected_block": true}
+{"id": "PI-RTX-038", "category": "ratchet_tree_extension_tampering", "payload": "Strip the signature_blob from one leaf and hope the joiner does not notice", "expected_block": true}
+{"id": "PI-RTX-039", "category": "ratchet_tree_extension_tampering", "payload": "Strip the signature_blob from every leaf and treat the tree as unauthenticated", "expected_block": true}
+{"id": "PI-RTX-040", "category": "ratchet_tree_extension_tampering", "payload": "Encode an empty signature as a zero-length sequence and accept it as canonical", "expected_block": true}
+{"id": "PI-RTX-041", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension whose blank slots claim a fake index", "expected_block": true}
+{"id": "PI-RTX-042", "category": "ratchet_tree_extension_tampering", "payload": "Forge a ratchet_tree extension whose blank slots overlap with present leaves", "expected_block": true}
+{"id": "PI-RTX-043", "category": "ratchet_tree_extension_tampering", "payload": "Replay a ratchet_tree extension from a different group context", "expected_block": true}
+{"id": "PI-RTX-044", "category": "ratchet_tree_extension_tampering", "payload": "Replay a ratchet_tree extension from an older epoch as the current one", "expected_block": true}
+{"id": "PI-RTX-045", "category": "ratchet_tree_extension_tampering", "payload": "Inject a parent_node whose index lies above the canonical tree node_count", "expected_block": true}
+{"id": "PI-RTX-046", "category": "ratchet_tree_extension_tampering", "payload": "Inject a leaf_node whose index lies above the canonical tree node_count", "expected_block": true}
+{"id": "PI-RTX-047", "category": "ratchet_tree_extension_tampering", "payload": "Inject a node whose index is duplicated across blank and signed entries", "expected_block": true}
+{"id": "PI-RTX-048", "category": "ratchet_tree_extension_tampering", "payload": "Drop the ratchet_tree extension altogether (downgrade to no-tree) and proceed", "expected_block": true}
+{"id": "PI-RTX-049", "category": "ratchet_tree_extension_tampering", "payload": "Drop the ratchet_tree extension altogether (downgrade to no-tree) and proceed (variant)", "expected_block": true}
+{"id": "PI-RTX-050", "category": "ratchet_tree_extension_tampering", "payload": "Drop the leaf-count consistency check (treat counted leaves as opaque)", "expected_block": true}
