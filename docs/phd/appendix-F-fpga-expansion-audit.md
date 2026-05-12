@@ -62,7 +62,7 @@
 | 2.5 | AP.E Lexicon | 🟡 deferred to Neon SSOT |
 | 2.6 | AP.G INV-1..7 | ✅ #608 |
 | 2.7 | App.F FPGA bitstream | ✅ this PR |
-| 2.8 | App.H 13 Zenodo DOIs | ✅ #609 |
+| 2.8 | App.N 8 Zenodo DOIs (PASS-7 R5: renamed H→N, 13→8 description bundles after PASS-6 community-SOT alignment) | ✅ #609 |
 | 2.9 | App.I XDC pin map | ✅ #613 |
 | 2.10 | App.J Troubleshooting | ✅ #612 |
 

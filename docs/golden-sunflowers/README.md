@@ -43,6 +43,6 @@ Do NOT edit here — edit in NEON, then re-run `v4/generate_from_neon.py`.
 - `app-e-pre-reg-pdf-osf-igla-race-results.md` — **App.E** Pre-reg PDF + OSF + IGLA RACE results
 - `app-f-bitstream-archive-sha-256.md` — **App.F** Bitstream archive + SHA-256
 - `app-g-clara-evidence-package-mirror.md` — **App.G** CLARA evidence package mirror
-- `app-h-13-zenodo-doi-registry.md` — **App.H** 13 Zenodo DOI registry
+- `app-h-zenodo-doi-registry.md` — **App.N** 8-bundle Zenodo DOI registry (community `trinity-s3ai`; PASS-7 R5-honest rename from `app-h-13-...` after PASS-6 reduced 13→8 description bundles)
 - `app-i-xdc-pin-map.md` — **App.I** XDC pin map
 - `app-j-troubleshooting-blk-001-blk-005.md` — **App.J** Troubleshooting (BLK-001..BLK-005)

@@ -1,8 +1,8 @@
 ![Zenodo DOI registry](https://raw.githubusercontent.com/gHashTag/trios/feat/illustrations/assets/illustrations/app-h-zenodo-doi-registry.png)
 
-*Figure — App.H: Zenodo DOI registry (scientific triptych, 1200×800).*
+*Figure — App.N: Zenodo DOI registry (scientific triptych, 1200×800). PASS-7 R5-honest note: the linked PNG lives on branch `feat/illustrations` and is not built into the LaTeX monograph (App.N renders the table only — see `docs/phd/appendix/N-zenodo-doi.tex`).*
 
-# App.H — Zenodo DOI registry (R5-honest, PASS-6 community-SOT aligned)
+# App.N — Zenodo DOI registry (R5-honest, PASS-7 community-SOT aligned)
 
 > **R5-honest audit, PASS-6 (2026-05-12, community SOT alignment).** This
 > appendix was previously titled “13 Zenodo DOI registry” and listed
