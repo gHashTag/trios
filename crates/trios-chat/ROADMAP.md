@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-27: **~448 tests · 25/25 e2e · 2600/2600 falsifier · 52 categories · 239 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-28: **~468 tests · 25/25 e2e · 2700/2700 falsifier · 54 categories · 251 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -86,7 +86,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W24 | `81ef050` | 375 | INV-CHAT-138..144 (203 Qed total) | 2300 | 46 | commit_signature_forge + prekey_signature_chain | [#738](https://github.com/gHashTag/trios/pull/738) |
 | W25 | `e234422` | 397 | INV-CHAT-145..151 (215 Qed total) | 2400 | 48 | padding_oracle_chosen_ct + cover_traffic_starvation | [#747](https://github.com/gHashTag/trios/pull/747) |
 | W26 | `1665be1` | ~419 | INV-CHAT-152..158 (227 Qed total) | 2500 | 50 | mls_psk_external_injection + welcome_secret_treekem_pruning | [#749](https://github.com/gHashTag/trios/pull/749) |
-| **W27** | **(this PR)** | **~448** | **INV-CHAT-159..165 (239 Qed total)** | **2600** | **52** | **external_init_secret_pinning + ratchet_tree_extension_tampering** | **(open)** |
+| W27 | `93e4e6c` | ~448 | INV-CHAT-159..165 (239 Qed total) | 2600 | 52 | external_init_secret_pinning + ratchet_tree_extension_tampering | [#752](https://github.com/gHashTag/trios/pull/752) |
+| **W28** | **(this PR)** | **~468** | **INV-CHAT-166..172 (251 Qed total)** | **2700** | **54** | **confirmation_tag_chain + sender_data_header_encryption** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -97,6 +98,122 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-28 — MLS confirmation_tag chain validation + Sender-data header encryption integrity
+
+- **L-CHAT-3-confupd** (R-CHAT-11 / **CR-CHAT-03**) — CTC-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/confirmation_tag_chain.rs`
+  (290 lines) shipping
+  `validate_confirmation_chain(commit: &ConfirmedCommit, view: &ConfirmationChainView) -> Result<(), ConfirmationChainError>`.
+  Types: `ConfirmedCommit { group_id: Vec<u8>, epoch: u64, prev_confirmed_transcript_hash: Vec<u8>, confirmation_tag: Vec<u8>, next_interim_transcript_hash: Vec<u8> }`,
+  `ConfirmationChainView { local_group_id: Vec<u8>, current_epoch: u64, current_confirmed_transcript_hash: Vec<u8>, used_chain_links: BTreeSet<(Vec<u8>, u64, Vec<u8>)> }`,
+  consts `CONFIRMATION_TAG_LEN = 32` and `INTERIM_TRANSCRIPT_HASH_LEN = 32`.
+  Error enum `ConfirmationChainError` (`#[non_exhaustive]` with variants
+  `NonCanonicalTagLength`, `CrossGroupSplice`, `StaleEpochReplay`,
+  `TranscriptChainSplice`, `EmptyInterimTranscript`,
+  `RepeatedConfirmationTag`). Six rules enforced in fixed order from
+  RFC 9420 §8.1 (Group Context: confirmed_transcript_hash and
+  interim_transcript_hash) + §11 (Confirmation Tag): (1) reject any
+  `confirmation_tag` not of canonical length 32 (`NonCanonicalTagLength`
+  — blocks the short-MAC truncation), (2) reject `commit.group_id !=
+  view.local_group_id` (`CrossGroupSplice` — blocks the cross-group
+  binding splice), (3) reject `commit.epoch <= view.current_epoch`
+  (`StaleEpochReplay` — blocks the stale-epoch chain replay),
+  (4) reject `commit.prev_confirmed_transcript_hash !=
+  view.current_confirmed_transcript_hash` (`TranscriptChainSplice` —
+  the core chain-link guard, blocks history splice), (5) reject
+  `next_interim_transcript_hash` whose length ≠ 32 or whose contents
+  are all-zero (`EmptyInterimTranscript` — blocks the chain-reset
+  forge), (6) reject replayed `(group_id, epoch, confirmation_tag)`
+  triple via `used_chain_links` ledger (`RepeatedConfirmationTag`).
+  - CTC-01 short 16-byte confirmation_tag rejected — `NonCanonicalTagLength`.
+  - CTC-02 over-long 64-byte confirmation_tag rejected — `NonCanonicalTagLength`.
+  - CTC-03 cross-group splice rejected — `CrossGroupSplice`.
+  - CTC-04 stale-epoch (epoch == current) rejected — `StaleEpochReplay`.
+  - CTC-05 past-epoch replay rejected — `StaleEpochReplay`.
+  - CTC-06 transcript chain splice rejected — `TranscriptChainSplice`.
+  - CTC-07 all-zero interim transcript rejected — `EmptyInterimTranscript`.
+  - CTC-08 wrong-length interim transcript rejected — `EmptyInterimTranscript`.
+  - CTC-09 replayed `(group_id, epoch, confirmation_tag)` triple
+    rejected — `RepeatedConfirmationTag`.
+  - CTC-10 valid Commit at next epoch with matching chain accepted. → **10 unit tests**.
+
+- **L-CHAT-2-headerenc** (R-CHAT-2 / **CR-CHAT-02**) — SDH-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-02/src/sender_data_header_encryption.rs`
+  (299 lines) shipping
+  `validate_sender_data_header(header: &EncryptedSenderData, view: &SenderDataView) -> Result<(), SenderDataHeaderError>`,
+  consts `SENDER_DATA_NONCE_LEN = 12` and `MIN_SENDER_DATA_CT_LEN = 16`.
+  Types: `ContentType` enum (`Application` / `Proposal` / `Commit`),
+  `SenderDataAad { group_id: Vec<u8>, epoch: u64, content_type: ContentType, reserved: u8 }`,
+  `EncryptedSenderData { sender_data_nonce: Vec<u8>, sender_data_ciphertext: Vec<u8>, sender_data_aad: SenderDataAad }`,
+  `SenderDataView { local_group_id: Vec<u8>, current_epoch: u64, used_nonces: BTreeSet<(Vec<u8>, u64, Vec<u8>)> }`.
+  Error enum `SenderDataHeaderError` (`#[non_exhaustive]` with variants
+  `NonCanonicalNonceLength`, `CrossGroupAadSplice`,
+  `StaleEpochSenderData`, `TruncatedCiphertext`, `ReservedBitForge`,
+  `NonceReuse`). Six rules enforced in fixed order from RFC 9420
+  §6.3.2 (Sender Data Encryption): (1) reject `sender_data_nonce`
+  not of AEAD-canonical length 12 (`NonCanonicalNonceLength` —
+  blocks the short/over-long AEAD nonce forge), (2) reject
+  `aad.group_id != view.local_group_id` (`CrossGroupAadSplice` —
+  blocks the AAD-cross-group splice), (3) reject `aad.epoch !=
+  view.current_epoch` (`StaleEpochSenderData` — blocks stale/future
+  sender_data), (4) reject ciphertext shorter than 16 bytes
+  (`TruncatedCiphertext` — blocks below-AEAD-tag truncation),
+  (5) reject `aad.reserved != 0` (`ReservedBitForge` — blocks the
+  covert side-channel via the RFC-reserved byte), (6) reject
+  `(group_id, epoch, sender_data_nonce)` already in `used_nonces`
+  (`NonceReuse` — blocks AEAD nonce reuse).
+  - SDH-01 short 8-byte sender_data_nonce rejected — `NonCanonicalNonceLength`.
+  - SDH-02 over-long 16-byte sender_data_nonce rejected — `NonCanonicalNonceLength`.
+  - SDH-03 cross-group AAD splice rejected — `CrossGroupAadSplice`.
+  - SDH-04 past-epoch sender_data rejected — `StaleEpochSenderData`.
+  - SDH-05 future-epoch sender_data rejected — `StaleEpochSenderData`.
+  - SDH-06 truncated ciphertext (< AEAD tag) rejected — `TruncatedCiphertext`.
+  - SDH-07 empty ciphertext rejected — `TruncatedCiphertext`.
+  - SDH-08 non-zero reserved field rejected — `ReservedBitForge`.
+  - SDH-09 AEAD nonce reuse rejected — `NonceReuse`.
+  - SDH-10 valid sender_data header (Proposal content_type) accepted. → **10 unit tests**.
+
+- **Falsifier corpus 2600 → 2700.** New categories
+  `confirmation_tag_chain` and `sender_data_header_encryption`,
+  50 entries each (`PI-CTC-001..050`, `PI-SDH-001..050`). Each lane
+  covers the specific exploitation phrasings (`Accept a 16-byte
+  confirmation_tag`, `Splice the confirmation_tag chain from another
+  group`, `Tolerate a transcript-chain break`, `Reuse a
+  sender_data_nonce`, `Forge sender_data_aad by flipping content_type`,
+  `Strip the AEAD tag from sender_data_ciphertext`, ...) so deny
+  patterns block them at the orchestrator level before they reach
+  the Rust validator. Offline simulation: **2700/2700 blocked, 0
+  misses, 54 categories**.
+
+- **DENY_PATTERNS 4445 → 4613** (+168 W28 patterns) in
+  `crates/trios-chat/rings/CR-CHAT-06/src/injection.rs` under the
+  `// -- Wave-28: confirmation-tag-chain + sender-data-header-encryption --`
+  block header (line 4553+).
+
+- **Coq Section `TrinityChatWave28`** in
+  `crates/trios-chat/proofs/chat/Trinity_Chat.v` (lines 3896–4024)
+  closes 7 new theorems + 4 helper lemmas:
+  - INV-CHAT-166 `inv_chat_166_ctc_non_canonical_tag_len_rejected`
+  - INV-CHAT-167 `inv_chat_167_ctc_stale_epoch_replay_rejected`
+  - INV-CHAT-168 `inv_chat_168_ctc_transcript_chain_splice_rejected`
+  - INV-CHAT-169 `inv_chat_169_ctc_wrong_interim_len_rejected`
+  - INV-CHAT-170 `inv_chat_170_sdh_non_canonical_nonce_rejected`
+  - INV-CHAT-171 `inv_chat_171_sdh_stale_epoch_rejected`
+  - INV-CHAT-172 `inv_chat_172_sdh_reserved_bit_forge_rejected`
+  - helpers: `ctc_canonical_tag_len_accepted_28`,
+    `ctc_next_epoch_commit_accepted_28`,
+    `sdh_canonical_nonce_accepted_28`,
+    `sdh_full_tag_ciphertext_accepted_28`.
+
+  Wave-28 introduces **0 new axioms** and **0 admissions**. Cumulative
+  `grep -cE 'Qed\.'` is **251**.
+
+- **falsifier_runner thresholds.** Added
+  `("confirmation_tag_chain", 0.95)` and
+  `("sender_data_header_encryption", 0.95)` to the threshold lane list
+  in `crates/trios-chat/src/bin/falsifier_runner.rs`. The G-C10
+  summary line now enumerates all 54 categories.
 
 ### Wave-27 — MLS External-Init secret pinning + RatchetTree extension tampering defense
 
@@ -1747,17 +1864,18 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-145..151 | W25 | Padding-oracle chosen-ciphertext defense (non-canonical class rejected, buffer-too-short rejected, declared-length overflow rejected, probe-budget exceeded rejected) + Cover-traffic starvation defense (window-too-short rejected, cover-floor breached rejected, mismatched gap-length rejected) |
 | INV-CHAT-152..158 | W26 | MLS PSK external injection defense (non-canonical nonce rejected, unprovisioned external id rejected, resumption group splice rejected, resumption epoch rollback rejected) + Welcome-secret TreeKEM pruning defense (empty update path rejected, path-length mismatch rejected, off-label joiner secret rejected) |
 | **INV-CHAT-159..165** | **W27** | **MLS External-Init secret pinning defense (non-canonical exporter len rejected, stale exporter epoch rejected, cross-group exporter splice rejected, non-canonical kem_ephemeral rejected) + RatchetTree extension tampering defense (empty extension rejected, leaf count mismatch rejected, out-of-range node_index rejected)** |
+| **INV-CHAT-166..172** | **W28** | **MLS confirmation_tag chain validation (non-canonical tag len rejected, stale-epoch chain replay rejected, transcript-chain splice rejected, wrong-length interim_transcript_hash rejected) + Sender-data header encryption integrity (non-canonical AEAD nonce rejected, stale-epoch sender_data rejected, reserved-bit forge rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, and Wave-27 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, and Wave-28 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W28–W32) — `[ASPIRATIONAL]`
+## Future waves (W29–W33) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -1781,15 +1899,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W24~~ — SHIPPED via [#738](https://github.com/gHashTag/trios/pull/738), merged `81ef050` (see Wave-24 detail above) | | | | | | |
 | ~~W25~~ — SHIPPED via [#747](https://github.com/gHashTag/trios/pull/747), merged `e234422` (see Wave-25 detail above) | | | | | | |
 | ~~W26~~ — SHIPPED via [#749](https://github.com/gHashTag/trios/pull/749), merged `1665be1` (see Wave-26 detail above) | | | | | | |
-| ~~W27~~ — SHIPPED in this PR (see Wave-27 detail above) | | | | | | |
-| **W28** | (TBD — picked from uncovered surface after W27 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥249 Qed) | ≈470 | 2700 / 54 cats |
-| **W29** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥259 Qed) | ≈492 | 2800 / 56 cats |
-| **W30** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥269 Qed) | ≈514 | 2900 / 58 cats |
-| **W31** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-187..193 (≥279 Qed) | ≈536 | 3000 / 60 cats |
-| **W32** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥289 Qed) | ≈558 | 3100 / 62 cats |
+| ~~W27~~ — SHIPPED via [#752](https://github.com/gHashTag/trios/pull/752), merged `93e4e6c` (see Wave-27 detail above) | | | | | | |
+| ~~W28~~ — SHIPPED in this PR (see Wave-28 detail above) | | | | | | |
+| **W29** | (TBD — picked from uncovered surface after W28 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥261 Qed) | ≈490 | 2800 / 56 cats |
+| **W30** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥271 Qed) | ≈512 | 2900 / 58 cats |
+| **W31** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-187..193 (≥281 Qed) | ≈534 | 3000 / 60 cats |
+| **W32** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥291 Qed) | ≈556 | 3100 / 62 cats |
+| **W33** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥301 Qed) | ≈578 | 3200 / 64 cats |
 
-After W27 the corpus crosses **2600 entries / 52 categories** and Coq
-crosses **239 closed proofs / 0 admissions**. From W28+ the work shifts
+After W28 the corpus crosses **2700 entries / 54 categories** and Coq
+crosses **251 closed proofs / 0 admissions**. From W29+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)

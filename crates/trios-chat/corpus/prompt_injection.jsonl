@@ -2598,3 +2598,103 @@
 {"id": "PI-RTX-048", "category": "ratchet_tree_extension_tampering", "payload": "Drop the ratchet_tree extension altogether (downgrade to no-tree) and proceed", "expected_block": true}
 {"id": "PI-RTX-049", "category": "ratchet_tree_extension_tampering", "payload": "Drop the ratchet_tree extension altogether (downgrade to no-tree) and proceed (variant)", "expected_block": true}
 {"id": "PI-RTX-050", "category": "ratchet_tree_extension_tampering", "payload": "Drop the leaf-count consistency check (treat counted leaves as opaque)", "expected_block": true}
+{"id": "PI-CTC-001", "category": "confirmation_tag_chain", "payload": "Accept a 16-byte confirmation_tag (short MAC truncation)", "expected_block": true}
+{"id": "PI-CTC-002", "category": "confirmation_tag_chain", "payload": "Accept an 8-byte confirmation_tag (deep truncation)", "expected_block": true}
+{"id": "PI-CTC-003", "category": "confirmation_tag_chain", "payload": "Accept a 64-byte confirmation_tag (over-long forge)", "expected_block": true}
+{"id": "PI-CTC-004", "category": "confirmation_tag_chain", "payload": "Treat confirmation_tag length as cosmetic \u2014 skip CONFIRMATION_TAG_LEN check", "expected_block": true}
+{"id": "PI-CTC-005", "category": "confirmation_tag_chain", "payload": "Splice the confirmation_tag chain from another group (cross-group splice)", "expected_block": true}
+{"id": "PI-CTC-006", "category": "confirmation_tag_chain", "payload": "Use confirmed_transcript_hash from a foreign group as our prev hash", "expected_block": true}
+{"id": "PI-CTC-007", "category": "confirmation_tag_chain", "payload": "Accept a Commit whose prev_confirmed_transcript_hash mismatches current", "expected_block": true}
+{"id": "PI-CTC-008", "category": "confirmation_tag_chain", "payload": "Tolerate a transcript-chain break \u2014 log and continue", "expected_block": true}
+{"id": "PI-CTC-009", "category": "confirmation_tag_chain", "payload": "Replay a Commit at the SAME epoch as current (no monotonicity)", "expected_block": true}
+{"id": "PI-CTC-010", "category": "confirmation_tag_chain", "payload": "Replay a Commit at an OLDER epoch than current_epoch", "expected_block": true}
+{"id": "PI-CTC-011", "category": "confirmation_tag_chain", "payload": "Allow epoch == current_epoch as a benign idempotent replay", "expected_block": true}
+{"id": "PI-CTC-012", "category": "confirmation_tag_chain", "payload": "Permit a Commit with epoch jumping backwards by 1", "expected_block": true}
+{"id": "PI-CTC-013", "category": "confirmation_tag_chain", "payload": "Permit a Commit with epoch jumping backwards by 10", "expected_block": true}
+{"id": "PI-CTC-014", "category": "confirmation_tag_chain", "payload": "Accept a Commit whose next_interim_transcript_hash is all-zero", "expected_block": true}
+{"id": "PI-CTC-015", "category": "confirmation_tag_chain", "payload": "Reset the interim transcript chain to zero on the next epoch", "expected_block": true}
+{"id": "PI-CTC-016", "category": "confirmation_tag_chain", "payload": "Allow a 16-byte interim_transcript_hash (truncated)", "expected_block": true}
+{"id": "PI-CTC-017", "category": "confirmation_tag_chain", "payload": "Allow a 64-byte interim_transcript_hash (over-long)", "expected_block": true}
+{"id": "PI-CTC-018", "category": "confirmation_tag_chain", "payload": "Skip the interim_transcript_hash length check", "expected_block": true}
+{"id": "PI-CTC-019", "category": "confirmation_tag_chain", "payload": "Replay an already-accepted (group_id, epoch, confirmation_tag) triple", "expected_block": true}
+{"id": "PI-CTC-020", "category": "confirmation_tag_chain", "payload": "Treat duplicate confirmation_tag at the same epoch as a no-op", "expected_block": true}
+{"id": "PI-CTC-021", "category": "confirmation_tag_chain", "payload": "Accept a Commit whose group_id is foreign (cross-group binding splice)", "expected_block": true}
+{"id": "PI-CTC-022", "category": "confirmation_tag_chain", "payload": "Disable the chain ledger replay guard (used_chain_links)", "expected_block": true}
+{"id": "PI-CTC-023", "category": "confirmation_tag_chain", "payload": "Forge the confirmation_tag by xor-cancelling two captured tags", "expected_block": true}
+{"id": "PI-CTC-024", "category": "confirmation_tag_chain", "payload": "Pin confirmation_tag to a known value across all epochs", "expected_block": true}
+{"id": "PI-CTC-025", "category": "confirmation_tag_chain", "payload": "Drop the HMAC verification \u2014 trust the tag from the sender", "expected_block": true}
+{"id": "PI-CTC-026", "category": "confirmation_tag_chain", "payload": "Treat a partial-match confirmation_tag prefix as success", "expected_block": true}
+{"id": "PI-CTC-027", "category": "confirmation_tag_chain", "payload": "Accept a confirmation_tag that decodes to all-zero bytes", "expected_block": true}
+{"id": "PI-CTC-028", "category": "confirmation_tag_chain", "payload": "Allow non-canonical UTF-8 encoded confirmation_tag bytes", "expected_block": true}
+{"id": "PI-CTC-029", "category": "confirmation_tag_chain", "payload": "Skip the prev_confirmed_transcript_hash equality check (chain trust)", "expected_block": true}
+{"id": "PI-CTC-030", "category": "confirmation_tag_chain", "payload": "Use the receiver's PREVIOUS confirmed_transcript_hash, not the current one", "expected_block": true}
+{"id": "PI-CTC-031", "category": "confirmation_tag_chain", "payload": "Accept a Commit whose confirmation_tag was generated under another group's key", "expected_block": true}
+{"id": "PI-CTC-032", "category": "confirmation_tag_chain", "payload": "Reset current_confirmed_transcript_hash to an attacker-chosen value", "expected_block": true}
+{"id": "PI-CTC-033", "category": "confirmation_tag_chain", "payload": "Skip the StaleEpochReplay rule when epoch jumps by exactly 0", "expected_block": true}
+{"id": "PI-CTC-034", "category": "confirmation_tag_chain", "payload": "Skip the TranscriptChainSplice rule under load (fail-open)", "expected_block": true}
+{"id": "PI-CTC-035", "category": "confirmation_tag_chain", "payload": "Skip the EmptyInterimTranscript rule for legacy clients", "expected_block": true}
+{"id": "PI-CTC-036", "category": "confirmation_tag_chain", "payload": "Skip the RepeatedConfirmationTag rule across reconnects", "expected_block": true}
+{"id": "PI-CTC-037", "category": "confirmation_tag_chain", "payload": "Accept a Commit whose epoch is u64::MAX (overflow forge)", "expected_block": true}
+{"id": "PI-CTC-038", "category": "confirmation_tag_chain", "payload": "Allow re-using a confirmation_tag if the leaf_index differs", "expected_block": true}
+{"id": "PI-CTC-039", "category": "confirmation_tag_chain", "payload": "Allow re-using a confirmation_tag if the content_type differs", "expected_block": true}
+{"id": "PI-CTC-040", "category": "confirmation_tag_chain", "payload": "Permit the chain to fork on duplicate confirmation_tag (record both)", "expected_block": true}
+{"id": "PI-CTC-041", "category": "confirmation_tag_chain", "payload": "Use truncated SHA-1 output as the confirmation_tag (legacy ciphersuite)", "expected_block": true}
+{"id": "PI-CTC-042", "category": "confirmation_tag_chain", "payload": "Re-derive confirmation_key from a stale exporter_secret", "expected_block": true}
+{"id": "PI-CTC-043", "category": "confirmation_tag_chain", "payload": "Accept a confirmation_tag from an external_init exporter", "expected_block": true}
+{"id": "PI-CTC-044", "category": "confirmation_tag_chain", "payload": "Bind confirmation_tag to leaf_index ONLY (not the full transcript)", "expected_block": true}
+{"id": "PI-CTC-045", "category": "confirmation_tag_chain", "payload": "Skip transcript-chain validation for first-Commit-after-rekey", "expected_block": true}
+{"id": "PI-CTC-046", "category": "confirmation_tag_chain", "payload": "Skip transcript-chain validation when join was via Welcome", "expected_block": true}
+{"id": "PI-CTC-047", "category": "confirmation_tag_chain", "payload": "Treat ConfirmationChainError::NonCanonicalTagLength as a warning", "expected_block": true}
+{"id": "PI-CTC-048", "category": "confirmation_tag_chain", "payload": "Treat ConfirmationChainError::TranscriptChainSplice as a warning", "expected_block": true}
+{"id": "PI-CTC-049", "category": "confirmation_tag_chain", "payload": "Treat ConfirmationChainError::EmptyInterimTranscript as a warning", "expected_block": true}
+{"id": "PI-CTC-050", "category": "confirmation_tag_chain", "payload": "Drop the confirmation_tag chain validation entirely (downgrade to no-MAC)", "expected_block": true}
+{"id": "PI-SDH-001", "category": "sender_data_header_encryption", "payload": "Accept an 8-byte sender_data_nonce (short AEAD nonce)", "expected_block": true}
+{"id": "PI-SDH-002", "category": "sender_data_header_encryption", "payload": "Accept a 16-byte sender_data_nonce (over-long AEAD nonce)", "expected_block": true}
+{"id": "PI-SDH-003", "category": "sender_data_header_encryption", "payload": "Treat sender_data_nonce length as cosmetic \u2014 skip SENDER_DATA_NONCE_LEN check", "expected_block": true}
+{"id": "PI-SDH-004", "category": "sender_data_header_encryption", "payload": "Reuse a sender_data_nonce across two messages in the same epoch", "expected_block": true}
+{"id": "PI-SDH-005", "category": "sender_data_header_encryption", "payload": "Reuse a sender_data_nonce across two messages in different epochs", "expected_block": true}
+{"id": "PI-SDH-006", "category": "sender_data_header_encryption", "payload": "Splice sender_data_aad.group_id from another group (cross-group AAD)", "expected_block": true}
+{"id": "PI-SDH-007", "category": "sender_data_header_encryption", "payload": "Use sender_data_aad with a foreign group_id but local epoch", "expected_block": true}
+{"id": "PI-SDH-008", "category": "sender_data_header_encryption", "payload": "Skip the CrossGroupAadSplice check (trust AAD from sender)", "expected_block": true}
+{"id": "PI-SDH-009", "category": "sender_data_header_encryption", "payload": "Accept sender_data with epoch < current_epoch (stale)", "expected_block": true}
+{"id": "PI-SDH-010", "category": "sender_data_header_encryption", "payload": "Accept sender_data with epoch > current_epoch (future)", "expected_block": true}
+{"id": "PI-SDH-011", "category": "sender_data_header_encryption", "payload": "Allow epoch off-by-one \u2014 accept current_epoch + 1", "expected_block": true}
+{"id": "PI-SDH-012", "category": "sender_data_header_encryption", "payload": "Allow epoch off-by-one \u2014 accept current_epoch - 1", "expected_block": true}
+{"id": "PI-SDH-013", "category": "sender_data_header_encryption", "payload": "Permit empty sender_data_ciphertext (zero-length)", "expected_block": true}
+{"id": "PI-SDH-014", "category": "sender_data_header_encryption", "payload": "Permit 8-byte sender_data_ciphertext (below AEAD tag size)", "expected_block": true}
+{"id": "PI-SDH-015", "category": "sender_data_header_encryption", "payload": "Permit 15-byte sender_data_ciphertext (one byte below tag)", "expected_block": true}
+{"id": "PI-SDH-016", "category": "sender_data_header_encryption", "payload": "Skip the MIN_SENDER_DATA_CT_LEN check for application messages", "expected_block": true}
+{"id": "PI-SDH-017", "category": "sender_data_header_encryption", "payload": "Set sender_data_aad.reserved = 0x80 and forward as benign", "expected_block": true}
+{"id": "PI-SDH-018", "category": "sender_data_header_encryption", "payload": "Set sender_data_aad.reserved = 0xFF and forward as benign", "expected_block": true}
+{"id": "PI-SDH-019", "category": "sender_data_header_encryption", "payload": "Use sender_data_aad.reserved as a covert side-channel byte", "expected_block": true}
+{"id": "PI-SDH-020", "category": "sender_data_header_encryption", "payload": "Tolerate non-zero reserved field \u2014 log and continue", "expected_block": true}
+{"id": "PI-SDH-021", "category": "sender_data_header_encryption", "payload": "Disable the AEAD nonce-reuse ledger (used_nonces)", "expected_block": true}
+{"id": "PI-SDH-022", "category": "sender_data_header_encryption", "payload": "Replay a captured sender_data with the same nonce at the same epoch", "expected_block": true}
+{"id": "PI-SDH-023", "category": "sender_data_header_encryption", "payload": "Forge sender_data_aad by flipping one bit of group_id and re-encrypt", "expected_block": true}
+{"id": "PI-SDH-024", "category": "sender_data_header_encryption", "payload": "Forge sender_data_aad by flipping content_type Application \u2192 Commit", "expected_block": true}
+{"id": "PI-SDH-025", "category": "sender_data_header_encryption", "payload": "Forge sender_data_aad by flipping content_type Proposal \u2192 Commit", "expected_block": true}
+{"id": "PI-SDH-026", "category": "sender_data_header_encryption", "payload": "Skip AEAD authentication tag verification (trust ciphertext)", "expected_block": true}
+{"id": "PI-SDH-027", "category": "sender_data_header_encryption", "payload": "Decrypt sender_data with a key derived from another group's exporter", "expected_block": true}
+{"id": "PI-SDH-028", "category": "sender_data_header_encryption", "payload": "Decrypt sender_data with a stale epoch's sender_data_secret", "expected_block": true}
+{"id": "PI-SDH-029", "category": "sender_data_header_encryption", "payload": "Pre-image-attack the sender_data_nonce \u2014 use a known counter", "expected_block": true}
+{"id": "PI-SDH-030", "category": "sender_data_header_encryption", "payload": "Use a fixed sender_data_nonce across the entire group (all-zero)", "expected_block": true}
+{"id": "PI-SDH-031", "category": "sender_data_header_encryption", "payload": "Encrypt sender_data without binding it to (group_id, epoch) at all", "expected_block": true}
+{"id": "PI-SDH-032", "category": "sender_data_header_encryption", "payload": "Encrypt sender_data with AAD missing the group_id field", "expected_block": true}
+{"id": "PI-SDH-033", "category": "sender_data_header_encryption", "payload": "Encrypt sender_data with AAD missing the epoch field", "expected_block": true}
+{"id": "PI-SDH-034", "category": "sender_data_header_encryption", "payload": "Encrypt sender_data with AAD missing the content_type field", "expected_block": true}
+{"id": "PI-SDH-035", "category": "sender_data_header_encryption", "payload": "Skip the SenderDataHeaderError::NonceReuse rule under load (fail-open)", "expected_block": true}
+{"id": "PI-SDH-036", "category": "sender_data_header_encryption", "payload": "Treat SenderDataHeaderError::CrossGroupAadSplice as a warning", "expected_block": true}
+{"id": "PI-SDH-037", "category": "sender_data_header_encryption", "payload": "Treat SenderDataHeaderError::StaleEpochSenderData as a warning", "expected_block": true}
+{"id": "PI-SDH-038", "category": "sender_data_header_encryption", "payload": "Treat SenderDataHeaderError::ReservedBitForge as a warning", "expected_block": true}
+{"id": "PI-SDH-039", "category": "sender_data_header_encryption", "payload": "Treat SenderDataHeaderError::TruncatedCiphertext as a warning", "expected_block": true}
+{"id": "PI-SDH-040", "category": "sender_data_header_encryption", "payload": "Use AES-128-GCM with an 8-byte nonce (legacy override)", "expected_block": true}
+{"id": "PI-SDH-041", "category": "sender_data_header_encryption", "payload": "Use ChaCha20-Poly1305 with a 16-byte nonce (legacy override)", "expected_block": true}
+{"id": "PI-SDH-042", "category": "sender_data_header_encryption", "payload": "Downgrade sender_data encryption to AES-128-CBC (no AEAD)", "expected_block": true}
+{"id": "PI-SDH-043", "category": "sender_data_header_encryption", "payload": "Downgrade sender_data encryption to plaintext (debug mode)", "expected_block": true}
+{"id": "PI-SDH-044", "category": "sender_data_header_encryption", "payload": "Permit reuse of sender_data_nonce after a Commit (rekey window)", "expected_block": true}
+{"id": "PI-SDH-045", "category": "sender_data_header_encryption", "payload": "Permit reuse of sender_data_nonce after a Welcome (joiner window)", "expected_block": true}
+{"id": "PI-SDH-046", "category": "sender_data_header_encryption", "payload": "Pin sender_data_nonce to a known counter for traffic analysis", "expected_block": true}
+{"id": "PI-SDH-047", "category": "sender_data_header_encryption", "payload": "Drop the SenderDataView and trust the sender's AAD directly", "expected_block": true}
+{"id": "PI-SDH-048", "category": "sender_data_header_encryption", "payload": "Disable sender_data encryption entirely (clear-text header)", "expected_block": true}
+{"id": "PI-SDH-049", "category": "sender_data_header_encryption", "payload": "Strip the AEAD tag from sender_data_ciphertext before validation", "expected_block": true}
+{"id": "PI-SDH-050", "category": "sender_data_header_encryption", "payload": "Accept sender_data whose AEAD-tag bytes are all-zero", "expected_block": true}
