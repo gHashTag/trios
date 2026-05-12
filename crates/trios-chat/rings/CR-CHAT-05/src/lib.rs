@@ -34,6 +34,13 @@ pub use welcome_secret_treekem_pruning::{
     WelcomeUpdatePath, WST_JOINER_LABEL,
 };
 
+pub mod group_context_extensions_consistency;
+pub use group_context_extensions_consistency::{
+    validate_group_context_extensions, ExtensionEntry, GroupContextExtensionsError,
+    GroupContextExtensionsView, GroupContextSnapshot, RESERVED_EXTENSION_ID_HIGH_START,
+    RESERVED_EXTENSION_ID_LOW,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
