@@ -1,8 +1,15 @@
 # Zenodo DOI Registry — Trinity Stack
 
+> **Single source of truth (community-level):** [`https://zenodo.org/communities/trinity-s3ai/`](https://zenodo.org/communities/trinity-s3ai/) (12 records as of 2026-05-12: 8 v5.0 description stubs B001–B008 + 4 D-series records D004–D007). Any DOI not in this community is **outside** the canonical Trinity S³AI surface and must be marked accordingly.
+>
 > **Canonical R5-honest source of truth for all Zenodo DOIs authored by Dmitrii Vasilev.**
-> Verified 2026-05-12 via Zenodo REST API (PASS-3 deep sweep) (`creators.name:"Vasilev, Dmitrii"`). 80 records, 42 concept-DOI families.
-> All metadata in this file is the canonical claim. Whenever a README, info.yaml, ADR, LICENSE, paper, or commit message cites a Zenodo DOI, it must match the title and concept-vs-version classification recorded here.
+> Re-verified 2026-05-12 (PASS-6) via the Zenodo REST API
+> (`/api/communities/trinity-s3ai/records` + `creators.name:"Vasilev, Dmitrii"`).
+> 12 records in the canonical community; ~80 total records under the author
+> across all communities, ~42 concept-DOI families.
+> All metadata in this file is the canonical claim. Whenever a README,
+> info.yaml, ADR, LICENSE, paper, or commit message cites a Zenodo DOI, it
+> must match the title and version/community classification recorded here.
 
 ## §0 · Author
 
@@ -21,18 +28,30 @@
    Currently, all four of these claims fall under (b) — see §3 corrections.
 5. **Trinity anchor** `φ² + φ⁻² = 3` is an algebraic identity. Its persistent-identifier marker is `10.5281/zenodo.19227877` (B007 v5.0 software description stub, NOT a peer-reviewed paper). The mathematical anchor stands on its Coq witness in gHashTag/t27 (218/162/32/11 on 2026-05-12), not on the DOI. For "always-latest of B007", use concept DOI `10.5281/zenodo.19227876`.
 
-## §2 · Canonical title table — B-series v5.0 (current)
+## §2 · Canonical title table — B-series v5.0 (current, community `trinity-s3ai`)
+
+All eight rows below are confirmed members of community
+[`trinity-s3ai`](https://zenodo.org/communities/trinity-s3ai/). The «version DOI»
+is the immutable Zenodo record ID; the «concept DOI» (where minted) is the
+«always-latest» umbrella that resolves to the newest version. **R5-honest
+PASS-6 audit (2026-05-12) note:** earlier drafts of this table listed
+`10.5281/zenodo.19227864/866/868/870/872/874/878` as «concept DOIs». They
+are in fact **server-side redirects** to the canonical version DOIs in the
+same row (HTTP 302 → the odd-numbered record), not separately minted
+concept DOIs. The only true concept DOI in this batch is
+`10.5281/zenodo.19227876` (the concept of B007 → `19227877`). The table
+below is the corrected truth.
 
 | DOI (version) | Concept DOI | Canonical title |
 |---|---|---|
-| `10.5281/zenodo.19227865` | `10.5281/zenodo.19227864` | Trinity B001: Ternary Neural Networks — Complete Scientific Framework v5.0 |
-| `10.5281/zenodo.19227867` | `10.5281/zenodo.19227866` | Trinity B002: Zero-DSP FPGA Architecture for Ternary Inference v5.0 |
-| `10.5281/zenodo.19227869` | `10.5281/zenodo.19227868` | Trinity B003: TRI-27 ISA — Ternary Instruction Set with Coptic Alphabet Encoding v5.0 |
-| `10.5281/zenodo.19227871` | `10.5281/zenodo.19227870` | Trinity B004: Queen Lotus Cycle — Autonomous Orchestration for Self-Evolving AI v5.0 |
-| `10.5281/zenodo.19227873` | `10.5281/zenodo.19227872` | Trinity B005: Tri Language — Linear Types, Effects, Dual-Target Compilation v5.0 |
-| `10.5281/zenodo.19227875` | `10.5281/zenodo.19227874` | Trinity B006: Sacred GF16/TF3 — Phi-Based Arithmetic for Ternary Computing v5.0 |
+| `10.5281/zenodo.19227865` | redirect-only | Trinity B001: Ternary Neural Networks — Complete Scientific Framework v5.0 |
+| `10.5281/zenodo.19227867` | redirect-only | Trinity B002: Zero-DSP FPGA Architecture for Ternary Inference v5.0 |
+| `10.5281/zenodo.19227869` | redirect-only | Trinity B003: TRI-27 ISA — Ternary Instruction Set with Coptic Alphabet Encoding v5.0 |
+| `10.5281/zenodo.19227871` | redirect-only | Trinity B004: Queen Lotus Cycle — Autonomous Orchestration for Self-Evolving AI v5.0 |
+| `10.5281/zenodo.19227873` | redirect-only | Trinity B005: Tri Language — Linear Types, Effects, Dual-Target Compilation v5.0 |
+| `10.5281/zenodo.19227875` | redirect-only | Trinity B006: Sacred GF16/TF3 — Phi-Based Arithmetic for Ternary Computing v5.0 |
 | `10.5281/zenodo.19227877` | `10.5281/zenodo.19227876` | **Trinity B007: VSA Operations for Ternary Computing v5.0** ← **anchor** |
-| `10.5281/zenodo.19227879` | `10.5281/zenodo.19227878` | Trinity S³AI Framework — Complete Research Collection v5.0 |
+| `10.5281/zenodo.19227879` | redirect-only | Trinity S³AI Framework — Complete Research Collection v5.0 |
 
 ## §3 · Forward-only corrections to historical claims
 
@@ -73,11 +92,17 @@ The following sub-titles previously circulated in info.yaml / README files but *
 | `10.5281/zenodo.18947017` | v2.0.2 | Trinity v2.0.2 — FPGA Autoregressive Ternary LLM |
 | `10.5281/zenodo.18950696` | v2.0.3 (latest) | Trinity v2.0.3 — FPGA Autoregressive Ternary LLM + Training Results |
 
-## §6 · Newest record (April 2026)
+## §6 · Newest record (April 2026) — outside community `trinity-s3ai`
+
+The GoldenFloat record is authored by Dmitrii Vasilev and exists on Zenodo,
+but has **not** been attached to community `trinity-s3ai`. It is therefore
+outside the canonical SOT surface and must be cited with a `[R5-honest:
+outside trinity-s3ai community]` annotation in any chapter or README until
+attached.
 
 | DOI | Concept DOI | Canonical title |
 |---|---|---|
-| `10.5281/zenodo.19456875` | `10.5281/zenodo.19456874` | **GoldenFloat: φ-Optimal Floating-Point Formats for Ternary Computing (T27)** ← latest of any kind |
+| `10.5281/zenodo.19456875` | `10.5281/zenodo.19456874` | **GoldenFloat: φ-Optimal Floating-Point Formats for Ternary Computing (T27)** — outside community |
 
 ## §7 · Earlier B-series families (v3, v3.1, v4) — for historical reference
 
@@ -112,10 +137,19 @@ These older versions remain on Zenodo but should not be cited in new work — al
 
 ## §8 · Inventory totals
 
-- 80 Zenodo records under `Vasilev, Dmitrii`
-- 42 concept-DOI families
-- 5 generations: trinity-repo (5) → D004–D007 (mid-March × 2) → B v3 baseline → v3.1 → v4 → v5.0 (current canonical) → GoldenFloat T27 (latest)
-- 0 records with title containing "Neuroanatomical" or "Brain Map" → these claims must be removed from circulation OR a dedicated DOI must be minted
+- **12 records in community `trinity-s3ai` (canonical SOT)**: 8 v5.0
+  description stubs B001–B008 + 4 D-series D004–D007.
+- ~80 Zenodo records total under `Vasilev, Dmitrii` across all communities;
+  the records outside community `trinity-s3ai` are FPGA software releases
+  (18939351/2, 18946966, 18947017, 18950696), the older B-series
+  generations (§7), the SUPERSEDED v3..v4 batch (§7 + Zenodo metadata),
+  and the GoldenFloat record (§6).
+- 42 concept-DOI families (Zenodo-side).
+- 5 generations: trinity-repo (5) → D004–D007 (mid-March × 2) → B v3 baseline
+  → v3.1 → v4 → v5.0 (current canonical, in community) → GoldenFloat T27
+  (latest, not in community).
+- 0 records with title containing "Neuroanatomical" or "Brain Map" → these
+  claims must be removed from circulation OR a dedicated DOI must be minted.
 
 ## §9 · Update procedure (R5-honest)
 
