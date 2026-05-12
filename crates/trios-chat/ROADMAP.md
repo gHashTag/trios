@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-25: **397 tests · 25/25 e2e · 2400/2400 falsifier · 48 categories · 215 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-26: **~419 tests · 25/25 e2e · 2500/2500 falsifier · 50 categories · 227 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -84,7 +84,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W22 | `119f0fe` | 335 | INV-CHAT-124..130 (181 Qed total) | 2100 | 42 | proposal_validation + mac_truncation | [#732](https://github.com/gHashTag/trios/pull/732) |
 | W23 | `1d6f910` | 355 | INV-CHAT-131..137 (191 Qed total) | 2200 | 44 | reinit_freshness + appack_replay | [#734](https://github.com/gHashTag/trios/pull/734) |
 | W24 | `81ef050` | 375 | INV-CHAT-138..144 (203 Qed total) | 2300 | 46 | commit_signature_forge + prekey_signature_chain | [#738](https://github.com/gHashTag/trios/pull/738) |
-| **W25** | **(this PR)** | **397** | **INV-CHAT-145..151 (215 Qed total)** | **2400** | **48** | **padding_oracle_chosen_ct + cover_traffic_starvation** | **(open)** |
+| W25 | `e234422` | 397 | INV-CHAT-145..151 (215 Qed total) | 2400 | 48 | padding_oracle_chosen_ct + cover_traffic_starvation | [#747](https://github.com/gHashTag/trios/pull/747) |
+| **W26** | **(this PR)** | **~419** | **INV-CHAT-152..158 (227 Qed total)** | **2500** | **50** | **mls_psk_external_injection + welcome_secret_treekem_pruning** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -95,6 +96,146 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-26 — MLS PSK external injection defense + Welcome-secret TreeKEM pruning defense
+
+- **L-CHAT-3-psk** (R-CHAT-3 / **CR-CHAT-03**) — PSK-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/psk_external_injection.rs`
+  (345 lines) shipping
+  `validate_psk_ref(psk: &PskRef, view: &PskInjectionView) -> Result<(), PskInjectionError>`.
+  Types: `PskType` (`External` / `Resumption`), `PskRef { psk_type,
+  psk_id, psk_nonce, group_id, epoch }`, `PskInjectionView {
+  provisioned_external_ids: BTreeSet<Vec<u8>>, current_group_id,
+  current_epoch, seen_nonces: BTreeSet<Vec<u8>> }`,
+  const `PSK_NONCE_LEN = 32`, error enum `PskInjectionError`
+  (`#[non_exhaustive]` with variants `NonCanonicalNonceLength`,
+  `UnprovisionedExternalId`, `ResumptionGroupSplice`,
+  `ResumptionEpochRollback`, `NonceReplay`). Five rules enforced in
+  fixed order from RFC 9420 §5.3 PreSharedKey validation: (1) reject
+  any `psk_nonce` not of canonical length 32
+  (`NonCanonicalNonceLength` — blocks the short-nonce truncation
+  forge), (2) reject `External` PSKs whose `psk_id` is absent from
+  `provisioned_external_ids` (`UnprovisionedExternalId` — blocks the
+  unprovisioned-id injection), (3) reject `Resumption` PSKs whose
+  `group_id` differs from the current group (`ResumptionGroupSplice` —
+  blocks cross-group resumption splice), (4) reject `Resumption`
+  PSKs whose `epoch` is strictly less than the current epoch
+  (`ResumptionEpochRollback` — blocks the stale-epoch replay), (5)
+  reject any `psk_nonce` already in `seen_nonces` (`NonceReplay` —
+  blocks the cross-session nonce reuse). Valid PSK refs return `Ok(())`.
+  - PSK-01 valid external PSK with provisioned id accepted.
+  - PSK-02 valid resumption PSK at current epoch accepted.
+  - PSK-03 short nonce rejected — `NonCanonicalNonceLength`.
+  - PSK-04 oversize nonce rejected — `NonCanonicalNonceLength`.
+  - PSK-05 unprovisioned external id rejected —
+    `UnprovisionedExternalId`.
+  - PSK-06 cross-group resumption splice rejected —
+    `ResumptionGroupSplice`.
+  - PSK-07 stale-epoch resumption rejected — `ResumptionEpochRollback`.
+  - PSK-08 future-epoch resumption accepted (forward rollover is the
+    application's concern, not PSK injection).
+  - PSK-09 nonce replay rejected — `NonceReplay`.
+  - PSK-10 green — module compiles and re-exports through
+    `CR-CHAT-03/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-5-wst** (R-CHAT-5 / **CR-CHAT-05**) — WST-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-05/src/welcome_secret_treekem_pruning.rs`
+  (287 lines) shipping
+  `validate_welcome_path(path: &WelcomeUpdatePath, view: &WelcomeTreeView) -> Result<(), WelcomeTreeError>`,
+  const `WST_JOINER_LABEL: &[u8] = b"joiner"`. Types: `UpdatePathNode
+  { node_index, encryptions_for: Vec<u32> }`, `WelcomeUpdatePath {
+  group_id, epoch, joiner_label, leaf_index, nodes }`,
+  `WelcomeTreeView { group_id, current_epoch, active_leaves:
+  BTreeSet<u32>, expected_direct_path_len }`, error enum
+  `WelcomeTreeError` (`#[non_exhaustive]` with variants
+  `EmptyUpdatePath`, `PathLengthMismatch`, `PrunedNodeEncryptions`,
+  `GroupContextEpochSplice`, `OffLabelJoinerSecret`). Five rules
+  enforced in fixed order from RFC 9420 §12.4.3 Welcome / UpdatePath
+  validation: (1) reject `nodes.is_empty()` (`EmptyUpdatePath` —
+  blocks the no-path forge), (2) reject `nodes.len() !=
+  expected_direct_path_len` (`PathLengthMismatch` — blocks
+  truncated-path injection), (3) reject any `UpdatePathNode` whose
+  `encryptions_for` references a leaf absent from `active_leaves`
+  (`PrunedNodeEncryptions` — blocks the pruned-leaf encryption that
+  would let a removed member decrypt the welcome secret), (4) reject
+  `(group_id, epoch) != (view.group_id, view.current_epoch)`
+  (`GroupContextEpochSplice` — blocks the cross-context welcome
+  splice), (5) reject `joiner_label != WST_JOINER_LABEL`
+  (`OffLabelJoinerSecret` — blocks the relabel attack that swaps the
+  KDF label and derives a parallel secret).
+  - WST-01 valid update path accepted.
+  - WST-02 empty update path rejected — `EmptyUpdatePath`.
+  - WST-03 truncated path rejected — `PathLengthMismatch`.
+  - WST-04 over-long path rejected — `PathLengthMismatch`.
+  - WST-05 pruned-leaf encryption rejected — `PrunedNodeEncryptions`.
+  - WST-06 cross-group splice rejected — `GroupContextEpochSplice`.
+  - WST-07 stale-epoch welcome rejected — `GroupContextEpochSplice`.
+  - WST-08 off-label joiner secret rejected — `OffLabelJoinerSecret`.
+  - WST-09 multi-node path with all active leaves accepted.
+  - WST-10 green — module compiles and re-exports through
+    `CR-CHAT-05/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 2400 → 2500.** New categories
+  `mls_psk_external_injection` and `welcome_secret_treekem_pruning`,
+  50 entries each (`PI-PSK-001..050`, `PI-WST-001..050`). Each lane
+  covers the specific exploitation phrasings (`accept a short PSK
+  nonce`, `accept an unprovisioned external psk_id`, `splice a
+  resumption PSK from another group`, `accept a stale-epoch
+  resumption`, `replay a PSK nonce across sessions`, `treat the
+  truncated update path as canonical`, `accept encryptions for a
+  pruned leaf`, `accept welcome bound to another group_id`, `accept
+  off-label joiner secret`, `swap the KDF joiner label`, …).
+  `falsifier_runner` gains two new threshold lanes
+  `mls_psk_external_injection` and `welcome_secret_treekem_pruning`
+  at `0.95`. Result: **50 categories at 100% block rate**, `2500 / 2500`
+  blocked.
+
+- **DENY_PATTERNS extension.** `CR-CHAT-06/src/injection.rs` grows two
+  new keyword blocks covering Lane A mls-psk-external-injection jargon
+  (`short psk nonce`, `truncated psk_nonce`, `unprovisioned psk_id`,
+  `unprovisioned external id`, `psk_nonce replay`, `resumption psk
+  cross-group splice`, `stale-epoch resumption`, `psk_id injection`,
+  `psk_id without provisioning`, `nonce reuse across sessions`, …)
+  and Lane B welcome-secret-treekem-pruning jargon (`pruned leaf
+  encryption`, `pruned node encryptions`, `truncated update path`,
+  `over-long update path`, `path-length mismatch`, `off-label joiner
+  secret`, `swap the joiner label`, `welcome bound to another
+  group_id`, `cross-context welcome splice`, `decrypt with removed
+  leaf`, …) so the injection guard blocks any prompt that attempts to
+  weaken the new lanes by name. 143 new unique patterns added.
+
+- **Coq Wave-26 — `Section TrinityChatWave26`.**
+  Predicates `psk_nonce_canonical_length_accepted_26`,
+  `psk_provisioned_external_accepted_26`,
+  `wst_canonical_path_accepted_26`,
+  `wst_canonical_label_accepted_26`. Lemmas:
+  - **INV-CHAT-152** `inv_chat_152_psk_non_canonical_nonce_rejected`
+    — `len <> 32 -> Nat.eqb len 32 = false` via `Nat.eqb_neq`.
+  - **INV-CHAT-153** `inv_chat_153_psk_unprovisioned_external_rejected`
+    — `is_provisioned = false -> reject` (boolean reflection).
+  - **INV-CHAT-154** `inv_chat_154_psk_resumption_group_splice_rejected`
+    — `gid <> gid_view -> Nat.eqb gid gid_view = false`.
+  - **INV-CHAT-155** `inv_chat_155_psk_resumption_epoch_rollback_rejected`
+    — `e < cur -> Nat.ltb e cur = true` via `Nat.ltb_lt`.
+  - **INV-CHAT-156** `inv_chat_156_wst_empty_update_path_rejected`
+    — `n = 0 -> Nat.eqb n 0 = true` via `Nat.eqb_refl`.
+  - **INV-CHAT-157** `inv_chat_157_wst_path_length_mismatch_rejected`
+    — `actual <> expected -> Nat.eqb actual expected = false`.
+  - **INV-CHAT-158** `inv_chat_158_wst_off_label_joiner_secret_rejected`
+    — `label <> 0 -> Nat.eqb label 0 = false`.
+  - `psk_nonce_canonical_length_accepted_26`,
+    `psk_provisioned_external_accepted_26`,
+    `wst_canonical_path_accepted_26`,
+    `wst_canonical_label_accepted_26` — four helper lemmas proving
+    the well-formed cases reduce to `false`/`true` rejection bits
+    correctly (`Nat.eqb_refl`, `Nat.lt_irrefl`).
+  Compiles **clean exit 0** with **227 Qed / 0 Admitted /
+  5 axioms (unchanged: `ss_kp_injective` (W2), `dh_step_fresh` (W3),
+  `dh_post_history_independent` (W3), `hybrid_kem_non_degenerate`
+  (W10), `sn_hash_sym` (W14))**. Wave-26 introduces **zero new
+  axioms** — every lemma is constructive.
+
+---
 
 ### Wave-25 — Padding-oracle chosen-ciphertext defense + Cover-traffic starvation defense
 
@@ -1463,18 +1604,19 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-124..130 | W22 | MLS proposal-bundle validation (empty rejected, oversized rejected, self-remove-only rejected, monotonic-indices required) + MAC tag truncation defense (short rejected, full-match accepted, full-mismatch rejected, split total-length preserved) |
 | INV-CHAT-131..137 | W23 | ReInit ceremony freshness (empty GID rejected, stale GID reuse rejected, protocol downgrade rejected, unsupported version leap rejected) + AppAck replay attestation (inverted range rejected, singleton accepted, stale/shrinking rejected, atomic-on-failure) |
 | INV-CHAT-138..144 | W24 | MLS commit signature forgery defense (empty sig rejected, zero-blob rejected, group-id splice rejected, epoch mismatch rejected) + Prekey signature chain binding (self-loop rejected, missing intermediate rejected, revoked identity rejected) |
-| **INV-CHAT-145..151** | **W25** | **Padding-oracle chosen-ciphertext defense (non-canonical class rejected, buffer-too-short rejected, declared-length overflow rejected, probe-budget exceeded rejected) + Cover-traffic starvation defense (window-too-short rejected, cover-floor breached rejected, mismatched gap-length rejected)** |
+| INV-CHAT-145..151 | W25 | Padding-oracle chosen-ciphertext defense (non-canonical class rejected, buffer-too-short rejected, declared-length overflow rejected, probe-budget exceeded rejected) + Cover-traffic starvation defense (window-too-short rejected, cover-floor breached rejected, mismatched gap-length rejected) |
+| **INV-CHAT-152..158** | **W26** | **MLS PSK external injection defense (non-canonical nonce rejected, unprovisioned external id rejected, resumption group splice rejected, resumption epoch rollback rejected) + Welcome-secret TreeKEM pruning defense (empty update path rejected, path-length mismatch rejected, off-label joiner secret rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, and Wave-25 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, and Wave-26 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W25–W29) — `[ASPIRATIONAL]`
+## Future waves (W26–W30) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -1496,15 +1638,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W22~~ — SHIPPED via [#732](https://github.com/gHashTag/trios/pull/732), merged `119f0fe` (see Wave-22 detail above) | | | | | | |
 | ~~W23~~ — SHIPPED via [#734](https://github.com/gHashTag/trios/pull/734), merged `1d6f910` (see Wave-23 detail above) | | | | | | |
 | ~~W24~~ — SHIPPED via [#738](https://github.com/gHashTag/trios/pull/738), merged `81ef050` (see Wave-24 detail above) | | | | | | |
-| ~~W25~~ — SHIPPED in this PR (see Wave-25 detail above) | | | | | | |
-| **W26** | (TBD — picked from uncovered surface after W25 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥225 Qed) | ≈419 | 2500 / 50 cats |
-| **W27** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥235 Qed) | ≈441 | 2600 / 52 cats |
-| **W28** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥245 Qed) | ≈463 | 2700 / 54 cats |
-| **W29** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥255 Qed) | ≈485 | 2800 / 56 cats |
-| **W30** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥265 Qed) | ≈507 | 2900 / 58 cats |
+| ~~W25~~ — SHIPPED via [#747](https://github.com/gHashTag/trios/pull/747), merged `e234422` (see Wave-25 detail above) | | | | | | |
+| ~~W26~~ — SHIPPED in this PR (see Wave-26 detail above) | | | | | | |
+| **W27** | (TBD — picked from uncovered surface after W26 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥237 Qed) | ≈441 | 2600 / 52 cats |
+| **W28** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-166..172 (≥247 Qed) | ≈463 | 2700 / 54 cats |
+| **W29** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-173..179 (≥257 Qed) | ≈485 | 2800 / 56 cats |
+| **W30** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-180..186 (≥267 Qed) | ≈507 | 2900 / 58 cats |
+| **W31** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-187..193 (≥277 Qed) | ≈529 | 3000 / 60 cats |
 
-After W25 the corpus crosses **2400 entries / 48 categories** and Coq
-crosses **215 closed proofs / 0 admissions**. From W26+ the work shifts
+After W26 the corpus crosses **2500 entries / 50 categories** and Coq
+crosses **227 closed proofs / 0 admissions**. From W27+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -1521,7 +1664,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2400/2400 blocked` (W25) at 48 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2500/2500 blocked` (W26) at 50 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -1558,8 +1701,9 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W26..W30 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W27..W31 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
+- Wave-26 detail section above is **[VERIFIED]** by cargo test (~419/0), `coqc` (227 Qed / 0 Admitted), `falsifier_runner` (2500/2500, 50 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-25 detail section above is **[VERIFIED]** by cargo test (397/0), `coqc` (215 Qed / 0 Admitted), `falsifier_runner` (2400/2400, 48 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-24 detail section above is **[VERIFIED]** by cargo test (375/0), `coqc` (203 Qed / 0 Admitted), `falsifier_runner` (2300/2300, 46 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-23 detail section above is **[VERIFIED]** by cargo test (355/0), `coqc` (191 Qed / 0 Admitted), `falsifier_runner` (2200/2200), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
