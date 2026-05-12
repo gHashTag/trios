@@ -89,7 +89,7 @@ Phase 1 cross-reference invariants are **preserved**. The new `\ref{app:F}`,
 | 2.4 | AP.D Trinity↔Flos Aureus symmetry proof table | **DONE pre-existing** (6,246 B; symmetry table present, proof in §D.2) |
 | 2.5 | AP.E Lexicon constants | **deferred to Neon SSOT** (lesson #2, #5) |
 | **2.6** | **AP.G INV-1..7 + Zenodo DOIs** | **THIS LANE** ✅ 18,560 B |
-| 2.7 | App.F FPGA bitstream + SHA-256 | open (4,932 B → ≥8 KB target) |
+| 2.7 | App.M FPGA bitstream + SHA-256 (PASS-8 R5: renamed App.F→App.M to resolve appendix collision after App.F became Coq Citation Map; appendix-F-fpga-expansion-audit.md renamed accordingly) | open (4,932 B → ≥8 KB target) |
 | 2.8 | App.N 8 Zenodo DOI registry (PASS-7 R5: renamed H→N + reduced 13→8 description bundles per PASS-6 community-SOT alignment) | open (4,607 B) |
 | 2.9 | App.I XDC pin map | open (4,435 B) |
 | 2.10 | App.J Troubleshooting | open (6,100 B) |

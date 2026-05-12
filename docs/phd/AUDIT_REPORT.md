@@ -40,12 +40,13 @@ https://raw.githubusercontent.com/gHashTag/trios/feat/phd-v5-tectonic-fix/assets
 | Приложение | Файл | Нужная иллюстрация |
 |---|---|---|
 | C — Golden Benchmark | `C-golden-benchmark.tex` | `app-c-acknowledgments.png` (есть в репо, не подключена) |
-| F — FPGA Bitstream | `F-fpga-bitstream.tex` | требуется новая (макет bitstream-архива) |
+| F — Coq Citation Map | `F-coq-citation-map.tex` | требуется новая (сводная статистика Coq-корпуса: 10 .v / 48 ствр / 35 Qed; в PASS-8 R5-honest сломанная ссылка на `app-f-bitstream-archive.png` убрана — PNG существует только на ветке `feat/illustrations`, плюс тематически неверно: bitstream-архив в Coq-citation appendix) |
+| M — FPGA Bitstream | `M-fpga-bitstream.tex` | требуется новая (макет bitstream-архива; бывший именованный файл `app-f-bitstream-archive.png` / после PASS-8 предложено `app-m-bitstream-archive.png` — PNG лежит только на `feat/illustrations`, в файле стоит R5-honest TODO(LD)) |
 | N — Zenodo DOI | `N-zenodo-doi.tex` | `app-h-zenodo-doi-registry.png` (лежит на ветке `feat/illustrations`, не в `main`; в PASS-7 R5-honest `\includegraphics` убран во избежание silent-drop в tectonic — см. `N-zenodo-doi.tex`) |
 | K — Agent Memory | `K-agent-memory.tex` | требуется новая (схема памяти 27-агентного улья) |
 | L — Pollen Channel | `L-pollen-channel.tex` | требуется новая (Pollen-канал ↔ Railway flow) |
 
-**Действие:** 2 иллюстрации (C, H) уже лежат в `assets/illustrations/` — нужно только подключить через `\includegraphics`. 3 иллюстрации (F, K, L) нужно сгенерировать.
+**Действие:** 1 иллюстрация (C) уже лежит в `assets/illustrations/` — нужно только подключить через `\includegraphics`. 4 иллюстрации (F Coq citation map summary, M FPGA bitstream, K agent memory, L pollen channel) нужно сгенерировать. **PASS-8 R5 note:** N-zenodo-doi (уже исправлен в PASS-7) + F-coq-citation-map + M-fpga-bitstream все имеют PASS-N TODO(LD) после удаления сломанных `\includegraphics` в рамках phd-pdf-images-gate.
 
 ---
 

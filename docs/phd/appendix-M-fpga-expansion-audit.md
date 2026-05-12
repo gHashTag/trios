@@ -1,4 +1,13 @@
-# Appendix F (FPGA bitstream) Expansion Audit · Phase 2 STUB-KILL task 2.7 · trios#380
+# Appendix M (FPGA bitstream) Expansion Audit · Phase 2 STUB-KILL task 2.7 · trios#380
+
+<!-- PASS-8 R5-honest (2026-05-12): file renamed from `appendix-F-fpga-expansion-audit.md`
+     to `appendix-M-fpga-expansion-audit.md` to match the post-rename appendix identity
+     (App.F = Coq Citation Map; App.M = FPGA Bitstream Archive). The body text below
+     was authored when the FPGA appendix was still labelled F; cross-references that
+     are unambiguously about the FPGA bitstream appendix have been updated to App.M.
+     References to the AUDIT process itself (which historically tracked task 2.7
+     against App.F) are preserved as-is for provenance, with this banner explaining
+     the rename. -->
 
 **Branch:** `feat/phd-phase2-stubkill-2-7` (stacked on `feat/phd-phase2-stubkill-2-9`, tip `fede810`)
 **Author:** Dmitrii Vasilev `<raoffonom@icloud.com>`, ORCID 0009-0008-4294-6159
