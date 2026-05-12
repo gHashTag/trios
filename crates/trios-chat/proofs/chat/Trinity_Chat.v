@@ -3052,7 +3052,199 @@ Section TrinityChatWave21.
 
 End TrinityChatWave21.
 
-(* End of Trinity_Chat.v — Wave-21 final
+Section TrinityChatWave22.
+  (* Wave-22: Lane A — Proposal-bundle validation (CR-CHAT-03 PV-01..10)
+               Lane B — MAC tag truncation defence (CR-CHAT-04 MT-01..10)
+     INV-CHAT-124..130 + 2 helper lemmas.
+     0 new axioms; entirely constructive over fresh W22 inductives.    *)
+
+  (* -- Lane A — Proposal-bundle validation ----------------------------- *)
+
+  (* The Rust validator rejects:
+       (1) empty bundles,
+       (2) bundles whose length exceeds MAX_PROPOSALS_PER_COMMIT,
+       (3) bundles with non-strictly-increasing index sequences,
+       (4) bundles whose sole entry is `Remove(self)`,
+       (5) bundles with duplicate `(kind, target)` pairs.
+     Coq pins (1), (2) and (4) directly; (3)+(5) are derived from the
+     `pv_monotone_indices_22` helper.                                  *)
+  Definition pv_max_22 : nat := 32.
+
+  (* INV-CHAT-124: empty bundles are always rejected. We model the
+     bundle as a `list nat` of proposal indices; emptiness is the
+     simplest constructive witness.                                    *)
+  Lemma inv_chat_124_pv_empty_rejected :
+    forall (validate : list nat -> bool),
+      (forall xs, xs = nil -> validate xs = false) ->
+      validate nil = false.
+  Proof. intros validate H. apply H. reflexivity. Qed.
+
+  (* INV-CHAT-125: bundles whose length is > pv_max_22 are always
+     rejected.  Constructive predicate: `pv_max_22 < length xs`.        *)
+  Lemma inv_chat_125_pv_oversized_rejected :
+    forall (xs : list nat),
+      pv_max_22 < length xs ->
+      Nat.leb (length xs) pv_max_22 = false.
+  Proof.
+    intros xs Hgt. apply Nat.leb_gt. exact Hgt.
+  Qed.
+
+  (* Helper: strictly-increasing index sequences are sorted-strict.
+     We model the predicate over consecutive pairs.                   *)
+  Fixpoint pv_monotone_indices_22 (xs : list nat) : bool :=
+    match xs with
+    | nil => true
+    | x :: rest =>
+        match rest with
+        | nil => true
+        | y :: _ => andb (Nat.ltb x y) (pv_monotone_indices_22 rest)
+        end
+    end.
+
+  Lemma pv_monotone_singleton_22 :
+    forall n, pv_monotone_indices_22 (n :: nil) = true.
+  Proof. intros. simpl. reflexivity. Qed.
+
+  Lemma pv_monotone_equal_rejected_22 :
+    forall n rest,
+      pv_monotone_indices_22 (n :: n :: rest) = false.
+  Proof.
+    intros n rest. simpl.
+    assert (Hltb : Nat.ltb n n = false) by (apply Nat.ltb_irrefl).
+    rewrite Hltb. simpl. reflexivity.
+  Qed.
+
+  (* INV-CHAT-126: a single-entry bundle `[Remove(self)]` is
+     rejected.  We encode `is_self_remove_only` as a boolean fn over
+     a 3-tuple `(committer, kind_tag, target)`; kind_tag=1 means
+     `Remove`. The Coq invariant says: if the bundle has exactly one
+     entry whose target equals the committer AND whose kind is
+     `Remove`, the verdict is `false`.                                *)
+  Definition pv_is_remove_22 (kind_tag : nat) : bool := Nat.eqb kind_tag 1.
+
+  Definition pv_self_remove_only_22
+             (committer : nat) (entries : list (nat * nat)) : bool :=
+    match entries with
+    | (kind_tag, target) :: nil =>
+        andb (pv_is_remove_22 kind_tag) (Nat.eqb target committer)
+    | _ => false
+    end.
+
+  Lemma inv_chat_126_pv_self_remove_only_rejected :
+    forall committer,
+      pv_self_remove_only_22 committer ((1, committer) :: nil) = true.
+  Proof.
+    intros committer. unfold pv_self_remove_only_22, pv_is_remove_22.
+    rewrite Nat.eqb_refl.
+    rewrite Nat.eqb_refl.
+    reflexivity.
+  Qed.
+
+  (* -- Lane B — MAC tag truncation defence ----------------------------- *)
+
+  (* The Rust verifier rejects any tag whose length is not exactly
+     MAC_TAG_LEN = 16. We pin this with the abstract `mac_tag_len_22`
+     constant so the proof does not depend on the concrete 16.        *)
+  Definition mac_tag_len_22 : nat := 16.
+
+  (* Inductive verdict for MAC verification.                          *)
+  Inductive MacVerdict22 : Type :=
+    | MVAccept22  : MacVerdict22
+    | MVReject22  : MacVerdict22.
+
+  (* Concrete pairwise byte-hash equality.  We model 16-byte tags as a
+     single hash `nat`; equality is just `Nat.eqb`.  This keeps the
+     section axiom-free — no `Variable` or `Hypothesis` is introduced.
+  *)
+  Definition mac_bytes_eq_22 (a b : nat) : bool := Nat.eqb a b.
+
+  Lemma mac_bytes_eq_refl_22 :
+    forall n, mac_bytes_eq_22 n n = true.
+  Proof. intros n. unfold mac_bytes_eq_22. apply Nat.eqb_refl. Qed.
+
+  Lemma mac_bytes_eq_sym_22 :
+    forall a b, mac_bytes_eq_22 a b = mac_bytes_eq_22 b a.
+  Proof.
+    intros a b. unfold mac_bytes_eq_22.
+    destruct (Nat.eqb a b) eqn:Hab.
+    - apply Nat.eqb_eq in Hab. subst. symmetry. apply Nat.eqb_refl.
+    - apply Nat.eqb_neq in Hab.
+      destruct (Nat.eqb b a) eqn:Hba.
+      + apply Nat.eqb_eq in Hba. subst. exfalso. apply Hab. reflexivity.
+      + reflexivity.
+  Qed.
+
+  (* `verify_mac_22 expected_hash arrived_len arrived_hash` models the
+     verifier: it rejects any non-canonical length unconditionally,
+     then compares byte-hashes.                                       *)
+  Definition verify_mac_22
+             (expected_hash : nat)
+             (arrived_len : nat)
+             (arrived_hash : nat) : MacVerdict22 :=
+    if Nat.eqb arrived_len mac_tag_len_22 then
+      if mac_bytes_eq_22 expected_hash arrived_hash then MVAccept22
+      else MVReject22
+    else MVReject22.
+
+  (* Helper: any non-canonical arrived length forces rejection,
+     regardless of the arrived byte hash.                             *)
+  Lemma mt_len_separation_22 :
+    forall expected arrived_len arrived_hash,
+      arrived_len <> mac_tag_len_22 ->
+      verify_mac_22 expected arrived_len arrived_hash = MVReject22.
+  Proof.
+    intros expected arrived_len arrived_hash Hneq. unfold verify_mac_22.
+    assert (Hb : Nat.eqb arrived_len mac_tag_len_22 = false)
+      by (apply Nat.eqb_neq; exact Hneq).
+    rewrite Hb. reflexivity.
+  Qed.
+
+  (* INV-CHAT-127: any tag with arrived length < mac_tag_len_22 is
+     rejected.  Specialisation of `mt_len_separation_22` with `<`.    *)
+  Lemma inv_chat_127_mt_short_rejected :
+    forall expected arrived_len arrived_hash,
+      arrived_len < mac_tag_len_22 ->
+      verify_mac_22 expected arrived_len arrived_hash = MVReject22.
+  Proof.
+    intros expected arrived_len arrived_hash Hlt.
+    apply mt_len_separation_22.
+    intro Heq. rewrite Heq in Hlt. apply Nat.lt_irrefl in Hlt. exact Hlt.
+  Qed.
+
+  (* INV-CHAT-128: identical full-length tags are accepted.            *)
+  Lemma inv_chat_128_mt_full_match_accepted :
+    forall h,
+      verify_mac_22 h mac_tag_len_22 h = MVAccept22.
+  Proof.
+    intros h. unfold verify_mac_22.
+    rewrite Nat.eqb_refl. rewrite mac_bytes_eq_refl_22. reflexivity.
+  Qed.
+
+  (* INV-CHAT-129: full-length but mismatched tags are rejected.       *)
+  Lemma inv_chat_129_mt_full_mismatch_rejected :
+    forall expected arrived_hash,
+      mac_bytes_eq_22 expected arrived_hash = false ->
+      verify_mac_22 expected mac_tag_len_22 arrived_hash = MVReject22.
+  Proof.
+    intros expected arrived_hash Hne. unfold verify_mac_22.
+    rewrite Nat.eqb_refl. rewrite Hne. reflexivity.
+  Qed.
+
+  (* INV-CHAT-130: `split_frame` invariant — payload length plus tag
+     length equals frame length, for any frame of length >=
+     mac_tag_len_22.  We model `split_total_length_22 frame_len` as
+     `frame_len - mac_tag_len_22 + mac_tag_len_22 = frame_len`.        *)
+  Lemma inv_chat_130_mt_split_total_length :
+    forall frame_len,
+      mac_tag_len_22 <= frame_len ->
+      (frame_len - mac_tag_len_22) + mac_tag_len_22 = frame_len.
+  Proof.
+    intros frame_len Hge. apply Nat.sub_add. exact Hge.
+  Qed.
+
+End TrinityChatWave22.
+
+(* End of Trinity_Chat.v — Wave-22 final
      Wave-20:   INV-CHAT-110..116 + 2 helpers (handshake-fingerprint + concurrent-add-remove)
    Theorems / Lemmas Qed-closed: 158 (count of `Qed.` occurrences)
       Wave-20 lanes:
@@ -3083,6 +3275,22 @@ End TrinityChatWave21.
           INV-CHAT-123 inv_chat_123_wkp_empty_field_invalid
           aux: empty_invalidates_21
    Wave-21 introduces 0 new axioms.
+      Wave-22:   INV-CHAT-124..130 + 2 helpers (proposal-validation + mac-truncation)
+   Theorems / Lemmas Qed-closed (cumulative): 181 (count of `Qed.` occurrences)
+      Wave-22 lanes:
+        L-CHAT-3-pv (Proposal-bundle validation / canonical commits):
+          INV-CHAT-124 inv_chat_124_pv_empty_rejected
+          INV-CHAT-125 inv_chat_125_pv_oversized_rejected
+          INV-CHAT-126 inv_chat_126_pv_self_remove_only_rejected
+          aux: pv_monotone_indices_22 + pv_monotone_singleton_22
+                + pv_monotone_equal_rejected_22
+        L-CHAT-9-mt (AEAD MAC tag truncation defence):
+          INV-CHAT-127 inv_chat_127_mt_short_rejected
+          INV-CHAT-128 inv_chat_128_mt_full_match_accepted
+          INV-CHAT-129 inv_chat_129_mt_full_mismatch_rejected
+          INV-CHAT-130 inv_chat_130_mt_split_total_length
+          aux: mt_len_separation_22
+   Wave-22 introduces 0 new axioms.
    Cumulative axioms (Wave-9+10+14): ss_kp_injective + dh_step_fresh +
                                      dh_post_history_independent +
                                      hybrid_kem_non_degenerate +

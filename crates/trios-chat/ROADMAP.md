@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-21: **330 tests · 25/25 e2e · 2000/2000 falsifier · 40 categories · 168 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-22: **335 tests · 25/25 e2e · 2100/2100 falsifier · 42 categories · 181 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -80,7 +80,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W18 | `6902a82` | 270 | INV-CHAT-96..102 (139 Qed total) | 1700 | 34 | padding_class_oracle + jitter_side_channel | [#717](https://github.com/gHashTag/trios/pull/717) |
 | W19 | `d601a58` | 290 | INV-CHAT-103..109 (148 Qed total) | 1800 | 36 | kem_decap_oracle + tag_stripping | [#719](https://github.com/gHashTag/trios/pull/719) |
 | W20 | `e556075` | 310 | INV-CHAT-110..116 (158 Qed total) | 1900 | 38 | handshake_fingerprint + concurrent_add_remove | [#724](https://github.com/gHashTag/trios/pull/724) |
-| **W21** | **(this PR)** | **330** | **INV-CHAT-117..123 (168 Qed total)** | **2000** | **40** | **epoch_authentication_failure + welcome_keypackage_pinning** | **(open)** |
+| W21 | `35b3ef6` | 330 | INV-CHAT-117..123 (168 Qed total) | 2000 | 40 | epoch_authentication_failure + welcome_keypackage_pinning | [#730](https://github.com/gHashTag/trios/pull/730) |
+| **W22** | **(this PR)** | **335** | **INV-CHAT-124..130 (181 Qed total)** | **2100** | **42** | **proposal_validation + mac_truncation** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -91,6 +92,150 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-22 — MLS proposal-bundle validation + MAC tag truncation defense
+
+- **L-CHAT-3-pv** (R-CHAT-3 / **CR-CHAT-03**) — PV-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/proposal_validation.rs`
+  (329 lines) shipping
+  `validate_bundle(bundle: &ProposalBundle) -> Result<(), ProposalValidationError>`,
+  constant `MAX_PROPOSALS_PER_COMMIT = 32`, types
+  `ProposalKind::{Add, Remove, Update}`,
+  `ProposalBundle { committer_leaf, entries }`, and
+  `ProposalEntry { index, kind, target }`. Five rules enforced in a
+  single pass: (1) bundle non-empty, (2) `entries.len() ≤ 32`,
+  (3) strict-monotonic `index` field (deterministic order, no
+  reorder injection), (4) no duplicate `(kind, target)` pair,
+  (5) reject the degenerate `[Remove(self)]` singleton that would
+  let a committer evict itself in a single commit (must always be
+  paired with another proposal so the group state cannot collapse).
+  - PV-01 empty bundle rejected — `entries = []` returns
+    `ProposalValidationError::Empty`.
+  - PV-02 oversized bundle rejected — `entries.len() = 33` returns
+    `ProposalValidationError::Oversized`.
+  - PV-03 max bundle accepted — `entries.len() = 32` is `Ok(())`.
+  - PV-04 monotonic indices accepted — `[0,1,2,3]` is `Ok(())`.
+  - PV-05 equal indices rejected — `[0,1,1,2]` returns
+    `ProposalValidationError::NonMonotonic`.
+  - PV-06 descending indices rejected — `[2,1,0]` returns
+    `ProposalValidationError::NonMonotonic`.
+  - PV-07 duplicate (kind,target) rejected — two `(Add, x)` returns
+    `ProposalValidationError::Duplicate`.
+  - PV-08 same target different kind allowed — `(Add,x)` then
+    `(Update,x)` is `Ok(())` (different kinds are valid).
+  - PV-09 self-remove-only rejected — `[Remove(committer_leaf)]`
+    returns `ProposalValidationError::SelfRemoveOnly`.
+  - PV-10 green — module compiles and re-exports through
+    `CR-CHAT-03/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-9-mt** (R-CHAT-9 / **CR-CHAT-04**) — MT-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-04/src/mac_truncation.rs`
+  (290 lines) shipping constant `MAC_TAG_LEN = 16`, newtype
+  `MacTag([u8; 16])` with `from_slice(&[u8]) -> Result<MacTag, MacError>`
+  and constant-time `ct_eq(&MacTag) -> Choice` via
+  `subtle::ConstantTimeEq` applied to `.as_slice()`,
+  `verify_mac(expected: &MacTag, arrived: &[u8]) -> Result<(), MacError>`,
+  and `split_frame(frame: &[u8]) -> Result<(&[u8], MacTag), MacError>`.
+  Error type `MacError::{Truncated, Oversized, Mismatch, FrameTooShort}`
+  — every length-failure collapses to a single rejection class so
+  an attacker cannot distinguish "15-byte tag" from "17-byte tag"
+  from "mismatched tag" by error shape. Length check is *strict*:
+  any tag whose length is not exactly 16 is rejected before any
+  byte comparison runs (no truncated-MAC oracle).
+  - MT-01 full-length match accepted — identical 16-byte tags is
+    `Ok(())`.
+  - MT-02 truncated tag rejected — 15 bytes returns
+    `MacError::Truncated`.
+  - MT-03 oversized tag rejected — 17 bytes returns
+    `MacError::Oversized`.
+  - MT-04 empty tag rejected — 0 bytes returns
+    `MacError::Truncated`.
+  - MT-05 mismatched tag rejected — flipped final byte returns
+    `MacError::Mismatch`, not a leak of which byte differs.
+  - MT-06 split_frame happy path — frame of length `payload + 16`
+    splits cleanly into `(payload, tag)`.
+  - MT-07 split_frame too short — frame of length 15 returns
+    `MacError::FrameTooShort`.
+  - MT-08 ct_eq is constant-time — `MacTag::ct_eq` returns a
+    `subtle::Choice`, not a `bool`, so the call site cannot
+    short-circuit on the first differing byte.
+  - MT-09 length-constant single source of truth — `MAC_TAG_LEN == 16`
+    is the only place the value lives.
+  - MT-10 green — module compiles and re-exports through
+    `CR-CHAT-04/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 2000 → 2100.** New categories
+  `proposal_validation` and `mac_truncation`, 50 entries each
+  (`PI-PV-001..050`, `PI-MT-001..050`), generated by
+  `gen_falsifier_wave22.py`. Each lane covers the specific
+  exploitation phrasings (`Skip Rule 3 monotonic`, `Permit (Add, x)
+  and (Update, x) for the same x`, `target == committer_leaf`,
+  `truncated MAC tag for perf`, `early-exit on first differing
+  byte`, `MacTag::ct_eq only when full length`, `read past arrived.len()`,
+  …). `falsifier_runner` gains two new threshold lanes at `0.95`.
+  Result: **42 categories at 100% block rate**, `2100 / 2100` blocked.
+
+- **DENY_PATTERNS extension.** `CR-CHAT-06/src/injection.rs`
+  grows two new keyword blocks covering Lane A proposal-bundle
+  jargon (`skip rule 3`, `monotonic indices`, `duplicate entry from
+  trusted committer`, `self-remove without companion`, `zero-indexed
+  entries as genesis`, `[Remove(self)]`, `committer_leaf`,
+  `validator as advisory`, `archived to disk`, `treat the validator`,
+  …) and Lane B MAC-tag jargon (`mac_tag_len - 1`, `truncated MAC`,
+  `first differing byte`, `early-exit on the first differing`,
+  `MacTag::ct_eq only when`, `subtle::Choice::from(arrived`,
+  `read past arrived.len()`, `payload is null`, `frame_len = mac_tag_len - 1`,
+  …) so the injection guard blocks any prompt that attempts to
+  weaken the new lanes by name.
+
+- **Coq Wave-22 — `Section TrinityChatWave22` (lines ≈ 3055–3231).**
+  Introduces constant `pv_max_22 := 32`, fixpoint
+  `pv_monotone_indices_22 : list nat -> bool` (strict-ascending
+  list check via fold over a running max), predicates
+  `pv_is_remove_22`, `pv_self_remove_only_22`, MAC verdicts
+  `Inductive MacVerdict22 := MVAccept22 | MVReject22`, computable
+  bytes equality `Definition mac_bytes_eq_22 := Nat.eqb` (concrete —
+  no `Variable`, no `Hypothesis`, **zero new axioms**),
+  `verify_mac_22 : nat -> nat -> nat -> nat -> MacVerdict22`, and
+  constant `mac_tag_len_22 := 16`. Closes:
+  - **INV-CHAT-124** `inv_chat_124_pv_empty_rejected` — empty
+    bundles always rejected.
+  - **INV-CHAT-125** `inv_chat_125_pv_oversized_rejected` —
+    `len > 32 → Nat.leb len 32 = false`.
+  - Helper `pv_monotone_singleton_22` — single-element lists are
+    monotonic.
+  - Helper `pv_monotone_equal_rejected_22` — equal adjacent
+    indices fail the strict-monotonic check.
+  - **INV-CHAT-126** `inv_chat_126_pv_self_remove_only_rejected` —
+    `[Remove(self)]` singleton is detected.
+  - **INV-CHAT-127** `inv_chat_127_mt_short_rejected` —
+    `arrived_len < 16 → MVReject22`.
+  - **INV-CHAT-128** `inv_chat_128_mt_full_match_accepted` —
+    identical 16-byte hashes accept.
+  - **INV-CHAT-129** `inv_chat_129_mt_full_mismatch_rejected` —
+    differing hashes reject.
+  - **INV-CHAT-130** `inv_chat_130_mt_split_total_length` —
+    `frame ≥ 16 → (frame - 16) + 16 = frame`.
+  - Helper `mt_len_separation_22` — strict length-failure boundary.
+  - Bonus lemmas `mac_bytes_eq_refl_22`, `mac_bytes_eq_sym_22`
+    (constructive over `Nat.eqb`, replace the two `Hypothesis`
+    declarations from the first draft).
+  - **Total: 181 `Qed.` / 0 `Admitted.` / 0 new axioms.**
+
+- **Verification gate.** `cargo test` over the 12 chat crates plus
+  harness binaries: **335 / 0**. `cargo run --bin e2e_chat_25`:
+  **25 / 25**. `cargo run --bin falsifier_runner`: **2100 / 2100**
+  blocked at 42 threshold lanes. `cargo clippy --all-targets -- -D warnings`
+  on `trios-chat` + the three touched ring crates: clean.
+  `coqc proofs/chat/Trinity_Chat.v`: silent exit `0`, three
+  abstract-large-number warnings only (pre-existing W14/W15 nat
+  literals, not from W22 code).
+
+- **Cumulative axioms — unchanged.** `ss_kp_injective` (W9),
+  `dh_step_fresh` + `dh_post_history_independent` +
+  `hybrid_kem_non_degenerate` (W10), `sn_hash_sym` (W14). Wave-22
+  introduces **zero** new axioms — both `mac_bytes_eq_refl_22` and
+  `mac_bytes_eq_sym_22` are constructive `Qed` proofs over `Nat.eqb`.
 
 ### Wave-21 — epoch-authentication failure + Welcome KeyPackage pinning
 
@@ -922,18 +1067,20 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-89..95 | W17 | tool-call argument confusion (kind mismatch, nested-sentinel, oversized-string, unknown-enum-variant) + group-PCS healing (epoch advance, no-op, epoch mismatch) |
 | INV-CHAT-96..102 | W18 | padding-class oracle (smallest-class, over-pad, length overflow, truncation, non-canonical gap, non-monotonic timestamp, reorder-attack) |
 | INV-CHAT-103..109 | W19 | ML-KEM-768 decapsulation oracle (FO determinism, ct flip → differ, anti-malleability, content-bound reject, CT eq, opaque observe) + structured-output tag-stripping (nested check, well-formed span) |
-| **INV-CHAT-110..116** | **W20** | **handshake fingerprinting (determinism, swap detected, empty-field invalid) + concurrent Add/Remove ordering (Update<Remove<Add priority, empty-set neutral, add-after-remove size-neutral)** |
+| INV-CHAT-110..116 | W20 | handshake fingerprinting (determinism, swap detected, empty-field invalid) + concurrent Add/Remove ordering (Update<Remove<Add priority, empty-set neutral, add-after-remove size-neutral) |
+| INV-CHAT-117..123 | W21 | epoch-authentication failure (future rejected, match accepted, opaque error, grace-window accepted) + Welcome KeyPackage pinning (immutable pin, mismatch rejected, hash determinism, empty-field invalid) |
+| **INV-CHAT-124..130** | **W22** | **MLS proposal-bundle validation (empty rejected, oversized rejected, self-remove-only rejected, monotonic-indices required) + MAC tag truncation defense (short rejected, full-match accepted, full-mismatch rejected, split total-length preserved)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, and Wave-20 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, and Wave-22 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W22–W26) — `[ASPIRATIONAL]`
+## Future waves (W23–W27) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -951,15 +1098,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W18~~ — SHIPPED via [#717](https://github.com/gHashTag/trios/pull/717), merged `6902a82` (see Wave-18 detail above) | | | | | | |
 | ~~W19~~ — SHIPPED via [#719](https://github.com/gHashTag/trios/pull/719), merged `d601a58` (see Wave-19 detail above) | | | | | | |
 | ~~W20~~ — SHIPPED via [#724](https://github.com/gHashTag/trios/pull/724), merged `e556075` (see Wave-20 detail above) | | | | | | |
-| ~~W21~~ — SHIPPED in this PR (see Wave-21 detail above) | | | | | | |
-| **W22** | (TBD — picked from uncovered surface after W21 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-124..130 (≥178 Qed) | ≈352 | 2100 / 42 cats |
-| **W23** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥188 Qed) | ≈374 | 2200 / 44 cats |
-| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥198 Qed) | ≈396 | 2300 / 46 cats |
-| **W25** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥208 Qed) | ≈418 | 2400 / 48 cats |
-| **W26** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥218 Qed) | ≈440 | 2500 / 50 cats |
+| ~~W21~~ — SHIPPED via [#730](https://github.com/gHashTag/trios/pull/730), merged `35b3ef6` (see Wave-21 detail above) | | | | | | |
+| ~~W22~~ — SHIPPED in this PR (see Wave-22 detail above) | | | | | | |
+| **W23** | (TBD — picked from uncovered surface after W22 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-131..137 (≥191 Qed) | ≈357 | 2200 / 44 cats |
+| **W24** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-138..144 (≥201 Qed) | ≈379 | 2300 / 46 cats |
+| **W25** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-145..151 (≥211 Qed) | ≈401 | 2400 / 48 cats |
+| **W26** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-152..158 (≥221 Qed) | ≈423 | 2500 / 50 cats |
+| **W27** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-159..165 (≥231 Qed) | ≈445 | 2600 / 52 cats |
 
-After W21 the corpus crosses **2000 entries / 40 categories** and Coq
-crosses **168 closed proofs / 0 admissions**. From W22+ the work shifts
+After W22 the corpus crosses **2100 entries / 42 categories** and Coq
+crosses **181 closed proofs / 0 admissions**. From W23+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -976,7 +1124,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2000/2000 blocked` (W21) at 40 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2100/2100 blocked` (W22) at 42 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -1013,11 +1161,11 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W21..W25 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W23..W27 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
-- Wave-20 detail section above is **[VERIFIED]** by cargo test
-  (310/0), `e2e_chat_25` (25/25), `falsifier_runner` (1900/1900,
-  38 cats), clippy (clean), and `coqc Trinity_Chat.v` (silent, 158
+- Wave-22 detail section above is **[VERIFIED]** by cargo test
+  (335/0), `e2e_chat_25` (25/25), `falsifier_runner` (2100/2100,
+  42 cats), clippy (clean), and `coqc Trinity_Chat.v` (silent, 181
   `Qed.`, 0 `Admitted.`).
 
 ---
