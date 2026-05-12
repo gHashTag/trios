@@ -43,6 +43,12 @@ pub use external_init_secret_pinning::{
     ExternalInitView, EIP_EXPORTER_LEN, EIP_KEM_EPHEMERAL_LEN,
 };
 
+pub mod welcome_path_secret_unmasking;
+pub use welcome_path_secret_unmasking::{
+    validate_welcome_path_secrets, WelcomePacket, WelcomePathSecret, WelcomePathSecretError,
+    WelcomePathSecretView, WELCOME_PATH_SECRET_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

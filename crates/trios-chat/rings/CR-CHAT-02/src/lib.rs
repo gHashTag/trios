@@ -45,6 +45,12 @@ pub use sender_data_header_encryption::{
     SENDER_DATA_NONCE_LEN,
 };
 
+pub mod application_data_aead_nonce_reuse;
+pub use application_data_aead_nonce_reuse::{
+    validate_application_data_aead, ApplicationDataAeadError, ApplicationDataPacket,
+    ApplicationDataView, APPLICATION_DATA_AEAD_NONCE_LEN, MAX_GENERATION_WINDOW,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
