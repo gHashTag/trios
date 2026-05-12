@@ -69,6 +69,12 @@ pub use cover_traffic_starvation::{
     MIN_COVER_RATIO_NUM, WINDOW_MIN_EMISSIONS,
 };
 
+pub mod ratchet_tree_extension_tampering;
+pub use ratchet_tree_extension_tampering::{
+    validate_ratchet_tree_extension, RatchetTreeExtError, RatchetTreeExtension, RatchetTreeNode,
+    RatchetTreeView, RTX_MIN_LEAVES,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
