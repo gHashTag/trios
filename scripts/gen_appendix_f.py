@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Regenerate docs/phd/appendix/F-coq-citation-map.tex from the EXTENDED
-consolidated theorem inventory (phd_proofs_inventory_v2.json).
+consolidated theorem inventory (phd_proofs_inventory_v3.json).
 
 R5-honest: counts come directly from grep of *.v files; Admitted is preserved
 verbatim. R1 CROWN exception: one-shot admin generator producing a *.tex file
@@ -16,7 +16,7 @@ Sources scanned (consolidated SoT, post t27 merge):
 import json
 from pathlib import Path
 
-INV = json.loads(open("/home/user/workspace/phd_proofs_inventory_v2.json").read())
+INV = json.loads(open("/home/user/workspace/phd_proofs_inventory_v3.json").read())
 FILES = [f for f in INV["files"] if f["kind"] == "coq"]
 
 def latex_escape(s):

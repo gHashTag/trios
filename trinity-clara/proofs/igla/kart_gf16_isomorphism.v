@@ -132,14 +132,40 @@ Definition kart_compose (theta : nat) (w x : gf16_vec) : bool :=
     [crates/trios-golden-float/tests/kart_gf16_witness.rs] is the falsifier:
     if any pair disagrees, the test panics and Theorem 12.7 is rejected.
 *)
+(** Key commutation lemma: the sum of per-position popcounts equals the
+    total popcount of the XOR. Proof: induction on the parallel structure
+    of [w] and [x] under the [length w = length x] hypothesis. *)
+Lemma kart_inner_vec_sum_eq_popcount_vec :
+  forall (w x : gf16_vec),
+    length w = length x ->
+    sum_nat (kart_inner_vec w x) = gf16_popcount_vec (gf16_xor_vec w x).
+Proof.
+  induction w as [| wh wt IH]; intros x Hlen.
+  - destruct x as [| xh xt].
+    + simpl. reflexivity.
+    + simpl in Hlen. discriminate Hlen.
+  - destruct x as [| xh xt].
+    + simpl in Hlen. discriminate Hlen.
+    + simpl in Hlen.
+      injection Hlen as Hlen'.
+      simpl.
+      unfold kart_inner.
+      rewrite (IH xt Hlen').
+      reflexivity.
+Qed.
+
+(** Theorem 12.7 (KART–GF(16) isomorphism, finite-field analogue):       *)
+(** Phase 4 closure (2026-05-13): Qed via kart_inner_vec_sum_eq_popcount_vec. *)
 Theorem kart_gf16_exact :
   forall (theta : nat) (w x : gf16_vec),
     length w = length x ->
     vsa_matmul theta w x = kart_compose theta w x.
 Proof.
-  (* Admitted: see header comment for the proof obligation breakdown.
-     Witness lives in crates/trios-golden-float/tests/kart_gf16_witness.rs. *)
-Admitted.
+  intros theta w x Hlen.
+  unfold vsa_matmul, kart_compose, kart_outer.
+  rewrite (kart_inner_vec_sum_eq_popcount_vec w x Hlen).
+  reflexivity.
+Qed.
 
 (** ── Section 5: Sanity Theorems (Qed) ── *)
 
