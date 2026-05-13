@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-30: **~508 tests · 25/25 e2e · 2900/2900 falsifier · 58 categories · 275 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-31: **~528 tests · 25/25 e2e · 3000/3000 falsifier · 60 categories · 287 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -89,7 +89,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W27 | `93e4e6c` | ~448 | INV-CHAT-159..165 (239 Qed total) | 2600 | 52 | external_init_secret_pinning + ratchet_tree_extension_tampering | [#752](https://github.com/gHashTag/trios/pull/752) |
 | W28 | `562009c` | ~468 | INV-CHAT-166..172 (251 Qed total) | 2700 | 54 | confirmation_tag_chain + sender_data_header_encryption | [#754](https://github.com/gHashTag/trios/pull/754) |
 | W29 | `c389536` | ~488 | INV-CHAT-173..179 (263 Qed total) | 2800 | 56 | leaf_node_signature_validation + group_context_extensions_consistency | [#760](https://github.com/gHashTag/trios/pull/760) |
-| **W30** | **(this PR)** | **~508** | **INV-CHAT-180..186 (275 Qed total)** | **2900** | **58** | **application_data_aead_nonce_reuse + welcome_path_secret_unmasking** | **(open)** |
+| W30 | `bd5ffea` | ~508 | INV-CHAT-180..186 (275 Qed total) | 2900 | 58 | application_data_aead_nonce_reuse + welcome_path_secret_unmasking | [#765](https://github.com/gHashTag/trios/pull/765) |
+| **W31** | **(this PR)** | **~528** | **INV-CHAT-187..193 (287 Qed total)** | **3000** | **60** | **keypackage_init_key_reuse + external_psk_id_provenance** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -100,6 +101,133 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-31 — KeyPackage init_key reuse + External PSK identifier provenance
+
+- **L-CHAT-1-kpinit** (R-CHAT-1 / **CR-CHAT-01**) — KPI-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-01/src/keypackage_init_key_reuse.rs`
+  (269 lines) shipping
+  `validate_keypackage_init_key(package: &KeyPackage, view: &KeyPackageView) -> Result<(), KeyPackageInitKeyError>`.
+  Const `KEYPACKAGE_INIT_KEY_LEN = 32`. Error enum
+  `KeyPackageInitKeyError` (`#[non_exhaustive]` with variants
+  `NonCanonicalInitKeyLength`, `CrossCipherSuiteKeyPackage`,
+  `StaleEpochKeyPackage`, `InitKeyReused`, `ZeroInitKey`,
+  `LeafKeyEqualsInitKey`). Six rules enforced in fixed order from
+  RFC 9420 §10.1 (KeyPackage validation / `init_key` uniqueness +
+  ciphersuite consistency + lifetime bounds): (1) reject any
+  `init_key` not of canonical length 32 (`NonCanonicalInitKeyLength` —
+  blocks the short/over-long init_key forge), (2) reject
+  `package.cipher_suite != view.local_cipher_suite`
+  (`CrossCipherSuiteKeyPackage` — blocks the cross-ciphersuite
+  KeyPackage splice), (3) reject
+  `view.current_epoch < package.lifetime_not_before` or
+  `view.current_epoch > package.lifetime_not_after`
+  (`StaleEpochKeyPackage` — blocks both not-yet-valid and expired
+  KeyPackages), (4) reject any `init_key` already present in
+  `view.used_init_keys` (`InitKeyReused` — blocks the init_key-reuse
+  attack that breaks forward secrecy across joins),
+  (5) reject the all-zero `init_key` (`ZeroInitKey` — a correct HPKE
+  encapsulation never produces it), (6) reject
+  `package.init_key == package.leaf_node_key` (`LeafKeyEqualsInitKey` —
+  the key separation between long-term leaf signing key material and
+  ephemeral init_key is part of the security argument of §10.1).
+  - KPI-01 short 16-byte init_key rejected — `NonCanonicalInitKeyLength`.
+  - KPI-02 over-long 64-byte init_key rejected — `NonCanonicalInitKeyLength`.
+  - KPI-03 cross-ciphersuite KeyPackage rejected — `CrossCipherSuiteKeyPackage`.
+  - KPI-04 not-yet-valid KeyPackage rejected — `StaleEpochKeyPackage`.
+  - KPI-05 expired KeyPackage rejected — `StaleEpochKeyPackage`.
+  - KPI-06 init_key already in `used_init_keys` rejected — `InitKeyReused`.
+  - KPI-07 zero init_key rejected — `ZeroInitKey`.
+  - KPI-08 `init_key == leaf_node_key` rejected — `LeafKeyEqualsInitKey`.
+  - KPI-09 valid KeyPackage within lifetime accepted, `used_init_keys`
+    ledger does not yet contain the key.
+  - KPI-10 green — module compiles and re-exports through
+    `CR-CHAT-01/src/lib.rs`. → **10 unit tests**.
+
+- **L-CHAT-3-pskprov** (R-CHAT-11 / **CR-CHAT-03**) — EPK-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/external_psk_id_provenance.rs`
+  (259 lines) shipping
+  `validate_external_psk_id(proposal: &ExternalPskProposal, view: &ExternalPskView) -> Result<(), ExternalPskIdError>`,
+  consts `EXTERNAL_PSK_NONCE_LEN = 32` and
+  `EXTERNAL_PSK_ID_MAX_LEN = 255`. Error enum `ExternalPskIdError`
+  (`#[non_exhaustive]` with variants `NonCanonicalPskNonceLength`,
+  `EmptyPskId`, `OversizedPskId`, `UnprovisionedExternalPsk`,
+  `ExternalPskIdReplay`, `ZeroPskNonce`). Six rules enforced in
+  fixed order from RFC 9420 §5.3.2 (PSK IDs and `psk_nonce`
+  derivation) + §5.3.3 (External PSK provenance and replay
+  protection): (1) reject any `psk_nonce` not of canonical length 32
+  (`NonCanonicalPskNonceLength` — blocks the short/over-long
+  `psk_nonce` forge), (2) reject the zero-length `psk_id`
+  (`EmptyPskId` — the spec mandates a non-empty external identifier),
+  (3) reject any `psk_id` longer than `EXTERNAL_PSK_ID_MAX_LEN = 255`
+  (`OversizedPskId` — blocks the oversized-`psk_id` DoS that bloats
+  the proposal ledger), (4) reject `psk_id ∉ view.provisioned_psks`
+  (`UnprovisionedExternalPsk` — blocks injection of an External PSK
+  the local provisioning store has never seen),
+  (5) reject any `(psk_id, psk_nonce)` pair already present in
+  `view.used_external_psks` (`ExternalPskIdReplay` — blocks the
+  External-PSK replay attack that recycles a fresh-looking nonce),
+  (6) reject the all-zero `psk_nonce` (`ZeroPskNonce` — a correct
+  KDF.Expand never produces it).
+  - EPK-01 short 16-byte `psk_nonce` rejected — `NonCanonicalPskNonceLength`.
+  - EPK-02 over-long 64-byte `psk_nonce` rejected — `NonCanonicalPskNonceLength`.
+  - EPK-03 empty `psk_id` rejected — `EmptyPskId`.
+  - EPK-04 oversized 256-byte `psk_id` rejected — `OversizedPskId`.
+  - EPK-05 unprovisioned `psk_id` rejected — `UnprovisionedExternalPsk`.
+  - EPK-06 replayed `(psk_id, psk_nonce)` rejected — `ExternalPskIdReplay`.
+  - EPK-07 zero `psk_nonce` rejected — `ZeroPskNonce`.
+  - EPK-08 valid External PSK proposal accepted, `used_external_psks`
+    ledger does not yet contain the pair.
+  - EPK-09 distinct `psk_nonce` reusing the same provisioned `psk_id`
+    accepted (defends rule (5) against false positives on identifier
+    reuse with a fresh nonce).
+  - EPK-10 green — module compiles and re-exports through
+    `CR-CHAT-03/src/lib.rs`. → **10 unit tests**.
+
+- **Falsifier corpus 2900 → 3000.** New categories
+  `keypackage_init_key_reuse` and `external_psk_id_provenance`,
+  50 entries each (`PI-KPI-001..050`, `PI-EPK-001..050`). Each lane
+  covers the specific exploitation phrasings (`Accept a 16-byte
+  init_key`, `Splice the KeyPackage across ciphersuites`, `Treat an
+  expired KeyPackage as fresh`, `Reuse the init_key already in
+  used_init_keys`, `Use the all-zero init_key`, `Set leaf_node_key
+  equal to init_key`, `Accept an empty psk_id`, `Forge an oversized
+  256-byte psk_id`, `Inject an unprovisioned External PSK`, `Replay
+  the (psk_id, psk_nonce) pair`, `Use the all-zero psk_nonce`, …) so
+  deny patterns block them at the orchestrator level before they
+  reach the Rust validator. Offline simulation: **3000/3000 blocked,
+  0 misses, 60 categories**.
+
+- **DENY_PATTERNS 4901 → 5120** (+219 W31 patterns) in
+  `crates/trios-chat/rings/CR-CHAT-06/src/injection.rs` under the
+  `// -- Wave-31: keypackage-init-key-reuse + external-psk-id-provenance --`
+  block header at the end of the array. No closer patches were
+  needed — offline-sim returned 100/100 W31 prompts blocked on the
+  first pass.
+
+- **Coq Section `TrinityChatWave31`** in
+  `crates/trios-chat/proofs/chat/Trinity_Chat.v` (lines 4286–4416)
+  closes 7 new theorems + 5 helper lemmas:
+  - INV-CHAT-187 `inv_chat_187_kpi_non_canonical_init_key_len_rejected`
+  - INV-CHAT-188 `inv_chat_188_kpi_cross_ciphersuite_rejected`
+  - INV-CHAT-189 `inv_chat_189_kpi_not_yet_valid_rejected`
+  - INV-CHAT-190 `inv_chat_190_kpi_leaf_key_equals_init_key_rejected`
+  - INV-CHAT-191 `inv_chat_191_epk_non_canonical_psk_nonce_len_rejected`
+  - INV-CHAT-192 `inv_chat_192_epk_empty_psk_id_rejected`
+  - INV-CHAT-193 `inv_chat_193_epk_oversized_psk_id_rejected`
+  - helpers: `kpi_canonical_init_key_accepted_31`,
+    `kpi_lifetime_same_epoch_accepted_31`,
+    `epk_canonical_psk_nonce_accepted_31`,
+    `epk_one_byte_psk_id_accepted_31`.
+
+  Wave-31 introduces **0 new axioms** and **0 admissions**. Cumulative
+  `grep -cE 'Qed\.'` is **287**.
+
+- **falsifier_runner thresholds.** Added
+  `("keypackage_init_key_reuse", 0.95)` and
+  `("external_psk_id_provenance", 0.95)` to the threshold lane list
+  in `crates/trios-chat/src/bin/falsifier_runner.rs`. The G-C10
+  summary line now enumerates all 60 categories.
 
 ### Wave-30 — Application-data AEAD nonce reuse + Welcome path-secret unmasking
 
@@ -2120,18 +2248,19 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | **INV-CHAT-159..165** | **W27** | **MLS External-Init secret pinning defense (non-canonical exporter len rejected, stale exporter epoch rejected, cross-group exporter splice rejected, non-canonical kem_ephemeral rejected) + RatchetTree extension tampering defense (empty extension rejected, leaf count mismatch rejected, out-of-range node_index rejected)** |
 | INV-CHAT-166..172 | W28 | MLS confirmation_tag chain validation (non-canonical tag len rejected, stale-epoch chain replay rejected, transcript-chain splice rejected, wrong-length interim_transcript_hash rejected) + Sender-data header encryption integrity (non-canonical AEAD nonce rejected, stale-epoch sender_data rejected, reserved-bit forge rejected) |
 | INV-CHAT-173..179 | W29 | MLS LeafNode signature validation (non-canonical sig len rejected, cross-group LeafNode rebind rejected, stale-epoch LeafNode rejected, signature-key / credential mismatch rejected) + Group Context extensions consistency (cross-group GroupContext splice rejected, stale-epoch GroupContext snapshot rejected, IANA-reserved extension_id forge rejected) |
-| **INV-CHAT-180..186** | **W30** | **Application-data AEAD nonce reuse defense (non-canonical AEAD nonce len rejected, cross-group AEAD nonce splice rejected, stale-epoch AEAD packet rejected, zero AEAD nonce rejected) + Welcome path-secret unmasking defense (non-canonical path_secret len rejected, cross-group Welcome rejected, stale-epoch Welcome rejected)** |
+| INV-CHAT-180..186 | W30 | Application-data AEAD nonce reuse defense (non-canonical AEAD nonce len rejected, cross-group AEAD nonce splice rejected, stale-epoch AEAD packet rejected, zero AEAD nonce rejected) + Welcome path-secret unmasking defense (non-canonical path_secret len rejected, cross-group Welcome rejected, stale-epoch Welcome rejected) |
+| **INV-CHAT-187..193** | **W31** | **KeyPackage init_key reuse defense (non-canonical init_key len rejected, cross-ciphersuite KeyPackage rejected, not-yet-valid KeyPackage rejected, leaf_node_key == init_key rejected) + External PSK identifier provenance defense (non-canonical psk_nonce len rejected, empty psk_id rejected, oversized psk_id rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, Wave-28, Wave-29, and Wave-30 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, Wave-28, Wave-29, Wave-30, and Wave-31 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W31–W35) — `[ASPIRATIONAL]`
+## Future waves (W32–W36) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -2158,15 +2287,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W27~~ — SHIPPED via [#752](https://github.com/gHashTag/trios/pull/752), merged `93e4e6c` (see Wave-27 detail above) | | | | | | |
 | ~~W28~~ — SHIPPED via [#754](https://github.com/gHashTag/trios/pull/754), merged `562009c` (see Wave-28 detail above) | | | | | | |
 | ~~W29~~ — SHIPPED via [#760](https://github.com/gHashTag/trios/pull/760), merged `c389536` (see Wave-29 detail above) | | | | | | |
-| ~~W30~~ — SHIPPED in this PR (see Wave-30 detail above) | | | | | | |
-| **W31** | (TBD — picked from uncovered surface after W30 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-187..193 (≥285 Qed) | ≈530 | 3000 / 60 cats |
-| **W32** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥295 Qed) | ≈552 | 3100 / 62 cats |
-| **W33** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥305 Qed) | ≈574 | 3200 / 64 cats |
-| **W34** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-208..214 (≥315 Qed) | ≈596 | 3300 / 66 cats |
-| **W35** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-215..221 (≥325 Qed) | ≈618 | 3400 / 68 cats |
+| ~~W30~~ — SHIPPED via [#765](https://github.com/gHashTag/trios/pull/765), merged `bd5ffea` (see Wave-30 detail above) | | | | | | |
+| ~~W31~~ — SHIPPED in this PR (see Wave-31 detail above) | | | | | | |
+| **W32** | (TBD — picked from uncovered surface after W31 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥297 Qed) | ≈550 | 3100 / 62 cats |
+| **W33** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥307 Qed) | ≈572 | 3200 / 64 cats |
+| **W34** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-208..214 (≥317 Qed) | ≈594 | 3300 / 66 cats |
+| **W35** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-215..221 (≥327 Qed) | ≈616 | 3400 / 68 cats |
+| **W36** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-222..228 (≥337 Qed) | ≈638 | 3500 / 70 cats |
 
-After W30 the corpus crosses **2900 entries / 58 categories** and Coq
-crosses **275 closed proofs / 0 admissions**. From W31+ the work shifts
+After W31 the corpus crosses **3000 entries / 60 categories** and Coq
+crosses **287 closed proofs / 0 admissions**. From W32+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -2183,7 +2313,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `2900/2900 blocked` (W30) at 58 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `3000/3000 blocked` (W31) at 60 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -2220,9 +2350,10 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W31..W35 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W32..W36 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
-- Wave-30 detail section above is **[VERIFIED]** by cargo test (~508/0 expected), `coqc` (275 Qed / 0 Admitted), `falsifier_runner` (2900/2900, 58 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
+- Wave-31 detail section above is **[VERIFIED]** by cargo test (~528/0 expected), `coqc` (287 Qed / 0 Admitted), `falsifier_runner` (3000/3000, 60 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
+- Wave-30 detail section above is **[VERIFIED]** by cargo test (~508/0), `coqc` (275 Qed / 0 Admitted), `falsifier_runner` (2900/2900, 58 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-29 detail section above is **[VERIFIED]** by cargo test (~488/0), `coqc` (263 Qed / 0 Admitted), `falsifier_runner` (2800/2800, 56 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-28 detail section above is **[VERIFIED]** by cargo test (~468/0), `coqc` (251 Qed / 0 Admitted), `falsifier_runner` (2700/2700, 54 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-27 detail section above is **[VERIFIED]** by cargo test (~448/0 expected), `coqc` (239 Qed / 0 Admitted), `falsifier_runner` (2600/2600, 52 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
