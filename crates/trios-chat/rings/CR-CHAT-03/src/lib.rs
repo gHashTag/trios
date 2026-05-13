@@ -27,6 +27,7 @@ pub mod commit_signature;
 pub mod concurrent_add_remove;
 pub mod confirmation_tag_chain;
 pub mod external_commit;
+pub mod external_psk_id_provenance;
 pub mod leaf_node_signature_validation;
 pub mod pcs_healing;
 pub mod proposal_validation;
@@ -43,6 +44,10 @@ pub use concurrent_add_remove::{
     apply_concurrent, ConcurrencyError, HashId, Leaf, MembershipDelta, Proposal,
 };
 pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
+pub use external_psk_id_provenance::{
+    validate_external_psk_id, ExternalPskIdError, ExternalPskProposal, ExternalPskView,
+    EXTERNAL_PSK_ID_MAX_LEN, EXTERNAL_PSK_NONCE_LEN,
+};
 pub use leaf_node_signature_validation::{
     validate_leaf_node_signature, LeafNodePacket, LeafNodeSignatureError,
     LeafNodeSignatureView, LEAF_NODE_SIGNATURE_KEY_LEN, LEAF_NODE_SIGNATURE_LEN,
