@@ -345,7 +345,9 @@ task~5.3); until then, the bridge above is the authoritative cross-reference.
 \label{app:G:coq-sot}
 
 The consolidated proof corpus for this monograph lives \textbf{in-tree}, in the
-\texttt{gHashTag/trios} monorepo, distributed across three roots:
+\texttt{gHashTag/trios} monorepo and \texttt{gHashTag/t27} upstream mirror,
+distributed across the following roots (deduplicated by SHA-1 in
+\filepath{docs/phd/data/phd\_proofs\_inventory\_v2.json}):
 
 \begin{itemize}
   \item \filepath{docs/phd/theorems/} --- 35 \texttt{*.v} files organised by
@@ -356,13 +358,25 @@ The consolidated proof corpus for this monograph lives \textbf{in-tree}, in the
     \filepath{igla/}, 5 at the top level).  This is the
     \emph{runtime-oriented} layout consumed by the IGLA training pipeline
     and the SystemVerilog assertions of TTSKY26a (Lane L-DPC3).
+  \item \filepath{crates/trios-chat/proofs/chat/Trinity\_Chat.v} --- the
+    258-theorem L-CHAT bucket (Waves 1--30, 220 \texttt{Qed},
+    0 \texttt{Admitted}). See Glava~\ref{ch:chat-invariants}.
   \item \filepath{proofs/KAT\_VSA\_Bridge.v} --- the cross-cutting bridge
     between the Kolmogorov--Arnold theorem family and the VSA matmul
     semantics (1 file, 4 theorems).
+  \item \filepath{../../t27/proofs/} and \filepath{../../t27/coq/} ---
+    upstream Trinity mirror, 11 \texttt{*.v} files contributing
+    $+88$~theorems (32 \texttt{Admitted} entries retained for the
+    proof-maturation ledger of Glava~\ref{ch:extended-bounds}).
 \end{itemize}
 
-\textbf{Total: 57 \texttt{*.v} files, 427 top-level theorems, 97.1\,\%
-\texttt{Qed}-closed} (see Appendix~\ref{app:F} for the full inventory).
+\textbf{Consolidated total: 68 unique \texttt{*.v} files,
+773 top-level theorems, 93.6\,\% \texttt{Qed}-closed}
+(618 \texttt{Qed}, 42 \texttt{Admitted}, see Appendix~\ref{app:F} for the
+full inventory). The drop from the canonical-only ratio of 97.1\,\% to the
+consolidated ratio of 93.6\,\% is exactly the t27-mirror's
+32~\texttt{Admitted} entries, every one of which is explicit in the
+proof-maturation ledger of Glava~\ref{ch:extended-bounds}.
 
 \paragraph{Build manifest.}
 The canonical \filepath{\_CoqProject} file in the repository root enumerates
