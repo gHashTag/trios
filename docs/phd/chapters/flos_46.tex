@@ -167,6 +167,84 @@ CRC-16/CCITT error injection tests (1000 randomly corrupted frames) produced a N
 
 The seed pool values \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\) were used to size the FIFO depth variants in simulation (256, 512, and 1024 entries respectively); the production design uses the 256-entry variant as the minimum sufficient for 63 toks/sec.
 
+\subsection{4.5 Silicon-G1 evidence: TRI-NET-G1 pre-registered acceptance on QMTECH XC7A100T + FT601}\label{ch_12:silicon-g1}
+
+The Hardware Bridge results in \S4 are simulation evidence (Vivado 2022.2,
+post-synthesis). To carry the chapter from TRL-3 (validated in sim) to TRL-4
+(validated in lab on representative hardware), the Trinity v0 RTL mesh fabric
+was re-targeted to a second carrier --- the QMTECH Artix-7 100T core board
+(\texttt{XC7A100T-FGG484-2}) with an FT601 USB-3 daughterboard supplying the
+245-synchronous-FIFO boundary --- under the codename \emph{silicon-G1}
+(lane \texttt{L-DPC6}, parent issue \filepath{gHashTag/trinity-fpga\#48},
+EPIC \filepath{gHashTag/trinity-fpga\#19}). The acceptance protocol is
+\emph{pre-registered}: every gate threshold and every refusal condition is
+frozen \textbf{before} the first physical run, so the silicon-G1 verdict
+cannot be moved post-hoc. This satisfies the falsifiability obligation
+demanded by App.~B (Popper) on the Trinity strand.
+
+The protocol comprises eleven gates SG1-01..SG1-11, partitioned into a
+\emph{base acceptance} suite (frozen against \texttt{main@65d2a60},
+PR~\filepath{gHashTag/tt-trinity-gf16\#9}, merged at \texttt{a423ed5}) and an
+\emph{extension} suite (frozen against \texttt{main@a423ed5},
+PR~\filepath{gHashTag/tt-trinity-gf16\#10}). The split exists because
+\texttt{main} advanced between pre-registrations to include silicon-anchored
+receipt emission (PR~\#6, \texttt{TRN\_OP\_RECEIPT}) and the Wave-26b
+SUPER-CROWN mini-SoC (PR~\#8, 15 RTL modules, $\approx$~16\,000 gates,
+8$\times$2 = 16 tiles); freezing all eleven gates against the same commit
+would have hidden which acceptance criteria belonged to which lane.
+
+\paragraph{Table 12.SG1 --- Pre-registered silicon-G1 acceptance matrix.}
+
+\begin{longtable}[]{@{}lp{0.40\linewidth}p{0.30\linewidth}l@{}}
+\toprule\noalign{}
+Gate & Test & Expected & Frozen against \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+SG1-01 & DSP48 count from Vivado synth & 0 (no \texttt{*} in new RTL) & \texttt{65d2a60} \\
+SG1-02 & Setup timing slack (50 / 100 MHz) & WNS $\geq$ 0 ns & \texttt{65d2a60} \\
+SG1-03 & DRC report & no CRITICAL\_WARNING rows & \texttt{65d2a60} \\
+SG1-04 & Bitstream size sanity & 3 MB $\leq$ size $\leq$ 6 MB (XC7A100T) & \texttt{65d2a60} \\
+SG1-05 & FT601 enumeration & \texttt{lsusb} shows 0403:601f or 601e & \texttt{65d2a60} \\
+SG1-06 & \texttt{silicon\_g1\_runner.py --probe dot4 --jobs 100} & exit 0 + 100/100 \texttt{0x47C0} line & \texttt{65d2a60} \\
+SG1-07 & Ledger byte sha256 & reproducible across reruns up to nonce/ts & \texttt{65d2a60} \\
+SG1-08 & No Linux/CPU/AXI on chip & \texttt{grep utilization.rpt} for MicroBlaze, AXI*, LMB* $\to$ 0 hits & \texttt{65d2a60} \\
+SG1-09 & Receipt engine roundtrip (PR \#6 \texttt{TRN\_OP\_RECEIPT}) & \texttt{--probe receipt --jobs 32} $\to$ 32/32 \texttt{op=0x5} with \texttt{0x47C0} and echoed nonce LSBs & \texttt{a423ed5} \\
+SG1-10 & SUPER-CROWN 8$\times$2 tile coverage (PR \#8 Wave-26b) & \texttt{--probe supercrown --jobs 16} fans out \texttt{tile\_id}$\in${0..15}; each returns \texttt{0x47C0} to correct \texttt{dst} & \texttt{a423ed5} \\
+SG1-11 & 16k-gate timing on QMTECH & post-route DCP WNS $\geq$ 0 ns at 50 \& 100 MHz with 16 tiles + receipt engine instantiated & \texttt{a423ed5} \\
+\end{longtable}
+
+\paragraph{Canonical job.} Every probe drives the same falsifying workload:
+the four GF16 half-precision operands $\{1.0, 2.0, 3.0, 4.0\}$ encoded as
+$\{$\texttt{0x3E00}, \texttt{0x4000}, \texttt{0x4100}, \texttt{0x4200}$\}$,
+whose canonical dot4 result is GF16(30.0) = \texttt{0x47C0}. Any single
+\emph{observed} word $\ne$ \texttt{0x47C0} on any tile, on any probe, on
+either node, falsifies the silicon-G1 hypothesis H1 for this lane and
+returns the design to RTL/sim for repair --- in line with the Trinity
+strand's invariant that hardware evidence and proof obligations share the
+same falsifier.
+
+\paragraph{R5-honesty refusal.} The host runner
+(\filepath{tt-trinity-gf16/host/silicon\_g1\_runner.py}) is engineered to
+\emph{refuse to fabricate evidence}: if the \texttt{ftd3xx} Python driver
+is not importable, or if \texttt{ftd3xx.createDeviceInfoList()} returns zero
+devices, the runner emits a \texttt{REFUSAL} banner on stderr, exits with
+code 2, and writes \emph{no} JSONL ledger. This forecloses the most common
+failure mode of FPGA bring-up reports --- claiming a pass on the basis of a
+simulation log that silently substituted for the hardware run. The same
+runner therefore cannot emit a \texttt{GATE\_GREEN} line without a real
+FT60x device on the USB bus.
+
+\paragraph{From silicon-G1 to silicon-G3 (DePIN node claim).} A silicon-G1
+GREEN verdict --- all eleven gates passing on one physical node --- is the
+precondition for, but \emph{not} the equivalent of, a Trinity DePIN node
+claim. The DePIN milestone (``two physical nodes exchange one job + one
+receipt over an off-chip mesh adapter'') is reserved for the silicon-G3
+lane (cf.~Ch.31). Until silicon-G3 GREEN, the dissertation forbids the
+phrase ``Helium competitor'' anywhere on the Trinity strand --- a self-
+imposed honesty gate on the L-DPC family.
+
 \section{5. Qed Assertions}\label{ch_12:qed-assertions}
 
 No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
