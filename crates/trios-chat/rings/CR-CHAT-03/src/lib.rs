@@ -30,6 +30,7 @@ pub mod external_commit;
 pub mod external_psk_id_provenance;
 pub mod leaf_node_signature_validation;
 pub mod pcs_healing;
+pub mod proposal_ref_collision;
 pub mod proposal_validation;
 pub mod psk_external_injection;
 pub mod reinit_freshness;
@@ -53,6 +54,10 @@ pub use leaf_node_signature_validation::{
     LeafNodeSignatureView, LEAF_NODE_SIGNATURE_KEY_LEN, LEAF_NODE_SIGNATURE_LEN,
 };
 pub use pcs_healing::{HealCommit, HealEntry, PathSecretHash, PcsState};
+pub use proposal_ref_collision::{
+    validate_proposal_ref, ProposalRefError, ProposalRefView, ProposalReference,
+    PROPOSAL_ID_MAX_LEN, PROPOSAL_REF_LEN,
+};
 pub use proposal_validation::{
     validate_bundle, ProposalBundle, ProposalEntry, ProposalKind, ProposalValidationError,
     MAX_PROPOSALS_PER_COMMIT,
