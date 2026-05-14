@@ -12,7 +12,7 @@ synthesis evidence, and the trios Throne/orchestrator layer.
 The update is deliberately conservative. Several public claims are corrected
 or downgraded where repository evidence is partial, stale, or internally
 inconsistent. In particular, Catalog42 is presented here as a **mapped
-proof-obligation catalogue**, not a completed 42/42 formal verification
-layer (see the proof-status lock immediately below). The reader can
+proof-obligation catalogue**, not a completed formula-by-formula formal
+verification layer (see the proof-status lock immediately below). The reader can
 verify every numeric claim in this article against the cited repository
 artifacts and reference values.

@@ -1,8 +1,9 @@
 ## Statistical multiplicity (Bonferroni correction)
 
-Earlier drafts reported a Bonferroni-corrected p-value of approximately 15
-for the joint significance of the unification claims. That number is the
-**uncapped product** $n \cdot p$, not a probability. By definition,
+Earlier drafts reported a value of approximately fifteen for the
+Bonferroni adjustment of the joint significance of the unification
+claims. That value is the **uncapped product** $n \cdot p$, not a
+probability and not a p-value. By definition,
 a p-value cannot exceed 1:
 
 $$

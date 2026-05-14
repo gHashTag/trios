@@ -13,10 +13,10 @@
 | Sacred ALU Fmax/latency/throughput measured | Not measured; estimated | Mark as estimate |
 | 71-chapter PhD is fully built | 71 files exist; build includes 0–69 only; `flos_70` skeleton | Say "71 files, TRI-1 skeleton not yet wired" |
 | v21 phrase is repo-native | String not found in t27/trios; external framing | Use as integration label, not repo artifact |
-| Catalog42 is 42/42 verified | 19 closed-with-Qed, 23 UnderRevision, 32 quarantined `Admitted.` outside flagship chain | Use the proof-status lock above; do not claim 42/42 |
+| Catalog42 is a fully verified formula-by-formula layer | 19 closed-with-Qed, 23 UnderRevision, 32 quarantined `Admitted.` outside flagship chain | Use the proof-status lock above; do not claim full-catalogue formal verification |
 | L01 verified, $<1\%$ error | Measured relative error ≈ 99% | Downgrade to UnderRevision / Reformulate |
 | L02 verified, $<1\%$ error | Measured relative error ≈ 6% | Downgrade to UnderRevision / Widen-or-reformulate |
 | L03 verified, $<1\%$ error | Measured relative error ≈ 99% | Downgrade to UnderRevision / Reformulate |
 | Q03 verified, $<1\%$ error | Measured relative error ≈ 98% | Downgrade to UnderRevision / Reformulate |
 | Q05 verified, $<1\%$ error | Measured relative error ≈ 1.06% | Downgrade to UnderRevision / Widen-or-chain |
-| Bonferroni-corrected p-value ≈ 15 | $p_{\text{Bonf}} = \min(1, 15) = 1$ by definition | Use the capped value, see §"Statistical multiplicity" |
+| Uncapped Bonferroni product $n \cdot p \approx 15$ reported as if it were a p-value | $p_{\text{Bonf}} = \min(1, n \cdot p) = \min(1, 15) = 1$ by definition | Use the capped value, see §"Statistical multiplicity" |

@@ -3,8 +3,8 @@
 This lock appears early in the paper by design. Any subsequent section that
 appears to overstate formal verification must be read through this lock.
 
-> **Catalog42 is a mapped proof-obligation catalogue, not a completed 42/42
-> formal verification layer.** The current audited state is **42 declared
+> **Catalog42 is a mapped proof-obligation catalogue, not a completed
+> formula-by-formula formal verification layer.** The current audited state is **42 declared
 > formula IDs**, **19 rows with closed-with-Qed numeric tolerance proofs
 > in the flagship source chain**, **23 UnderRevision rows with explicit
 > proof obligations**, **zero `Admitted.` in the flagship import chain**,

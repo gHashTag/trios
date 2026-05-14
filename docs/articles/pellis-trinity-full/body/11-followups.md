@@ -15,7 +15,8 @@
 8. Add missing TRI-1 Coq witness files or downgrade those references.
 9. Run Catalog42 on a Coq-equipped machine with `coq-interval` so that a
    fresh compiler verdict can replace the current source-level audit.
-10. Continue Catalog42 from 19/42 to 42/42 only after formulas, reference
+10. Continue Catalog42 from the current 19-of-42 closed state toward
+    full formula-by-formula closure only after formulas, reference
     values, and tolerances are frozen, **and** after L01, L02, L03, Q03,
     Q05 are either reformulated, widened with explicit justification, or
     closed with Qed.
