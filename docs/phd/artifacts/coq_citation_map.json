@@ -1,32 +1,34 @@
 {
   "_metadata": {
     "schema_version": "1.0.0",
-    "lane": "L-S46",
-    "parent_epic": "https://github.com/gHashTag/trios/issues/801",
+    "description": "Mapping from Coq proof files to RTL source citations (Wave-13b)",
     "anchor": "phi^2 + phi^-2 = 3",
     "zenodo_doi": "10.5281/zenodo.19227877",
-    "description": "Citation map from MerkleReplaySafety.v theorems to source artefacts",
-    "created_by": "Dmitrii Vasilev <admin@t27.ai>",
-    "created_at": "2026-05-14"
+    "author": "Dmitrii Vasilev <admin@t27.ai>"
   },
   "entries": [
     {
-      "id": "MERKLE_DET",
-      "theorem": "MerkleReplaySafety.merkle_deterministic",
-      "coq_file": "docs/phd/theorems/igla/MerkleReplaySafety.v",
-      "source_artefact": "trinity_merkle_agg.v",
-      "description": "Same leaf inputs (l0,l1,l2,l3) always produce the same Merkle root via hash_combine.",
-      "proof_pattern": "congruence",
-      "cross_refs": ["L-S46"]
-    },
-    {
-      "id": "REPLAY_SAFE",
-      "theorem": "MerkleReplaySafety.receipt_no_replay",
-      "coq_file": "docs/phd/theorems/igla/MerkleReplaySafety.v",
-      "source_artefact": "ledger_receipt_v2.v",
-      "description": "Receipts emitted in distinct windows carry distinct window counters, making replay impossible.",
-      "proof_pattern": "contrapositive + injection",
-      "cross_refs": ["L-S46"]
+      "id": "L_S48_MULTI_DIE_AGG",
+      "wave": "Wave-13b",
+      "label": "L-S48",
+      "coq_file": "docs/phd/theorems/igla/MultiDieAggCorrect.v",
+      "theorems": [
+        "super_root_deterministic",
+        "super_root_assoc_layers",
+        "super_root_refl"
+      ],
+      "proof_pattern": "opaque_parameter_congruence",
+      "rtl_citation": {
+        "repo": "gHashTag/tt-trinity-gf16",
+        "file": "src/multi_die_reducer.v",
+        "description": "3-stage 8->4->2->1 multi-die merkle reducer, hash combiner R1=5 R2=11 R3=22"
+      },
+      "sim_token": "MULTI_DIE_REDUCER_GREEN",
+      "sim_tests": "88/88 PASS (8 deterministic + 80 LFSR)",
+      "coqc_version": "8.20.1",
+      "coqc_exit": 0,
+      "issue": "https://github.com/gHashTag/trios/issues/803",
+      "topology": "8-leaf inter-die merkle: Stage0(8->4) + PipeReg1 + Stage1(4->2) + PipeReg2 + Stage2(2->1) + OutReg"
     }
   ]
 }
