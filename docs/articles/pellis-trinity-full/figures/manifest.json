@@ -1,0 +1,80 @@
+{
+  "$schema_hint": "Figure manifest consumed by `tri article` PhD-style atlas renderer.",
+  "$rules": [
+    "All figures must be rendered as vector PDF objects via the renderer.",
+    "All labels must be real PDF text strings, in English, in the house font.",
+    "No pseudo-Latin filler, no AI-rasterized lettering, no microtext below 7pt.",
+    "Minimum label contrast: WCAG AA (4.5:1) against figure background.",
+    "Figures must be placed near their referencing section, not dumped consecutively.",
+    "If a figure cannot meet these rules, mark `regenerate_required: true` and the renderer must abort the build with a clear error message rather than substitute a plain text replacement page."
+  ],
+  "house_style": {
+    "background": "#F7F6F2",
+    "text": "#28251D",
+    "muted": "#7A7974",
+    "primary": "#01696F",
+    "border": "#D4D1CA",
+    "label_min_pt": 8.0,
+    "label_font_family": "Inter, Helvetica, sans-serif",
+    "no_pseudo_latin": true,
+    "no_rasterized_text": true
+  },
+  "figures": [
+    {
+      "id": "fig-grammar-acceptance",
+      "anchor_section": "03-strand-i-mathematics.md",
+      "kind": "vector-diagram",
+      "title": "Finite-grammar acceptance / rejection schematic",
+      "labels_en": [
+        "finite grammar search space",
+        "error-band acceptance region",
+        "rejection region",
+        "locked holdout set"
+      ],
+      "replaces_legacy_page": 17,
+      "regenerate_required": true,
+      "regenerate_reason": "Legacy page 17 contained pseudo-Latin microtext. Must be redrawn as a clean vector diagram with English labels only.",
+      "must_not_use": ["lorem ipsum", "rasterized AI text", "microtext below 7pt"]
+    },
+    {
+      "id": "fig-s3ai-banner",
+      "anchor_section": "04-strand-ii-cognition.md",
+      "kind": "vector-banner",
+      "title": "S3AI cognitive-layer banner",
+      "labels_en": [
+        "S3AI",
+        "Strand II — Cognitive substrate",
+        "src/tri/ (10 modules)",
+        "src/brain/ (21+ regions)"
+      ],
+      "replaces_legacy_page": 35,
+      "regenerate_required": true,
+      "regenerate_reason": "Legacy page 35 S3AI banner was flagged as garbled AI text. Must be redrawn as vector banner with real PDF text and high-contrast labels.",
+      "must_not_use": ["rasterized stylized text", "low-contrast over photo background"]
+    },
+    {
+      "id": "fig-pellis-ladder",
+      "anchor_section": "05-strand-iii-language-hardware.md",
+      "kind": "vector-triptych",
+      "title": "Pellis expansion ladder, Trinity monomial wheel, additive-to-multiplicative mirror map",
+      "panels": [
+        {
+          "id": "ladder",
+          "labels_en": ["Pellis expansion ladder", "level 0", "level 1", "level 2", "level 3"]
+        },
+        {
+          "id": "wheel",
+          "labels_en": ["Trinity monomial wheel", "phi^0", "phi^1", "phi^2", "phi^-1", "phi^-2"]
+        },
+        {
+          "id": "mirror",
+          "labels_en": ["additive representation", "mirror map", "multiplicative representation"]
+        }
+      ],
+      "replaces_legacy_page": 51,
+      "regenerate_required": true,
+      "regenerate_reason": "Legacy page 51 used rasterized stylized text and dense labels. Must be redrawn as a vector triptych with real PDF text; labels at 9pt minimum.",
+      "must_not_use": ["rasterized lettering", "pseudo-Latin banners", "micro-labels"]
+    }
+  ]
+}
