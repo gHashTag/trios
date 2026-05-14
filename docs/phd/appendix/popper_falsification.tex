@@ -1,0 +1,55 @@
+\chapter{Falsification Witness (Popper R7)}
+\label{app:popper}
+
+This appendix enumerates the empirical observations that would falsify
+the central hypothesis of this monograph.
+
+\section{Hypothesis under test}
+H1: \(\varphi^2 + \varphi^{-2} = 3\) is the unique algebraic anchor for
+Trinity ternary architectures.
+
+\section{Falsification criteria}
+\begin{enumerate}
+  \item \textbf{F1 — Numerical violation.} If any silicon-validated GF16
+        dot4 computation produces output disagreeing with the φ-anchor
+        identity beyond Q1.15 rounding error.
+  \item \textbf{F2 — BPB collapse.} If BPB on held-out test set drops
+        below 0 in any single training step (THM-25-3 violation).
+  \item \textbf{F3 — Lucas period drift.} If PLRM counter measures a
+        period not in \{29, 47, 76, 123\}.
+  \item \textbf{F4 — Cassini identity break.} If \(L_n L_{n+1} - L_{n-1}
+        L_{n+2} \neq 5 \cdot (-1)^n\) for any n in our hardware POST.
+  \item \textbf{F5 — Entropy out-of-band.} If NCA entropy escapes
+        [1.5, 2.8] nats during stable training (INV-4 violation).
+  \item \textbf{F6 — Replay attack succeeds.} If strobe replay detected
+        within Lucas-period window (L-S26 violation).
+  \item \textbf{F7 — TOPS underdeliver.} If TRI-1 silicon delivers
+        \(<70\%\) of FPGA-validated 323 MHz TOPS at iso-power.
+\end{enumerate}
+
+\section{Pre-registered tests}
+Each falsifier F1–F7 maps to a CI test in trios/trios-railway repos.
+See Table~\ref{tab:falsifier-map}.
+
+\begin{table}[h]
+\centering
+\caption{Falsifier → CI Test mapping}
+\label{tab:falsifier-map}
+\begin{tabular}{lll}
+\toprule
+ID & Falsifier & CI test \\
+\midrule
+F1 & GF16 dot4 numeric & gf16_kat_check.yml \\
+F2 & BPB \(\geq 0\) & bpb_nonneg_guard \\
+F3 & Lucas period & plrm_counter sim \\
+F4 & Cassini identity & cassini_post sim \\
+F5 & NCA entropy band & nca_entropy_monitor sim \\
+F6 & Strobe replay & StrobeReplayUnique.v Qed \\
+F7 & Silicon TOPS & post-tapeout bench \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Status of falsification efforts}
+At submission date (\today), no falsifier has triggered. Future
+researchers are explicitly invited to attempt F1–F7 and publish results.
