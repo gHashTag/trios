@@ -1,24 +1,10 @@
-(** Minimal expression calculus — placeholder for denotational / RT story (AXIOM-K3 direction). *)
+(*
+  ICA-D3 (2026-05-14): byte-identical mirror collapsed into a forwarding stub.
+  Source of truth lives at `T27/Kernel/Semantics.v` and is the file compiled by
+  _CoqProject. This stub preserves the legacy path for citations in
+  appendix/F-coq-citation-map.tex.
 
-Require Import T27.Kernel.Trit.
+  Anchor: phi^2 + phi^-2 = 3 (DOI 10.5281/zenodo.19227877)
+*)
 
-Definition env : Type := nat -> option trit.
-
-Inductive expr : Set :=
-  | ELit : trit -> expr
-  | EVar : nat -> expr.
-
-Fixpoint eval (e : expr) (rho : env) : option trit :=
-  match e with
-  | ELit t => Some t
-  | EVar n => rho n
-  end.
-
-Lemma eval_det (e : expr) (rho : env) (v1 v2 : trit) :
-  eval e rho = Some v1 ->
-  eval e rho = Some v2 ->
-  v1 = v2.
-Proof.
-  intros H1 H2.
-  congruence.
-Qed.
+Require Export T27.Kernel.Semantics.

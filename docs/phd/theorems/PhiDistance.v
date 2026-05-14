@@ -1,10 +1,10 @@
-(** THEOREM-K2 direction — numeric format ordering via phi-distance; stub until formats are formalized. *)
+(*
+  ICA-D3 (2026-05-14): byte-identical mirror collapsed into a forwarding stub.
+  Source of truth lives at `T27/Theorems/PhiDistance.v` and is the file compiled by
+  _CoqProject. This stub preserves the legacy path for citations in
+  appendix/F-coq-citation-map.tex.
 
-Require Import Reals.
-Open Scope R_scope.
+  Anchor: phi^2 + phi^-2 = 3 (DOI 10.5281/zenodo.19227877)
+*)
 
-(** Placeholder distance on reals; replace with format-indexed definitions from specs/numeric. *)
-Definition phi_distance_stub (x y : R) : R := Rabs (x - y).
-
-Lemma phi_distance_nonneg (x y : R) : 0 <= phi_distance_stub x y.
-Proof. apply Rabs_pos. Qed.
+Require Export T27.Theorems.PhiDistance.

@@ -1,5 +1,10 @@
-(** Abstract shell for "minimal trusted kernel" (AXIOM-K4 narrative).
-    Expand with t27c AST, typecheck : expr -> option ty, etc. *)
+(*
+  ICA-D3 (2026-05-14): byte-identical mirror collapsed into a forwarding stub.
+  Source of truth lives at `T27/Kernel/KernelSpec.v` and is the file compiled by
+  _CoqProject. This stub preserves the legacy path for citations in
+  appendix/F-coq-citation-map.tex.
 
-Module Type T27_KERNEL_MINIMAL.
-End T27_KERNEL_MINIMAL.
+  Anchor: phi^2 + phi^-2 = 3 (DOI 10.5281/zenodo.19227877)
+*)
+
+Require Export T27.Kernel.KernelSpec.

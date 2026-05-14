@@ -1,8 +1,10 @@
-(** THEOREM-K3 direction — codegen idempotency; needs abstract Spec/Code types from t27c model. *)
+(*
+  ICA-D3 (2026-05-14): byte-identical mirror collapsed into a forwarding stub.
+  Source of truth lives at `T27/Theorems/GenIdempotency.v` and is the file compiled by
+  _CoqProject. This stub preserves the legacy path for citations in
+  appendix/F-coq-citation-map.tex.
 
-Parameter spec : Type.
-Parameter code : Type.
-Parameter t27c_gen : spec -> code.
+  Anchor: phi^2 + phi^-2 = 3 (DOI 10.5281/zenodo.19227877)
+*)
 
-Lemma gen_idempotent (s : spec) : t27c_gen s = t27c_gen s.
-Proof. reflexivity. Qed.
+Require Export T27.Theorems.GenIdempotency.
