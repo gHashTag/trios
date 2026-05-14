@@ -79,6 +79,61 @@
         "CH35:Theorem35.13"
       ],
       "theorem_dependency": "CH35 Theorem 35.13"
+    },
+    {
+      "id": "INV_28_ZERO_DSP",
+      "lemma": "zero_dsp_closure",
+      "coq_file": "trinity-clara/proofs/fpga/ZeroDSP.v",
+      "proof_pattern": "induction_on_trit_cases",
+      "runtime_witness": {
+        "language": "hdl",
+        "path": "gHashTag/trinity-fpga/src/ternary_acc.v",
+        "function": "ternary_accumulator",
+        "property_test": "post_impl_dsp48_count_zero"
+      },
+      "falsification_protocol": "Run report_utilization on B002 DCP in Vivado 2023.x; assert DSP48E1 count = 0.",
+      "chapter": "CH28",
+      "wave": "wave-13c",
+      "theorems_added": [
+        "THM-28.1",
+        "THM-28.2",
+        "THM-28.3",
+        "THM-28.4"
+      ],
+      "cross_refs": [
+        "CH28",
+        "CH31",
+        "CH34",
+        "AppendixF",
+        "AppendixI"
+      ]
+    },
+    {
+      "id": "INV_30_VSA_CAPACITY",
+      "lemma": "vsa_recall_error_bound",
+      "coq_file": "trinity-clara/proofs/igla/VSACapacity.v",
+      "proof_pattern": "hoeffding_union_bound",
+      "runtime_witness": {
+        "language": "rust",
+        "path": "crates/trios-vsa/src/vsa_recall.rs",
+        "function": "ar_recall",
+        "property_test": "prop_recall_accuracy_1003_tokens"
+      },
+      "falsification_protocol": "Store 47 random ternary hypervectors of dim 6765, density 0.382; measure recall@1 accuracy over 1000 queries. Failure if accuracy < 99%.",
+      "chapter": "CH30",
+      "wave": "wave-13c",
+      "theorems_added": [
+        "THM-30.1",
+        "THM-30.2",
+        "THM-30.3",
+        "THM-30.4"
+      ],
+      "cross_refs": [
+        "CH28",
+        "CH24",
+        "CH6",
+        "CH25"
+      ]
     }
   ],
   "AppL_pollen_channel": [
