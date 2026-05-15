@@ -1,0 +1,62 @@
+{
+  "wave": 40,
+  "lane": "FF'",
+  "lever": "Dynamic Frequency Scaling (DFS) — AVS sibling, f scales with Vdd per IRDS22FDX",
+  "sacred_opcode": "OP_DFS_GATE",
+  "opcode_byte": "0xE7",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "predicates": {
+    "W-108-A": {
+      "name": "opcode_unique_against_chain",
+      "statement": "OP_DFS_GATE (0xE7) differs from every opcode in sacred chain 0xDE..0xE6",
+      "witness": {
+        "0xE7_vs_0xE6_holo_mux_x4": "distinct",
+        "0xE7_vs_0xE5_subth_clk": "distinct",
+        "0xE7_vs_0xE4_avs_reconf": "distinct",
+        "0xE7_vs_0xE3_lut_npu": "distinct",
+        "0xE7_vs_0xE2_tom": "distinct",
+        "0xE7_vs_0xE1_tenet": "distinct",
+        "0xE7_vs_0xE0_w_bitrom": "distinct",
+        "0xE7_vs_0xDF_v_lut": "distinct",
+        "0xE7_vs_0xDE_c_prime": "distinct"
+      },
+      "coq_proof_ref": "t27/trios-coq/Physics/DFS.v Lemma dfs_op_distinct_from_*"
+    },
+    "W-108-B": {
+      "name": "freq_monotonicity",
+      "statement": "f(Vdd) is non-decreasing in Vdd across the 16-step IRDS22FDX V-f LUT",
+      "witness_lemma": "DFS.v Lemma dfs_freq_monotone",
+      "lut_size": 16
+    },
+    "W-108-C": {
+      "name": "cubic_energy_law",
+      "statement": "Energy per op proportional to V^2 (constant f at iso-throughput), enabling P=C*V^2*f optimization",
+      "witness_lemma": "DFS.v Lemma dfs_cubic_energy_law_non_negative",
+      "physics_constant_cell": "L0 C-12 (CMOS dynamic-power C constant, no new ROM cell per R15)"
+    },
+    "W-108-D": {
+      "name": "rtl_tb_pass",
+      "statement": "tb/dfs_controller_tb.sv passes 10 tests under iverilog -g2012",
+      "expected": "ALL 10/10 PASS",
+      "test_categories": ["V-f LUT correctness (4 corners)", "vdd_lock handshake", "OP_DFS_GATE gating", "Acquire/Hold/Release", "OP_DFS_GATE=8'hE7 assert"]
+    },
+    "W-108-E": {
+      "name": "rust_witness_pass",
+      "statement": "crates/dfs-witness cargo test passes 6 unit tests",
+      "expected_tests": 6
+    },
+    "W-108-F": {
+      "name": "chain_depth_10",
+      "statement": "Sacred ISA chain depth increases from 9 (after W39) to 10 (after W40) with 0xE7 appended",
+      "chain": "0xDE > 0xDF > 0xE0 > 0xE1 TENET > 0xE2 TOM > 0xE3 LUT_NPU > 0xE4 AVS_RECONF > 0xE5 SUBTH_CLK > 0xE6 HOLO_MUX_X4 > 0xE7 DFS_GATE",
+      "next_free_slot": "0xE8"
+    }
+  },
+  "avs_sibling": {
+    "w36_opcode": "OP_AVS_RECONF=0xE4",
+    "handshake": "vdd_lock signal from AVS controller gates DFS f_target update",
+    "tops_w_lift_projection": "520 (W39) → 595 (W40 DFS, +15% at iso-throughput)"
+  },
+  "constitutional_compliance": ["R1","R3","R4","R5","R7","R8","R12","R14","R15","R18","R-SI-1"]
+}
