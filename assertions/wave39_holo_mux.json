@@ -1,0 +1,57 @@
+{
+  "wave": 39,
+  "lane": "DD'",
+  "lever": "Holographic 1x4 Multiplexer on top of LUT-NPU",
+  "sacred_opcode": "OP_HOLO_MUX_X4",
+  "opcode_byte": "0xE6",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "predicates": {
+    "W-107-A": {
+      "name": "opcode_unique_against_chain",
+      "statement": "OP_HOLO_MUX_X4 (0xE6) differs from every opcode in sacred chain 0xDE..0xE5",
+      "witness": {
+        "0xE6_vs_0xE5_subth_clk": "distinct",
+        "0xE6_vs_0xE4_avs_reconf": "distinct",
+        "0xE6_vs_0xE3_lut_npu": "distinct",
+        "0xE6_vs_0xE2_tom": "distinct",
+        "0xE6_vs_0xE1_tenet": "distinct",
+        "0xE6_vs_0xE0_w_bitrom": "distinct",
+        "0xE6_vs_0xDF_v_lut": "distinct",
+        "0xE6_vs_0xDE_c_prime": "distinct"
+      },
+      "coq_proof_ref": "t27/trios-coq/Physics/HoloMux.v Lemma holo_mux_op_distinct_from_*"
+    },
+    "W-107-B": {
+      "name": "throughput_4x_per_address",
+      "statement": "Holo-mux delivers 4 LUT-NPU lookups per shared-SRAM address",
+      "witness_lemma": "HoloMux.v Lemma holo_mux_throughput_4x_per_addr",
+      "expected_value": 4
+    },
+    "W-107-C": {
+      "name": "iso_area_macro",
+      "statement": "Single 256-cell SRAM macro serves 4 channels via phi^-1 phase rotation",
+      "area_per_channel_um2_iso": "same as W35 LUT-NPU 64-cell baseline",
+      "tops_w_projection": 520
+    },
+    "W-107-D": {
+      "name": "rtl_tb_pass",
+      "statement": "tb/holo_mux_1x4_tb.sv passes all 12 tests under iverilog -g2012",
+      "expected": "ALL 12/12 PASS",
+      "test_categories": ["phase 00/01/10/11 selector", "pattern A/B/C", "OP_HOLO_MUX_X4=8'hE6 hierarchical assert"]
+    },
+    "W-107-E": {
+      "name": "rust_witness_pass",
+      "statement": "src/holo_mux_witness.rs cargo test passes 6 unit tests",
+      "expected_tests": 6
+    },
+    "W-107-F": {
+      "name": "chain_depth_9",
+      "statement": "Sacred ISA chain depth increases from 8 (after W38) to 9 (after W39) with 0xE6 appended",
+      "chain": "0xDE > 0xDF > 0xE0 > 0xE1 TENET > 0xE2 TOM > 0xE3 LUT_NPU > 0xE4 AVS_RECONF > 0xE5 SUBTH_CLK > 0xE6 HOLO_MUX_X4",
+      "next_free_slot": "0xE7"
+    }
+  },
+  "merge_precedence_rule": "ICA-W38-001 precedent: older mergedAt wins on collision",
+  "constitutional_compliance": ["R1","R3","R4","R5","R7","R8","R12","R14","R15","R18","R-SI-1"]
+}
