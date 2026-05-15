@@ -1,0 +1,56 @@
+{
+  "wave": 43,
+  "codename": "DROWSY-RETENTION-SRAM",
+  "sacred_opcode": "0xEC",
+  "opcode_name": "OP_DROWSY_RET",
+  "tops_w_projection": {"pre": 820, "post": 890, "lift_pct": 8.5, "target_ihp22fdx": 825, "headroom_pct": 7.9},
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "biology_ref": "FlautnerISCA2002,KimDAC2002,SteriadeCA1Slow1993",
+  "quantum_brain_mapping": {
+    "phys_si": "gamma = phi^-3 -> retention rail bias (Sacred ROM B007)",
+    "bio_si": "hippocampal CA1 slow-wave idle -> drowsy bin selector",
+    "lang_si": "TRI-27 RET-DROWSY -> 0xEC OP_DROWSY_RET"
+  },
+  "theory": {
+    "v_ret_formula": "V_ret = V_DD * gamma = V_DD * phi^-3 ≈ 0.236 * V_DD",
+    "gamma_q15": "0x1E35",
+    "gamma_decimal": 0.23606797749978967,
+    "leakage_max_pct": 30,
+    "wake_cycles_max": 2,
+    "retention_fidelity_min": 0.99
+  },
+  "assertions": [
+    {"id": "W-115-A", "type": "coq_lemma", "name": "drowsy_op_distinct_chain_11",       "file": "trios-coq/Physics/DrowsyRet.v",                          "expected": "Qed"},
+    {"id": "W-115-B", "type": "coq_lemma", "name": "drowsy_drv_floor_safe",             "file": "trios-coq/Physics/DrowsyRet.v",                          "expected": "Qed"},
+    {"id": "W-115-C", "type": "coq_lemma", "name": "drowsy_leakage_reduction",          "file": "trios-coq/Physics/DrowsyRet.v",                          "expected": "Qed"},
+    {"id": "W-115-D", "type": "coq_lemma", "name": "drowsy_wake_cycles_bound",          "file": "trios-coq/Physics/DrowsyRet.v",                          "expected": "Qed"},
+    {"id": "W-115-E", "type": "coq_lemma", "name": "drowsy_gamma_match",                "file": "trios-coq/Physics/DrowsyRet.v",                          "expected": "Qed"},
+    {"id": "W-115-F", "type": "coq_theorem", "name": "drowsy_ret_composite",            "file": "trios-coq/Physics/DrowsyRet.v",                          "expected": "Qed"},
+    {"id": "W-115-G", "type": "rtl_assert", "name": "all_banks_drowsy_after_threshold", "file": "rtl/drowsy_ret/drowsy_ret_ctrl.sv",                      "expected": "PASS"},
+    {"id": "W-115-H", "type": "rtl_assert", "name": "wake_latency_bound",               "file": "rtl/drowsy_ret/drowsy_ret_ctrl.sv",                      "expected": "PASS"},
+    {"id": "W-115-I", "type": "rust_test",  "name": "test_opcode_ec_constant",          "file": "crates/drowsy-ret-witness/tests/opcode.rs",              "expected": "PASS"},
+    {"id": "W-115-J", "type": "rust_test",  "name": "test_gamma_match_half_percent",    "file": "crates/drowsy-ret-witness/tests/opcode.rs",              "expected": "PASS"},
+    {"id": "W-115-K", "type": "rust_test",  "name": "test_leakage_full_drowsy",         "file": "crates/drowsy-ret-witness/tests/opcode.rs",              "expected": "PASS"},
+    {"id": "W-115-L", "type": "rust_test",  "name": "test_distinct_from_all_prior_opcodes","file": "crates/drowsy-ret-witness/tests/opcode.rs",            "expected": "PASS"}
+  ],
+  "evidence": {
+    "coq_pr":      {"repo": "gHashTag/t27",                "pr": 672, "sha": "ebea3674fbd910fd578d2be42e83450de6aa6e79"},
+    "rtl_pr":      {"repo": "gHashTag/trinity-fpga",       "pr": 153, "sha": "07d369e99f147dbc62e64cf9ee70e85ebc3f00fd"},
+    "rust_pr":     {"repo": "gHashTag/tt-trinity-max-true","pr": 36,  "sha": "aa03752d7c90fb1ed1a0c0fce6062f49da3a95ca"}
+  },
+  "constitutional_compliance": {
+    "R1_rust_zig_only": true,
+    "R5_honest": true,
+    "R7_falsification": true,
+    "R8_signoff": "admin@t27.ai",
+    "R14_coq_citation_map": "trios-coq/Physics/DrowsyRet.v",
+    "R15_sacred_synth_gate": "gamma sourced from Sacred ROM B007",
+    "R18_layer_frozen": "75 Sacred ROM cells preserved"
+  },
+  "signoff": {
+    "author": "Vasilev Dmitrii",
+    "email":  "admin@t27.ai",
+    "orcid":  "0009-0008-4294-6159"
+  }
+}
