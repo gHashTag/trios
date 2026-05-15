@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "mission_id": "L-DPC25-W28-001",
+  "predecessor": "L-DPC24-W27-001",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "author": "Vasilev Dmitrii <admin@t27.ai>",
+  "orcid": "0009-0008-4294-6159",
+  "filed_at_utc": "2026-05-15T16:10:00Z",
+  "verdict_deadline_utc": "2026-10-15T00:00:00Z",
+  "hypothesis": {
+    "id": "H_W28",
+    "statement": "Lever Stack (Platinum-LUT PE × BitROM weight bank × 4x4 mesh) raises Trinity TOPS/W from 55 baseline to >= 100 on TTIHP27a silicon at Vdd=1.2V, 25C, n=9 dies, BitNet b1.58-3B workload, Welch t-test alpha=0.01, Bonferroni x3 lanes.",
+    "predicted_gain": {
+      "lever_1_lut_pe": 1.4,
+      "lever_2_bitrom": 2.0,
+      "lever_3_4x4_mesh": "linear scale-out (no TOPS/W cost)",
+      "stacked_single_die": 2.8,
+      "target_tops_per_w_tihp27a": 150,
+      "minimum_pass_tops_per_w_tihp27a": 100,
+      "baseline_w15a_tops_per_w": 55
+    },
+    "predicates": [
+      {
+        "id": "W-101-A",
+        "name": "LUT PE energy bound",
+        "assertion": "lut_pe_energy_per_op <= 2 * shift_add_baseline_energy_per_op",
+        "method": "post-synthesis power sim + silicon measurement",
+        "owner_lane": "V"
+      },
+      {
+        "id": "W-101-B",
+        "name": "BitROM BER bound",
+        "assertion": "bitrom_read_bit_error_rate <= 1e-9 over 1e12 reads",
+        "method": "Monte Carlo SPICE + silicon endurance test",
+        "owner_lane": "W"
+      },
+      {
+        "id": "W-101-C",
+        "name": "Mesh boot latency",
+        "assertion": "mesh_4x4_boot_cycles <= 4",
+        "method": "RTL sim + silicon scan-chain probe",
+        "owner_lane": "U"
+      },
+      {
+        "id": "W-101-D",
+        "name": "Zero star (R-SI-1)",
+        "assertion": "for_all op in holo_op: rtl_uses_star(op) = false",
+        "method": "Coq Qed (Lane X) + Rust mirror unit test + RTL gate check_no_star.sh",
+        "owner_lane": "X+N"
+      },
+      {
+        "id": "W-101-E",
+        "name": "Thermal density",
+        "assertion": "thermal_density <= 1.0 W/mm^2 with LUT+BitROM+mesh live",
+        "method": "OpenROAD thermal + silicon IR probe",
+        "owner_lane": "K"
+      }
+    ]
+  },
+  "gates": {
+    "G1_rtl_sim": {"trigger": "V+W+U merged", "owner": "trinity-queen"},
+    "G2_coq_qed": {"trigger": "X merged", "owner": "trinity-grandmaster"},
+    "G3_openroad_cgt": {"trigger": "V+W synth", "owner": "tri-gardener"},
+    "G4_drc_lvs": {"trigger": "OpenLane2 GDS", "owner": "tri-gardener"},
+    "G5_tapeout": {"trigger": "G3+G4+Q live", "owner": "trinity-silicon-tapeout"},
+    "G6_silicon_smoke": {"trigger": "dies return", "deadline": "2026-09-30"},
+    "G7_h_w28_verdict": {"trigger": "9 dies measured", "deadline": "2026-10-15"}
+  },
+  "lanes": {
+    "V": {"repo": "trinity-fpga", "scope": "Platinum-style LUT PE Verilog", "priority": "HIGH", "effort": "M"},
+    "W": {"repo": "trinity-fpga", "scope": "BitROM bidirectional ROM cell + Tri-Mode accumulator + DR-eDRAM", "priority": "HIGH", "effort": "L"},
+    "X": {"repo": "t27", "scope": "Coq spec extension: OP_LUT_LOOKUP + OP_BITROM_READ + Qed re-proof", "priority": "MED", "effort": "S"},
+    "U": {"repo": "tt-trinity-holo", "scope": "4x4 mesh top module + UCIe-A PHY stub", "priority": "MED", "effort": "L"},
+    "R": {"repo": "tt-trinity-holo", "scope": "Razor flip-flop v2 across LUT-PE clock domain", "priority": "LOW", "effort": "S"},
+    "Q": {"repo": "trios", "scope": "Assertion mirror assertions/lever_stack.json", "priority": "HIGH", "effort": "S"},
+    "P": {"repo": "trios", "scope": "PhD Glava 78 + Theorem 78.1", "priority": "MED", "effort": "L"},
+    "N": {"repo": "tt-trinity-max-true", "scope": "5 R7 Rust falsification witnesses W-101-A..E", "priority": "MED", "effort": "M"},
+    "M": {"repo": "trinity-fpga", "scope": "TOPS/W measurement harness bench/lever_stack_harness.rs", "priority": "HIGH", "effort": "M"},
+    "K": {"repo": "tt-trinity-max-true", "scope": "Thermal CI gate v2 with LUT+ROM stack", "priority": "LOW", "effort": "S"}
+  },
+  "academic_anchors": [
+    {"title": "Platinum (ASP-DAC 2026)", "url": "https://arxiv.org/html/2511.21910v1", "lever": 1, "measured_metric": "1534 GOPS @ 0.96 mm^2 @ 500 MHz @ 28nm"},
+    {"title": "BitROM (ASP-DAC 2026)", "url": "https://arxiv.org/abs/2509.08542", "lever": 2, "measured_metric": "20.8 TOPS/W @ 4967 kB/mm^2 @ 65nm"},
+    {"title": "TerEffic (arXiv 2025)", "url": "https://arxiv.org/html/2502.16473v2", "lever": "background", "measured_metric": "290 tok/s @ 7B @ 46W"},
+    {"title": "MatMul-free LM (arXiv 2024)", "url": "https://arxiv.org/html/2406.02528v7", "lever": "background"},
+    {"title": "BitNet b1.58", "url": "https://arxiv.org/abs/2402.17764", "lever": "background"}
+  ],
+  "constitutional_compliance": {
+    "R_SI_1_zero_star": "Lane X (Coq) + Lane N (Rust) + RTL check_no_star.sh gate",
+    "R5_honest": "All gains pre-registered with falsification predicates W-101-A..E",
+    "R7_falsification": "W-101-A through W-101-E enumerated above",
+    "R8_admin_at_t27_ai": "All commits MUST be signed Vasilev Dmitrii <admin@t27.ai>",
+    "R12_proof_style": "Lee/GVSU enforced on Lane X + P",
+    "R14_coq_map": "Lane X registers in assertions/coq_map.json",
+    "R15_sacred_synth_gate": "OP_LUT_LOOKUP=0xDF, OP_BITROM_READ=0xE0 in sacred opcode range",
+    "R18_layer_frozen": "All lanes purely additive (new files only)",
+    "license": "Apache-2.0"
+  }
+}
