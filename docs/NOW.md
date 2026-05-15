@@ -86,3 +86,41 @@ Created `assertions/wave34_tom_layer_gate.json` — JSON-schema draft-07 predica
 
 ### Status: OPEN PR ✅
 
+
+---
+
+## Lane V''' — PhD Glava 81 LUT-NPU · L-DPC32 Wave-35
+
+**Agent:** Lane V''' (PhD chapter agent)
+**Date:** 2026-05-15
+**Mission:** L-DPC32 · Wave-35 LUT-NPU (trinity-fpga#120 / trios#858)
+**Branch:** `feat/wave35-lut-npu-phd-glava-81`
+**Tracking Issue:** trios#866
+
+### Deliverable
+
+Created `docs/phd/chapters/glava_81_lut_npu_wave35.tex` — PhD monograph chapter for Wave-35 Lever #9 (LUT-NPU 81-entry direct-evaluation BitNet b1.58 PE, OP_LUT_NPU=0xE3, 270 TOPS/W spec-layer).
+
+### Key Facts
+
+- **1859 total lines** / **1584 non-blank** (R3 ≥ 1500 ✅)
+- **5 theorems** (81.1 Correctness, 81.2 Energy Lower Bound, 81.3 Orthogonality, 81.4 Witness W-104-A) + 4 proofs + 5 corollaries + 9 definitions
+- **18 distinct citation keys**, 62 `\cite{...}` calls (R3 ≥ 2 ✅)
+- **35 PRE-SILICON ESTIMATE labels** (R5-HONEST ✅)
+- Table 81.2: 15-row coefficient-source map (R6 ✅)
+- W-104-A pre-registration, freeze 2026-08-15 (R7 ✅)
+- Coq map → `t27/trios-coq/IGLA/LutNpu.v` `Theorem lut_npu_safe` (R14 ✅)
+- LAYER-FROZEN (R18 ✅)
+- Signed `Vasilev Dmitrii <admin@t27.ai>` ORCID 0009-0008-4294-6159 (R8 ✅)
+
+### Wave-35 cross-strand triangle (4/5 already merged)
+
+| Lane | PR | SHA |
+|------|------|-----|
+| V (Coq, t27) | #651 | `8e4f2a8a` |
+| V' (JSON, trios) | #859 | `f2ee3613` |
+| V'' (Rust, max-true) | #21 | `403a80dd` |
+| U (RTL, fpga) | #124 | `4d339944` |
+| **V''' (PhD, trios)** | **(THIS LANE)** | — |
+
+φ² + φ⁻² = 3 · γ = φ⁻³ · DOI 10.5281/zenodo.19227877 · NEVER STOP
