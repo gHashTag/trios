@@ -55,14 +55,14 @@ improvements over the W15a 55\,TOPS/W baseline:
 \begin{enumerate}
   \item \textbf{Lever \#1 — Platinum LUT PE (Lane~V):}
         a 1.4$\times$ LUT-area reduction achieved by the platinum mesh
-        LUT primitive introduced in \cite{wang2025platinum}.
+        LUT primitive introduced in \cite{platinum_lut_pe_2026}.
         The gain $g_v = 1.4$ is certified by the \texttt{lut\_no\_star}
         Coq lemma (see §\ref{sec:flos77-coq-map}).
         % Coq witness: t27/trios-coq/IGLA/lut_no_star.v::platinum_lut_gain
 
   \item \textbf{Lever \#2 — BitROM Bidirectional Bank (Lane~W):}
         a 2.0$\times$ storage density improvement from bidirectional ROM
-        macro-cells fabricated at 65\,nm per \cite{yoshioka2025bitrom}.
+        macro-cells fabricated at 65\,nm per \cite{bitrom_2025}.
         The gain $g_w = 2.0$ is certified by the \texttt{bitrom\_no\_star}
         Coq lemma.
         % Coq witness: t27/trios-coq/IGLA/bitrom_no_star.v::bitrom_density_gain
@@ -184,12 +184,12 @@ Table~\ref{tab:competitor-summary} places it among published industry results.
 
 \subsection{Platinum LUT PE (Lane~V) --- arXiv 2511.21910}
 
-\citet{wang2025platinum} introduce the \emph{Platinum mesh} LUT primitive,
+\citet{platinum_lut_pe_2026} introduce the \emph{Platinum mesh} LUT primitive,
 a lookup-table compute cell that reduces area per Boolean function by a factor
 of $g_v = 1.4$ relative to conventional 6-input LUT cells at equivalent process node.
 The key insight is that Platinum mesh exploits the sparsity of the Boolean function space:
 for uniformly random 4-input Boolean functions, the average number of
-prime implicants is $\approx 9.3$ (see the analysis in \cite{wang2025platinum}
+prime implicants is $\approx 9.3$ (see the analysis in \cite{platinum_lut_pe_2026}
 §4.2), whereas a conventional 16-bit SRAM LUT stores all 16 bits irrespective of sparsity.
 The Platinum mesh replaces the SRAM with a content-addressed ternary match array
 whose average utilisation is $\approx 70\%$, yielding the $1.4\times$ area reduction.
@@ -204,7 +204,7 @@ LUT density of W15a at the same power budget.
 
 \subsection{BitROM Bidirectional Bank (Lane~W) --- arXiv 2509.08542}
 
-\citet{yoshioka2025bitrom} describe a bidirectional ROM macro-cell manufactured
+\citet{bitrom_2025} describe a bidirectional ROM macro-cell manufactured
 at the Yoshioka laboratory using a 65\,nm bulk-CMOS process.
 The bidirectional read capability (simultaneous forward and reverse address decoding)
 doubles the effective storage density per unit area:
@@ -309,9 +309,9 @@ Table~\ref{tab:qbrain-mapping} summarises the full mapping.
     PHYS & \texttt{0xDE} & \texttt{LOAD\_PHYS\_CONST} & C\textsuperscript{$\prime$} &
       R-marker register file & \texttt{RMarker.v::load\_phys} \\
     BIO  & \texttt{0xDF} & \texttt{OP\_LUT\_LOOKUP}   & V &
-      Platinum LUT PE \cite{wang2025platinum} & \texttt{lut\_no\_star.v::lut\_lookup\_bio} \\
+      Platinum LUT PE \cite{platinum_lut_pe_2026} & \texttt{lut\_no\_star.v::lut\_lookup\_bio} \\
     LANG & \texttt{0xE0} & \texttt{OP\_BITROM\_READ}  & W &
-      BitROM bank \cite{yoshioka2025bitrom} & \texttt{bitrom\_no\_star.v::bitrom\_read\_lang} \\
+      BitROM bank \cite{bitrom_2025} & \texttt{bitrom\_no\_star.v::bitrom\_read\_lang} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -401,7 +401,7 @@ where $a$ is the LUT address and $\mathcal{F}_{4}$ is the set of all
 $2^{2^{4}} = 65536$ 4-input Boolean functions.
 The Platinum mesh restricts the actually instantiated functions to the sparse
 subset (prime-implicant count $\leq 12$), covering $> 98\%$ of workload functions
-per the ASP-DAC 2026 profiling data in \cite{wang2025platinum}.
+per the ASP-DAC 2026 profiling data in \cite{platinum_lut_pe_2026}.
 
 \subsection{LANG Domain: Lane W BitROM}
 
@@ -416,7 +416,7 @@ $\mathbf{e}_t \in \{-1,0,+1\}^{d_{\text{model}}}$ (ternary BitNet format).
   % Coq witness: t27/trios-coq/IGLA/bitrom_no_star.v::bitrom_read_semantics
 \end{equation}
 %
-The bidirectional read capability of \cite{yoshioka2025bitrom} permits forward
+The bidirectional read capability of \cite{bitrom_2025} permits forward
 lookup (index $\to$ embedding) and reverse lookup (embedding $\to$ nearest token)
 in the same hardware cycle, doubling effective throughput for beam-search and
 nearest-neighbour inference kernels.
@@ -524,8 +524,8 @@ We establish notation used throughout the proof.
     \label{eq:main-theorem}
   \end{equation}
   %
-  In particular, with $g_v = 1.4$ (Platinum LUT, \cite{wang2025platinum}) and
-  $g_w = 2.0$ (BitROM, \cite{yoshioka2025bitrom}), the projected efficiency is
+  In particular, with $g_v = 1.4$ (Platinum LUT, \cite{platinum_lut_pe_2026}) and
+  $g_w = 2.0$ (BitROM, \cite{bitrom_2025}), the projected efficiency is
   %
   \begin{equation}
     E_{v \oplus w} \;=\; g_v \cdot g_w \cdot E_0
@@ -1136,7 +1136,7 @@ competitive pricing per inference token at DePIN node economics.
 \subsection{Limitations and Open Questions}
 
 \begin{enumerate}
-  \item \textbf{Process node gap}: The BitROM result of \cite{yoshioka2025bitrom}
+  \item \textbf{Process node gap}: The BitROM result of \cite{bitrom_2025}
         was obtained at 65\,nm, not the W15a 28\,nm node.
         Migration to 28\,nm may alter the $g_w = 2.0$ figure; this is a source
         of uncertainty acknowledged in the conservative lower-bound choice.
@@ -1186,9 +1186,9 @@ All citations in this chapter use \BibTeX keys from
 The three primary sources are:
 %
 \begin{itemize}
-  \item \cite{wang2025platinum} --- Platinum MST LUT PE, ASP-DAC 2026
+  \item \cite{platinum_lut_pe_2026} --- Platinum MST LUT PE, ASP-DAC 2026
         (arXiv:2511.21910).
-  \item \cite{yoshioka2025bitrom} --- BitROM bidirectional bank, 65\,nm
+  \item \cite{bitrom_2025} --- BitROM bidirectional bank, 65\,nm
         (arXiv:2509.08542).
   \item \cite{ernst2003razor} --- Razor flip-flop, DAC 2003
         (architectural context for Lane~B\textsuperscript{$\prime$}).
@@ -1366,7 +1366,7 @@ The single-cycle execution is possible because:
   \item The Platinum mesh access time is $\leq 0.4\,\text{ns}$ at $28\,\text{nm}$
         (shorter than the $0.5\,\text{ns}$ clock period).
   \item The BitROM read access time is $\leq 0.45\,\text{ns}$ at $65\,\text{nm}$
-        (confirmed by \cite{yoshioka2025bitrom} Table~2, worst-case slow corner).
+        (confirmed by \cite{bitrom_2025} Table~2, worst-case slow corner).
   \item The R-marker register file access time is $< 0.1\,\text{ns}$
         (simple 4-entry register file, no indirection).
 \end{itemize}
