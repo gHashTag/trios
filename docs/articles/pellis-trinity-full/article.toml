@@ -1,0 +1,54 @@
+# Canonical article descriptor for the `tri article` service.
+#
+# `tri article list` should expose `pellis-trinity-full` because this file
+# exists at `docs/articles/pellis-trinity-full/article.toml`.
+
+[article]
+slug         = "pellis-trinity-full"
+title        = "Vasilev-Pellis Constants"
+short_title  = "Vasilev-Pellis Constants"
+brand        = "Trinity S³AI DNA"          # visible running-header brand (use S³AI in source)
+brand_ascii  = "Trinity S3AI DNA"          # machine-field fallback for pipelines that reject U+00B3
+authors      = ["gHashTag/trios"]
+version      = "v21.6-vasilev-pellis"
+integration_label = "v21"          # v21 is an integration label, not a repo-native release string
+language     = "en"
+license      = "see repository LICENSE"
+
+# v21 is an integration label, not a repository-native release string.
+# This field is consumed by `tri article` to suppress any "repo release v21" wording.
+
+[render]
+preset       = "phdstyle-atlas"
+pdf          = true
+html         = true
+emit_links   = true                # placeholder [link] tokens are an error, see qa
+annotations  = "links-only"        # final PDF: /Annots count 0 unless a hyperlink is present
+                                   # no highlight/comment/text-markup annotations
+
+[render.header]
+# Visible page-header text. The renderer MUST use these strings verbatim
+# (with S³AI rendered as a real superscript-3, not the ASCII "S3AI") on
+# every page of the PDF and HTML output. The pre-v21.6 header strings
+# are obsolete and the exhaustive list lives in
+# qa/pellis-trinity-full.qa.toml::forbidden_phrases. The renderer must
+# emit no header text other than the two strings declared here (plus
+# optional page-number footers as defined elsewhere).
+left          = "Vasilev-Pellis Constants"
+right         = "Trinity S³AI DNA"
+left_ascii    = "Vasilev-Pellis Constants"
+right_ascii   = "Trinity S3AI DNA"          # only used by pipelines that reject U+00B3
+forbid_legacy_strings_source = "qa/pellis-trinity-full.qa.toml::forbidden_phrases"
+
+[body]
+# Sections are rendered in lexical order from body/ unless explicitly listed.
+order = "lexical"
+root  = "body"
+
+[figures]
+manifest = "figures/manifest.json"
+# Renderer must regenerate figures in-source as vector PDF text.
+# No pseudo-Latin, no microtext, no low-contrast labels.
+
+[qa]
+config = "qa/pellis-trinity-full.qa.toml"
