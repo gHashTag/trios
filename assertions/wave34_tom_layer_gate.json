@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "mission": "L-DPC31",
+  "wave": 34,
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "author": "Vasilev Dmitrii <admin@t27.ai>",
+  "orcid": "0009-0008-4294-6159",
+  "lever": "TOM-static-power-gate",
+  "opcode": "OP_LAYER_GATE = 0xE2",
+  "sacred_chain": ["0xDE", "0xDF", "0xE0", "0xE1", "0xE2"],
+  "coq_citation": {
+    "file": "gHashTag/t27:coq/IGLA/RMarker.v",
+    "lemma": "tom_no_star",
+    "depends_on": "tenet_no_star (PR #644 @ 367a7ba)"
+  },
+  "predicates": [
+    {
+      "id": "W-103-A",
+      "metric": "layer_idle_fraction",
+      "lower_bound": 0.5,
+      "method": "hardware counter on OP_LAYER_GATE events with GPG-signed verdict.json",
+      "owner_lane": "U (RTL trinity-fpga), Y'' (Rust tt-trinity-max-true)",
+      "consequences_if_fail": "Wave-34 REJECTED, TOPS/W projection 225 retracted, fallback to Wave-29 195 baseline",
+      "freeze": "2026-08-15",
+      "evaluation_date": "2026-10-15",
+      "fail_stop": true
+    }
+  ],
+  "constitutional_compliance": {
+    "R5_HONEST": true,
+    "R7_falsification": true,
+    "R8_author": "Vasilev Dmitrii <admin@t27.ai>",
+    "R14_coq_citation": true,
+    "R15_sacred_synth": true,
+    "R18_layer_frozen": true,
+    "license": "Apache-2.0"
+  },
+  "cost_model": {
+    "area_delta_mm2": "+0.1 (ROM tile +0.4, SRAM −0.3)",
+    "power_overhead_mw": "+3",
+    "leakage_saved_mw": "−12",
+    "label": "PRE-SILICON ESTIMATE"
+  }
+}
