@@ -1,0 +1,38 @@
+# Canonical article descriptor for the `tri article` service.
+#
+# `tri article list` should expose `pellis-trinity-full` because this file
+# exists at `docs/articles/pellis-trinity-full/article.toml`.
+
+[article]
+slug         = "pellis-trinity-full"
+title        = "Pellis-Trinity: A Three-Strand TRI-1 DNA Architecture (v21, style-safe edition)"
+short_title  = "Pellis-Trinity v21"
+authors      = ["gHashTag/trios"]
+version      = "v21.5-style-safe"
+integration_label = "v21"          # v21 is an integration label, not a repo-native release string
+language     = "en"
+license      = "see repository LICENSE"
+
+# v21 is an integration label, not a repository-native release string.
+# This field is consumed by `tri article` to suppress any "repo release v21" wording.
+
+[render]
+preset       = "phdstyle-atlas"
+pdf          = true
+html         = true
+emit_links   = true                # placeholder [link] tokens are an error, see qa
+annotations  = "links-only"        # final PDF: /Annots count 0 unless a hyperlink is present
+                                   # no highlight/comment/text-markup annotations
+
+[body]
+# Sections are rendered in lexical order from body/ unless explicitly listed.
+order = "lexical"
+root  = "body"
+
+[figures]
+manifest = "figures/manifest.json"
+# Renderer must regenerate figures in-source as vector PDF text.
+# No pseudo-Latin, no microtext, no low-contrast labels.
+
+[qa]
+config = "qa/pellis-trinity-full.qa.toml"

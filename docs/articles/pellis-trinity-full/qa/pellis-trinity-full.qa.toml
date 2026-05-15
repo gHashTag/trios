@@ -1,0 +1,102 @@
+# QA gates for `tri article qa pellis-trinity-full`.
+#
+# These gates must all pass before a PDF/HTML build is considered shippable.
+# A regression in any gate fails the build (rules.fail_build_on_qa_regression = true).
+
+[meta]
+slug = "pellis-trinity-full"
+
+# Phrases that must NOT appear in the rendered text.
+[forbidden_phrases]
+patterns = [
+  "42/42",
+  "42 of 42 Coq",
+  "completed 42/42",
+  "complete 42-row Coq proof layer",
+  "zero Admitted in all Coq",
+  "[link]",
+  "Bonferroni-corrected p-value is 15",
+  "Bonferroni-corrected p-value of 15",
+  "Bonferroni-corrected p-value of approximately 15",
+  "Bonferroni-corrected p-value ≈ 15",
+  "p = 15",
+  "p_Bonf = 15",
+  "muT(x) = 0 at exactness",
+  "Physics Reports 7",
+  "Phys. Rep. 7",
+  "Wilson and Kogut, page 7",
+]
+
+# Phrases that MUST appear in the rendered text.
+[required_phrases]
+patterns = [
+  "Catalog42 is a mapped proof-obligation catalogue",
+  "formula-by-formula formal verification layer",
+  "42 declared formula IDs",
+  "19 rows with closed-with-Qed",
+  "23 UnderRevision rows",
+  "zero `Admitted.` in the flagship import chain",
+  "32 `Admitted.` quarantined outside",
+  "source-level audit, not a new compiler verdict",
+  "min(1, 15) = 1",
+  "Physics Reports",
+  "75–199 (1974)",
+  "352 LUT, 165 FF, 1 DSP48E1, and 0.6 percent LUT utilization on XC7A100T",
+  "v21 as an integration label, not as a repository-native release string",
+]
+
+# Per-row Catalog42 status that must be present (downgrades in force).
+[catalog42_row_status]
+L01 = "UnderRevision / Reformulate"
+L02 = "UnderRevision / Widen-or-reformulate"
+L03 = "UnderRevision / Reformulate"
+Q03 = "UnderRevision / Reformulate"
+Q05 = "UnderRevision / Widen-or-chain"
+
+# Annotation policy on the final PDF.
+[annotations]
+# `/Annots` count must be 0 unless link annotations are present
+# (`render.emit_links = true` + actual hyperlinks). No highlight/comment
+# annotations are permitted at all.
+max_non_link_annots         = 0
+max_highlight_annots        = 0
+max_text_markup_annots      = 0
+max_comment_annots          = 0
+max_popup_annots            = 0
+expected_annots_when_no_links = 0
+
+# Figure-level QA: every legacy problem page must be replaced by a
+# regenerated vector figure, not a blank or text replacement page.
+[figures]
+legacy_pages_requiring_regen = [17, 35, 51]
+require_vector_text_labels    = true
+forbid_pseudo_latin           = true
+forbid_microtext_below_pt     = 7
+forbid_rasterized_text_labels = true
+
+# Reference / link checks.
+[references]
+require_real_urls            = true
+forbid_link_placeholder      = true
+required_anchors = [
+  "https://physics.nist.gov/cgi-bin/cuu/Value?alph",
+  "https://physics.nist.gov/cuu/pdf/wall_2022.pdf",
+  "https://pdg.lbl.gov/2024/reviews/rpp2024-rev-qcd.pdf",
+  "https://www.science.org/doi/10.1126/sciadv.aay2631",
+  "https://iri.columbia.edu/~tippett/cv_papers/Grunwald.pdf",
+]
+
+# Numeric / structural sanity.
+[numerics]
+bonferroni_corrected_pvalue_max = 1.0   # min(1, n*p), never above 1
+catalog42_declared              = 42
+catalog42_closed_with_qed       = 19
+catalog42_under_revision        = 23
+catalog42_flagship_admitted     = 0
+catalog42_quarantined_admitted  = 32
+
+# External-tool gates that should also pass after build.
+[external_tools]
+qpdf_check_must_pass            = true
+pdfinfo_must_show_pages_gt_zero = true
+pdfimages_must_succeed          = true
