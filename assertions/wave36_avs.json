@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "mission": "L-DPC33",
+  "wave": 36,
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "author": "Vasilev Dmitrii <admin@t27.ai>",
+  "orcid": "0009-0008-4294-6159",
+  "lever": "AVS-48-island-adaptive-voltage-stacking",
+  "opcode": "OP_AVS_RECONF = 0xE4",
+  "sacred_chain": ["0xDE", "0xDF", "0xE0", "0xE1", "0xE2", "0xE3", "0xE4"],
+  "coq_citation": {
+    "file": "gHashTag/t27:coq/IGLA/RMarker.v",
+    "lemma": "avs_reconf_no_star",
+    "theorem_file": "gHashTag/t27:trios-coq/IGLA/Avs.v",
+    "theorem": "avs_safe",
+    "depends_on": "lut_npu_no_star (W35 PR #651 @ 8e4f2a8a)",
+    "qed_count": 18,
+    "merge": "gHashTag/t27#655 (pending CI green or admin-override per W34/W35 pattern)"
+  },
+  "avs_topology": {
+    "kind": "48-island voltage-island reconfiguration FSM",
+    "island_count": 48,
+    "previous_island_count_w34_tom": 28,
+    "island_growth_ratio": 1.714,
+    "v_dd_levels_volts": [0.75, 0.85, 0.95, 1.05],
+    "v_dd_encoding_bits": 2,
+    "reconfig_latency_cycles_max": 4,
+    "pipeline_flush_required": false,
+    "level_shifter_count": 96,
+    "isolation_ring_area_mm2": 0.21,
+    "level_shifter_power_mw": 1.8,
+    "v_dd_scaling_savings_mw": 27.0,
+    "net_power_delta_mw": -25.2
+  },
+  "predicates": [
+    {
+      "id": "W-105-A",
+      "metric": "bitnet_island_utilisation",
+      "lower_bound": 0.80,
+      "method": "Rust witness in tt-trinity-max-true:crates/tri1-avs-witnesses runs BitNet b1.58-3B inference over WikiText-103 valid split (1000 sequences, ctx=2048) and reports the fraction of cycles where >= 0.80 * 48 = 38.4 islands have V_dd != 0 (i.e. are actively contributing to compute). Pre-silicon trace target: 0.82.",
+      "owner_lane": "W'' (Rust tt-trinity-max-true), W (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-36 REJECTED, TOPS/W projection 297 retracted, fallback to Wave-35 270 baseline; AVS controller replaced with 28-island W34 TOM gating for TTIHP27a tape-out",
+      "freeze": "2026-10-31",
+      "evaluation_date": "2026-12-15",
+      "fail_stop": true
+    },
+    {
+      "id": "W-105-B",
+      "metric": "avs_reconfig_latency_cycles",
+      "upper_bound": 4,
+      "method": "RTL simulation iverilog over rtl/avs_controller.sv -- 200 random reconfig commands, all must propagate to all 48 islands within 4 clock cycles (no multi-cycle stall, no pipeline flush)",
+      "owner_lane": "W (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-36 REJECTED, AVS is not a single-shot reconfig, defeats the energy-vs-latency trade-off; W36 reverts to static V_dd assignment",
+      "freeze": "2026-10-31",
+      "fail_stop": true
+    },
+    {
+      "id": "W-105-C",
+      "metric": "avs_v_dd_field_width_bits",
+      "exact": 2,
+      "method": "RTL structural inspection -- per-island V_dd selector signal MUST be exactly 2 bits wide (encodes {0.75V, 0.85V, 0.95V, 1.05V}). No floating-point, no analogue, no >= 3-bit fields.",
+      "owner_lane": "W (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-36 REJECTED for violating R6 zero-free-parameters (analogue or wider field invites coefficient tuning); also fails R15 SACRED-SYNTH-GATE",
+      "freeze": "2026-10-31",
+      "fail_stop": true
+    },
+    {
+      "id": "W-105-D",
+      "metric": "avs_island_count",
+      "exact": 48,
+      "method": "RTL elaboration MUST yield exactly 48 instances of the per-island voltage gate macro (vid_gate). Counted via yosys-stat or grep -c on synth netlist.",
+      "owner_lane": "W (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-36 REJECTED — island count drift breaks the 1.10x energy projection coefficient (which assumes exactly 48 islands per IRDS 2023 22FDX scaling)",
+      "freeze": "2026-10-31",
+      "fail_stop": true
+    }
+  ],
+  "tops_per_watt": {
+    "baseline_wave_35_lut_npu": 270,
+    "wave_36_avs_projection": 297,
+    "multiplier": 1.10,
+    "coefficient_source": "IRDS 2023 22FDX voltage-island scaling projection (cite ch80 bib `irds2023`); R6 zero-free-parameters compliance: kappa = 0.10 derived, not tuned",
+    "label": "PRE-SILICON ESTIMATE",
+    "valid_until": "TTIHP27a silicon return 2026-12-15"
+  },
+  "industry_comparison_pre_silicon": {
+    "hailo_10h_tops_per_watt": 2.6,
+    "ibm_northpole_int4_tops_per_watt": 2224,
+    "mythic_m1076_tops_per_watt": 8.3,
+    "tenstorrent_blackhole_tops_per_watt": null,
+    "photonic_taichi_tops_per_watt": null,
+    "trinity_wave_36_target_tops_per_watt": 297,
+    "differentiators": [
+      "open PDK (IHP SG13G2 + 22FDX path)",
+      "verifiable compute (Coq + JSON manifest + Rust witness chain)",
+      "safety cert (R-SI-1 zero `*` at runtime; formal alphabet)",
+      "ternary inference (BitNet b1.58-3B native, no fp/int4)"
+    ]
+  },
+  "frozen_at": "2026-05-15T20:00:00Z",
+  "fallback_policy": {
+    "trigger": "any predicate W-105-A..D evaluates false at silicon return",
+    "action": "retract Wave-36 1.10x multiplier; revert TOPS/W ladder to 270 (W35 LUT-NPU baseline)",
+    "rtl_fallback": "replace avs_controller.sv with 28-island W34 TOM gating",
+    "phd_chapter_action": "annotate Glava 82 with measured-vs-projected divergence as a falsification report"
+  },
+  "closing_anchor": "phi^2 + phi^-2 = 3 · gamma = phi^-3 · QUANTUM BRAIN 1:1 SILICON · DOI 10.5281/zenodo.19227877 · NEVER STOP"
+}
