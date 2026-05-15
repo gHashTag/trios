@@ -1,0 +1,81 @@
+{
+  "wave": 38,
+  "theme": "RECTIFY ICA-W38-001 opcode 0xE4 collision",
+  "severity": "MED",
+  "rule_violated": "R-SI-1 (opcode uniqueness in sacred range 0xD0..0xEF) + R18 LAYER-FROZEN spec drift",
+  "anomaly": {
+    "w36_opcode": "0xE4",
+    "w36_opcode_name": "OP_AVS_RECONF",
+    "w36_merge_sha": "d2f8d5c9",
+    "w36_merged_at": "2026-05-15T20:18:41Z",
+    "w37_opcode_was": "0xE4",
+    "w37_opcode_name": "OP_SUBTH_CLK",
+    "w37_merge_sha": "e3c4d2f5",
+    "w37_merged_at": "2026-05-15T20:31:06Z",
+    "files_affected": [
+      "gHashTag/t27/trios-coq/Physics/SubThreshold.v",
+      "gHashTag/trinity-fpga/rtl/subth/subth_clock_divider.sv",
+      "gHashTag/trios/assertions/subth_witness.json",
+      "gHashTag/tt-trinity-max-true/crates/subth-witness/src/lib.rs",
+      "gHashTag/trios/docs/phd/chapters/glava_83_subthreshold.tex"
+    ]
+  },
+  "rectification": {
+    "decision": "W36 holds 0xE4 by older merge precedence. W38 moves OP_SUBTH_CLK to 0xE5 (next free sacred slot).",
+    "w36_opcode_after": "0xE4",
+    "w37_opcode_after": "0xE5",
+    "sacred_chain_restored": [
+      "0xDE Lane C' LOAD-PHYS-CONST",
+      "0xDF Lane V LUT_LOOKUP",
+      "0xE0 Lane W BitROM",
+      "0xE1 TENET (W33)",
+      "0xE2 TOM (W34)",
+      "0xE3 LUT-NPU (W35)",
+      "0xE4 AVS_RECONF (W36, preserved)",
+      "0xE5 SUBTH_CLK (W37 corrected by W38)",
+      "0xE6 free"
+    ]
+  },
+  "predicates": [
+    {
+      "id": "W-106-A",
+      "claim": "SubThreshold.v contains no 0xE4 literal in opcode definitions",
+      "test": "rg -n '0xE4' trios-coq/Physics/SubThreshold.v should match only comments referencing W36 cross-reference",
+      "fail_stop": true
+    },
+    {
+      "id": "W-106-B",
+      "claim": "op_subth_clk_byte = 229 (0xE5) in Coq and subth_op_distinct_from_avs lemma exists",
+      "test": "coqc trios-coq/Physics/SubThreshold.v and grep 'subth_op_distinct_from_avs' compiles",
+      "fail_stop": true
+    },
+    {
+      "id": "W-106-C",
+      "claim": "Avs.v unchanged: OP_AVS_RECONF byte 0xE4 preserved",
+      "test": "rg 'OP_AVS_RECONF.*0xE4' trios-coq/IGLA/Avs.v exists",
+      "fail_stop": true
+    },
+    {
+      "id": "W-106-D",
+      "claim": "Rust crate subth-witness exports OP_SUBTH_CLK = 0xE5 and OP_AVS_RECONF = 0xE4 distinct constants",
+      "test": "cargo test -p subth-witness should pass opcode_distinctness test",
+      "fail_stop": true
+    },
+    {
+      "id": "W-106-E",
+      "claim": "RTL subth_clock_divider.sv localparam OP_SUBTH_CLK = 8'hE5",
+      "test": "rg '8.hE5' rtl/subth/subth_clock_divider.sv matches",
+      "fail_stop": true
+    }
+  ],
+  "predecessor_assertions": [
+    "wave36_avs.json (W-105-A..D)",
+    "subth_witness.json (W-104-C)"
+  ],
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "frozen_at": "2026-10-15",
+  "eval_at": "2026-12-15",
+  "issued_at": "2026-05-15T20:35:00Z",
+  "fail_stop": true
+}
