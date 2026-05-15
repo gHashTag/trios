@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "mission": "L-DPC32",
+  "wave": 35,
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "author": "Vasilev Dmitrii <admin@t27.ai>",
+  "orcid": "0009-0008-4294-6159",
+  "lever": "LUT-NPU-81-entry-bitnet-cpp-port",
+  "opcode": "OP_LUT_NPU = 0xE3",
+  "sacred_chain": ["0xDE", "0xDF", "0xE0", "0xE1", "0xE2", "0xE3"],
+  "coq_citation": {
+    "file": "gHashTag/t27:coq/IGLA/RMarker.v",
+    "lemma": "lut_npu_no_star",
+    "theorem_file": "gHashTag/t27:trios-coq/IGLA/LutNpu.v",
+    "theorem": "lut_npu_safe",
+    "depends_on": "tom_no_star (W34 PR #648 @ 6a81d8d2)",
+    "qed_count": 16,
+    "merge": "gHashTag/t27#651 @ 8e4f2a8a"
+  },
+  "lut_topology": {
+    "kind": "Z_3^4 indexed (3^4 = 81 entries)",
+    "input_width_trits": 4,
+    "input_bits_packed": 8,
+    "output_width_trits": 2,
+    "output_bits_packed": 4,
+    "rom_kind": "BitROM bidirectional (reuses Lever #2 OP_BITROM_READ macro)",
+    "address_lookup_cycles": 1,
+    "replaces": "8-bit signed MAC at L1 Compute PE"
+  },
+  "lut_inventory": {
+    "entry_count": 81,
+    "format": "z3^4 -> z3^2",
+    "generation": "bitnet.cpp reference table (Microsoft 2024) re-encoded for trit-native PE",
+    "encoding_note": "Each entry is a deterministic function of (x0,x1,x2,x3) in {-1,0,+1}^4. Output = sign(sum_i x_i) packed as 2 trits with saturation at +-1.",
+    "verifier": "scripts/verify_lut_npu.py (planned) -- enumerates all 81 (x0,x1,x2,x3) combos and asserts table[idx]==expected",
+    "hash_sha256": "PENDING_RTL_LANE_U"
+  },
+  "predicates": [
+    {
+      "id": "W-104-A",
+      "metric": "bitnet_trinity_loss_sparsity",
+      "lower_bound": 0.5,
+      "method": "Rust witness in tt-trinity-max-true:crates/tri1-lut-npu-witnesses runs BitNet b1.58-3B over WikiText-103 valid split (1000 sequences, ctx=2048) and reports fraction of (x0,x1,x2,x3) tuples whose LUT-NPU lookup hits a SPARSE_SKIP-eligible slot (output trits == (0,0))",
+      "owner_lane": "V'' (Rust tt-trinity-max-true), U (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-35 REJECTED, TOPS/W projection 270 retracted, fallback to Wave-34 225 baseline; LUT-NPU PE replaced with vanilla MAC for TTIHP27a tape-out",
+      "freeze": "2026-09-30",
+      "evaluation_date": "2026-11-30",
+      "fail_stop": true
+    },
+    {
+      "id": "W-104-B",
+      "metric": "lut_lookup_cycles",
+      "upper_bound": 1,
+      "method": "RTL simulation iverilog over rtl/lut_npu_pe.sv -- 100 random (x0,x1,x2,x3) inputs, all must produce stable output trits within 1 clock cycle (no multi-cycle ROM stall)",
+      "owner_lane": "U (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-35 REJECTED, LUT-NPU is not a 1-cycle replacement for MAC, defeats the energy projection",
+      "freeze": "2026-09-30",
+      "fail_stop": true
+    },
+    {
+      "id": "W-104-C",
+      "metric": "yosys_dollar_mul_count",
+      "upper_bound": 0,
+      "method": "Yosys read_verilog rtl/lut_npu_pe.sv -- after synth_sky130 stat must report 0 occurrences of $mul, $mod, $div, $shr, $shl",
+      "owner_lane": "U (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-35 REJECTED, LUT-NPU violates R-SI-1 (no Kleene-star equivalent in RTL)",
+      "freeze": "2026-09-30",
+      "fail_stop": true
+    },
+    {
+      "id": "W-104-D",
+      "metric": "lut_npu_pe_cell_count",
+      "upper_bound": 350,
+      "method": "Yosys synth_sky130 -top lut_npu_pe stat -- reported cell count must be <= 350 (vs 800 for vanilla 8-bit MAC PE)",
+      "owner_lane": "U (RTL trinity-fpga)",
+      "consequences_if_fail": "Wave-35 REJECTED, area projection +0.18 mm^2 was a lie",
+      "freeze": "2026-09-30",
+      "fail_stop": true
+    }
+  ],
+  "constitutional_compliance": {
+    "R1_rust_zig_only": true,
+    "R3_main_only": true,
+    "R5_HONEST": true,
+    "R7_falsification": true,
+    "R8_author": "Vasilev Dmitrii <admin@t27.ai>",
+    "R14_coq_citation": true,
+    "R15_sacred_synth": true,
+    "R18_layer_frozen": true,
+    "R_SI_1_no_star": true,
+    "license": "Apache-2.0"
+  },
+  "cost_model": {
+    "area_delta_mm2": "+0.18 (81-entry ROM tile +0.32, MAC PE -0.14)",
+    "power_overhead_mw": "+6",
+    "energy_per_op_pj": "0.83 -> 0.69 (-17%)",
+    "tops_w_w34_baseline": 225,
+    "tops_w_w35_projected": 270,
+    "multiplier": "x1.20",
+    "label": "PRE-SILICON ESTIMATE (TTIHP27a generic synth)"
+  },
+  "quantum_brain_mapping": {
+    "phys_to_si": "Z_3^4 symmetry (3^4 = 81) -> 81 LUT entries hard-mapped",
+    "lang_to_si": "OP_LUT_NPU = 0xE3 extends sacred alphabet to 8 opcodes (0xDE..0xE3)",
+    "bio_to_si": "L1 Compute opcode; L2 ROM microcode block reuses Lever #2 BitROM bidirectional macro; no L0 Sacred ROM cell consumed",
+    "r18_sacred_rom_cells_preserved": 75
+  },
+  "broadcast": {
+    "parent_one_shot": "gHashTag/trinity-fpga#120",
+    "throne": "gHashTag/trios#264",
+    "agent_entry": "gHashTag/trios#244",
+    "tracker": "gHashTag/t27#649",
+    "merge_pr": "gHashTag/t27#651 @ 8e4f2a8a"
+  }
+}
