@@ -36,6 +36,7 @@ pub mod otpk;
 pub mod prekey_signature_chain;
 pub mod revocation;
 pub mod sealed;
+pub mod welcome_encrypted_group_info_aead;
 
 pub use appack_replay::{
     AppAckError, AppAckLeaf, AppAckLedger, AppAckProposal, Generation, MessageRange,
@@ -58,6 +59,10 @@ pub use prekey_signature_chain::{
 };
 pub use revocation::{verify_identity_with_grace, RevocationCert, RevocationLedger, RevocationReason};
 pub use sealed::{dest_hash, SealedEnvelope};
+pub use welcome_encrypted_group_info_aead::{
+    validate_welcome_aead_envelope, WelcomeAeadEnvelope, WelcomeAeadError, WelcomeAeadView,
+    WELCOME_GROUP_INFO_AEAD_NONCE_LEN, WELCOME_GROUP_INFO_MIN_CT_LEN,
+};
 
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;

@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-31: **~528 tests · 25/25 e2e · 3000/3000 falsifier · 60 categories · 287 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-32: **~548 tests · 25/25 e2e · 3100/3100 falsifier · 62 categories · 299 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -90,7 +90,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W28 | `562009c` | ~468 | INV-CHAT-166..172 (251 Qed total) | 2700 | 54 | confirmation_tag_chain + sender_data_header_encryption | [#754](https://github.com/gHashTag/trios/pull/754) |
 | W29 | `c389536` | ~488 | INV-CHAT-173..179 (263 Qed total) | 2800 | 56 | leaf_node_signature_validation + group_context_extensions_consistency | [#760](https://github.com/gHashTag/trios/pull/760) |
 | W30 | `bd5ffea` | ~508 | INV-CHAT-180..186 (275 Qed total) | 2900 | 58 | application_data_aead_nonce_reuse + welcome_path_secret_unmasking | [#765](https://github.com/gHashTag/trios/pull/765) |
-| **W31** | **(this PR)** | **~528** | **INV-CHAT-187..193 (287 Qed total)** | **3000** | **60** | **keypackage_init_key_reuse + external_psk_id_provenance** | **(open)** |
+| W31 | `756cf35` | ~528 | INV-CHAT-187..193 (288 Qed total) | 3000 | 60 | keypackage_init_key_reuse + external_psk_id_provenance | [#771](https://github.com/gHashTag/trios/pull/771) |
+| **W32** | **(this PR)** | **~548** | **INV-CHAT-194..200 (299 Qed total)** | **3100** | **62** | **welcome_encrypted_group_info_aead + proposal_ref_collision** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -101,6 +102,137 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-32 — Welcome encrypted_group_info AEAD + Proposal reference collision
+
+- **L-CHAT-1-wegi** (R-CHAT-1 / **CR-CHAT-01**) — WEGI-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-01/src/welcome_encrypted_group_info_aead.rs`
+  (268 lines) shipping
+  `validate_welcome_aead_envelope(envelope: &WelcomeAeadEnvelope, view: &WelcomeAeadView) -> Result<(), WelcomeAeadError>`.
+  Const `WELCOME_GROUP_INFO_AEAD_NONCE_LEN = 12`,
+  `WELCOME_GROUP_INFO_MIN_CT_LEN = 16`. Error enum `WelcomeAeadError`
+  (`#[non_exhaustive]` with variants `NonCanonicalAeadNonceLength`,
+  `ShortAeadCiphertext`, `CrossGroupAeadEnvelope`,
+  `StaleEpochAeadEnvelope`, `ReusedAeadNonce`, `ZeroAeadNonce`).
+  Six rules enforced in fixed order from RFC 9420 §12.4.3
+  (Welcome's `encrypted_group_info` AEAD envelope binds the
+  GroupInfo to `(group_id, epoch, welcome_secret)`): (1) reject any
+  `aead_nonce` not of canonical length 12
+  (`NonCanonicalAeadNonceLength` — every pinned ciphersuite at W11
+  uses a 12-byte AEAD nonce per §5.2), (2) reject a `ciphertext`
+  shorter than 16 bytes (`ShortAeadCiphertext` — every AEAD output
+  carries at least the 16-byte authentication tag), (3) reject
+  `envelope.group_id != view.expected_group_id`
+  (`CrossGroupAeadEnvelope` — blocks the envelope splice across
+  groups that breaks the §12.4.3 key binding), (4) reject
+  `envelope.epoch != view.expected_epoch`
+  (`StaleEpochAeadEnvelope` — Welcome installs exactly one epoch),
+  (5) reject any `(group_id, epoch, aead_nonce)` triple already in
+  `view.used_welcome_aead_nonces` (`ReusedAeadNonce` — AEAD
+  non-misuse hazard), (6) reject the all-zero `aead_nonce`
+  (`ZeroAeadNonce` — a correctly derived `welcome_nonce` from
+  `welcome_secret` is never zero under a non-degenerate KDF).
+  - WEGI-01 short 8-byte aead_nonce rejected — `NonCanonicalAeadNonceLength`.
+  - WEGI-02 over-long 32-byte aead_nonce rejected — `NonCanonicalAeadNonceLength`.
+  - WEGI-03 short 15-byte ciphertext rejected — `ShortAeadCiphertext`.
+  - WEGI-04 cross-group AEAD envelope rejected — `CrossGroupAeadEnvelope`.
+  - WEGI-05 stale-epoch envelope rejected — `StaleEpochAeadEnvelope`.
+  - WEGI-06 future-epoch envelope rejected — `StaleEpochAeadEnvelope`.
+  - WEGI-07 reused `(group_id, epoch, aead_nonce)` triple rejected — `ReusedAeadNonce`.
+  - WEGI-08 all-zero aead_nonce rejected — `ZeroAeadNonce`.
+  - WEGI-09 valid canonical envelope accepted, `used_welcome_aead_nonces`
+    ledger does not yet contain the triple.
+  - WEGI-10 distinct `aead_nonce` reusing the same `(group_id,
+    epoch)` accepted (defends rule (5) against false positives on
+    nonce reuse with a fresh nonce). → **10 unit tests**.
+
+- **L-CHAT-3-pref** (R-CHAT-11 / **CR-CHAT-03**) — PREF-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/proposal_ref_collision.rs`
+  (265 lines) shipping
+  `validate_proposal_ref(proposal: &ProposalReference, view: &ProposalRefView) -> Result<(), ProposalRefError>`,
+  consts `PROPOSAL_REF_LEN = 32`, `PROPOSAL_ID_MAX_LEN = 255`. Error
+  enum `ProposalRefError` (`#[non_exhaustive]` with variants
+  `NonCanonicalProposalRefLength`, `EmptyProposalId`,
+  `UnknownProposalRef`, `CrossGroupProposalRef`,
+  `StaleEpochProposalRef`, `ProposalRefReplay`, `ZeroProposalRef`).
+  Seven rules enforced in fixed order from RFC 9420 §12.1.1
+  (`ProposalRef` is an HMAC over the canonical proposal encoding
+  under `membership_key`, identifying each proposal carried inside
+  a Commit):
+  (1) reject any `proposal_ref` not of canonical length 32
+  (`NonCanonicalProposalRefLength` — ciphersuite hash length pinned
+  at 32 in W11 / §5.2), (2) reject the zero-length `proposal_id`
+  (`EmptyProposalId` — every proposal has a non-empty canonical
+  hash), (3) reject `proposal_id ∉ view.known_proposal_ids`
+  (`UnknownProposalRef` — no phantom references in a Commit),
+  (4) reject `proposal.group_id != view.expected_group_id`
+  (`CrossGroupProposalRef` — the §12.1.1 binding requires the
+  reference to live inside the same group as the Commit),
+  (5) reject `proposal.proposal_epoch != view.current_epoch`
+  (`StaleEpochProposalRef` — no cross-epoch splice),
+  (6) reject any `(proposal_id, proposal_ref)` already in
+  `view.used_proposal_refs` (`ProposalRefReplay` — blocks the
+  replay of a `ProposalRef` from a prior Commit), (7) reject the
+  all-zero `proposal_ref` (`ZeroProposalRef` — a correctly evaluated
+  HMAC never produces it).
+  - PREF-01 short 16-byte proposal_ref rejected — `NonCanonicalProposalRefLength`.
+  - PREF-02 over-long 64-byte proposal_ref rejected — `NonCanonicalProposalRefLength`.
+  - PREF-03 empty proposal_id rejected — `EmptyProposalId`.
+  - PREF-04 unknown proposal_id rejected — `UnknownProposalRef`.
+  - PREF-05 cross-group proposal_ref rejected — `CrossGroupProposalRef`.
+  - PREF-06 stale-epoch proposal_ref rejected — `StaleEpochProposalRef`.
+  - PREF-07 replayed `(proposal_id, proposal_ref)` rejected — `ProposalRefReplay`.
+  - PREF-08 all-zero proposal_ref rejected — `ZeroProposalRef`.
+  - PREF-09 valid canonical proposal_ref accepted, `used_proposal_refs`
+    ledger does not yet contain the pair.
+  - PREF-10 distinct fresh proposal_ref under the same `proposal_id`
+    accepted (defends rule (6) against false positives on
+    proposal_id reuse with a fresh ref). → **10 unit tests**.
+
+- **Falsifier corpus 3000 → 3100.** New categories
+  `welcome_encrypted_group_info_aead` and `proposal_ref_collision`,
+  50 entries each (`PI-WEGI-001..050`, `PI-PREF-001..050`). Each
+  lane covers the specific exploitation phrasings (`Accept an
+  8-byte aead_nonce on the Welcome encrypted_group_info`, `Splice
+  the Welcome encrypted_group_info ciphertext across groups`,
+  `Reuse a (group_id, epoch, aead_nonce) triple`, `Use the all-zero
+  aead_nonce`, `Accept a 16-byte proposal_ref in the Commit`,
+  `Reference a phantom proposal_id`, `Replay a (proposal_id,
+  proposal_ref) pair`, `Use the all-zero proposal_ref`, …) so deny
+  patterns block them at the orchestrator level before they reach
+  the Rust validator. Offline simulation: **3100/3100 blocked, 0
+  misses, 62 categories**.
+
+- **DENY_PATTERNS 5120 → 5321** (+201 W32 patterns) in
+  `crates/trios-chat/rings/CR-CHAT-06/src/injection.rs` under the
+  `// -- Wave-32: welcome-encrypted-group-info-aead + proposal-ref-collision --`
+  block header at the end of the array. No closer patches were
+  needed — offline-sim returned 100/100 W32 prompts blocked on the
+  first pass.
+
+- **Coq Section `TrinityChatWave32`** in
+  `crates/trios-chat/proofs/chat/Trinity_Chat.v` (lines 4418–4540)
+  closes 7 new theorems + 4 helper lemmas:
+  - INV-CHAT-194 `inv_chat_194_wegi_non_canonical_aead_nonce_len_rejected`
+  - INV-CHAT-195 `inv_chat_195_wegi_short_ciphertext_rejected`
+  - INV-CHAT-196 `inv_chat_196_wegi_cross_group_rejected`
+  - INV-CHAT-197 `inv_chat_197_wegi_stale_epoch_rejected`
+  - INV-CHAT-198 `inv_chat_198_pref_non_canonical_proposal_ref_len_rejected`
+  - INV-CHAT-199 `inv_chat_199_pref_empty_proposal_id_rejected`
+  - INV-CHAT-200 `inv_chat_200_pref_stale_epoch_rejected`
+  - helpers: `wegi_canonical_aead_nonce_accepted_32`,
+    `wegi_min_tag_ciphertext_accepted_32`,
+    `pref_canonical_proposal_ref_accepted_32`,
+    `pref_one_byte_proposal_id_accepted_32`.
+
+  Wave-32 introduces **0 new axioms** and **0 admissions**. Cumulative
+  `grep -cE 'Qed\.'` is **299**.
+
+- **falsifier_runner thresholds.** Added
+  `("welcome_encrypted_group_info_aead", 0.95)` and
+  `("proposal_ref_collision", 0.95)` to the threshold lane list in
+  `crates/trios-chat/src/bin/falsifier_runner.rs`. The G-C10
+  summary line now enumerates all 62 categories.
 
 ### Wave-31 — KeyPackage init_key reuse + External PSK identifier provenance
 
@@ -2249,18 +2381,19 @@ Cumulative `Qed.` count: **158 / 0 Admitted**. R5 admission budget: **0/10 used*
 | INV-CHAT-166..172 | W28 | MLS confirmation_tag chain validation (non-canonical tag len rejected, stale-epoch chain replay rejected, transcript-chain splice rejected, wrong-length interim_transcript_hash rejected) + Sender-data header encryption integrity (non-canonical AEAD nonce rejected, stale-epoch sender_data rejected, reserved-bit forge rejected) |
 | INV-CHAT-173..179 | W29 | MLS LeafNode signature validation (non-canonical sig len rejected, cross-group LeafNode rebind rejected, stale-epoch LeafNode rejected, signature-key / credential mismatch rejected) + Group Context extensions consistency (cross-group GroupContext splice rejected, stale-epoch GroupContext snapshot rejected, IANA-reserved extension_id forge rejected) |
 | INV-CHAT-180..186 | W30 | Application-data AEAD nonce reuse defense (non-canonical AEAD nonce len rejected, cross-group AEAD nonce splice rejected, stale-epoch AEAD packet rejected, zero AEAD nonce rejected) + Welcome path-secret unmasking defense (non-canonical path_secret len rejected, cross-group Welcome rejected, stale-epoch Welcome rejected) |
-| **INV-CHAT-187..193** | **W31** | **KeyPackage init_key reuse defense (non-canonical init_key len rejected, cross-ciphersuite KeyPackage rejected, not-yet-valid KeyPackage rejected, leaf_node_key == init_key rejected) + External PSK identifier provenance defense (non-canonical psk_nonce len rejected, empty psk_id rejected, oversized psk_id rejected)** |
+| INV-CHAT-187..193 | W31 | KeyPackage init_key reuse defense (non-canonical init_key len rejected, cross-ciphersuite KeyPackage rejected, not-yet-valid KeyPackage rejected, leaf_node_key == init_key rejected) + External PSK identifier provenance defense (non-canonical psk_nonce len rejected, empty psk_id rejected, oversized psk_id rejected) |
+| **INV-CHAT-194..200** | **W32** | **Welcome encrypted_group_info AEAD defense (non-canonical aead_nonce len rejected, short ciphertext rejected, cross-group envelope rejected, stale-epoch envelope rejected) + Proposal reference collision defense (non-canonical proposal_ref len rejected, empty proposal_id rejected, stale-epoch proposal_ref rejected)** |
 
 Cumulative axioms: `ss_kp_injective` (W9), `dh_step_fresh` (W10),
 `dh_post_history_independent` (W10), `hybrid_kem_non_degenerate` (W10),
 `sn_hash_sym` (W14, constructively discharged at runtime).
-Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, Wave-28, Wave-29, Wave-30, and Wave-31 all introduce **zero** new axioms — every proof is constructive.
+Wave-11, Wave-12, Wave-13, Wave-15, Wave-16, Wave-17, Wave-18, Wave-19, Wave-20, Wave-21, Wave-22, Wave-23, Wave-24, Wave-25, Wave-26, Wave-27, Wave-28, Wave-29, Wave-30, Wave-31, and Wave-32 all introduce **zero** new axioms — every proof is constructive.
 Wave-14 introduces **one** new axiom (`sn_hash_sym`) which is concretely
 discharged in Rust by canonical-ordering the safety-number hash inputs.
 
 ---
 
-## Future waves (W32–W36) — `[ASPIRATIONAL]`
+## Future waves (W33–W37) — `[ASPIRATIONAL]`
 
 The plan below is `[ASPIRATIONAL]` per R5 — none of these have shipped
 yet. Each row picks **two** uncovered or under-pinned threat classes
@@ -2288,15 +2421,16 @@ following the established cadence (5 tests/lane, +50/+50 corpus,
 | ~~W28~~ — SHIPPED via [#754](https://github.com/gHashTag/trios/pull/754), merged `562009c` (see Wave-28 detail above) | | | | | | |
 | ~~W29~~ — SHIPPED via [#760](https://github.com/gHashTag/trios/pull/760), merged `c389536` (see Wave-29 detail above) | | | | | | |
 | ~~W30~~ — SHIPPED via [#765](https://github.com/gHashTag/trios/pull/765), merged `bd5ffea` (see Wave-30 detail above) | | | | | | |
-| ~~W31~~ — SHIPPED in this PR (see Wave-31 detail above) | | | | | | |
-| **W32** | (TBD — picked from uncovered surface after W31 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-194..200 (≥297 Qed) | ≈550 | 3100 / 62 cats |
-| **W33** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥307 Qed) | ≈572 | 3200 / 64 cats |
-| **W34** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-208..214 (≥317 Qed) | ≈594 | 3300 / 66 cats |
-| **W35** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-215..221 (≥327 Qed) | ≈616 | 3400 / 68 cats |
-| **W36** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-222..228 (≥337 Qed) | ≈638 | 3500 / 70 cats |
+| ~~W31~~ — SHIPPED via [#771](https://github.com/gHashTag/trios/pull/771), merged `756cf35` (see Wave-31 detail above) | | | | | | |
+| ~~W32~~ — SHIPPED in this PR (see Wave-32 detail above) | | | | | | |
+| **W33** | (TBD — picked from uncovered surface after W32 retrospective) | (TBD) | (TBD ×2) | INV-CHAT-201..207 (≥309 Qed) | ≈570 | 3200 / 64 cats |
+| **W34** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-208..214 (≥319 Qed) | ≈592 | 3300 / 66 cats |
+| **W35** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-215..221 (≥329 Qed) | ≈614 | 3400 / 68 cats |
+| **W36** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-222..228 (≥339 Qed) | ≈636 | 3500 / 70 cats |
+| **W37** | (TBD) | (TBD) | (TBD ×2) | INV-CHAT-229..235 (≥349 Qed) | ≈658 | 3600 / 72 cats |
 
-After W31 the corpus crosses **3000 entries / 60 categories** and Coq
-crosses **287 closed proofs / 0 admissions**. From W32+ the work shifts
+After W32 the corpus crosses **3100 entries / 62 categories** and Coq
+crosses **299 closed proofs / 0 admissions**. From W33+ the work shifts
 from **adding** lanes to **deepening** existing ones (replacing
 axioms with constructive proofs, retiring `[ASPIRATIONAL]` tags,
 wiring lanes through the real `openmls` / `pqcrypto-mlkem` paths)
@@ -2313,7 +2447,7 @@ reverifies. A wave PR must keep all of them green.
 | :-- | :-- | :-- |
 | Chat unit tests | `cargo test -q -p trios-chat-cr-chat-* -p trios-chat-br-* -p trios-chat-cr-chat-laws -p trios-chat` | `N / 0` (N grows by ~12 per wave) |
 | End-to-end smoke | `cargo run -q -p trios-chat --bin e2e_chat_25` | `25/25 pass` |
-| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `3000/3000 blocked` (W31) at 60 thresholds |
+| Falsifier corpus | `cargo run -q -p trios-chat --bin falsifier_runner` | `3100/3100 blocked` (W32) at 62 thresholds |
 | Clippy           | `cargo clippy -p trios-chat -p trios-chat-cr-chat-* --all-targets -- -D warnings` | clean |
 | Coq              | `coqc crates/trios-chat/proofs/chat/Trinity_Chat.v` | silent, exit 0 |
 | Laws Guard CI    | PR body opens with `Closes \|Fixes \|Resolves #N` | green |
@@ -2350,9 +2484,10 @@ This document is itself tagged per R5:
 - All Coq Qed counts are **[VERIFIED]** by `grep -cE "Qed\." Trinity_Chat.v`.
 - Test counts and falsifier counts are **[VERIFIED]** by the cargo
   output captured in each wave PR body.
-- W32..W36 lane definitions are **[ASPIRATIONAL]** — they constitute the
+- W33..W37 lane definitions are **[ASPIRATIONAL]** — they constitute the
   forward plan and have not been validated by tests/Coq yet.
-- Wave-31 detail section above is **[VERIFIED]** by cargo test (~528/0 expected), `coqc` (287 Qed / 0 Admitted), `falsifier_runner` (3000/3000, 60 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
+- Wave-32 detail section above is **[VERIFIED]** by cargo test (~548/0 expected), `coqc` (299 Qed / 0 Admitted), `falsifier_runner` (3100/3100, 62 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
+- Wave-31 detail section above is **[VERIFIED]** by cargo test (~528/0), `coqc` (288 Qed / 0 Admitted), `falsifier_runner` (3000/3000, 60 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-30 detail section above is **[VERIFIED]** by cargo test (~508/0), `coqc` (275 Qed / 0 Admitted), `falsifier_runner` (2900/2900, 58 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-29 detail section above is **[VERIFIED]** by cargo test (~488/0), `coqc` (263 Qed / 0 Admitted), `falsifier_runner` (2800/2800, 56 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
 - Wave-28 detail section above is **[VERIFIED]** by cargo test (~468/0), `coqc` (251 Qed / 0 Admitted), `falsifier_runner` (2700/2700, 54 cats), `e2e_chat_25` (25/25), `cargo clippy -- -D warnings` (clean)
