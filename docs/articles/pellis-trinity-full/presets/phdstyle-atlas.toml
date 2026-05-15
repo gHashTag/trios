@@ -1,0 +1,53 @@
+# PhD-style atlas preset for the Vasilev-Pellis Constants article.
+#
+# Consumed by `tri article presets` and `tri article build ... --pdf|--html`.
+# Defines the house style. Renderer must produce real PDF text (no AI
+# rasterization), placed near each referencing section.
+#
+# Visible header (running text on every page of the PDF and HTML) is
+# defined by [render.header] in article.toml and is:
+#   left   = "Vasilev-Pellis Constants"
+#   right  = "Trinity S³AI DNA"
+# Pre-v21.6 header strings are obsolete; the exhaustive list lives in
+# qa/pellis-trinity-full.qa.toml::forbidden_phrases.
+
+[preset]
+name        = "phdstyle-atlas"
+description = "PhD-style atlas / codex / triptych house style for the Vasilev-Pellis Constants article (under the Trinity S³AI DNA brand)."
+
+[page]
+size      = "A4"
+margin_mm = 24
+
+[colors]
+background = "#F7F6F2"
+text       = "#28251D"
+muted      = "#7A7974"
+primary    = "#01696F"
+border     = "#D4D1CA"
+
+[fonts]
+body_family   = "Inter, Helvetica, sans-serif"
+mono_family   = "JetBrains Mono, Menlo, monospace"
+body_size_pt  = 10.8
+label_min_pt  = 8.0
+heading1_pt   = 23.0
+heading2_pt   = 14.0
+
+[rules]
+no_pseudo_latin                 = true
+no_rasterized_text_in_figures   = true
+no_microtext_below_7pt          = true
+labels_must_be_pdf_text         = true
+figures_placed_near_section     = true
+fail_build_on_qa_regression     = true
+
+[annotations]
+# Only link annotations are permitted in the final PDF.
+# Highlight / comment / text-markup annotations are forbidden.
+allow_link_annots      = true
+allow_highlight_annots = false
+allow_text_markup      = false
+allow_comments         = false
+allow_popup            = false
+expected_annots_when_no_links = 0

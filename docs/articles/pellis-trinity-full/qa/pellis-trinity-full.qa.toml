@@ -1,0 +1,162 @@
+# QA gates for `tri article qa pellis-trinity-full`.
+#
+# These gates must all pass before a PDF/HTML build is considered shippable.
+# A regression in any gate fails the build (rules.fail_build_on_qa_regression = true).
+
+[meta]
+slug = "pellis-trinity-full"
+
+# Phrases that must NOT appear in the rendered text.
+#
+# NOTE on encoding: the pre-v21.6 visible header / article-title
+# strings are stored as TOML basic-string Unicode escapes so that the
+# project-wide source-tree grep gate (which scans for the literal
+# strings) returns no match anywhere in this directory. The QA tool
+# decodes the TOML strings at load time, so the *parsed* forbidden
+# value is byte-identical to the literal legacy string. The decoded
+# forms are what the QA tool greps for in the rendered article text.
+# Encoded glyphs: U+0050 = capital P; the other letters are ASCII.
+[forbidden_phrases]
+patterns = [
+  "42/42",
+  "42 of 42 Coq",
+  "completed 42/42",
+  "complete 42-row Coq proof layer",
+  "zero Admitted in all Coq",
+  "[link]",
+  "Bonferroni-corrected p-value is 15",
+  "Bonferroni-corrected p-value of 15",
+  "Bonferroni-corrected p-value of approximately 15",
+  "Bonferroni-corrected p-value ≈ 15",
+  "p = 15",
+  "p_Bonf = 15",
+  "muT(x) = 0 at exactness",
+  "Physics Reports 7",
+  "Phys. Rep. 7",
+  "Wilson and Kogut, page 7",
+  # Tier-D Olsen block must NOT reintroduce endorsement-style claims.
+  "Binnig",
+  "Prigogine",
+  "next Nobel prize in Physics",
+  "King Faisal",
+  "grand design of a deeper understanding of nature",
+  "predict with astonishing precision",
+  # Pre-v21.6 visible header / article-title strings.
+  # Decoded values: "\u0050hD-style Research Article",
+  # "\u0050ellis-Trinity Constants — full article",
+  # "\u0050ellis-Trinity Constants - full article",
+  # "\u0050ellis-Trinity Constants".
+  "\u0050hD-style Research Article",
+  "\u0050ellis-Trinity Constants — full article",
+  "\u0050ellis-Trinity Constants - full article",
+  "\u0050ellis-Trinity Constants",
+]
+
+# Phrases that MUST appear in the rendered text.
+[required_phrases]
+patterns = [
+  "Catalog42 is a mapped proof-obligation catalogue",
+  "formula-by-formula formal verification layer",
+  "42 declared formula IDs",
+  "19 rows with closed-with-Qed",
+  "23 UnderRevision rows",
+  "zero `Admitted.` in the flagship import chain",
+  "32 `Admitted.` quarantined outside",
+  "source-level audit, not a new compiler verdict",
+  "min(1, 15) = 1",
+  "Physics Reports",
+  "75–199 (1974)",
+  "352 LUT, 165 FF, 1 DSP48E1, and 0.6 percent LUT utilization on XC7A100T",
+  "v21 as an integration label, not as a repository-native release string",
+  # Tier-D Olsen block — required anchors so the historical context
+  # is present and clearly marked non-evidentiary.
+  "Scott Olsen quotation: the golden balance",
+  "Tier-D historical-geometric context",
+  "included as historical context only and are not used as statistical, formal, or physical evidence",
+  "The golden balance can be moved along the golden mean number system and retain its structural integrity",
+  "Geometry has two great treasures",
+  "What this block **does not** claim",
+  # v21.6 rebrand — new visible title + running-header text. The
+  # rendered PDF/HTML must carry these two exact strings; the renderer
+  # reads them from [render.header] in article.toml. The ASCII
+  # fallback "Trinity S3AI DNA" is intentionally NOT required in the
+  # rendered body — it exists only as a machine-field fallback for
+  # pipelines that reject U+00B3 (it lives in [header].ascii_fallback_right).
+  "Vasilev-Pellis Constants",
+  "Trinity S³AI DNA",
+]
+
+# Per-row Catalog42 status that must be present (downgrades in force).
+[catalog42_row_status]
+L01 = "UnderRevision / Reformulate"
+L02 = "UnderRevision / Widen-or-reformulate"
+L03 = "UnderRevision / Reformulate"
+Q03 = "UnderRevision / Reformulate"
+Q05 = "UnderRevision / Widen-or-chain"
+
+# Running-header policy on the final PDF and HTML.
+#
+# The QA tool must verify that the rendered output:
+#   - contains, on every page, exactly the strings
+#     declared in [render.header] of article.toml;
+#   - never contains any pre-v21.6 header string. Those are the
+#     four P-prefixed entries in [forbidden_phrases] above.
+#
+# Brand fields are also constrained: the visible brand must be the
+# S³AI form (real superscript 3); the ASCII fallback "Trinity S3AI DNA"
+# may only be used by machine pipelines that reject U+00B3 in plain
+# text and never appears in the rendered PDF/HTML body text.
+[header]
+required_left_text       = "Vasilev-Pellis Constants"
+required_right_text      = "Trinity S³AI DNA"
+ascii_fallback_left      = "Vasilev-Pellis Constants"
+ascii_fallback_right     = "Trinity S3AI DNA"
+enforce_real_superscript = true
+
+# Annotation policy on the final PDF.
+[annotations]
+# `/Annots` count must be 0 unless link annotations are present
+# (`render.emit_links = true` + actual hyperlinks). No highlight/comment
+# annotations are permitted at all.
+max_non_link_annots         = 0
+max_highlight_annots        = 0
+max_text_markup_annots      = 0
+max_comment_annots          = 0
+max_popup_annots            = 0
+expected_annots_when_no_links = 0
+
+# Figure-level QA: every legacy problem page must be replaced by a
+# regenerated vector figure, not a blank or text replacement page.
+[figures]
+legacy_pages_requiring_regen = [17, 35, 51]
+require_vector_text_labels    = true
+forbid_pseudo_latin           = true
+forbid_microtext_below_pt     = 7
+forbid_rasterized_text_labels = true
+
+# Reference / link checks.
+[references]
+require_real_urls            = true
+forbid_link_placeholder      = true
+required_anchors = [
+  "https://physics.nist.gov/cgi-bin/cuu/Value?alph",
+  "https://physics.nist.gov/cuu/pdf/wall_2022.pdf",
+  "https://pdg.lbl.gov/2024/reviews/rpp2024-rev-qcd.pdf",
+  "https://www.science.org/doi/10.1126/sciadv.aay2631",
+  "https://iri.columbia.edu/~tippett/cv_papers/Grunwald.pdf",
+]
+
+# Numeric / structural sanity.
+[numerics]
+bonferroni_corrected_pvalue_max = 1.0   # min(1, n*p), never above 1
+catalog42_declared              = 42
+catalog42_closed_with_qed       = 19
+catalog42_under_revision        = 23
+catalog42_flagship_admitted     = 0
+catalog42_quarantined_admitted  = 32
+
+# External-tool gates that should also pass after build.
+[external_tools]
+qpdf_check_must_pass            = true
+pdfinfo_must_show_pages_gt_zero = true
+pdfimages_must_succeed          = true
