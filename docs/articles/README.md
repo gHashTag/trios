@@ -6,7 +6,7 @@ in `<slug>/article.toml`.
 
 | Slug | Description |
 |---|---|
-| `pellis-trinity-full` | Pellis-Trinity PhD-Style Atlas, v21 style-safe edition |
+| `pellis-trinity-full` | *Vasilev-Pellis Constants* (Trinity S³AI DNA brand), v21 style-safe edition |
 
 ## Canonical commands
 

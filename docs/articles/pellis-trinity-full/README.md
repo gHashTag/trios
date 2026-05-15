@@ -1,6 +1,8 @@
 # pellis-trinity-full
 
-Canonical article source for the **Pellis-Trinity PhD-Style Atlas (v21, style-safe edition)**, rendered by the `tri article` service.
+Canonical article source for the **Vasilev-Pellis Constants** article (under the **Trinity S³AI DNA** brand, v21 style-safe edition), rendered by the `tri article` service.
+
+The directory slug `pellis-trinity-full` is retained for URL/path stability; the visible article title is `Vasilev-Pellis Constants` and the visible running header on every rendered page is `Vasilev-Pellis Constants` (left) / `Trinity S³AI DNA` (right). Pre-v21.6 header strings are retired and listed in `qa/pellis-trinity-full.qa.toml::forbidden_phrases`.
 
 This directory is the upstream source of truth. All reviewer corrections
 land here, not in a post-processed PDF.

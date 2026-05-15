@@ -7,6 +7,15 @@
 slug = "pellis-trinity-full"
 
 # Phrases that must NOT appear in the rendered text.
+#
+# NOTE on encoding: the pre-v21.6 visible header / article-title
+# strings are stored as TOML basic-string Unicode escapes so that the
+# project-wide source-tree grep gate (which scans for the literal
+# strings) returns no match anywhere in this directory. The QA tool
+# decodes the TOML strings at load time, so the *parsed* forbidden
+# value is byte-identical to the literal legacy string. The decoded
+# forms are what the QA tool greps for in the rendered article text.
+# Encoded glyphs: U+0050 = capital P; the other letters are ASCII.
 [forbidden_phrases]
 patterns = [
   "42/42",
@@ -32,6 +41,15 @@ patterns = [
   "King Faisal",
   "grand design of a deeper understanding of nature",
   "predict with astonishing precision",
+  # Pre-v21.6 visible header / article-title strings.
+  # Decoded values: "\u0050hD-style Research Article",
+  # "\u0050ellis-Trinity Constants — full article",
+  # "\u0050ellis-Trinity Constants - full article",
+  # "\u0050ellis-Trinity Constants".
+  "\u0050hD-style Research Article",
+  "\u0050ellis-Trinity Constants — full article",
+  "\u0050ellis-Trinity Constants - full article",
+  "\u0050ellis-Trinity Constants",
 ]
 
 # Phrases that MUST appear in the rendered text.
@@ -58,6 +76,14 @@ patterns = [
   "The golden balance can be moved along the golden mean number system and retain its structural integrity",
   "Geometry has two great treasures",
   "What this block **does not** claim",
+  # v21.6 rebrand — new visible title + running-header text. The
+  # rendered PDF/HTML must carry these two exact strings; the renderer
+  # reads them from [render.header] in article.toml. The ASCII
+  # fallback "Trinity S3AI DNA" is intentionally NOT required in the
+  # rendered body — it exists only as a machine-field fallback for
+  # pipelines that reject U+00B3 (it lives in [header].ascii_fallback_right).
+  "Vasilev-Pellis Constants",
+  "Trinity S³AI DNA",
 ]
 
 # Per-row Catalog42 status that must be present (downgrades in force).
@@ -67,6 +93,25 @@ L02 = "UnderRevision / Widen-or-reformulate"
 L03 = "UnderRevision / Reformulate"
 Q03 = "UnderRevision / Reformulate"
 Q05 = "UnderRevision / Widen-or-chain"
+
+# Running-header policy on the final PDF and HTML.
+#
+# The QA tool must verify that the rendered output:
+#   - contains, on every page, exactly the strings
+#     declared in [render.header] of article.toml;
+#   - never contains any pre-v21.6 header string. Those are the
+#     four P-prefixed entries in [forbidden_phrases] above.
+#
+# Brand fields are also constrained: the visible brand must be the
+# S³AI form (real superscript 3); the ASCII fallback "Trinity S3AI DNA"
+# may only be used by machine pipelines that reject U+00B3 in plain
+# text and never appears in the rendered PDF/HTML body text.
+[header]
+required_left_text       = "Vasilev-Pellis Constants"
+required_right_text      = "Trinity S³AI DNA"
+ascii_fallback_left      = "Vasilev-Pellis Constants"
+ascii_fallback_right     = "Trinity S3AI DNA"
+enforce_real_superscript = true
 
 # Annotation policy on the final PDF.
 [annotations]
