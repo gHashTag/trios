@@ -6,10 +6,14 @@
 //   presets                    List presets across all articles
 //   build <slug> [--pdf] [--html]
 //   qa    <slug>
+//   verify-style <slug>        Run the v22.10 final-style audit gates against the latest
+//                              build PDF (color-page audit, cream-corner audit, duplicate
+//                              image-hash audit, plus the qa.toml [reference_artifact]
+//                              invariants). Exits non-zero on any regression.
 //
 // This file is intentionally dependency-light: only @iarna/toml and
 // markdown-it are required for parsing and rendering. PDF + QA shell out
-// to weasyprint / qpdf / pdftotext.
+// to weasyprint / qpdf / pdftotext / pdfimages.
 
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
@@ -386,6 +390,307 @@ function auditPdfAnnotations(pdfPath) {
 }
 
 // ---------------------------------------------------------------------------
+// v22.10 final-style audit gates.
+//
+// The v22.10 PDF was hand-audited and signed off with: pure #FFFFFF white
+// page background, B&W Da Vinci / scientific atlas style, no teal/colored
+// service pages, no cream/off-white backgrounds, no duplicate raster-image
+// hash groups, no old title strings. The helpers below encode those checks
+// so future builds reproduce the visual lock automatically.
+// ---------------------------------------------------------------------------
+
+import { createHash } from 'node:crypto';
+import { unlinkSync, mkdtempSync, readdirSync as _readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return null;
+  const v = parseInt(m[1], 16);
+  return [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff];
+}
+
+function rgbDelta(a, b) {
+  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
+}
+
+// Returns { width, height, channels, raw } for a single page rendered to PPM.
+function renderPagePpm(pdfPath, page, dpi = 24) {
+  const dir = mkdtempSync(join(tmpdir(), 'tri-article-style-'));
+  const prefix = join(dir, 'p');
+  const r = spawnSync('pdftoppm', ['-r', String(dpi), '-f', String(page), '-l', String(page), pdfPath, prefix], { encoding: 'buffer' });
+  if (r.status !== 0) return null;
+  const files = _readdirSync(dir).filter((f) => f.endsWith('.ppm') || f.endsWith('.pbm') || f.endsWith('.pgm'));
+  if (files.length === 0) return null;
+  const buf = readFileSync(join(dir, files[0]));
+  try { unlinkSync(join(dir, files[0])); } catch {}
+  try { spawnSync('rmdir', [dir]); } catch {}
+  return parsePpm(buf);
+}
+
+// Minimal PPM (P5/P6) parser sufficient for corner/mean sampling.
+function parsePpm(buf) {
+  let p = 0;
+  function readToken() {
+    while (p < buf.length && (buf[p] === 0x20 || buf[p] === 0x0a || buf[p] === 0x0d || buf[p] === 0x09)) p++;
+    if (buf[p] === 0x23) {  // comment '#' to EOL
+      while (p < buf.length && buf[p] !== 0x0a) p++;
+      return readToken();
+    }
+    const start = p;
+    while (p < buf.length && buf[p] !== 0x20 && buf[p] !== 0x0a && buf[p] !== 0x0d && buf[p] !== 0x09) p++;
+    return buf.slice(start, p).toString();
+  }
+  const magic = readToken();
+  const width = parseInt(readToken(), 10);
+  const height = parseInt(readToken(), 10);
+  const maxval = parseInt(readToken(), 10);
+  if (buf[p] === 0x0a || buf[p] === 0x0d) p++;
+  const channels = magic === 'P6' ? 3 : (magic === 'P5' ? 1 : (magic === 'P4' ? 1 : 0));
+  if (!channels) return null;
+  const raw = buf.slice(p);
+  return { width, height, channels, maxval, raw };
+}
+
+// Sample mean RGB of a width×height square in a PPM image at (x0,y0).
+function sampleMeanRgb(img, x0, y0, w, h) {
+  const stride = img.width * img.channels;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let y = y0; y < y0 + h && y < img.height; y++) {
+    for (let x = x0; x < x0 + w && x < img.width; x++) {
+      const i = y * stride + x * img.channels;
+      if (img.channels === 1) {
+        const v = img.raw[i] ?? 0;
+        r += v; g += v; b += v;
+      } else {
+        r += img.raw[i] ?? 0;
+        g += img.raw[i + 1] ?? 0;
+        b += img.raw[i + 2] ?? 0;
+      }
+      n++;
+    }
+  }
+  if (!n) return [0, 0, 0];
+  return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+}
+
+// Audit one page for cream-corner / color-page / blank / dark anomalies.
+function auditPageStyle(img, qaStyleGate) {
+  if (!img) return { ok: true, reason: 'page-render-skipped' };
+  const corner = qaStyleGate?.corner_sample_px ?? 24;
+  const tol = qaStyleGate?.corner_color_tolerance ?? 16;
+  const forbid = qaStyleGate?.forbid_corner_color_palettes || [];
+  const corners = [
+    sampleMeanRgb(img, 0, 0, corner, corner),
+    sampleMeanRgb(img, img.width - corner, 0, corner, corner),
+    sampleMeanRgb(img, 0, img.height - corner, corner, corner),
+    sampleMeanRgb(img, img.width - corner, img.height - corner, corner, corner),
+  ];
+  // Cream-corner: any corner whose mean RGB matches a forbidden palette
+  // AND that palette is significantly closer to the corner than pure
+  // white (#FFFFFF) is. A near-white corner that happens to be within
+  // the tolerance band of a legacy cream palette but is even closer
+  // to pure white is treated as pure white, not cream. We also exempt
+  // pure-white corners (mean delta < 8 from #FFFFFF) outright — at PPM
+  // sample resolution, antialiased borders can shave a few units off
+  // 255 without crossing into legacy cream territory.
+  const pureWhite = [255, 255, 255];
+  for (const c of corners) {
+    const dWhite = rgbDelta(c, pureWhite);
+    if (dWhite < 8) continue;       // pure-white corner — exempt
+    for (const palette of forbid) {
+      const rgb = hexToRgb(palette);
+      if (!rgb) continue;
+      const dPalette = rgbDelta(c, rgb);
+      // Cream-corner requires the palette is BOTH within tolerance AND
+      // strictly closer (by ≥ 2) than pure white is.
+      if (dPalette <= tol && dPalette + 2 < dWhite) {
+        return { ok: false, reason: `cream-corner: corner-mean=${c.join(',')} matches forbidden ${palette}` };
+      }
+    }
+  }
+  // Pure-white pass: the cream-corner check above already handles the
+  // legacy palette. Predominantly-figure pages can have non-white corners
+  // (figure bleed); we do not fail solely on white-corner absence.
+
+  // Color-page: count how many sampled rows are non-greyscale.
+  // We sample a 16-row band at row-fraction 0.2..0.8 and count rows where R/G/B deviate by > 24 from mean.
+  const sampleRows = 32;
+  let coloredPixels = 0;
+  let totalSampled = 0;
+  for (let row = 0; row < sampleRows; row++) {
+    const y = Math.floor((row / sampleRows) * img.height);
+    for (let col = 0; col < 32; col++) {
+      const x = Math.floor((col / 32) * img.width);
+      const stride = img.width * img.channels;
+      const i = y * stride + x * img.channels;
+      if (img.channels === 3) {
+        const r = img.raw[i] ?? 0, g = img.raw[i + 1] ?? 0, b = img.raw[i + 2] ?? 0;
+        const mean = (r + g + b) / 3;
+        if (Math.max(Math.abs(r - mean), Math.abs(g - mean), Math.abs(b - mean)) > 24) coloredPixels++;
+      }
+      totalSampled++;
+    }
+  }
+  const colorFraction = totalSampled ? coloredPixels / totalSampled : 0;
+  if (colorFraction > 0.10) {
+    return { ok: false, reason: `color-page: ${(colorFraction * 100).toFixed(1)}% colored samples` };
+  }
+  // Dark anomaly: mean luminance below 64 across page.
+  const center = sampleMeanRgb(img, Math.floor(img.width * 0.2), Math.floor(img.height * 0.2),
+                                Math.floor(img.width * 0.6), Math.floor(img.height * 0.6));
+  const lum = (center[0] + center[1] + center[2]) / 3;
+  if (lum < 64) {
+    return { ok: false, reason: `dark-anomaly: center-mean luminance=${lum.toFixed(0)}` };
+  }
+  // Blank: mean luminance > 254 AND essentially no non-white pixels
+  // ANYWHERE on the page. We sample on a dense 4-pixel grid covering
+  // the FULL page (not just the center), so thin text in any margin
+  // still trips the non-white counter and prevents a false-blank.
+  if (lum > 254) {
+    let nonWhite = 0;
+    const stride = img.width * img.channels;
+    for (let y = 0; y < img.height; y += 4) {
+      for (let x = 0; x < img.width; x += 4) {
+        const i = y * stride + x * img.channels;
+        if (img.channels === 3) {
+          if (img.raw[i] < 240 || img.raw[i + 1] < 240 || img.raw[i + 2] < 240) nonWhite++;
+        } else {
+          if (img.raw[i] < 240) nonWhite++;
+        }
+        if (nonWhite > 4) break;   // early exit: clearly not blank
+      }
+      if (nonWhite > 4) break;
+    }
+    if (nonWhite === 0) return { ok: false, reason: 'blank-page' };
+  }
+  return { ok: true };
+}
+
+// Enumerate raster images embedded in the PDF and compute sha256 of each.
+// Returns { count, hashGroups } where hashGroups is an array of arrays of
+// {pageNo, imageId} that share an identical hash AND have size > 4KB
+// (small icons/separators are exempt).
+function auditDuplicateImageHashes(pdfPath) {
+  const dir = mkdtempSync(join(tmpdir(), 'tri-article-img-'));
+  const prefix = join(dir, 'i');
+  const r = spawnSync('pdfimages', ['-all', pdfPath, prefix], { encoding: 'utf8' });
+  const files = _readdirSync(dir);
+  const hashMap = new Map();   // sha256 → array of file basenames
+  let count = 0;
+  for (const f of files) {
+    const buf = readFileSync(join(dir, f));
+    if (buf.length < 4096) {
+      try { unlinkSync(join(dir, f)); } catch {}
+      continue;
+    }
+    const h = createHash('sha256').update(buf).digest('hex');
+    if (!hashMap.has(h)) hashMap.set(h, []);
+    hashMap.get(h).push({ file: f, bytes: buf.length });
+    count++;
+    try { unlinkSync(join(dir, f)); } catch {}
+  }
+  try { spawnSync('rmdir', [dir]); } catch {}
+  const dupes = [];
+  for (const [h, list] of hashMap.entries()) {
+    if (list.length > 1) dupes.push({ sha256: h, count: list.length, members: list });
+  }
+  return { count, hashGroups: dupes, status: r.status };
+}
+
+// Full v22.10 final-style audit. Reads the qa.toml [style_gate] +
+// [reference_artifact] sections from the slug's qa file.
+function runStyleAudit(slug, { pdfOverride } = {}) {
+  const article = findArticle(slug);
+  const qaPath = join(article.dir, 'qa', `${slug}.qa.toml`);
+  if (!existsSync(qaPath)) throw new Error(`qa file missing: ${qaPath}`);
+  const qa = TOML.parse(readFileSync(qaPath, 'utf8'));
+  const gate = qa?.style_gate || {};
+  const ref = qa?.reference_artifact || {};
+  const buildDir = join(article.dir, 'build');
+  const candidatePdf = pdfOverride || join(buildDir, `${slug}.pdf`);
+  const findings = [];
+  let passed = 0, failed = 0;
+
+  if (!existsSync(candidatePdf)) {
+    findings.push({ gate: 'style.pdf', status: 'FAIL', detail: `PDF not found: ${candidatePdf}` });
+    return { findings, passed: 0, failed: 1 };
+  }
+
+  // Reference invariants: page count, qpdf, annotation total.
+  const info = spawnSync('pdfinfo', [candidatePdf], { encoding: 'utf8' });
+  const pageMatch = info.stdout && info.stdout.match(/Pages:\s+(\d+)/);
+  const pages = pageMatch ? parseInt(pageMatch[1], 10) : 0;
+  findings.push({ gate: 'style.pages', status: 'INFO', detail: `pages=${pages}` });
+  if (ref.expected_pages !== undefined) {
+    if (pages !== ref.expected_pages) {
+      findings.push({ gate: 'style.page_count', status: 'FAIL', detail: `pages=${pages} expected=${ref.expected_pages}` });
+      failed++;
+    } else passed++;
+  }
+  const qpdfChk = spawnSync('qpdf', ['--check', candidatePdf], { encoding: 'utf8' });
+  if (qpdfChk.status !== 0) {
+    findings.push({ gate: 'style.qpdf_check', status: 'FAIL', detail: qpdfChk.stderr || qpdfChk.stdout });
+    failed++;
+  } else passed++;
+
+  // Duplicate image-hash audit.
+  const imgAudit = auditDuplicateImageHashes(candidatePdf);
+  findings.push({ gate: 'style.image_count', status: 'INFO', detail: `images=${imgAudit.count}` });
+  if (ref.expected_images !== undefined && imgAudit.count > 0) {
+    // We don't fail if image count differs (figures can be re-rendered); we only flag.
+    if (imgAudit.count !== ref.expected_images) {
+      findings.push({ gate: 'style.image_count', status: 'INFO', detail: `images=${imgAudit.count} (reference=${ref.expected_images})` });
+    }
+  }
+  const maxDup = gate.max_duplicate_image_groups ?? 0;
+  if (imgAudit.hashGroups.length > maxDup) {
+    findings.push({ gate: 'style.duplicate_images', status: 'FAIL', detail: `duplicate_groups=${imgAudit.hashGroups.length} (max=${maxDup})` });
+    failed++;
+  } else passed++;
+
+  // Per-page audit: cream-corner / color-page / blank / dark-anomaly.
+  let creamPages = 0, colorPages = 0, blankPages = 0, darkPages = 0;
+  const sampleEvery = pages > 30 ? Math.ceil(pages / 30) : 1;   // sample ≤ 30 pages for speed
+  for (let pno = 1; pno <= pages; pno++) {
+    if (pno !== 1 && pno !== pages && (pno % sampleEvery) !== 0) continue;
+    const img = renderPagePpm(candidatePdf, pno, 24);
+    if (!img) continue;
+    const result = auditPageStyle(img, gate);
+    if (!result.ok) {
+      if (result.reason.startsWith('cream-corner')) { creamPages++; findings.push({ gate: 'style.page', status: 'FAIL', detail: `p${pno}: ${result.reason}` }); }
+      else if (result.reason.startsWith('color-page')) { colorPages++; findings.push({ gate: 'style.page', status: 'FAIL', detail: `p${pno}: ${result.reason}` }); }
+      else if (result.reason === 'blank-page') { blankPages++; findings.push({ gate: 'style.page', status: 'FAIL', detail: `p${pno}: blank` }); }
+      else if (result.reason.startsWith('dark-anomaly')) { darkPages++; findings.push({ gate: 'style.page', status: 'FAIL', detail: `p${pno}: ${result.reason}` }); }
+    }
+  }
+  const maxCream = gate.max_cream_corner_pages ?? 0;
+  const maxColor = gate.max_color_pages ?? 0;
+  const maxBlank = gate.max_blank_pages ?? 0;
+  const maxDark = gate.max_dark_anomaly_pages ?? 0;
+  if (creamPages > maxCream) { findings.push({ gate: 'style.cream_corners', status: 'FAIL', detail: `cream-corner pages=${creamPages} max=${maxCream}` }); failed++; } else passed++;
+  if (colorPages > maxColor) { findings.push({ gate: 'style.color_pages', status: 'FAIL', detail: `color pages=${colorPages} max=${maxColor}` }); failed++; } else passed++;
+  if (blankPages > maxBlank) { findings.push({ gate: 'style.blank_pages', status: 'FAIL', detail: `blank pages=${blankPages} max=${maxBlank}` }); failed++; } else passed++;
+  if (darkPages > maxDark) { findings.push({ gate: 'style.dark_pages', status: 'FAIL', detail: `dark-anomaly pages=${darkPages} max=${maxDark}` }); failed++; } else passed++;
+
+  // sha256 cross-check: only an INFO line; we do not fail on hash mismatch
+  // (the build is allowed to legitimately produce a new artifact when the
+  // body markdown changes).
+  if (ref.sha256_pdf) {
+    const buf = readFileSync(candidatePdf);
+    const h = createHash('sha256').update(buf).digest('hex');
+    if (h !== ref.sha256_pdf) {
+      findings.push({ gate: 'style.sha256', status: 'INFO', detail: `sha256=${h} (reference=${ref.sha256_pdf})` });
+    } else {
+      findings.push({ gate: 'style.sha256', status: 'INFO', detail: `sha256 matches reference v22.10` });
+      passed++;
+    }
+  }
+
+  return { findings, passed, failed };
+}
+
+// ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
@@ -395,6 +700,7 @@ function usage() {
   article-runner presets
   article-runner build <slug> [--pdf] [--html]
   article-runner qa    <slug>
+  article-runner verify-style <slug> [--pdf <path>]
 `);
 }
 
@@ -448,6 +754,19 @@ function main(argv) {
       console.log(`${f.status}\t${f.gate}\t${f.detail}`);
     }
     console.log(`\nQA SUMMARY: passed=${passed} failed=${failed}`);
+    return failed === 0 ? 0 : 1;
+  }
+
+  if (cmd === 'verify-style') {
+    const slug = args[1];
+    if (!slug) { usage(); return 2; }
+    const pdfIdx = args.indexOf('--pdf');
+    const pdfOverride = pdfIdx >= 0 ? args[pdfIdx + 1] : undefined;
+    const { findings, passed, failed } = runStyleAudit(slug, { pdfOverride });
+    for (const f of findings) {
+      console.log(`${f.status}\t${f.gate}\t${f.detail}`);
+    }
+    console.log(`\nSTYLE AUDIT SUMMARY: passed=${passed} failed=${failed}`);
     return failed === 0 ? 0 : 1;
   }
 

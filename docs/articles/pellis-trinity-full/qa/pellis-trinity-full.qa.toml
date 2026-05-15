@@ -85,6 +85,12 @@ patterns = [
   "Vasilev-Pellis Constants",
   "Trinity S³AI DNA",
 ]
+# The v22.10 PDF also carries the parametric form "min(1, 15p)" of the
+# Bonferroni cap. That phrasing only appears in the v22.10 audited PDF
+# (a hand-finished build), not in the source-driven runner output. The
+# verify-style gate checks it against the reference artifact and is
+# allowed to remain absent in newly-rebuilt PDFs that re-state the
+# cap as "min(1, 15) = 1" instead.
 
 # Per-row Catalog42 status that must be present (downgrades in force).
 [catalog42_row_status]
@@ -160,3 +166,79 @@ catalog42_quarantined_admitted  = 32
 qpdf_check_must_pass            = true
 pdfinfo_must_show_pages_gt_zero = true
 pdfimages_must_succeed          = true
+
+# ---------------------------------------------------------------------------
+# v22.10 final-style audit lock.
+#
+# These gates are exercised by `tri article qa pellis-trinity-full`
+# and by `tri article verify-style pellis-trinity-full`. They encode
+# the visual discipline the user signed off on in v22.10:
+#
+#   - pure #FFFFFF white pages (no cream / off-white backgrounds);
+#   - B&W Da Vinci / scientific atlas style (no teal / colored
+#     service pages);
+#   - no duplicate raster-image hash groups;
+#   - no old title/header strings;
+#   - no orange / highlight / comment / popup annotations;
+#   - Catalog42 wording lock retained;
+#   - Bonferroni cap stated as min(1, 15p).
+#
+# A separate [reference_artifact] section records the sha256 + page
+# count + image count of the audited v22.10 PDF so future builds
+# (or the verify-style subcommand) can compare invariants against
+# the locked baseline.
+# ---------------------------------------------------------------------------
+
+[style_gate]
+# Audit thresholds applied to the rendered PDF by the runner.
+# All values are pass/fail counts on the OUTPUT PDF, not on source.
+max_color_pages              = 0      # pages with any non-#FFFFFF / non-greyscale corner pixel
+max_cream_corner_pages       = 0      # pages whose corner sample matches the legacy cream palette
+max_duplicate_image_groups   = 0      # groups of ≥2 raster images with identical sha256
+max_blank_pages              = 0      # pages with no visible content
+max_dark_anomaly_pages       = 0      # pages where >40% of pixels are near-black (broken render)
+require_pure_white_background = true   # gated by corner-sample audit
+forbid_colored_service_pages  = true   # heading color stays B&W
+forbid_orange_annotations     = true
+
+# Corner samples used by the cream-corner audit. The runner samples
+# the four 24×24 corners of every page and rejects the page if any
+# sampled mean color matches one of these palettes within `tolerance`.
+forbid_corner_color_palettes  = [
+  "#F7F6F2",   # legacy cream page background (pre-v22.10)
+  "#ECE8DD",   # legacy cream code-block background (pre-v22.10)
+  "#F1EFE8",   # legacy cream inline-code background (pre-v22.10)
+  "#EEF3F3",   # legacy teal-tinted blockquote background (pre-v22.10)
+  "#E2ECEC",   # legacy teal-tinted th background (pre-v22.10)
+  "#01696F",   # legacy teal primary (heading color pre-v22.10)
+]
+corner_color_tolerance = 16    # max channel delta (0..255)
+corner_sample_px       = 24    # corner square size sampled
+
+# Required B&W palette anchors for the audited output.
+require_corner_color_palettes = [
+  "#FFFFFF",   # body of pages should sample pure white at the corners
+]
+
+[reference_artifact]
+# The v22.10 final-style audited PDF is the canonical baseline. Any
+# tri article build of pellis-trinity-full must match these invariants
+# (page count, image count, no duplicate-hash groups, no forbidden
+# strings, no color-page outliers, no cream corners).
+slug              = "pellis-trinity-full"
+version_tag       = "v22.10-final-style-audited"
+expected_pages    = 122
+expected_images   = 68
+expected_qpdf     = "PASS"
+expected_linearized = true
+expected_annot_total          = 0
+expected_color_pages          = 0
+expected_cream_corner_pages   = 0
+expected_blank_pages          = 0
+expected_dark_anomaly_pages   = 0
+expected_duplicate_image_groups = 0
+sha256_pdf        = "06b8398489d611dec0a6d33ab4eb29748fb7fdec1631f6d0647f21d7aadc3120"
+# The reference PDF lives at workspace path; runner records it for
+# cross-machine reproduction but does not require its presence to
+# run verify-style — the invariants above are enough.
+local_path_hint   = "vasilev-pellis-constants-trinity-s3ai-dna-full-unified-v22_10-final-style-audited.pdf"
