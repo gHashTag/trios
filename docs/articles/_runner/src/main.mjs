@@ -123,13 +123,14 @@ h1 { font-size: ${fonts.heading1_pt || 23}pt; color: ${colors.primary || '#01696
 h2 { font-size: ${fonts.heading2_pt || 14}pt; color: ${colors.primary || '#01696F'}; margin: 1.2em 0 0.3em 0; line-height: 1.2; border-bottom: 0.5pt solid ${colors.border || '#D4D1CA'}; padding-bottom: 0.15em; }
 h3 { font-size: 12pt; color: ${colors.text || '#28251D'}; margin: 1em 0 0.2em 0; }
 p { margin: 0 0 0.6em 0; }
-blockquote { border-left: 2.5pt solid ${colors.primary || '#01696F'}; margin: 0.6em 0; padding: 0.1em 0.9em; color: ${colors.text || '#28251D'}; background: rgba(1,105,111,0.04); }
-code, pre { font-family: ${fonts.mono_family || 'JetBrains Mono, Menlo, monospace'}; font-size: 0.92em; }
-pre { background: rgba(40,37,29,0.04); padding: 0.6em 0.8em; border: 0.4pt solid ${colors.border || '#D4D1CA'}; border-radius: 2pt; white-space: pre-wrap; word-wrap: break-word; }
-code { background: rgba(40,37,29,0.06); padding: 0.05em 0.25em; border-radius: 2pt; }
+blockquote { border-left: 2.5pt solid ${colors.primary || '#01696F'}; margin: 0.6em 0; padding: 0.1em 0.9em; color: ${colors.text || '#28251D'}; background: ${colors.blockquote_bg || '#EEF3F3'}; }
+code, pre { font-family: ${fonts.mono_family || 'JetBrains Mono, Menlo, monospace'}; font-size: 0.92em; color: ${colors.code_text || colors.text || '#28251D'}; }
+pre { background: ${colors.code_bg || '#ECE8DD'}; color: ${colors.code_text || colors.text || '#28251D'}; padding: 0.6em 0.8em; border: 0.4pt solid ${colors.code_border || colors.border || '#D4D1CA'}; border-radius: 2pt; white-space: pre-wrap; word-wrap: break-word; }
+pre code { background: transparent; padding: 0; color: inherit; border: 0; }
+code { background: ${colors.code_inline_bg || '#F1EFE8'}; color: ${colors.code_text || colors.text || '#28251D'}; padding: 0.05em 0.25em; border-radius: 2pt; border: 0.3pt solid ${colors.code_border || colors.border || '#D4D1CA'}; }
 table { border-collapse: collapse; margin: 0.6em 0; width: 100%; font-size: 0.94em; }
 th, td { border: 0.4pt solid ${colors.border || '#D4D1CA'}; padding: 0.3em 0.5em; text-align: left; vertical-align: top; }
-th { background: rgba(1,105,111,0.08); }
+th { background: ${colors.th_bg || '#E2ECEC'}; color: ${colors.text || '#28251D'}; }
 ul, ol { margin: 0.3em 0 0.6em 1.2em; padding: 0; }
 li { margin: 0.1em 0; }
 section { break-inside: auto; }
