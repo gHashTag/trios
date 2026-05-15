@@ -673,6 +673,99 @@ function runStyleAudit(slug, { pdfOverride } = {}) {
   if (blankPages > maxBlank) { findings.push({ gate: 'style.blank_pages', status: 'FAIL', detail: `blank pages=${blankPages} max=${maxBlank}` }); failed++; } else passed++;
   if (darkPages > maxDark) { findings.push({ gate: 'style.dark_pages', status: 'FAIL', detail: `dark-anomaly pages=${darkPages} max=${maxDark}` }); failed++; } else passed++;
 
+  // Replacement-asset audit: every entry in [figures.replacements]
+  // must exist on disk and match its declared sha256. This catches
+  // broken triptych assets being silently swapped or removed.
+  const replacements = qa?.figures?.replacements || {};
+  const assetPairs = [];
+  for (const k of Object.keys(replacements)) {
+    if (k.endsWith('_asset')) {
+      const base = k.replace(/_asset$/, '');
+      const shaKey = `${base}_sha256`;
+      if (replacements[shaKey]) assetPairs.push({ name: base, path: replacements[k], sha256: replacements[shaKey] });
+    }
+  }
+  for (const a of assetPairs) {
+    const full = join(article.dir, a.path);
+    if (!existsSync(full)) {
+      findings.push({ gate: 'figures.replacement.missing', status: 'FAIL', detail: `${a.name}: missing ${a.path}` });
+      failed++;
+      continue;
+    }
+    const h = createHash('sha256').update(readFileSync(full)).digest('hex');
+    if (h !== a.sha256) {
+      findings.push({ gate: 'figures.replacement.sha256', status: 'FAIL', detail: `${a.name}: sha256=${h} expected=${a.sha256}` });
+      failed++;
+    } else {
+      findings.push({ gate: 'figures.replacement.sha256', status: 'INFO', detail: `${a.name}: ${a.path} matches manifest` });
+      passed++;
+    }
+  }
+
+  // Forbidden raster-label combos: any embedded raster in the PDF
+  // whose OCR'd text matches a forbidden combo's `must_contain_all`
+  // (and does not match any of the combo's `must_not_contain_any`
+  // signatures) fails the gate. The discriminator lets us forbid the
+  // broken pre-v22.10 epistemic triptych panel-header triple while
+  // letting the v22.10 replacement asset (which uses different panel
+  // headers and includes the legacy phrase only in a small footer
+  // caption) pass.
+  //
+  // Backwards-compat: a combo expressed as a flat array of strings is
+  // interpreted as `must_contain_all = <array>`, `must_not_contain_any = []`.
+  //
+  // tesseract is best-effort — if unavailable, we emit an INFO line
+  // and skip rather than failing closed.
+  const combos = qa?.figures?.forbidden_raster_label_combos || {};
+  const comboKeys = Object.keys(combos);
+  if (comboKeys.length) {
+    const tessCheck = spawnSync('tesseract', ['--version'], { encoding: 'utf8' });
+    if (tessCheck.status !== 0) {
+      findings.push({ gate: 'figures.raster_ocr', status: 'INFO', detail: 'tesseract not installed — skipping forbidden_raster_label_combos audit (manifest entries still enforced)' });
+    } else {
+      const imgDir = mkdtempSync(join(tmpdir(), 'tri-article-rocr-'));
+      const imgPrefix = join(imgDir, 'r');
+      spawnSync('pdfimages', ['-png', candidatePdf, imgPrefix], { encoding: 'utf8' });
+      const files = _readdirSync(imgDir).filter((f) => f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.ppm'));
+      let ocrChecked = 0;
+      const comboHits = [];
+      for (const f of files) {
+        const path = join(imgDir, f);
+        const sz = readFileSync(path).length;
+        if (sz < 4096) { try { unlinkSync(path); } catch {} continue; }
+        const r = spawnSync('tesseract', [path, '-', '-l', 'eng'], { encoding: 'utf8' });
+        const text = (r.stdout || '').toUpperCase();
+        ocrChecked++;
+        for (const key of comboKeys) {
+          const v = combos[key];
+          let must = [], mustNot = [];
+          if (Array.isArray(v)) { must = v; }
+          else if (v && typeof v === 'object') {
+            must = v.must_contain_all || [];
+            mustNot = v.must_not_contain_any || [];
+          }
+          if (!must.length) continue;
+          const hits = must.every((p) => text.includes(String(p).toUpperCase()));
+          if (!hits) continue;
+          const excluded = mustNot.length && mustNot.some((p) => text.includes(String(p).toUpperCase()));
+          if (excluded) continue;
+          comboHits.push({ image: f, combo: key });
+        }
+        try { unlinkSync(path); } catch {}
+      }
+      try { spawnSync('rmdir', [imgDir]); } catch {}
+      findings.push({ gate: 'figures.raster_ocr', status: 'INFO', detail: `ocr-checked ${ocrChecked} embedded raster(s)` });
+      if (comboHits.length) {
+        for (const h of comboHits) {
+          findings.push({ gate: 'figures.forbidden_raster_combo', status: 'FAIL', detail: `image=${h.image} combo=${h.combo}` });
+        }
+        failed++;
+      } else {
+        passed++;
+      }
+    }
+  }
+
   // sha256 cross-check: only an INFO line; we do not fail on hash mismatch
   // (the build is allowed to legitimately produce a new artifact when the
   // body markdown changes).

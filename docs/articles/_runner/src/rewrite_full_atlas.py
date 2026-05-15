@@ -330,14 +330,141 @@ def rewrite(in_pdf: str, out_pdf: str) -> dict:
     return stats
 
 
+def _replace_first_image_xref_on_page(doc, page_no_1indexed: int, image_path: str) -> int | None:
+    """Replace the pixmap of the first embedded image on the page with the
+    contents of `image_path`. Uses pymupdf's `Page.replace_image(xref, filename=...)`
+    which re-encodes the new raster into the existing xref's image dict so
+    the legacy pixels are physically removed from the PDF (unlike a
+    paint-over draw_rect/insert_image splice, which leaves the xref
+    intact and visible to pdfimages / OCR audits).
+
+    Returns the xref that was rewritten, or None if the page has no
+    embedded image or the pymupdf binding lacks replace_image (very old
+    pymupdf versions).
+    """
+    page = doc[page_no_1indexed - 1]
+    imgs = page.get_images(full=True)
+    if not imgs:
+        return None
+    xref = imgs[0][0]
+    replace = getattr(page, "replace_image", None)
+    if replace is None:
+        return None
+    try:
+        replace(xref, filename=image_path)
+    except Exception:
+        return None
+    return xref
+
+
+def splice_replacement_image(
+    pdf_path: str,
+    page_no_1indexed: int,
+    image_path: str,
+    out_path: str,
+) -> dict:
+    """Splice a replacement raster image over the figure region of a page.
+
+    Used to fix the broken pre-v22.10 epistemic triptych at page 47
+    whose panel headers were FALSIFIER WALL / NOT ESTABLISHED /
+    SPECTRAL GAP with a misaligned bottom ribbon. The replacement
+    asset lives at
+      docs/articles/pellis-trinity-full/figures/raster/
+      fig-p2-ch2-epistemic-falsification-mechanism-spectral-gap-v2.png
+    and re-labels the panels to FALSIFICATION GATE / OPEN MECHANISM
+    / SPECTRAL GAP with an aligned TRINITY S3AI bottom ribbon
+    (the v22.10 audited captions).
+
+    The original embedded image on the page is left in the content
+    stream but is fully covered by the white background of the
+    splice; the page's caption text below the image is preserved.
+    """
+    doc = fitz.open(pdf_path)
+    # Strategy A (preferred): replace the legacy image's pixmap by xref.
+    # This physically removes the broken raster's pixels from the PDF
+    # content stream so pdfimages + tesseract OCR audits no longer see
+    # the broken panel-header strings.
+    replaced_xref = _replace_first_image_xref_on_page(doc, page_no_1indexed, image_path)
+    # Strategy B (fallback): paint over with a white rect and insert the
+    # replacement on top. Always applied because some PDF viewers cache
+    # raster bounding rectangles that differ from the legacy bbox; this
+    # ensures the replacement is also positioned correctly.
+    page = doc[page_no_1indexed - 1]
+    page_rect = page.rect
+    margin_x = page_rect.width * 0.04
+    margin_top = page_rect.height * 0.08
+    fig_h = page_rect.height * 0.60
+    rect = fitz.Rect(
+        margin_x,
+        margin_top,
+        page_rect.width - margin_x,
+        margin_top + fig_h,
+    )
+    if replaced_xref is None:
+        page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1), overlay=True)
+        page.insert_image(rect, filename=image_path, keep_proportion=True, overlay=True)
+    # If writing back to the same path, pymupdf requires incremental save
+    # OR a different file. Use a temp sibling path and atomically replace.
+    import os as _os
+    if _os.path.abspath(out_path) == _os.path.abspath(pdf_path):
+        tmp = out_path + ".splice.tmp"
+        doc.save(tmp, garbage=4, deflate=True, clean=True)
+        doc.close()
+        _os.replace(tmp, out_path)
+    else:
+        doc.save(out_path, garbage=4, deflate=True, clean=True)
+        doc.close()
+    return {
+        "spliced_page": page_no_1indexed,
+        "image": image_path,
+        "rect": [rect.x0, rect.y0, rect.x1, rect.y1],
+        "xref_replaced": replaced_xref,
+        "strategy": "xref_replace" if replaced_xref is not None else "paint_over",
+    }
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="src", required=True)
     ap.add_argument("--out", dest="dst", required=True)
+    # Optional epistemic-triptych replacement splice. Off by default to
+    # keep the v22.10 audited PDF byte-identical; turned on by a future
+    # `tri article build pellis-trinity-full --pdf` that wants to splice
+    # the v22.10 epistemic triptych over the legacy raster on page 47.
+    ap.add_argument(
+        "--replace-fig-p2-ch2-epistemic",
+        dest="replace_p47",
+        default=None,
+        help=(
+            "Path to a replacement PNG/JPG for the broken epistemic "
+            "triptych on PDF page 47 (panels FALSIFIER WALL / NOT "
+            "ESTABLISHED / SPECTRAL GAP). The replacement is spliced "
+            "AFTER the text-redaction pass."
+        ),
+    )
+    ap.add_argument(
+        "--replace-fig-p2-ch2-epistemic-page",
+        dest="replace_p47_page",
+        type=int,
+        default=26,
+        help=(
+            "1-indexed PDF page number of the broken epistemic triptych "
+            "(default 26: the OCR audit on the v22.10 reference identifies "
+            "page 26, xref 64, as the only embedded raster matching the "
+            "broken FALSIFIER WALL / NOT ESTABLISHED panel-header pattern)."
+        ),
+    )
     args = ap.parse_args(argv)
     stats = rewrite(args.src, args.dst)
     for k, v in stats.items():
         print(f"  {k}: {v}")
+    if args.replace_p47:
+        # Operate in-place on the just-written output PDF.
+        splice_stats = splice_replacement_image(
+            args.dst, args.replace_p47_page, args.replace_p47, args.dst
+        )
+        for k, v in splice_stats.items():
+            print(f"  splice.{k}: {v}")
     return 0
 
 

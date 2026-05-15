@@ -134,11 +134,50 @@ expected_annots_when_no_links = 0
 # Figure-level QA: every legacy problem page must be replaced by a
 # regenerated vector figure, not a blank or text replacement page.
 [figures]
-legacy_pages_requiring_regen = [17, 35, 51]
+legacy_pages_requiring_regen = [17, 35, 47, 51]
 require_vector_text_labels    = true
 forbid_pseudo_latin           = true
 forbid_microtext_below_pt     = 7
 forbid_rasterized_text_labels = true
+
+# Replacement raster assets. The runner's verify-style gate enforces:
+#   - the named replacement asset file is present on disk;
+#   - its sha256 matches the manifest entry;
+#   - no embedded raster in the OUTPUT PDF carries the broken triple
+#     of panel headers (forbidden_raster_label_combo below);
+#   - body text may still mention any of these phrases individually
+#     as prose (e.g. "falsifier wall keeps the catalogue honest") — the
+#     forbidden combo is specifically the panel-header triple inside
+#     a single embedded raster image.
+[figures.replacements]
+fig_p2_ch2_epistemic_asset = "figures/raster/fig-p2-ch2-epistemic-falsification-mechanism-spectral-gap-v2.png"
+fig_p2_ch2_epistemic_sha256 = "0937d805fac91517a2dda06524e3f633d9e1258b44545e1d8f300bb3b6b9b3c3"
+
+# Forbidden panel-header combinations inside embedded raster images.
+#
+# If the OUTPUT PDF contains any embedded image whose extracted text
+# (via tesseract OCR when available) matches the `must_contain_all`
+# list AND does NOT match any of the `must_not_contain_any` items,
+# verify-style fails. The discriminator lets us forbid the broken
+# pre-v22.10 epistemic triptych (panel headers `FALSIFIER WALL`,
+# `NOT ESTABLISHED`, `SPECTRAL GAP`, no `FALSIFICATION GATE` or
+# `OPEN MECHANISM` headers) while letting the v22.10 replacement
+# image (panel headers `FALSIFICATION GATE` / `OPEN MECHANISM` /
+# `SPECTRAL GAP`, plus the small caption "A falsifier wall keeps
+# the catalogue honest" as prose under panel 1) pass.
+[figures.forbidden_raster_label_combos.broken_epistemic_triptych]
+must_contain_all = [
+  "FALSIFIER WALL",
+  "NOT ESTABLISHED",
+  "SPECTRAL GAP",
+]
+# Replacement-image signatures. If ANY of these is also present in
+# the OCR'd image text, the image is the v22.10 replacement, not the
+# broken pre-v22.10 plate, and is allowed.
+must_not_contain_any = [
+  "FALSIFICATION GATE",
+  "OPEN MECHANISM",
+]
 
 # Reference / link checks.
 [references]
