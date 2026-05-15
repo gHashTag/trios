@@ -1,0 +1,124 @@
+{
+  "wave": 36,
+  "theme": "Adaptive Voltage Stacking — 3-tier safety extension",
+  "lane": "W-EXT (complement to W-mainline #655 + W-X #656)",
+  "lever": 10,
+  "predecessor_wave": 35,
+  "predecessor_theme": "LUT-NPU",
+  "predecessor_opcode": "0xE3 OP_LUT_NPU",
+  "depends_on_opcode": "0xE4 OP_AVS_RECONF (t27/coq/IGLA/RMarker.v, merged in #655)",
+  "voltage_ladder": {
+    "tier_near_ret_mv": 550,
+    "tier_cruise_mv": 750,
+    "tier_active_mv": 1000,
+    "strictly_monotone": true,
+    "mutually_distinct": true,
+    "encoding_bits_per_island": 2
+  },
+  "island_arithmetic": {
+    "banks": 3,
+    "islands_per_bank": 16,
+    "total_islands": 48,
+    "decomposition": "3 (Trinity strands) × 16 (sacred-ALU opcodes)",
+    "baseline_w34_tom_islands": 28,
+    "strict_growth_over_w34": true
+  },
+  "wakeup_budget": {
+    "wakeup_ns": 8,
+    "budget_ns": 50,
+    "headroom_ns": 42,
+    "decomposition": "4 reconfig cycles @ 400 MHz (10 ns) + 4 PLL settle (-2 ns slack)"
+  },
+  "w_105_a_falsifier": {
+    "name": "W-105-A leakage-floor lower bound",
+    "assertion": "leakage_observed_permille >= leakage_floor_permille",
+    "leakage_floor_permille": 90,
+    "leakage_observed_permille": 102,
+    "saving_pct_floor": 9.0,
+    "saving_pct_observed": 10.2,
+    "process_node": "28FDX (GF/TSMC equivalents)",
+    "workload": "BitNet b1.58-3B WikiText-103 valid split, ctx=2048, 1000 sequences",
+    "method": "post-place-and-route Cadence Voltus + silicon SoC leakage probe",
+    "freeze_utc": "2026-10-31T00:00:00Z",
+    "eval_utc": "2026-12-15T00:00:00Z",
+    "fail_stop": true
+  },
+  "tops_w_projection": {
+    "target": 297,
+    "baseline_w35_lut_npu": 270,
+    "multiplier_factor": 1.10,
+    "method": "TTIHP27a generic synth + AVS-48 power model",
+    "verified_by": "coq Theorem volt_stack_passes_w105a (when paired with #656 efficiency floor)"
+  },
+  "pipeline_chain_witness": {
+    "op_list": [
+      "OP_LUT_LOOKUP",
+      "OP_BITROM_READ",
+      "OP_SPARSE_SKIP",
+      "OP_NOC_FORWARD",
+      "OP_HOLO_MUX_1X2",
+      "OP_LUT_NPU",
+      "OP_AVS_RECONF"
+    ],
+    "depth": 7,
+    "r_si_1_compliant": true,
+    "synth_star_count": 0
+  },
+  "coq_citation": {
+    "repo": "gHashTag/t27",
+    "file": "trios-coq/IGLA/VoltStack.v",
+    "merge_sha": "d2b43cf70e755d6497a6851837b86165a593061a",
+    "merged_at_utc": "2026-05-15T20:37:28Z",
+    "pr": 659,
+    "lemma_count": 22,
+    "lemmas": [
+      "tier_mv_near_ret",
+      "tier_mv_cruise",
+      "tier_mv_active",
+      "tier_mv_strict_lo",
+      "tier_mv_strict_hi",
+      "tier_mv_strict_full",
+      "tier_distinct_near_cruise",
+      "tier_distinct_near_active",
+      "tier_distinct_cruise_active",
+      "total_islands_value",
+      "volt_stack_grows_islands",
+      "wakeup_within_budget",
+      "wakeup_le_budget",
+      "leakage_floor_value",
+      "leakage_observed_above_floor",
+      "volt_stack_passes_w105a",
+      "volt_stack_op_in_chain",
+      "volt_stack_op_no_star",
+      "volt_stack_chain_depth",
+      "volt_stack_safe_chain"
+    ],
+    "headline_theorem": "volt_stack_passes_w105a",
+    "bonus_proof_fixes_in_avs_v": [
+      "avs_oplist_in_lut_lookup",
+      "avs_oplist_in_bitrom_read",
+      "avs_oplist_in_sparse_skip",
+      "avs_oplist_in_noc_forward",
+      "avs_oplist_in_holo_mux",
+      "avs_oplist_in_lut_npu",
+      "avs_oplist_in_avs_reconf",
+      "avs_extends_lut_npu"
+    ]
+  },
+  "sibling_lanes": {
+    "lane_w_mainline_t27_pr655": "AvS-48 OP_AVS_RECONF=0xE4 + avs_safe + 18 lemmas (MERGED)",
+    "lane_x_t27_pr656": "Physics/AvsStacking.v 8 lemmas IR-drop quadratic (MERGED)",
+    "lane_w_double_prime_rust": "gHashTag/tt-trinity-max-true crates/tri1-volt-stack-witnesses/ (W36 PENDING)",
+    "lane_u_rtl_fpga": "gHashTag/trinity-fpga rtl/volt_stack/volt_stack_controller.sv (W36 PENDING)",
+    "lane_w_triple_prime_phd": "gHashTag/trios docs/phd/chapters/glava_82_voltage_stacking_wave36.tex (W36 PENDING)"
+  },
+  "one_shot": "gHashTag/trinity-fpga#130",
+  "tracker": "gHashTag/t27#658 (closed)",
+  "pr": "gHashTag/t27#659 (merged 2026-05-15T20:37:28Z)",
+  "filed_at_utc": "2026-05-15T20:40:00Z",
+  "filed_by": "Vasilev Dmitrii <admin@t27.ai>",
+  "orcid": "0009-0008-4294-6159",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "anchors_full": "phi^2 + phi^-2 = 3 · gamma = phi^-3 · C = phi^-1 · G = pi^3 gamma^2 / phi",
+  "doi": "10.5281/zenodo.19227877"
+}
