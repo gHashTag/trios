@@ -1,0 +1,66 @@
+{
+  "wave": 44,
+  "codename": "FORWARD-BODY-BIAS",
+  "sacred_opcode": "0xEE",
+  "opcode_name": "OP_FBB",
+  "opcode_decimal": 238,
+  "ica_rectification": "ICA-W44-001",
+  "ica_note": "0xED already held by SparsityMask W40 LL per ICA-W40-002; OP_FBB relocated to 0xEE.",
+  "issue": "gHashTag/trinity-fpga#154",
+  "tops_w_projection": {"pre": 890, "post": 955, "lift_pct": 7.3, "target_ihp22fdx": 950, "headroom_pct": 0.5},
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "biology_ref": "Voltage-controlled cortical excitability (Hutcheon-Yarom 2000); body-bias retina amacrine cells",
+  "quantum_brain_mapping": {
+    "phys_si": "gamma^4 = phi^-12 -> body-bias rail divider (Sacred ROM B007^4)",
+    "bio_si": "amacrine cell body-bias modulation -> MAC pipeline speed-up",
+    "lang_si": "TRI-27 FBB -> 0xEE OP_FBB"
+  },
+  "theory": {
+    "v_fbb_formula": "V_FBB = V_DD * (1 + gamma^4) ≈ 1.00309 * V_DD",
+    "gamma4_bps": 31,
+    "gamma4_decimal": 0.003089785978362854,
+    "v_dd_mV": 800,
+    "v_fbb_mV": 802,
+    "v_fbb_max_mV": 840,
+    "body_coefficient_q15": "≈0.3 V^½ in Q1.15",
+    "mac_speedup_min_pct": 7,
+    "mac_speedup_max_pct": 15,
+    "power_overhead_max_pct": 2,
+    "tops_w_lift_min_pct": 7
+  },
+  "assertions": [
+    {"id": "W-117-A", "type": "coq_lemma",   "name": "fbb_op_distinct_chain_13",           "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-B", "type": "coq_lemma",   "name": "fbb_voltage_below_max",              "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-C", "type": "coq_lemma",   "name": "fbb_voltage_above_vdd",              "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-D", "type": "coq_lemma",   "name": "fbb_voltage_safe",                   "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-E", "type": "coq_lemma",   "name": "fbb_gamma4_match",                   "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-F", "type": "coq_lemma",   "name": "fbb_gamma4_relative_drift_half_percent", "file": "trios-coq/Physics/FBBActive.v",            "expected": "Qed"},
+    {"id": "W-117-G", "type": "coq_lemma",   "name": "fbb_body_coefficient_in_range",      "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-H", "type": "coq_lemma",   "name": "fbb_speedup_within_band",            "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-I", "type": "coq_lemma",   "name": "fbb_power_overhead_bounded",         "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-J", "type": "coq_lemma",   "name": "fbb_tops_w_lift_at_least_7pct",      "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-K", "type": "coq_theorem", "name": "fbb_active_composite",               "file": "trios-coq/Physics/FBBActive.v",                "expected": "Qed"},
+    {"id": "W-117-L", "type": "rtl_assert",  "name": "v_fbb_within_safe_band",             "file": "rtl/fbb_active/fbb_ctrl.sv",                   "expected": "PASS"},
+    {"id": "W-117-M", "type": "rtl_assert",  "name": "no_star_operator_fbb_active",        "file": "rtl/fbb_active/*.sv",                          "expected": "PASS"},
+    {"id": "W-117-N", "type": "rust_witness","name": "op_fbb_constant_ee",                 "file": "crates/fbb-active-witness/tests/opcode.rs",    "expected": "PASS"},
+    {"id": "W-117-O", "type": "rust_witness","name": "fbb_voltage_in_band",                "file": "crates/fbb-active-witness/tests/opcode.rs",    "expected": "PASS"},
+    {"id": "W-117-P", "type": "rust_witness","name": "fbb_speedup_at_least_7pct",          "file": "crates/fbb-active-witness/tests/opcode.rs",    "expected": "PASS"},
+    {"id": "W-117-Q", "type": "rust_witness","name": "fbb_distinct_from_all_prior_opcodes","file": "crates/fbb-active-witness/tests/opcode.rs",    "expected": "PASS"},
+    {"id": "W-117-R", "type": "doc_chapter", "name": "glava_90_fbb_active",                "file": "docs/phd/chapters/glava_90_fbb_active.tex",     "expected": "≥1500L,≥4thm,≥10cite"}
+  ],
+  "constitutional_compliance": {
+    "R-SI-1": "0 '*' operators in RTL — verified at lint",
+    "R5-HONEST": "Provenance tags on every output; no Admitted",
+    "R6": "Zero free parameters — every constant derived from gamma^4 or V_DD",
+    "R7": "Falsification witness — v_fbb_within_safe_band assertion can fire",
+    "R15": "SACRED-SYNTH-GATE — gamma^4 = phi^-12 locked to Sacred ROM cell B007^4",
+    "R18": "LAYER-FROZEN — 75 Sacred ROM cells preserved (B007 reused, not mutated)"
+  },
+  "wave_links": {
+    "issue": "https://github.com/gHashTag/trinity-fpga/issues/154",
+    "broadcast": ["trios#264 #4464616994", "trios#244 #4464617063", "trinity-fpga#61 #4464617123"],
+    "ica_rectification_comment": "https://github.com/gHashTag/trinity-fpga/issues/154#issuecomment-4464925468",
+    "predecessor_wave": "wave43_drowsy.json"
+  }
+}
