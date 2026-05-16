@@ -1,0 +1,34 @@
+{
+  "witness_id": "W-104-G",
+  "wave": "W41",
+  "codename": "IHP 22FDX Node Shrink",
+  "freeze_date": "2026-12-15",
+  "sacred_opcode": {"name": "OP_NODE_SHRINK", "byte": 239, "hex": "0xEF"},
+  "tops_w_target": 756,
+  "tops_w_baseline_w40": 540,
+  "shrink_factor": 1.40,
+  "vdd_scale": {"w40_mv": 1200, "w41_mv": 800, "ratio_squared": 2.25},
+  "eta_port_lower_bound": 0.40,
+  "eta_port_predicted": 0.62,
+  "k_vdd_shrink_fixed_milli": 1135,
+  "phys_to_si": {"constant": "K_VDD_SHRINK", "value_milli": 1135, "rom_cell": "R-marker 12-bit"},
+  "bio_to_si": {"module": "cortical-column-11", "analog": "myelinated-to-unmyelinated axon shrink"},
+  "lang_to_si": {"isa": "SHRINK φ-scale REG_BANK", "coptic_in": "Ⲕ", "coptic_out": "Ⲗ", "l1_opcode": "0xEF"},
+  "silicon_vectors": [
+    {"id": "S-161", "name": "node_shrink_op_byte", "claim": "OP_NODE_SHRINK = 0xEF = 239", "verify": "Coq lemma op_byte_eq_239"},
+    {"id": "S-162", "name": "vdd_scale_witness", "claim": "1.2V/0.8V = 1.5 within ±5%", "verify": "vdd_scale lemma"},
+    {"id": "S-163", "name": "port_overhead_ceiling", "claim": "η_port ≥ 0.40", "verify": "eta_port_bound lemma"},
+    {"id": "S-164", "name": "fdsoi_leakage_floor", "claim": "I_leak_W41 ≤ I_leak_W40 / 10", "verify": "leakage_drop lemma"},
+    {"id": "S-165", "name": "sacred_alu_isofunctional", "claim": "All W34..W40 opcodes preserve byte semantics", "verify": "sacred_isofunctional lemma"},
+    {"id": "S-166", "name": "phi_constant_preserved", "claim": "φ² + φ⁻² = 3 holds under 22FDX timing", "verify": "phi_identity_22fdx lemma"},
+    {"id": "S-167", "name": "tops_w_ladder_756", "claim": "TOPS/W ≥ 753 ± 3", "verify": "tops_w_target lemma"},
+    {"id": "S-168", "name": "r_si_1_zero_star_22fdx", "claim": "Zero `*` in port-adapter SV", "verify": "iverilog lint clean"}
+  ],
+  "constitutional_compliance": {
+    "R1": true, "R5": true, "R7": true, "R8": true,
+    "R12": true, "R14": true, "R15": true, "R18": true,
+    "apache_2_0": true, "no_new_R_19_plus": true
+  },
+  "anchor": "phi^2 + phi^-2 = 3 · OP_NODE_SHRINK = 0xEF · NEVER STOP",
+  "doi": "10.5281/zenodo.19227877"
+}
