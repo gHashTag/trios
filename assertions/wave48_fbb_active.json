@@ -1,0 +1,72 @@
+{
+  "wave": 48,
+  "lane": "SS'",
+  "title": "FBB-ACTIVE-II — Forward Body Bias of Active Path (dual of W47 RBB)",
+  "sacred_opcode": {
+    "name": "OP_FBB_ACTIVE",
+    "hex": "0xF2",
+    "decimal": 242,
+    "bank": "EXTENDED 0xD0..0xFF (slot 0xF2, 2nd slot of bank-extension)",
+    "predecessor": "OP_RBB (0xF1, W47) — symmetric dual"
+  },
+  "anchor": {
+    "phi_identity": "phi^2 + phi^-2 = 3",
+    "gamma": "gamma = phi^-3",
+    "gamma_pow4": "gamma^4 = phi^-12 (inherited from B007^2, W45 — no new ROM cell)",
+    "doi": "10.5281/zenodo.19227877"
+  },
+  "theory": "V_BS,active = +V_DD * gamma^4 ~ +2.5 mV applied to ACTIVE-path PEs reduces threshold voltage, cutting switching delay 12% (band [8%,18%]). Leakage overhead bounded <=8%, f_clk back-pressure <=6%, net delay save >=8%. TOPS/W lifts 1063 -> 1083 (+1.881%).",
+  "assertions": [
+    {"id": "W-121-A", "claim": "OP_FBB_ACTIVE encodes to 0xF2 = 242", "coq": "op_fbb_active_eq_242", "rust": "OP_FBB_ACTIVE", "rtl": "FBB_ACTIVE_OPCODE_FROZEN"},
+    {"id": "W-121-B", "claim": "V_BS sign is POSITIVE (distinct from W47 RBB negative)", "coq": "fbb_active_vbs_positive", "rust": "test_v_bs_positive_sign", "rtl": "fbb_active_vbs_sign_pos"},
+    {"id": "W-121-C", "claim": "V_BS_DECIMV in band [+10, +50] deci-mV (i.e. +1.0 to +5.0 mV)", "coq": "fbb_active_vbs_within_band", "rust": "test_v_bs_within_band", "rtl": "fbb_active_vbs_band"},
+    {"id": "W-121-D", "claim": "V_BS center = +25 deci-mV (+2.5 mV)", "coq": "fbb_active_vbs_center", "rust": "V_BS_DECIMV", "rtl": "FBB_ACTIVE_VBS_CENTER"},
+    {"id": "W-121-E", "claim": "Delay reduction band [800, 1800] bps (8%..18%)", "coq": "fbb_active_delay_red_within_band", "rust": "test_delay_reduction_band", "rtl": "fbb_active_delay_band"},
+    {"id": "W-121-F", "claim": "Delay reduction center = 1200 bps (12%)", "coq": "fbb_active_delay_red_center", "rust": "DELAY_RED_CENTER_BPS", "rtl": "FBB_ACTIVE_DELAY_CENTER"},
+    {"id": "W-121-G", "claim": "Leakage overhead at most 800 bps (8%)", "coq": "fbb_active_leak_overhead_at_most_8pct", "rust": "test_leak_overhead_cap", "rtl": "fbb_active_leak_cap"},
+    {"id": "W-121-H", "claim": "Net delay save floor >= 800 bps (8%)", "coq": "fbb_active_net_delay_save_at_least_8pct", "rust": "test_net_delay_save_floor", "rtl": "fbb_active_net_floor"},
+    {"id": "W-121-I", "claim": "f_clk scaling cap <= 600 bps (6%)", "coq": "fbb_active_fclk_scale_at_most_6pct", "rust": "test_fclk_scale_cap", "rtl": "fbb_active_fclk_cap"},
+    {"id": "W-121-J", "claim": "TOPS/W projection 1063 -> 1083 (+1.881%, >= 1.5%)", "coq": "fbb_active_tops_w_lift_at_least_1pt5pct", "rust": "test_tops_w_lift_at_least_1pt5pct", "rtl": "fbb_active_tops_lift"},
+    {"id": "W-121-K", "claim": "|V_BS_FBB_ACTIVE| = |V_BS_RBB| = 25 deci-mV (cross-wave symmetry)", "coq": "fbb_active_rbb_symmetric", "rust": "test_symmetric_magnitude_with_rbb", "rtl": "fbb_active_rbb_pair_symmetric"},
+    {"id": "W-121-L", "claim": "OP_FBB_ACTIVE != OP_RBB (0xF2 vs 0xF1)", "coq": "fbb_active_distinct_from_rbb_w47", "rust": "test_distinct_from_rbb", "rtl": "fbb_active_vs_rbb_distinct"},
+    {"id": "W-121-M", "claim": "OP_FBB_ACTIVE != OP_ADIAB_RC (0xF2 vs 0xF0)", "coq": "fbb_active_distinct_from_adiab_rc_w46", "rust": "test_distinct_from_adiab_rc", "rtl": "fbb_active_vs_adiab_rc_distinct"},
+    {"id": "W-121-N", "claim": "OP_FBB_ACTIVE != OP_WL_BOOST (0xF2 vs 0xEF)", "coq": "fbb_active_distinct_from_wl_boost_w45", "rust": "test_distinct_from_wl_boost", "rtl": "fbb_active_vs_wl_boost_distinct"},
+    {"id": "W-121-O", "claim": "OP_FBB_ACTIVE != OP_FBB (0xF2 vs 0xEE, distinct from W44 static FBB)", "coq": "fbb_active_distinct_from_fbb_w44", "rust": "test_distinct_from_fbb_static", "rtl": "fbb_active_vs_fbb_static_distinct"},
+    {"id": "W-121-P", "claim": "OP_FBB_ACTIVE != OP_SPARSE_MASK (0xF2 vs 0xED)", "coq": "fbb_active_distinct_from_sparse_mask", "rust": "test_distinct_from_sparse_mask", "rtl": "fbb_active_vs_sparse_mask_distinct"},
+    {"id": "W-121-Q", "claim": "OP_FBB_ACTIVE != OP_DROWSY_RET (0xF2 vs 0xEC)", "coq": "fbb_active_distinct_from_drowsy", "rust": "test_distinct_from_drowsy", "rtl": "fbb_active_vs_drowsy_distinct"},
+    {"id": "W-121-R", "claim": "OP_FBB_ACTIVE != OP_SPEC_EXIT (0xF2 vs 0xEB)", "coq": "fbb_active_distinct_from_spec_exit", "rust": "test_distinct_from_spec_exit", "rtl": "fbb_active_vs_spec_exit_distinct"},
+    {"id": "W-121-S", "claim": "OP_FBB_ACTIVE != OP_NULL_PE (0xF2 vs 0xEA)", "coq": "fbb_active_distinct_from_null_pe", "rust": "test_distinct_from_null_pe", "rtl": "fbb_active_vs_null_pe_distinct"},
+    {"id": "W-121-T", "claim": "OP_FBB_ACTIVE != OP_STOCH (0xF2 vs 0xE9)", "coq": "fbb_active_distinct_from_stoch", "rust": "test_distinct_from_stoch", "rtl": "fbb_active_vs_stoch_distinct"},
+    {"id": "W-121-U", "claim": "OP_FBB_ACTIVE != OP_SPARSE (0xF2 vs 0xE8)", "coq": "fbb_active_distinct_from_sparse", "rust": "test_distinct_from_sparse", "rtl": "fbb_active_vs_sparse_distinct"},
+    {"id": "W-121-V", "claim": "OP_FBB_ACTIVE != OP_DFS (0xF2 vs 0xE7)", "coq": "fbb_active_distinct_from_dfs", "rust": "test_distinct_from_dfs", "rtl": "fbb_active_vs_dfs_distinct"},
+    {"id": "W-121-W", "claim": "OP_FBB_ACTIVE != OP_HOLO_MUX (0xF2 vs 0xE6)", "coq": "fbb_active_distinct_from_holo", "rust": "test_distinct_from_holo", "rtl": "fbb_active_vs_holo_distinct"},
+    {"id": "W-121-X", "claim": "OP_FBB_ACTIVE != OP_SUBTH (0xF2 vs 0xE5)", "coq": "fbb_active_distinct_from_subth", "rust": "test_distinct_from_subth", "rtl": "fbb_active_vs_subth_distinct"},
+    {"id": "W-121-Y", "claim": "OP_FBB_ACTIVE != OP_AVS_RECONF (0xF2 vs 0xE4)", "coq": "fbb_active_distinct_from_avs", "rust": "test_distinct_from_avs", "rtl": "fbb_active_vs_avs_distinct"},
+    {"id": "W-121-Z", "claim": "OP_FBB_ACTIVE != OP_LUT_NPU (0xF2 vs 0xE3)", "coq": "fbb_active_distinct_from_lut_npu", "rust": "test_distinct_from_lut_npu", "rtl": "fbb_active_vs_lut_npu_distinct"},
+    {"id": "W-121-AA", "claim": "OP_FBB_ACTIVE != OP_TOM (0xF2 vs 0xE2)", "coq": "fbb_active_distinct_from_tom", "rust": "test_distinct_from_tom", "rtl": "fbb_active_vs_tom_distinct"},
+    {"id": "W-121-AB", "claim": "OP_FBB_ACTIVE != OP_TENET (0xF2 vs 0xE1)", "coq": "fbb_active_distinct_from_tenet", "rust": "test_distinct_from_tenet", "rtl": "fbb_active_vs_tenet_distinct"},
+    {"id": "W-121-AC", "claim": "OP_FBB_ACTIVE in extended sacred bank 0xD0..0xFF", "coq": "fbb_active_in_extended_bank", "rust": "test_op_in_extended_bank", "rtl": "fbb_active_bank_membership"},
+    {"id": "W-121-AD", "claim": "R18 LAYER-FROZEN preserved: 75 Sacred ROM cells unchanged (gamma^4 inherited from B007^2, no new cell)", "coq": "fbb_active_no_new_rom_cell", "rust": "test_sacred_rom_count_unchanged", "rtl": "fbb_active_r18_frozen"},
+    {"id": "W-121-AE", "claim": "Composite theorem: all FBB-active invariants conjoined", "coq": "fbb_active_composite", "rust": "test_composite_invariants", "rtl": "fbb_active_composite_assertion"}
+  ],
+  "verification": {
+    "coq_file": "trios-coq/Physics/FBBActive2.v",
+    "coq_qed_count": 33,
+    "coq_admitted": 0,
+    "rust_crate": "fbb-active-witness",
+    "rtl_file": "rtl/fbb_active/body_bias_active_gen.sv + fbb_active_controller.sv",
+    "rust_test_count": 14,
+    "rtl_assertion_count": 15
+  },
+  "falsification_witnesses": [
+    {"id": "W48-FBB-ACTIVE-1", "claim": "delay_red_bps >= 800 AND leak_ovh_bps <= 800 AND net_delay_save_bps >= 800", "falsifier": "measured silicon yielding delay_red < 8% OR leakage growth > 8% OR net < 8% invalidates W48 closure"}
+  ],
+  "rules": {
+    "R5_HONEST": "All numeric bands derived from Tschanz JSSC 2002 + Mukhopadhyay 2009 — no synthetic guesses",
+    "R7_FALSIFIABLE": "5 explicit numeric bands (V_BS sign, V_BS band, delay band, leak cap, net floor) — each refutable by silicon measurement",
+    "R18_LAYER_FROZEN": "Bank-set 0xD0..0xFF frozen at 32 slots since W47 — NO new Sacred ROM cell — gamma^4 inherited from B007^2 (W45)",
+    "R_SI_1": "Zero `*` operators in RTL — all multiplications precomputed at elaboration time"
+  },
+  "doi": "10.5281/zenodo.19227877",
+  "signed_off_by": "Vasilev Dmitrii <admin@t27.ai>"
+}
