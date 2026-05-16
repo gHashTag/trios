@@ -1,0 +1,42 @@
+{
+  "witness_id": "W-105-G",
+  "wave": "W42",
+  "codename": "MoE Sparse Routing",
+  "freeze_date": "2026-12-31",
+  "thesis": "NO new L1 opcode — reuses 0xE8 OP_SPARSE_SKIP + 0xED OP_SPARSE_MASK via L2 macro",
+  "reused_opcodes": [
+    {"byte": 232, "hex": "0xE8", "name": "OP_SPARSE_SKIP"},
+    {"byte": 237, "hex": "0xED", "name": "OP_SPARSE_MASK"}
+  ],
+  "l2_microcode_slot": {"map": "BIO→SI", "module": "cortical-column-12", "slot": 12, "total_brain_modules": 21},
+  "expert_config": {"k": 2, "N": 8, "sparsity_ratio_milli": 250},
+  "k_moe_sparsity": {"milli": 236, "identity": "phi^-3 (Barbero-Immirzi gamma)"},
+  "tops_w_target": 982,
+  "tops_w_baseline_w41": 756,
+  "speedup_factor": 1.30,
+  "load_imbalance_ceiling_milli": 250,
+  "cache_amplification_milli": 1150,
+  "eta_gate_predicted_milli": 970,
+  "eta_gate_floor_milli": 950,
+  "phys_to_si": {"constant": "K_MOE_SPARSITY", "value_milli": 236, "identity": "phi^-3", "rom_cell": "R-marker 8-bit"},
+  "bio_to_si": {"module": "cortical-column-12", "analog": "prefrontal cortex expert gating (Posner attention)"},
+  "lang_to_si": {"isa": "ROUTE k OF N IN BANK", "macro_of": ["OP_SPARSE_MASK", "OP_SPARSE_SKIP"], "no_new_l1_opcode": true},
+  "silicon_vectors": [
+    {"id": "S-169", "name": "moe_no_new_l1_opcode", "claim": "macro decomposes into 0xE8 + 0xED only", "verify": "Coq lemma moe_no_new_opcode"},
+    {"id": "S-170", "name": "moe_top_k_constant", "claim": "k=2, N=8", "verify": "Coq lemma moe_k_le_N"},
+    {"id": "S-171", "name": "moe_sparsity_phi_inv_3", "claim": "K_MOE_SPARSITY ≈ phi^-3 ≈ 0.236", "verify": "moe_sparsity_close"},
+    {"id": "S-172", "name": "moe_load_imbalance_ceiling", "claim": "imbalance ≤ 0.25", "verify": "moe_imbalance_bounded"},
+    {"id": "S-173", "name": "moe_cache_amplification", "claim": "bandwidth ≥ 1.15×", "verify": "cache_amp_min"},
+    {"id": "S-174", "name": "moe_gate_overhead_floor", "claim": "η_gate ≥ 0.95", "verify": "eta_gate_floor"},
+    {"id": "S-175", "name": "moe_tops_w_ladder_982", "claim": "TOPS/W ≥ 979 ± 3", "verify": "tops_w_within_witness"},
+    {"id": "S-176", "name": "moe_r15_preserved", "claim": "sacred chain depth = 32 unchanged", "verify": "r15_byte_stable"}
+  ],
+  "constitutional_compliance": {
+    "R1": true, "R5": true, "R7": true, "R8": true,
+    "R12": true, "R14": true, "R15": true, "R18": true,
+    "apache_2_0": true, "no_new_R_19_plus": true,
+    "no_new_l1_opcode": true
+  },
+  "anchor": "phi^2 + phi^-2 = 3 · NO NEW OPCODE · NEVER STOP",
+  "doi": "10.5281/zenodo.19227877"
+}
