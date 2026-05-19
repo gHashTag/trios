@@ -5,7 +5,6 @@
 //! Usage: cargo run -p trinity-extract -- --input trinity-clara/proofs/igla --output assertions/igla_assertions.json
 
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -50,14 +49,14 @@ fn get_git_commit(repo_path: &Path) -> String {
 fn detect_status(content: &str, theorem_name: &str) -> ProofStatus {
     // Find the theorem block and check if it ends with Admitted or Qed
     let mut in_theorem = false;
-    let mut depth = 0usize;
+    let mut _depth = 0usize;
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.contains(theorem_name) && (trimmed.starts_with("Theorem") || trimmed.starts_with("Lemma")) {
             in_theorem = true;
         }
         if in_theorem {
-            if trimmed.contains("Proof.") { depth += 1; }
+            if trimmed.contains("Proof.") { _depth += 1; }
             if trimmed == "Admitted." {
                 return ProofStatus::Admitted;
             }
