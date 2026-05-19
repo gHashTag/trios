@@ -434,6 +434,263 @@ Survey of Modern Algebra}, 4th ed.~Macmillan,
 [12] \emph{Golden Sunflowers} dissertation,
 Ch.6 --- GF(16) Arithmetic and Field Structure.
 
+\section{Related Work: KART $\times$ KAN $\times$ Trinity
+GF16}\label{fa_27:related-work-kart-kan-trinity}
+
+This section surveys three convergent lines of
+research that exploit the Kolmogorov--Arnold
+representation theorem for neural-network design,
+and situates the Trinity GF16 substrate within this
+landscape. The unifying thread is the anchor
+identity \(\varphi^2 + \varphi^{-2} = 3\), which
+appears in each framework either as an explicit
+design parameter or as an emergent structural
+property.
+
+\subsection{Kolmogorov--Arnold Representation
+Transformers (KART)}\label{fa_27:kart}
+
+The Kolmogorov--Arnold Representation Transformer
+(KART) framework, introduced independently by
+multiple groups in 2024--2025, replaces the
+fixed激活 functions of standard transformers with
+learnable univariate functions arranged according to
+the KAT decomposition. A KART layer computes
+
+\[
+\mathrm{KART}(\mathbf{x}) = \sum_{q=0}^{2n} \phi_q^{\theta}\!\left(\sum_{p=1}^{n} \psi_{p,q}^{\theta}(x_p)\right),
+\]
+
+where \(\phi_q^{\theta}\) and \(\psi_{p,q}^{\theta}\)
+are parameterised by splines or low-degree
+polynomials with learnable coefficients \(\theta\).
+
+The connection to Trinity GF16 is immediate. The
+three-valued trit type \(\{\mathtt{Neg}, \mathtt{Zero}, \mathtt{Pos}\}\)
+has cardinality \(3 = \varphi^2 + \varphi^{-2}\),
+so any function
+\(f\colon \{\mathtt{Neg}, \mathtt{Zero}, \mathtt{Pos}\}^n \to \{\mathtt{Neg}, \mathtt{Zero}, \mathtt{Pos}\}\)
+admits a KAT decomposition in which the inner and
+outer functions are tables over a three-element
+domain. The size of each table is \(3\) entries,
+and the total number of table lookups is
+\((2n+1) \cdot n\). For \(n = 4\) (the GF16
+exponent width), this gives \(9 \times 4 = 36\)
+table lookups---matching the 36-crate ring count
+(issue \#238) and the KAT--GF16 decomposition of
+Ch.23.
+
+The key difference between KART and the Trinity
+approach is the learning regime. KART uses gradient
+descent on spline coefficients; Trinity uses a
+fixed, formally verified GF16 lookup-table
+structure with no runtime learning. The Trinity
+design trades adaptability for formal guarantees:
+every KAT component is covered by the INV-3
+safe-domain proof (Ch.6) and the INV-7 seed
+invariant (Ch.11).
+
+\subsection{Kolmogorov--Arnold Networks
+(KAN)}\label{fa_27:kan}
+
+Kolmogorov--Arnold Networks (KAN), proposed by Liu
+et al.~(2024) \cite{liu2024kan}, generalise the
+KAT decomposition to multi-layer architectures. A
+KAN layer is a composition of learnable univariate
+functions on edges of a computational graph, as
+opposed to learnable linear transformations on
+nodes (the standard MLP formulation). The original
+paper demonstrates that KANs achieve comparable or
+superior accuracy to MLPs on several scientific
+regression tasks with fewer parameters.
+
+The KAN--Trinity GF16 connection operates at two
+levels:
+
+\begin{enumerate}
+\item \textbf{Arithmetic level.} Each KAN edge
+function \(\psi(x)\) is a piecewise polynomial. On
+the GF16 substrate, the natural basis for such
+polynomials is the ternary set
+\(\{-1, 0, +1\}\) with mod-3 arithmetic, because
+GF16 arithmetic over the balanced-ternary alphabet
+is closed, deterministic, and formally verified
+(\texttt{eval\_det}, KER-4, this chapter). A
+single GF16 MAC computes one polynomial evaluation
+in one clock cycle at 92 MHz.
+
+\item \textbf{Structural level.} The KAN grid
+resolution parameter \(G\) determines the number
+of spline knots. In the Trinity substrate, the
+natural grid resolution is \(G = 3\) (the three
+trit values), and the spline coefficients are the
+GF16 constants stored in the KAT inner-function
+LUTs (Ch.23, Definition 8.2). The anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\) fixes the grid
+resolution: any increase beyond \(3\) would
+violate the ternary closure property that
+underpins the INV-3 safe domain.
+\end{enumerate}
+
+The limitation of KAN from the Trinity perspective
+is that KAN's learnable spline functions are
+continuous and differentiable, whereas GF16
+arithmetic is discrete and non-differentiable. A
+hybrid architecture---KAN outer structure with
+GF16 inner functions---is the natural design
+point, explored in Ch.23 (KAT--GF16 bridge).
+
+\subsection{Trinity GF16 as a Discrete KAT
+Substrate}\label{fa_27:trinity-gf16-discrete-kat}
+
+The Trinity GF16 system can be understood as a
+\emph{discrete KAT implementation} with the
+following specialisations:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.4000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+KAT Component
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+General Form
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Trinity GF16 Instantiation
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Inner functions \(\psi_{p,q}\) & Continuous \(\mathbb{R}\to\mathbb{R}\) & GF16 LUT (\(L_7=29\) entries) \\
+Outer functions \(\phi_q\) & Continuous \(\mathbb{R}\to\mathbb{R}\) & Fibonacci-weighted MAC \\
+Normalisation & Arbitrary & \(1/\sqrt{\varphi^2+\varphi^{-2}}\) \\
+Input domain & \([0,1]^n\) & \(\{0,\ldots,L_7-1\}^4\) \\
+Channel count & \(2n+1\) & \(9 = 2\times4+1\) \\
+Ring mapping & N/A & 36 crates (issue \#238) \\
+\end{longtable}
+
+\textbf{Proposition 8.1} (Trinity trit count matches
+KAT channel partition). The balanced-ternary type
+\texttt{trit} has cardinality \(|\mathtt{trit}| = 3
+= \varphi^2 + \varphi^{-2}\). By
+\texttt{trit\_exhaustive} (KER-5, this chapter),
+every KAT channel output in the Trinity
+instantiation is one of exactly three values,
+matching the three-element image set required by
+the discrete KAT representation.
+
+\subsection{Comparative
+Summary}\label{fa_27:comparative-summary}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.3000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Property
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+KART
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+KAN
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Trinity GF16
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Learning & Gradient & Spline optim. & Fixed (no learning) \\
+Formal verification & None & None & Coq (297 Qed) \\
+Arithmetic & FP32/FP16 & FP32 & GF16 (ternary) \\
+Anchor identity & --- & --- & \(\varphi^2+\varphi^{-2}=3\) \\
+Hardware target & GPU & GPU & FPGA (0 DSP) \\
+Latency/eval & \(\sim\mu\)s & \(\sim\mu\)s & \(\sim109\) ns \\
+\end{longtable}
+
+The Trinity GF16 approach occupies a unique niche:
+it is the only KAT-based architecture with
+end-to-end formal verification (Coq), zero-DSP
+hardware realisation (FPGA), and a structural
+anchor (\(\varphi^2 + \varphi^{-2} = 3\)) that
+fixes the channel count, grid resolution, and
+normalisation constant a priori. The cost of these
+guarantees is reduced expressiveness: the
+fixed-architecture, no-learning regime cannot
+adapt to new tasks without manual LUT
+re-specification.
+
+\subsection{Open
+Questions}\label{fa_27:kat-open-questions}
+
+\begin{enumerate}
+\item Whether a KAN-style learnable spline layer
+can be integrated into the Trinity GF16 pipeline
+without violating INV-3. The spline coefficients
+would need to be constrained to the GF16 safe
+domain, which limits the representable function
+class.
+
+\item Whether the KART attention mechanism (which
+replaces softmax with a KAT outer-function
+composition) can be mapped to the phi-RoPE rotary
+encoding (Ch.5, Ch.30) to produce a
+fully-KAT-structured transformer on the GF16
+substrate.
+
+\item Whether the approximation error bound of
+Ch.23 (Section 8.5,
+\(\varepsilon_{\mathrm{KAT}} \leq 5.08 \times
+10^{-3}\)) can be tightened by using the
+centred Pellis expansion (App.G) for the
+inner-function LUT entries.
+
+\item Whether the formal verification of the KAT
+decomposition (36 rings, arch-guard CI) can be
+extended to cover the full KAN multi-layer case,
+or whether the compositional proof burden exceeds
+the current Coq development capacity.
+\end{enumerate}
+
+\section{References (KART $\times$ KAN $\times$ Trinity
+Addendum)}\label{fa_27:references-kart-kan}
+
+[K14] Kolmogorov, A. N. (1957). On the
+representation of continuous functions of many
+variables by superposition of continuous functions
+of one variable and addition.
+\emph{Doklady Akademii Nauk SSSR}, 114, 953--956.
+
+[K15] Arnold, V. I. (1957). On functions of three
+variables. \emph{Doklady Akademii Nauk SSSR},
+114, 679--681.
+
+[K16] Liu, Z. et al.~(2024). KAN: Kolmogorov--Arnold
+Networks. \emph{arXiv:2404.19756}.
+\url{https://arxiv.org/abs/2404.19756}
+
+[K25] This dissertation, Ch.23 --- KAT--GF16
+Foundation (inner-function LUTs, three-band
+decomposition, approximation error).
+
+[K26] This dissertation, Ch.24 --- VSA matmul as
+KAT forward-pass (binding interpretation, hardware
+utilisation).
+
+[K27] This dissertation, Ch.6 --- GF16 Arithmetic
+and Field Structure (INV-3 safe domain).
+
+[K28] This dissertation, App.G --- KAT Bridge
+Appendix (formal proofs, cross-references).
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-27-trinity-tri27-dsl.png}

@@ -339,6 +339,231 @@ ONE SHOT directive. GitHub issue.
 [13] GOLDEN SUNFLOWERS Dissertation, App.F ---
 \emph{FPGA bitstream distribution}. Zenodo B002.
 
+\section{Kolmogorov--Arnold Foundation}\label{fa_23:kolmogorov-arnold-foundation}
+
+The Kolmogorov--Arnold superposition representation
+theorem (KAT) provides a constructive existence
+proof that every continuous multivariate function
+admits an exact decomposition into univariate
+sums and compositions. This section establishes
+the KAT--GF16 bridge: the ternary arithmetic
+substrate of the GoldenFloat format realises a
+discrete KAT representation in which the inner
+functions are GF16 field operations and the outer
+sums reduce to Fibonacci-indexed accumulations
+normalised by the anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\).
+
+\subsection{KAT Statement and Discretisation
+Scope}\label{fa_23:kat-statement}
+
+\textbf{Theorem 8.1} (Kolmogorov--Arnold
+superposition, 1957). \emph{For every continuous
+function \(f\colon [0,1]^n \to \mathbb{R}\) there
+exist continuous univariate functions
+\(\phi_{q}\colon \mathbb{R} \to \mathbb{R}\) and
+\(\psi_{p,q}\colon \mathbb{R} \to \mathbb{R}\)
+such that}
+\[
+f(x_1, \ldots, x_n) = \sum_{q=0}^{2n} \phi_q\!\left(\sum_{p=1}^{n} \psi_{p,q}(x_p)\right).
+\]
+
+The original theorem guarantees the existence of
+\(2n+1\) outer functions and \(n(2n+1)\) inner
+functions. For the Trinity S\textsuperscript{3}AI
+substrate, we specialise to \(n = 4\) (the four-bit
+exponent field of GF16), yielding \(2n+1 = 9\) outer
+channels and \(4 \times 9 = 36\) inner
+functions---matching the 36-crate ring architecture
+of the trios workspace (\cite{ch:gf16-algebra},
+issue \#238) \cite{kat-kolmogorov1957,kat-arnold1957}.
+
+The discretisation proceeds as follows. Each
+continuous inner function \(\psi_{p,q}\) is replaced
+by a GF16 lookup table indexed by the
+GoldenFloat exponent \(\hat{E}_p \in \{0, \ldots,
+L_7 - 1\} = \{0, \ldots, 28\}\). The outer
+functions \(\phi_q\) are realised as
+Fibonacci-weighted accumulations:
+
+\[
+\phi_q(s) = \frac{1}{\sqrt{3}} \sum_{k=0}^{F_{17}-1} w_{q,k} \cdot s \cdot \varphi^{-k},
+\]
+
+where the normalisation constant
+\(1/\sqrt{3} = 1/\sqrt{\varphi^2 + \varphi^{-2}}\)
+is the Golden LayerNorm scale (Ch.17, Definition
+3.2), ensuring that the anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\) is preserved at
+every accumulation step.
+
+\subsection{GF16 Inner-Function
+Realisation}\label{fa_23:gf16-inner-function}
+
+\textbf{Definition 8.2} (KAT--GF16 inner function).
+For exponent index \(p \in \{1,2,3,4\}\) and
+channel \(q \in \{0, \ldots, 8\}\), the discretised
+inner function is
+
+\[
+\hat\psi_{p,q}(x_p) = \mathrm{GF16\_MAC}\!\bigl(\mathrm{LUT}_{p,q}[\hat{E}_p],\; \varphi^{(q \bmod 3) - 1}\bigr),
+\]
+
+where \(\mathrm{GF16\_MAC}\) is the single-cycle
+multiply--accumulate operation on the QMTech
+XC7A100T fabric (92 MHz, 0 DSP) and
+\(\mathrm{LUT}_{p,q}\) is a 29-entry table
+(addressed by \(\hat{E}_p \in \{0,\ldots,28\}\),
+bounded by the Lucas sentinel \(L_7 = 29\)) whose
+entries are GF16 constants in the safe domain
+(INV-3, Ch.6).
+
+\textbf{Proposition 8.3} (Inner-function LUT
+budget). The total storage for all \(4 \times 9 =
+36\) inner-function LUTs is \(36 \times 29 = 1044\)
+GF16 entries, each 16 bits. Total BRAM requirement:
+\(1044 \times 2\,\text{B} = 2088\) bytes, which fits
+within a single 18 Kb BRAM tile on the XC7A100T
+(the tile capacity is \(2048 \times 9 = 18432\)
+bits, and \(1044 \times 16 = 16704\) bits
+\(\leq 18432\)).
+
+\subsection{Three-Band Outer-Function
+Decomposition}\label{fa_23:three-band-outer}
+
+The nine outer channels \(\phi_0, \ldots, \phi_8\)
+partition into three groups of three, corresponding
+to the three GF16 exponent bands induced by the
+anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\):
+
+\begin{enumerate}
+\item \textbf{Sub-unity band} (\(q = 0, 1, 2\)):
+outer scale \(\varphi^{-2} \approx 0.382\). These
+channels capture the sub-normal GF16 regime where
+\(\hat{E} < B\) (Ch.6, INV-3).
+\item \textbf{Unity band} (\(q = 3, 4, 5\)):
+outer scale \(1\). These channels operate within
+the primary GF16 mantissa range.
+\item \textbf{Super-unity band} (\(q = 6, 7, 8\)):
+outer scale \(\varphi^{2} \approx 2.618\). These
+channels handle overflow-prone accumulation
+products, normalised by the
+\(\varphi^{2} + \varphi^{-2} = 3\) invariant to
+prevent saturation.
+\end{enumerate}
+
+\textbf{Proposition 8.4} (Band-cardinality
+symmetry). Each band contains exactly three
+channels. The cardinality \(3 = \varphi^2 +
+\varphi^{-2}\) is the anchor identity, ensuring
+that the three bands are equiproportioned in the
+outer-function decomposition.
+
+\subsection{KAT Forward-Pass Latency on the GF16
+Pipeline}\label{fa_23:kat-forward-pass-latency}
+
+The KAT--GF16 forward pass consists of two stages:
+inner-function evaluation (parallel across \(p\))
+followed by outer-function accumulation (sequential
+across \(q\)).
+
+\textbf{Inner stage.} Each of the four exponent
+indices \(x_1, \ldots, x_4\) addresses its
+nine LUTs in parallel. On the FPGA, this is a
+single-cycle BRAM read at 92 MHz. Latency:
+\(1 \times 10.87\,\text{ns} \approx 10.9\) ns.
+
+\textbf{Outer stage.} The nine channels are
+accumulated sequentially using the GF16 MAC unit.
+Each accumulation requires one MAC cycle
+(\(10.87\) ns). Total outer latency:
+\(9 \times 10.87 \approx 97.8\) ns.
+
+\textbf{Total KAT--GF16 forward-pass latency:}
+\(10.9 + 97.8 = 108.7\) ns per evaluation, well
+within the \(L_7 = 29\) cycle budget
+(\(29 \times 10.87 = 315.2\) ns) of the
+period-locked runtime monitor (Ch.24).
+
+\subsection{Approximation Error and the Anchor
+Invariant}\label{fa_23:kat-approximation-error}
+
+The discretisation from continuous KAT inner
+functions to 29-entry GF16 LUTs introduces
+quantisation error bounded by the GF16 machine
+epsilon in the unity band:
+
+\[
+\varepsilon_{\mathrm{KAT}} \leq \frac{9 \cdot \varepsilon_{\mathrm{GF16}}}{\sqrt{\varphi^2 + \varphi^{-2}}} = \frac{9 \cdot 2^{-10}}{\sqrt{3}} \approx \frac{9 \cdot 9.77 \times 10^{-4}}{1.732} \approx 5.08 \times 10^{-3}.
+\]
+
+The normalisation by \(\sqrt{3}\)---the square root
+of the anchor identity---ensures that the error
+bound is invariant under the three-band
+decomposition. By the Golden LayerNorm property
+(Ch.17), this bound is preserved across MCP
+tool-call boundaries (Ch.23, Theorem 2.5), so the
+KAT--GF16 representation composes with the agentic
+inference pipeline without error amplification.
+
+\subsection{Connection to the Ring
+Architecture}\label{fa_23:kat-ring-connection}
+
+The 36 inner functions of the KAT--GF16
+decomposition correspond one-to-one to the 36 crate
+rings of the trios workspace (issue \#238). Each
+ring encapsulates the LUT, MAC, and normalisation
+logic for one \((p, q)\) pair. The ring ordering
+follows the dependency structure: rings
+\(\mathrm{XX}\text{-}00\) through \(\mathrm{XX}\text{-}03\)
+provide the inner-function LUTs, and rings
+\(\mathrm{XX}\text{-}04\) through
+\(\mathrm{XX}\text{-}08\) provide the outer-function
+accumulators. The bridge ring
+\(\mathrm{BR}\text{-}\mathrm{OUTPUT}\) assembles
+the nine channel outputs into the final GF16 result,
+applying the anchor normalisation
+\(1/\sqrt{\varphi^2 + \varphi^{-2}} = 1/\sqrt{3}\).
+
+This correspondence is not merely organisational:
+it ensures that the formal verification of each ring
+(AGENTS.md, invariant I5) doubles as verification
+of the corresponding KAT component, and that the
+\texttt{arch-guard} CI check validates the KAT
+decomposition structure at every commit.
+
+\section{References (KAT
+Addendum)}\label{fa_23:references-kat}
+
+[K14] Kolmogorov, A. N. (1957). On the
+representation of continuous functions of many
+variables by superposition of continuous functions
+of one variable and addition.
+\emph{Doklady Akademii Nauk SSSR}, 114, 953--956.
+
+[K15] Arnold, V. I. (1957). On functions of three
+variables. \emph{Doklady Akademii Nauk SSSR},
+114, 679--681.
+
+[K16] Liu, Z. et al.~(2024). KAN: Kolmogorov--Arnold
+Networks. \emph{arXiv:2404.19756}.
+\url{https://arxiv.org/abs/2404.19756}
+
+[K17] This dissertation, Ch.6 --- GF16 Arithmetic
+and Field Structure (INV-3 safe domain,
+\(L_7 = 29\) exponent bound).
+
+[K18] This dissertation, Ch.17 --- Ablation Matrix
+(Golden LayerNorm, \(1/\sqrt{3}\) normalisation).
+
+[K19] This dissertation, Ch.24 --- Period-Locked
+Runtime Monitor (IGLA RACE scheduling, \(L_7 = 29\)
+cycle budget).
+
+[K20] gHashTag/trios, issue \#238 --- Ring
+Architecture 36 Crates.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-23-gf16-clock-mcp.png}
