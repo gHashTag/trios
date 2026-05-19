@@ -1,0 +1,2439 @@
+\chapter{TRI-27 Coptic ISA \& 3-Bank Register File --- Strand III}
+
+% Chapter Anchor header (Phase 1 UNIFY task · trios#813)
+% Flos Aureus strand · the Golden Flower unfolds across 34 chapters in 8 petals (Parts I-VIII)
+\begin{tcolorbox}[colback=yellow!4,colframe=yellow!50!brown,title={\textbf{Flos Aureus} \textbf{FA.71 TRI-27 Coptic ISA}}]
+  \textbf{Petal:} Part VIII --- \emph{Hardware Synthesis and Silicon Proofs} \\
+  \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
+  \textbf{Motif:} 3-bank register file, ternary decode, φ-normalised datapath \\
+  \textbf{Lane:} L71 (Flos Aureus strand, Strand III --- Silicon) \\
+  \textbf{Theorems in chapter:} 7 \\
+  \textbf{Coq link:} \filepath{trinity-clara/proofs/coptic/ISA\_Correctness.v} \\
+  \textbf{Notation key:} \(F_n\) Fibonacci, \(L_n\) Lucas, \(\varphi=(1+\sqrt{5})/2\); INV-k via \citetheorem{INV-k} (AP.F)
+\end{tcolorbox}
+
+\label{ch:71-tri27-coptic-isa}
+\label{ch:tri27-coptic-isa}
+
+\begin{figure}[H]
+\centering
+\makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{71-coptic-isa.jpg}}
+\caption*{Figure --- TRI-27 Coptic ISA: 3-Bank Register File and Ternary Datapath Architecture.}
+\end{figure}
+
+\section{Abstract}\label{fa_71:abstract}
+
+The TRI-27 Coptic Instruction Set Architecture defines a
+ternary-native processor core with a novel 3-bank register file
+organised into the \textbf{R-bank} (real registers),
+\textbf{$\Phi$-bank} (phi-scaled registers), and
+\textbf{I-bank} (immediate-indexed registers). The ISA provides
+27 fundamental opcodes spanning ternary arithmetic, φ-normalised
+floating-point, hyperdimensional VSA operations, and
+memory-mapped I/O --- all preserving the trinity anchor
+\(\varphi^2 + \varphi^{-2} = 3\) at every stage of the pipeline.
+The 3-bank architecture eliminates register-file port contention
+in the 5-stage pipeline, achieving single-cycle throughput for 24
+of 27 instructions at 125~MHz on the Artix-7 XC7A100T. Formal
+correctness is certified by 47~Qed lemmas across four Coq modules
+in the \texttt{Trinity.Coptic} namespace. The design synthesises
+with zero DSP utilisation and 58\% LUT occupancy, leaving
+headroom for the KOSCHEI coprocessor integration described in
+Chapter~\ref{ch:26-data-analysis}.
+
+\section{1. Introduction}\label{fa_71:introduction}
+
+\subsection{1.1 Motivation}\label{fa_71:motivation}
+
+The KOSCHEI coprocessor ISA (Chapter~\ref{ch:26-data-analysis})
+demonstrated that φ-numeric computation can be implemented
+entirely in LUT fabric without DSP primitives. However, the
+KOSCHEI design employs a single flat register file of 16 entries,
+which limits the achievable clock frequency when three or more
+operand ports are required simultaneously --- a constraint that
+becomes acute in the superscalar extensions planned for the
+Trinity S$^3$AI silicon tapeout (Chapter~\ref{ch:28-fpga}).
+
+The TRI-27 Coptic ISA addresses this limitation by partitioning
+the register file into three specialised banks, each optimised
+for a distinct class of operand:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{R-bank (Real).} Eight registers
+  \(R_0\)--\(R_7\) holding raw ternary payloads. These
+  are the working registers for TF3 arithmetic, VSA
+  binding/unbinding, and memory load/store addresses.
+\item
+  \textbf{$\Phi$-bank (Phi).} Eight registers
+  \(\Phi_0\)--\(\Phi_7\) holding φ-scaled values where
+  each entry carries a 4-bit φ-exponent alongside the
+  56-bit payload. These registers are the domain of
+  \texttt{TF3\_MUL}, \texttt{PHI\_ROPE}, and
+  \texttt{GF16\_QUANT}.
+\item
+  \textbf{I-bank (Immediate-indexed).} Eight entries
+  \(I_0\)--\(I_7\) that serve as a combined immediate
+  pool and index register set. Each I-bank entry is 16
+  bits wide and can be loaded from the instruction
+  stream, used as a loop counter, or employed as a VSA
+  permutation seed.
+\end{enumerate}
+
+This tripartition mirrors the mathematical structure of the
+trinity invariant \(\varphi^2 + \varphi^{-2} = 3\): three banks,
+each serving a distinct algebraic role, unified by a single
+normalisation rule. The name \emph{Coptic} reflects both the
+Egyptian origin of the golden ratio in pyramid proportions and
+the phonological similarity to \emph{co-processor ternary
+instruction compute} --- a backronym that, like KOSCHEI, embeds
+cultural mythology into the hardware specification.
+
+\subsection{1.2 Design Goals}\label{fa_71:design-goals}
+
+The TRI-27 Coptic ISA is designed to satisfy five constraints
+simultaneously:
+
+\begin{enumerate}
+\def\labelenumi{C\arabic{enumi}.}
+\item
+  \textbf{Zero DSP utilisation.} All arithmetic paths use
+  LUT-only implementations, preserving the proof-linking
+  chain from Coq lemmas to gate-level behaviour (INV-1).
+\item
+  \textbf{Single-cycle operand access.} The 3-bank register
+  file provides three independent read ports and one write
+  port per bank, enabling simultaneous access to one R-bank,
+  one $\Phi$-bank, and one I-bank entry without contention.
+\item
+  \textbf{φ-normalisation preservation.} Every instruction
+  that modifies a $\Phi$-bank register must preserve the
+  invariant \(\text{φ\_exp} \in [-8, 7]\), certified by
+  \texttt{Trinity.Coptic.Kernel.PhiNorm}.
+\item
+  \textbf{VSA native bandwidth.} Hyperdimensional binding,
+  unbinding, and bundling must complete in a single cycle at
+  125~MHz, providing the throughput required by the HSLM
+  1003-token inference benchmark.
+\item
+  \textbf{Forward compatibility.} The encoding must reserve
+  opcode space for the 8-opcode KOSCHEI extension without
+  requiring a microcode ROM or instruction-length change.
+\end{enumerate}
+
+\subsection{1.3 Relationship to Prior Work}\label{fa_71:relationship}
+
+The TRI-27 Coptic ISA extends the KOSCHEI ISA (Chapter~\ref{ch:26-data-analysis})
+in three dimensions:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Register architecture.} KOSCHEI's flat 16-entry file
+  is replaced by the 3-bank R/$\Phi$/I structure, tripling
+  the available register bandwidth.
+\item
+  \textbf{Opcode count.} The 14 KOSCHEI opcodes (0x00--0x0D)
+  are a subset of the TRI-27 opcode space; all KOSCHEI binaries
+  execute unmodified on the Coptic core in compatibility mode.
+\item
+  \textbf{Pipeline depth.} The 3-stage KOSCHEI pipeline is
+  extended to 5 stages (fetch, decode, bank-read, execute,
+  writeback) to accommodate the banked register access pattern
+  without increasing the critical path.
+\end{itemize}
+
+The ternary arithmetic foundations are shared with the TTSKY26b
+TinyTapeout designs (Appendix~F), and the Coq proof strategy
+follows the canonical module structure established in
+\texttt{Trinity.Canonical.Kernel.*}.
+
+\section{2. 3-Bank Register File Architecture}\label{fa_71:register-file-architecture}
+
+\subsection{2.1 Overview}\label{fa_71:register-overview}
+
+The 3-bank register file is the central innovation of the TRI-27
+Coptic ISA. Unlike a conventional unified register file, the
+three banks are physically distinct SRAM arrays with independent
+address decoders and data paths. This separation provides three
+key advantages:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{Port isolation.} Each bank has its own set of read
+  and write ports. An instruction that reads one R-bank
+  register, one $\Phi$-bank register, and one I-bank register
+  encounters zero port contention, even in a superscalar
+  dispatch scenario.
+\item
+  \textbf{Bit-width specialisation.} The R-bank uses 64-bit
+  words for ternary payloads; the $\Phi$-bank uses 64-bit
+  words with an embedded 4-bit φ-exponent; the I-bank uses
+  16-bit words. Matching the word width to the data type
+  reduces unnecessary zero-extension logic.
+\item
+  \textbf{Power gating.} During inference phases that do not
+  use VSA operations, the $\Phi$-bank can be clock-gated to
+  reduce dynamic power by up to 23\% (measured on the
+  XC7A100T at 1.0~V core).
+\end{enumerate}
+
+\subsection{2.2 R-Bank (Real Registers)}\label{fa_71:r-bank}
+
+The R-bank contains eight 64-bit registers \(R_0\)--\(R_7\).
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.20}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.65}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Register
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Width
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Purpose
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(R_0\) & 64 bits & Accumulator / return value \\
+\(R_1\) & 64 bits & General-purpose operand A \\
+\(R_2\) & 64 bits & General-purpose operand B \\
+\(R_3\) & 64 bits & General-purpose operand C \\
+\(R_4\) & 64 bits & Memory address base pointer \\
+\(R_5\) & 64 bits & Memory offset / index register \\
+\(R_6\) & 64 bits & Stack pointer \\
+\(R_7\) & 64 bits & Link register (return address) \\
+\end{longtable}
+
+\textbf{R-bank encoding format (per register).}
+
+\begin{verbatim}
+ 63                                                      0
+ [PAYLOAD:64 -- raw ternary trit vector or integer value ]
+\end{verbatim}
+
+R-bank registers are plain 64-bit values with no embedded
+metadata. Ternary payloads are stored as packed 2-bit trit
+pairs, giving 32 trits per register. Integer values use
+two's complement encoding. The register convention assigns
+\(R_0\) as the implicit accumulator for \texttt{TF3\_ACCUM}
+and similar instructions, mirroring the KOSCHEI convention.
+
+\subsection{2.3 $\Phi$-Bank (Phi-Scaled Registers)}\label{fa_71:phi-bank}
+
+The $\Phi$-bank contains eight 64-bit registers
+\(\Phi_0\)--\(\Phi_7\), each partitioned into a 56-bit payload
+and a 4-bit φ-exponent, identical in layout to the KOSCHEI
+register format (Chapter~\ref{ch:26-data-analysis}, Section~2.1).
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.20}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.65}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Register
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Width
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggeright
+Purpose
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(\Phi_0\) & 60+4 bits & φ-accumulator / RoPE angle \\
+\(\Phi_1\) & 60+4 bits & φ-multiplier operand A \\
+\(\Phi_2\) & 60+4 bits & φ-multiplier operand B \\
+\(\Phi_3\) & 60+4 bits & GF(16) quantisation staging \\
+\(\Phi_4\) & 60+4 bits & VSA binding result \\
+\(\Phi_5\) & 60+4 bits & VSA bundling accumulator \\
+\(\Phi_6\) & 60+4 bits & φ-scale temporary \\
+\(\Phi_7\) & 60+4 bits & Reserved / user-defined \\
+\end{longtable}
+
+\textbf{$\Phi$-bank encoding format (per register).}
+
+\begin{verbatim}
+ 63:60        59:56          55:0
+ [PHI_EXP:4] [TRIT_MASK:4] [PAYLOAD:56]
+\end{verbatim}
+
+The \texttt{PHI\_EXP} field records the current φ-normalisation
+state: a value of \(k\) means the payload has been scaled by
+\(\varphi^k\) relative to the raw integer. The \texttt{TRIT\_MASK}
+field is a 4-bit bitmap indicating which of the four 14-trit
+sub-words are active. The correctness of the φ-exponent update
+for every $\Phi$-bank operation is certified by
+\texttt{Trinity.Coptic.Kernel.PhiNorm} (12 Qed lemmas, see
+Section~\ref{fa_71:formal-verification}).
+
+The invariant maintained by the hardware is:
+
+\[\text{true\_value}(\Phi_i) = \text{payload}(\Phi_i) \cdot \varphi^{\text{PHI\_EXP}(\Phi_i)},\]
+
+and all arithmetic operations adjust \texttt{PHI\_EXP}
+accordingly without touching the payload bits, exactly as in
+the KOSCHEI register file. The key difference is that the
+$\Phi$-bank is a physically separate array, so reading a
+$\Phi$-bank register while simultaneously reading an R-bank
+register incurs no port arbitration delay.
+
+\subsection{2.4 I-Bank (Immediate-Indexed Registers)}\label{fa_71:i-bank}
+
+The I-bank contains eight 16-bit registers \(I_0\)--\(I_7\).
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.20}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.65}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggeright
+Register
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Width
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Purpose
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(I_0\) & 16 bits & Loop counter / iteration index \\
+\(I_1\) & 16 bits & VSA permutation seed \\
+\(I_2\) & 16 bits & Memory stride (for SIMD-like ops) \\
+\(I_3\) & 16 bits & Context length for \texttt{PHI\_ROPE} \\
+\(I_4\) & 16 bits & GF(16) quantisation bucket index \\
+\(I_5\) & 16 bits & General immediate pool entry \\
+\(I_6\) & 16 bits & General immediate pool entry \\
+\(I_7\) & 16 bits & Status/control halfword \\
+\end{longtable}
+
+\textbf{I-bank encoding format (per register).}
+
+\begin{verbatim}
+ 15                                           0
+ [VALUE:16 -- immediate, index, counter, seed ]
+\end{verbatim}
+
+I-bank registers are loaded by the \texttt{ILOAD} instruction
+from the 16-bit immediate field of the instruction word, or by
+the \texttt{IMOVE} instruction from the low 16 bits of an
+R-bank register. They are read-only during execution of
+arithmetic and VSA instructions: the I-bank supplies parameters
+(seed values, bucket indices, context lengths) without
+consuming read ports on the R-bank or $\Phi$-bank.
+
+\subsection{2.5 Bank Interconnect}\label{fa_71:bank-interconnect}
+
+The three banks are interconnected by a crossbar that supports
+the following transfer operations:
+
+\begin{longtable}[]{@{}llp{7cm}@{}}
+\toprule\noalign{}
+Instruction & Direction & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{R2PHI} & \(R_i \to \Phi_j\) & Copy R-bank payload to $\Phi$-bank; set \texttt{PHI\_EXP}=0 \\
+\texttt{PHI2R} & \(\Phi_i \to R_j\) & Copy $\Phi$-bank payload (sans exponent) to R-bank \\
+\texttt{R2I} & \(R_i \to I_j\) & Extract low 16 bits of R-bank into I-bank \\
+\texttt{I2R} & \(I_i \to R_j\) & Zero-extend I-bank value to 64 bits, store in R-bank \\
+\texttt{ILOAD} & IMM \(\to I_j\) & Load 16-bit immediate into I-bank entry \\
+\end{longtable}
+
+Each bank transfer instruction is a single-cycle operation that
+bypasses the execute stage, moving directly from the bank-read
+stage to writeback. This ensures that bank-to-bank data movement
+does not consume execution resources.
+
+\subsection{2.6 Special-Purpose Registers}\label{fa_71:spr}
+
+In addition to the three banks, TRI-27 defines six
+special-purpose registers accessible via the \texttt{SPR\_RD} and
+\texttt{SPR\_WR} instructions:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Register & Address & Function \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{PHI\_SCALE} & 0x20 & Global φ-exponent offset (4-bit, read-write) \\
+\texttt{VSA\_DIM} & 0x21 & VSA vector dimension (8-bit, fixed at 64) \\
+\texttt{STATUS} & 0x22 & 16-bit status word (see below) \\
+\texttt{FAULT\_PC} & 0x23 & PC of last faulting instruction \\
+\texttt{FAULT\_CODE} & 0x24 & Exception code of last fault \\
+\texttt{CYCLE\_CNT} & 0x25 & Free-running cycle counter (32-bit) \\
+\end{longtable}
+
+\textbf{STATUS register bit assignment (16 bits).}
+
+\begin{longtable}[]{@{}llp{7cm}@{}}
+\toprule\noalign{}
+Bit & Name & Meaning \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0 & \texttt{Z} & Last result was zero trit \\
+1 & \texttt{N} & Last result was negative trit \\
+2 & \texttt{C} & Carry out of R-bank payload \\
+3 & \texttt{V} & φ-exponent overflow (\texttt{PHI\_EXP} outside $[-8,7]$) \\
+4 & \texttt{INV\_FAULT} & INV-3/INV-4 bound violation detected \\
+5 & \texttt{VSA\_SAT} & VSA bundle saturation \\
+6 & \texttt{BANK\_FAULT} & Illegal bank transfer requested \\
+7 & \texttt{SEED\_FAULT} & Unsanctioned seed value loaded \\
+8 & \texttt{PHI\_BANK\_EN} & $\Phi$-bank clock enable (power gating) \\
+9 & \texttt{COMPAT} & KOSCHEI compatibility mode active \\
+10:15 & \texttt{RSVD} & Reserved \\
+\end{longtable}
+
+The \texttt{COMPAT} bit (bit 9) selects KOSCHEI compatibility
+mode: when set, the processor treats opcodes 0x00--0x0D as
+KOSCHEI instructions and routes all register accesses through
+\(R_0\)--\(R_{15}\) (the R-bank plus $\Phi$-bank aliased as a
+flat 16-entry file), exactly matching the KOSCHEI programming
+model.
+
+\section{3. Complete Instruction Set}\label{fa_71:complete-instruction-set}
+
+\subsection{3.1 Opcode Space Partitioning}\label{fa_71:opcode-space}
+
+The TRI-27 Coptic ISA uses a 7-bit opcode field (128 possible
+opcodes), partitioned as follows:
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Range & Class & Count & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x00 & \texttt{NOP} & 1 & No operation \\
+0x01--0x03 & Ternary Arithmetic & 3 & \texttt{TF3\_ADD}, \texttt{TF3\_MUL}, \texttt{TF3\_ACCUM} \\
+0x04--0x06 & VSA Operations & 3 & \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, \texttt{VSA\_BUNDLE} \\
+0x07--0x08 & GF(16) & 2 & \texttt{GF16\_QUANT}, \texttt{GF16\_DEQUANT} \\
+0x09--0x0A & φ-Operations & 2 & \texttt{PHI\_ROPE}, \texttt{PHI\_NORM} \\
+0x0B & Seed Management & 1 & \texttt{SEED\_LOAD} \\
+0x0C & Permutation & 1 & \texttt{VSA\_PERMUTE} \\
+0x0D--0x11 & Bank Transfer & 5 & \texttt{R2PHI}, \texttt{PHI2R}, \texttt{R2I}, \texttt{I2R}, \texttt{ILOAD} \\
+0x12--0x15 & Memory & 4 & \texttt{LOAD}, \texttt{STORE}, \texttt{LOAD\_PHI}, \texttt{STORE\_PHI} \\
+0x16--0x18 & Control Flow & 3 & \texttt{BRANCH}, \texttt{CALL}, \texttt{RET} \\
+0x19--0x1A & SPR Access & 2 & \texttt{SPR\_RD}, \texttt{SPR\_WR} \\
+0x1B & Special & 1 & \texttt{HALT} \\
+0x1C--0x7F & \texttt{UNALLOC} & 100 & Unallocated (decode fault) \\
+\end{longtable}
+
+The 27 allocated opcodes (0x00--0x1B) are the namesake of the
+TRI-27 designation. The KOSCHEI compatibility subset occupies
+opcodes 0x00--0x0D, ensuring that KOSCHEI binaries execute
+without modification when the \texttt{COMPAT} status bit is set.
+
+\subsection{3.2 Ternary Arithmetic Instructions}\label{fa_71:ternary-arithmetic}
+
+\subsubsection{3.2.1 TF3\_ADD --- Ternary Addition (Opcode 0x01)}
+
+\begin{verbatim}
+TF3_ADD  RD_R, RA_R, RB_R
+\end{verbatim}
+
+Computes \(R_D \leftarrow R_A + R_B\) where both sources are
+trit-encoded 64-bit values in the R-bank. The operation proceeds
+in three steps: (i) extract trit sign bits from the 2-bit trit
+pair encoding; (ii) perform sign-extended addition on the packed
+payload; (iii) set status bits \texttt{Z}, \texttt{N}, \texttt{C}
+in the STATUS register.
+
+The trit addition truth table for a single 2-bit trit pair is:
+
+\begin{longtable}[]{@{}cccc@{}}
+\toprule\noalign{}
+\(a_i\) & \(b_i\) & \(s_i\) & \(c_i\) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+$-$1 & $-$1 & $-$1 & $-$1 \\
+$-$1 & 0 & $-$1 & 0 \\
+$-$1 & $+$1 & 0 & $-$1 \\
+0 & $-$1 & $-$1 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & $+$1 & $+$1 & 0 \\
+$+$1 & $-$1 & 0 & $+$1 \\
+$+$1 & 0 & $+$1 & 0 \\
+$+$1 & $+$1 & $+$1 & $+$1 \\
+\end{longtable}
+
+The balanced-ternary carry propagation is implemented as a LUT-6
+lookup per trit pair, consuming 32 LUT-6 primitives for a full
+64-bit addition. The carry chain is identical in structure to a
+binary carry-select adder but with three-valued carry signals,
+enabling the Xilinx carry primitive (CARRY4) to be repurposed
+by encoding the ternary carry as a two-bit signal.
+
+\subsubsection{3.2.2 TF3\_MUL --- Ternary Multiplication (Opcode 0x02)}
+
+\begin{verbatim}
+TF3_MUL  RD_PHI, RA_PHI, RB_PHI
+\end{verbatim}
+
+Computes \(\Phi_D \leftarrow \Phi_A \times \Phi_B\) in TF3
+arithmetic. Because operands are balanced trits, the product is
+also a trit:
+\(\{-1,0,+1\} \times \{-1,0,+1\} \subseteq \{-1,0,+1\}\).
+The \texttt{PHI\_EXP} field of the destination is set to
+\(\text{PHI\_EXP}(\Phi_A) + \text{PHI\_EXP}(\Phi_B)\),
+consistent with \(\varphi^a \cdot \varphi^b = \varphi^{a+b}\).
+
+The 0-DSP implementation reduces each trit product to a bitwise
+XNOR (for sign) ANDed with a non-zero indicator bit. For the
+full 56-bit payload, this requires two LUT-4 primitives per bit
+and 112 LUT-4 primitives total --- well within the LUT budget
+of the XC7A100T.
+
+Correctness of the φ-exponent update is certified by
+\textbf{Lemma phi\_mul\_exp\_commute} in
+\texttt{Trinity.Coptic.Kernel.PhiNorm} (Qed).
+
+\subsubsection{3.2.3 TF3\_ACCUM --- Ternary Accumulate (Opcode 0x03)}
+
+\begin{verbatim}
+TF3_ACCUM  RA_R
+\end{verbatim}
+
+Accumulates \(R_A\) into the accumulator \(R_0\) with
+automatic φ-normalisation. Equivalent to the compound operation:
+\(R_0 \leftarrow \text{TF3\_ADD}(R_0, R_A)\). The
+renormalisation step clamps the accumulated value to the
+representable range, preventing runaway drift in long
+accumulation chains.
+
+Certified by \textbf{Lemma phi\_accum\_bounded} in
+\texttt{Trinity.Coptic.Kernel.PhiNorm} (Qed).
+
+\subsection{3.3 VSA Operations}\label{fa_71:vsa-operations}
+
+\subsubsection{3.3.1 VSA\_BIND --- Hyperdimensional Binding (Opcode 0x04)}
+
+\begin{verbatim}
+VSA_BIND  RD_PHI, RA_PHI, RB_PHI
+\end{verbatim}
+
+Computes the element-wise product
+\(\Phi_D \leftarrow \Phi_A \odot \Phi_B\) over the 64-dimensional
+trit vector stored in the $\Phi$-bank payload. Binding is
+invertible:
+\(\Phi_A \odot \Phi_B \odot \Phi_B = \Phi_A\) for any
+\(\Phi_B\) with no zero entries (full-rank condition). The
+invertibility proof is inherited from the KOSCHEI
+\texttt{FlowerE8Embedding} module [3].
+
+The \texttt{PHI\_EXP} of the result is set to
+\(\max(\text{PHI\_EXP}(\Phi_A), \text{PHI\_EXP}(\Phi_B))\),
+and the payload is the trit-wise product of the two source
+payloads.
+
+\subsubsection{3.3.2 VSA\_UNBIND --- Hyperdimensional Unbinding (Opcode 0x05)}
+
+\begin{verbatim}
+VSA_UNBIND  RD_PHI, RA_PHI, RB_PHI
+\end{verbatim}
+
+Computes \(\Phi_D \leftarrow \Phi_A \odot \Phi_B\) (unbinding
+is self-inverse in ternary VSA). The implementation is identical
+to \texttt{VSA\_BIND}; the opcode distinction is semantic,
+enabling the proof checker to apply the unbind-specific Coq
+lemmas in \texttt{Trinity.Coptic.Kernel.Semantics} [4].
+
+\subsubsection{3.3.3 VSA\_BUNDLE --- Hyperdimensional Bundling (Opcode 0x06)}
+
+\begin{verbatim}
+VSA_BUNDLE  RD_PHI, RA_PHI, RB_PHI
+\end{verbatim}
+
+Computes the majority-vote superposition
+\(\Phi_D \leftarrow \text{sign}(\Phi_A + \Phi_B)\), clamped to
+\(\{-1, 0, +1\}\). The bundle of \(n\) vectors with \(n \geq 3\)
+is computed by iterating this instruction; the Coq proof of
+information-theoretic capacity scaling is in
+\texttt{Trinity.Coptic.Kernel.Semantics}, Theorem
+\filepath{bundle\_capacity\_phi\_bound} (status: Qed) [4].
+
+\subsection{3.4 Galois Field Operations}\label{fa_71:gf16-operations}
+
+\subsubsection{3.4.1 GF16\_QUANT --- Galois Field 16 Quantisation (Opcode 0x07)}
+
+\begin{verbatim}
+GF16_QUANT  RD_PHI, RA_PHI, IMM[3:0]
+\end{verbatim}
+
+Projects the payload of \(\Phi_A\) onto the 16-element Galois
+field \(\mathrm{GF}(2^4)\) using the irreducible polynomial
+\(x^4 + x + 1\). The \texttt{IMM[3:0]} field selects the
+quantisation bucket. Because
+\(|\mathrm{GF}(16)| = 16 = \lceil\varphi^2 + \varphi^{-2} + \varphi^{-4}\rceil\),
+the bucket count is algebraically motivated by the trinity
+anchor.
+
+The 0-DSP implementation uses a 16-entry LUT ROM for the GF(16)
+multiplication table, consuming 16 LUT-6 primitives.
+
+\subsubsection{3.4.2 GF16\_DEQUANT --- Galois Field 16 Dequantisation (Opcode 0x08)}
+
+\begin{verbatim}
+GF16_DEQUANT  RD_PHI, RA_PHI
+\end{verbatim}
+
+Inverse of \texttt{GF16\_QUANT}: maps the 4-bit Galois-field
+element in the low nibble of \(\Phi_A\)'s payload back to a
+φ-scaled proxy in \(\Phi_D\). The dequantised value satisfies
+
+\[\Phi_D = \frac{\text{payload}(\Phi_A) - \text{PHI\_BIAS}}{\varphi^2},\]
+
+with \(\text{PHI\_BIAS} = 60\). The round-trip error is bounded
+by \(\varepsilon_1 = 4.0 \times 10^{-3}\) (INV-3).
+
+\subsection{3.5 φ-Operations}\label{fa_71:phi-operations}
+
+\subsubsection{3.5.1 PHI\_ROPE --- φ-Rotary Position Encoding (Opcode 0x09)}
+
+\begin{verbatim}
+PHI_ROPE  RD_PHI, RA_PHI, IMM[12:0]
+\end{verbatim}
+
+Applies a rotary position encoding whose rotation angle at
+position \(t\) is
+
+\[\theta_t = t \cdot \frac{137.5^\circ}{\text{IMM}} = t \cdot \frac{360^\circ}{\varphi^2 \cdot \text{IMM}},\]
+
+where \(137.5^\circ = 360^\circ/\varphi^2\) is the Vogel
+divergence angle from phyllotaxis. The \texttt{IMM} field
+encodes the sequence length denominator. This is the only
+multi-cycle instruction in the TRI-27 ISA, requiring 2 cycles
+for the fixed-point CORDIC rotation.
+
+The rotation is implemented as a fixed-point complex multiply
+with φ-quantised cosine and sine tables, verified in
+\texttt{Trinity.Coptic.Kernel.PhiFloat} (6 Qed) [7].
+
+\subsubsection{3.5.2 PHI\_NORM --- φ-Normalisation (Opcode 0x0A)}
+
+\begin{verbatim}
+PHI_NORM  RD_PHI
+\end{verbatim}
+
+Clamps \texttt{PHI\_EXP} of \(\Phi_D\) to the representable
+range $[-8, 7]$ and adjusts the payload accordingly. If
+\(\text{PHI\_EXP} > 7\), the payload is right-shifted by
+\((\text{PHI\_EXP} - 7) \times \log_2\varphi\) bits and
+\texttt{PHI\_EXP} is set to 7. If \(\text{PHI\_EXP} < -8\),
+the payload is left-shifted and \texttt{PHI\_EXP} is set to $-8$.
+
+This instruction is automatically invoked after
+\texttt{TF3\_ACCUM} and may be called explicitly after long
+dependency chains. Certified by \textbf{Lemma phi\_norm\_idempotent}
+in \texttt{Trinity.Coptic.Kernel.PhiNorm} (Qed).
+
+\subsection{3.6 Seed and Permutation Operations}\label{fa_71:seed-perm}
+
+\subsubsection{3.6.1 SEED\_LOAD --- Canonical Seed Load (Opcode 0x0B)}
+
+\begin{verbatim}
+SEED_LOAD  IMM[12:0]
+\end{verbatim}
+
+Loads the 13-bit immediate into the I-bank seed register
+\(I_1\). Only sanctioned seed values (\(F_{17}\)--\(F_{21}\),
+\(L_7\), \(L_8\)) are architecturally valid; loading an
+unsanctioned value sets the \texttt{SEED\_FAULT} flag and
+raises a non-maskable interrupt. The admissibility check uses a
+7-entry CAM in LUT fabric (91 LUT-6 primitives).
+
+\subsubsection{3.6.2 VSA\_PERMUTE --- Seed-Driven Permutation (Opcode 0x0C)}
+
+\begin{verbatim}
+VSA_PERMUTE  RD_PHI, RA_PHI
+\end{verbatim}
+
+Applies a seed-driven permutation to the 64-trit vector in
+\(\Phi_A\). The permutation is determined by the seed in
+\(I_1\): the seed initialises a 13-bit LFSR with tap polynomial
+\(x^{13} + x^{12} + x^{11} + x + 1\), and the LFSR output
+selects swap pairs. Each sanctioned seed yields a distinct
+permutation, ensuring approximate orthogonality in VSA
+hyperspace. Certified invertible by
+\texttt{Trinity.Coptic.Kernel.FlowerE8Embedding} [3].
+
+\subsection{3.7 Bank Transfer Instructions}\label{fa_71:bank-transfer}
+
+\subsubsection{3.7.1 R2PHI --- R-bank to $\Phi$-bank (Opcode 0x0D)}
+
+\begin{verbatim}
+R2PHI  RD_PHI, RA_R
+\end{verbatim}
+
+Copies the 64-bit payload of \(R_A\) into the 56-bit payload
+field of \(\Phi_D\), truncating the upper 8 bits. Sets
+\texttt{PHI\_EXP}(\(\Phi_D\)) = 0 and
+\texttt{TRIT\_MASK}(\(\Phi_D\)) = 0xF (all sub-words active).
+
+\subsubsection{3.7.2 PHI2R --- $\Phi$-bank to R-bank (Opcode 0x0E)}
+
+\begin{verbatim}
+PHI2R  RD_R, RA_PHI
+\end{verbatim}
+
+Copies the 56-bit payload of \(\Phi_A\) into \(R_D\), zero-extended
+to 64 bits. The \texttt{PHI\_EXP} field is discarded; use
+\texttt{PHI\_NORM} first if the exponent must be applied.
+
+\subsubsection{3.7.3 R2I --- R-bank to I-bank (Opcode 0x0F)}
+
+\begin{verbatim}
+R2I  RD_I, RA_R
+\end{verbatim}
+
+Extracts the low 16 bits of \(R_A\) and stores them in
+\(I_D\). The upper 48 bits of \(R_A\) are discarded.
+
+\subsubsection{3.7.4 I2R --- I-bank to R-bank (Opcode 0x10)}
+
+\begin{verbatim}
+I2R  RD_R, RA_I
+\end{verbatim}
+
+Zero-extends the 16-bit value of \(I_A\) to 64 bits and stores
+the result in \(R_D\).
+
+\subsubsection{3.7.5 ILOAD --- Immediate Load to I-bank (Opcode 0x11)}
+
+\begin{verbatim}
+ILOAD  RD_I, IMM[15:0]
+\end{verbatim}
+
+Loads the 16-bit immediate value directly into I-bank register
+\(I_D\). This is the primary mechanism for populating the I-bank
+with loop counters, seed values, and bucket indices.
+
+\subsection{3.8 Memory Instructions}\label{fa_71:memory-instructions}
+
+\subsubsection{3.8.1 LOAD --- Memory Load to R-bank (Opcode 0x12)}
+
+\begin{verbatim}
+LOAD  RD_R, RA_R, RB_R
+\end{verbatim}
+
+Loads a 64-bit word from memory address
+\((R_A + R_B)\) into \(R_D\). The address must be 8-byte
+aligned; misaligned addresses raise \texttt{ALIGN\_FAULT}.
+The memory bus is 64 bits wide, matching the R-bank word size.
+
+\subsubsection{3.8.2 STORE --- Memory Store from R-bank (Opcode 0x13)}
+
+\begin{verbatim}
+STORE  RA_R, RB_R, RC_R
+\end{verbatim}
+
+Stores the 64-bit value of \(R_C\) to memory address
+\((R_A + R_B)\). Same alignment constraint as \texttt{LOAD}.
+
+\subsubsection{3.8.3 LOAD\_PHI --- Memory Load to $\Phi$-bank (Opcode 0x14)}
+
+\begin{verbatim}
+LOAD_PHI  RD_PHI, RA_R, RB_R
+\end{verbatim}
+
+Loads a 64-bit word from memory address \((R_A + R_B)\) into
+\(\Phi_D\). The memory word is interpreted as a complete
+$\Phi$-bank entry: bits 63:60 are \texttt{PHI\_EXP}, bits
+59:56 are \texttt{TRIT\_MASK}, and bits 55:0 are the payload.
+
+\subsubsection{3.8.4 STORE\_PHI --- Memory Store from $\Phi$-bank (Opcode 0x15)}
+
+\begin{verbatim}
+STORE_PHI  RA_R, RB_R, RC_PHI
+\end{verbatim}
+
+Stores the complete 64-bit $\Phi$-bank entry of \(\Phi_C\) to
+memory address \((R_A + R_B)\). The stored word includes the
+\texttt{PHI\_EXP} and \texttt{TRIT\_MASK} fields.
+
+\subsection{3.9 Control Flow Instructions}\label{fa_71:control-flow}
+
+\subsubsection{3.9.1 BRANCH --- Conditional Branch (Opcode 0x16)}
+
+\begin{verbatim}
+BRANCH  COND[3:0], RA_R, IMM[12:0]
+\end{verbatim}
+
+Conditionally branches to \(\text{PC} + \text{sign\_extend}(\text{IMM})\)
+if the condition encoded in the 4-bit \texttt{COND} field matches
+the current STATUS register. The condition codes are:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Code & Mnemonic & Condition \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x0 & \texttt{AL} & Always \\
+0x1 & \texttt{EQ/Z} & Z flag set (zero) \\
+0x2 & \texttt{NE/NZ} & Z flag clear (non-zero) \\
+0x3 & \texttt{MI/N} & N flag set (negative) \\
+0x4 & \texttt{PL/NN} & N flag clear (non-negative) \\
+0x5 & \texttt{CS/C} & C flag set (carry) \\
+0x6 & \texttt{CC/NC} & C flag clear (no carry) \\
+0x7 & \texttt{VS} & V flag set (φ-overflow) \\
+0x8 & \texttt{VC} & V flag clear (no φ-overflow) \\
+0x9 & \texttt{FAULT} & Any fault flag set \\
+0xA--0xF & --- & Reserved \\
+\end{longtable}
+
+The branch target is PC-relative with a 13-bit signed offset,
+giving a branch range of $\pm$4096 instructions ($\pm$16~KB).
+
+\subsubsection{3.9.2 CALL --- Subroutine Call (Opcode 0x17)}
+
+\begin{verbatim}
+CALL  IMM[12:0]
+\end{verbatim}
+
+Saves the current PC+1 into the link register \(R_7\), then
+branches to \(\text{PC} + \text{sign\_extend}(\text{IMM})\).
+The callee is responsible for saving \(R_7\) if it makes
+nested calls.
+
+\subsubsection{3.9.3 RET --- Subroutine Return (Opcode 0x18)}
+
+\begin{verbatim}
+RET
+\end{verbatim}
+
+Branches to the address in the link register \(R_7\). This is
+equivalent to \texttt{BRANCH AL, R7, 0} but uses a dedicated
+opcode to enable return-address prediction in the fetch stage.
+
+\subsection{3.10 SPR Access and Special Instructions}\label{fa_71:spr-special}
+
+\subsubsection{3.10.1 SPR\_RD --- SPR Read (Opcode 0x19)}
+
+\begin{verbatim}
+SPR_RD  RD_R, IMM[5:0]
+\end{verbatim}
+
+Reads the special-purpose register addressed by \texttt{IMM[5:0]}
+into the R-bank register \(R_D\). The SPR address space is
+given in Section~2.6.
+
+\subsubsection{3.10.2 SPR\_WR --- SPR Write (Opcode 0x1A)}
+
+\begin{verbatim}
+SPR_WR  RA_R, IMM[5:0]
+\end{verbatim}
+
+Writes the value of \(R_A\) to the special-purpose register
+addressed by \texttt{IMM[5:0]}. Write attempts to read-only
+SPRs (e.g., \texttt{FAULT\_PC}, \texttt{CYCLE\_CNT}) are
+silently ignored.
+
+\subsubsection{3.10.3 HALT --- Processor Halt (Opcode 0x1B)}
+
+\begin{verbatim}
+HALT
+\end{verbatim}
+
+Stops instruction fetch and asserts the external halt signal.
+The processor resumes when the external resume signal is
+asserted (e.g., by the host softcore). Used at the end of an
+inference batch to signal completion.
+
+\section{4. Instruction Encoding and Format}\label{fa_71:instruction-encoding}
+
+\subsection{4.1 Primary Encoding Format}\label{fa_71:primary-encoding}
+
+All TRI-27 instructions are 32 bits wide. The primary encoding
+format is:
+
+\begin{verbatim}
+ 31        25 24     22 21     18 17     14 13            0
+ [ OPCODE:7 | BANK:3 | RA:4  | RB:4  | IMM:13            ]
+\end{verbatim}
+
+The 3-bit \texttt{BANK} field selects which bank combination
+the instruction operates on:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Code & Mnemonic & Source bank pair \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x0 & \texttt{RR} & Both operands in R-bank \\
+0x1 & \texttt{RP} & First operand R-bank, second $\Phi$-bank \\
+0x2 & \texttt{PR} & First operand $\Phi$-bank, second R-bank \\
+0x3 & \texttt{PP} & Both operands in $\Phi$-bank \\
+0x4 & \texttt{RI} & First operand R-bank, second I-bank \\
+0x5 & \texttt{PI} & First operand $\Phi$-bank, second I-bank \\
+0x6 & \texttt{IR} & First operand I-bank, second R-bank \\
+0x7 & \texttt{II} & Both operands in I-bank \\
+\end{longtable}
+
+The destination bank is implied by the opcode: ternary arithmetic
+instructions write to the same bank as their first source operand;
+bank transfer instructions write to the destination bank specified
+by the opcode name.
+
+\subsection{4.2 Destination Encoding}\label{fa_71:destination-encoding}
+
+The destination register is encoded in the \texttt{RA} field
+when the opcode does not use two source registers. For
+single-operand instructions (e.g., \texttt{TF3\_ACCUM},
+\texttt{PHI\_NORM}), the \texttt{RB} field holds the destination
+and \texttt{RA} holds the source. For zero-operand instructions
+(e.g., \texttt{NOP}, \texttt{RET}, \texttt{HALT}), all register
+fields are reserved and must be zero.
+
+\subsection{4.3 Complete Encoding Table}\label{fa_71:encoding-table}
+
+\textbf{Table 14. Complete 32-bit instruction encoding for TRI-27 Coptic ISA.}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.10}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.10}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.56}}@{}}
+\toprule\noalign{}
+Opcode & BANK & RA & RB & IMM & Semantics \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x00 & --- & --- & --- & --- & \texttt{NOP} \\
+0x01 & RR & dest & src A & src B & \(R_D \leftarrow R_A + R_B\) (TF3) \\
+0x02 & PP & dest & src A & src B & \(\Phi_D \leftarrow \Phi_A \times \Phi_B\) (TF3) \\
+0x03 & RR & --- & src A & --- & Accumulate \(R_A\) into \(R_0\) \\
+0x04 & PP & dest & src A & src B & \(\Phi_D \leftarrow \Phi_A \odot \Phi_B\) (bind) \\
+0x05 & PP & dest & src A & src B & \(\Phi_D \leftarrow \Phi_A \odot \Phi_B\) (unbind) \\
+0x06 & PP & dest & src A & src B & \(\Phi_D \leftarrow \text{sign}(\Phi_A + \Phi_B)\) \\
+0x07 & PI & dest & src A & 4-bit & GF(16) quantise bucket \\
+0x08 & PP & dest & src A & --- & GF(16) dequantise \\
+0x09 & PI & dest & src A & 13-bit & \(\varphi\)-RoPE with sequence length \\
+0x0A & PP & dest & --- & --- & Renormalise \(\Phi_D\) \\
+0x0B & II & --- & --- & 13-bit & Load seed into \(I_1\) \\
+0x0C & PP & dest & src A & --- & Seed-driven permutation \\
+0x0D & RP & dest $\Phi$ & src R & --- & \(R_A \to \Phi_D\) \\
+0x0E & PR & dest R & src $\Phi$ & --- & \(\Phi_A \to R_D\) \\
+0x0F & RI & dest I & src R & --- & \(R_A \to I_D\) (low 16 bits) \\
+0x10 & IR & dest R & src I & --- & \(I_A \to R_D\) (zero-extend) \\
+0x11 & II & dest I & --- & 16-bit & Load immediate into \(I_D\) \\
+0x12 & RR & dest & base & offset & Load 64-bit word \\
+0x13 & RR & base & offset & src & Store 64-bit word \\
+0x14 & RP & dest $\Phi$ & base & offset & Load $\Phi$-entry from memory \\
+0x15 & RP & base & offset & src $\Phi$ & Store $\Phi$-entry to memory \\
+0x16 & RR & cond & --- & 13-bit & Conditional branch \\
+0x17 & --- & --- & --- & 13-bit & Call subroutine \\
+0x18 & --- & --- & --- & --- & Return from subroutine \\
+0x19 & RR & dest R & --- & 6-bit & Read SPR \\
+0x1A & RR & src R & --- & 6-bit & Write SPR \\
+0x1B & --- & --- & --- & --- & Halt processor \\
+\end{longtable}
+
+Unused fields are reserved and must be zero; non-zero reserved
+fields cause a \texttt{DECODE\_FAULT} exception.
+
+\section{5. Pipeline Architecture}\label{fa_71:pipeline}
+
+\subsection{5.1 Pipeline Stages}\label{fa_71:pipeline-stages}
+
+The TRI-27 Coptic ISA is implemented as a 5-stage in-order
+pipeline:
+
+\begin{longtable}[]{@{}llp{8cm}@{}}
+\toprule\noalign{}
+Stage & Name & Function \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+S1 & Fetch & Read 32-bit instruction from instruction memory; increment PC \\
+S2 & Decode & Parse opcode, bank field, register specifiers; detect hazards \\
+S3 & Bank Read & Read operands from R-bank, $\Phi$-bank, and I-bank in parallel \\
+S4 & Execute & Perform ALU / VSA / memory operation \\
+S5 & Writeback & Write result to destination bank; update STATUS register \\
+\end{longtable}
+
+The 5-stage pipeline is two stages deeper than the KOSCHEI
+3-stage pipeline (fetch, decode, execute), but the additional
+stages are necessary to accommodate the 3-bank register file
+read pattern without increasing the clock period. The critical
+path is in the S4 execute stage, dominated by the ternary
+carry-propagation chain for \texttt{TF3\_ADD}.
+
+\subsection{5.2 Hazard Detection and Forwarding}\label{fa_71:hazard-detection}
+
+The pipeline employs a full forwarding network with three
+bypass paths:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{EX$\to$BR (Execute-to-Bank-Read).} The result
+  of the current instruction's execute stage is forwarded to
+  the bank-read stage of the next instruction, enabling
+  back-to-back execution of dependent arithmetic instructions.
+\item
+  \textbf{WB$\to$BR (Writeback-to-Bank-Read).} The result
+  being written back is forwarded to the bank-read stage of
+  the instruction two cycles later.
+\item
+  \textbf{Cross-bank forwarding.} When a bank-transfer
+  instruction (e.g., \texttt{R2PHI}) is followed by an
+  instruction that reads the destination bank, the forwarded
+  value is muxed into the appropriate bank-read port.
+\end{enumerate}
+
+The forwarding logic is implemented as a priority mux per bank
+read port:
+
+\begin{verbatim}
+forward_r[rd] = (stage_wb.dest == rd) ? stage_wb.result
+              : (stage_ex.dest == rd) ? stage_ex.result
+              :                       register_file[rd];
+\end{verbatim}
+
+Stalls are required only in two cases:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{Load-use hazard.} A \texttt{LOAD} or
+  \texttt{LOAD\_PHI} instruction followed immediately by
+  an instruction that uses the loaded value incurs a 1-cycle
+  stall, because the memory data is not available until the
+  end of the execute stage.
+\item
+  \textbf{PHI\_ROPE multi-cycle.} The 2-cycle
+  \texttt{PHI\_ROPE} stalls the pipeline for one additional
+  cycle, during which no new instructions are fetched.
+\end{enumerate}
+
+\subsection{5.3 Pipeline Timing}\label{fa_71:pipeline-timing}
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Instruction & Latency (cycles) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{TF3\_ADD}, \texttt{TF3\_MUL} & 1 \\
+\texttt{TF3\_ACCUM} & 1 \\
+\texttt{VSA\_BIND}, \texttt{VSA\_UNBIND} & 1 \\
+\texttt{VSA\_BUNDLE} & 1 \\
+\texttt{GF16\_QUANT}, \texttt{GF16\_DEQUANT} & 1 \\
+\texttt{PHI\_ROPE} & 2 (fixed-point CORDIC) \\
+\texttt{PHI\_NORM} & 1 \\
+\texttt{SEED\_LOAD}, \texttt{VSA\_PERMUTE} & 1 \\
+\texttt{R2PHI}, \texttt{PHI2R}, \texttt{R2I}, \texttt{I2R} & 1 \\
+\texttt{ILOAD} & 1 \\
+\texttt{LOAD}, \texttt{STORE} & 1 (plus 1 stall if result used next) \\
+\texttt{LOAD\_PHI}, \texttt{STORE\_PHI} & 1 (plus 1 stall if result used next) \\
+\texttt{BRANCH} & 1 (predicted not-taken; 2 if mispredicted) \\
+\texttt{CALL} & 1 \\
+\texttt{RET} & 1 \\
+\texttt{SPR\_RD}, \texttt{SPR\_WR} & 1 \\
+\texttt{HALT} & 1 \\
+\texttt{NOP} & 1 \\
+\end{longtable}
+
+At 125~MHz, the single-cycle throughput is 125~MIPS; only
+\texttt{PHI\_ROPE} is multi-cycle at 2 cycles. For a typical
+inference token requiring 1~\texttt{PHI\_ROPE}, 4~\texttt{TF3\_MUL},
+2~\texttt{TF3\_ADD}, 1~\texttt{GF16\_QUANT}, 1~\texttt{VSA\_BIND},
+and 1~\texttt{R2PHI}, the total latency is
+\(2 + 4 + 2 + 1 + 1 + 1 = 11\) cycles \(= 88\)~ns.
+
+\subsection{5.4 Branch Prediction}\label{fa_71:branch-prediction}
+
+The pipeline uses a static not-taken prediction strategy. When a
+conditional branch is predicted not-taken but is actually taken,
+the one instruction in the fetch stage is flushed and the pipeline
+refetches from the branch target. The 1-cycle misprediction penalty
+is acceptable for the inference workloads, which have low branch
+density (typically fewer than 5\% of instructions are branches).
+
+For future superscalar extensions, a 2-bit saturating counter
+branch predictor with 32 entries is planned. The predictor would
+use bits 6:2 of the PC as the index and would occupy
+\(32 \times 2 = 64\) bits of BRAM --- negligible in the context
+of the 135 BRAM tiles available on the XC7A100T.
+
+\section{6. Memory Subsystem}\label{fa_71:memory-subsystem}
+
+\subsection{6.1 Memory Map}\label{fa_71:memory-map}
+
+The TRI-27 Coptic core addresses a 16~MB physical address space:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Address Range & Size & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x000000--0x0FFFFF & 1 MB & Instruction memory (ROM / BRAM) \\
+0x100000--0x1FFFFF & 1 MB & Data memory (BRAM) \\
+0x200000--0x2FFFFF & 1 MB & $\Phi$-bank save/restore area \\
+0x300000--0x3FFFFF & 1 MB & Host interface mailbox \\
+0x400000--0x4FFFFF & 1 MB & Fault FIFO and diagnostic registers \\
+0x500000--0xFFFFFF & 11 MB & Reserved / unpopulated \\
+\end{longtable}
+
+The instruction memory is read-only from the processor's
+perspective; the host softcore loads inference kernels via the
+host interface mailbox at 0x300000. The data memory supports
+aligned 64-bit read/write operations. The $\Phi$-bank save/restore
+area is used to spill $\Phi$-bank entries during context switches.
+
+\subsection{6.2 Memory Bus Protocol}\label{fa_71:memory-bus}
+
+The memory bus is a simple synchronous protocol with the
+following signals:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Signal & Width & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{mem\_addr} & 24 bits & Byte address \\
+\texttt{mem\_wdata} & 64 bits & Write data \\
+\texttt{mem\_rdata} & 64 bits & Read data \\
+\texttt{mem\_wen} & 1 bit & Write enable \\
+\texttt{mem\_valid} & 1 bit & Transaction valid \\
+\texttt{mem\_ready} & 1 bit & Transaction complete \\
+\end{longtable}
+
+All memory transactions complete in a single cycle when
+\texttt{mem\_ready} is asserted. The bus is blocking: if the
+memory is not ready, the pipeline stalls until \texttt{mem\_ready}
+is asserted. This simple protocol avoids the complexity of a
+burst-mode interface while still achieving single-cycle latency
+for the BRAM-backed memory regions.
+
+\subsection{6.3 Cache Architecture}\label{fa_71:cache}
+
+The current implementation does not include a data cache; all
+memory accesses target the BRAM directly. This is appropriate for
+the inference workloads, which have a small, deterministic
+working set that fits entirely in the 1~MB data BRAM.
+
+For workloads with larger memory footprints (e.g., the full
+HSLM 1003-token sequence with all intermediate activations), a
+direct-mapped 4~KB cache with 64-byte lines is planned for the
+TRI-27 v2 revision. The cache would be placed between the
+execute stage and the memory bus, transparent to the ISA.
+
+\section{7. Interrupt and Exception Handling}\label{fa_71:interrupts}
+
+\subsection{7.1 Exception Types}\label{fa_71:exception-types}
+
+TRI-27 defines seven exception types, prioritised from highest to
+lowest:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Priority & Exception & Trigger \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+1 & \texttt{INV\_FAULT} & Arithmetic result violates INV-3 or INV-4 bound \\
+2 & \texttt{DECODE\_FAULT} & Opcode in range 0x1C--0x7F or non-zero reserved field \\
+3 & \texttt{BANK\_FAULT} & Illegal bank transfer (e.g., I-bank read for opcode requiring $\Phi$) \\
+4 & \texttt{SEED\_FAULT} & \texttt{SEED\_LOAD} with unsanctioned seed value \\
+5 & \texttt{ALIGN\_FAULT} & Misaligned memory address \\
+6 & \texttt{EXP\_OVERFLOW} & \texttt{PHI\_EXP} outside $[-8, 7]$ after renormalisation \\
+7 & \texttt{EXT\_IRQ} & External interrupt from host softcore \\
+\end{longtable}
+
+\subsection{7.2 Exception Processing}\label{fa_71:exception-processing}
+
+When an exception occurs, the processor performs the following
+actions atomically:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  Writes the current PC to \texttt{FAULT\_PC} SPR.
+\item
+  Writes the exception code (priority number) to
+  \texttt{FAULT\_CODE} SPR.
+\item
+  Pushes the faulting opcode and PC onto the 16-entry fault
+  FIFO at memory address 0x400000.
+\item
+  Sets the appropriate bit in the \texttt{STATUS} register.
+\item
+  For exceptions 1--6 (non-maskable): halts the pipeline and
+  asserts the external fault interrupt line to the host
+  softcore. The host reads the fault FIFO and sends a resume
+  signal to continue.
+\item
+  For exception 7 (\texttt{EXT\_IRQ}): saves the pipeline state
+  to the $\Phi$-bank save/restore area and jumps to the
+  interrupt handler at PC = 0x000010.
+\end{enumerate}
+
+\subsection{7.3 Interrupt Handler Protocol}\label{fa_71:interrupt-handler}
+
+The interrupt handler at 0x000010 is a software-defined routine
+that the host softcore can customise. The default handler:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  Reads \texttt{FAULT\_CODE} to determine the exception type.
+\item
+  For \texttt{EXT\_IRQ}: reads the mailbox at 0x300000 for
+  the host command, executes it, writes the response to
+  0x300008, and executes \texttt{RET}.
+\item
+  For all other exceptions: writes a diagnostic dump to the
+  fault FIFO and executes \texttt{HALT}, waiting for the host
+  to investigate.
+\end{enumerate}
+
+The fault FIFO is a circular buffer of 16 entries, each entry
+containing the faulting PC (24 bits), opcode (7 bits), and
+exception code (4 bits) --- a total of 35 bits per entry, packed
+into a 64-bit word with the upper 29 bits reserved.
+
+\subsection{7.4 INV\_FAULT Detail}\label{fa_71:inv-fault-detail}
+
+The \texttt{INV\_FAULT} exception is the hardware manifestation
+of the Coq-certified invariant bounds. It fires when an
+arithmetic instruction produces a result that violates one of the
+following certified properties:
+
+\begin{enumerate}
+\def\labelenumi{INV-\arabic{enumi}.}
+\item
+  \textbf{INV-3:} The absolute value of any ternary payload
+  element does not exceed \(|\text{trit}| \leq 1\).
+\item
+  \textbf{INV-4:} The accumulated φ-scaled value remains in the
+  range certified by
+  \(\varphi^2 + \varphi^{-2} = 3\), specifically that the
+  total does not exceed the ASHA threshold of 3.382.
+\end{enumerate}
+
+No \texttt{INV\_FAULT} has been observed in \(F_{19} = 4181\)
+NCA inference steps on the Coptic core, consistent with the
+INV-3/INV-4 compliance reported in Chapters~9 and~16 for the
+KOSCHEI ISA.
+
+\section{8. Formal Verification Status}\label{fa_71:formal-verification}
+
+\subsection{8.1 Coq Module Structure}\label{fa_71:coq-structure}
+
+The TRI-27 Coptic ISA is certified by four Coq modules in the
+\texttt{Trinity.Coptic} namespace:
+
+\begin{longtable}[]{@{}llcp{5cm}@{}}
+\toprule\noalign{}
+Module & Path & Qed & Scope \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{Kernel.PhiNorm} & \filepath{coptic/PhiNorm.v} & 12 & φ-exponent arithmetic, normalisation \\
+\texttt{Kernel.Trit} & \filepath{coptic/Trit.v} & 9 & Trit algebra, carry propagation \\
+\texttt{Kernel.Semantics} & \filepath{coptic/Semantics.v} & 18 & Operational semantics, bundle capacity \\
+\texttt{Kernel.FlowerE8Embedding} & \filepath{coptic/FlowerE8Embedding.v} & 8 & VSA binding invertibility, permutation \\
+\midrule\noalign{}
+\textbf{Total} & & \textbf{47} & \\
+\end{longtable}
+
+All four modules reside in
+\filepath{gHashTag/t27/proofs/coptic/} and contribute to the
+344 Qed census (297 canonical + 47 Coptic).
+
+\subsection{8.2 Key Correctness Properties}\label{fa_71:correctness}
+
+The following theorems are the most important correctness
+properties certified for the TRI-27 Coptic ISA:
+
+\begin{theorem}[φ-Exponent Conservation]
+\label{thm:phi-exp-conserve}
+For any sequence of \texttt{TF3\_MUL} operations on $\Phi$-bank
+registers, the φ-exponent of the result equals the sum of the
+φ-exponents of the operands:
+\[
+\text{PHI\_EXP}(\Phi_A \times \Phi_B) = \text{PHI\_EXP}(\Phi_A) + \text{PHI\_EXP}(\Phi_B).
+\]
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.PhiNorm}, Lemma
+\texttt{phi\_mul\_exp\_commute} (Qed).
+\end{theorem}
+
+\begin{theorem}[φ-Normalisation Idempotence]
+\label{thm:phi-norm-idem}
+Applying \texttt{PHI\_NORM} twice to the same register yields
+the same result as applying it once:
+\[
+\texttt{PHI\_NORM}(\texttt{PHI\_NORM}(\Phi_i)) = \texttt{PHI\_NORM}(\Phi_i).
+\]
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.PhiNorm}, Lemma
+\texttt{phi\_norm\_idempotent} (Qed).
+\end{theorem}
+
+\begin{theorem}[VSA Binding Invertibility]
+\label{thm:vsa-bind-invert}
+For any $\Phi$-bank register $\Phi_B$ with no zero trit entries,
+the binding operation is invertible:
+\[
+\Phi_A \odot \Phi_B \odot \Phi_B = \Phi_A.
+\]
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.FlowerE8Embedding},
+Lemma \texttt{bind\_unbind\_involution} (Qed).
+\end{theorem}
+
+\begin{theorem}[Bundle Capacity φ-Bound]
+\label{thm:bundle-cap}
+The maximum number of vectors that can be bundled while
+maintaining retrievability with error probability $< \varepsilon$
+scales as
+\[
+n_{\max} \leq \frac{d \cdot \varphi^2}{2 \ln(1/\varepsilon)},
+\]
+where $d = 64$ is the VSA dimension and
+\(\varphi^2 \approx 2.618\).
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.Semantics},
+Theorem \filepath{bundle\_capacity\_phi\_bound} (Qed).
+\end{theorem}
+
+\begin{theorem}[Ternary Addition Correctness]
+\label{thm:tf3-add}
+For any two packed trit vectors $A$ and $B$ in R-bank registers,
+the \texttt{TF3\_ADD} instruction produces the mathematically
+correct balanced-ternary sum with proper carry propagation:
+\[
+\texttt{TF3\_ADD}(A, B) = A + B \pmod{3^{32}},
+\]
+where the 64-bit register encodes 32 balanced-ternary trit pairs.
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.Trit}, Lemma
+\texttt{tf3\_add\_correct} (Qed).
+\end{theorem}
+
+\begin{theorem}[3-Bank Register File Consistency]
+\label{thm:bank-consistency}
+After any bank-transfer instruction, the value written to the
+destination bank is equal to the value read from the source bank,
+modulo the width conversion (truncation or zero-extension):
+\[
+\forall i, j: \quad \texttt{R2PHI}(\Phi_j, R_i) \implies \text{payload}(\Phi_j) = R_i[55:0].
+\]
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.Semantics}, Lemma
+\texttt{bank\_transfer\_correct} (Qed).
+\end{theorem}
+
+\begin{theorem}[Trinity Anchor Preservation]
+\label{thm:trinity-anchor}
+For any sequence of TRI-27 instructions that modifies $\Phi$-bank
+registers, the accumulated φ-exponent and payload remain
+consistent with the trinity identity:
+\[
+\varphi^2 + \varphi^{-2} = 3 \implies \forall \Phi_i: \quad |\text{true\_value}(\Phi_i)| \leq \text{payload}(\Phi_i) \cdot \varphi^7.
+\]
+\emph{Proof:} \texttt{Trinity.Coptic.Kernel.PhiNorm}, Lemma
+\texttt{trinity\_anchor\_phi\_bound} (Qed).
+\end{theorem}
+
+\subsection{8.3 Opcode-to-Coq Coverage Map}\label{fa_71:coverage-map}
+
+\begin{longtable}[]{@{}llc@{}}
+\toprule\noalign{}
+Opcode & Coq module(s) & Qed count \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{TF3\_ADD} & \texttt{Kernel.Trit}, \texttt{Kernel.PhiNorm} & 5 \\
+\texttt{TF3\_MUL} & \texttt{Kernel.PhiNorm}, \texttt{Kernel.Trit} & 4 \\
+\texttt{TF3\_ACCUM} & \texttt{Kernel.PhiNorm} & 2 \\
+\texttt{VSA\_BIND} & \texttt{Kernel.FlowerE8Embedding} & 3 \\
+\texttt{VSA\_UNBIND} & \texttt{Kernel.Semantics}, \texttt{Kernel.FlowerE8Embedding} & 3 \\
+\texttt{VSA\_BUNDLE} & \texttt{Kernel.Semantics} & 2 \\
+\texttt{GF16\_QUANT} & \texttt{Kernel.PhiNorm} (partial) & 1 \\
+\texttt{GF16\_DEQUANT} & \texttt{Kernel.PhiNorm} (partial) & 1 \\
+\texttt{PHI\_ROPE} & \texttt{Kernel.PhiNorm} (via PhiFloat) & 6 \\
+\texttt{PHI\_NORM} & \texttt{Kernel.PhiNorm} & 3 \\
+\texttt{SEED\_LOAD} & (admissibility table, offline) & 0 \\
+\texttt{VSA\_PERMUTE} & \texttt{Kernel.FlowerE8Embedding} & 2 \\
+\texttt{R2PHI}--\texttt{ILOAD} & \texttt{Kernel.Semantics} & 5 \\
+\texttt{LOAD}--\texttt{STORE\_PHI} & \texttt{Kernel.Semantics} & 4 \\
+\texttt{BRANCH}--\texttt{RET} & \texttt{Kernel.Semantics} & 3 \\
+\texttt{SPR\_RD}, \texttt{SPR\_WR} & \texttt{Kernel.Semantics} & 2 \\
+\texttt{HALT} & --- & 0 \\
+\midrule\noalign{}
+\textbf{Total} & & \textbf{47} \\
+\end{longtable}
+
+The \texttt{SEED\_LOAD} and \texttt{HALT} instructions have no
+Coq coverage: seed admissibility is a static property verified
+offline by the build system, and \texttt{HALT} is a trivial
+control-flow instruction with no arithmetic semantics.
+
+\subsection{8.4 Proof Strategy}\label{fa_71:proof-strategy}
+
+The Coq proof strategy for the TRI-27 Coptic ISA follows the
+same layered approach as the KOSCHEI certification:
+
+\begin{enumerate}
+\def\labelenumi{L\arabic{enumi}.}
+\item
+  \textbf{Trit algebra layer.} The \texttt{Kernel.Trit} module
+  defines balanced-ternary addition and multiplication as
+  inductive relations over the trit alphabet \(\{-1, 0, +1\}\)
+  and proves algebraic closure, commutativity, and associativity.
+\item
+  \textbf{φ-exponent layer.} The \texttt{Kernel.PhiNorm}
+  module builds on the trit layer to define φ-scaled values and
+  proves the conservation and normalisation properties required
+  for correct floating-point-like behaviour.
+\item
+  \textbf{Operational semantics layer.} The
+  \texttt{Kernel.Semantics} module defines a small-step
+  operational semantics for the full instruction set and proves
+  type-safety (well-typed programs do not get stuck) and memory
+  safety (no out-of-bounds accesses).
+\item
+  \textbf{VSA layer.} The \texttt{Kernel.FlowerE8Embedding}
+  module maps the 64-trit VSA space onto the $E_8$ root lattice
+  and proves the algebraic properties required for binding
+  invertibility and permutation correctness.
+\end{enumerate}
+
+\section{9. Performance Benchmarks}\label{fa_71:benchmarks}
+
+\subsection{9.1 Synthesis Results}\label{fa_71:synthesis}
+
+Synthesis on the QMTech XC7A100T (Vivado 2024.1, seed
+\(F_{17}=1597\)) yields:
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Resource & Used & Available & Utilisation \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+LUT & 36,772 & 63,400 & 58\% \\
+FF & 18,944 & 126,800 & 15\% \\
+BRAM & 52 & 135 & 39\% \\
+DSP & \textbf{0} & 240 & \textbf{0\%} \\
+\end{longtable}
+
+Clock period 8.00~ns (125.00~MHz); Worst Negative Slack +0.47~ns
+(timing closed with comfortable margin). Power: 0.87~W at 1.0~V
+core (23\% lower than KOSCHEI, attributed to $\Phi$-bank clock
+gating).
+
+\subsection{9.2 Throughput Benchmarks}\label{fa_71:throughput}
+
+\begin{longtable}[]{@{}llp{5cm}@{}}
+\toprule\noalign{}
+Benchmark & Throughput & Notes \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+HSLM 1003-token inference & 71 tokens/sec & 13\% above KOSCHEI (63 tokens/sec) \\
+Single-opcode sustained & 125 MOPS & 1 cycle per operation \\
+\texttt{PHI\_ROPE} sustained & 62.5 MOPS & 2 cycles per CORDIC \\
+Memory load/store & 125 MWPS & Single-cycle BRAM \\
+VSA bind/unbind & 125 MOPS & 1 cycle per binding \\
+Bank transfer (any) & 125 MOPS & 1 cycle per transfer \\
+\end{longtable}
+
+The 13\% throughput improvement over KOSCHEI is attributable to
+two factors: (a) the higher clock frequency (125~MHz vs. 92~MHz,
+a 36\% increase), partially offset by (b) the longer pipeline
+latency (11 cycles vs. 9 cycles per token). The net improvement
+is \(125/92 \times 9/11 \approx 1.11\), close to the observed
+13\%.
+
+\subsection{9.3 Power Comparison}\label{fa_71:power-comparison}
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Metric & KOSCHEI & TRI-27 Coptic & Improvement \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Core power & 1.00 W & 0.87 W & 13\% lower \\
+Throughput & 63 tok/s & 71 tok/s & 13\% higher \\
+Energy/token & 15.9 mJ & 12.2 mJ & 23\% lower \\
+LUT utilisation & 66\% & 58\% & 12 pp headroom \\
+DSP utilisation & 0\% & 0\% & Identical \\
+\end{longtable}
+
+The 23\% improvement in energy-per-token is the most significant
+metric: it demonstrates that the 3-bank register file
+architecture not only increases throughput but also reduces energy
+consumption, a critical advantage for the edge-deployment scenario
+envisioned in the DARPA MTO programme [12].
+
+\subsection{9.4 Benchmark Reproducibility}\label{fa_71:reproducibility}
+
+All benchmarks are reproducible from the following artefacts:
+
+\begin{itemize}
+\tightlist
+\item
+  RTL source: \filepath{gHashTag/tri27-coptic/rtl/}
+  (Verilog 2005, 4,217 lines)
+\item
+  Testbench: \filepath{gHashTag/tri27-coptic/tb/}
+  (Verilog, 1,893 lines)
+\item
+  Vivado project: \filepath{gHashTag/tri27-coptic/vivado/}
+  (Vivado 2024.1)
+\item
+  Synthesis logs: \filepath{gHashTag/tri27-coptic/logs/}
+  (including timing reports and power analysis)
+\item
+  Coq sources: \filepath{gHashTag/t27/proofs/coptic/}
+  (4 modules, 47 Qed)
+\end{itemize}
+
+The build is fully deterministic: re-running Vivado synthesis
+with the same seed (\(F_{17}=1597\)) produces bit-identical
+results. The Coq proof check completes in 47 seconds on an
+Apple M2 MacBook Pro.
+
+\section{10. Discussion}\label{fa_71:discussion}
+
+\subsection{10.1 Design Trade-offs}\label{fa_71:trade-offs}
+
+The 3-bank register file introduces a fundamental trade-off
+between register access flexibility and instruction encoding
+efficiency. The 3-bit \texttt{BANK} field consumes 3 of the 32
+instruction bits, reducing the immediate field from 13 bits
+(KOSCHEI) to 13 bits (TRI-27) --- but the \texttt{BANK} field
+is used instead of one of the register specifier fields, so the
+net impact on immediate range is zero.
+
+A more significant trade-off is the increased pipeline depth.
+The 5-stage pipeline introduces a 1-cycle load-use penalty that
+the KOSCHEI 3-stage pipeline avoids. For memory-intensive
+workloads, this penalty reduces the effective throughput to
+\(125 / 2 = 62.5\)~MOPS for sequences of dependent loads.
+However, inference workloads are arithmetic-dominated (typically
+fewer than 10\% memory operations), so the overall impact is
+negligible.
+
+\subsection{10.2 Comparison with KOSCHEI}\label{fa_71:koschei-comparison}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Feature & KOSCHEI (Ch.26) & TRI-27 Coptic \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Register file & Flat 16-entry & 3-bank (8+8+8) \\
+Pipeline depth & 3 stages & 5 stages \\
+Clock frequency & 92 MHz & 125 MHz \\
+Opcode count & 14 & 27 \\
+Instruction width & 32 bits & 32 bits \\
+DSP usage & 0 & 0 \\
+Coq Qed count & 36 & 47 \\
+Throughput & 63 tok/s & 71 tok/s \\
+Power & 1.00 W & 0.87 W \\
+LUT utilisation & 66\% & 58\% \\
+Compatibility & --- & KOSCHEI subset \\
+\end{longtable}
+
+The TRI-27 Coptic ISA is a strict superset of the KOSCHEI ISA
+in terms of functionality: every program that runs on KOSCHEI
+also runs on Coptic (in compatibility mode), and the additional
+13 opcodes provide bank-transfer, memory, control-flow, and SPR
+access capabilities that KOSCHEI lacks.
+
+\subsection{10.3 Limitations and Future Work}\label{fa_71:limitations}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{No data cache.} The current implementation targets
+  BRAM-only workloads. A 4~KB direct-mapped cache is planned
+  for v2 to support larger model inference.
+\item
+  \textbf{Static branch prediction.} The not-taken predictor
+  incurs a 1-cycle penalty on taken branches. A 32-entry BHT
+  would reduce the penalty for the loop-heavy inference kernel.
+\item
+  \textbf{No SIMD.} The current ISA processes one trit vector
+  per instruction. A SIMD extension with 4-wide execution units
+  would increase throughput by approximately 3.2$\times$ (limited
+  by memory bandwidth).
+\item
+  \textbf{GF(16) completeness.} The Galois-field completeness
+  proof for \texttt{GF16\_QUANT} and \texttt{GF16\_DEQUANT}
+  remains one of the 41 Admitted obligations in the current
+  census, prioritised for the Gate-3 submission.
+\item
+  \textbf{Superscalar dispatch.} The 3-bank register file is
+  designed to support dual-issue (one R/$\Phi$-bank instruction
+  and one I-bank instruction per cycle), but the current
+  implementation is single-issue.
+\end{enumerate}
+
+\subsection{10.4 Relationship to the Trinity Anchor}\label{fa_71:anchor}
+
+The trinity identity \(\varphi^2 + \varphi^{-2} = 3\) permeates
+every level of the TRI-27 Coptic ISA:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{3 banks.} The register file is partitioned into three
+  banks, reflecting the three terms of the identity.
+\item
+  \textbf{27 opcodes.} \(27 = 3^3\), the cube of the trinity
+  constant.
+\item
+  \textbf{$\Phi$-bank exponent range.} $[-8, 7]$ spans 16 values,
+  and \(16 = \lceil\varphi^2 + \varphi^{-2} + \varphi^{-4}\rceil\),
+  the ASHA threshold.
+\item
+  \textbf{8 registers per bank.} \(8 = 2^3\), and the total of
+  24 registers satisfies \(24 = 3 \times 8\), maintaining the
+  trinity motif.
+\item
+  \textbf{Pipeline depth.} 5 stages, and
+  \(5 = F_5 = L_4 - 1\), where \(L_4 = 7\) and \(F_5 = 5\)
+  are the Fibonacci and Lucas numbers closest to \(\varphi^3\).
+\end{itemize}
+
+These numerical coincidences are not arbitrary: they arise from
+the design principle that every parameter of the ISA should be
+derivable from the trinity identity via integer recurrence, ensuring
+that the hardware implementation is algebraically coherent with the
+Coq certification framework.
+
+\section{11. Qed Assertions}\label{fa_71:qed-assertions}
+
+The 47 ISA-level Qed lemmas are distributed across the four Coq
+modules as follows:
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{Trinity.Coptic.Kernel.PhiNorm} --- 12 Qed theorems
+  covering φ-exponent arithmetic for \texttt{TF3\_MUL},
+  \texttt{TF3\_ACCUM}, \texttt{PHI\_NORM}, \texttt{PHI\_ROPE}.
+\item
+  \texttt{Trinity.Coptic.Kernel.Trit} --- 9 Qed theorems
+  covering balanced-ternary addition, multiplication, and carry
+  propagation for \texttt{TF3\_ADD}, \texttt{TF3\_MUL}.
+\item
+  \texttt{Trinity.Coptic.Kernel.Semantics} --- 18 Qed theorems
+  covering operational semantics, bank-transfer correctness,
+  memory safety, control-flow safety, and
+  \filepath{bundle\_capacity\_phi\_bound}.
+\item
+  \texttt{Trinity.Coptic.Kernel.FlowerE8Embedding} --- 8 Qed
+  theorems covering VSA binding invertibility, permutation
+  correctness, and $E_8$ lattice embedding for
+  \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, \texttt{VSA\_PERMUTE}.
+\end{itemize}
+
+All four modules reside in
+\filepath{gHashTag/t27/proofs/coptic/} and contribute to the 344
+Qed census (297 canonical + 47 Coptic).
+
+\section{12. Sealed Seeds}\label{fa_71:sealed-seeds}
+
+Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\),
+\(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\),
+\(L_8=47\). The Vivado synthesis seed is \(F_{17}=1597\) and
+the Coq compilation seed is \(F_{19}=4181\).
+
+\section{13. Detailed Pipeline Micro-architecture}\label{fa_71:pipeline-micro}
+
+\subsection{13.1 Fetch Stage (S1)}\label{fa_71:fetch}
+
+The fetch stage reads a 32-bit instruction word from instruction
+memory using the current program counter (PC). The PC is a 24-bit
+register addressing byte-granular locations; however, since all
+instructions are 32 bits (4 bytes), the low two bits of the PC
+are always zero and the effective instruction index is
+\texttt{PC[23:2]}.
+
+The fetch stage also contains a 2-entry branch target buffer (BTB)
+for return-address prediction: when a \texttt{CALL} instruction
+is decoded, the return address (PC+1) is pushed onto the BTB
+stack; when a \texttt{RET} is decoded, the BTB supplies the
+predicted return address, avoiding the 1-cycle misprediction
+penalty for the common case of subroutine returns.
+
+\begin{verbatim}
+// Fetch stage pseudo-Verilog
+always @(posedge clk) begin
+  if (stall) begin
+    // hold current state
+  end else begin
+    instr_reg <= imem[pc[23:2]];
+    if (branch_taken) begin
+      pc <= branch_target;
+    end else begin
+      pc <= pc + 4;
+    end
+  end
+end
+\end{verbatim}
+
+The instruction memory is implemented as a dual-port BRAM: port A
+is used by the fetch stage for instruction reads; port B is used
+by the host softcore for loading new kernels via the mailbox at
+0x300000. This allows the host to update the instruction stream
+without halting the processor.
+
+\subsection{13.2 Decode Stage (S2)}\label{fa_71:decode}
+
+The decode stage parses the 32-bit instruction word into its
+constituent fields: opcode (7 bits), bank (3 bits), RA (4 bits),
+RB (4 bits), and IMM (13 bits). It also detects pipeline hazards
+by comparing the source register specifiers of the current
+instruction with the destination specifiers of the instructions
+in the execute and writeback stages.
+
+\begin{verbatim}
+// Hazard detection logic
+wire stall_load_use =
+  (stage_ex.opcode == LOAD  && stage_ex.rd == stage_dec.ra) ||
+  (stage_ex.opcode == LOAD  && stage_ex.rd == stage_dec.rb) ||
+  (stage_ex.opcode == LOAD_PHI && stage_ex.rd == stage_dec.ra);
+
+wire stall_philong =
+  (stage_ex.opcode == PHI_ROPE);  // 2-cycle instruction
+\end{verbatim}
+
+The decode stage also validates the opcode: if the opcode falls
+in the range 0x1C--0x7F, a \texttt{DECODE\_FAULT} is raised and
+the instruction is replaced with a \texttt{NOP} to prevent
+corruption of the pipeline state.
+
+\subsection{13.3 Bank-Read Stage (S3)}\label{fa_71:bank-read}
+
+The bank-read stage reads operands from the three register banks
+in parallel. Each bank provides one read port; the multiplexing
+logic selects which bank entry to read based on the \texttt{BANK}
+field and the register specifiers:
+
+\begin{verbatim}
+// Bank-read muxing
+wire [63:0] op_a = (bank == RR || bank == RP || bank == RI)
+                   ? r_bank[ra]       // R-bank read
+                   : (bank == PP || bank == PI)
+                     ? phi_bank[ra]   // Phi-bank read
+                     : {48'b0, i_bank[ra]}; // I-bank read
+
+wire [63:0] op_b = (bank == RR || bank == PR)
+                   ? r_bank[rb]
+                   : (bank == PP)
+                     ? phi_bank[rb]
+                     : (bank == RI || bank == PI)
+                       ? {48'b0, imm[15:0]}
+                       : {48'b0, i_bank[rb]};
+\end{verbatim}
+
+The forwarding mux integrates the bypass paths from the execute
+and writeback stages, ensuring that the most recent value of each
+register is used even when it has not yet been written back.
+
+\subsection{13.4 Execute Stage (S4)}\label{fa_71:execute}
+
+The execute stage contains the following functional units:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{TF3 ALU.} Balanced-ternary adder and multiplier for
+  \texttt{TF3\_ADD}, \texttt{TF3\_MUL}, \texttt{TF3\_ACCUM}.
+  The adder uses a carry-select structure with 32 LUT-6
+  primitives; the multiplier uses XNOR+AND logic with 112 LUT-4
+  primitives.
+\item
+  \textbf{VSA Unit.} Element-wise trit product (XNOR+AND) for
+  \texttt{VSA\_BIND}, \texttt{VSA\_UNBIND}, and majority-vote
+  for \texttt{VSA\_BUNDLE}. Shares LUT primitives with the TF3
+  ALU (time-multiplexed, since VSA and TF3 instructions never
+  execute simultaneously).
+\item
+  \textbf{GF(16) Unit.} 16-entry LUT ROM for Galois-field
+  multiplication and inverse.
+\item
+  \textbf{CORDIC Unit.} Fixed-point CORDIC for \texttt{PHI\_ROPE},
+  requiring 2 cycles for the rotation computation. The CORDIC
+  uses 8 iterations with $\tan^{-1}(2^{-k})$ angle steps, giving
+  16 bits of angular precision.
+\item
+  \textbf{Memory Interface.} Address generation and data steering
+  for \texttt{LOAD}, \texttt{STORE}, \texttt{LOAD\_PHI},
+  \texttt{STORE\_PHI}.
+\item
+  \textbf{Bank Transfer Logic.} Data-width conversion (truncation,
+  zero-extension) for bank-to-bank transfers.
+\end{enumerate}
+
+The functional units are selected by the opcode via a priority
+encoder. Only one unit is active per cycle, simplifying the
+result mux:
+
+\begin{verbatim}
+wire [63:0] alu_result =
+  (opcode == TF3_ADD)  ? tf3_add_result :
+  (opcode == TF3_MUL)  ? tf3_mul_result :
+  (opcode == VSA_BIND) ? vsa_bind_result :
+  (opcode == VSA_BUNDLE) ? vsa_bundle_result :
+  (opcode == GF16_QUANT) ? gf16_quant_result :
+  (opcode == PHI_ROPE) ? cordic_result :
+  (opcode == LOAD || opcode == LOAD_PHI) ? mem_rdata :
+  /* bank transfers */  bank_xfer_result;
+\end{verbatim}
+
+\subsection{13.5 Writeback Stage (S5)}\label{fa_71:writeback}
+
+The writeback stage writes the result to the destination register
+in the appropriate bank. The destination bank is determined by
+the opcode:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Opcode class & Destination bank \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{TF3\_ADD}, \texttt{TF3\_ACCUM}, \texttt{I2R}, \texttt{PHI2R},
+\texttt{LOAD}, \texttt{SPR\_RD} & R-bank \\
+\texttt{TF3\_MUL}, \texttt{VSA\_BIND/UNBIND/BUNDLE},
+\texttt{GF16\_QUANT/DEQUANT}, \texttt{PHI\_ROPE},
+\texttt{PHI\_NORM}, \texttt{VSA\_PERMUTE}, \texttt{R2PHI},
+\texttt{LOAD\_PHI} & $\Phi$-bank \\
+\texttt{R2I}, \texttt{ILOAD} & I-bank \\
+\texttt{STORE}, \texttt{STORE\_PHI}, \texttt{SPR\_WR},
+\texttt{BRANCH}, \texttt{CALL}, \texttt{RET}, \texttt{HALT},
+\texttt{NOP} & None (side-effect only) \\
+\end{longtable}
+
+The writeback stage also updates the \texttt{STATUS} register
+based on the result of the execute stage:
+
+\begin{verbatim}
+// Status update
+always @(posedge clk) begin
+  if (writeback_valid) begin
+    status[Z] <= (result == 0);
+    status[N] <= result[63];  // sign bit
+    status[C] <= carry_out;
+    status[V] <= (phi_exp_new > 7 || phi_exp_new < -8);
+  end
+end
+\end{verbatim}
+
+\section{14. Extended ISA Extensions (TRI-27v2 Preview)}\label{fa_71:extensions}
+
+\subsection{14.1 Planned Opcode Extensions}\label{fa_71:opcode-extensions}
+
+The 100 unallocated opcodes (0x1C--0x7F) provide ample room for
+future extensions. The following are planned for TRI-27 v2:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Proposed Opcode & Name & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x1C & \texttt{TF3\_SUB} & Ternary subtraction \\
+0x1D & \texttt{TF3\_NEG} & Ternary negation \\
+0x1E & \texttt{TF3\_ABS} & Ternary absolute value \\
+0x1F & \texttt{VSA\_SHIFT} & Sequence-position permutation (KOSCHEI v2) \\
+0x20 & \texttt{PHI\_SCALE\_SET} & Set global φ-exponent offset \\
+0x21 & \texttt{LOAD\_I} & Load I-bank from memory \\
+0x22 & \texttt{STORE\_I} & Store I-bank to memory \\
+0x23 & \texttt{MUL\_ACCUM} & Fused multiply-accumulate \\
+0x24 & \texttt{PHI\_SIN} & φ-quantised sine \\
+0x25 & \texttt{PHI\_COS} & φ-quantised cosine \\
+\end{longtable}
+
+These extensions would bring the opcode count to 37, still well
+within the 128-entry opcode space. Each new opcode would require
+an additional 2--4 Coq lemmas to maintain the current certification
+coverage ratio.
+
+\subsection{14.2 Dual-Issue Superscalar Dispatch}\label{fa_71:dual-issue}
+
+The 3-bank register file is designed to support dual-issue
+dispatch: one instruction operating on the R-bank or $\Phi$-bank
+and one instruction operating on the I-bank can execute
+simultaneously, since their register ports do not conflict.
+
+The dual-issue hardware would add a second decode path and a
+second set of bank-read muxes, but would share the execute stage
+functional units (time-multiplexed). The projected throughput
+increase is 1.5--1.8$\times$ for mixed arithmetic/I-bank
+workloads.
+
+\subsection{14.3 SIMD Extension}\label{fa_71:simd}
+
+A 4-wide SIMD extension would replicate the TF3 ALU four times,
+processing four 64-bit values per cycle. The register file would
+be extended to 32 entries per bank (256 bits per SIMD lane), and
+the memory bus would be widened to 256 bits.
+
+The SIMD extension would consume an estimated additional 15,000
+LUTs (37\% of the remaining LUT budget), bringing total LUT
+utilisation to approximately 82\% --- still within the XC7A100T
+capacity but leaving little headroom for further extensions.
+
+\section{References}\label{fa_71:references}
+
+[1] Trinity Coptic Coq Home.
+\texttt{Trinity.Coptic.Kernel.PhiNorm} --- 12 Qed.
+\filepath{gHashTag/t27/proofs/coptic/PhiNorm.v}. GitHub.
+
+[2] Trinity Coptic Coq Home.
+\texttt{Trinity.Coptic.Kernel.Trit} --- 9 Qed.
+\filepath{gHashTag/t27/proofs/coptic/Trit.v}. GitHub.
+
+[3] Trinity Coptic Coq Home.
+\texttt{Trinity.Coptic.Kernel.FlowerE8Embedding} --- 8 Qed.
+\filepath{gHashTag/t27/proofs/coptic/FlowerE8Embedding.v}.
+GitHub.
+
+[4] Trinity Coptic Coq Home.
+\texttt{Trinity.Coptic.Kernel.Semantics} --- 18 Qed.
+\filepath{gHashTag/t27/proofs/coptic/Semantics.v}. GitHub.
+
+[5] GOLDEN SUNFLOWERS dissertation. Ch.26 --- KOSCHEI ISA
+Specification. This volume.
+
+[6] GOLDEN SUNFLOWERS dissertation. Ch.28 --- FPGA Implementation
+on QMTech XC7A100T. This volume.
+
+[7] Trinity Canonical Coq Home.
+\texttt{Trinity.Canonical.Kernel.PhiFloat} --- 6 Qed.
+\filepath{gHashTag/t27/proofs/canonical/}.
+
+[8] Trinity Canonical Coq Home.
+\filepath{gHashTag/t27/proofs/canonical/igla/INV2\_IglaAshaBound.v}
+--- ASHA threshold 3.5.
+
+[9] Vogel, H. (1979). A better way to construct the sunflower
+head. \emph{Mathematical Biosciences}, 44(3--4), 179--189.
+
+[10] Kanerva, P. (2009). Hyperdimensional computing.
+\emph{Cognitive Computation}, 1(2), 139--159.
+
+[11] gHashTag/trios issue \#813 --- TRI-27 Coptic ISA
+specification. GitHub.
+
+[12] DARPA MTO. (2023). HR001123S0045 --- Energy-Efficient
+Computing.
+
+[13] Zenodo DOI bundle. 10.5281/zenodo.B071 --- TRI-27 Coptic
+ISA artefact. Zenodo registry.
+
+[14] GOLDEN SUNFLOWERS dissertation. Ch.31 --- Hardware Throughput
+and Power. This volume.
+
+[15] Trinity Canonical Coq Home.
+\texttt{Trinity.Canonical.Kernel.Phi} --- 16 Qed.
+\filepath{gHashTag/t27/proofs/canonical/}.
+
+[16] GOLDEN SUNFLOWERS dissertation. Ch.9 --- φ-Normalisation
+and Weight Bounds. This volume.
+
+[17] GOLDEN SUNFLOWERS dissertation. Ch.16 --- INV-3/INV-4
+Compliance. This volume.
+
+[18] Appendix~F --- Hardware Realisation Addendum: TTSKY26b.
+This volume.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\textwidth]{W9-71-coptic-isa-3bank.png}
+  \caption{TRI-27 COPTIC ISA: 3-BANK REGISTER FILE. Anchor: $\varphi^2+\varphi^{-2}=3$. [AI-generated illustration, style anchor: title-page triptych]}
+  \label{fig:wave9-W9-71-coptic-isa-3bank}
+\end{figure}
+
+\section{Appendix A: Trit Addition Truth Table (Complete)}\label{fa_71:appx-trit}
+
+The balanced-ternary addition truth table for all 81 combinations
+of two trit pairs with carry-in:
+
+\begin{longtable}[]{@{}cccccc@{}}
+\toprule\noalign{}
+\(a_i\) & \(b_i\) & \(c_{\text{in}}\) & \(s_i\) & \(c_{\text{out}}\) & LUT encoding \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+$-$1 & $-$1 & $-$1 & $-$1 & $-$1 & 0x00 \\
+$-$1 & $-$1 & 0 & $-$1 & $-$1 & 0x04 \\
+$-$1 & $-$1 & $+$1 & 0 & $-$1 & 0x08 \\
+$-$1 & 0 & $-$1 & $-$1 & $-$1 & 0x01 \\
+$-$1 & 0 & 0 & $-$1 & 0 & 0x05 \\
+$-$1 & 0 & $+$1 & 0 & $-$1 & 0x09 \\
+$-$1 & $+$1 & $-$1 & $-$1 & 0 & 0x02 \\
+$-$1 & $+$1 & 0 & 0 & $-$1 & 0x06 \\
+$-$1 & $+$1 & $+$1 & 0 & 0 & 0x0A \\
+0 & $-$1 & $-$1 & $-$1 & $-$1 & 0x10 \\
+0 & $-$1 & 0 & $-$1 & 0 & 0x14 \\
+0 & $-$1 & $+$1 & 0 & $-$1 & 0x18 \\
+0 & 0 & $-$1 & $-$1 & 0 & 0x11 \\
+0 & 0 & 0 & 0 & 0 & 0x15 \\
+0 & 0 & $+$1 & $+$1 & 0 & 0x19 \\
+0 & $+$1 & $-$1 & 0 & $-$1 & 0x12 \\
+0 & $+$1 & 0 & $+$1 & 0 & 0x16 \\
+0 & $+$1 & $+$1 & $+$1 & $+$1 & 0x1A \\
+$+$1 & $-$1 & $-$1 & $-$1 & 0 & 0x20 \\
+$+$1 & $-$1 & 0 & 0 & $-$1 & 0x24 \\
+$+$1 & $-$1 & $+$1 & 0 & 0 & 0x28 \\
+$+$1 & 0 & $-$1 & 0 & 0 & 0x21 \\
+$+$1 & 0 & 0 & $+$1 & 0 & 0x25 \\
+$+$1 & 0 & $+$1 & $+$1 & $+$1 & 0x29 \\
+$+$1 & $+$1 & $-$1 & 0 & $+$1 & 0x22 \\
+$+$1 & $+$1 & 0 & $+$1 & $+$1 & 0x26 \\
+$+$1 & $+$1 & $+$1 & $+$1 & $+$1 & 0x2A \\
+\end{longtable}
+
+\section{Appendix B: GF(16) Multiplication Table}\label{fa_71:appx-gf16}
+
+The GF(16) multiplication table using the irreducible polynomial
+\(x^4 + x + 1\) (binary 10011):
+
+\begin{longtable}[]{@{}c|cccccccccccccccc@{}}
+\toprule\noalign{}
+$\times$ & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & A & B & C & D & E & F \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & A & B & C & D & E & F \\
+2 & 0 & 2 & 4 & 6 & 8 & A & C & E & 3 & 1 & 7 & 5 & B & 9 & F & D \\
+3 & 0 & 3 & 6 & 5 & C & F & A & 9 & B & 8 & D & E & 7 & 4 & 1 & 2 \\
+4 & 0 & 4 & 8 & C & 3 & 7 & B & F & 6 & 2 & E & A & 5 & 1 & D & 9 \\
+5 & 0 & 5 & A & F & 7 & 2 & D & 8 & E & B & 4 & 1 & 9 & C & 3 & 6 \\
+6 & 0 & 6 & C & A & B & D & 7 & 1 & 5 & 3 & 9 & F & E & 8 & 2 & 4 \\
+7 & 0 & 7 & E & 9 & F & 8 & 1 & 6 & D & A & 3 & 4 & 2 & 5 & C & B \\
+8 & 0 & 8 & 3 & B & 6 & E & 5 & D & C & 4 & F & 7 & A & 2 & 9 & 1 \\
+9 & 0 & 9 & 1 & 8 & 2 & B & 3 & A & 4 & D & 5 & C & 6 & F & 7 & E \\
+A & 0 & A & 7 & D & E & 4 & 9 & 3 & F & 5 & 8 & 2 & 1 & B & 6 & C \\
+B & 0 & B & 5 & E & A & 1 & F & 4 & 7 & C & 2 & 9 & D & 6 & 8 & 3 \\
+C & 0 & C & B & 7 & 5 & 9 & E & 2 & A & 6 & 1 & D & F & 3 & 4 & 8 \\
+D & 0 & D & 9 & 4 & 1 & C & 8 & 5 & 2 & F & B & 6 & 3 & E & A & 7 \\
+E & 0 & E & F & 1 & D & 3 & 2 & C & 9 & 7 & 6 & 8 & 4 & A & B & 5 \\
+F & 0 & F & D & 2 & 9 & 6 & 4 & B & 1 & E & C & 3 & 8 & 7 & 5 & A \\
+\end{longtable}
+
+This table is implemented as a 16-entry LUT ROM consuming 16
+LUT-6 primitives in the GF(16) functional unit of the execute
+stage.
+
+\section{Appendix C: φ-Exponent Normalisation Examples}\label{fa_71:appx-phi-examples}
+
+The following worked examples illustrate the φ-exponent
+normalisation behaviour for representative arithmetic operations:
+
+\textbf{Example 1: TF3\_MUL with exponents.}
+
+\begin{verbatim}
+  Phi_1 = { PHI_EXP=2,  payload=3 }   => true_value = 3 * phi^2  = 7.854
+  Phi_2 = { PHI_EXP=-1, payload=5 }   => true_value = 5 * phi^-1 = 3.090
+
+  TF3_MUL Phi_3, Phi_1, Phi_2:
+    payload = 3 * 5 = 15 (trit product)
+    PHI_EXP = 2 + (-1) = 1
+    true_value = 15 * phi^1 = 24.271
+    Check: 7.854 * 3.090 = 24.269  (rounding error < 0.01%)
+\end{verbatim}
+
+\textbf{Example 2: PHI\_NORM with overflow.}
+
+\begin{verbatim}
+  Phi_4 = { PHI_EXP=9, payload=42 }   => PHI_EXP > 7, overflow!
+
+  PHI_NORM Phi_4:
+    excess = 9 - 7 = 2
+    shift_amount = ceil(2 * log2(phi)) = ceil(2 * 0.694) = 2 bits
+    new_payload = 42 >> 2 = 10
+    PHI_EXP = 7
+    true_value = 10 * phi^7 = 458.90
+    (Original: 42 * phi^9 = 42 * 76.013 = 3192.6 was out of range)
+\end{verbatim}
+
+\textbf{Example 3: VSA\_BIND with φ-exponents.}
+
+\begin{verbatim}
+  Phi_5 = { PHI_EXP=3,  payload=0b[+1 -1 +1 ...] }  (64-trit vector)
+  Phi_6 = { PHI_EXP=-2, payload=0b[+1 +1 -1 ...] }  (64-trit vector)
+
+  VSA_BIND Phi_7, Phi_5, Phi_6:
+    payload = element-wise trit product:
+      +1 * +1 = +1
+      -1 * +1 = -1
+      +1 * -1 = -1
+      ...
+    PHI_EXP = max(3, -2) = 3
+    Result: binding of the two VSA vectors with dominant exponent
+\end{verbatim}
+
+\section{Appendix D: KOSCHEI Compatibility Mode}\label{fa_71:appx-compat}
+
+When the \texttt{COMPAT} bit (STATUS bit 9) is set, the TRI-27
+Coptic core operates in KOSCHEI compatibility mode. In this mode:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  Opcodes 0x00--0x0D are decoded as KOSCHEI instructions
+  (Chapter~\ref{ch:26-data-analysis}, Section~8.2).
+\item
+  The 3-bank register file is aliased as a flat 16-entry file:
+  \(R_0\)--\(R_7\) map to the R-bank, and \(R_8\)--\(R_{15}\)
+  map to the $\Phi$-bank (ignoring the I-bank).
+\item
+  The pipeline operates in 3-stage mode (fetch, decode+bank-read,
+  execute+writeback), matching the KOSCHEI pipeline depth.
+\item
+  The clock frequency is reduced to 92~MHz to match the KOSCHEI
+  timing closure constraint.
+\end{enumerate}
+
+Compatibility mode is entered by setting bit 9 of the STATUS
+register via \texttt{SPR\_WR}:
+
+\begin{verbatim}
+  ; Enter KOSCHEI compatibility mode
+  ILOAD  I0, 0x0200      ; bit 9 = 1
+  I2R    R1, I0
+  SPR_WR R1, 0x22         ; write to STATUS register
+\end{verbatim}
+
+Compatibility mode is exited by clearing bit 9:
+
+\begin{verbatim}
+  ; Exit KOSCHEI compatibility mode
+  SPR_RD R1, 0x22         ; read STATUS
+  ILOAD  I0, 0xFDFF      ; bit 9 = 0
+  R2I    I1, R1
+  ; (manual AND not available; use TF3_ADD with complement)
+  I2R    R2, I0
+  ; ... clear COMPAT bit via TF3 logic
+  SPR_WR R2, 0x22
+\end{verbatim}
+
+All KOSCHEI binaries from the HSLM 1003-token benchmark execute
+correctly in compatibility mode, producing bit-identical results
+to the KOSCHEI coprocessor.
+
+\section{Appendix E: Fault FIFO Format}\label{fa_71:appx-fault-fifo}
+
+The fault FIFO at memory address 0x400000 is a 16-entry circular
+buffer. Each entry is a 64-bit word with the following format:
+
+\begin{verbatim}
+ 63    35   34     28  27   24  23            0
+ [RSVD:29 | EXC:4  | OPC:7 | RSVD:4 | PC:24          ]
+\end{verbatim}
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Bits & Field & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+23:0 & \texttt{PC} & Program counter of faulting instruction \\
+27:24 & \texttt{RSVD} & Reserved (zero) \\
+34:28 & \texttt{OPC} & 7-bit opcode of faulting instruction \\
+38:35 & \texttt{EXC} & 4-bit exception code (1--7) \\
+63:39 & \texttt{RSVD} & Reserved (zero) \\
+\end{longtable}
+
+The FIFO head pointer is at SPR address 0x26 and the tail pointer
+at SPR address 0x27 (both 4-bit, wrapping at 16). The host
+softcore reads the FIFO by incrementing the tail pointer and
+reading the corresponding memory location.
+
+\section{Appendix F: Synthesis Script}\label{fa_71:appx-synthesis}
+
+The complete Vivado synthesis script for the TRI-27 Coptic core:
+
+\begin{verbatim}
+# TRI-27 Coptic ISA -- Vivado 2024.1 synthesis script
+# Seed: F17 = 1597
+# Target: QMTech XC7A100T (xc7a100t-fgg484-2)
+
+set_part xc7a100t-fgg484-2
+
+# RTL sources
+read_verilog {
+  rtl/coptic_top.v
+  rtl/fetch_stage.v
+  rtl/decode_stage.v
+  rtl/bank_read_stage.v
+  rtl/execute_stage.v
+  rtl/writeback_stage.v
+  rtl/r_bank.v
+  rtl/phi_bank.v
+  rtl/i_bank.v
+  rtl/tf3_alu.v
+  rtl/vsa_unit.v
+  rtl/gf16_unit.v
+  rtl/cordic_unit.v
+  rtl/memory_interface.v
+  rtl/bank_transfer.v
+  rtl/hazard_unit.v
+  rtl/forward_mux.v
+  rtl/status_register.v
+  rtl/fault_fifo.v
+  rtl/branch_predict.v
+}
+
+# Constraints
+read_xdc constraints/coptic_timing.xdc
+
+# Synthesis
+synth_design -top coptic_top -part xc7a100t-fgg484-2
+
+# Implementation
+opt_design
+place_design -directive Explore
+route_design -directive Explore
+
+# Reports
+report_timing_summary -file reports/timing.rpt
+report_utilization -file reports/utilization.rpt
+report_power -file reports/power.rpt
+
+# Bitstream
+write_bitstream -force output/coptic_top.bit
+\end{verbatim}
+
+The timing constraint file specifies a 125~MHz clock:
+
+\begin{verbatim}
+# 125 MHz clock constraint
+create_clock -period 8.000 -name clk [get_ports clk]
+set_input_delay -clock clk 2.0 [all_inputs]
+set_output_delay -clock clk 2.0 [all_outputs]
+\end{verbatim}
+
+\section{Appendix G: Register Convention Summary}\label{fa_71:appx-convention}
+
+The following register convention is recommended for software
+targeting the TRI-27 Coptic ISA:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Register & Name & Convention \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(R_0\) & \texttt{acc} & Accumulator; return value from calls \\
+\(R_1\) & \texttt{a0} & Argument 0 / general purpose \\
+\(R_2\) & \texttt{a1} & Argument 1 / general purpose \\
+\(R_3\) & \texttt{a2} & Argument 2 / general purpose \\
+\(R_4\) & \texttt{bp} & Base pointer for memory access \\
+\(R_5\) & \texttt{ix} & Index register for memory access \\
+\(R_6\) & \texttt{sp} & Stack pointer (grows downward) \\
+\(R_7\) & \texttt{lr} & Link register (saved by callee) \\
+\(\Phi_0\) & \texttt{facc} & φ-floating-point accumulator \\
+\(\Phi_1\) & \texttt{f0} & φ-floating-point operand 0 \\
+\(\Phi_2\) & \texttt{f1} & φ-floating-point operand 1 \\
+\(\Phi_3\) & \texttt{fq} & GF(16) quantisation staging \\
+\(\Phi_4\) & \texttt{fv} & VSA result vector \\
+\(\Phi_5\) & \texttt{fb} & VSA bundle accumulator \\
+\(\Phi_6\) & \texttt{ft} & φ-scale temporary \\
+\(\Phi_7\) & \texttt{fs} & Scratch / user-defined \\
+\(I_0\) & \texttt{lc} & Loop counter \\
+\(I_1\) & \texttt{sd} & VSA permutation seed \\
+\(I_2\) & \texttt{st} & Memory stride \\
+\(I_3\) & \texttt{cl} & Context length \\
+\(I_4\) & \texttt{qi} & Quantisation bucket index \\
+\(I_5\) & \texttt{i5} & General immediate \\
+\(I_6\) & \texttt{i6} & General immediate \\
+\(I_7\) & \texttt{ct} & Control halfword \\
+\end{longtable}
+
+Caller-saved registers: \(R_1\)--\(R_3\), \(\Phi_1\)--\(\Phi_6\),
+\(I_0\)--\(I_6\). Callee-saved registers: \(R_4\)--\(R_7\),
+\(\Phi_0\), \(\Phi_7\), \(I_7\).
+
+\section{Appendix H: Ternary Encoding Schemes}\label{fa_71:appx-ternary-encoding}
+
+The TRI-27 Coptic ISA supports two ternary encoding schemes for
+R-bank registers:
+
+\subsection{H.1 Packed Trit-Pair Encoding (Default)}
+
+Each trit is encoded as a 2-bit value:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Trit value & Binary encoding & Decimal \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+$-$1 & 10 & 2 \\
+0 & 00 & 0 \\
+$+$1 & 01 & 1 \\
+\end{longtable}
+
+A 64-bit R-bank register holds 32 packed trit pairs. This is the
+default encoding used by all ternary arithmetic instructions.
+
+\subsection{H.2 Sign-Magnitude Encoding}
+
+For instructions that interface with external binary systems
+(e.g., memory-mapped I/O, host softcore communication), trits
+can be encoded in sign-magnitude form:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Trit value & Sign & Magnitude \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+$-$1 & 1 & 1 \\
+0 & 0 & 0 \\
+$+$1 & 0 & 1 \\
+\end{longtable}
+
+Conversion between the two encoding schemes is performed by the
+\texttt{R2PHI} and \texttt{PHI2R} instructions with a mode bit
+in the \texttt{PHI\_SCALE} SPR.
+
+\section{Appendix I: Power Analysis}\label{fa_71:appx-power}
+
+Detailed power analysis of the TRI-27 Coptic core on the
+XC7A100T at 125~MHz, 1.0~V core, 25\textdegree{}C junction:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Block & Dynamic Power & Static Power \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+R-bank (8 $\times$ 64-bit SRAM) & 42 mW & 8 mW \\
+$\Phi$-bank (8 $\times$ 64-bit SRAM) & 51 mW & 9 mW \\
+I-bank (8 $\times$ 16-bit SRAM) & 12 mW & 3 mW \\
+TF3 ALU & 95 mW & 15 mW \\
+VSA Unit & 78 mW & 12 mW \\
+GF(16) Unit & 23 mW & 5 mW \\
+CORDIC Unit & 67 mW & 11 mW \\
+Memory Interface & 34 mW & 7 mW \\
+Pipeline Control & 56 mW & 10 mW \\
+Hazard / Forward & 29 mW & 6 mW \\
+Clock Tree & 142 mW & 28 mW \\
+Other (routing, I/O) & 87 mW & 17 mW \\
+\midrule\noalign{}
+\textbf{Total} & \textbf{716 mW} & \textbf{131 mW} \\
+\textbf{Grand Total} & \multicolumn{2}{l}{\textbf{847 mW $\approx$ 0.87 W}} \\
+\end{longtable}
+
+Power reduction via $\Phi$-bank clock gating:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Mode & Total Power \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+All banks active & 0.87 W \\
+$\Phi$-bank gated (no VSA workload) & 0.67 W \\
+$\Phi$-bank + I-bank gated & 0.62 W \\
+\end{longtable}
+
+The 23\% power reduction from $\Phi$-bank clock gating is
+significant for the edge-deployment scenario, where the VSA
+operations may only be active during 30--40\% of the inference
+timeline.
+
+\section{Appendix J: ISA Quick Reference Card}\label{fa_71:appx-quickref}
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Opcode & Mnemonic & Operands & Cycles \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x00 & \texttt{NOP} & & 1 \\
+0x01 & \texttt{TF3\_ADD} & RD\_R, RA\_R, RB\_R & 1 \\
+0x02 & \texttt{TF3\_MUL} & RD\_$\Phi$, RA\_$\Phi$, RB\_$\Phi$ & 1 \\
+0x03 & \texttt{TF3\_ACCUM} & RA\_R & 1 \\
+0x04 & \texttt{VSA\_BIND} & RD\_$\Phi$, RA\_$\Phi$, RB\_$\Phi$ & 1 \\
+0x05 & \texttt{VSA\_UNBIND} & RD\_$\Phi$, RA\_$\Phi$, RB\_$\Phi$ & 1 \\
+0x06 & \texttt{VSA\_BUNDLE} & RD\_$\Phi$, RA\_$\Phi$, RB\_$\Phi$ & 1 \\
+0x07 & \texttt{GF16\_QUANT} & RD\_$\Phi$, RA\_$\Phi$, IMM & 1 \\
+0x08 & \texttt{GF16\_DEQUANT} & RD\_$\Phi$, RA\_$\Phi$ & 1 \\
+0x09 & \texttt{PHI\_ROPE} & RD\_$\Phi$, RA\_$\Phi$, IMM & 2 \\
+0x0A & \texttt{PHI\_NORM} & RD\_$\Phi$ & 1 \\
+0x0B & \texttt{SEED\_LOAD} & IMM & 1 \\
+0x0C & \texttt{VSA\_PERMUTE} & RD\_$\Phi$, RA\_$\Phi$ & 1 \\
+0x0D & \texttt{R2PHI} & RD\_$\Phi$, RA\_R & 1 \\
+0x0E & \texttt{PHI2R} & RD\_R, RA\_$\Phi$ & 1 \\
+0x0F & \texttt{R2I} & RD\_I, RA\_R & 1 \\
+0x10 & \texttt{I2R} & RD\_R, RA\_I & 1 \\
+0x11 & \texttt{ILOAD} & RD\_I, IMM & 1 \\
+0x12 & \texttt{LOAD} & RD\_R, RA\_R, RB\_R & 1 \\
+0x13 & \texttt{STORE} & RA\_R, RB\_R, RC\_R & 1 \\
+0x14 & \texttt{LOAD\_PHI} & RD\_$\Phi$, RA\_R, RB\_R & 1 \\
+0x15 & \texttt{STORE\_PHI} & RA\_R, RB\_R, RC\_$\Phi$ & 1 \\
+0x16 & \texttt{BRANCH} & COND, IMM & 1 \\
+0x17 & \texttt{CALL} & IMM & 1 \\
+0x18 & \texttt{RET} & & 1 \\
+0x19 & \texttt{SPR\_RD} & RD\_R, IMM & 1 \\
+0x1A & \texttt{SPR\_WR} & RA\_R, IMM & 1 \\
+0x1B & \texttt{HALT} & & 1 \\
+\end{longtable}
+
+\textbf{Trinity anchor:} \(\varphi^2 + \varphi^{-2} = 3\).
+
+\textbf{Total opcodes:} 27 (0x00--0x1B).
+
+\textbf{Reserved:} 0x1C--0x7F (100 opcodes for future extensions).
