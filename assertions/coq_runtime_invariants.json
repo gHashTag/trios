@@ -1,0 +1,42 @@
+{
+  "_metadata": {
+    "schema_version": "1.0.0",
+    "description": "Runtime invariants proved in Coq and verified by the Rust test suite.",
+    "anchor": "phi^2 + phi^-2 = 3",
+    "zenodo_doi": "10.5281/zenodo.19227877"
+  },
+  "entries": [
+    {
+      "id": "INV-26",
+      "wave": "26",
+      "lane": "L-GPTQ-ON-GF16",
+      "invariant_name": "gptq_reconstruction_dominates_naive",
+      "coq_file": "trinity-clara/proofs/trios_gptq_gf16.v",
+      "coq_theorem": "gptq_reconstruction_dominates_naive",
+      "statement": "For any Q with bounded dequantisation error delta and any PSD-consistent HessInv H, the GPTQ drift introduced into column k is at most delta. Establishes that one step of Hessian-corrected quantisation does not increase column-k error beyond the naive Q-error bound.",
+      "admitted": 0,
+      "axioms_used": ["psd_hinv_diag_dominates", "phi_trinity"],
+      "axiom_justification": "psd_hinv_diag_dominates follows from the Gershgorin circle theorem for H = 2XX^T + lambda*I with lambda > 0. phi_trinity is the Trinity Identity phi^2 + phi^-2 = 3.",
+      "runtime_witness": {
+        "language": "rust",
+        "path": "crates/trios-golden-float/src/gptq.rs",
+        "function": "gf16_quantize_matrix_gptq",
+        "property_tests": [
+          "gptq_n0_byte_identical_to_naive",
+          "gptq_reconstruction_mse_bounded",
+          "gptq_seed_determinism"
+        ]
+      },
+      "ablation_output": "assertions/calibration_ablation.jsonl",
+      "falsifier": "H0: GPTQ N-batch calibration gives no significant reconstruction improvement over naive GF16. Tested in 3-seed ablation on seeds {47,89,144} x N in {0,16,32}.",
+      "falsifier_verdict": {
+        "paired_t_0_16": {"t": 90.6683, "p": 0.9999, "verdict": "FAIL"},
+        "paired_t_16_32": {"t": -14.4573, "p": 0.0024, "verdict": "PASS"},
+        "overall": "H0 NOT REJECTED — N=16 shows no lift over N=0 in synthetic Gaussian setting"
+      },
+      "issue": "https://github.com/gHashTag/trios/issues/645",
+      "external_ref": "https://github.com/openai/parameter-golf/pull/2135",
+      "r5_honesty": "Theorem scoped to single column-pair step. Full matrix composition is captured by psd_hinv_diag_dominates axiom. Ablation honestly reports H0 not rejected for (0->16) comparison."
+    }
+  ]
+}

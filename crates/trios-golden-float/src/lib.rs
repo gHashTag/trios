@@ -4,7 +4,10 @@
 //! When Zig vendor is not available, all FFI-dependent functions return stubs.
 
 mod ffi;
+pub mod gptq;
 pub mod router;
+
+pub use gptq::{gf16_dequantize_matrix, gf16_quantize_matrix_gptq, naive_quantize_columns};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GF16(u16);
