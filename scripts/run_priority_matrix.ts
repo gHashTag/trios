@@ -51,7 +51,7 @@ const SAMPLES_JSONL = resolve(
   REPO_ROOT,
   process.env.SAMPLES_JSONL || "assertions/matrix_samples.jsonl",
 );
-const SEEDS: number[] = (process.env.SEEDS || "47,89,144")
+const SEEDS: number[] = (process.env.SEEDS || "47,89,144,123")
   .split(",")
   .map((s) => Number.parseInt(s.trim(), 10))
   .filter((n) => Number.isFinite(n));

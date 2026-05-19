@@ -12,10 +12,9 @@ R7-aligned per-cell coverage thresholds (anti-fake-pass guard, lane L-C4):
   * ``MIN_DISTINCT_SEEDS_PER_CELL`` ≥ 2 (default; tunable via env)
   * ``MIN_MAX_STEP_PER_CELL``    ≥ 3000 (default; tunable via env)
 
-The historical SQL ``WHERE bpb > 1.0 GROUP BY format, algo`` was
-decorative — a single synthetic row with ``bpb > 1.0`` and any
-``step`` could clear the gate. The hardened SQL below enforces the
-three thresholds *inside* the SQL (R7 §witness, R5 §honest-status).
+The gate groups by ``cell_id`` against the actual ``ssot.bpb_samples``
+schema (id, cell_id, tier, seed, bpb, steps, sha_pin, runner_service,
+created_at) and maps cell_id → (format, algo) via the axis arrays.
 
 R5 honest:
   * Never closes #446 unless every cell satisfies ALL three thresholds.
@@ -114,34 +113,32 @@ def main() -> int:
 
     with psycopg2.connect(dsn) as conn:
         with conn.cursor() as cur:
-            # R7-hardened per-cell coverage. A cell qualifies only when
-            # it has >=MIN_ROWS_PER_CELL distinct rows (with bpb>1.0),
-            # >=MIN_DISTINCT_SEEDS_PER_CELL distinct seed values, and
-            # at least one row at step>=MIN_MAX_STEP_PER_CELL. The
-            # legacy gate (WHERE bpb>1.0, GROUP BY format,algo) admitted
-            # synthetic stub rows; this version blocks them in SQL.
             cur.execute(
-                "SELECT format, algo, "
+                "SELECT cell_id, "
                 "       MIN(bpb), "
                 "       COUNT(*), "
-                "       COUNT(DISTINCT seed_phi), "
-                "       MAX(step) "
+                "       COUNT(DISTINCT seed), "
+                "       MAX(steps) "
                 "  FROM ssot.bpb_samples "
                 " WHERE bpb > 1.0 "
-                " GROUP BY format, algo "
+                " GROUP BY cell_id "
                 "HAVING COUNT(*) >= %s "
-                "   AND COUNT(DISTINCT seed_phi) >= %s "
-                "   AND MAX(step) >= %s",
+                "   AND COUNT(DISTINCT seed) >= %s "
+                "   AND MAX(steps) >= %s",
                 (
                     MIN_ROWS_PER_CELL,
                     MIN_DISTINCT_SEEDS_PER_CELL,
                     MIN_MAX_STEP_PER_CELL,
                 ),
             )
-            present = {
-                (f, a): (mb, cnt, dseeds, mstep)
-                for f, a, mb, cnt, dseeds, mstep in cur.fetchall()
-            }
+            present = {}
+            for cell_id, mb, cnt, dseeds, mstep in cur.fetchall():
+                fmt_idx = cell_id // len(algos)
+                algo_idx = cell_id % len(algos)
+                if 0 <= fmt_idx < len(formats) and 0 <= algo_idx < len(algos):
+                    present[(formats[fmt_idx], algos[algo_idx])] = (
+                        mb, cnt, dseeds, mstep,
+                    )
             cur.execute("SELECT COUNT(*) FROM ssot.bpb_samples")
             total_rows = int(cur.fetchone()[0])
 
@@ -176,7 +173,7 @@ def main() -> int:
         f"  * `measured_cells == total_cells == {expected}` ✅\n"
         f"  * every cell has `bpb > 1.0` ✅\n"
         f"  * every cell has ≥ {MIN_ROWS_PER_CELL} rows ✅\n"
-        f"  * every cell has ≥ {MIN_DISTINCT_SEEDS_PER_CELL} distinct seed_phi ✅\n"
+        f"  * every cell has ≥ {MIN_DISTINCT_SEEDS_PER_CELL} distinct seed ✅\n"
         f"  * every cell has at least one row at step ≥ {MIN_MAX_STEP_PER_CELL} ✅\n"
         f"  * matrix-bot live body up to date ✅ (lane L-C6)\n\n"
         f"Closing per `gHashTag/trios#536` lane L-C7. "
