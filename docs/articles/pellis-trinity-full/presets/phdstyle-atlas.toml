@@ -19,12 +19,29 @@ description = "PhD-style atlas / codex / triptych house style for the Vasilev-Pe
 size      = "A4"
 margin_mm = 24
 
+# v22.10 final-style audit lock: pure white #FFFFFF page background,
+# black #000000 text, B&W Da Vinci / scientific atlas / PhD triptych
+# style. No teal / colored service pages, no cream / off-white
+# backgrounds. The verify-style gate (see _runner/src/main.mjs)
+# enforces this on every PDF build.
 [colors]
-background = "#F7F6F2"
-text       = "#28251D"
-muted      = "#7A7974"
-primary    = "#01696F"
-border     = "#D4D1CA"
+background     = "#FFFFFF"   # PURE WHITE (locked, was cream #F7F6F2 pre-v22.10)
+text           = "#000000"   # PURE BLACK
+muted          = "#555555"   # mid-grey for header/footer/captions
+primary        = "#000000"   # headings stay B&W (was teal #01696F pre-v22.10)
+border         = "#B0B0B0"   # mid-grey rule lines
+blockquote_bg  = "#F2F2F2"   # neutral light grey for blockquote panel
+th_bg          = "#EDEDED"   # neutral light grey for table header
+
+# Code-block styling. Both inline `code` and fenced ```code``` use an
+# opaque, light-neutral background so dark body text remains readable
+# (WCAG-AA contrast against the panel, > 12:1 in practice). v22.10
+# locks these to neutral greys (was warm cream pre-v22.10) to keep
+# the cream-corner audit green.
+code_bg        = "#F2F2F2"   # fenced-block panel background, opaque grey
+code_inline_bg = "#EFEFEF"   # inline-code chip background, opaque grey
+code_text      = "#000000"   # mono text color (same as body text)
+code_border    = "#B0B0B0"   # fenced-block panel border
 
 [fonts]
 body_family   = "Inter, Helvetica, sans-serif"
@@ -41,6 +58,12 @@ no_microtext_below_7pt          = true
 labels_must_be_pdf_text         = true
 figures_placed_near_section     = true
 fail_build_on_qa_regression     = true
+# v22.10 style-gate invariants:
+require_pure_white_background   = true   # PDF pages must be #FFFFFF; gated by color-page audit
+forbid_cream_corner             = true   # gated by cream-corner audit (no #F7F6F2-ish corners)
+forbid_colored_service_pages    = true   # heading color stays B&W; gated by color-page audit
+forbid_duplicate_image_hashes   = true   # gated by pdfimages-hash audit
+forbid_orange_annotations       = true   # gated by annotation-color audit
 
 [annotations]
 # Only link annotations are permitted in the final PDF.

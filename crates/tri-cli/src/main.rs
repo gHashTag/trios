@@ -23,6 +23,17 @@ enum Commands {
     Stop,
     /// Show status
     Status,
+    /// Article build / QA service (docs/articles/<slug>/).
+    ///
+    /// Thin wrapper around the repo-native Node runner at
+    /// docs/articles/_runner/src/main.mjs. The Rust binary preserves the
+    /// `tri article ...` command surface declared in
+    /// docs/articles/<slug>/README.md and forwards all positional and
+    /// flag arguments verbatim to the runner.
+    Article {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
 }
 
 const TRIOS_SERVER: &str = "trios-server";
@@ -113,6 +124,60 @@ async fn wait_for_server(mut server: Child) -> Result<()> {
     Ok(())
 }
 
+/// Locate the repo-native Node article runner.
+///
+/// The runner lives at `docs/articles/_runner/src/main.mjs` relative to
+/// the repository root. We walk up from the manifest dir (cargo sets
+/// `CARGO_MANIFEST_DIR` to `crates/tri-cli`) until we find it; we also
+/// honour `TRIOS_ARTICLE_RUNNER` for ad-hoc overrides.
+fn locate_article_runner() -> Result<std::path::PathBuf> {
+    use std::path::PathBuf;
+    if let Ok(p) = std::env::var("TRIOS_ARTICLE_RUNNER") {
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Ok(pb);
+        }
+    }
+    // Manifest dir → repo root is two `..` up.
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let mut here = PathBuf::from(manifest);
+    for _ in 0..6 {
+        let candidate = here.join("docs/articles/_runner/src/main.mjs");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+        if !here.pop() {
+            break;
+        }
+    }
+    // Fall back to cwd-based lookup.
+    let cwd = std::env::current_dir()?;
+    let candidate = cwd.join("docs/articles/_runner/src/main.mjs");
+    if candidate.exists() {
+        return Ok(candidate);
+    }
+    anyhow::bail!(
+        "article runner not found at docs/articles/_runner/src/main.mjs (set TRIOS_ARTICLE_RUNNER to override)"
+    )
+}
+
+async fn run_article(args: Vec<String>) -> Result<()> {
+    let runner = locate_article_runner()?;
+    let status = Command::new("node")
+        .arg(&runner)
+        .args(&args)
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()?;
+    if !status.success() {
+        anyhow::bail!(
+            "tri article: runner exited with {}",
+            status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into())
+        );
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -130,6 +195,7 @@ async fn main() -> Result<()> {
                 Commands::Start { port } => start_server_and_tunnel(port).await,
                 Commands::Stop => stop_all().await,
                 Commands::Status => show_status().await,
+                Commands::Article { args } => run_article(args).await,
             }
         } => {
             if let Err(e) = result {

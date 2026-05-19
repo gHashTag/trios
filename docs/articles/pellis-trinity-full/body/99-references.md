@@ -1,9 +1,10 @@
 ## References
 
-All placeholder citation tokens of the form `[` + `link` + `]` from
-earlier drafts are replaced here with real URLs. The QA gate
-`qa/pellis-trinity-full.qa.toml` rejects any remaining literal
-placeholder token in the rendered body.
+All bare-bracket citation placeholders carried over from earlier drafts
+(the "link placeholders" pattern) are replaced here with real URLs.
+The QA gate `qa/pellis-trinity-full.qa.toml` rejects any remaining
+bare-bracket placeholder in the rendered body so this regression
+cannot reappear silently.
 
 ### Reference values
 
