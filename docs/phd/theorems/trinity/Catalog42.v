@@ -5,15 +5,15 @@
    This file has been moved to the Trinity Coq Canonical SSOT.
    The full proof now lives at:
 
-     gHashTag/t27/proofs/canonical/igla/INV2_IglaAshaBound.v
-       (logical path: Trinity.Canonical.Igla.INV2_IglaAshaBound)
+     gHashTag/t27/proofs/canonical/sacred/Catalog42.v
+       (logical path: Trinity.Canonical.Sacred.Catalog42)
 
-   Bundle:        INV-2
-   Title:         ASHA Champion Survival
-   PhD chapter:   Ch.13 STROBE / App.E
+   Bundle:        SAC-4
+   Title:         Catalog of 42 sealed formulae
+   PhD chapter:   Ch.29 Sacred V
    Census:        github.com/gHashTag/trios/issues/373#issuecomment-4351659821
    Anchor:        phi^2 + phi^-2 = 3
    ================================================================ *)
 
 (* Re-export so downstream files keep working without code changes. *)
-From Trinity.Canonical.Igla Require Export INV2_IglaAshaBound.
+From Trinity.Canonical.Sacred Require Export Catalog42.
