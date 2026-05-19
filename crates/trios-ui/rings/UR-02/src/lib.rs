@@ -43,17 +43,6 @@ pub struct ButtonProps {
 }
 
 /// Primary button component.
-///
-/// # Example
-/// ```rust,ignore
-/// rsx! {
-///     Button {
-///         children: "Click me".to_string(),
-///         variant: ButtonVariant::Primary,
-///         onclick: move |_| { /* action */ },
-///     }
-/// }
-/// ```
 pub fn Button(props: ButtonProps) -> Element {
     let palette = use_palette();
     let (bg, color, border) = match props.variant {

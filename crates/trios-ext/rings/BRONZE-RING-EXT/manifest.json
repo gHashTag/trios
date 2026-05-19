@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Trinity Agent Bridge",
-  "version": "0.3.0",
-  "description": "Trinity Agent Bridge — WASM sidepanel + MCP HTTP client",
+  "version": "0.4.0",
+  "description": "Trinity Agent Bridge — A2A Social Network + WASM sidepanel + MCP HTTP client",
   "permissions": [
     "sidePanel",
     "activeTab",
@@ -11,11 +11,14 @@
   "host_permissions": [
     "http://127.0.0.1:9005/*",
     "http://localhost:9005/*",
+    "http://127.0.0.1:9876/*",
+    "http://localhost:9876/*",
     "https://playras-macbook-pro-1.tail01804b.ts.net/*",
+    "https://*.trycloudflare.com/*",
     "https://api.z.ai/*"
   ],
   "background": {
-    "service_worker": "dist/bg-sw.js"
+    "service_worker": "sw.js"
   },
   "action": {
     "default_title": "Trinity Agent Bridge",
@@ -35,22 +38,17 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://github.com/*/issues/*", "https://github.com/*/pull/*"],
-      "js": ["dist/trios_ext.js", "dist/github-bootstrap.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://claude.ai/*"],
-      "js": ["dist/trios_ext.js", "dist/claude-bootstrap.js"],
+      "matches": ["https://github.com/*/issues/*", "https://github.com/*/pull/*", "https://claude.ai/*"],
+      "js": ["dist/trios_ext_ring_ex00.js"],
       "run_at": "document_idle"
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://127.0.0.1:9005 http://localhost:9005 https://playras-macbook-pro-1.tail01804b.ts.net https://api.z.ai;"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://127.0.0.1:9005 http://localhost:9005 http://127.0.0.1:9876 http://localhost:9876 https://playras-macbook-pro-1.tail01804b.ts.net https://*.trycloudflare.com https://api.z.ai;"
   },
   "web_accessible_resources": [
     {
-      "resources": ["dist/trios_ext_bg.wasm"],
+      "resources": ["dist/trios_ext_ring_ex00_bg.wasm"],
       "matches": ["https://github.com/*", "https://claude.ai/*"]
     }
   ]

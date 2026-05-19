@@ -34,28 +34,23 @@ pub struct Agent {
 }
 
 /// Agent status enum.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum AgentStatus {
+    /// Agent is offline (default).
+    #[default]
+    Offline,
     /// Agent is idle and available.
     Idle,
     /// Agent is working on a task.
     Busy,
     /// Agent encountered an error.
     Error(String),
-    /// Agent is offline.
-    Offline,
-}
-
-impl Default for AgentStatus {
-    fn default() -> Self {
-        Self::Offline
-    }
 }
 
 // ─── Chat types ──────────────────────────────────────────────
 
 /// Chat state atom.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ChatState {
     /// Chat messages.
     pub messages: Vec<ChatMessage>,
@@ -65,17 +60,6 @@ pub struct ChatState {
     pub is_loading: bool,
     /// Active agent ID for the chat.
     pub active_agent_id: Option<String>,
-}
-
-impl Default for ChatState {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            input: String::new(),
-            is_loading: false,
-            active_agent_id: None,
-        }
-    }
 }
 
 /// A single chat message.
@@ -171,6 +155,135 @@ pub enum Theme {
     Light,
 }
 
+// ─── A2A Social types (UR-09) ─────────────────────────────────
+
+/// A2A Social state atom.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct A2AState {
+    /// A2A bus messages.
+    pub messages: Vec<A2AMessage>,
+    /// Agent presence map (name → entry).
+    pub presence: std::collections::HashMap<String, A2APresenceEntry>,
+    /// Whether bus is connected.
+    pub connected: bool,
+    /// Whether interrupt is active.
+    pub interrupt_active: bool,
+    /// Conversation ID.
+    pub conversation_id: String,
+}
+
+impl Default for A2AState {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            presence: std::collections::HashMap::new(),
+            connected: false,
+            interrupt_active: false,
+            conversation_id: "trinity-ops-2026-05-03".to_string(),
+        }
+    }
+}
+
+impl A2AState {
+    /// Check if an agent is online (seen within 120s).
+    pub fn is_agent_online(&self, name: &str) -> bool {
+        self.presence.get(name).map_or(false, |e| {
+            let now = now_ms();
+            now.saturating_sub(e.last_seen) < 120_000
+        })
+    }
+}
+
+/// A single A2A bus message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct A2AMessage {
+    /// Unique message ID.
+    pub id: String,
+    /// Message type (chat, interrupt, abort, interrupted, presence).
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    /// Sender role (human, agent).
+    pub role: String,
+    /// Sender agent name.
+    #[serde(rename = "agentName")]
+    pub agent_name: String,
+    /// Message content.
+    pub content: String,
+    /// Conversation ID.
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    /// Timestamp (epoch ms).
+    pub timestamp: u64,
+}
+
+/// A2A presence entry.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct A2APresenceEntry {
+    /// Agent role.
+    pub role: String,
+    /// Last seen timestamp (epoch ms).
+    #[serde(rename = "lastSeen")]
+    pub last_seen: u64,
+    /// Status (join, heartbeat, leave).
+    pub status: String,
+}
+
+/// Agent profile for social display.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AgentProfile {
+    /// Agent name (matches A2AMessage.agent_name).
+    pub name: String,
+    /// Display emoji.
+    pub emoji: String,
+    /// Display label.
+    pub label: String,
+    /// Agent color (CSS hex).
+    pub color: String,
+    /// Description.
+    pub desc: String,
+}
+
+impl AgentProfile {
+    pub fn human() -> Self {
+        Self { name: "HumanOverlord".into(), emoji: "👑".into(), label: "You".into(), color: "#D4AF37".into(), desc: "Human-in-the-Loop — veto power".into() }
+    }
+    pub fn browser_os() -> Self {
+        Self { name: "BrowserOS-Agent".into(), emoji: "🤖".into(), label: "BOS".into(), color: "#4fc3f7".into(), desc: "Local browser agent".into() }
+    }
+    pub fn scarabs() -> Self {
+        Self { name: "PerplexityScarabs".into(), emoji: "🕷️".into(), label: "Scarabs".into(), color: "#ff6b9d".into(), desc: "Cloud code agent".into() }
+    }
+    pub fn phi_t27() -> Self {
+        Self { name: "phi-t27".into(), emoji: "φ".into(), label: "t27".into(), color: "#FF6B6B".into(), desc: "Trinity compute agent".into() }
+    }
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "HumanOverlord" => Self::human(),
+            "BrowserOS-Agent" => Self::browser_os(),
+            "PerplexityScarabs" => Self::scarabs(),
+            "phi-t27" => Self::phi_t27(),
+            _ => Self { name: name.into(), emoji: "❓".into(), label: name.into(), color: "#666".into(), desc: String::new() },
+        }
+    }
+}
+
+// ─── Utility ─────────────────────────────────────────────────
+
+/// Get current time in epoch ms. Uses js_sys in WASM, std in native.
+fn now_ms() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+}
+
 // ─── Global Signal atoms (Jotai-style) ──────────────────────
 
 /// Global agents atom. Use `use_agents_atom()` to access.
@@ -184,6 +297,9 @@ static MCP_ATOM: GlobalSignal<McpState> = GlobalSignal::new(McpState::default);
 
 /// Global settings atom. Use `use_settings_atom()` to access.
 static SETTINGS_ATOM: GlobalSignal<Settings> = GlobalSignal::new(Settings::default);
+
+/// Global A2A social state atom. Use `use_a2a_atom()` to access.
+pub static A2A_ATOM: GlobalSignal<A2AState> = GlobalSignal::new(A2AState::default);
 
 // ─── Atom accessors (Jotai-style hooks) ─────────────────────
 
@@ -213,4 +329,9 @@ pub fn use_mcp_atom() -> Signal<McpState> {
 /// Access the global settings atom.
 pub fn use_settings_atom() -> Signal<Settings> {
     SETTINGS_ATOM.signal()
+}
+
+/// Access the global A2A social state atom.
+pub fn use_a2a_atom() -> Signal<A2AState> {
+    A2A_ATOM.signal()
 }

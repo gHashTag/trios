@@ -12,7 +12,6 @@ use trios_ui_ur02::{Button, ButtonVariant, Input};
 // ─── SettingsPanel ───────────────────────────────────────────
 
 /// Full settings panel.
-#[component]
 pub fn SettingsPanel() -> Element {
     let palette = use_palette();
     let settings = use_settings_atom();
@@ -20,7 +19,6 @@ pub fn SettingsPanel() -> Element {
         Theme::Dark => "🌙 Dark",
         Theme::Light => "☀️ Light",
     };
-    let theme_label_owned = theme_label.to_string();
 
     rsx! {
         div {
@@ -44,8 +42,25 @@ pub fn SettingsPanel() -> Element {
                 "⚙ Settings"
             }
             // Theme section
-            SettingsSection {
-                title: "Appearance".to_string(),
+            div {
+                style: "
+                    display: flex;
+                    flex-direction: column;
+                    gap: {spacing::SM};
+                    background: {palette.surface};
+                    border: 1px solid {palette.border};
+                    border-radius: {radius::LG};
+                    padding: {spacing::MD};
+                ",
+                div {
+                    style: "
+                        font-family: {typography::FONT_FAMILY};
+                        font-size: {typography::SIZE_SM};
+                        font-weight: {typography::WEIGHT_BOLD};
+                        color: {palette.text_muted};
+                    ",
+                    "Appearance"
+                }
                 div {
                     style: "display: flex; align-items: center; justify-content: space-between;",
                     span {
@@ -54,7 +69,7 @@ pub fn SettingsPanel() -> Element {
                             font-size: {typography::SIZE_MD};
                             color: {palette.text};
                         ",
-                        "Theme: {theme_label_owned}"
+                        "Theme: {theme_label}"
                     }
                     Button {
                         variant: ButtonVariant::Secondary,
@@ -79,7 +94,6 @@ pub struct SettingsSectionProps {
     pub children: Element,
 }
 
-#[component]
 pub fn SettingsSection(props: SettingsSectionProps) -> Element {
     let palette = use_palette();
 
@@ -112,9 +126,9 @@ pub fn SettingsSection(props: SettingsSectionProps) -> Element {
 
 // ─── ApiKeySection ───────────────────────────────────────────
 
-#[component]
 fn ApiKeySection() -> Element {
     let mut settings = use_settings_atom();
+    let palette = use_palette();
     let api_key = settings.read().api_key.clone();
     let masked = if api_key.is_empty() {
         String::new()
@@ -123,8 +137,25 @@ fn ApiKeySection() -> Element {
     };
 
     rsx! {
-        SettingsSection {
-            title: "API Key".to_string(),
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                gap: {spacing::SM};
+                background: {palette.surface};
+                border: 1px solid {palette.border};
+                border-radius: {radius::LG};
+                padding: {spacing::MD};
+            ",
+            div {
+                style: "
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_SM};
+                    font-weight: {typography::WEIGHT_BOLD};
+                    color: {palette.text_muted};
+                ",
+                "API Key"
+            }
             Input {
                 placeholder: "Enter z.ai API key...".to_string(),
                 value: masked,
@@ -144,7 +175,6 @@ const URL_LOCAL: &str = "http://localhost:9005";
 const URL_PUBLIC: &str = "https://playras-macbook-pro-1.tail01804b.ts.net";
 
 /// MCP server URL section with Local / Public quick-select buttons.
-#[component]
 fn McpUrlSection() -> Element {
     let mut settings = use_settings_atom();
     let palette = use_palette();
@@ -153,16 +183,37 @@ fn McpUrlSection() -> Element {
     let is_local = mcp_url == URL_LOCAL || mcp_url.starts_with("http://localhost");
     let is_public = mcp_url.contains("tail01804b.ts.net");
 
-    let local_border = if is_local { palette.primary } else { palette.border };
-    let local_bg = if is_local { palette.primary } else { palette.surface };
-    let local_color = if is_local { palette.background } else { palette.text };
-    let public_border = if is_public { palette.primary } else { palette.border };
-    let public_bg = if is_public { palette.primary } else { palette.surface };
-    let public_color = if is_public { palette.background } else { palette.text };
+    let (local_border, local_bg, local_color) = if is_local {
+        (palette.primary, palette.primary, palette.background)
+    } else {
+        (palette.border, palette.surface, palette.text)
+    };
+    let (public_border, public_bg, public_color) = if is_public {
+        (palette.primary, palette.primary, palette.background)
+    } else {
+        (palette.border, palette.surface, palette.text)
+    };
 
     rsx! {
-        SettingsSection {
-            title: "MCP Server".to_string(),
+        div {
+            style: "
+                display: flex;
+                flex-direction: column;
+                gap: {spacing::SM};
+                background: {palette.surface};
+                border: 1px solid {palette.border};
+                border-radius: {radius::LG};
+                padding: {spacing::MD};
+            ",
+            div {
+                style: "
+                    font-family: {typography::FONT_FAMILY};
+                    font-size: {typography::SIZE_SM};
+                    font-weight: {typography::WEIGHT_BOLD};
+                    color: {palette.text_muted};
+                ",
+                "MCP Server"
+            }
             // Quick-select row
             div {
                 style: "display: flex; gap: {spacing::SM}; margin-bottom: {spacing::XS};",
