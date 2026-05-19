@@ -1,48 +1,79 @@
-# Golden Sunflowers — chapter source (mirror of NEON SSOT)
+# Golden Sunflowers — chapter source = NEON SSOT (single source of truth)
 
-These markdown files are auto-generated from `ssot.chapters.body_md` in NEON.
-Do NOT edit here — edit in NEON, then re-run `v4/generate_from_neon.py`.
+> **Anchor:** φ² + φ⁻² = 3 · Trinity · Zenodo DOI [10.5281/zenodo.19227877](https://doi.org/10.5281/zenodo.19227877)
 
-## Files
-* Trinity Identity (φ²+φ⁻²=3)
-- `ch-4-sacred-formula-derivation.md` — **Ch.4** Sacred Formula — α_φ derivation
-- `ch-5-distance-and-fibonacci-lucas-seeds.md` — **Ch.5** φ-distance and Fibonacci-Lucas seeds
-- `ch-6-goldenfloat-family-gf4-gf64.md` — **Ch.6** GoldenFloat Family GF4..GF64
-- `ch-7-vogel-phyllotaxis-137-5-360.md` — **Ch.7** Vogel phyllotaxis 137.5° = 360°/φ²
-- `ch-8-tf3-tf9-sparse-ternary-matmul.md` — **Ch.8** TF3/TF9 sparse ternary MatMul
-- `ch-9-gf-vs-mxfp4-ablation.md` — **Ch.9** GF vs MXFP4 ablation
-- `ch-10-coq-l1-range-precision-pareto.md` — **Ch.10** Coq L1 range×precision Pareto
-- `ch-11-pre-registration-h-3-distinct-seeds.md` — **Ch.11** Pre-registration H₁ (≥3 distinct seeds)
-- `ch-12-hardware-bridge-deferred.md` — **Ch.12** Hardware Bridge (deferred)
-- `ch-13-strobe-sealed-seeds.md` — **Ch.13** STROBE Sealed seeds
-- `ch-14-eval-semantics-bpb-metric.md` — **Ch.14** Eval semantics (BPB metric)
-- `ch-15-bpb-benchmark-neon-write.md` — **Ch.15** BPB benchmark + Neon write
-- `ch-16-360-lane-phi-distance-grid.md` — **Ch.16** 360-lane phi-distance grid
-- `ch-17-ablation-matrix.md` — **Ch.17** Ablation matrix
-- `ch-18-limitations.md` — **Ch.18** Limitations
-- `ch-19-statistical-analysis-welch-t.md` — **Ch.19** Statistical analysis (Welch-t)
-- `ch-20-reproducibility.md` — **Ch.20** Reproducibility
-- `ch-21-igla-race-multi-agent-fleet.md` — **Ch.21** IGLA RACE (multi-agent fleet)
-- `ch-22-railway-trios-orchestration.md` — **Ch.22** Railway / Trios orchestration
-- `ch-23-mcp-integration.md` — **Ch.23** MCP integration
-- `ch-24-period-locked-runtime-monitor.md` — **Ch.24** Period-Locked Runtime Monitor
-- `ch-25-period-cycles.md` — **Ch.25** φ-period Cycles
-- `ch-26-koschei-numeric-coprocessor-isa.md` — **Ch.26** KOSCHEI φ-Numeric Coprocessor (ISA)
-- `ch-27-tri27-dsl.md` — **Ch.27** TRI27 DSL
-- `ch-28-qmtech-xc7a100t-fpga.md` — **Ch.28** QMTech XC7A100T FPGA
-- `ch-29-sacred-formula-v-ckm-leptons.md` — **Ch.29** Sacred Formula V (CKM/leptons)
-- `ch-30-trinity-sai-vsa-ar.md` — **Ch.30** Trinity SAI (VSA + AR)
-- `ch-31-hardware-empirical-1003-toks-hslm.md` — **Ch.31** Hardware empirical (1003 toks HSLM)
-- `ch-32-uart-v6-protocol.md` — **Ch.32** UART v6 protocol
-- `ch-33-jtag-macos-blk-001-resolved.md` — **Ch.33** JTAG macOS BLK-001 resolved
-- `ch-34-energy-3000-darpa.md` — **Ch.34** Energy 3000× DARPA
-- `app-a-cover-abstract-250w-executive.md` — **App.A** Cover + Abstract (250w · executive)
-- `app-b-golden-ledger-297-qed-canonical-sha-1.md` — **App.B** Golden Ledger (297 Qed canonical + SHA-1)
-- `app-c-acknowledgments-ai-assisted-disclaimer.md` — **App.C** Acknowledgments + AI-assisted disclaimer
-- `app-d-reproducibility-scripts.md` — **App.D** Reproducibility scripts
-- `app-e-pre-reg-pdf-osf-igla-race-results.md` — **App.E** Pre-reg PDF + OSF + IGLA RACE results
-- `app-f-bitstream-archive-sha-256.md` — **App.F** Bitstream archive + SHA-256
-- `app-g-clara-evidence-package-mirror.md` — **App.G** CLARA evidence package mirror
-- `app-h-zenodo-doi-registry.md` — **App.N** 8-bundle Zenodo DOI registry (community `trinity-s3ai`; PASS-7 R5-honest rename from `app-h-13-...` after PASS-6 reduced 13→8 description bundles)
-- `app-i-xdc-pin-map.md` — **App.I** XDC pin map
-- `app-j-troubleshooting-blk-001-blk-005.md` — **App.J** Troubleshooting (BLK-001..BLK-005)
+## Single source of truth
+
+The 98 chapters of the *Flos Aureus* / *Monumentum Aureum* monograph live in
+**NEON Postgres**, table `ssot.chapters`, column `body_md`. There is **no**
+hand-written markdown copy in this repository. Every chapter is generated
+on demand from NEON by the Rust pipeline `crates/trios-phd`
+(see [#372](https://github.com/gHashTag/trios/issues/372)).
+
+```
+NEON `ssot.chapters.body_md`  →  trios-phd compile-chapters  →  per-chapter PDF  →  monograph.pdf
+```
+
+Connection (read-only operations only — never `UPDATE` from a non-claimant):
+
+```bash
+export DB='postgresql://neondb_owner:<password>@ep-curly-math-ao51pquy-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+psql "$DB" -c "SELECT ch_num, length(body_md) FROM ssot.chapters ORDER BY ch_num;"
+```
+
+## How to edit a chapter
+
+Per the Golden Sunflowers ONE SHOT protocol ([#373](https://github.com/gHashTag/trios/issues/373)):
+
+```sql
+-- 1. Atomically claim the chapter (SKIP LOCKED, stale-lock release)
+SELECT * FROM ssot.claim_one_shot('Ch.X', 'your-agent-name');
+
+-- 2. Heartbeat every ≤ 2 min while writing
+SELECT ssot.heartbeat(<oneshot_id>, 'your-agent-name', 'running', '<message>', <pct>);
+
+-- 3. Update the canonical body
+UPDATE ssot.chapters SET body_md = $$ ... $$ WHERE ch_num = 'Ch.X';
+
+-- 4. Mark complete
+SELECT ssot.complete_one_shot(<oneshot_id>, 'your-agent-name', '<PR-or-evidence-URL>');
+```
+
+The PR you open against `gHashTag/trios` is **only for the build pipeline**
+(templates, Lua filters, migrations, the `trios-phd` Rust binary). It must
+**not** add a per-chapter markdown file under `docs/golden-sunflowers/`,
+because that would re-introduce a second source of truth.
+
+## What this directory now contains
+
+| Path | Source of truth | Notes |
+|---|---|---|
+| `README.md` | this file | static |
+| `pdf/` | generated artefacts | output of `trios-phd compile-chapters`, kept for browsing only |
+
+Per-chapter files (`ch-*.md`, `app-*.md`) were a NEON → repo mirror in v4.
+They are removed because:
+
+1. **R5 honest single-source rule.** The v5/v6 pipeline renders directly from
+   NEON; the markdown copies were drifting (see [#372 v6.2 cycle](https://github.com/gHashTag/trios/issues/372#issuecomment-)).
+2. **R6 lane discipline.** Multiple agents were editing the file *and* the
+   NEON row in different orders, producing irreproducible PDFs.
+3. **User instruction (2026-05-06):** *«всё лежит в NEON !! один источник
+   правды !! и генерируется !! у нас нет руками написанных глав !! нужно
+   всё перенести в NEON и удалить в других местах».*
+
+## Counterpart audit issues
+
+- [#372](https://github.com/gHashTag/trios/issues/372) — Golden Sunflowers SSOT spec.
+- [#373](https://github.com/gHashTag/trios/issues/373) — Master epic / one-shot dispatch.
+- [#265](https://github.com/gHashTag/trios/issues/265) — Original Flos Aureus PhD ONE SHOT (R1–R14).
+
+## Reproducibility
+
+Every published PDF carries:
+- the `ssot.chapters` SHA-256 manifest at build time,
+- the canon-locked git SHA of the `trios-phd` binary,
+- the Zenodo DOI of the data anchor (10.5281/zenodo.19227877).
+
+A mismatch between any of these and the rendered PDF is itself a §G falsifier
+hit (see App. B Golden Ledger).
