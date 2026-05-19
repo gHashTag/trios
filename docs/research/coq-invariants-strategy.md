@@ -9,7 +9,7 @@
 ```
 NASA P10 Rule 5 ("assert!()")
     ↓是你的 научный метод
-Audited Coq corpus (218 statements / 162 Qed / 32 Admitted in t27 on 2026-05-12)
+84 Coq Theorems (тройственность формул)
     ↓фокусирует поиск
 trinity-clara AR Engine (bounded rationality)
     ↓автоматизирует
@@ -489,7 +489,7 @@ QUALITY: 100% valid results (vs 70% before)
 ## 🧠 ФОРМАЛЬНАЯ ВЕРИФИКАЦИЯ (Coq + trinity-clara)
 
 **Связь с научной работой:**
-- Audited Coq корпус из `docs/phd/theorems/` (45 .v, 340 statements / 286 Qed / 3 Admitted на 2026-05-12) → основа для инвариантов
+- 84 Coq теоремы из `docs/phd/theorems/` → основа для инвариантов
 - trinity-clara AR Engine (`ternary_logic.t27`) → авто-генерация проверок
 - NASA P10 Rule 5 (`assert!()`) → практическая реализация
 

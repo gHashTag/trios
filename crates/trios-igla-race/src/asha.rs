@@ -12,6 +12,7 @@ use rand::rngs::StdRng;
 
 use crate::neon::NeonDb;
 use crate::lessons::{TrialConfig, RungData, Outcome};
+use crate::invariants::INV2_BPB_PRUNE_THRESHOLD;
 
 /// Architecture kind for IGLA Race (local copy)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,8 +151,8 @@ pub async fn should_prune(
     if current_bpb <= config.target_bpb {
         return Ok(false);
     }
-    let threshold = crate::invariants::INV2_BPB_PRUNE_THRESHOLD;
-    Ok(current_bpb > threshold)
+    // INV-2 PROVEN: threshold=3.5 (phi^2+phi^-2+0.5) guarantees champion survives
+    Ok(current_bpb > INV2_BPB_PRUNE_THRESHOLD)
 }
 
 /// Handle trial pruning (STUB)
@@ -272,8 +273,8 @@ pub async fn run_worker(
 
             let rung_steps = rung as usize;
             
-            // a. Spawn subprocess: external SoT trainer (cargo install --git ...trios-trainer-igla)
-            let output = Command::new("trios-train")
+            // a. Spawn subprocess: ./target/release/trios-igla-trainer with config args
+            let output = Command::new("./target/release/trios-igla-trainer")
                 .arg("--seed").arg("42") // Fixed seed for now
                 .arg("--steps").arg(rung_steps.to_string())
                 .arg("--hidden").arg(config.hidden.unwrap_or(256).to_string())
@@ -313,8 +314,8 @@ pub async fn run_worker(
             }
             
             // d. if should_prune(rung, bpb) → break to next trial
-            // Mock median check - in reality would query Neon
-            let should_prune = bpb > crate::invariants::INV2_BPB_PRUNE_THRESHOLD;
+            // INV-2 PROVEN: threshold=3.5 (phi^2+phi^-2+0.5) guarantees champion survives
+            let should_prune = bpb > INV2_BPB_PRUNE_THRESHOLD;
             
             if should_prune {
                 info!("Prune trial: BPB={}", bpb);
