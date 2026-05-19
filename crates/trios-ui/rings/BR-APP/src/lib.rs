@@ -6,7 +6,7 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! // From trios-ext:
+//! // From Chrome Extension:
 //! trios_ui::mount_app();
 //! ```
 

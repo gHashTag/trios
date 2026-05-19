@@ -1,22 +1,64 @@
-# trios-mcp / BR-XTASK
+# BR-XTASK: Launcher
 
-> **Anchor:** `phi^2 + phi^-2 = 3 · TRINITY · O(1) FOREVER`
-> **Ring:** `BR-XTASK` of `trios-mcp`
-> **Mandate (I5):** every ring carries README + TASK + AGENTS — see [AGENTS.md](https://github.com/gHashTag/trios/blob/main/AGENTS.md#i5).
+## Ring Purpose
 
-## Purpose
+Single command `cargo run -p trios-mcp` to launch all rings in parallel.
+Replaces `package.json` scripts from browser-tools-mcp (bun dev).
 
-Documentation stub satisfying the **I5 invariant** enforced by [`arch-guard.yml`](https://github.com/gHashTag/trios/blob/main/.github/workflows/arch-guard.yml).
-The functional contract for this ring lives in its source files (`src/lib.rs`) and is exported through the parent crate facade. This stub exists so the constitutional CI gate guarding [EPIC #446](https://github.com/gHashTag/trios/issues/446) (Ring-Pattern Refactor) can pass while the canonical narrative is being written by the ring owner.
+## TypeScript Reference
 
-## Status
+`package.json` scripts → `bun dev` command
 
-- Source: present
-- Tests: see crate-level `cargo test -p trios-mcp`
-- Owner-authored README: TODO (ticket: backfill prose under EPIC #446)
+## Rust Files
 
-## See also
+- `src/main.rs` — Single launch command, parallel execution
 
-- [`AGENTS.md`](./AGENTS.md) — agent-scope rules for this ring
-- [`TASK.md`](./TASK.md) — current task ledger
-- [`LAWS.md`](https://github.com/gHashTag/trios/blob/main/LAWS.md) — constitutional layer
+## Dependencies (workspace)
+
+- tokio, anyhow, tracing
+- tracing-subscriber — Logging init
+- Ring dependencies via path:
+  - `trios-mcp-sr00 = { path = "../SR-00" }`
+  - `trios-mcp-sr01 = { path = "../SR-01" }`
+  - `trios-mcp-sr02 = { path = "../SR-02" }`
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_HOST` | `127.0.0.1` | Server host |
+| `MCP_PORT` | `3025` | Server port (law L5) |
+| `RUST_LOG` | `trios_mcp=info,warn` | Log filter |
+
+## Parallel Launch
+
+```rust
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt().init();
+
+    // Parse configuration
+    let host = env::var("MCP_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port: u16 = env::var("MCP_PORT")
+        .unwrap_or_else(|_| "3025".to_string())
+        .parse()?;
+
+    // Launch SR-00 in background
+    tokio::spawn(async move {
+        trios_mcp_sr00::BrowserServer::run(host.clone(), port).await
+    });
+
+    // Launch SR-02 in foreground (stdio for MCP)
+    trios_mcp_sr02::McpServer::run_stdio().await?;
+}
+```
+
+## Ring Status
+
+- [x] `cargo run -p trios-mcp` launches everything
+- [x] SR-00 and SR-02 run in parallel
+- [x] Environment variables parsed correctly
+- [x] Ctrl+C graceful shutdown
+- [x] `RING.md` present (R3)
+- [x] Separate `Cargo.toml` (R2)
+- [x] Tests pass (R4, ≥10 tests)

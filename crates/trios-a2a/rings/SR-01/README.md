@@ -1,22 +1,44 @@
-# trios-a2a / SR-01
+# RING — SR-01 (trios-a2a)
 
-> **Anchor:** `phi^2 + phi^-2 = 3 · TRINITY · O(1) FOREVER`
-> **Ring:** `SR-01` of `trios-a2a`
-> **Mandate (I5):** every ring carries README + TASK + AGENTS — see [AGENTS.md](https://github.com/gHashTag/trios/blob/main/AGENTS.md#i5).
+## Identity
+
+| Field | Value |
+|-------|-------|
+| Metal | 🥈 Silver |
+| Package | trios-a2a-sr01 |
+| Sealed | No |
 
 ## Purpose
 
-Documentation stub satisfying the **I5 invariant** enforced by [`arch-guard.yml`](https://github.com/gHashTag/trios/blob/main/.github/workflows/arch-guard.yml).
-The functional contract for this ring lives in its source files (`src/lib.rs`) and is exported through the parent crate facade. This stub exists so the constitutional CI gate guarding [EPIC #446](https://github.com/gHashTag/trios/issues/446) (Ring-Pattern Refactor) can pass while the canonical narrative is being written by the ring owner.
+Message protocol ring. Defines the A2A message envelope and task lifecycle.
+Every interaction between agents in TRIOS flows through `A2AMessage`.
+Tasks are the unit of work — they have a state machine, priority, and ownership.
 
-## Status
+## Why tasks are in SR-01 and not SR-02
 
-- Source: present
-- Tests: see crate-level `cargo test -p trios-a2a`
-- Owner-authored README: TODO (ticket: backfill prose under EPIC #446)
+`Task` is a protocol-level concept, not a registry concept.
+The registry (SR-02) stores and queries tasks, but the task's shape
+(fields, state machine, priority) is part of the protocol contract.
+Separating them means SR-02 can evolve its storage without touching the protocol.
 
-## See also
+## API Surface (pub)
 
-- [`AGENTS.md`](./AGENTS.md) — agent-scope rules for this ring
-- [`TASK.md`](./TASK.md) — current task ledger
-- [`LAWS.md`](https://github.com/gHashTag/trios/blob/main/LAWS.md) — constitutional layer
+| Type | Role |
+|------|------|
+| `A2AMessage` | Universal message envelope |
+| `A2AMessageType` | Direct, Broadcast, TaskAssign, TaskUpdate, TaskResult, Heartbeat, Error |
+| `Task` | Unit of work with full lifecycle |
+| `TaskState` | Pending → Assigned → InProgress → Completed/Failed/Cancelled |
+| `TaskPriority` | Low, Medium, High, Critical (Ord implemented) |
+
+## Dependencies
+
+- SR-00 (AgentId)
+- `serde`, `uuid` (v4), `chrono` (UTC timestamps)
+
+## Laws
+
+- R1: No imports from SR-02, BR-OUTPUT
+- L6: Pure Rust only
+- All timestamps: RFC3339 UTC via `chrono::Utc::now().to_rfc3339()`
+- All IDs: UUID v4 via `uuid::Uuid::new_v4()`
