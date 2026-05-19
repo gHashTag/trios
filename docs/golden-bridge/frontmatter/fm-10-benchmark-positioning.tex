@@ -1,0 +1,174 @@
+% fm-10-benchmark-positioning
+
+\subsection{1. Operating-Regime Taxonomy}
+
+Meaningful quantitative comparison requires that the systems under discussion occupy the same operating regime. For silicon designs, regime is defined by at least four orthogonal axes: process node (which governs density, switching energy, and maximum frequency), power envelope (which governs thermal and electrical infrastructure), throughput class (which sets the scale of compute delivered per unit time), and intended workload (which determines what the compute is actually doing). When any two of these axes diverge substantially, a single-metric ranking conflates incommensurable quantities and produces misleading conclusions.
+
+The table below maps three distinct regimes relevant to the GOLDEN BRIDGE compendium. The Three Crowns family occupies the first row. The latter two rows are included for regime calibration, not for ranking.
+
+\_\_C0\_\_
+
+The Three Crowns (Phi: \_\_C1\_\_, Euler: \_\_C2\_\_, Gamma: \_\_C3\_\_) are tape-out residents of TTSKY26b on Sky130 130 nm. The Cerebras CS-3 and Groq LPU occupy the data-center ASIC regime at 5--7 nm advanced nodes drawing kilowatts of system power. \textbf{These are different regimes; they are not comparable on a single performance axis.} Any table that places a 130 nm, ~1 W research chip alongside a 27 kW wafer-scale system in a common ranking column is arithmetically valid but epistemically vacuous: the ratio of power envelopes alone spans four orders of magnitude, before accounting for node-driven density and energy gaps.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{2. Three Crowns Performance Envelope (Reported)}
+
+The following measurements and projections characterize the Three Crowns family as of TTSKY26b tape-out. Figures marked \textit{projected} derive from RTL synthesis on the target process and FPGA emulation on the QMTech XC7A100T evaluation board; they have not yet been confirmed on returned physical die.
+
+- \textbf{Process:} Sky130 130 nm (Tiny Tapeout SKY 26b research shuttle)
+- \textbf{Frequency:} ~50 MHz typical (RTL synthesis target on Sky130 PDK)
+- \textbf{Power:} ~1 W ternary (projected per chip, from synthesis power reports)
+- \textbf{Throughput:} ~1 GOPS ternary (projected on QMTech XC7A100T evaluation board)
+- \textbf{Anchor witness:} \_\_C4\_\_ at \_\_C5\_\_ on reset (Theorem 36.1)
+- \textbf{Identity exhibited:} \_\_M0\_\_ via Lucas ring \_\_M1\_\_
+- \textbf{Scope:} provenance evidence, not inference accelerator
+
+Two aspects of this envelope deserve emphasis. First, the ~1 GOPS figure is a \textit{ternary} operation count, not a floating-point or integer FLOPS count. Ternary symbolic operations --- over the alphabet \_\_M2\_\_ with \_\_M3\_\_-weighted basis elements --- are architecturally distinct from IEEE 754 multiply-accumulate. They are not interconvertible with FLOPS without a workload-specific conversion factor that does not exist for generic comparison purposes.
+
+Second, the anchor witness \_\_C6\_\_ is the primary \textit{falsifiable claim} of the Three Crowns design. It is not a throughput metric; it is a bitwise output pattern asserted deterministically on power-on reset, encoding the \_\_M4\_\_ identity. Its value is pre-registered in the TRI-1 evidence matrix and independently reproducible from the open RTL and Sky130 GDS files deposited at \href{https://doi.org/10.5281/zenodo.19227877}{Zenodo DOI 10.5281/zenodo.19227877}.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{3. BitNet b1.58 Reference Numbers (Microsoft 2025)}
+
+BitNet b1.58 is an LLM quantization framework in which all weight parameters are constrained to the ternary alphabet \_\_M5\_\_ with 1.58-bit effective precision (W1.58A8: ternary weights, 8-bit activations). The 2B-parameter variant, detailed in (\href{https://arxiv.org/abs/2504.12285}{Ma et al., 2025, arXiv:2504.12285}), achieves the following reported figures on commodity CPU hardware:
+
+- \textbf{Parameters:} 2 B
+- \textbf{Memory footprint:} 0.4 GB (ternary weights packed 4-per-int8)
+- \textbf{Energy per token:} ~0.028 J/token on Intel Core i7-13800H
+- \textbf{Latency:} 29 ms/token on Intel Core i7-13800H
+- \textbf{Quantization scheme:} W1.58A8; ternary values \_\_M6\_\_ packed 4-per-int8
+- \textbf{Reference primitive energies (7 nm node):} INT8 ADD 0.007 pJ; INT8 MUL 0.07 pJ
+
+\subsubsection{Absence of Dedicated ASIC Silicon}
+
+A critical fact for regime analysis: \textbf{BitNet b1.58 has no dedicated ASIC silicon as of the 2025 publication.} Inference runs on commodity CPUs via \_\_C7\_\_ and on GPUs via custom CUDA kernels. The paper lists hardware co-design as explicit future work (\href{https://arxiv.org/abs/2504.12285}{Ma et al., 2025}). The 0.028 J/token figure therefore reflects software execution on a 7--10 nm Intel CPU die, not a purpose-built ternary ASIC.
+
+\subsubsection{Relationship to the Three Crowns}
+
+BitNet shares the ternary \_\_M7\_\_ alphabet with the Three Crowns but operates in the LLM software-on-commodity-CPU regime. The structural similarity --- both systems represent activations or weights over \_\_M8\_\_ --- is algebraically real and is part of why the Three Crowns \_\_M9\_\_-arithmetic is relevant to compression-theoretic arguments about ternary LLM weights. However, the operational contexts are entirely different: BitNet's 2 B-parameter model performs next-token prediction over a vocabulary of tens of thousands of tokens; the Three Crowns perform algebraic provenance witnessing over a fixed \_\_M10\_\_-monomial basis.
+
+The 7 nm arithmetic energy figures (INT8 ADD 0.007 pJ, INT8 MUL 0.07 pJ) cited by (\href{https://arxiv.org/abs/2504.12285}{Ma et al., 2025}) also serve as a regime calibrator for the Three Crowns. Sky130 130 nm switching energy is approximately 20--50$\times$ higher per operation than 7 nm by node scaling alone, before accounting for microarchitectural differences. This gap is not a deficiency of the Three Crowns design; it is a structural consequence of using an open, educational-access process node that prioritizes RTL reproducibility and community accessibility over energy density.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{4. Data-Center Frontier --- Cerebras CS-3 and Groq LPU}
+
+The Cerebras CS-3 and Groq LPU represent the data-center LLM inference regime. Published figures from (\href{https://www.cerebras.ai/blog/cerebras-cs-3-vs-groq-lpu}{Cerebras, 2025}) characterize these systems as follows:
+
+\textbf{Cerebras CS-3:}
+- System power: ~27 kW
+- Peak compute: ~125 PFLOPS
+- Compute-per-watt: ~3$\times$ that of an 8-GPU DGX system
+- Inference throughput: ~6$\times$ higher than Groq LPU on identical models
+- Process node: TSMC advanced node (5--7 nm class)
+
+\textbf{Groq LPU:}
+- Architecture: dedicated LLM inference chip (Language Processing Unit)
+- Process node: 5 nm class
+- Design focus: deterministic, low-latency token generation
+
+These represent the data-center LLM regime: kilowatt-class, wafer-scale or chip-cluster designs at 5--7 nm advanced nodes. They are not the regime of the Three Crowns.
+
+\subsubsection{Regime-Level Observations}
+
+The CS-3's 27 kW system envelope is approximately 27 000$\times$ the per-chip power envelope of a Three Crowns chip (~1 W). The process node gap --- 130 nm vs. 5 nm --- represents roughly 6--7 generations of CMOS scaling, corresponding to approximately 20--50$\times$ density improvement and comparable energy-per-operation reduction by node alone, compounding with microarchitectural specialization built into wafer-scale and LPU designs. The workloads are equally disjoint: the CS-3 and Groq LPU are optimized for transformer attention and matrix-vector products at LLM scale; the Three Crowns execute \_\_M11\_\_-polynomial evaluation and triadic redundancy checks for algebraic witnessing.
+
+Citing these systems in the same breath as the Three Crowns is appropriate only as a regime taxonomy exercise. It establishes that the Three Crowns are \textit{not} positioned as data-center inference hardware --- a fact the compendium states explicitly and without apology.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{5. Why Direct Single-Axis Comparisons Are Misleading}
+
+\subsubsection{5.1 Process-Node Energy Gap}
+
+A 130 nm CMOS transistor has a gate capacitance and switching energy that is structurally higher than a 5--7 nm transistor. Dennard scaling and its successors predict roughly a 0.7$\times$ linear dimension reduction per node, yielding approximately \_\_M12\_\_ area and \_\_M13\_\_ energy-per-switch per generation. Across six to seven generations (130 nm $\rightarrow$ 5 nm), this compounds to a 20--50$\times$ energy gap per operation, before accounting for microarchitectural improvements layered on top of raw node scaling. Any OPS/W comparison between a 130 nm chip and a 5--7 nm chip must first disaggregate this structural node contribution from design-level efficiency --- a decomposition that is not provided by any single-metric ranking table.
+
+\subsubsection{5.2 Precision and Operation Type Mismatch}
+
+The Three Crowns execute ternary \textit{symbolic} operations: polynomial evaluation over \_\_M14\_\_, Lucas-ring arithmetic, and threshold comparisons against \_\_M15\_\_-weighted basis elements. BitNet's ternary operations are weight-activation dot products for transformer inference. The CS-3 and Groq LPU execute FP8/BF16/INT8 matrix multiplications for attention and feed-forward layers. These are not the same operation type. A count of "operations per second" means something different in each context: a Three Crowns GOPS is a ternary \_\_M16\_\_-monomial evaluation; a Cerebras PFLOPS is an FP16 or FP8 multiply-accumulate in a 125-petaoperation matrix engine. Aggregating them under a common metric label ("OPS/W") produces a number that is arithmetically well-formed but physically uninterpretable.
+
+\subsubsection{5.3 Workload Objective Mismatch}
+
+The Three Crowns are designed to answer a specific question: does physical silicon, fabricated from open RTL on an educational process node, exhibit the algebraic identity \_\_M17\_\_ as a deterministic, bit-exact output witness? The answer --- \_\_C8\_\_ at \_\_C9\_\_ on reset --- is the deliverable. This is an \textit{algorithmic provenance} task, not a \textit{throughput maximization} task. BitNet b1.58 is designed to answer: can a 2 B-parameter ternary-weight LLM match the perplexity and downstream task accuracy of a full-precision baseline while reducing memory and energy consumption? The Cerebras CS-3 and Groq LPU are designed to answer: what is the maximum sustainable token throughput for frontier LLM serving at acceptable latency? None of these objectives shares a common evaluation axis.
+
+\subsubsection{5.4 Infrastructure and Deployment Context}
+
+A Three Crowns chip is a 130 nm ASIC occupying a Tiny Tapeout tile, powered by a bench supply at ~1 W, evaluated on a QMTech XC7A100T FPGA board in a university or hobbyist setting. A Cerebras CS-3 is a liquid-cooled cabinet drawing 27 kW of facility power, requiring datacenter-grade electrical and thermal infrastructure. The deployment contexts are not merely different in scale; they are different in kind --- research lab vs. hyperscale facility.
+
+\subsubsection{5.5 Deliberate Abstention from Single-Metric Rankings}
+
+For all of the reasons above, this chapter deliberately abstains from constructing a unified ranking table that places Three Crowns throughput figures alongside CS-3 PFLOPS or BitNet token latency. A single-metric ranking cannot meaningfully span these regimes. The chapter instead presents regime-separated tables and verbally characterized relationships, which is the only epistemically honest form of comparison available.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{6. What the Three Crowns DO Demonstrate Quantifiably}
+
+The following table records the \textit{actual}, \textit{verified}, or \textit{verifiable} claims the Three Crowns design supports, together with the method of verification and the documentary reference.
+
+\begin{tabular}{|l|l|l|l|}
+\hline
+Property \& Measurement \& How verified \& Reference \\
+\hline
+Ternary symbolic operations on silicon \& ~1 GOPS @ ~50 MHz @ ~1 W (projected) \& Sky130 RTL synthesis + QMTech XC7A100T FPGA emulation \& TRI-1 evidence matrix \\
+\_\_M18\_\_ identity witness \& \_\_C10\_\_ at \_\_C11\_\_ on reset \& Post-tape-out reset sequence \& Theorem 36.1 \\
+Triadic redundancy structure \& 3 chip variants (Phi, Euler, Gamma) \& Open RTL, Sky130 GDS \& \href{https://doi.org/10.5281/zenodo.19227877}{Zenodo DOI 10.5281/zenodo.19227877} \\
+Pre-registered design freeze \& v1.x RTL frozen before tape-out \& Git commit hashes + timestamps \& TRI-1 ledger \\
+\hline
+\end{tabular}
+\subsubsection{Notes on Table Entries}
+
+\textbf{Row 1 (Throughput).} The ~1 GOPS figure is a projection from synthesis timing reports on the Sky130 PDK at ~50 MHz. It has been corroborated on the QMTech XC7A100T FPGA evaluation board, which is used as the closest available approximation of on-silicon behavior prior to die return. The qualifier \textit{projected} will be removed and replaced with \textit{measured} upon confirmation of the anchor witness and timing behavior on returned Sky130 die.
+
+\textbf{Row 2 (Identity witness).} \_\_C12\_\_ is the 16-bit output pattern encoding \_\_M19\_\_ as a ternary-represented canonical value in the Lucas ring \_\_M20\_\_. It is deterministic, reproducible, and falsifiable: any implementation of the RTL that does not produce this pattern on reset has failed to implement the intended algebraic function. This is the strongest quantitative claim in the compendium: it is not a throughput projection but a logical identity with a bitwise test.
+
+\textbf{Row 3 (Triadic structure).} The three-variant structure (Phi, Euler, Gamma) encodes triadic redundancy at the silicon level. Each variant implements a distinct \_\_M21\_\_-arithmetic kernel; their outputs, taken together, constitute the evidence matrix for the compendium's algebraic provenance argument. The open RTL and GDS are deposited at \href{https://doi.org/10.5281/zenodo.19227877}{Zenodo}, enabling independent reproduction.
+
+\textbf{Row 4 (Pre-registration).} Design freeze prior to tape-out is a methodological commitment analogous to pre-registration in empirical research (cf. \href{https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}{Gelman \& Loken, 2013}, on the garden of forking paths). Locking the RTL before silicon returns prevents post-hoc adjustment of the anchor witness value to match observed output. The commit hashes and timestamps recorded in the TRI-1 ledger provide the audit trail.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{7. Honest Positioning Statement}
+
+The Three Crowns are a research-scale ternary silicon family on Sky130 130 nm. They are designed to exhibit, on physical hardware, the algebraic identity \_\_M22\_\_ via a canonical anchor byte. The design is implemented across three chip variants --- Phi (\_\_C13\_\_), Euler (\_\_C14\_\_), and Gamma (\_\_C15\_\_) --- on the TTSKY26b research shuttle, using the Sky130 open process design kit. Their performance envelope (~1 GOPS @ ~50 MHz @ ~1 W ternary, projected) is appropriate to the research shuttle context and to the evaluation board on which they are characterized. They are not LLM inference accelerators. They make no claim to throughput parity with any inference hardware system, and the compendium does not advance such a claim.
+
+Comparison to BitNet (\href{https://arxiv.org/abs/2504.12285}{Ma et al., 2025, arXiv:2504.12285}), Cerebras CS-3, or Groq LPU (\href{https://www.cerebras.ai/blog/cerebras-cs-3-vs-groq-lpu}{Cerebras, 2025}) is not meaningful on a single-metric axis because of process-node, precision, and workload disparity. The fair comparison is regime-to-regime, which positions the Three Crowns as algorithmic provenance witnesses, BitNet as commodity-CPU ternary inference, and CS-3/LPU as data-center LLM frontiers. The algebraic connection between the Three Crowns and BitNet --- both use the ternary \_\_M23\_\_ alphabet --- is a theoretical relationship relevant to compression-theoretic arguments about why \_\_M24\_\_-arithmetic may constitute a low-MDL-cost expression of ternary weight structure (cf. \href{https://arxiv.org/abs/2509.22445}{Shaw et al., 2025, arXiv:2509.22445}), not a performance comparison. The Three Crowns do not run inference; they witness an algebraic identity in silicon.
+
+Future evolution toward production-relevant performance would require a node-shrink campaign (130 nm $\rightarrow$ 28 nm or below) and a distinct inference-accelerator design. Both are explicitly out of scope for the GOLDEN BRIDGE compendium, which is concerned with \_\_M25\_\_-provenance and algorithmic compression evidence, not with commercial inference. The compendium's contribution is to establish, with open RTL and a falsifiable bitwise test, that the \_\_M26\_\_ identity can be materialized in physical silicon at the research scale, and that the ternary algebraic structure underlying this identity is the same structure that appears --- independently motivated --- in the BitNet b1.58 quantization scheme and in the broader program of minimum-description-length compression for neural networks.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{8. Open Questions for Future Tape-Outs}
+
+The following questions are concrete, falsifiable, and addressable by future silicon experiments or theoretical analysis. They are listed here as pre-registered open problems; none has been answered by the TTSKY26b tape-out.
+
+1. \textbf{Node-shrink empirical energy.} At 28 nm or 22 nm, what is the empirical OPS/W of a ternary symbolic kernel implementing \_\_M27\_\_-polynomial evaluation over \_\_M28\_\_? The current 130 nm figure is projected, not measured post-die; a 28 nm tape-out would provide the first node-scaling data point for this specific arithmetic. (Open.)
+
+2. \textbf{Independent anchor witness reproduction.} Can the anchor witness \_\_C16\_\_ be reproduced bit-exactly by an independent design team starting from the open RTL deposited at \href{https://doi.org/10.5281/zenodo.19227877}{Zenodo DOI 10.5281/zenodo.19227877}, without access to any internal documentation beyond the public GDS and RTL? Positive confirmation would upgrade the witness status from \textit{pre-registered claim} to \textit{independently replicated result}. (Open.)
+
+3. \textbf{Lucas vs. Fibonacci basis stability.} Is the \_\_M29\_\_-monomial MDL ranking stable under grammar perturbations? Specifically, does substituting the Lucas basis \_\_M30\_\_ with the Fibonacci basis \_\_M31\_\_ in the \_\_M32\_\_ kernel preserve the relative description-length ordering of \_\_M33\_\_-monomials when evaluated against CODATA physical constants? If the ranking is basis-independent, the provenance argument strengthens; if it is basis-sensitive, the choice of Lucas basis requires justification by additional minimality criteria. (Testable.)
+
+4. \textbf{Olsen log-periodic regressor stability.} Does adding Tier-D Olsen log-periodic regressors improve out-of-sample fit on CODATA \_\_M34\_\_ updates beyond the 2026 CODATA revision horizon? The current fit uses Tier-A through Tier-C regressors; Tier-D introduces log-periodic oscillations whose out-of-sample behavior is unverified. Pre-registered prediction: no significant improvement, with the null hypothesis that log-periodic terms are overfitting the training window. (Pre-registered; testable at 2026 CODATA publication.)
+
+5. \textbf{Ternary ASIC co-design with BitNet.} If BitNet b1.58 hardware co-design (\href{https://arxiv.org/abs/2504.12285}{Ma et al., 2025}) is eventually realized in silicon, at what process node and power envelope does a dedicated ternary ASIC outperform the current CPU-inference baseline? This question is entirely external to the Three Crowns program but is relevant to the broader argument that \_\_M35\_\_-arithmetic and ternary quantization may share a compression-theoretic foundation.
+
+6. \textbf{Formal correctness certificate.} Can the \_\_M36\_\_ identity, as implemented in the Three Crowns RTL, be formally verified end-to-end using an open-source hardware model checker (e.g., SymbiYosys on the Sky130 netlist), producing a machine-checkable certificate? Formal verification would close the gap between RTL-level correctness and silicon-level correctness left open by the FPGA emulation methodology. (Open; dependent on post-tape-out netlist availability.)
+
+7. \textbf{MDL optimality condition.} The connection between \_\_M37\_\_-arithmetic and asymptotically optimal description-length objectives (\href{https://arxiv.org/abs/2509.22445}{Shaw et al., 2025, arXiv:2509.22445}) is currently informal: both involve minimum-complexity representations, but no theorem has been stated connecting the Three Crowns' Lucas-ring kernel to the variational MDL framework of Shaw et al. Can a formal statement be made --- and proved or refuted --- that \_\_M38\_\_-monomial representations constitute a fixed point of the adaptive Gaussian mixture prior used in that framework? (Open theoretical question.)
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{References}
+
+- \href{https://arxiv.org/abs/2504.12285}{Ma et al. (2025). \textit{BitNet b1.58 2B4T: The First 1-bit LLM that Matches Full Precision LLMs in Language Understanding, Reasoning, Math and Coding}. arXiv:2504.12285. https://arxiv.org/abs/2504.12285}
+
+- \href{https://www.cerebras.ai/blog/cerebras-cs-3-vs-groq-lpu}{Cerebras (2025). \textit{Cerebras CS-3 vs. Groq LPU}. https://www.cerebras.ai/blog/cerebras-cs-3-vs-groq-lpu}
+
+- \href{https://arxiv.org/abs/2509.22445}{Shaw P., Cohan J., Eisenstein J., Toutanova K. (2025). \textit{Bridging Kolmogorov Complexity and Deep Learning: Asymptotically Optimal Description Length Objectives for Transformers}. arXiv:2509.22445. https://doi.org/10.48550/arXiv.2509.22445}
+
+- \href{https://doi.org/10.5281/zenodo.19227877}{Zenodo deposit. \textit{Three Crowns TTSKY26b RTL and GDS}. DOI: 10.5281/zenodo.19227877. https://doi.org/10.5281/zenodo.19227877}
+
+- \href{https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}{Gelman A., Loken E. (2013). \textit{The garden of forking paths: Why multiple comparisons can be a problem, even when there is no "fishing expedition"}. https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}
+
+- \href{https://doi.org/10.3390/e28040434}{Li M. (2026). \textit{From Levin's Universal Search to Policy-Guided Tree Search}. Entropy 28(4):434. https://doi.org/10.3390/e28040434}

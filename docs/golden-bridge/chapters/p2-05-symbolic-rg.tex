@@ -1,0 +1,97 @@
+% p2-05-symbolic-rg
+
+\section{P2 §5. Symbolic Renormalization Group: A Toy Model}
+
+5. Symbolic Renormalization Group: A Toy Model
+
+   Figure (fig-p2-ch5-symbolic-rg). Symbolic RG triptych --- Symbolic coupling space / beta-function
+                                with zero / fixed-point eigenvalue ratio.
+
+  [CONJECTURAL --- this section contains no derived results; it develops a formal
+  language for later work packages]
+
+  5.1 Motivation for a Symbolic RG
+  Standard RG analysis operates on real-valued couplings. The results of Paper 1 suggest
+  an alternative representation: couplings encoded as symbolic expressions over an
+  algebraic basis. The symbolic RG (sRG) model asks whether RG flows act simply on
+  such symbolic representations. The Lucas ring Z[$\varphi$] provides a natural candidate for the
+  symbolic coupling space because it is closed under the $\varphi$2 = $\varphi$+1 recursion and carries
+  the Coq-proven identity (1).
+
+  5.2 Definition of the Symbolic Coupling Space [L3 --- Model-derived]
+  Let Sigma be the set of algebraic numbers expressible as
+
+  Sigma = { sumk ak $\varphi$nk : ak $\in$ Q, nk $\in$ Z, finitely many terms } = Q($\varphi$) = Q(5). 12
+
+  A $\varphi$-structured coupling at scale mu is a coupling g(mu) whose minimal description
+  length in a $\varphi$-basis is shorter than in a generic algebraic basis.
+
+  The symbolic complexity C[g] of a coupling is defined operationally as the length of the
+  shortest expression tree in a basis B = {$\varphi$, pi, e, +, -, $\times$, /} that evaluates to g within a
+  specified numerical tolerance epsilon. Paper 1's finding is that for a selected set of
+  coupling combinations, CB[g] < CB'[g] where B' replaces $\varphi$ with a generic algebraic
+  constant. The robustness of this finding is Work Package 5.
+
+  5.3 Symbolic Beta Functions [CONJECTURAL --- L5]
+  A symbolic beta function is a map
+
+  beta: Sigma $\rightarrow$ Sigma, g ↦ mu (dg)/(dmu) 13
+
+  such that beta(g) $\in$ Sigma whenever g $\in$ Sigma. A $\varphi$-closed RG trajectory is a flow
+  whose couplings remain in Sigma for all scales mu. The question of whether any
+  realistic QFT beta function is $\varphi$-closed is open.
+
+  The one-loop beta function for a single scalar coupling lambda in phi4 theory in 4D is
+  (Wilson and Kogut, Phys. Rep. 12 (1974) 75):
+
+  beta(lambda) = (3lambda2)/(16pi2) + O(lambda3). 14
+
+  [Structural obstacle --- L3] At one loop, beta(lambda) $\in$ Sigma only if lambda $\in$ Sigma
+  and 16pi2 $\in$ Sigma. Since pi2 notin Q(5) --- these are algebraically independent over Q
+  by Nesterenko's theorem --- the naive $\varphi$-closure fails immediately at one loop. This is
+  the $\pi^{2}$-incommensurability obstacle and is a concrete structural result, not a conjecture.
+  It implies that $\varphi$-closure cannot hold for individual coupling beta functions at standard
+  perturbative order; it must emerge in ratios or at fixed points, if it emerges at all.
+
+  Possible resolutions [L5 --- all conjectural]:
+
+  - $\varphi$-structure is approximate and emerges only in specific running-coupling ratios, not
+  individual couplings.
+
+  - The relevant quantities are operator eigenvalue ratios at fixed points, not the
+  couplings themselves; these are pure numbers that may lie in Q(5).
+  - $\varphi$-closure holds only at discrete RG scales separated by a ratio of $\varphi$, i.e., a DSI
+  condition.
+  - SUSY non-renormalization theorems protect certain operator dimensions exactly; a
+  SUSY theory with a $\varphi$-eigenvalue ratio at tree level would maintain it to all orders.
+
+  5.4 Fixed Points and Symbolic Eigenvalue Ratios [CONJECTURAL ---
+  L5]
+  At a fixed point g^*, the stability matrix
+
+  Mij = ($\partial$ betai)/($\partial$ gj)|g^* 15
+
+  has eigenvalues Deltai (the anomalous dimensions of critical operators). The ratio
+  Deltaj / Deltai is a dimensionless number. The $\varphi$-Eigenvalue Conjecture reads:
+
+          $\varphi$-Eigenvalue Conjecture [L5]. There exist physically motivated field theories in
+          which Deltaj / Deltai = $\varphi$n for integer n at an RG fixed point.
+
+  This is stated as a conjecture motivated by the Toda/Coxeter examples but not derived
+  from them. A demonstration would require identifying an explicit fixed point with a
+  $\varphi$-eigenvalue ratio and verifying it survives quantum corrections. This is Work Package
+  1. The formal falsification criterion is given in the table in Section 4.4.
+
+  The Trinity anchor identity is relevant here as a consistency check: if two scaling
+  dimensions Delta1, Delta2 are in the ratio Delta2/Delta1 = $\varphi$, then Delta22/Delta12 =
+  $\varphi$2 = $\varphi$ + 1. The identity $\varphi$2 + $\varphi$-2 = 3 constrains Delta1-2 + Delta2-2 = Delta1-2(1 +
+  $\varphi$-2) and Delta12 + Delta22 = Delta12(1 + $\varphi$2) = Delta12(2 + $\varphi$). Neither expression
+  equals 3 in general; the anchor constrains a specific bilinear form in $\varphi$ and $\varphi$-1, not
+  arbitrary scaling dimension sums.
+
+\subsection{References}
+
+- Coldea, R. et al. "Quantum Criticality in an Ising Chain: Experimental Evidence for Emergent E8 Symmetry." \textit{Science} 327 (2010) 177. DOI \href{https://doi.org/10.1126/science.1180085}{10.1126/science.1180085}.
+- Wu, J. et al. "E8 Symmetry in CoN$b_{2}$$O_{6}$ at Higher Resolution." \textit{Phys. Rev. B} 108, L060403 (2023). DOI \href{https://doi.org/10.1103/PhysRevB.108.L060403}{10.1103/PhysRevB.108.L060403}.
+- Fring, A.; Korff, C. "Affine Toda field theories related to Coxeter groups of non-crystallographic type." \textit{Nucl. Phys. B} 729 (2005) 361. \href{https://arxiv.org/abs/hep-th/0506226}{arXiv:hep-th/0506226}. DOI \href{https://doi.org/10.1016/j.nuclphysb.2005.08.044}{10.1016/j.nuclphysb.2005.08.044}.
+- Pellis, S. "The Fine-Structure Constant and the Golden Ratio." \href{https://vixra.org/pdf/2110.0117v4.pdf}{viXra 2110.0117 v4}.

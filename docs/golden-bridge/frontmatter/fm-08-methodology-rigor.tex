@@ -1,0 +1,102 @@
+% fm-08-methodology-rigor
+
+\section{Methodology and Scientific Rigor --- Pre-Registered Protocol for GOLDEN BRIDGE}
+
+This chapter consolidates the methodological standards of GOLDEN BRIDGE in one explicit place, addressing the most common criticisms of $\varphi$-based natural-constant research: (a) numerology charge, (b) selection-bias / cherry-picking, (c) lack of falsifiability, (d) ambiguous MDL definitions. We answer each charge with a pre-registered protocol that mirrors the rigour standards of physics-informed symbolic regression (Nature s43588-025-00904-8, 2025) and the pre-registration tradition formalised in clinical-trial and behavioural-science methodology.
+
+\subsection{1. The four charges and the four answers}
+
+\begin{tabular}{|l|l|l|}
+\hline
+Charge \& Standard answer in the literature \& GOLDEN BRIDGE answer \\
+\hline
+\textbf{C1. Numerology} --- "any number can be approximated by a sufficiently complex $\varphi$-expression" \& Often deflected with appeals to aesthetics \& \textbf{Falsifiable MDL cost comparison against null} (Strand I, §5). Pellis expressions must beat random-prime-rational null at pre-registered confidence. \\
+\textbf{C2. Cherry-picking} --- "the authors chose the constants where $\varphi$ works" \& Often left as an unresolved methodological gap \& \textbf{Pre-registration freeze} (Strand I, §4). The target constant list is frozen and SHA-256 hashed before any expression search. New constants enter the falsification ledger, never the training set. \\
+\textbf{C3. Falsifiability} --- "what would refute this theory?" \& Often answered weakly \& \textbf{Hardware reset-time assertion} (Strand II, Three Crowns) + \textbf{log-periodic null check} (Tier-D, OD-Cat-3). Both are direct empirical experiments that can return "no signal". \\
+\textbf{C4. MDL ambiguity} --- "MDL depends on the chosen description language" \& Often left implicit \& \textbf{Explicit G\_$\varphi$ grammar specification} (Strand I, §3). Every generator, operator, and cost weight is fixed in the pre-registration manifest. \\
+\hline
+\end{tabular}
+\subsection{2. The G\_$\varphi$ grammar --- explicit specification}
+
+To eliminate Charge C4, the grammar G\_$\varphi$ is fully specified:
+
+- \textbf{Generators (Tier-0):} $\varphi$, $\pi$, e, ln 2, 1, integer primes $\leq$ 47.
+- \textbf{Operators:} binary +, binary $\cdot$, binary /, unary negation, unary $x^{-1}$, integer powers $x^n$ (n $\in$ {2,3,4,5,$-$5,$-$4,$-$3,$-$2}).
+- \textbf{Cost function:} MDL cost of an expression E is
+  cost(E) = $\alpha$ $\cdot$ (\# generators) + $\beta$ $\cdot$ (depth(E)) + $\gamma$ $\cdot$ lo$g_{2}$(max integer coefficient appearing in E).
+- \textbf{Pre-registered weights:} ($\alpha$, $\beta$, $\gamma$) = (1.0, 0.6, 0.4), frozen by SHA-256 hash in the Catalog42 manifest before any expression search runs.
+
+This specification has the property that any expression that can be written down explicitly has a finite, well-defined MDL cost.
+
+\subsection{3. The pre-registration protocol (Catalog42 freeze)}
+
+The protocol mirrors clinical-trial pre-registration (Wikipedia \href{https://en.wikipedia.org/wiki/Preregistration\_\%28science\%29}{Preregistration} and is anchored against post-hoc "cracking" of pre-registration (PMC6168681, 2018):
+
+1. \textbf{Freeze target list.} The Catalog42 manifest lists 42 dimensionless target ratios with their CODATA reference values. SHA-256 hash of the manifest is published before search.
+2. \textbf{Freeze grammar.} G\_$\varphi$ (above) is pre-registered with weights.
+3. \textbf{Freeze null models.} Three null models are pre-registered: (i) random-prime-rational, (ii) log-uniform random real, (iii) permutation-of-targets. Their MDL-cost distributions are computed by Monte Carlo before any expression search.
+4. \textbf{Run search.} A greedy $\varphi$-coefficient search produces a best Pellis-style expression for each target.
+5. \textbf{Compare against null.} For each target, the search MDL cost is compared against the per-target null distribution. The pre-registered acceptance criterion is p < 1$0^{-3}$ (Bonferroni-corrected over 42 targets $\rightarrow$ p < 2.4 $\times$ 1$0^{-5}$).
+6. \textbf{Record in falsification ledger.} All results --- pass or fail --- are recorded in the ledger (P1 §10) with timestamp and protocol-state hash.
+
+\subsection{4. The falsification ledger --- what would refute the Bridge}
+
+A refutation of GOLDEN BRIDGE is any one of the following pre-registered failures:
+
+- \textbf{FL-1.} A frozen Pellis expansion for $\alpha^{-1}$ in F\_{$-$5} that fails its null test at pre-registered confidence.
+- \textbf{FL-2.} A Three Crowns chip whose \_\_C0\_\_ at reset is \textbf{not} \_\_C1\_\_ while the Verilog source contains the canonical anchor sub-module.
+- \textbf{FL-3.} A direct log-periodic search (OD-Cat-3) in LHC running data that detects a $\varphi$-periodic signal at pre-registered amplitude --- falsifying Olsen's current "below-A\_i" bound (which is itself a falsifiable claim).
+- \textbf{FL-4.} A counter-example to Theorem 36.1 (the algebraic anchor identity) discovered in any standard model of $\mathbb{Z}$[$\varphi$].
+- \textbf{FL-5.} A negative-control target (random real near a CODATA value, not in the frozen list) producing a lower MDL cost than the Catalog42 entries, indicating the protocol is selection-biased.
+
+Each of FL-1 through FL-5 is a single experiment that could refute the Bridge in its current form. None of them have been observed at the time of this v26 publication; the falsification ledger records this absence.
+
+\subsection{5. Reproducibility checklist}
+
+- [x] Catalog42 target list frozen; SHA-256 hash published.
+- [x] G\_$\varphi$ grammar, generators, operators, cost weights frozen.
+- [x] Null model Monte Carlo seed published.
+- [x] Search algorithm source code released (\href{https://github.com/}{Trinity $S^{3}$AI repo} --- links in Strand-I §4).
+- [x] Three Crowns silicon designs open under Tiny Tapeout licence (\#4913, \#4914, \#4915).
+- [x] Falsification ledger maintained at every release; pass/fail recorded with timestamps.
+- [x] All expression evaluations performed at $\geq$ 50-digit Decimal precision; full evaluator code in repository.
+
+
+
+\subsection{5b. v27 Strengthening: BH-FDR, Blind Analysis, and Asymptotically Optimal MDL}
+
+The v26 protocol applied Bonferroni correction over the 42 frozen targets (\_\_M0\_\_). For v27 we strengthen this further:
+
+1. \textbf{Benjamini--Hochberg FDR control at \_\_M1\_\_} is applied across the entire Catalog42 cohort, not per-entry. This is less conservative than Bonferroni and gives proper credit to genuine effects while still controlling the expected false-discovery proportion. Cf. \href{https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}{Gelman \& Loken (2013), \textit{The garden of forking paths}}.
+2. \textbf{Two-stage blind analysis.} \_\_M2\_\_ grammar and Catalog42 entries are constructed on training constants. The TARGET observable (CODATA \_\_M3\_\_) is HIDDEN from the analyst until the Catalog42 ledger is timestamped on Zenodo. Post-hoc grammar modification VOIDS the pre-registration. Details: see chapter \textit{Formal MDL and Kolmogorov-Complexity Foundations} (fm-11), §8.
+3. \textbf{Pre-registered effect-size threshold.} Following the worked example for \_\_M4\_\_ (CODATA 2022: \_\_M5\_\_, \_\_M6\_\_), the minimum-detectable-residual gain is set at \_\_M7\_\_. Sub-\_\_M8\_\_ residuals are NOT claimed as evidence.
+4. \textbf{Asymptotically optimal MDL grounding.} \href{https://arxiv.org/abs/2509.22445}{Shaw, Cohan, Eisenstein \& Toutanova (2025), \textit{Bridging Kolmogorov Complexity and Deep Learning}} establish that a minimizer of an asymptotically optimal description-length objective achieves optimal compression for any dataset, up to an additive constant, in the limit as model resource bounds increase. We adopt this as the formal foundation for our \_\_M9\_\_ MDL claims (fm-11 §3), while explicitly acknowledging the optimization-gap caveat from the same paper: standard optimizers fail to find low-complexity solutions from a random initialization.
+5. \textbf{Speed-Prior tractability.} Because Solomonoff's universal prior is uncomputable, we use the \href{https://doi.org/10.1007/3-540-45435-7\_15}{Speed Prior (Schmidhuber, 2002)}, \_\_M10\_\_, as a computable approximation favouring runtime-bounded explanations. Details: fm-11 §4.
+6. \textbf{AIC/BIC comparators.} Any reported \_\_M11\_\_ MDL gain must be reported alongside AIC and BIC scores for the same data and the same set of comparator models.
+
+The full formal apparatus, including precise definitions of \_\_M12\_\_, \_\_M13\_\_, \_\_M14\_\_, the Kolmogorov-invariance theorem with explicit caveats, and the 10-item reproducibility checklist, is consolidated in \textit{Formal MDL and Kolmogorov-Complexity Foundations} (fm-11).
+
+For adversarial review of the framework --- including explicit acknowledgement of the consensus that "no numerological explanation has ever been accepted by the physics community" (Wikipedia: Fine-structure constant), Feynman's "greatest damn mysteries of physics" position, and I.J. Good's Platonic-ideal evidentiary bar --- see \textit{Adversarial Self-Critique} (fm-09).
+
+For honest quantitative positioning of the Three Crowns silicon family relative to BitNet, Cerebras CS-3, and Groq LPU (different process nodes, different power envelopes, different regimes --- comparison is regime-to-regime, not single-axis), see \textit{Quantitative Positioning} (fm-10).
+
+\subsection{6. What the Bridge does \textit{not} claim}
+
+To pre-empt the most common misreadings:
+
+- We do \textbf{not} claim that $\alpha^{-1}$ or $\mu$ is "explained by" $\varphi$.
+- We do \textbf{not} claim that the Three Crowns silicon "computes" $\alpha^{-1}$ --- it carries a reset-time identity, that is all.
+- We do \textbf{not} claim competitive AI-accelerator performance. The honest perf string is \_\_C2\_\_.
+- We do \textbf{not} claim cross-scale validity beyond what Tier-D's frozen ratio list allows.
+- We do \textbf{not} claim numerological inevitability. Pellis expressions might fail their null test in some future Catalog42 release; that would be a refutation, not an embarrassment.
+
+\subsection{7. References}
+
+- Nature Computational Science, "Discovering physical laws with parallel symbolic enumeration." DOI \href{https://www.nature.com/articles/s43588-025-00904-8}{10.1038/s43588-025-00904-8}. 2025.
+- Knowledge Integration for Physics-informed Symbolic Regression. \href{https://arxiv.org/abs/2509.03036}{arXiv:2509.03036}.
+- Sornette, D. et al. "Revisiting log-periodic oscillations." \href{https://arxiv.org/abs/2403.00432}{arXiv:2403.00432}. 2024.
+- Wikipedia, "Preregistration (science)." <https://en.wikipedia.org/wiki/Preregistration\_\%28science\%29>.
+- PMC, "How to Crack Pre-registration." PMC6168681. \href{https://pmc.ncbi.nlm.nih.gov/articles/PMC6168681/}{https://pmc.ncbi.nlm.nih.gov/articles/PMC6168681/}.
+- Pellis, S. "Exact Expressions of the Fine-Structure Constant." \href{https://vixra.org/abs/2110.0117}{viXra 2110.0117 v4}.
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- Olsen, S. \textit{The Golden Section: Nature's Greatest Secret}. Wooden Books, 2006.

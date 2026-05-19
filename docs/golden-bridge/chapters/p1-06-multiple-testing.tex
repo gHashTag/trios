@@ -1,0 +1,67 @@
+% p1-06-multiple-testing
+
+\section{P1 §6. Multiple Testing and Correction Procedure}
+
+6. Multiple Testing and Correction Procedure
+
+   Figure (fig-p1-ch6-multiple-testing). Look-elsewhere triptych --- N candidate folios / null residual
+                                  histogram / Bonferroni xN penalty.
+
+  6.1 The Multiple Testing Problem
+  The symbolic search over S(C) constitutes a large-scale multiple comparison. For each
+  target constant Xi $\in$ T, the minimum residual dC(Xi) is the minimum over |S(C)|
+  comparisons. The minimum of M independent uniform [0,1] random variables has
+  expectation 1/(M+1), decreasing as M-1. Since |S(C)| $\sim$ O(C4), residuals as small as
+  O(C-4) are expected even under purely random target values.
+
+  This is the central obstacle for symbolic constant studies: the combinatorial
+  proliferation of candidates makes it statistically almost certain that small residuals will
+  be found, even for randomly generated target sets. Any significance claim that does not
+  explicitly account for this proliferation is methodologically void.
+
+  6.2 Effective Trial Count
+  For a grammar of complexity C, the effective number of statistical trials for each target
+  constant is
+
+  Neff(C) := |S(C)| approx (3 C4)/(2). 14
+
+  A naively computed p-value for a single match with residual $\varepsilon$ must be inflated by the
+  Bonferroni factor:
+
+  pcorrected = min(1, Neff(C) $\cdot$ praw). 15
+
+  At C = 10, Neff approx 15{,}000, so a raw p-value of 10-3 yields a corrected p-value of
+  approximately 15, meaning the match is completely non-significant. This illustrates why
+  uncorrected coincidence counting is scientifically insufficient.
+
+  6.3 Family-Wise Error Rate Control
+
+  For joint assessment of coverage across all N = |T| constants simultaneously, the total
+  number of comparisons is N $\cdot$ Neff(C). Bonferroni correction at family-wise error rate
+  (FWER) alphaFWER = 0.05 requires
+
+  alphaindividual = (0.05)/(N $\cdot$ Neff(C)). 16
+
+  For N = 10 constants and C = 10, this gives alphaindividual approx 3.3 $\times$ 10-7. No
+  claim of individual constant significance is made unless this threshold is met.
+
+  6.4 False Discovery Rate Control
+  For the weaker goal of identifying a fraction of constants with genuine compressibility,
+  the Benjamini--Hochberg (BH) procedure is applied to the ranked p-values at the
+  dataset level. The BH procedure controls the expected fraction of false discoveries
+  among rejections at a specified false discovery rate (FDR). It is appropriate when a
+  non-trivial proportion of the targets is expected to exhibit compressibility under the
+  alternative hypothesis.
+
+  6.5 Permutation-Based Calibration
+  All reported p-values are calibrated against the empirical null distribution derived from
+  B $\geq$ 10{,}000 permutation resamples under Mperm. A result is reported as significant
+  only if its corrected p-value is below 0.05 under both analytic Bonferroni correction and
+  permutation calibration. This two-layer requirement embodies the honest-admission
+  ethos of the PhD monograph's Limitations chapter (PhD: Ch.52 Limitations).
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- Pellis, S. "The Fine-Structure Constant and the Golden Ratio." \href{https://vixra.org/pdf/2110.0117v4.pdf}{viXra 2110.0117 v4}.
+- Sherbon, M. A. "Fundamental Nature of the Fine-Structure Constant." \href{https://hal.science/hal-02341850/document}{HAL hal-02341850}.

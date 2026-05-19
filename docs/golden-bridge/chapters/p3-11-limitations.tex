@@ -1,0 +1,96 @@
+% p3-11-limitations
+
+\section{P3 §11. Limitations}
+
+11. Limitations
+
+   Figure (fig-p3-ch11-limitations). Limitations triptych (Paper III) --- Independence open / 42 not a
+                                         proof set / Coq status.
+
+  11.1 Unproven Independence of Generators
+  Propositions 3.1 and 3.5, and Corollary 3.6, are all conditional on the Q-linear
+  independence of log 3, log $\varphi$, log pi, 1. Baker's theorem on linear forms in logarithms of
+  algebraic numbers covers log 3 and log $\varphi$ (both algebraic), but logpi involves
+  transcendental arguments not covered by the standard machinery. The status of logpi
+  relative to Q-linear independence of algebraic logarithms is an open problem in
+  transcendence theory. All results depending on this independence are marked
+  "(conditional)" throughout.
+
+  Consequence. If independence fails --- i.e., if there exists a non-trivial Q-linear relation
+  among log 3, log $\varphi$, log pi, 1 --- then the Trinity monomial lattice T is not a free abelian
+  group in log-space, and collisions can occur: two distinct labels may represent the same
+  real number. In this case, the MDL score would need to be adjusted to account for the
+  effective dimensionality of the lattice.
+
+  11.2 AlphaPhi Notation (Resolved for Paper 3)
+  The notation inconsistency between alpha$\varphi$( alg) approx 0.118 and alpha$\varphi$(log) approx
+  0.306 in the early drafts of Chapter 38 of the PhD program is resolved by Section 10.5
+  above. Paper 3 uses the disambiguated notation throughout. All future papers in this
+  trilogy must adopt this disambiguation; Section 10.5 is the canonical reference.
+
+  11.3 Floating-Point Limitations
+  All numerical examples use 50-digit approximations. Computed Pellis coefficients and
+  Trinity approximants are valid only to the working precision. Physical constants are
+  given to current best-known values, with CODATA 2022 used for NIST constants; as
+  measurements improve, the expansions change. The framework is applied to current
+
+  best values, not exact transcendental numbers, and all numerical results carry implicit
+  uncertainty at the 50th decimal digit.
+
+  11.4 The 42-Entry Catalogue Is Not a Proof Set
+  The 42 precision fits of the PhD program's Chapter 34 are an empirical survey, not a
+  proof that the listed symbolic forms are the structurally "correct" representations of the
+  constants. The MDL reinterpretation (Section 7.3) preserves this status and explicitly
+  labels each entry as a compression hypothesis, not a theoretical derivation. High-MDL
+  catalogue entries provide evidence against the represented form, not evidence for
+  anything else.
+
+  The corresponding Coq file t27/proofs/trinity/Catalog42.v should be read as a
+  representative formal-provenance layer for the catalogue. In the available source audit,
+  that file contains 13 source-level Qed. markers, 0 Admitted. markers, and a
+  totalverifiedtheorems aggregate over 28 representative theorem obligations. The
+  surrounding t27/proofs/trinity/ layer is larger: 13 Coq files, 281 theorem-like
+  declarations, 122 source-level Qed. markers, and 32 source-level Admitted. markers.
+  This is stronger than an informal table, but it is not yet a one-row-one-theorem
+  formalization of all 42 catalogue entries.
+
+  11.5 Physical Constants Are Not Explained
+  Compact Trinity representations of alpha QED-1 or mupe are purely numerical facts
+  about current measured values. The MDL score measures description economy, not
+  causal or theoretical relationships. No claim is made about the physical origin of any
+  constant.
+
+  11.6 Non-Uniqueness of Optimal Approximants
+  At any complexity budget L, two Trinity monomials may be equidistant from the target.
+  The argmin in Definition 5.1 is generically unique (under the working independence
+  hypothesis) but can fail for special targets. A canonical tiebreaking rule is adopted in
+  Appendix A.3 (lexicographic on label); this rule is implemented in the reference
+  software.
+
+  11.7 Computational Feasibility
+  The Trinity lattice search is naively O(2L) in the complexity budget L. Practical
+  feasibility requires L $\leq$ 25 without logarithmic pruning; with the log-space pruning of
+  Algorithm 9.2, this extends to L $\leq$ 40 or so. Theorem 7.2 (MDL optimality) applies only
+  to the exact minimiser; the pruned algorithm is a heuristic approximation.
+
+  11.8 Conjecture Status of Core Results
+
+        Conjecture 6. 5 (spectral gap) and Conjecture 8.1 (phase transition) are open.
+        Their proof would require development of Baladi-type functional-analytic
+        machinery in the GOLDEN BRIDGE (Trinity-Pellis Bridge) setting and, for the phase transition, a connection
+        to homogeneous dynamics (Ratner theory) that remains to be formalised.
+
+  11.9 Coq Proof Status
+  Identities from the PhD program's Appendix F (Coq citation map) are cited as formal
+  provenance, not as complete proofs accessible to general mathematical verification.
+  Exact theorem counts are intentionally not reproduced here because the Coq audit
+  ledger is regenerated as the repository evolves. Paper 3 uses only local status labels:
+  Qed, Admitted / proof-sketch, not formalised, or open. Any theorem whose dependency
+  chain touches an Admitted item must be treated as conditional until the regenerated
+  ledger closes it.
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

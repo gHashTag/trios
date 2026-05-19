@@ -1,0 +1,101 @@
+% p3-05-projection
+
+\section{P3 §5. The Projection/Coarse-Graining Map}
+
+Figure (fig-p3-ch5-projection). Projection triptych --- fine lattice / coarse lattice / pi-L bridge
+                                                  operator.
+
+  5.1 Definition of PiL
+
+        Definition 5.1 (Projection map PiL). Given a real number x > 0 and a
+        complexity budget L $\in$ Z>0,
+
+  PiL(x) = argminT $\in$ T, ell(lambdaT) $\leq$ L | x - T |.
+
+  The minimisation is over the finite set {T $\in$ T : ell(lambdaT) $\leq$ L}, so the argmin is
+  well-defined. Generically it is unique (under the working independence hypothesis); ties
+  are broken lexicographically by label (Appendix A.3).
+
+        Remark 5.2 (MDL motivation). The map PiL is not an arbitrary discretisation: it
+        is the exact complexity-L optimal approximant in the sense that no Trinity
+        monomial with fewer than L bits can do better. This is the information-theoretic
+        content of the MDL framework (Section 7). The two-part MDL code encodes the
+        monomial in L bits and the residual separately.
+
+  5.2 The Residual Operator
+
+        Definition 5.3 (Pellis residual). The residual of x at complexity level L is
+
+  RL(x) = x - PiL(x).
+
+  The residual admits its own Pellis expansion:
+
+  RL(x) = sumk=0D' ck res $\varphi$-k + RD'(RL(x)).
+
+        Proposition 5.4 (Residual bound). |RL(x)| $\leq$ minT $\in$ SL |x - T|. This is immediate
+        from the definition of PiL.
+
+        Proposition 5.5 (Residual Pellis expansion convergence). The Pellis
+        expansion of RL(x) converges exponentially with the same rate $\varphi$-(D+1) as
+        Theorem 4.4. The residual inherits all convergence properties from the primary
+        expansion because it is itself a positive real number (or, in signed cases, a real
+        number for which signed Pellis coefficients apply).
+
+  5.3 Composing Pellis and Trinity Representations
+
+        Theorem 5.6 (Composite expansion; Theorem). Let T^* = PiL(x) and r =
+        RL(x). Then
+
+  x = T^* + sumk=0D ck res $\varphi$-k + O($\varphi$-(D+1)), 2
+
+  providing a two-level representation: Trinity monomial (coarse-grained symbolic
+  skeleton) + Pellis series (fine-scale additive correction).
+
+        Definition 5.7 (Unification representation). The pair (T^*, (ck res)k=0D) is
+        the GOLDEN BRIDGE (Trinity-Pellis Bridge) unification representation of x at complexity budget L and Pellis
+        depth D. It is the central object of this paper.
+
+  5.4 Equivariance Under Scaling
+
+        Proposition 5.8 (Scaling equivariance). For any lambda $\in$ T and x > 0,
+
+  PiL(lambda $\cdot$ x) = lambda $\cdot$ PiL - ell(lambdalambda)(x),
+
+  provided L > ell(lambdalambda). Proof. Multiplication by lambda $\in$ T is an
+  automorphism of the multiplicative structure, shifting the complexity budget by
+  ell(lambda). □
+
+  This equivariance means that the unification representation is scale-covariant:
+  rescaling the input by a Trinity monomial shifts the complexity budget without
+  changing the qualitative structure of the representation.
+
+  5.5 The Role of the Trinity Anchor in Coarse-Graining
+  The anchor identity $\varphi$2 + $\varphi$-2 = 3 constrains how fine-grained the Pellis residual can be
+  relative to the Trinity approximant.
+
+        Proposition 5.9 (Exact residual for Lucas ring elements). For any x $\in$ Z[$\varphi$]
+        and any T^ $\in$ T cap Z[$\varphi$], the residual RL(x) = x - T^ $\in$ Z[$\varphi$], and its Pellis
+        expansion terminates exactly (zero remainder).
+
+        Proof. Z[$\varphi$] is a ring, closed under subtraction; Corollary 4.5 then gives exact
+        termination. □
+
+  This means that for elements of the Lucas ring paired with Lucas ring Trinity
+  approximants, the GOLDEN BRIDGE (Trinity-Pellis Bridge) unification representation (2) is exact with no
+  remainder term.
+
+  5.6 Connection to Quasicrystalline Structure
+
+  The projection map PiL has a structural analogy with the "cut-and-project" method used
+  in the crystallography of quasicrystals. In the cut-and-project approach (which explains
+  the diffraction patterns observed by Shechtman et al. (1984)), a quasicrystalline
+  structure is obtained by projecting a periodic lattice in higher-dimensional space onto a
+  lower-dimensional "physical" subspace. Similarly, PiL projects the real line onto the
+  discrete Trinity lattice T within a complexity budget --- a symbolic analogue of the
+  physical cut-and-project. This analogy is conceptual; no physical claim is made.
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

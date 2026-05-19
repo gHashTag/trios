@@ -1,0 +1,84 @@
+% p1-05-null-models
+
+\section{P1 §5. Null Models}
+
+5. Null Models
+
+    Figure (fig-p1-ch5-null-models). Null-models triptych --- log-uniform / permutation / randomized
+                                          exponent grammar.
+
+  5.1 Rationale for Explicit Null Models
+  Without a properly specified null distribution, observed residuals dC(Xi) are statistically
+  uninterpretable. The grammar G$\varphi$ is sufficiently expressive that small residuals are
+  guaranteed to exist for large C, regardless of whether the target values carry algebraic
+  structure. The null models defined here answer: how small would residuals be if the
+  target values had no structural relation to the grammar?
+
+  Three complementary null models are specified.
+
+  5.2 Null Model M0: Log-Uniform Random Baseline
+  Under M0, the target values {Xi}i=1N are replaced by independent samples from a
+  log-uniform distribution on the empirical range of T:
+
+  log Xi(0) $\sim$ Uniform[log Xmin, log Xmax], 9
+
+  where [Xmin, Xmax] matches the empirical range. The coverage functional under M0,
+
+  rho0(C, $\varepsilon$) := EX(0) $\sim$ M0[(1)/(N)sumi=1N 1[dC(Xi(0)) < $\varepsilon$]], 10
+
+  is computed by Monte Carlo sampling over B $\geq$ 10{,}000 independent realizations of
+  T(0). The null hypothesis is rho(C, $\varepsilon$) = rho0(C, $\varepsilon$); the alternative is rho(C, $\varepsilon$) > rho0(C,
+  $\varepsilon$).
+
+  5.3 Null Model Mperm: Permutation-Based Baseline
+  The permutation null model Mperm preserves the empirical distribution of T while
+  destroying any structural relation between individual constants and the grammar.
+
+  Under Mperm, the target set is replaced by a random permutation of its elements
+  combined with a random sign-flip in log-space:
+
+  Tpi := {exp(± log Xpi(i))}i=1N, pi uniform on SN. 11
+
+  The coverage functional under Mperm is
+
+  rhoperm(C, $\varepsilon$) := Epi $\sim$ SN[(1)/(N)sumi=1N 1[dC(Xpi(i)) < $\varepsilon$]]. 12
+
+  Because Mperm samples from the same empirical distribution as T, it controls for
+  distributional effects without assuming log-uniformity, making it more conservative
+  than M0.
+
+  5.4 Null Model Mrand: Randomized Exponent Grammar
+  A third control uses a randomized grammar Mrand in which exponent vectors are
+  drawn uniformly from the same bounded integer domain as S(C), but with basis vectors
+  replaced by independent random positive reals:
+
+  k, p, m, q $\sim$ Unif({-C,…,C}4), n $\sim$ Unif({1,…,9}), log vrand $\sim$ Unif[0,1]4. 13
+
+  This generates an ensemble Srand(C) with the same cardinality as S(C) but without the
+  specific algebraic structure of the $\varphi$-basis. Comparing coverage under G$\varphi$ to coverage
+  under Mrand isolates the contribution of the specific algebraic structure.
+
+  5.5 Summary of Null Model Hierarchy
+  The three null models form a hierarchy of increasing conservatism:
+
+  M0 $\subset$ Mperm $\subset$ Mrand.
+
+  A compressibility claim has statistical content only if it survives all three comparisons
+  simultaneously.
+
+  5.6 Negative Controls: Randomly Rotated Constants
+  In addition to the three null models, a battery of negative controls is constructed using
+  randomly rotated versions of T:
+
+  Tneg(j) = {Xi $\cdot$ Uj}i=1N, Uj $\sim$ Log-Uniform(0.5, 2.0), 13.a
+
+  for j = 1, …, 50 independent realizations. Coverage under G$\varphi$ applied to these rotated
+  datasets should not exceed the null expectation, because the rotation destroys any
+  algebraic alignment. Failure of this check would indicate that the grammar is simply
+  dense in the relevant range, not genuinely selective.
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- Pellis, S. "The Fine-Structure Constant and the Golden Ratio." \href{https://vixra.org/pdf/2110.0117v4.pdf}{viXra 2110.0117 v4}.
+- Sherbon, M. A. "Fundamental Nature of the Fine-Structure Constant." \href{https://hal.science/hal-02341850/document}{HAL hal-02341850}.

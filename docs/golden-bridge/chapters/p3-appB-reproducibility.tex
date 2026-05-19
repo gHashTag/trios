@@ -1,0 +1,62 @@
+% p3-appB-reproducibility
+
+\section{P3 Appendix B: Reproducibility Protocol}
+
+Appendix B: Reproducibility Protocol
+
+         Figure (fig-p3-appB-reproducibility). Reproducibility triptych (Paper III) --- Software stack /
+                                  Reference implementation / Test suite.
+
+  B.1 Software Requirements
+  The reproducibility target is intentionally small. A conforming implementation must
+  provide arbitrary-precision arithmetic at 50 decimal digits or higher, exact symbolic
+  definitions for $\varphi$, pi, and e, deterministic enumeration of Trinity labels, and a
+  regression-test mode that exits non-zero on any failed invariant.
+
+  The minimum contract is:
+
+  - Precision: at least 50 decimal digits, preventing false agreement from binary floating
+  point.
+  - Determinism: fixed enumeration order and lexicographic tie-breaks, making PiL(x)
+  reproducible.
+  - Sanctioned seeds: use only F17,F18,F19,F20,F21,L7,L8                              for   sanctioned
+  demonstrations, preventing hidden RNG cherry-picking.
+  - Forbidden seeds: never use 42, 43, 44, or 45 as RNG seeds, preserving the PhD
+  STROBE embargo rule.
+  - Constants: use CODATA 2022 for NIST constants and cite the table used, preventing
+  stale-value drift.
+
+  B.2 Reference Implementation Contract
+  Instead of printing fragile source code in the article, the paper defines the executable
+  contract that the repository implementation must satisfy. This avoids layout breakage in
+  the PDF while preserving exact reproducibility requirements.
+
+  The executable contract has eight required checks:
+
+  1. Trinity anchor: |$\varphi$2+$\varphi$-2-3|<10-48 at 50 digits.
+
+  2. Algebraic AlphaPhi: alpha$\varphi$( alg)=$\varphi$-3/2approx0.11803.
+  3. Logarithmic AlphaPhi: alpha$\varphi$(log)=2ln$\varphi$/piapprox0.30635.
+  4. AlphaPhi separation: |alpha$\varphi$(log)-alpha$\varphi$( alg)|>0.1.
+  5. Golden ratio representation: T(1,0,1,0,0)=$\varphi$ to working precision.
+  6. Integer seed representation: T(1597,0,0,0,0)=1597 exactly.
+  7. Binet check: $\varphi$17/5approx1596.999875, with the conjugate term required for exact
+  F17.
+  8. QED input value: alpha-1=137.035999177 when CODATA 2022 is selected.
+
+  B.3 Test Suite
+  The minimal regression suite has seven tests: exact Trinity identity, AlphaPhi
+  disambiguation, sanctioned-seed termination, forbidden-seed exclusion, deterministic
+  Trinity label ordering, CODATA-value selection, and absence of physical-derivation
+  language. The last test is editorial rather than numerical: the article must not assert
+  that any measured Standard Model constant has been derived from $\varphi$.
+
+  B.4 Data Sources
+  Physical constants: NIST CODATA 2022 recommended values (                       Mathematical
+  constants: Wolfram MathWorld (
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

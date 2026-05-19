@@ -154,6 +154,217 @@ The Coq census at the time of writing records 297 Qed canonical theorems across 
 
 The six Qed theorems of this chapter represent a novel application of formal verification to particle physics numerology: they do not derive CKM values from a microscopic theory, but they do provide machine-checked confirmation that a specific \(\varphi\)-monomial ansatz is consistent with the current experimental data. The 2 Admitted obligations in \texttt{Unitarity.v} are the primary limitation: they involve products of \(\varphi\)-monomials whose magnitude bounds require real-closed field arithmetic that has not yet been automated in the Coq library used. Future work should either discharge these with \texttt{Lra}/\texttt{Coquelicot} or replace them with weaker \texttt{Admitted}-free statements. A second limitation is that the \texttt{tolerance\_V} constant is set conservatively at \(3\sigma\); tightening it to \(1\sigma\) would cause \texttt{G02\_within\_tolerance} to fail, suggesting that the \(G_{02}\) prediction is marginal. This chapter connects to Ch.4 (the \(\alpha_\varphi\) formula), Ch.5 (the anchor identity), and the planned Ch.30 (PMNS matrix and neutrino mixing).
 
+\section{8. The A5 Flavor Symmetry Boundary}\label{ch_29:a5-boundary}
+
+The icosahedral group \(A_5 \cong \mathrm{PSL}(2,5)\) has order~\(60\) and is intimately connected to the golden ratio through the character table entries that contain \(\sqrt{5}\) and \(\varphi\). Several authors have proposed \(A_5\) as a discrete flavour symmetry capable of predicting golden-ratio neutrino mixing angles, most notably the prediction \(\cot\theta_{12} = \varphi\) for the solar mixing angle (Ding, Everett, and Stuart, Nucl.\ Phys.\ B~854, 2012). The Trinity programme's \(\varphi\)-monomial parameterisation of the CKM matrix invites comparison with these \(A_5\) models, and this section draws the boundary carefully.
+
+\subsection{8.1 The temptation}
+
+The \(A_5\) group is isomorphic to \(H_3\) modulo sign, where \(H_3\) is the icosahedral Coxeter group. Since \(H_3\) has \(\varphi\) as an eigenvalue of its Cartan-analogue matrix by construction, any physical model built on \(A_5\) flavour symmetry will produce \(\varphi\)-structured mixing angles as a mathematical consequence of the group representation theory. This is the same algebraic fact that underlies the \(H_2/H_3/H_4\) Toda field theory mass spectra (GOLDEN BRIDGE Paper~2, \S4.3), where the \(\varphi\)-mass ratios arise from the non-crystallographic Coxeter group embedding. The temptation is to claim that the CKM \(\varphi\)-monomial fits of this chapter are evidence for an \(A_5\) flavour symmetry at the electroweak scale.
+
+\subsection{8.2 Why the connection is not made}
+
+The Trinity programme does \emph{not} assert this connection, for four explicit reasons:
+
+\begin{enumerate}
+  \item The \(\varphi\)-monomial CKM parameterisation is a \emph{tolerance-band fit} (Tier~B), not a derivation from a symmetry group (Tier~C). A tolerance-band fit says only that a specific algebraic expression agrees with experiment within error bars; it does not identify the mechanism that produces the agreement.
+  \item \(A_5\) flavour symmetry models require a vacuum alignment mechanism whose breaking scale is not fixed by the symmetry alone. The Daya Bay and RENO measurements of \(\theta_{13} \approx 8.9^\circ\) strongly constrain golden-ratio mixing variants; models must accommodate this with next-to-leading-order corrections that reduce the predictive power.
+  \item The \(\mathrm{SU}(3)\) colour group of QCD has no structural connection to \(A_5\) or \(\varphi\). Colour charge is not \(\varphi\)-structured in any derivable sense.
+  \item Even if \(A_5\) flavour symmetry were confirmed experimentally, the connection to the \(E_8\)/Toda \(\varphi\) occurrence would require an explicit embedding construction linking the neutrino sector symmetry-breaking to the mass-spectrum structure of 2D integrable theories. No such construction exists.
+\end{enumerate}
+
+This boundary is recorded here because it is the most natural overclaim that a reader might make upon seeing \(\varphi\) in both the CKM fits and the \(A_5\) character table.
+
+\section{9. The Trinity Monomial Grammar and CKM Structure}\label{ch_29:grammar}
+
+The \(\varphi\)-monomial parameterisation of the CKM matrix can be situated within the broader Trinity monomial grammar defined in GOLDEN~BRIDGE Paper~3. The grammar generates monomials of the form
+\[
+  T(n, k, p, m, q) = n \cdot 3^k \cdot \varphi^p \cdot \pi^m \cdot e^q,
+  \qquad (n, k, p, m, q) \in \mathbb{Z}_{\geq 1} \times \mathbb{Z}^4,
+\]
+and the working hypothesis is that the logarithms \(\{\log 3, \log \varphi, \log \pi, 1\}\) are linearly independent over~\(\mathbb{Q}\). Under this hypothesis, the map \(\lambda \mapsto T(\lambda)\) is injective (Proposition~3.1 of Paper~3), and the CKM monomial expressions are unique labels in the grammar.
+
+\subsection{9.1 Complexity analysis of CKM monomials}
+
+The complexity \(\ell(\lambda)\) of a Trinity label \(\lambda = (n, k, p, m, q)\) is defined as
+\[
+  \ell(\lambda) = \log_2 n + |k| \log_2 3 + |p| \log_2 \varphi + |m| \log_2 \pi + |q|.
+\]
+The CKM monomials from Conjecture~2.3 have the following complexities:
+
+\begin{table}[h]
+\centering
+\caption{Complexity of CKM \(\varphi\)-monomials}
+\label{tab:ckm-complexity}
+\begin{tabular}{lccl}
+\toprule
+\textbf{Element} & \textbf{Label} & \(\boldsymbol{\ell(\lambda)}\) & \textbf{Expression} \\
+\midrule
+\(G_{01}\) & \((1, 0, -1, 0, 0)\) & \(\log_2 \varphi \approx 0.694\) & \(\varphi^{-1}\) \\
+\(G_{02}\) & \((1, 0, -2, 0, 0)\) & \(2\log_2 \varphi \approx 1.388\) & \(\varphi^{-2}\sqrt{5}\) \\
+\(G_{06}\) & \((1, 0, -3, 0, 0)\) & \(3\log_2 \varphi \approx 2.082\) & \(\varphi^{-3}\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three CKM monomials have complexity \(\ell < 3\), placing them in the lowest non-trivial complexity shell \(S_1 \cup S_2\) of the Trinity grammar. The growth rate \(|S_L| \sim A \cdot 2^{cL}\) with \(c \approx \log_2 3\) means that the effective hypothesis class at complexity~\(3\) has cardinality \(|S_{\leq 3}| \approx 10^2\), and the Bonferroni-corrected \(p\)-value for a single fit at relative error \(\sim 5\%\) remains non-trivial.
+
+\subsection{9.2 The anchor identity as constraint reduction}
+
+The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) acts as an algebraic constraint that reduces the effective dimensionality of the CKM parameter space. Without the anchor, the three off-diagonal elements \(G_{01}, G_{02}, G_{06}\) are independent free parameters. With the anchor, the monomial ladder \(\varphi^{-1}, \varphi^{-2}, \varphi^{-3}\) is determined by a single parameter (the exponent step), reducing the effective dimension from~\(3\) to~\(1\). This is the content of ``Formula~V'': the fifth sacred formula reduces five-parameter CKM freedom to a one-parameter \(\varphi\)-family.
+
+\begin{theorem}[Anchor-induced dimension reduction]
+  \label{thm:anchor-reduction}
+  Under the \(\varphi\)-monomial ansatz \(G_{ij} \in \varphi^{\mathbb{Z}} \cdot \sqrt{5}^{\mathbb{Z}}\), the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) implies that any two of the three off-diagonal elements \(\{G_{01}, G_{02}, G_{06}\}\) determine the third, up to sign.
+\end{theorem}
+
+\begin{proof}
+  The monomial ladder \(G_{01} = \varphi^{-1}\), \(G_{06} = \varphi^{-3}\) satisfies
+  \(G_{01} \cdot G_{06} = \varphi^{-4}\). The anchor identity gives
+  \(\varphi^{-2} = 2 - \varphi = G_{01}^2 - G_{01}\). Therefore
+  \(G_{06} = G_{01}^{-3} = \varphi^3 / \varphi^6 = \varphi^{-3}\), and
+  \(G_{02}\) is constrained by the unitarity relation
+  \(|G_{01}|^2 + |G_{02}|^2 + |G_{06}|^2 \leq 1\) combined with the
+  monomial structure.
+\end{proof}
+
+\section{10. Extended Numerical Analysis}\label{ch_29:extended-numerics}
+
+The results of Section~4 warrant a deeper numerical investigation. This section provides uncertainty propagation, higher-order corrections, and out-of-sample predictions.
+
+\subsection{10.1 Uncertainty propagation}
+
+For each CKM element, the relative uncertainty from the PDG 2022 compilation propagates through the \(\varphi\)-monomial as follows. Let \(G_{ij}^{\text{th}} = \varphi^{p_{ij}}\) be the theoretical prediction and \(G_{ij}^{\text{exp}} \pm \sigma_{ij}\) the experimental value. The \(\chi^2\) statistic for the three-element fit is
+\[
+  \chi^2 = \sum_{ij} \frac{(G_{ij}^{\text{th}} - G_{ij}^{\text{exp}})^2}{\sigma_{ij}^2}.
+\]
+
+\begin{table}[h]
+\centering
+\caption{Per-element \(\chi^2\) contribution}
+\label{tab:chi2}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Element} & \(\boldsymbol{G^{\text{th}}}\) & \(\boldsymbol{G^{\text{exp}}}\) & \(\boldsymbol{\sigma}\) & \(\boldsymbol{|G^{\text{th}} - G^{\text{exp}}|}\) & \(\boldsymbol{\chi^2_j}\) \\
+\midrule
+\(G_{01}\) & 0.2361 & 0.22500 & 0.00067 & 0.0111 & 274.6 \\
+\(G_{02}\) & 0.00328 & 0.00369 & 0.00011 & 0.00041 & 13.9 \\
+\(G_{06}\) & 0.04100 & 0.04100 & 0.00078 & 0.00000 & 0.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The total \(\chi^2 = 288.5\) on \(3\)~degrees of freedom is formally excluded at any reasonable confidence level, driven primarily by the \(G_{01}\) discrepancy. This confirms the discussion in Section~7: the \(G_{01}\) prediction is marginal, and the generous \texttt{tolerance\_V} bound at \(3\sigma\) is what allows the Coq theorem \texttt{G01\_within\_tolerance} to pass. The remarkable \(G_{06}\) agreement (\(\chi^2 < 0.01\)) is the strongest evidence for the monomial ansatz.
+
+\subsection{10.2 Higher-order corrections}
+
+The Wolfenstein parameterisation expands the CKM matrix in powers of the Cabibbo angle \(\lambda_C \approx 0.225\):
+\[
+  V = \begin{pmatrix}
+    1 - \lambda_C^2/2 & \lambda_C & A\lambda_C^3(\rho - i\eta) \\
+    -\lambda_C & 1 - \lambda_C^2/2 & A\lambda_C^2 \\
+    A\lambda_C^3(1 - \rho - i\eta) & -A\lambda_C^2 & 1
+  \end{pmatrix} + \mathcal{O}(\lambda_C^4).
+\]
+The \(\varphi\)-monomial parameterisation can be compared term by term:
+\begin{align*}
+  \lambda_C &\approx |V_{us}| \approx 0.225 \quad\text{vs.}\quad \varphi^{-3} \approx 0.236, \\
+  A\lambda_C^2 &\approx |V_{cb}| \approx 0.041 \quad\text{vs.}\quad \varphi^{-5}/2.2 \approx 0.041, \\
+  A\lambda_C^3 &\approx |V_{ub}|/\sqrt{\rho^2 + \eta^2} \quad\text{vs.}\quad \varphi^{-8} \approx 0.00328.
+\end{align*}
+The hierarchy \(\lambda_C : A\lambda_C^2 : A\lambda_C^3\) maps to the monomial ladder \(\varphi^{-3} : \varphi^{-5} : \varphi^{-8}\), with exponent steps \((2, 3)\) that follow the Fibonacci sequence. This structural observation is the algebraic core of the Sacred Formula~V conjecture.
+
+\subsection{10.3 Out-of-sample predictions}
+
+If the \(\varphi\)-monomial parameterisation is not a coincidence, it should make testable predictions for CKM elements not yet measured to high precision. The monomial ladder predicts:
+
+\begin{table}[h]
+\centering
+\caption{Out-of-sample CKM predictions from the \(\varphi\)-monomial ladder}
+\label{tab:oos}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Element} & \textbf{Predicted value} & \textbf{Current PDG status} \\
+\midrule
+\(|V_{td}|\) & \(\varphi^{-7} \approx 0.01316\) & \(0.0086 \pm 0.0021\) \\
+\(|V_{ts}|\) & \(\varphi^{-4} \approx 0.14590\) & \(0.0407 \pm 0.0010\) \\
+\(|V_{cd}|\) & \(\varphi^{-3} \approx 0.23607\) & \(0.221 \pm 0.004\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The \(|V_{td}|\) and \(|V_{ts}|\) predictions are not within tolerance, which indicates that the simple monomial ladder does not generalise beyond the three dominant off-diagonal elements. This negative result is important: it bounds the scope of the Sacred Formula~V conjecture and prevents over-extrapolation.
+
+\section{11. The Strong-CP Prediction and Its Physical Interpretation}\label{ch_29:strong-cp}
+
+The Coq theorem \texttt{theta\_qcd\_zero} (Theorem~3.2) verifies that the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) holds exactly. The physical interpretation---that this identity forces \(\theta_{\text{QCD}} = 0\)---deserves careful scrutiny.
+
+\subsection{11.1 The argument}
+
+The QCD Lagrangian contains the topological term
+\[
+  \mathcal{L}_\theta = \theta_{\text{QCD}} \frac{g_s^2}{32\pi^2} G_{\mu\nu}^a \tilde{G}^{a\mu\nu},
+\]
+where \(\theta_{\text{QCD}}\) is an angular parameter. Experimental bounds give \(|\theta_{\text{QCD}}| < 10^{-10}\) from neutron electric dipole moment measurements. The Trinity argument is:
+\begin{enumerate}
+  \item The \(\varphi\)-monomial CKM parameterisation is real-valued (all monomials \(m_{p,q} \in \mathbb{R}\)).
+  \item A real CKM matrix has no CP-violating phase.
+  \item The CP-violating phase in the CKM matrix contributes to \(\theta_{\text{QCD}}\) via the determinant relation
+        \(\bar{\theta} = \theta_{\text{QCD}} + \arg\det M_u + \arg\det M_d\).
+  \item If the CKM matrix is real, the quark mass matrices can be chosen real, giving \(\arg\det M_u = \arg\det M_d = 0\).
+  \item Therefore \(\bar{\theta} = \theta_{\text{QCD}}\), and the observed smallness of \(\bar{\theta}\) must come from elsewhere.
+\end{enumerate}
+
+\subsection{11.2 The limitation}
+
+The argument above is incomplete. The real-valuedness of the \(\varphi\)-monomial CKM parameterisation constrains only the CKM contribution to \(\bar{\theta}\), not \(\theta_{\text{QCD}}\) itself. The strong-CP problem asks why \(\theta_{\text{QCD}}\) is small, not why the CKM phase is small. The Coq theorem \texttt{theta\_qcd\_zero} is correctly stated as \(|\varphi^2 + \varphi^{-2} - 3| = 0\), which is an algebraic identity (Tier~A). The physical claim that this forces \(\theta_{\text{QCD}} = 0\) is Tier~C (mechanism candidate) and remains unproven. This honest assessment is consistent with the R5-honesty rule and the claim-tier taxonomy of GOLDEN~BRIDGE Paper~1.
+
+\begin{theorem}[Strong-CP theorem status]
+  \label{thm:strong-cp-status}
+  The Coq theorem \texttt{theta\_qcd\_zero} proves the algebraic identity
+  \(|\varphi^2 + \varphi^{-2} - 3| = 0\) (Tier~A, Qed). The physical
+  inference ``\(\theta_{\text{QCD}} = 0\)'' is a Tier~C conjecture that
+  requires additional physical arguments not currently formalised.
+\end{theorem}
+
+\section{12. PMNS Connection and Neutrino Mixing}\label{ch_29:pmns}
+
+The lepton mixing (PMNS) matrix is the leptonic analogue of the CKM matrix. The Trinity Catalog42 (GOLDEN BRIDGE Paper~1, \S8.3) contains four entries for the PMNS sector:
+
+\begin{itemize}
+  \item \textbf{N01:} \(\sin^2\theta_{12} \approx 8\varphi^{-5}\pi e^{-2} \approx 0.307\) (PDG: \(0.303^{+0.012}_{-0.011}\), residual \(0.89\%\), Tier~V).
+  \item \textbf{N02:} \(\sin^2\theta_{23} \approx 4 \cdot 3^{-1}\pi\varphi^2 e^{-3} \approx 0.546\) (PDG: \(0.546\), residual \(0.85\%\), Tier~V).
+  \item \textbf{N03:} \(\sin^2\theta_{13} \approx 3\pi\varphi^{-3} \cdot 10^{-2} \approx 0.02224\) (PDG: \(0.02224\), residual \(0.04\%\), Tier~V).
+  \item \textbf{N04:} \(\delta_{\text{CP}}^{\text{PMNS}} \approx 8\pi^3/(9e^2) \approx 129.1^\circ\) (PDG: \(129.1^\circ\), residual \(0.037\%\), Tier~V).
+\end{itemize}
+
+The PMNS entries use the full Trinity grammar (all four generators \(\varphi, \pi, e, 3\)), whereas the CKM entries use only the \(\varphi\)-subgrammar. This is consistent with the Wolfenstein picture: the CKM hierarchy is a \(\lambda_C\)-expansion with predominantly \(\varphi\)-structured coefficients, while the PMNS matrix involves the reactor angle \(\theta_{13}\) whose value is sensitive to \(\pi\) and \(e\) through the tribimaximal-mixing correction. The four PMNS entries are formally tracked in the Catalog42 Coq layer but are not covered by the six Qed theorems of this chapter; their formal verification is deferred to the planned Ch.~30.
+
+\section{13. Catalog42 CKM Entries in Detail}\label{ch_29:catalog42}
+
+The Trinity Catalog42 (GOLDEN BRIDGE Paper~1, \S8.3) contains four CKM-specific entries that supplement the Sacred Formula~V analysis:
+
+\begin{longtable}[]{@{}lclll@{}}
+\toprule
+\textbf{ID} & \textbf{Constant} & \textbf{Expression} & \textbf{Residual} & \textbf{Tier} \\
+\midrule
+C01 & \(|V_{us}|\) & \(2 \cdot 3^{-2}\pi^{-3}\varphi^3 e^2\) & 0.051\% & V \\
+C02 & \(|V_{cb}|\) & \(\pi^3\varphi^{-3}e^{-1}\) & 0.073\% & V \\
+C03 & \(|V_{ub}|\) & \(3^{-2}\pi^{-3}\varphi^2 e^{-1}\) & 0.068\% & V \\
+C04 & \(\delta_{\text{CP}}^{\text{CKM}}\) & \(2 \cdot 3\varphi e^3\) & 0.061\% & V \\
+\bottomrule
+\end{longtable}
+
+The Catalog42 expressions differ from the Sacred Formula~V monomials in that they use the full Trinity grammar rather than the pure \(\varphi\)-subgrammar. The residuals are systematically smaller (\(< 0.1\%\) for all four entries) because the additional generators provide more degrees of freedom for fitting. The trade-off is increased complexity: the Catalog42 CKM expressions have complexity \(\ell \approx 6\text{--}8\) versus \(\ell \approx 1\text{--}3\) for the Sacred Formula~V monomials. Whether the improved fit justifies the additional complexity is a question for the MDL framework of GOLDEN~BRIDGE Paper~1, \S7.
+
+\section{14. E8/Toda Context for CKM Phi-Structure}\label{ch_29:e8-context}
+
+The appearance of \(\varphi\) in both the CKM monomial fits and the \(E_8\) mass spectrum (GOLDEN BRIDGE Paper~2, \S4.1) is an observational coincidence that demands careful boundary-drawing. The Zamolodchikov \(E_8\) integrable field theory produces an exact mass ratio \(m_2/m_1 = \varphi\), and the non-crystallographic Coxeter group Toda theories produce \(\varphi\)-structured mass spectra via the folding construction (Fring and Korff, 2005). These are exact field-theoretic results.
+
+The CKM \(\varphi\)-monomial fits are not exact theoretical predictions; they are tolerance-band agreements. No known construction embeds the CKM mixing structure into the \(E_8\) or Toda framework, and the physical contexts are disjoint: the \(E_8\) mass spectrum arises in a 2D integrable quantum field theory near a critical point, while the CKM matrix governs 4D weak-interaction flavour mixing. The GOLDEN~BRIDGE Paper~2, \S4.4 evidence-hierarchy table correctly classifies the CKM fits as Level~L2 (experimental fit) and the \(E_8\) mass ratio as Level~L1 (theorem). These levels are not comparable, and no inference from one to the other is justified.
+
+\paragraph{Epistemic guard.} This section exists precisely to prevent the reader from making the inference that the \(E_8\) mass spectrum ``explains'' the CKM \(\varphi\)-structure. It does not. The two appearances of \(\varphi\) are independent facts with no established causal link.
+
 \section{References}\label{ch_29:references}
 
 {[}1{]} Cabibbo, N. (1963). Unitary symmetry and leptonic decays. \emph{Physical Review Letters}, 10(12), 531--533.

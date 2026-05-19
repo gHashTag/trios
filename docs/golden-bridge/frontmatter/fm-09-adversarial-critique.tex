@@ -1,0 +1,236 @@
+% fm-09-adversarial-critique
+
+\subsection{1. Devil's-Advocate Posture and Methodology}
+
+This chapter adopts an adversarial reviewer posture. Its purpose is not to defend the Golden Bridge framework but to subject it to the strongest objections a skeptical referee could plausibly raise---and then to assess, honestly, how well those objections are answered. Where the critique is strong and the response is weak, that weakness is conceded. Where a genuine mitigation exists, it is stated without embellishment.
+
+\subsubsection{1.1 The Steelman Principle}
+
+A steelman argument is the opposite of a strawman: it constructs the strongest possible version of the opposing position before attempting a rebuttal. The adversarial sections below do not merely anticipate weak objections; they assume the reviewer is a working physicist or statistician with no prior sympathy for the $\varphi$-cosmology program, and who has read the framework closely enough to identify its structural vulnerabilities.
+
+This posture is not rhetorical. It reflects a methodological commitment: credibility is built by acknowledging fragility, not by suppressing it. A brochure that contains no self-critique is not a scientific document.
+
+\subsubsection{1.2 The Garden of Forking Paths}
+
+\href{https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}{Gelman and Loken (2013)} identified a fundamental problem in empirical research that is distinct from deliberate p-hacking: even a researcher acting in complete good faith accumulates degrees of freedom through the many small analytic decisions made during data collection, model selection, and reporting. Each branch point in that garden---which regularization to apply, which expressions to include in a symbolic search, which functional form to fit---inflates the effective number of hypotheses tested, without any of these choices necessarily appearing in the published record.
+
+This concern applies directly to symbolic regression over a structured grammar. Every choice embedded in the \_\_M0\_\_ grammar---which base constants to include, the maximum polynomial degree, the operator set---constitutes a prior analytic decision that shapes which expressions can even appear as candidates. The Catalog42 pre-registration protocol and MDL Description Length minimization are substantive responses to this concern, but they do not fully resolve it. The garden of forking paths begins before pre-registration, at the grammar-design stage.
+
+This chapter proceeds with that caveat as its organizing premise.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{2. Critique of the $\varphi$-Cosmology and $\alpha^{-1}$ Claims}
+
+\subsubsection{2.1 The Canonical Physics Position}
+
+The fine-structure constant \_\_M1\_\_ (\href{https://en.wikipedia.org/wiki/Fine-structure\_constant}{CODATA 2022}) occupies a peculiar position in theoretical physics: it is among the most precisely measured dimensionless constants in all of science, and it has attracted more numerological speculation than virtually any other quantity. The physics community's position on that speculation is unambiguous. As \href{https://en.wikipedia.org/wiki/Fine-structure\_constant}{Feynman} wrote:
+
+> "It's one of the greatest damn mysteries of physics: a magic number that comes to us with no understanding by humans."
+
+I.J. Good, writing on the epistemics of such conjectures, set the evidentiary bar explicitly: "a numerological explanation would only be acceptable if it could be based on a good theory that is not yet known but 'exists' in the sense of a Platonic Ideal" (\href{https://en.wikipedia.org/wiki/Fine-structure\_constant}{Wikipedia: Fine-structure constant}). The Wikipedia entry on the fine-structure constant states the consensus position directly: "no numerological explanation has ever been accepted by the physics community."
+
+This is not obscurantism; it reflects a principled empirical standard. A numerological coincidence, no matter how compact, does not constitute a physical explanation unless it is embedded in a theory that predicts other independent, testable quantities.
+
+\subsubsection{2.2 Eddington as Cautionary Precedent}
+
+Arthur Eddington's 1929 conjecture that \_\_M2\_\_ exactly is the most instructive historical precedent. Eddington was a first-rank physicist, and his derivation was internally consistent by the standards of his framework (\href{https://en.wikipedia.org/wiki/Fine-structure\_constant}{Wikipedia: Fine-structure constant}). The conjecture was refuted by the 1940s, as more precise measurements placed \_\_M3\_\_ closer to \_\_M4\_\_ and made exact-integer equality untenable.
+
+The lesson is not merely that Eddington was wrong. The lesson is that a compact, structurally motivated expression---one that a capable theorist could embed in a broader theoretical framework---can still fail. The Golden Bridge framework must grapple with this precedent directly, not merely acknowledge it in passing.
+
+\subsubsection{2.3 Degrees of Freedom in Three-Parameter $\varphi$-Expressions}
+
+The CODATA 2022 uncertainty in \_\_M5\_\_ is approximately \_\_M6\_\_ in relative terms. A three-parameter expression over the \_\_M7\_\_ grammar---combining powers of \_\_M8\_\_, integers, and elementary operations---spans a combinatorial space large enough that some element of that space will match any measured value to within the CODATA uncertainty with probability approaching unity, assuming the expression space is sufficiently expressive.
+
+This is not a claim that the specific expression reported is without structure. It is a claim that the \textit{mere fact of close numerical agreement} carries less evidential weight than might initially appear, because the null distribution of coincidences has not been characterized. The critical question is: how many \_\_M9\_\_-monomial expressions were evaluated before the reported expression was selected as the best match? If that number is large, the apparent precision of the match is misleading.
+
+\subsubsection{2.4 The Multiple-Testing Problem and Required Corrections}
+
+\href{https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}{Gelman and Loken (2013)} describe how uncorrected multiple comparisons inflate false-positive rates even when no deliberate fishing occurs. For a symbolic regression over a grammar of moderate complexity, the effective number of hypotheses tested may run into the thousands or tens of thousands.
+
+The \href{https://en.wikipedia.org/wiki/Benjamini\%E2\%80\%93Hochberg\_procedure}{Benjamini and Hochberg (1995)} false discovery rate (BH-FDR) procedure, applied at \_\_M10\_\_, would require each individual test to pass a significance threshold adjusted for the total number of comparisons. A Bonferroni correction is more conservative but provides stronger family-wise error rate control. Neither correction appears to have been applied systematically to the original expression-search procedure.
+
+\subsubsection{2.5 The Mitigating Argument and Its Residual Weakness}
+
+The MDL framework combined with the Catalog42 pre-registration protocol constitutes a genuine methodological response. Description length minimization penalizes complexity directly, functioning as an implicit regularizer over the expression space. Pre-registration of the search grammar and evaluation criteria before blind out-of-sample testing prevents post-hoc selection.
+
+However, these mitigations do not eliminate \textit{prior selection bias at the grammar level}. The \_\_M11\_\_ grammar was designed with \_\_M12\_\_ as a privileged constant. A researcher who had not already conjectured a connection between \_\_M13\_\_ and \_\_M14\_\_ would not have constructed this grammar. The grammar encodes a hypothesis that pre-dates the search. This is not misconduct; it is the normal structure of theory-motivated modeling. But it means the MDL result is conditional on the grammar choice, and that conditioning is a source of circularity that cannot be resolved by pre-registration alone.
+
+This is a strong objection. The honest response is to acknowledge it and to propose a resolution: the decisive test is whether the \_\_M15\_\_ grammar achieves strictly lower MDL than a comparator grammar (e.g., one based on \_\_M16\_\_ or \_\_M17\_\_) on the same dataset. Section 7 formalizes this as an explicit falsification condition.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{3. Critique of the MDL Framework}
+
+\subsubsection{3.1 Asymptotic Optimality and Its Practical Limits}
+
+\href{https://arxiv.org/abs/2509.22445}{Shaw, Cohan, Eisenstein, and Toutanova (2025)} (arXiv:2509.22445, DOI: \href{https://doi.org/10.48550/arXiv.2509.22445}{10.48550/arXiv.2509.22445}) establish that a minimizer of an asymptotically optimal description length objective achieves optimal compression up to an additive constant, in the limit as model resource bounds increase. This is a substantive theoretical result, and it provides a principled foundation for the MDL claims made in this work.
+
+Two caveats from that same paper are equally important and must be stated honestly. First, the optimality guarantee holds \textit{asymptotically}---it applies as the dataset size and model capacity grow without bound. For finite datasets and fixed model architectures, the additive constant is not negligible, and no bound on its magnitude is provided. Second, and more practically, Shaw et al. note that standard optimizers fail to find low-complexity solutions from random initialization. The MDL landscape is non-convex, and gradient descent does not reliably reach the global minimum. The "low-MDL-cost expression" reported in this work is therefore a candidate, not a certificate of global optimality.
+
+\subsubsection{3.2 Grammar-Conditionality of MDL Rankings}
+
+The Kolmogorov complexity of a string is defined relative to a universal prefix-free Turing machine. Different choices of universal machine change the complexity by at most an additive constant (\href{https://homepages.cwi.nl/~paulv/papers/mdlindbayeskolmcompl.pdf}{Grünwald and Roos}), which is the source of the machine-independence claim in the theoretical literature. However, when MDL is instantiated as a symbolic regression over a finite grammar \_\_M18\_\_, the "additive constant" between two grammars can be large relative to the numerical precision of the comparison.
+
+Concretely: the \_\_M19\_\_ grammar assigns short descriptions to expressions that are structurally simple in the \_\_M20\_\_-monomial basis. A grammar \_\_M21\_\_ based on \_\_M22\_\_ would assign different description lengths to the same expressions. The claim that a particular expression achieves "low MDL cost" is therefore a claim relative to \_\_M23\_\_, not a grammar-free result. This is a structural limitation, not a flaw in any individual calculation.
+
+The appropriate response---which this work adopts as a forward commitment (see Section 9)---is to report BIC and AIC alongside the MDL score for all statistical comparisons, and to test the reported expression against comparator grammars.
+
+\subsubsection{3.3 Solomonoff Prior and Computability}
+
+The theoretical MDL framework is grounded in the Solomonoff universal prior, which assigns probability proportional to \_\_M24\_\_ where \_\_M25\_\_ is Kolmogorov complexity. This prior is not computable. Any practical instantiation requires an approximation. This work uses a Speed-Prior-style approximation following \href{https://doi.org/10.1007/3-540-45435-7\_15}{Schmidhuber (2002)}, which assigns prior probability proportional to the inverse of the runtime of the shortest program producing the output. The Speed Prior is computable and retains several desirable theoretical properties, but it introduces an additional degree of freedom: the choice of reference machine and runtime bound.
+
+\href{https://doi.org/10.3390/e28040434}{Li (2026)} provides a recent treatment connecting Levin's universal search to policy-guided tree search, which is relevant to the practical implementation of MDL minimization under a Speed Prior. The theoretical foundations are therefore available and cited; but the gap between those foundations and the specific implementation used here has not been fully closed in the published record.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{4. Critique of the TTSKY26b Silicon Anchor}
+
+\subsubsection{4.1 What the Anchor Byte Does and Does Not Establish}
+
+The reset state \_\_M26\_\_\texttt{uio\\_out}\_\_M27\_\_ \texttt{uo\\_out}\} = \texttt{0x47C0}\_\_M28\_\_18368\_\_M29\_\_\phi^2 + \phi^{-2} = 3$ constitutes the "anchor byte witness." The chip does what it does because the RTL was written that way; the silicon does not independently \textit{confirm} the mathematical identity.
+
+This distinction matters. The word "proof" should not appear in any description of this result. "Provenance evidence" is the accurate characterization: the anchor byte is evidence that the identity $\phi^2 + \phi^{-2} = 3$ was embedded in the design before fabrication, not that $\phi^2 + \phi^{-2} = 3$ holds for a reason other than simple algebra.
+
+\subsubsection{4.2 The Post-Hoc Significance Problem}
+
+A determined skeptic will observe that any 16-bit constant---assigned at random---could be decomposed post-hoc into components that are assigned narrative significance. $2^{16} = 65536$ constants exist in the relevant space; with sufficient ingenuity, a substantial fraction of them can be connected to $\phi$, $\pi$, $e$, or other distinguished constants via some chain of arithmetic. The anchor byte argument is therefore only as strong as its \textit{pre-registration}: the claim that $\texttt{0x47C0}$ was not chosen after the fact, but was committed to before tape-out.
+
+The response to this critique rests entirely on the Zenodo pre-registration (DOI: \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}). The v1.x design files, including the RTL that produces this reset state, are time-stamped and publicly archived. If the time-stamp predates tape-out, the post-hoc selection objection is rebutted in principle---though a motivated skeptic could still argue that the RTL was written after the constant was identified as significant, and the Zenodo deposit merely formalizes a retroactive choice.
+
+The residual risk here is not eliminable by any documentation strategy. It is, however, substantially mitigated by the public, inspectable nature of the RTL deposit.
+
+\subsubsection{4.3 Honest Characterization of the Silicon}
+
+The Three Crowns ($\texttt{tt\_um\_trinity\_nano}$, $\texttt{tt\_um\_trinity\_euler}$, $\texttt{tt\_um\_trinity\_gamma}$) are fabricated on TTSKY26b in Sky130 130 nm process. The honest performance estimate is approximately 1 GOPS at approximately 50 MHz at approximately 1 W ternary, projected on a QMTech XC7A100T evaluation board. These are projected figures for a research and educational shuttle chip, not measured production specifications.
+
+Sky130 is a mature, open process node. It is not comparable to 5 nm or 7 nm commercial nodes. The Three Crowns are not inference accelerators and are not presented as such. Their function in this work is as a physical, fabricated instance of the $\phi^2 + \phi^{-2} = 3$ identity in ternary logic---provenance evidence for the mathematical structure, not a performance demonstration.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{5. Critique of Triple Authorship Composition}
+
+\subsubsection{5.1 Author Roles and Their Evidential Weight}
+
+The three authors contribute to distinct strands of the work. Vasilev (corresponding author, admin@t27.ai) is responsible for Strands I and II: the MDL symbolic-regression analysis and the ternary silicon design. Pellis (University of Ioannina, informal/independent affiliation) contributes Strand III: the golden-angle $\alpha$ formula and related mathematical results. Olsen (Independent Scholar; Emeritus Professor of Philosophy and Religion, College of Central Florida) contributes Tier-D: the $\varphi$-cosmology philosophical-historical framing and cross-scale interpretation.
+
+This division of labor is defensible and is stated accurately. The empirical claims---the MDL results and the silicon measurements---rest on Vasilev and Pellis. Olsen's contribution is interpretive and historical. However, the publication as a unified document creates a risk that reviewers will apply the epistemic standards appropriate for the philosophical sections to the empirical sections, or vice versa.
+
+\subsubsection{5.2 The Informal Affiliation Risk}
+
+Pellis's affiliation with the University of Ioannina is described as informal and independent. This is an honest characterization, but it creates a presentation problem: the institutional affiliation confers apparent credibility that may not accurately reflect the author's current institutional standing. The appropriate disclosure is that the affiliation is informal and that the work was conducted independently.
+
+\subsubsection{5.3 The Philosophical Co-Author Risk}
+
+Reviewers at physics or electrical engineering venues may discount the entire work because of a co-author whose primary credential is in philosophy and religion. This is a real risk, not a hypothetical one. The mitigation is clear role delineation: Olsen's contribution is explicitly scoped to philosophical-historical framing and cross-scale narrative. The empirical claims do not depend on Olsen's sections for their validity. Reviewers who wish to evaluate the empirical claims can do so without engaging the $\varphi$-cosmology framing sections.
+
+This defense is reasonable but not complete. A co-authorship implies shared intellectual responsibility for the whole document. The framing sections shape how the empirical results are presented, and that shaping is not neutral.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{6. Threats to Validity}
+
+The following table summarizes the principal threats to the validity of this work, their sources, the mitigations adopted in v27, and the residual risks that remain after mitigation.
+
+\begin{tabular}{|l|l|l|l|}
+\hline
+Threat & Source & Mitigation & Residual Risk \\
+\hline
+Multiple-testing across the $\phi$-monomial expression space & Garden of forking paths in symbolic regression; unknown number of expressions evaluated & BH-FDR at $q = 0.05$ applied to all Catalog42 entries; pre-registration of search grammar & Grammar-level selection bias; the $G_\phi$ alphabet was chosen before the search \\
+Confirmation bias in the author team & All three authors share a prior commitment to the $\varphi$-cosmology framework & Triple-author cross-review; adversarial self-critique (this chapter) & Shared philosophical priors cannot be fully externalized by internal review alone \\
+Silicon-validation circularity & The anchor byte \texttt{0x47C0} was written into the RTL specifically to encode the identity $\phi^2 + \phi^{-2} = 3$ & Time-stamped pre-registration of v1.x design files via Zenodo (DOI: \href{https://doi.org/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}) & Post-tape-out reinterpretation of the constant's significance cannot be fully excluded \\
+Small-N sample in silicon validation & Only one chip family (Three Crowns), three design instances, one process node (Sky130 130 nm) & Wider tapeout campaign planned for future shuttle runs & Small-N inference; single-process-node results may not generalize \\
+No independent replication of the Pellis golden-angle $\alpha$ formula & No external group has reproduced Strand III results from first principles & Invitation for OSF pre-registered replication study; open publication of all intermediate calculations & Residual risk remains high until at least one independent replication is completed \\
+\hline
+\end{tabular}
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{7. What Would Falsify the Bridge?}
+
+A scientific claim that cannot be falsified is not a scientific claim. The following four conditions, if observed, would constitute decisive evidence against the core claims of the Golden Bridge framework. Each condition is stated with a measurable threshold.
+
+\textbf{Condition 1: Catalog42 out-of-sample prediction failure.}
+The Catalog42 protocol pre-registers a set of predictions about measurable physical quantities. If a planned blind out-of-sample test---conducted after the pre-registration timestamp, by parties with no access to the test data during model development---yields predictions that exceed the CODATA 2022 uncertainty bounds for the relevant constants, the predictive claim is falsified. The threshold is: any pre-registered prediction whose deviation from the measured value exceeds $3\sigma$ of the CODATA uncertainty constitutes a failure. A pattern of failures across the Catalog42 entries (e.g., more than $5\%$ of entries failing at $q = 0.05$ BH-FDR) would falsify the broader framework.
+
+\textbf{Condition 2: A non-$\varphi$ grammar achieves strictly lower MDL on the same dataset.}
+The $G_\phi$ grammar is claimed to yield a parsimonious description of the fine-structure constant and related quantities. If a comparator grammar $G_\pi$ (based on $\pi$) or $G_e$ (based on $e$) achieves strictly lower MDL cost on the same dataset, under the same \href{https://arxiv.org/abs/2509.22445}{Shaw et al. (2025)} objective, the claim that $\phi$ is the natural basis for these expressions is falsified. "Strictly lower" means lower by more than the additive constant established by the asymptotic optimality theorem---in practice, a difference that exceeds the numerical precision of the MDL calculation by a margin sufficient to rule out optimizer noise.
+
+\textbf{Condition 3: The anchor byte is shown to be a coincidence by systematic audit.}
+A systematic audit would proceed as follows: assign $N$ pseudo-randomly generated 16-bit constants to hypothetical silicon designs, and attempt to construct narratives connecting each constant to $\phi^2 + \phi^{-2} = 3$ or related identities. If a substantial fraction (e.g., more than $10\%$) of randomly chosen constants can be assigned comparable narrative significance, the anchor byte argument is weakened to the point of evidential irrelevance. If the fraction is low (e.g., fewer than $1\%$), the pre-registered anchor byte retains evidential weight.
+
+\textbf{Condition 4: Independent replication of the RTL fails to reproduce the anchor witness.}
+The RTL for the Three Crowns is publicly available. An independent silicon-design team, working from the open RTL without access to the authors' design notes, should be able to verify that the reset state $\{$\texttt{uio\_out}$,$ \texttt{uo\_out}\} = \texttt{0x47C0}$ is a necessary consequence of the RTL as written. If an independent team, following the RTL faithfully, obtains a different reset state, or if the RTL is found to contain errors that were corrected post-hoc, the silicon provenance claim is falsified. This test is executable now, with publicly available tools, and the framework invites it.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{8. Honest Limits of the Performance Envelope}
+
+\subsubsection{8.1 The Three Crowns as Research Silicon}
+
+The Three Crowns are fabricated at Sky130 130 nm. The projected performance on a QMTech XC7A100T evaluation board is approximately 1 GOPS at approximately 50 MHz at approximately 1 W ternary. These are projected figures derived from synthesis estimates, not from silicon measurements at speed. The chips are research and educational shuttle parts, produced through the Tiny Tapeout program, at low volume, for the purpose of fabricating a physical instance of the \_\_M62\_\_ identity in ternary logic.
+
+The correct framing, stated without qualification: the Three Crowns are presented as provenance evidence for \_\_M63\_\_, not as inference accelerators.
+
+\subsubsection{8.2 Comparison with BitNet b1.58}
+
+\href{https://arxiv.org/abs/2504.12285}{BitNet b1.58 (Microsoft, 2025)} (arXiv:2504.12285) achieves approximately 0.028 J/token on an Intel i7-13800H CPU, with a 2B-parameter model using W1.58A8 quantization (1.58-bit weights, 8-bit activations; ternary values \_\_M64\_\_ packed four per INT8). This is a software inference benchmark on commodity CPU hardware.
+
+Critically: BitNet b1.58 has no dedicated ASIC silicon. The paper lists "Hardware Co-Design" as future work. The architectural interest of ternary quantization is shared between BitNet and the Three Crowns; the implementation regimes are entirely different. BitNet b1.58 is a deployed language model running on production CPUs. The Three Crowns are 130 nm research chips whose purpose is mathematical provenance, not language model inference.
+
+No performance comparison between the Three Crowns and BitNet b1.58 is meaningful at this stage, and none is offered.
+
+\subsubsection{8.3 Comparison with Cerebras CS-3}
+
+The \href{https://www.cerebras.ai/blog/cerebras-cs-3-vs-groq-lpu}{Cerebras CS-3} operates at approximately 27 kW and approximately 125 PFLOPS, fabricated at a 5 nm class process node (TSMC advanced nodes). It achieves approximately \_\_M65\_\_ the compute-per-watt of an 8-GPU DGX system. This is a data-center inference accelerator in a completely different operating regime---power, cost, process node, and deployment context are all orders of magnitude removed from the Three Crowns.
+
+Any comparison between the Three Crowns and the CS-3 would be a category error. The Three Crowns are not data-center hardware. They are not offered as competitors to any commercial silicon product. Their relevance is to the mathematical and philosophical claims of the Golden Bridge framework, not to any inference acceleration market.
+
+\subsubsection{8.4 Summary Statement}
+
+The Three Crowns are presented as provenance evidence for \_\_M66\_\_, not as inference accelerators. Performance claims are limited to projected figures on a research evaluation board. No comparison to commercial silicon products at 5 nm or 7 nm is made or implied.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{9. Concrete Improvements Adopted for v27}
+
+The following improvements, adopted in response to the adversarial analysis above, are incorporated into the v27 brochure:
+
+1. \textbf{Adversarial self-critique chapter (this chapter).} The framework is subjected to systematic adversarial review, with concessions stated explicitly where the critique is strong.
+
+2. \textbf{Quantitative benchmark comparison chapter.} The Three Crowns are honestly positioned relative to BitNet b1.58 and Cerebras CS-3, with explicit statements of the different operating regimes (research shuttle vs. CPU inference vs. data-center accelerator). No performance competition is implied.
+
+3. \textbf{Pre-registration template expanded.} The Catalog42 pre-registration template now includes stopping rules (maximum number of expressions evaluated before reporting), effect-size thresholds (minimum MDL differential required for a positive result), and a blind-analysis protocol (test data sealed until predictions are committed).
+
+4. \textbf{Multiple-testing correction applied.} BH-FDR at \_\_M67\_\_ is applied to all Catalog42 entries. Individual entry \_\_M68\_\_-values are adjusted for the total number of expressions evaluated. This correction is reported alongside the uncorrected values.
+
+5. \textbf{Shaw (2025) MDL theorem integrated as formal foundation.} The theoretical basis for the MDL claims is now explicitly grounded in \href{https://arxiv.org/abs/2509.22445}{Shaw et al. (2025)}, with the asymptotic-optimality caveat and the optimizer-failure caveat both stated in the main text.
+
+6. \textbf{Speed Prior cited as computable Solomonoff approximation.} \href{https://doi.org/10.1007/3-540-45435-7\_15}{Schmidhuber (2002)} is cited as the justification for the computable approximation to the Solomonoff universal prior used in the MDL implementation. The gap between the theoretical prior and the practical approximation is acknowledged explicitly.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection{References}
+
+- \href{https://sites.stat.columbia.edu/gelman/research/unpublished/forking.pdf}{Gelman, A., and Loken, E. (2013). "The garden of forking paths: Why multiple comparisons can be a problem, even when there is no 'fishing expedition'."}
+
+- \href{https://arxiv.org/abs/2509.22445}{Shaw, P., Cohan, J., Eisenstein, J., and Toutanova, K. (2025). "Bridging Kolmogorov Complexity and Deep Learning: Asymptotically Optimal Description Length Objectives for Transformers." arXiv:2509.22445. DOI: 10.48550/arXiv.2509.22445.}
+
+- \href{https://doi.org/10.1007/3-540-45435-7\_15}{Schmidhuber, J. (2002). "The Speed Prior: A New Simplicity Measure Yielding Near-Optimal Computable Predictions." DOI: 10.1007/3-540-45435-7\_15.}
+
+- \href{https://doi.org/10.3390/e28040434}{Li, M. (2026). "From Levin's Universal Search to Policy-Guided Tree Search." \textit{Entropy} 28(4):434. DOI: 10.3390/e28040434.}
+
+- \href{https://homepages.cwi.nl/~paulv/papers/mdlindbayeskolmcompl.pdf}{Grünwald, P., and Roos, T. "MDL, Bayesian Inference and Kolmogorov Complexity." CWI.}
+
+- \href{https://www.jstor.org/stable/2346101}{Benjamini, Y., and Hochberg, Y. (1995). "Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing." \textit{Journal of the Royal Statistical Society, Series B}, 57(1):289--300.}
+
+- \href{https://en.wikipedia.org/wiki/Fine-structure\_constant}{Wikipedia: Fine-structure constant. (Accessed 2025). Includes Feynman quotation, I.J. Good quotation, Eddington 1929 precedent, and CODATA 2022 value.}
+
+- \href{https://doi.org/10.5281/zenodo.19227877}{Zenodo pre-registration: TTSKY26b Three Crowns v1.x design files. DOI: 10.5281/zenodo.19227877.}
+
+- \href{https://arxiv.org/abs/2504.12285}{BitNet b1.58 2B4T (Microsoft, 2025). arXiv:2504.12285.}
+
+- \href{https://www.cerebras.ai/blog/cerebras-cs-3-vs-groq-lpu}{Cerebras CS-3 vs. Groq LPU (2025). Cerebras.ai blog.}
+
+- \href{https://philarchive.org/rec/SHEGRG}{Sherbon, M. A. (2019). "Golden Ratio Geometry and the Fine-Structure Constant." PhilArchive.}
+
+- \href{https://doi.org/10.1126/science.1180085}{Coldea, R. et al. (2010). "Quantum criticality in an Ising chain: experimental evidence for emergent E8 symmetry." \textit{Science} 327:177--180. DOI: 10.1126/science.1180085.}

@@ -1,0 +1,87 @@
+% p3-07-mdl
+
+\section{P3 §7. MDL Interpretation of Representation Quality}
+
+7. MDL Interpretation of Representation Quality
+
+  Figure (fig-p3-ch7-mdl). MDL-interpretation triptych --- Two-part code / Algorithmic information /
+                                        42-entry catalogue.
+
+  7.1 The Two-Part MDL Code
+  The MDL principle evaluates a model by the total code length required to transmit both
+  the model and the data given the model. In the GOLDEN BRIDGE (Trinity-Pellis Bridge) context:
+
+  - Model: Trinity monomial T^ = PiL(x), requiring ell(lambda^) bits (Definition 2.6);
+  - Data given model: Pellis residual c res of depth D, requiring approximately D $\cdot$ H(c res)
+  bits, where H is the empirical entropy of the coefficient sequence.
+
+  The two-part MDL framework --- in which model and residuals are coded separately and
+  combined --- is the formulation of Barron, Rissanen, and Yu (1998). The full refined
+  MDL treatment, including normalized maximum likelihood, is covered by Grünwald
+  (2007, MIT Press).
+
+        Definition 7.1 (MDL score).
+
+  MDL(T^, c res) = ell(lambda^) + sumk=0D ell(ck res),
+
+  where ell(c) = lceil log2(|c|+1) rceil + 1 for each coefficient (one bit for the sign).
+
+        Theorem 7.2 (MDL optimality; Theorem). Among all representations of x as T
+        + r with T $\in$ T and r approximated to precision $\varepsilon$ by a Pellis expansion of depth D,
+        the representation (PiL(x), RL(x)) minimises the MDL score (Definition 7.1) up to
+        an additive constant of O(log log(1/$\varepsilon$)).
+
+  Proof sketch. Among all T $\in$ T with ell(lambdaT) $\leq$ L, the choice T^* = PiL(x) minimises
+  |r| = |x - T|. A smaller residual |r| yields shorter Pellis coefficient sequences (since RD $\leq
+  $\varphi$-(D+1) and the coefficients are bounded by the residual magnitude), hence a lower
+  MDL score. The O(loglog(1/$\varepsilon$)) additive error arises from the integer rounding in
+  coefficient coding. □
+
+  7.2 Connection to Algorithmic Information Theory
+  The relation between MDL scores and Kolmogorov/algorithmic complexity was
+  established by Chaitin (1987). In the GOLDEN BRIDGE (Trinity-Pellis Bridge) setting:
+
+  K(x|$\varepsilon$) $\leq$ MDL(T^*, c res) + O(log K(x|$\varepsilon$)),
+
+  where K(x|$\varepsilon$) is the Kolmogorov complexity of x given precision $\varepsilon$. Constants with
+  anomalously low MDL scores relative to their Kolmogorov complexity --- i.e., those that
+  admit very short GOLDEN BRIDGE (Trinity-Pellis Bridge) descriptions compared to their informational content ---
+  are candidates for genuine structural relationships with the Trinity monomial system.
+
+  As Chaitin's framework makes clear, low algorithmic complexity is a necessary but not
+  sufficient condition for structural understanding: it shows that a short description
+  exists, not that the description reveals a physical law. This caveat is central to the
+  falsification protocol of Section 9.4.
+
+  7.3 MDL and the 42-Entry Catalogue
+  The PhD programme's 42-entry precision catalogue provides an empirically
+  pre-selected set of target constants together with their proposed symbolic
+  representations. In the Paper 3 framework, each catalogue entry (xi, Fi) --- where Fi is
+  the proposed symbolic form --- is reinterpreted as a specific Trinity label lambdai
+  together with a Pellis residual ci res. The MDL score of this representation is then a
+  computable compression metric.
+
+        Definition 7.3 (Catalogue MDL vector). Let {(xi, lambdai)}i=142 be the 42
+        catalogue entries. The catalogue MDL vector is
+
+  M = (MDL(T(lambdai), ci res))i=142 $\in$ R42.
+
+  The distribution of M over the catalogue --- its mean, variance, and outlier structure ---
+  is the primary empirical object of the computational program (Section 9).
+
+  Caveat. The 42 catalogue entries were assembled as an empirical survey of notable
+  numerical coincidences and are explicitly labelled as not constituting proofs of
+  structural relationships. The MDL reinterpretation preserves this status: it converts
+  each entry from a proposed symbolic form to a compression score, but the score alone
+  does not constitute a proof of any underlying mathematical or physical relationship.
+
+  The distribution of MDL scores admits a natural three-way classification:
+
+  Here L decimal is the description length of the naive decimal expansion at the same
+  precision. High-MDL entries in the catalogue are candidates for removal or revision.
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

@@ -1,0 +1,141 @@
+% p3-02-notation
+
+\section{P3 §2. Notation and Representation Hierarchy}
+
+2. Notation and Representation Hierarchy
+
+         Figure (fig-p3-ch2-notation). Notation triptych --- Constants / Sanctioned seeds / Lucas ring
+                                                    lattice.
+
+  2.1 Fundamental Constants and Parameters
+  Throughout this paper the following constants are fixed:
+
+  - $\varphi$ = (1 + 5)/(2) approx 1.61803398874989, the golden ratio;
+  - pi approx 3.14159265358979, the ratio of a circle's circumference to its diameter;
+  - e approx 2.71828182845905, the base of the natural logarithm;
+  - psi = $\varphi$-1 = $\varphi$ - 1 approx 0.61803398874989, the reciprocal golden ratio.
+
+  Note the fundamental identity $\varphi$2 = $\varphi$ + 1, which implies $\varphi$-1 = $\varphi$ - 1 and more generally
+  the recurrence $\varphi$n = Fn $\varphi$ + Fn-1 for Fibonacci numbers Fn. The identity
+
+  $\varphi$2 + $\varphi$-2 = 3 star
+
+  is the Trinity anchor identity. It follows directly from $\varphi$2 = $\varphi$ + 1 and $\varphi$-2 = 2 - $\varphi$:
+
+  $\varphi$2 + $\varphi$-2 = ($\varphi$ + 1) + (2 - $\varphi$) = 3.
+
+  This is not a coincidence or a notational choice: it is the algebraic root of the
+  multiplicative Trinity monomial grammar (Section 3). The factor 3 in n $\cdot$ 3k reflects
+  precisely this sum, making the Trinity monomial system grounded in Z[$\varphi$]-arithmetic
+  rather than arbitrary. Notably, the same golden ratio governs the structure of
+  quasicrystalline materials --- in Shechtman et al.'s discovery, the linear scale between
+  pentagonal diffraction features is exactly tau = $\varphi$ --- suggesting that the algebraic
+  centrality of $\varphi$ in the Trinity framework resonates with its role in aperiodic physical
+  order.
+
+  The proof of (star) has Qed status in the t27 Coq proof base (C-01 in the Coq citation
+  map of the PhD program's Appendix F; see Appendix E of this paper).
+
+  2.2 Sanctioned Seeds and Forbidden Seeds
+  The PhD program specifies sanctioned Fibonacci/Lucas initial seeds for experiments
+  and formal computations:
+
+  Sanctioned seeds: F17 = 1597, F18 = 2584, F19 = 4181, F20 = 6765, F21 = 10946, L7
+  = 29, L8 = 47.
+
+  Forbidden STROBE seeds: {42, 43, 44, 45}. Any numerical experiment in the
+  computational program of Section 9 that uses these seeds as RNG initialisation values
+  is deemed non-reproducible within the PhD framework and must be re-run with
+  sanctioned alternatives.
+
+  The Pellis expansion algorithm (Algorithm 4.1) applied to these seeds produces
+  canonical coefficient sequences whose study is a primary focus of the computational
+  program. Each sanctioned seed lies in Z[$\varphi$] (as an integer), so by Corollary 4.5 its Pellis
+  expansion terminates exactly.
+
+  2.3 The Pellis Hierarchy: Levels and Depths
+
+        Definition 2.1 (Pellis depth-D expansion). A Pellis expansion of depth D of a
+        real number x > 0 is a formal sum
+
+  x = sumk=0D ck(D) $\varphi$-k + RD(x),
+
+  where the coefficients ck(D) $\in$ Z$\geq$ 0 are determined by a hierarchical greedy algorithm
+  (Algorithm 4.1), and RD(x) is the depth-D remainder satisfying 0 $\leq$ RD(x) < $\varphi$-(D+1).
+
+  The hierarchical interference structure refers to the property that coefficients at depth
+  d may encode cancellations between terms at depths d-1 and d+1, analogous to detail
+  coefficients in a wavelet expansion. This is made precise in Section 4.2.
+
+  2.4 The Trinity Monomial Lattice
+
+        Definition 2.2 (Trinity monomial). A Trinity monomial is an expression of the
+        form
+
+  T(n,k,p,m,q) = n $\cdot$ 3k $\cdot$ $\varphi$p $\cdot$ pim $\cdot$ eq,
+
+  where n $\in$ Z$\geq$ 1, and (k, p, m, q) $\in$ Z4. The quintuple lambda = (n, k, p, m, q) is called
+  the Trinity label of the monomial.
+
+  The set of all Trinity monomials
+
+  T = { T(n,k,p,m,q) : n $\geq$ 1, (k,p,m,q) $\in$ Z4 }
+
+  is conjecturally dense in (0, $\in$fty) under the working independence hypothesis (see
+  Section 3.4). The factor 3 in the exponent 3k is not arbitrary: it is motivated by the
+  Trinity anchor identity (star). Within Z[$\varphi$], the number 3 arises as the sum of $\varphi$2 and its
+  conjugate $\varphi$-2; it is therefore the simplest non-unit, non-power-of-$\varphi$ element of Z[$\varphi$].
+
+  2.5 The Lucas Ring Z[$\varphi$] as Discrete State Space
+
+        Definition 2.3 (Lucas ring). The Lucas ring is Z[$\varphi$] = { a + b$\varphi$ : a, b $\in$ Z }, the
+        ring of integers of the quadratic field Q(5). Lucas numbers Ln and Fibonacci
+        numbers Fn both live in Z[$\varphi$] via
+
+  Ln = $\varphi$n + psin, Fn = ($\varphi$n - psin)/(5),
+
+  where psi = $\varphi$-1 = $\varphi$ - 1 is the Galois conjugate of $\varphi$. This is the standard Binet formula;
+  the Fibonacci recurrence and the identity Ln = Fn-1 + Fn+1 are both consequences.
+
+  The Lucas ring plays two roles in this paper:
+
+  1. Exact termination locus: By Corollary 4.5, the Pellis expansion of x $\in$ Z[$\varphi$] terminates
+  in finitely many steps with zero remainder. Thus Z[$\varphi$] is precisely the set of real
+  numbers with finite Pellis expansions --- it is the fixed-point set of the expansion
+  operator.
+
+  2. Discrete state space for symbolic dynamics: The symbolic dynamical system of
+  Section 6 is defined over the space X = T $\times$ ZN; the Lucas ring furnishes the discrete
+  skeleton of X by supplying exactly-representable anchor points.
+
+  The connection between Z[$\varphi$] and the structure of Penrose tilings / quasicrystals is not
+  accidental: the inflation and deflation rules of Penrose tilings scale tile lengths by $\varphi$,
+  and the number of tiles after each generation satisfies a Fibonacci recurrence --- the
+  same arithmetic that governs termination of the Pellis expansion.
+
+        Proposition 2.4 (Lucas closure under Trinity product). Z[$\varphi$] cap T is closed
+        under the Trinity product (Definition 3.3). Proof. Any product T(lambda1) $\cdot
+        T(lambda2) with both factors in Z[$\varphi$] remains in Z[$\varphi$] by ring closure; the
+        monomial form of the product is confirmed directly. □
+
+  This proposition corresponds to C-02 (Lucas closure) in the PhD program's Coq citation
+  map, with Qed status as of the CLARA Provenance Audit 2026-05-12 (Appendix E).
+
+  2.6 Complexity of a Representation
+  The bit-complexity (or description length) of a Trinity label lambda = (n,k,p,m,q) is
+
+  ell(lambda) = lceil log2(n+1) rceil + lceil log2(|k|+1) rceil + 1 + lceil log2(|p|+1) rceil
+  + 1 + lceil log2(|m|+1) rceil + 1 + lceil log2(|q|+1) rceil + 1,
+
+  where the +1 terms account for sign bits. The Pellis depth D of an expansion
+  contributes approximately D log2($\varphi$-1) approx 0.694 D bits per term in the coefficient
+  sequence (see Section 7). This definition follows the two-part coding model of Barron,
+  Rissanen, and Yu (1998).
+
+  3. Multiplicative Grammar of Trinity Monomials
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

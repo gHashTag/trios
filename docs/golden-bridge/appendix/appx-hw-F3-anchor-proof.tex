@@ -1,0 +1,26 @@
+% appx-hw-F3-anchor-proof
+
+\section{Appendix F.3 --- The Silicon Anchor Proof Chain}
+
+\textit{The hardware constant \_\_C0\_\_ is not chosen by convention. It is forced by the algebraic identity that anchors the manuscript.}
+
+\subsection{Chain}
+
+\_\_M0\_\_
+
+\subsection{Per-step justification}
+
+- \textbf{Step 1} ($\varphi^{2}$ + $\varphi^{-2}$ = 3): closed algebraic identity (Paper 1 §2.4; Paper 3 §2.1; PhD INV-22).
+- \textbf{Step 2} ($L_{2}$ = 3): Lucas recurrence $L_{0}$ = 2, $L_{1}$ = 1, L\_{n+2} = L\_{n+1} + L\_n, hence $L_{2}$ = 3. Coq-witnessed in \_\_C1\_\_.
+- \textbf{Step 3} (GF(16) dot4 = \_\_C2\_\_): the four canonical Trinity basis vectors over GF(16), reduced through the polynomial $x^{4}$ + x + 1, yield the byte pair \_\_C3\_\_. Coq-witnessed in \_\_C4\_\_.
+
+\subsection{Silicon enforcement}
+
+All three SKUs assert the byte pair \_\_C5\_\_ on reset before any user-mode computation begins. Failure of the assertion produces an immediate halt in the proof-trace writer (Euler module \_\_C6\_\_) and a hardware-level anchor-fault flag on the Gamma module (\_\_C7\_\_).
+
+\textbf{Epistemic guard (per Appendix A.2).} This anchor chain is a numeric-tolerance algebraic chain that has been mechanised in Coq and embedded in synthesisable RTL. It is \textit{not} a derivation of a physical constant. The chain belongs to the same tier as the entries in Section 8.3 of Paper 1: low-complexity symbolic representations with closed algebraic status, not Standard Model mechanism.
+
+\subsection{References}
+
+- Tiny Tapeout SKY 26b project pages: Phi \href{https://app.tinytapeout.com/projects/4914}{\#4914}, Euler \href{https://app.tinytapeout.com/projects/4915}{\#4915}, Gamma \href{https://app.tinytapeout.com/projects/4913}{\#4913}.
+- QMTech XC7A100T FPGA evaluation board specification.

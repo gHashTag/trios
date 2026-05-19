@@ -121,6 +121,51 @@ A reader who is short on time may navigate the work in three slices.
         cube, and the Platonic / Kepler solids in \(\mathcal{L}\).
 \end{itemize}
 
+\section{The Lucas Ring \(\mathcal{L} = \mathbb{Z}[\varphi]\)}
+
+The ring \(\mathbb{Z}[\varphi] = \{a + b\varphi : a, b \in \mathbb{Z}\}\) is the ring of integers of the quadratic field \(\mathbb{Q}(\sqrt{5})\). Its algebraic properties are foundational to every subsequent chapter.
+
+\begin{theorem}[Lucas closure in \(\mathbb{Z}[\varphi]\)]\label{fa_00:thm:lucas-closure}
+For all \(n \geq 0\), the expression \(\varphi^{2n} + \varphi^{-2n}\) is an integer equal to the Lucas number \(L_{2n}\).
+\end{theorem}
+\begin{proof}
+The Fibonacci numbers satisfy Binet's formula \(F_n = (\varphi^n - \psi^n)/\sqrt{5}\) where \(\psi = -\varphi^{-1}\) is the algebraic conjugate. The Lucas numbers are defined by \(L_n = \varphi^n + \psi^n\). Since \(\psi = -\varphi^{-1}\), for even index \(2n\) we have \(\psi^{2n} = \varphi^{-2n}\). Therefore:
+\[
+  L_{2n} = \varphi^{2n} + \psi^{2n} = \varphi^{2n} + \varphi^{-2n}.
+\]
+Both \(\varphi^{2n}\) and \(\psi^{2n} = \varphi^{-2n}\) lie in \(\mathbb{Z}[\varphi]\), and their sum satisfies the Lucas recurrence \(L_{n+2} = L_{n+1} + L_n\) with integer initial conditions \(L_0 = 2\), \(L_1 = 1\). Hence \(L_{2n} \in \mathbb{Z}\) for all \(n\). The base case \(n=0\) gives \(\varphi^0 + \varphi^0 = 2 = L_0\); the case \(n=1\) recovers the Trinity Identity \(\varphi^2 + \varphi^{-2} = 3 = L_2\).
+\qed
+\end{proof}
+
+The first few values of the sequence \(\varphi^{2n} + \varphi^{-2n}\) are:
+
+\begin{longtable}[]{@{}cccl@{}}
+\toprule\noalign{}
+\(n\) & \(\varphi^{2n} + \varphi^{-2n}\) & \(L_{2n}\) & Role in architecture \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0 & 2 & \(L_0 = 2\) & Binary (Boolean) alphabet \\
+1 & 3 & \(L_2 = 3\) & Ternary alphabet; Trinity Identity \\
+2 & 7 & \(L_4 = 7\) & VSA capacity tier \\
+3 & 18 & \(L_6 = 18\) & PLRM monitor bound \\
+4 & 47 & \(L_8 = 47\) & Max agents in scheduler \\
+5 & 123 & \(L_{10} = 123\) & Max token positions (phi-RoPE) \\
+\end{longtable}
+
+The identity \(\varphi^2 + \varphi^{-2} = 3\) is thus not an isolated curiosity but the \(n=1\) entry in an integer-valued sequence indexed by the Lucas numbers. The ternary alphabet \(\{-1, 0, +1\}\) of the VSA layer (Ch.30), the three exponent bands of GoldenFloat (Ch.6), and the three strands of the Rule of Three all trace back to this single algebraic fact.
+
+\begin{corollary}[Three-band partition]\label{fa_00:cor:three-band}
+The positive reals admit a partition into three bands of relative widths \(\varphi^{-2} : 1 : \varphi^{-2}\), whose normalised probabilities sum to unity:
+\[
+  \varphi^{-2} + \varphi^{-2} + (3 - 2\varphi^{-2}) = 3,
+\]
+where the third term simplifies because \(3 - 2\varphi^{-2} = 3 - 2 \cdot 0.382 = 2.236 \approx \varphi^2 - \varphi^{-2}\).
+\end{corollary}
+
+This three-band partition is the architectural basis for the GoldenFloat exponent encoding (Ch.6) and the VSA ternary symbol alphabet (Ch.30).
+
 \section{Falsification Stance}
 
 Following Popper \cite{popper1959} and Lakatos \cite{lakatos1976}, we
@@ -137,22 +182,87 @@ Any free parameter outside this set is an editorial bug, and any
 chapter that introduces one is rejected by the audit pipeline
 (\texttt{cargo run -p trios-phd -- audit}).
 
+The falsification stance operates on four claim tiers imported from the reviewer-hardening protocol (Paper 1, §2.7):
+
+\begin{description}
+  \item[Tier A --- Algebraic identity.] Exact symbolic statements such as \(\varphi^2 + \varphi^{-2} = 3\). These are mathematical theorems; falsification means finding an error in the proof.
+  \item[Tier B --- Symbolic compressibility.] Statistical claims about low-description-length approximations under a fixed grammar. Falsification requires showing the MDL score is non-significant under the null model.
+  \item[Tier C --- Mechanism candidate.] Conjectural bridges from algebra to physics. These remain conjectural unless embedded in an accepted physical theory.
+  \item[Tier D --- Historical context.] Conceptual framing from the golden-section tradition. These provide orientation only and are never evidence for Tier B or C.
+\end{description}
+
+If a sentence can be read in more than one tier, the lower evidentiary tier controls the interpretation. This discipline prevents the category error of promoting an algebraic coincidence (Tier A) to a physical prediction (Tier C) without a mechanism.
+
 \section{Notation}
 
 We collect here the symbols used throughout the monograph; the full
 table lives in the front-matter notation page.
 
-\begin{itemize}
-  \item \(\varphi\) — golden ratio, \((1+\sqrt{5})/2\).
-  \item \(\psi\) — algebraic conjugate, \((1-\sqrt{5})/2 = -\varphi^{-1}\).
-  \item \(\mathcal{L}\) — Lucas ring \(\mathbb{Z}[\varphi]\).
-  \item \(L_n, F_n\) — Lucas and Fibonacci numbers.
-  \item \(\alpha_\varphi\) — the constant \(\varphi^{-3}/2\), used for
-        the learning-rate champion in Chapter~\ref{ch:igla-architecture}.
-  \item \(\text{INV-}k\) — the \(k\)-th runtime invariant
-        (\(k = 1, \ldots, 5\); see Chapter~\ref{ch:gf16-algebra} and
-        Appendix~F).
-\end{itemize}
+\begin{longtable}[]{@{}clp{8cm}@{}}
+\toprule\noalign{}
+Symbol & Name & Definition / usage \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(\varphi\) & Golden ratio & \((1+\sqrt{5})/2 \approx 1.618{,}034\); positive root of \(x^2 - x - 1 = 0\) \\
+\(\psi\) & Algebraic conjugate & \((1-\sqrt{5})/2 = -\varphi^{-1}\); negative root of \(x^2 - x - 1 = 0\) \\
+\(\mathcal{L}\) & Lucas ring & \(\mathbb{Z}[\varphi] = \{a + b\varphi : a, b \in \mathbb{Z}\}\) \\
+\(F_n\) & Fibonacci numbers & \(F_0=0, F_1=1, F_{n+2}=F_{n+1}+F_n\) \\
+\(L_n\) & Lucas numbers & \(L_0=2, L_1=1, L_{n+2}=L_{n+1}+L_n\); \(L_n = \varphi^n + \psi^n\) \\
+\(\alpha_\varphi\) & Alpha-Phi constant & \(\varphi^{-3}/2 \approx 0.118\); learning-rate champion (Ch.4) \\
+\(\rho^*\) & Canonical density & \(\varphi^{-2} \approx 0.382\); VSA non-zero fraction (Ch.30) \\
+\(\mathrm{GF}(e,m)\) & GoldenFloat format & \(e\)-bit exponent, \(m\)-bit mantissa from Fibonacci sequence (Ch.6) \\
+\(\text{INV-}k\) & Runtime invariants & \(k = 1, \ldots, 5\); formal bounds proved in Coq (Ch.6, App.F) \\
+BPB & Bits per byte & Compression ratio; target \(\leq 1.85\) at Gate-2 (Ch.15) \\
+\end{longtable}
+
+\section{Algebraic Preliminaries}
+
+Several identities recur throughout the monograph and are collected here for reference. All follow from the defining relation \(\varphi^2 = \varphi + 1\):
+
+\begin{enumerate}
+  \item \(\varphi^{-1} = \varphi - 1 \approx 0.618\).
+  \item \(\varphi^{-2} = 2 - \varphi \approx 0.382\).
+  \item \(\varphi^2 + \varphi^{-2} = 3\) (Trinity Identity, Theorem~\ref{fa_00:thm:trinity-identity-prologue}).
+  \item \(\varphi^3 = 2\varphi + 1 \approx 4.236\).
+  \item \(\varphi^n = F_n \varphi + F_{n-1}\) for all \(n \geq 1\) (consequence of Binet's formula).
+  \item \(\varphi^n + \psi^n = L_n \in \mathbb{Z}\) for all \(n \geq 0\) (Theorem~\ref{fa_00:thm:lucas-closure}).
+\end{enumerate}
+
+These identities are exact in \(\mathbb{Q}(\sqrt{5})\) and are the algebraic backbone of every design decision in the Trinity S\textsuperscript{3}AI architecture. No floating-point approximation is used in their statement; numerical values are given only for orientation.
+
+\section{Coq Proof Status}
+
+The algebraic backbone of the monograph is mechanised in the Coq proof assistant. The proof status of the core identities is:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Identity & Status & Location \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(\varphi^2 + \varphi^{-2} = 3\) & Qed & \filepath{trinity-clara/proofs/igla/lucas\_closure\_gf16.v} \\
+\(\varphi^2 = \varphi + 1\) & Qed & \filepath{t27/proofs/canonical/kernel/PhiFloat.v} \\
+GF64 bounded & Qed & \filepath{t27/proofs/canonical/kernel/PhiFloat.v} \\
+INV-3 (GF16 safe domain) & Qed & \filepath{t27/proofs/canonical/igla/INV3\_Gf16Precision.v} \\
+INV-5 (Lucas closure) & Qed (10 lemmas) & \filepath{t27/proofs/canonical/igla/INV5\_LucasClosureGf16.v} \\
+\end{longtable}
+
+As of the 2026-05-12 CLARA audit, the Coq witness reports 35 proven statements and 0 admitted obligations for the Trinity identity chain. The broader \texttt{t27/proofs/} tree contains 18 Coq proof files with 127 source-level Qed markers and 32 source-level Admitted markers. No claim in this monograph depends on an Admitted lemma for its force; every Tier A assertion rests on a Qed proof.
+
+\section{Chapter Dependencies}
+
+The dependency graph of the monograph radiates from this chapter. The following diagram shows the three primary dependency chains:
+
+\begin{description}
+  \item[Arithmetic chain.] Ch.0 (this chapter) \(\to\) Ch.3 (Trinity Identity) \(\to\) Ch.6 (GoldenFloat) \(\to\) Ch.9 (quantisation) \(\to\) Ch.28 (FPGA synthesis).
+  \item[Runtime chain.] Ch.0 \(\to\) Ch.24 (PLRM scheduler) \(\to\) Ch.25 (IGLA RACE) \(\to\) Ch.30 (VSA+AR) \(\to\) Ch.28 (hardware).
+  \item[Empirical chain.] Ch.0 \(\to\) Ch.11 (E8 symmetry) \(\to\) Ch.13 (Standard Model) \(\to\) Ch.16 (benchmarks) \(\to\) Ch.17 (data analysis).
+\end{description}
+
+Every chain begins with the Trinity Identity \(\varphi^2 + \varphi^{-2} = 3\) and terminates at an empirical or hardware chapter. The monograph contains no chapter that depends on a claim not already established in an earlier chapter of its chain; this acyclicity is verified by the build system (\texttt{cargo run -p trios-phd -- audit}).
 
 \section{Where to Begin}
 

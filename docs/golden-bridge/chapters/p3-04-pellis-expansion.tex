@@ -1,0 +1,132 @@
+% p3-04-pellis-expansion
+
+\section{P3 §4. The Additive Pellis Expansion}
+
+Figure (fig-p3-ch4-pellis). Pellis expansion triptych (Paper III) --- greedy phi-algorithm /
+                                         interference / convergence funnel.
+
+  4.1 Construction via Greedy $\varphi$-Algorithm
+  The Pellis greedy expansion follows the same logical pattern as the Rényi $\beta$-expansion
+  for base beta = $\varphi$, but with relaxed digit constraints and additional hierarchical
+  structure.
+
+  Algorithm 4.1 (Pellis greedy expansion to depth D).
+
+  Input: x > 0, depth parameter D $\geq$ 0.
+
+  Initialise: r0 = x, coefficients list C = [].
+
+  For k = 0, 1, …, D:
+
+  1. Compute the tentative coefficient ck = rk $\cdot$ $\varphi$k.
+  2. Set ck = lfloor ck rfloor (the floor; optionally the nearest integer for centred
+  expansions).
+  3. Set rk+1 = rk - ck $\varphi$-k.
+  4. Append ck to C.
+
+  Output: coefficient sequence (c0, c1, …, cD) and remainder RD = rD+1.
+
+  The expansion is then
+
+  x = sumk=0D ck $\varphi$-k + RD(x). 1
+
+        Proposition 4.2 (Non-negativity and bound). The greedy Pellis expansion
+        satisfies 0 $\leq$ RD(x) < $\varphi$-(D+1) for all x $\geq$ 0. The coefficients ck are non-negative
+        integers whenever x is a positive real.
+
+        Proof. By construction, rk+1 = rk - lfloor rk $\varphi$k rfloor $\varphi$-k $\in$ [0, $\varphi$-k). Iterating
+        gives rD+1 $\in$ [0, $\varphi$-(D+1)). □
+
+  Comparison with Zeckendorf's representation. In the standard Zeckendorf setting, the
+  input is a positive integer N, the digit set is {0, 1}, and the constraint of no two
+  consecutive 1s ensures uniqueness. The Pellis expansion relaxes the integer input to
+  arbitrary x $\in$ R>0, permits coefficients greater than 1, and adds the hierarchical
+  interference layer (Section 4.2). It reduces to a variant of the Zeckendorf
+  representation when x $\in$ Z>0 and when the coefficient set is restricted.
+
+  Comparison with Parry--Rényi $\beta$-expansions. The Rényi (1957) / Parry (1960) theory of
+  $\beta$-expansions in base beta = $\varphi$ uses digits in {0, 1} with the "no two consecutive 1s"
+  constraint (since $\varphi$2 = $\varphi$ + 1). The Boyd beta-expansions framework further
+  characterises when such expansions are periodic (Salem/Pisot numbers). The Pellis
+  expansion departs from this setup in two ways: (i) it allows arbitrary non-negative
+  integer coefficients, not just binary digits; (ii) it adds an interference correction layer
+  (Section 4.2) that encodes cancellations between adjacent levels. The Pellis expansion
+  should be understood as a signed generalisation of the Rényi $\beta$-expansion, not a special
+  case.
+
+  4.2 Hierarchical Interference Structure
+  The hierarchical Pellis expansion adds a second level of structure by decomposing the
+  coefficients ck into sums involving lower-level coefficients, encoding interference
+  between adjacent depth levels.
+
+        Definition 4.3 (Level-2 Pellis interference coefficient). Given the depth-D
+        sequence (ck), define level-2 interference coefficients
+
+  gammak = ck - (ck-1 ck+1)/(ck-1 + ck+1 + 1), k = 1, …, D-1,
+
+  with boundary conditions gamma0 = c0 and gammaD = cD. The quantity deltak = ck -
+  gammak measures the interference correction at level k.
+
+  The resulting tree of correction terms at depth L is the Pellis interference tree P(x, D,
+  L), a binary tree of height L with D leaves at each depth. The analogy with a
+  multiresolution wavelet decomposition is exact in spirit: the coarse coefficients c0, c1
+  carry the leading structure, while the interference corrections deltak at higher depths
+  carry fine-grained detail.
+
+        Remark (wavelet analogy). The Pellis interference structure parallels the
+        multiresolution analysis of Mallat (1989), with $\varphi$-k playing the role of dilation
+        factors and gammak playing the role of scaling coefficients. The key distinction is
+        that Mallat's framework operates in L2(R) with orthonormal bases, while the Pellis
+        interference tree operates in R>0 with a non-orthogonal, greedy decomposition.
+        No claim is made that the two frameworks are equivalent.
+
+  4.3 Convergence and Termination Properties
+
+        Theorem 4.4 (Exponential convergence; Theorem). For any x $\in$ (0, $\in$fty),
+
+        Proof. Follows from Proposition 4.2 by induction on D: the remainder RD $\in$ [0,
+        $\varphi$-(D+1)) at each step, so the sum converges exponentially in D. □
+
+  Since $\varphi$-1 approx 0.618, each additional depth level multiplies the approximation error
+  by at most $\varphi$-1 approx 0.618, corresponding to a 0.694-bit reduction per step ---
+  consistent with the description-length analysis of Section 2.6.
+
+        Corollary 4.5 (Lucas ring termination; Theorem). If x $\in$ Z[$\varphi$] --- i.e., x = a +
+        b$\varphi$ for a, b $\in$ Z --- then the standard Pellis expansion terminates in finitely many
+        steps with zero remainder.
+
+        Proof. Each step of the greedy algorithm subtracts a Z[$\varphi$] element ck $\varphi$-k from the
+        current remainder, producing a new remainder in Z[$\varphi$] cap [0, $\varphi$-k). The set Z[$\varphi$]
+        cap [0, $\varepsilon$) is empty for sufficiently small $\varepsilon$ > 0, so the algorithm terminates. An
+        explicit bound is that termination occurs in at most 2max(|a|, |b|) steps
+        (established in companion Paper 1 of this trilogy, Theorem 3.2). □
+
+  Sanctioned seed verification. For each sanctioned seed F17 = 1597, …, F21 = 10946,
+  L7 = 29, L8 = 47: each is an integer, hence in Z[$\varphi$] with b = 0. By Corollary 4.5,
+  Algorithm 4.1 terminates at depth 0 with c0 = x and zero remainder. This is a
+  regression test for the reference implementation (Appendix B, Test 2; Section 13.5, Test
+  P3-T3).
+
+  4.4 Relation to $\beta$-Expansions and Continued Fractions
+  The Pellis expansion relates to three classical constructions:
+
+  1. Rényi $\beta$-expansion (Rényi 1957): base-$\varphi$ $\beta$-expansion, digits $\in$ {0,1}, no consecutive
+  1s (so the expansion of $\varphi$ in base $\varphi$ is 1.0, and that of $\varphi$2 = $\varphi$ + 1 is 10.01). Pellis relaxes
+  the digit constraint and adds hierarchical interference.
+
+  2. Parry characterisation (Parry 1960): characterises bases beta for which the
+  expansion of 1 is finite or periodic (Parry numbers). $\varphi$ is a Parry number since its
+  beta-expansion of 1 is finite. The Boyd framework extends this to Salem/Pisot number
+  classification. The Pellis expansion inherits the Parry-number properties of $\varphi$ but
+  relaxes the digit constraint.
+
+  3. Continued fraction expansion: best rational approximations; Pellis gives best
+  $\varphi$-polynomial approximations, as developed in companion Paper 2 of this trilogy.
+
+  5. The Projection/Coarse-Graining Map
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

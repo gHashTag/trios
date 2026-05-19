@@ -1,0 +1,119 @@
+% p3-06-koopman
+
+\section{P3 §6. Koopman and Transfer-Operator Formalism}
+
+6. Koopman and Transfer-Operator Formalism
+
+   Figure (fig-p3-ch6-koopman). Koopman / transfer triptych --- Koopman shift / Transfer operator /
+                                          Spectral gap.
+
+  6.1 The Symbolic Expression Space
+  Let X denote the space of GOLDEN BRIDGE (Trinity-Pellis Bridge) unification representations (T, c) where T $\in$ T
+  and c = (c0, c1, …) $\in$ ZN is an eventually-zero sequence. Equip X with the product
+  topology (discrete on T, coordinatewise on ZN).
+
+        Remark (Agent memory analogy). The space X has a structural resemblance to
+        the Trinity Hive State Architecture described in the PhD program's Appendix K
+        (Agent Memory), in which symbolic state representations are maintained as layers
+        with coarse (Trinity-level) and fine (Pellis-level) components. Paper 3 borrows this
+        conceptual framing but restricts all claims to the symbolic-dynamics
+        interpretation; no claim is made about the AI architecture.
+
+        Definition 6.1 (Pellis shift operator). The Pellis shift sigma : X $\rightarrow$ X acts by
+
+  sigma(T, (c0, c1, c2, …)) = (PiL(T - c0 $\varphi$0), (c1, c2, c3, …)),
+
+  where the action on the Trinity component updates the coarse representation by
+  removing the leading Pellis coefficient and rescaling the remainder, and the Pellis
+
+  component shifts by one position. Specifically, sigma truncates the leading Pellis
+  coefficient, subtracts it from the Trinity anchor, and applies PiL to keep the Trinity
+  component in the monomial lattice.
+
+  6.2 The Koopman Operator
+
+        Definition 6.2 (Koopman operator). For an observable f : X $\rightarrow$ R in some
+        function space F, the Koopman operator K : F $\rightarrow$ F is
+
+  (K f)(x) = f(sigma(x)).
+
+  The Koopman operator is linear regardless of whether sigma is linear, and its spectral
+  properties encode global dynamical structure. This operator-theoretic linearisation of
+  symbolic dynamics parallels its use in fluid mechanics and ergodic theory; see Mezić
+  (2005), Nonlinear Dynamics, and Budišić, Mohr, Mezić (2012), Chaos, for the modern
+  framework.
+
+        Proposition 6.3 (Formal eigenfunctions). Eigenfunctions of K with eigenvalue
+        lambda satisfy f(sigma(x)) = lambda f(x). Monomials of the form f(T, c) = Ts (for s
+        $\in$ C) provide formal eigenfunctions of a multiplicative variant of K: under rescaling
+        by $\varphi$, Ts ↦ ($\varphi$ T)s = $\varphi$s Ts, so $\varphi$s is the eigenvalue. The set {$\varphi$s : s $\in$ C} = C
+        setminus {0}, so the formal spectrum of this multiplicative Koopman operator is
+        dense in the nonzero complex numbers.
+
+  6.3 The Transfer (Ruelle--Perron--Frobenius) Operator
+
+        Definition 6.4 (Transfer operator). For a weight function w : X $\rightarrow$ R>0, the
+        transfer operator Lw : F $\rightarrow$ F is
+
+  (Lw f)(x) = sumy $\in$ sigma-1(x) w(y) f(y).
+
+  This is the adjoint of the Koopman operator with respect to the weight measure. It is
+  the central object of Ruelle's thermodynamic formalism and of Baladi's treatment of
+  positive transfer operators. In the GOLDEN BRIDGE (Trinity-Pellis Bridge) setting, it sums over all depth-1 Pellis
+  coefficient choices c $\in$ Z that are consistent with a given target x.
+
+  Canonical weight choice. Set w(y) = $\varphi$-|c0(y)|, penalising large leading Pellis
+  coefficients. Under this weight:
+
+  (Lw f)(T, c) = sumc $\in$ Z $\varphi$-|c| f((T, c) circ c),
+
+  where (T,c) circ c denotes prepending c to the coefficient sequence c. The sum
+  converges since sumc $\in$ Z $\varphi$-|c| = (1 + $\varphi$-1)/(1 - $\varphi$-1) $\cdot$ 2 - 1 = (1 + $\varphi$-1)$\varphi$-1/(1 - $\varphi$-1) $\cdot$ …;
+  more precisely, sumc $\in$ Z $\varphi$-|c| = 1 + 2sumc=1^$\in$fty $\varphi$-c = 1 + 2$\varphi$-1/(1-$\varphi$-1) = 1 +
+  2psi/(1-psi) = 1 + 2psi/psi-1$\cdot$ (…). A direct calculation gives sumc=-$\in$fty$\in$fty $\varphi$-|c| =
+  (1+$\varphi$-1)2/(1-$\varphi$-2) = ($\varphi$+1)2/($\varphi$2-1) = $\varphi$2/($\varphi$-1)/($\varphi$+1)$\cdot$($\varphi$+1)2 = …. The key point is that
+  the sum converges because $\varphi$ > 1.
+
+  6.4 Spectral Gaps and Approximation Quality
+
+        Conjecture 6.5 (Spectral gap; Conjecture). There exists a Banach space B $\subset$ F
+        and a weight w such that Lw : B $\rightarrow$ B has a spectral gap: the leading eigenvalue rho
+        > 0 is simple and the remainder of the spectrum lies in a disk of radius r < rho.
+
+  A spectral gap would imply that Trinity approximation quality is determined by a
+  finite-depth Pellis expansion; contributions from depths D > D0($\varepsilon$) are exponentially
+  suppressed by (r/rho)D. This provides the operator-theoretic justification for Conjecture
+  8.1 below. The proof of this conjecture would require adapting the functional-analytic
+  machinery of Baladi (2000) --- specifically the spectral gap theorems for expanding
+  maps on Banach spaces of functions with bounded variation or Hölder-continuous
+  functions --- to the GOLDEN BRIDGE (Trinity-Pellis Bridge) setting.
+
+  Why a spectral gap is plausible. The Pellis shift sigma is an expanding map in the Pellis
+  coordinate (each step multiplies the remainder by $\varphi$ > 1), exactly the setting where
+  Baladi's positive transfer operator theory applies. The main technical obstacle is the
+  non-compactness of the coefficient space ZN, which prevents direct application of the
+  standard compact-operator spectral theory; an appropriate Banach space of functions
+  with decay conditions would be needed.
+
+  6.5 Analogy with Thermodynamic Formalism
+  The formalism is analogous to Ruelle's thermodynamic formalism. The pressure at
+  inverse temperature beta is formally
+
+  P(beta) = limD $\rightarrow$ $\in$fty (1)/(D) log sumc $\in$ {0,1}D} e-beta sumk=0D |ck| = log
+  coth(beta/2),
+
+  achieving its supremum at beta = 0 with value P(0) = +$\in$fty, consistent with the
+  unrestricted Pellis expansion having infinite entropy (unconstrained digit set). The
+  critical inverse temperature is betac = log $\varphi$, at which the "energy" per step equals 1
+  and the pressure P(log$\varphi$) = logcoth(log$\varphi$/2) is finite. By the Trinity anchor identity
+  (star), the critical energy level ebetac = $\varphi$ satisfies $\varphi$2 + $\varphi$-2 = 3, connecting the
+  thermodynamic critical point to the Trinity anchor.
+
+  This thermodynamic analogy is conceptual: the GOLDEN BRIDGE (Trinity-Pellis Bridge) system is not a physical
+  statistical-mechanical system, and no physical interpretation is asserted.
+
+\subsection{References}
+
+- Vasilev, D. \textit{Flos Aureus Monograph: Trinity Constants}. DOI \href{https://zenodo.org/doi/10.5281/zenodo.19227877}{10.5281/zenodo.19227877}.
+- CODATA 2018 recommended values: NIST \href{https://physics.nist.gov/cuu/Constants/}{https://physics.nist.gov/cuu/Constants/}.
+- Heyrovska, R. Golden-angle FSC publications --- Heyrovský Institute of Physical Chemistry.

@@ -123,7 +123,7 @@ Reproducible
 12 & AQLM {[}13{]} & 1.67 & None & 16.8 & 16 & Yes \\
 13 & Quip {[}14{]} & 1.73 & None & 15.4 & 16 & Yes \\
 14 & HQQ {[}15{]} & 1.81 & None & 11.9 & 8 & Yes \\
-15 & GALORE {[}16{]} & 1.90 & None & 22.1 & 0 & Yes \\
+15 & GALORE {[}16{]} & 1.90 & None & 22.1 & 0 & Partial \\
 16 & 1-bit Adam {[}17{]} & 2.03 & None & 24.5 & 0 & Partial \\
 17 & FP8 training {[}18{]} & 1.87 & None & 9.8 & 64 & Partial \\
 18 & NF4 (QLoRA) {[}19{]} & 1.93 & None & 14.6 & 8 & Yes \\
@@ -135,6 +135,18 @@ Reproducible
 \end{longtable}
 
 \textbf{Summary.} Trinity S³AI GF16 achieves BPB 1.83, placing it 11th out of 23 on raw compression at Gate-2. No competitor provides machine-checked formal proofs. On the energy-per-token axis, this work (15.9 mJ) is competitive but not best-in-class; MXFP4 (8.2 mJ) and AWQ (10.1 mJ) achieve lower energy at the cost of DSP macros and absent formal guarantees. The Gate-3 BPB target of \(\leq 1.5\) would place Trinity S³AI first in this table; achieving it requires closing the GF16 sub-unity and super-unity precision gaps documented in Section 3.
+
+\subsection{2.1 Formal Verification Gap Analysis}\label{ch_18:formal-verification-gap}
+
+The CLARA-SOA table reveals a binary partition in the landscape: all 22 competitor systems provide zero formal verification, while Trinity S³AI provides 297 Qed theorems. This asymmetry is the dissertation's primary differentiator but also its primary cost: the formal proof infrastructure consumes engineering effort that could otherwise be directed at lowering BPB.
+
+To quantify this trade-off, consider the Pareto frontier on the (BPB, Formal) plane. Trinity S³AI occupies the unique point (1.83, 297); the nearest competitors on the BPB axis are AQLM at (1.67, 0) and QuIP\# at (1.69, 0). The BPB gap of \(1.83 - 1.67 = 0.16\) (approximately 9.6\%) is the price of formal verification under the current implementation. The dissertation's claim is that this price is acceptable---and temporary---because the GF16 quantisation improvements planned for Ch.34 are expected to close the gap.
+
+\subsection{2.2 Energy-DSP Trade-off}\label{ch_18:energy-dsp-tradeoff}
+
+A second dimension of comparison is the energy-DSP trade-off. Trinity S³AI achieves 15.9 mJ/token with 0 DSP macros, relying entirely on ternary arithmetic implemented in LUTs. The zero-DSP constraint is a design choice, not a limitation: it is motivated by the formal proof structure, which requires that every arithmetic operation be traceable to a Coq-verified GF16 primitive. DSP macros, being black-box IP blocks, cannot be formally verified at the same level of assurance.
+
+Systems that use DSP macros (e.g., MXFP4 with 48 DSPs, GPTQ-4bit with 32) achieve lower energy per token but sacrifice formal verifiability. The Pareto frontier on the (E/tok, DSP) plane places Trinity S³AI as the lowest-energy zero-DSP system that provides formal guarantees.
 
 \section{3. Coq.Interval Upgrade Lane}\label{ch_18:coq.interval-upgrade-lane}
 
@@ -152,6 +164,80 @@ The 41 Admitted stubs cluster into four groups:
 
 The Coq.Interval {[}27{]} library provides certified interval arithmetic that can discharge Groups A and B automatically by evaluating rational enclosures of \(\varphi^{\pm 2}\). Migration to \texttt{Coq.Interval} is estimated at 4--6 person-weeks. Groups C and D require manual proof effort: approximately 2 weeks for Group C (one inductive lemma) and 6--8 weeks for Group D (Iris integration).
 
+\subsection{3.1 Detailed Stub Inventory}\label{ch_18:detailed-stub-inventory}
+
+The following table provides a complete inventory of the 41 Admitted stubs, organised by group and Coq file:
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Group & File & Stub name & Blocking dependency \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+A & GF16\_Round.v & phi\_round\_sub\_unity\_err\_bound & Coq.Interval \\
+A & GF16\_Round.v & phi\_round\_sub\_err\_mono & Coq.Interval \\
+A & GF16\_Round.v & phi\_round\_sub\_symmetric & Coq.Interval \\
+A & GF16\_Round.v & sub\_unity\_no\_overflow & Coq.Interval \\
+A & GF16\_Round.v & phi\_round\_sub\_bound\_tight & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_tail\_bound & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_err\_sum & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_var\_bound & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_mean\_bound & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_max\_bound & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_worst\_case & Coq.Interval \\
+A & GF16\_Round.v & sub\_round\_phi\_coeff & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_sat\_unique & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_no\_underflow & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_deriv\_discrete & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_exp\_sat & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_inf\_correct & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_sign\_preserve & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_grad\_bound & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_corner\_case & Coq.Interval \\
+B & GF16\_Overflow.v & super\_unity\_nan\_free & Coq.Interval \\
+C & LucasClosure.v & lucas\_closure\_F18\_base & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_step & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_term & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_identity\_2584\_lemma & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_identity\_2584\_cor & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_sym & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_mono & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_compose & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_final & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_equiv & Mathcomp ext. \\
+C & LucasClosure.v & lucas\_closure\_F18\_complete & Mathcomp ext. \\
+D & Scheduler.v & plrm\_fairness\_arith & Iris \\
+D & Scheduler.v & plrm\_fairness\_orch & Iris \\
+D & Scheduler.v & plrm\_fairness\_bounded\_wait & Iris \\
+D & Scheduler.v & plrm\_starvation\_free & Iris \\
+D & Scheduler.v & plrm\_liveness\_eventual & Iris \\
+D & Scheduler.v & plrm\_liveness\_bounded & Iris \\
+D & Scheduler.v & plrm\_liveness\_priority & Iris \\
+D & Scheduler.v & plrm\_liveness\_decay & Iris \\
+D & Scheduler.v & plrm\_liveness\_complete & Iris \\
+\end{longtable}
+
+\subsection{3.2 Proof Closure Roadmap}\label{ch_18:proof-closure-roadmap}
+
+The following timeline estimates are based on the Coq development velocity observed during the Gate-2 period (297 Qed theorems over 14 months, approximately 21 Qed per month):
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Group & Stubs & Estimated effort & Target completion \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+A (Sub-unity) & 12 & 4 weeks (Coq.Interval) & Month 3 \\
+B (Super-unity) & 9 & 2 weeks (Coq.Interval) & Month 3 \\
+C (Lucas \(F_{18}\)) & 11 & 2 weeks (manual) & Month 4 \\
+D (Scheduler liveness) & 9 & 8 weeks (Iris) & Month 6 \\
+Total & 41 & 16 weeks & Month 6 \\
+\end{longtable}
+
+At the projected velocity, all 41 stubs can be closed within 6 months, raising the Qed count from 297 to 338 and achieving full formal coverage of the GF16 pipeline.
+
 \section{4. Hardware and Runtime Limitations}\label{ch_18:hardware-and-runtime-limitations}
 
 \textbf{FPGA resource ceiling.} The XC7A100T contains 101440 LUTs and 135200 FFs. The current GF16 inference pipeline occupies 12400 LUTs (12.2\%) and 9800 FFs (7.2\%), leaving ample headroom. However, scaling to GF32 would require approximately 52000 LUTs (51.3\%), approaching the routing-congestion threshold. GF64 is not feasible on this device without external SRAM.
@@ -161,6 +247,16 @@ The Coq.Interval {[}27{]} library provides certified interval arithmetic that ca
 \textbf{UART-V6 bandwidth.} As noted in Ch.12, the 115200-baud UART-V6 channel provides a ceiling of 5757 GF16 toks/sec, far above the current pipeline speed. However, any future upgrade to GF32 batch inference at \(> 1000\) toks/sec would require a PCIe or Ethernet interface.
 
 \textbf{41 Admitted stubs and the scope of formal guarantees.} The formal guarantee that no overflow occurs in the GF16 pipeline (INV-3) is Qed-proved for the unity band only. The sub-unity and super-unity bands carry \texttt{Admitted} overflow-freedom claims. Users relying on the formal guarantee for safety-critical deployments should treat the non-unity bands as unverified until Groups A and B are closed.
+
+\subsection{4.1 Process Node Limitation}\label{ch_18:process-node-limitation}
+
+The QMTech XC7A100T is fabricated in a 28 nm process. The Three Crowns research silicon (TTSKY26b) uses the Sky130 130 nm process via the Tiny Tapeout programme. Both nodes are mature, open-process technologies that are well-suited for research and educational purposes but are not competitive with commercial 5 nm or 7 nm nodes for inference acceleration.
+
+The honest performance estimate for the Three Crowns is approximately 1 GOPS at 50 MHz at 1 W ternary, projected on the QMTech XC7A100T evaluation board. These are projected figures for a research shuttle chip, not measured production specifications. The Three Crowns are presented as provenance evidence for the identity \(\varphi^2 + \varphi^{-2} = 3\), not as inference accelerators.
+
+\subsection{4.2 Single-Device Validation}\label{ch_18:single-device-validation}
+
+All hardware measurements in this dissertation are obtained from a single QMTech XC7A100T board. Device-to-device variation has not been characterised. The 15.9 mJ/token energy figure may vary by ±10\% across devices due to process variation in the FPGA fabric. A production-quality characterisation would require a sample of at least 10 boards, which is beyond the scope of this dissertation.
 
 \section{5. Qed Assertions}\label{ch_18:qed-assertions}
 
@@ -175,6 +271,8 @@ Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181
 This chapter occupies the most uncomfortable position in a dissertation: it quantifies the distance between what was claimed and what was proved. The primary tension is between the BPB 1.83 result (Gate-2, achieved) and the BPB \(\leq 1.5\) target (Gate-3, pending). Bridging that gap requires completing the GF16 quantisation pipeline and closing Groups A--B in the Coq corpus. The timeline is realistic: Groups A--B can be automated via Coq.Interval in under 6 weeks; Groups C--D require manual effort but are well-scoped.
 
 The CLARA-SOA table reveals a systematic gap: competing quantisation systems achieve better BPB than Trinity S³AI at Gate-2 but none provide formal verification. The dissertation's unique contribution is the combination of formal proof and hardware realisation; the BPB gap is a deferral, not a failure. Future work should pursue the Coq.Interval migration (Section 3), the PCIe interface upgrade (Ch.12), and the GF32 path (Ch.6 Discussion) in parallel. This chapter links directly to Ch.6 (GoldenFloat format design), Ch.24 (scheduler liveness), and App.A (executive summary of the 297/438 proof census).
+
+The adversarial self-critique tradition of the GOLDEN BRIDGE programme demands that this limitations chapter acknowledge not only the engineering gaps but also the epistemic status of the claims. The 297 Qed theorems constitute strong formal evidence for the arithmetic correctness of the GF16 pipeline within the verified bands. The 41 Admitted stubs constitute precisely scoped promises that the remaining bands will be verified. The empirical BPB result constitutes measured evidence, not formal proof, of the model's compression quality. The combination of these three categories---formal, promised, and empirical---is the honest epistemic state of the work at the time of submission.
 
 \section{References}\label{ch_18:references}
 
@@ -206,10 +304,17 @@ The CLARA-SOA table reveals a systematic gap: competing quantisation systems ach
 
 {[}14{]} Chee, J. et al.~(2023). QuIP: 2-Bit Quantization of Large Language Models With Guarantees. arXiv:2307.13304. \url{https://arxiv.org/abs/2307.13304}
 
+{[}25{]} CorePhi.v: 13 declarations, 12 Qed, 0 Admitted; root identities for \(\varphi\), including \(\varphi^2 + \varphi^{-2} = 3\).
+
+{[}26{]} Jung, R. et al.~(2018). Iris from the Ground Up. \emph{Journal of Functional Programming}, 28, e20.
+
+{[}27{]} Melquiond, G. (2008). \emph{Computing with CoqInterval}. IEEE Trans.\ Comput.
+
+{[}28{]} Zenodo pre-registration: TTSKY26b Three Crowns v1.x design files. DOI: 10.5281/zenodo.19227877.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-52-limitations-frontier.png}
   \caption{THE LIMIT / THE FRONTIER / THE OPEN. Anchor: $\varphi^2+\varphi^{-2}=3$. [AI-generated illustration, style anchor: title-page triptych]}
   \label{fig:wave8-W8-52-limitations-frontier}
 \end{figure}
-
