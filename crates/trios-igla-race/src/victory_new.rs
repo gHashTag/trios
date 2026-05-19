@@ -152,9 +152,9 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     // One-tailed p-value using approximation for t-distribution
     // For df=2, we use the exact form: 0.5 + t / (2 * sqrt(2 + t²))
     let p_value = if t_statistic >= 0.0 {
-        0.5 - t.abs() / (2.0 * (2.0 + t * t).sqrt())
+        0.5 - t_statistic.abs() / (2.0 * (2.0 + t_statistic * t_statistic).sqrt())
     } else {
-        0.5 + t.abs() / (2.0 * (2.0 + t.abs() * t).sqrt())
+        0.5 + t_statistic.abs() / (2.0 * (2.0 + t_statistic.abs() * t_statistic).sqrt())
     };
 
     // Test passes if p < α AND t < 0 (mean below baseline)
