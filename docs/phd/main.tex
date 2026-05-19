@@ -1,85 +1,446 @@
-\documentclass[12pt,a4paper]{book}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage[russian,english]{babel}
+% ===================================================================
+% PhD Monograph v6.0 — Monumentum Aureum
+% Trinity Identity to All Physical Constants
+% Author: Dmitrii Vasilev
+% Date: 2026-04-20
+% Lane: A — Scaffold
+% refs #30, #41
+% ===================================================================
+
+\documentclass[12pt,a4paper,openany,oneside]{book}
+% openany  - chapters can start on any page (no blank verso)
+% oneside  - no mirrored margins, no blank pages between chapters
+
+% ===================================================================
+% PACKAGES
+% ===================================================================
+
+% Language and encoding (XeLaTeX/Tectonic — fontspec gives full Unicode incl. Cyrillic + Greek)
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\usepackage{newunicodechar}
+
+% Math (classic CM math — works under XeLaTeX without unicode-math)
 \usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{physics}
+
+% Float placement helpers (R1/L1)
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{epigraph}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{adjustbox}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% Map common Unicode math/physics symbols that occasionally appear in body text
+% so XeLaTeX+lmroman doesn't crash on them.  All map to math-mode equivalents.
+\newunicodechar{φ}{\ensuremath{\varphi}}
+\newunicodechar{Φ}{\ensuremath{\Phi}}
+\newunicodechar{π}{\ensuremath{\pi}}
+\newunicodechar{σ}{\ensuremath{\sigma}}
+\newunicodechar{μ}{\ensuremath{\mu}}
+\newunicodechar{λ}{\ensuremath{\lambda}}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{β}{\ensuremath{\beta}}
+\newunicodechar{γ}{\ensuremath{\gamma}}
+\newunicodechar{δ}{\ensuremath{\delta}}
+\newunicodechar{ε}{\ensuremath{\varepsilon}}
+\newunicodechar{θ}{\ensuremath{\theta}}
+\newunicodechar{ω}{\ensuremath{\omega}}
+\newunicodechar{Ω}{\ensuremath{\Omega}}
+\newunicodechar{Δ}{\ensuremath{\Delta}}
+\newunicodechar{Σ}{\ensuremath{\Sigma}}
+\newunicodechar{Π}{\ensuremath{\Pi}}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{←}{\ensuremath{\leftarrow}}
+\newunicodechar{⇒}{\ensuremath{\Rightarrow}}
+\newunicodechar{⇐}{\ensuremath{\Leftarrow}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{≥}{\ensuremath{\geq}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{≈}{\ensuremath{\approx}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∞}{\ensuremath{\infty}}
+\newunicodechar{∅}{\ensuremath{\emptyset}}
+\newunicodechar{∇}{\ensuremath{\nabla}}
+\newunicodechar{∂}{\ensuremath{\partial}}
+
+% Graphics and figures
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc,3d,patterns}
+\usepackage{graphicx}
+\graphicspath{{assets/}{../../assets/illustrations/}{../../assets/illustrations_v516/}{../assets/}{./}}
+% Universal margin / line-breaking discipline (fixes 95% of Overfull \hbox).
+\usepackage{microtype}
+\sloppy
+\emergencystretch=6em
+\hyphenpenalty=50
+\tolerance=9999
+\hbadness=10000
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+% Long technical strings (URLs, slugs, hex) should break anywhere.
+\usepackage{seqsplit}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+% Pandoc-generated code-block environment (Shaded + Highlighting)
+\usepackage{fancyvrb}
+\usepackage{fvextra}
+\usepackage{framed}
+\providecommand{\VerbatimFootnotes}{}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\providecommand{\Shaded}{}
+\let\OldShaded\Shaded
+\renewenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\},breaklines,breakanywhere,breaksymbolleft={},breaksymbolright={},fontsize=\footnotesize,formatcom=\sloppy}
+% Pandoc highlight token commands → no-op
+\newcommand{\KeywordTok}[1]{\textbf{#1}}
+\newcommand{\DataTypeTok}[1]{#1}
+\newcommand{\DecValTok}[1]{#1}
+\newcommand{\BaseNTok}[1]{#1}
+\newcommand{\FloatTok}[1]{#1}
+\newcommand{\ConstantTok}[1]{#1}
+\newcommand{\CharTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{#1}
+\newcommand{\StringTok}[1]{\textit{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textit{#1}}
+\newcommand{\SpecialStringTok}[1]{\textit{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\CommentTok}[1]{\textit{\textcolor{gray}{#1}}}
+\newcommand{\DocumentationTok}[1]{\textit{#1}}
+\newcommand{\AnnotationTok}[1]{#1}
+\newcommand{\CommentVarTok}[1]{#1}
+\newcommand{\OtherTok}[1]{#1}
+\newcommand{\FunctionTok}[1]{#1}
+\newcommand{\VariableTok}[1]{#1}
+\newcommand{\ControlFlowTok}[1]{\textbf{#1}}
+\newcommand{\OperatorTok}[1]{#1}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\PreprocessorTok}[1]{#1}
+\newcommand{\AttributeTok}[1]{#1}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\InformationTok}[1]{#1}
+\newcommand{\WarningTok}[1]{#1}
+\newcommand{\AlertTok}[1]{\textbf{#1}}
+\newcommand{\ErrorTok}[1]{\textbf{#1}}
+\newcommand{\NormalTok}[1]{#1}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+
+% Babel + bibliography (natbib — works with vanilla bibtex shipped in tectonic)
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage{url}
+\usepackage[numbers,sort&compress]{natbib}
+\providecommand{\textcite}[1]{\citet{#1}}
+\providecommand{\autocite}[1]{\citep{#1}}
+\providecommand{\parencite}[1]{\citep{#1}}
+\providecommand{\addbibresource}[1]{}
+\providecommand{\printbibliography}{\bibliographystyle{plainnat}\bibliography{bibliography}}
 \usepackage{hyperref}
+\usepackage{cleveref}
+
+% Layout
 \usepackage{geometry}
-\geometry{margin=2.5cm}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
 
-% Sacred-ALU PhD Monograph: Flos Aureus
-% Anchor: phi^2 + phi^-2 = 3 · NEVER STOP · DOI 10.5281/zenodo.19227877
+% Geometry
+% Universal book geometry (Springer LNM-like): one template for ALL chapters.
+\geometry{
+  paperwidth=210mm, paperheight=297mm,
+  left=25mm, right=25mm, top=25mm, bottom=28mm,
+  headheight=14pt, headsep=8mm, footskip=14mm,
+  marginparwidth=0pt, marginparsep=0pt,
+  bindingoffset=0pt
+}
+% Make verbatim/code blocks respect the text width (no overflow into margins).
+\fvset{fontsize=\small,frame=none}
+% Long URL / texttt strings hyphenate at any character (universal right-margin fix).
+\PassOptionsToPackage{hyphens}{url}
+\Urlmuskip=0mu plus 1mu
+% Permit hyphenation/breaking inside \texttt strings (snake_case, hex, slugs)
+% so they don't shoot past the right margin.
+% Allow hyphenation inside monospace (\texttt) fonts so long paths break.
+\usepackage[htt]{hyphenat}
+% \filepath{...}: monospace path-like literal that breaks anywhere.
+% Argument is regular LaTeX text — use \_ and \# for those characters.
+\DeclareRobustCommand{\filepath}[1]{\texttt{\seqsplit{#1}}}
+\AtBeginDocument{%
+  \let\OldTexttt\texttt%
+  \protected\def\texttt#1{\OldTexttt{\hspace{0pt}#1\hspace{0pt}}}%
+}
+% Aggressive sloppy + huge emergencystretch keeps long \texttt or URLs from
+% running into the right margin even when no good break point exists.
+\sloppy
+\emergencystretch=6em
+\tolerance=9999
+\hbadness=10000
+\vbadness=10000
+\hfuzz=4pt
+% Allow images to scale down if they declare an oversized width.
+\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+\definecolor{golden}{RGB}{212,175,55}
+\definecolor{goldlight}{RGB}{255,223,128}
+\definecolor{golddark}{RGB}{184,134,11}
 
-\newtheorem{theorem}{Теорема}[chapter]
-\newtheorem{lemma}[theorem]{Лемма}
-\newtheorem{corollary}[theorem]{Следствие}
-\newtheorem{definition}{Определение}[chapter]
+% Golden color
+\definecolor{phi}{RGB}{193,161,49}
 
-\title{Flos Aureus: Sacred-ALU Stack \\ PhD Monograph}
-\author{Vasilev Dmitrii}
-\date{2026}
+% Frames for honest Admitted markers (R5)
+\usepackage[most]{tcolorbox}
+
+% Theorem environments (R12 — Lee/GVSU conventions)
+\usepackage{thmtools}
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% Proof environment — must be ensuremath, otherwise \end{proof} crashes
+\renewcommand{\qedsymbol}{}
+
+% \admittedbox{<text>} — the honest visual marker for Admitted theorems (R5).
+% Renders a red-bordered box around the text. Use whenever a theorem's Coq
+% counterpart in trinity-clara/proofs/igla/*.v is still Admitted; never use
+% to mask Admitted as Proven.
+% R5-honest visual marker. The tcolorbox environment is named
+% `admittedboxenv` so the convenience macro `\admittedbox{<text>}`
+% below can coexist with it (prior revisions collided: tcolorbox auto-
+% created a same-named token on \newtcolorbox{admittedbox}, which then
+% clashed with the subsequent \newcommand{\admittedbox}). All chapter
+% callsites use the macro form `\admittedbox{...}` only; the renamed
+% environment is an internal implementation detail.
+\newtcolorbox{admittedboxenv}[1][]{
+  colback=red!4!white,
+  colframe=red!60!black,
+  boxrule=0.6pt,
+  arc=2pt,
+  left=4pt,right=4pt,top=4pt,bottom=4pt,
+  fontupper=\small\itshape,
+  title={\bfseries Admitted (Coq status: not Proven \textemdash{} R5)},
+  #1
+}
+\newcommand{\admittedbox}[1]{\begin{admittedboxenv}#1\end{admittedboxenv}}
+
+% \coqcite{thm-name}{file}{lines}{status} — Coq citation block
+\newcommand{\coqcite}[4]{\par\noindent\textbf{Coq:} \texttt{#1} in \texttt{#2} (lines #3) --- \emph{#4}\par}
+% \filepath — generic file-path renderer
+\providecommand{\filepath}[1]{\texttt{#1}}
+
+% Generic theorem-like environments referenced in appendices
+\theoremstyle{plain}
+\newtheorem{invariant}{Invariant}
+\newtheorem{property}{Property}
+\newtheorem{principle}{Principle}
+\newtheorem{convention}{Convention}
+\newtheorem{requirement}{Requirement}
+
+% Falsification box (R7) — used by empirical chapters.
+\newtcolorbox{falsificationbox}[1][]{
+  colback=blue!4!white,
+  colframe=blue!60!black,
+  boxrule=0.6pt,
+  arc=2pt,
+  left=4pt,right=4pt,top=4pt,bottom=4pt,
+  fontupper=\small,
+  title={\bfseries Falsification Criterion (Popper)},
+  #1
+}
+
+% Convenience: \citealp = author-year inline (used by 00-monad)
+\providecommand{\citealp}[1]{\textcite{#1}}
+
+% \citetheorem{INV-k} — robust hyperref to a Coq invariant in appendix F.
+% Phase 1 UNIFY task 1.6 (issue #380): chapters cite invariants via this macro;
+% appendix F-coq-citation-map.tex carries the canonical \label{thm:INV-k} per row,
+% backed byte-for-byte by assertions/igla_assertions.json (R5 honesty, R14 traceability).
+%
+% Falls back gracefully if the label is missing (typeset literal text in small caps,
+% same visual as defense/slides.tex stub) so a single-chapter compile never errors.
+%
+% Usage examples:
+%   \citetheorem{INV-1}            -> [INV-1] hyperlinked to appendix F row
+%   \citetheorem{INV-12}           -> [INV-12]
+%   \citetheorem{INV-1..INV-13}    -> raw label form for slide-style compound refs
+\providecommand{\citetheorem}[1]{%
+  \hyperref[thm:#1]{[\textsc{#1}]}%
+}
+
+% Page style
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\textcolor{golden}{\small\bfseries Monograph v6.0}}
+\fancyfoot[LE,RO]{\textcolor{golddark}{\scriptsize Trinity Framework}}
+
+% ===================================================================
+% DOCUMENT
+% ===================================================================
 
 \begin{document}
-\maketitle
-\tableofcontents
 
-% Frontmatter
+% Front matter
 \frontmatter
-\chapter*{Введение}
-Настоящая монография систематизирует результаты разработки Sacred-ALU стека
-(волны W34--W41) в рамках проекта Trinity. Монография охватывает математические
-основания (часть I), реализацию (часть II) и верификацию (часть III).
+\include{frontmatter/title-page}
+\include{frontmatter/declaration}
+\include{frontmatter/abstract}
+\include{frontmatter/dedication}
+\include{frontmatter/acknowledgements}
+\include{frontmatter/preface}
+\include{frontmatter/biographical-note}
+
+% Table of contents
+% Widen ToC number boxes so 21.10/26.10/30.10 don't eat the next letter.
+\makeatletter
+\renewcommand*\l@section{\@dottedtocline{1}{1.5em}{4.0em}}
+\renewcommand*\l@subsection{\@dottedtocline{2}{4.5em}{4.6em}}
+\renewcommand*\l@subsubsection{\@dottedtocline{3}{8.0em}{5.5em}}
+\makeatother
+\tableofcontents
+\listoffigures
+\listoftables
+\include{frontmatter/list-of-theorems}
+\include{frontmatter/notation}
+
+% Main matter
 \mainmatter
 
-% Part I: Foundations
-\part{Математические основания Sacred-ALU}
-\include{chapters/flos_77}
-\include{chapters/glava_78_lever_stack}
+% Part I: The Foundations (Ch. 1-4)
+\part{The Foundations}
+\include{chapters/flos_00}
+\include{chapters/flos_01}
+\include{chapters/flos_02}
+\include{chapters/flos_03}
 
-% Part II: Implementation Waves
-\part{Волны реализации W29--W40}
-\include{chapters/ch79_tenet_sparsity_wave29}
-\include{chapters/ch80_tom_layer_gate_wave34}
-\include{chapters/glava_81_lut_npu}
-\include{chapters/glava_81_lut_npu_wave35}
-\include{chapters/ch81_lut_npu_replaces_multiplier}
-\include{chapters/glava_82_avs}
-\include{chapters/ch82_avs_voltage_stacking_wave36}
-\include{chapters/glava_83_subthreshold}
-\include{chapters/glava_84_ica_001_rectify}
-\include{chapters/glava_84_nullor}
-\include{chapters/glava_85_holo_mux_x4}
-\include{chapters/glava_86_dfs}
-\include{chapters/glava_87_sparse_activation}
-\include{chapters/ch88_stoch_round_wave38}
-\include{chapters/glava_88_stoch_round}
-\include{chapters/glava_89_drowsy_ret}
-\include{chapters/glava_90_speculative_exit}
-\include{chapters/glava_91_sparsity}
-\include{chapters/glava_92_fbb_active}
+% Part II: The Expansion (Ch. 5-7)
+\part{The Expansion}
+\include{chapters/flos_04}
+\include{chapters/flos_05}
+\include{chapters/flos_06}
+\include{chapters/flos_07}
 
-% Part III: Node Shrink
-\part{W41 IHP 22FDX Node Shrink}
-\include{chapters/glava_93_ihp22fdx_shrink}
+% Part III: The Crystal (Ch. 8-9)
+\part{The Crystal}
+\include{chapters/flos_08}
+\include{chapters/flos_09}
 
-% Part IV: Supplementary chapters
-\part{Дополнительные главы}
-\include{chapters/glava_94_verification}
-\include{chapters/glava_95_coq_proofs}
-\include{chapters/glava_96_rust_witness}
-\include{chapters/glava_97_rtl_assertions}
-\include{chapters/glava_98_timing_models}
-\include{chapters/glava_99_pdk_comparison}
-\include{chapters/glava_100_future_work}
-\include{chapters/glava_101_open_source}
-\include{chapters/glava_102_conclusion}
-\include{chapters/glava_103_appendix_coq}
-\include{chapters/glava_104_appendix_rust}
-\include{chapters/glava_105_appendix_rtl}
+% Part IV: The Synthesis (Ch. 10-11)
+\part{The Synthesis}
+\include{chapters/flos_10}
+
+% Part V: Sacred Geometry (Ch. 12-20)
+\part{Sacred Geometry}
+\include{chapters/flos_11}
+\include{chapters/flos_12}
+\include{chapters/flos_13}
+\include{chapters/flos_14}
+\include{chapters/flos_15}
+\include{chapters/flos_16}
+\include{chapters/flos_17}
+\include{chapters/flos_18}
+\include{chapters/flos_19}
+
+% Part VI: Physics Foundation (Ch. 21-27)
+\part{Physics Foundation}
+\include{chapters/flos_20}
+\include{chapters/flos_21}
+\include{chapters/flos_22}
+\include{chapters/flos_23}
+\include{chapters/flos_24}
+
+% Part VII: Algebraic Proofs (Ch. 28-30)
+\part{Algebraic Proofs}
+\include{chapters/flos_25}
+\include{chapters/flos_26}
+\include{chapters/flos_27}
+\include{chapters/flos_28}
+\include{chapters/flos_29}
+
+% Part VIII: Imagery \& Genealogy (Ch. 31-33)
+\part{Imagery \& Genealogy}
+\include{chapters/flos_30}
+\include{chapters/flos_31}
+\include{chapters/flos_32}
+\include{chapters/flos_33}
+
+% --- Trinity S³AI strand (Ch.0..Ch.34) materialised from Railway phd-postgres-ssot (ssot.chapters) ---
+\part{Trinity S³AI Strand}
+\include{chapters/flos_34}
+\include{chapters/flos_35}
+\include{chapters/flos_36}
+\include{chapters/flos_37}
+\include{chapters/flos_38}
+\include{chapters/flos_39}
+\include{chapters/flos_40}
+\include{chapters/flos_41}
+\include{chapters/flos_42}
+\include{chapters/flos_43}
+\include{chapters/flos_44}
+\include{chapters/flos_45}
+\include{chapters/flos_46}
+\include{chapters/flos_47}
+\include{chapters/flos_48}
+\include{chapters/flos_49}
+\include{chapters/flos_50}
+\include{chapters/flos_51}
+\include{chapters/flos_52}
+\include{chapters/flos_53}
+\include{chapters/flos_54}
+\include{chapters/flos_55}
+\include{chapters/flos_56}
+\include{chapters/flos_57}
+\include{chapters/flos_58}
+\include{chapters/flos_59}
+\include{chapters/flos_60}
+\include{chapters/flos_61}
+\include{chapters/flos_62}
+\include{chapters/flos_63}
+\include{chapters/flos_64}
+\include{chapters/flos_65}
+\include{chapters/flos_66}
+\include{chapters/flos_67}
+\include{chapters/flos_68}
+\include{chapters/flos_69}  % Ch.35 Trinity GF16 ASIC dePIN Mesh Node — L-DPC3 silicon strand · contains Theorem 35.13 (L-KAT-35, Admitted) and references Clause F-5
+\include{chapters/flos_70_silicon_proofs}  % Ch.36 Silicon-Strand Proof Bridge — 24 Coq theorems certifying bit-exact RTL · refs #109, App.F full catalogue
+\include{chapters/flos_71_chat_invariants}  % Ch.37 Trinity Chat Invariants — 258 L-CHAT theorems (Trinity_Chat.v, 220 Qed, 0 Admitted)
+\include{chapters/flos_72_extended_bounds}  % Ch.38 Extended Bounds / Physics / Gravity Catalogue — t27 mirror, proof-maturation ledger
+
+% Appendices
+\appendix
+\include{appendix/A-catalogue}
+\include{appendix/B-falsification}
+\include{appendix/C-golden-benchmark}
+\include{appendix/D-golden-mirror}
+\include{appendix/E-lexicon}
+\include{appendix/F-coq-citation-map}
+\include{appendix/M-fpga-bitstream}
+\include{appendix/G-data-availability}
+\include{appendix/H-acm-ae-checklist}
+\include{appendix/N-zenodo-doi}
+\include{appendix/I-xdc-pin-map}
+\include{appendix/J-troubleshooting}
+\include{appendix/K-agent-memory}
+\include{appendix/L-pollen-channel}
 
 % Bibliography
-\backmatter
-\bibliographystyle{plain}
-\bibliography{bibliography}
+\printbibliography
 
 \end{document}

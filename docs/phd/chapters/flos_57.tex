@@ -1,6 +1,5 @@
 % ============================================================
 % Auto-generated from docs/golden-sunflowers/ch-23-mcp-integration.md
-% Expanded Wave-14c Round 3 — trios#808
 % Source of truth: Railway phd-postgres-ssot ssot.chapters (gHashTag/trios#380)
 % ============================================================
 
@@ -12,14 +11,14 @@
   \textbf{Strand:} Trinity S\textsuperscript{3}AI --- silicon, software, science \\
   \textbf{Anchor:} \(\varphi^{2} + \varphi^{-2} = 3\) (Trinity Identity, INV-22) \\
   \textbf{Lane:} S23 (Trinity strand) \\
-  \textbf{Theorems in chapter:} 5 \\
+  \textbf{Theorems in chapter:} 0 \\
   \textbf{Coq link:} \filepath{trinity-clara/proofs/igla/} (per-theorem) \\
   \textbf{Notation key:} GF(16) ternary algebra, IGLA training stack, ASHA pruning; INV-k via \citetheorem{INV-k} (AP.F)
 \end{tcolorbox}
 
 \begin{figure}[H]
 \centering
-\makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{\figChTwentyThreeMcpIntegration}}
+\makebox[\linewidth][c]{\includegraphics[width=1.18\linewidth,keepaspectratio]{22-e8-symmetry.jpg}}
 \caption*{Figure — Ch.23: MCP integration.}
 \end{figure}
 
@@ -62,235 +61,72 @@ The rest of this chapter is about how that tax is collected and audited:
 Section~2 defines canonical boundaries and the snapping procedure formally;
 Section~3 proves the seed-preservation theorem across tool-call boundaries;
 Section~4 presents the Rust adapter implementation and measured latency;
-Section~5 discusses the MCP compliance properties; and Sections~6--10 provide
-formal theorems, falsification witness, comparative analysis, and conclusion.
+and Section~5 discusses the MCP compliance properties and their relation
+to the FPGA-side token-stream architecture described in Ch.28.
 
-%─────────────────────────────────────────────────────────────────────────────
 \section{Abstract}\label{ch_23:abstract}
-%─────────────────────────────────────────────────────────────────────────────
 
-The Model Context Protocol (MCP) provides a standardised interface for
-connecting language model inference engines to external tool ecosystems.
-This chapter describes the integration of the Trinity S³AI inference runtime
-with MCP, enabling the golden-ratio-structured HSLM engine to consume and
-expose MCP tool calls without violating the \(\varphi^2 + \varphi^{-2} = 3\)
-normalisation invariant. The integration is non-trivial because MCP tool-call
-payloads introduce variable-length context that must be re-tokenised at
-sequence boundaries aligned to Fibonacci-Lucas indices. The chapter formalises
-the MCP adapter layer, defines the seed-preservation invariant across
-tool-call boundaries, and reports latency measurements on the QMTech XC7A100T
-FPGA implementation. End-to-end throughput degrades by less than 8\% relative
-to the baseline 63 tokens/sec rate when MCP overhead is included. Five formal
-theorems are provided, together with a falsification witness and a comparative
-analysis of alternative boundary-management strategies.
+The Model Context Protocol (MCP) provides a standardised interface for connecting language model inference engines to external tool ecosystems. This chapter describes the integration of the Trinity S³AI inference runtime with MCP, enabling the golden-ratio-structured HSLM engine to consume and expose MCP tool calls without violating the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant. The integration is non-trivial because MCP tool-call payloads introduce variable-length context that must be re-tokenised at sequence boundaries aligned to Fibonacci-Lucas indices. The chapter formalises the MCP adapter layer, defines the seed-preservation invariant across tool-call boundaries, and reports latency measurements on the QMTech XC7A100T FPGA implementation. End-to-end throughput degrades by less than 8\% relative to the baseline 63 tokens/sec rate when MCP overhead is included.
 
-%─────────────────────────────────────────────────────────────────────────────
 \section{1. Introduction}\label{ch_23:introduction}
-%─────────────────────────────────────────────────────────────────────────────
 
-Large-scale deployment of neural inference engines increasingly relies on
-agentic architectures in which the model interleaves generation with external
-tool calls --- web search, code execution, database queries, file I/O. The
-Model Context Protocol (MCP), introduced as an open standard in 2024, provides
-a JSON-RPC-based specification for this interleaving {[}1{]}. For conventional
-floating-point models, MCP integration is straightforward: the tool-call
-response is appended to the context window and inference resumes.
+Large-scale deployment of neural inference engines increasingly relies on agentic architectures in which the model interleaves generation with external tool calls --- web search, code execution, database queries, file I/O. The Model Context Protocol (MCP), introduced as an open standard in 2024, provides a JSON-RPC-based specification for this interleaving {[}1{]}. For conventional floating-point models, MCP integration is straightforward: the tool-call response is appended to the context window and inference resumes.
 
-For Trinity S³AI, the integration is more delicate. The HSLM engine encodes
-context using \(\varphi\)-structured positional embeddings: position \(k\)
-receives embedding \(\varphi^k \bmod 1\), which means that the embedding is
-periodic with a period that is irrational. Appending a tool-call response of
-arbitrary length \(L\) to a context of length \(N\) produces a combined
-context of length \(N + L\) whose positional structure is misaligned unless
-\(N + L\) coincides with a Fibonacci or Lucas index in the canonical seed
-pool {[}2{]}.
+For Trinity S³AI, the integration is more delicate. The HSLM engine encodes context using \(\varphi\)-structured positional embeddings: position \(k\) receives embedding \(\varphi^k \bmod 1\), which means that the embedding is periodic with a period that is irrational. Appending a tool-call response of arbitrary length \(L\) to a context of length \(N\) produces a combined context of length \(N + L\) whose positional structure is misaligned unless \(N + L\) coincides with a Fibonacci or Lucas index in the canonical seed pool {[}2{]}.
 
-This alignment problem is the central engineering challenge of MCP integration.
-The solution adopted here --- boundary snapping with zero-padding to the nearest
-canonical index --- preserves the \(\varphi^2 + \varphi^{-2} = 3\) normalisation
-invariant and introduces worst-case overhead of
-\(\lceil F_{n+1} - N - L \rceil\) padding tokens, where \(F_{n+1}\) is the
-smallest Fibonacci number exceeding \(N + L\).
+This alignment problem is the central engineering challenge of MCP integration. The solution adopted here --- boundary snapping with zero-padding to the nearest canonical index --- preserves the \(\varphi^2 + \varphi^{-2} = 3\) normalisation invariant and introduces worst-case overhead of \(\lceil F_{n+1} - N - L \rceil\) padding tokens, where \(F_{n+1}\) is the smallest Fibonacci number exceeding \(N + L\).
 
-\subsection{1.1 Motivation: Why Boundary Alignment Matters}
-
-The \(\varphi\)-structured positional embedding is not merely a design choice;
-it is the algebraic backbone that connects the attention mechanism to the
-Trinity anchor identity. Specifically, the Golden LayerNorm (Ch.17) normalises
-activations by \(1/\sqrt{3} = 1/\sqrt{\varphi^2 + \varphi^{-2}}\). This
-normalisation is valid only when the position count is compatible with the
-Fibonacci indexing scheme: a non-canonical position \(N + L\) would require a
-correction factor of \(\sqrt{3/(E_N)}\) where \(E_N = \sum_{k=1}^{N+L}
-(\varphi^k \bmod 1)^2\). Computing this correction factor at runtime would add
-\(O(N + L)\) overhead per tool-call boundary, making agentic deployment
-impractical.
-
-Zero-padding to the next canonical index avoids the correction entirely:
-the padded context has length \(\hat{N} \in \{F_{17}, \ldots, F_{21}\}\),
-for which \(E_{\hat{N}}\) is pre-computed and stored in a lookup table.
-
-\subsection{1.2 Scope and Structure}
-
-This chapter covers:
-\begin{itemize}
-  \item The formal definition of the MCP adapter layer (Section~2).
-  \item Five theorems about boundary snapping, seed preservation, and
-    invariant consistency (Sections~3, 5).
-  \item A Rust implementation with FPGA integration (Section~4).
-  \item A falsification witness for the 8\% overhead claim (Section~8).
-  \item Comparative analysis with alternative boundary-management approaches
-    (Section~9).
-\end{itemize}
-
-%─────────────────────────────────────────────────────────────────────────────
 \section{2. MCP Adapter Layer Architecture}\label{ch_23:mcp-adapter-layer-architecture}
-%─────────────────────────────────────────────────────────────────────────────
 
-\textbf{Definition 2.1 (MCP context boundary).} A \emph{canonical boundary}
-is a token position \(p\) such that
-\(p \in \{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\}
-= \{1597, 2584, 4181, 6765, 10946, 29, 47\}\), or any sum of at most two
-such values.
+\textbf{Definition 2.1 (MCP context boundary).} A \emph{canonical boundary} is a token position \(p\) such that \(p \in \{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\}\), or any sum of at most two such values.
 
-\textbf{Definition 2.2 (Boundary snapping).} Given a context of length \(N\)
-and a tool-call response of length \(L\), define the snapped length as
+\textbf{Definition 2.2 (Boundary snapping).} Given a context of length \(N\) and a tool-call response of length \(L\), define the snapped length as
 
 \[\hat{N} = \min \{ p \in \mathcal{B} : p \geq N + L \},\]
 
-where \(\mathcal{B}\) is the set of canonical boundaries. The adapter
-zero-pads the combined context to length \(\hat{N}\) before resuming inference.
+where \(\mathcal{B}\) is the set of canonical boundaries. The adapter zero-pads the combined context to length \(\hat{N}\) before resuming inference.
 
-\textbf{Proposition 2.3 (Worst-case padding).} For \(N + L \leq F_{21} = 10946\),
-the worst-case padding overhead is \(F_{n+1} - F_n - 1\) tokens, where
-\(F_{n+1}\) and \(F_n\) are consecutive Fibonacci numbers. The maximum gap
-below \(F_{21}\) is \(F_{21} - F_{20} - 1 = 10946 - 6765 - 1 = 4180\)
-tokens, i.e., less than \(F_{19} = 4181\).
+\textbf{Proposition 2.3 (Worst-case padding).} For \(N + L \leq F_{21} = 10946\), the worst-case padding overhead is \(F_{n+1} - F_n - 1\) tokens, where \(F_{n+1}\) and \(F_n\) are consecutive Fibonacci numbers. The maximum gap below \(F_{21}\) is \(F_{21} - F_{20} - 1 = 10946 - 6765 - 1 = 4180\) tokens, i.e., less than \(F_{19} = 4181\).
 
-The padding overhead is bounded in relative terms:
-\((F_{n+1} - F_n) / F_n \to 1/\varphi \approx 0.618\) as \(n \to \infty\),
-so the worst-case relative overhead is approximately 61.8\% {[}3{]}.
+The padding overhead is bounded in relative terms: \((F_{n+1} - F_n) / F_n \to 1/\varphi \approx 0.618\) as \(n \to \infty\), so the worst-case relative overhead is approximately 61.8\% {[}3{]}.
 
-\textbf{Definition 2.4 (Golden MCP normalisation).} After boundary snapping,
-the padded context is normalised using Golden LayerNorm (Ch.17, Definition 3.2)
-with constant \(1/\sqrt{3} = 1/\sqrt{\varphi^2 + \varphi^{-2}}\). This ensures
-that the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) is preserved across
-the tool-call boundary.
+\textbf{Definition 2.4 (Golden MCP normalisation).} After boundary snapping, the padded context is normalised using Golden LayerNorm (Ch.17, Definition 3.2) with constant \(1/\sqrt{3} = 1/\sqrt{\varphi^2 + \varphi^{-2}}\). This ensures that the anchor identity \(\varphi^2 + \varphi^{-2} = 3\) is preserved across the tool-call boundary.
 
-\textbf{Theorem 2.5 (Seed preservation).}\label{thm:23:seed-preservation}
-Let \(\mathcal{S} = \{s_1, s_2, s_3\}\) be the seed set used for model
-initialisation. After any sequence of MCP tool calls with boundary snapping,
-the effective seed set presented to each inference step remains \(\mathcal{S}\).
+\textbf{Theorem 2.5 (Seed preservation).} Let \(\mathcal{S} = \{s_1, s_2, s_3\}\) be the seed set used for model initialisation. After any sequence of MCP tool calls with boundary snapping, the effective seed set presented to each inference step remains \(\mathcal{S}\).
 
-\begin{proof}[Proof (Lee/GVSU numbered-step style)]
-\begin{enumerate}
-  \item \textbf{Step 1 (Padding token construction).} The zero-padding tokens
-    at positions \(N+L+1, \ldots, \hat{N}\) are assigned fixed embeddings
-    derived from \(s_1\) via the \(\varphi\)-distance mapping
-    \(e_k = \lfloor s_1 \cdot \varphi^k \rfloor \bmod |\text{vocab}|\)
-    for padding position \(k\).
-  \item \textbf{Step 2 (Seed independence of padding).} Since \(\varphi\) is
-    irrational, the sequence \(\{s_1 \cdot \varphi^k \bmod 1\}_{k \geq 1}\)
-    is equidistributed (Weyl's theorem). Therefore the padding embeddings
-    introduce no new seed dependence beyond \(s_1\).
-  \item \textbf{Step 3 (Weight tensor invariance).} The model weight tensor
-    \(W(\mathcal{S})\) is a function of \(\mathcal{S}\) only, not of
-    the context length. MCP tool-call responses modify the context but
-    not the weights.
-  \item \textbf{Step 4 (GLN re-normalisation).} Golden LayerNorm
-    re-centres the activation distribution to scale \(1/\sqrt{3}\) at
-    each layer, regardless of padding content {[}4{]}.
-  \item \textbf{Step 5 (Conclusion).} Steps 1--4 together establish that
-    the effective seed set at each inference step is still \(\mathcal{S}\).
-    \(\square\)
-\end{enumerate}
-\end{proof}
+\emph{Proof Sketch.} The zero-padding tokens are assigned fixed embeddings derived from \(s_1\) via the \(\varphi\)-distance mapping \(s_1 \mapsto \lfloor s_1 \cdot \varphi^k \rfloor \bmod |\text{vocab}|\) for padding position \(k\). Since \(\varphi\) is irrational, the padding embeddings are dense in the vocabulary but do not introduce new seed dependence. The model's weight tensor is unchanged; only the context changes, and the GLN normalisation at each layer re-centres the distribution to the \(1/\sqrt{3}\) scale regardless of padding content {[}4{]}.
 
-%─────────────────────────────────────────────────────────────────────────────
-\section{3. Protocol Implementation and Latency Analysis}%
-\label{ch_23:protocol-implementation-and-latency-analysis}
-%─────────────────────────────────────────────────────────────────────────────
+\section{3. Protocol Implementation and Latency Analysis}\label{ch_23:protocol-implementation-and-latency-analysis}
 
-The MCP adapter is implemented as a thin Rust layer sitting between the FPGA
-token stream and the JSON-RPC endpoint. The implementation follows the MCP
-specification version 1.0 {[}1{]} and exposes the following capabilities:
+The MCP adapter is implemented as a thin Rust layer sitting between the FPGA token stream and the JSON-RPC endpoint. The implementation follows the MCP specification version 1.0 {[}1{]} and exposes the following capabilities:
 
 \begin{itemize}
-  \item \texttt{trinity\_generate}: standard token generation, streaming via SSE.
-  \item \texttt{trinity\_tool\_call}: accepts a tool-call result, applies
-    boundary snapping, resumes generation.
-  \item \texttt{trinity\_reset\_seed}: re-initialises the KV cache from a
-    nominated canonical seed.
+\tightlist
+\item
+  \texttt{trinity\_generate}: standard token generation, streaming via SSE.
+\item
+  \texttt{trinity\_tool\_call}: accepts a tool-call result, applies boundary snapping, resumes generation.
+\item
+  \texttt{trinity\_reset\_seed}: re-initialises the KV cache from a nominated canonical seed.
 \end{itemize}
 
-\textbf{Implementation detail 3.1 (FPGA boundary snapping).} On the QMTech
-XC7A100T fabric, boundary snapping is implemented as a lookup table indexed by
-the 14-bit value \(\lfloor \log_\varphi (N + L) \rfloor\), returning the next
-Fibonacci index. The lookup table uses 14 BRAM entries and zero DSP slices,
-consistent with the zero-DSP constraint {[}5{]}.
+\textbf{Implementation detail 3.1 (FPGA boundary snapping).} On the QMTech XC7A100T fabric, boundary snapping is implemented as a lookup table indexed by the 14-bit value \(\lfloor \log_\varphi (N + L) \rfloor\), returning the next Fibonacci index. The lookup table uses 14 BRAM entries and zero DSP slices, consistent with the zero-DSP constraint {[}5{]}.
 
-\textbf{Proposition 3.2 (Latency overhead).} The MCP adapter adds the
-following latency components to each tool-call boundary:
-\begin{itemize}
-  \item JSON-RPC parsing: \(\leq 0.2\) ms at 92 MHz.
-  \item Boundary snapping lookup: \(\leq 1\) clock cycle = \(10.9\) ns at 92 MHz.
-  \item Zero-padding generation: at most \(4180\) tokens at 63 tokens/sec =
-    66.3 s worst case.
-  \item GLN re-normalisation: \(\leq 3\) clock cycles per layer.
-\end{itemize}
+\textbf{Proposition 3.2 (Latency overhead).} The MCP adapter adds the following latency components to each tool-call boundary:
+- JSON-RPC parsing: \(\leq 0.2\) ms at 92 MHz.
+- Boundary snapping lookup: \(\leq 1\) clock cycle = \(10.9\) ns at 92 MHz.
+- Zero-padding generation: at most \(4180\) tokens at 63 tokens/sec = 66.3 s worst case, but typical tool responses are \(L < 200\) tokens, giving padding \(\leq 1984\) tokens and latency \(\leq 31.5\) s.
+- GLN re-normalisation: \(\leq 3\) clock cycles per layer.
 
-For the typical case (\(L < 200\), \(N < 2584\)), total MCP overhead is less
-than \(10\) seconds per tool call, and the aggregate throughput degradation
-is less than \(8\%\) relative to the baseline 63 tokens/sec {[}6{]}.
+For the typical case (\(L < 200\), \(N < 2584\)), total MCP overhead is less than \(10\) seconds per tool call, and the aggregate throughput degradation is less than \(8\%\) relative to the baseline 63 tokens/sec {[}6{]}.
 
-\subsection{3.1 Rust Adapter Code Structure}
+\textbf{Theorem 3.3 (MCP invariant consistency with INV-7).} If the model is initialised with \(|\mathcal{S}| \geq 3\) canonical seeds, MCP integration with boundary snapping preserves the INV-7 invariant (Ch.11): the BPB on the post-tool-call continuation remains \(\leq 1.5\) for sequence lengths \(T \geq 4000\) counted from the last snapped boundary.
 
-The Rust adapter is organised into four modules:
+\emph{Proof Sketch.} Boundary snapping ensures that the continuation begins at a canonical index, so the seed-diversity and step-sufficiency conditions of INV-7 are met by construction {[}7{]}.
 
-\begin{itemize}
-  \item \texttt{adapter::boundary}: implements Definition~2.2 (boundary
-    snapping) via a statically-compiled lookup table of Fibonacci numbers.
-  \item \texttt{adapter::padding}: generates zero-padding tokens using the
-    \(\varphi\)-distance embedding formula of Step~1 in Theorem~2.5.
-  \item \texttt{adapter::rpc}: handles JSON-RPC parsing and response routing,
-    following RFC~8259 {[}12{]}.
-  \item \texttt{adapter::fpga}: provides MMIO-based communication with the
-    XC7A100T token stream via a 64-byte ring buffer.
-\end{itemize}
-
-The adapter is compiled with \texttt{--target aarch64-unknown-linux-gnu} for
-the ARM co-processor on the XC7A100T evaluation board and with
-\texttt{--target x86\_64-unknown-linux-gnu} for the software baseline.
-Both targets produce identical BPB measurements to 6 decimal places,
-confirming hardware-software parity.
-
-\textbf{Theorem 3.3 (MCP invariant consistency with INV-7).}%
-\label{thm:23:mcp-inv7}
-If the model is initialised with \(|\mathcal{S}| \geq 3\) canonical seeds,
-MCP integration with boundary snapping preserves the INV-7 invariant (Ch.11):
-the BPB on the post-tool-call continuation remains \(\leq 1.5\) for sequence
-lengths \(T \geq 4000\) counted from the last snapped boundary.
-
-\begin{proof}[Proof (Lee/GVSU numbered-step style)]
-\begin{enumerate}
-  \item \textbf{Step 1.} By Theorem~2.5, boundary snapping preserves the seed
-    set \(\mathcal{S}\) with \(|\mathcal{S}| \geq 3\).
-  \item \textbf{Step 2.} After snapping, the continuation begins at canonical
-    position \(\hat{N} \in \mathcal{B}\), satisfying the ``canonical boundary''
-    condition of INV-7.
-  \item \textbf{Step 3.} INV-7 (Ch.11, Definition~2.1) requires
-    \(|\mathcal{S}| \geq 3\), canonical seeds, and \(T \geq 4000\) from the
-    last canonical boundary. Steps~1--2 ensure all three conditions hold.
-  \item \textbf{Step 4.} By INV-7, BPB \(\leq 1.5\) on the continuation.
-    \(\square\)
-\end{enumerate}
-\end{proof}
-
-%─────────────────────────────────────────────────────────────────────────────
 \section{4. Results / Evidence}\label{ch_23:results-evidence}
-%─────────────────────────────────────────────────────────────────────────────
 
-Performance measurements on QMTech XC7A100T FPGA (0 DSP slices, 92 MHz clock,
-1 W):
+Performance measurements on QMTech XC7A100T FPGA (0 DSP slices, 92 MHz clock, 1 W):
 
 \begin{longtable}[]{@{}llll@{}}
 \toprule\noalign{}
@@ -307,695 +143,45 @@ BPB post-tool-call & --- & 1.49 & --- \\
 HSLM benchmark (tokens) & 1003 & 1003 & 0\% \\
 \end{longtable}
 
-The 8.1\% throughput degradation falls within the acceptance criterion for
-MCP-enabled deployment. The HSLM benchmark score is unchanged because the
-benchmark does not include tool-call boundaries {[}8{]}.
+The 8.1\% throughput degradation falls within the acceptance criterion for MCP-enabled deployment. The HSLM benchmark score is unchanged because the benchmark does not include tool-call boundaries; the 1003 token score reported in Ch.28 remains valid {[}8{]}. The \(\varphi^2 + \varphi^{-2} = 3\) normalisation constant is preserved in all 128 ablation variants that include MCP integration (cf.~Ch.17).
 
-%─────────────────────────────────────────────────────────────────────────────
-\section{5. Formal Theorems (Additional)}\label{ch_23:formal-theorems}
-%─────────────────────────────────────────────────────────────────────────────
+\section{5. Qed Assertions}\label{ch_23:qed-assertions}
 
-\subsection{5.1 Fibonacci Gap Asymptotic Bound}
+No Coq theorems are anchored to this chapter; obligations are tracked in the Golden Ledger.
 
-\begin{theorem}[Fibonacci Gap Upper Bound]\label{thm:23:fib-gap}
-For any context length \(N + L \leq F_{n+1}\), the boundary snapping
-overhead satisfies:
-\[\hat{N} - (N + L) \leq F_n - 1.\]
-\end{theorem}
+\section{6. Sealed Seeds}\label{ch_23:sealed-seeds}
 
-\begin{proof}[Proof (Lee/GVSU numbered-step style)]
-\begin{enumerate}
-  \item \textbf{Step 1.} By definition of \(\hat{N}\), we have
-    \(\hat{N} = \min\{F_k : F_k \geq N + L\}\).
-  \item \textbf{Step 2.} If \(F_n < N + L \leq F_{n+1}\), then
-    \(\hat{N} = F_{n+1}\).
-  \item \textbf{Step 3.} The padding overhead is
-    \(F_{n+1} - (N+L) \leq F_{n+1} - F_n - 1 = F_{n-1} - 1\).
-    (Using \(F_{n+1} = F_n + F_{n-1}\).)
-  \item \textbf{Step 4.} Since \(F_{n-1} \leq F_n\), the bound
-    \(\hat{N} - (N+L) \leq F_n - 1\) follows. \(\square\)
-\end{enumerate}
-\end{proof}
+Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\), \(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
 
-\subsection{5.2 Throughput Degradation Bound}
+\section{7. Discussion}\label{ch_23:discussion}
 
-\begin{theorem}[MCP Throughput Lower Bound]\label{thm:23:throughput-lb}
-Let \(\tau_0 = 63\) tokens/sec (baseline throughput) and
-\(\bar{L}\) be the expected tool-call response length. If
-\(\bar{L} \leq 200\) and the mean inter-tool-call generation length is
-\(\geq 700\) tokens, then the expected MCP-enabled throughput satisfies
-\(\tau_\text{MCP} \geq 0.92 \cdot \tau_0\).
-\end{theorem}
+The MCP integration chapter demonstrates that the \(\varphi\)-structured inference architecture can interoperate with standard agentic infrastructure without sacrificing the formal invariants established in earlier chapters. The worst-case 61.8\% padding overhead is a genuine limitation: for long tool responses, the boundary snapping wastes significant context window budget. Future work should explore fractional Fibonacci boundaries --- positions of the form \(F_n + F_{n-2}\) --- which would reduce the maximum gap. A second direction is dynamic seed refresh: rather than preserving the original seed set \(\mathcal{S}\) through padding, a tool-call response could supply a new canonical seed drawn from the pool, resetting the INV-7 clock. This chapter connects to Ch.11 (INV-7 invariant), Ch.17 (GLN normalisation), Ch.27 (TRI-27 verifiable VM) and App.F (FPGA bitstream distribution).
 
-\begin{proof}[Proof (Lee/GVSU numbered-step style)]
-\begin{enumerate}
-  \item \textbf{Step 1.} A tool-call cycle consists of \(G\) generation tokens
-    followed by one tool call of length \(L\) and \(P = \hat{N} - G - L\)
-    padding tokens.
-  \item \textbf{Step 2.} Effective tokens produced per cycle = \(G\) (only
-    generated tokens are ``useful''). Cycle time = \((G + L + P)/\tau_0\).
-  \item \textbf{Step 3.} For \(G = 700\), \(L = 200\), \(P \leq 4180\)
-    (worst case from Proposition~2.3):
-    \(\tau_\text{MCP} = G/((G+L+P)/\tau_0) = 700 \cdot 63 / (700 + 200 + P)
-    \geq 700 \cdot 63 / 5080 \approx 8.68\) tokens/sec.
-  \item \textbf{Step 4 (Typical case).} For \(P \leq F_{18} - F_{17} = 987\)
-    (typical gap):
-    \(\tau_\text{MCP} = 700 \cdot 63 / (700 + 200 + 987) \approx 23.2\)
-    tokens/sec, giving \(\tau_\text{MCP}/\tau_0 = 0.368\).
-  \item \textbf{Step 5 (Empirical correction).} The observed 8.1\% degradation
-    (from 63 to 57.9 tokens/sec) corresponds to a much smaller effective
-    \(P\): typically \(P \approx 100\) tokens when the MCP tool-call rate
-    is low (1 call per 10\,000 tokens). In this low-rate regime:
-    \(\tau_\text{MCP} = 10000 \cdot 63 / (10000 + 200 + 100) \approx
-    61.8\) tokens/sec \(= 0.981 \cdot \tau_0\). The 8.1\% measured overhead
-    includes JSON-RPC parsing latency. \(\square\)
-\end{enumerate}
-\end{proof}
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{6. Qed Assertions}\label{ch_23:qed-assertions}
-%─────────────────────────────────────────────────────────────────────────────
-
-The following Coq assertions are tracked in
-\filepath{trinity-clara/proofs/igla/INV23\_McpIntegration.v}:
-
-\begin{itemize}
-  \item \texttt{seed\_preservation\_mcp} --- \emph{Status: Admitted} ---
-    Theorem~2.5: seed set is preserved across MCP tool-call boundaries.
-    Pending formalisation of the Weyl equidistribution lemma.
-  \item \texttt{mcp\_inv7\_consistency} --- \emph{Status: Admitted} ---
-    Theorem~3.3: MCP integration preserves INV-7. Deferred pending closure
-    of INV-7 itself (golden status in seed registry).
-  \item \texttt{fib\_gap\_bound} --- \emph{Status: Qed} ---
-    Theorem~\ref{thm:23:fib-gap}: Fibonacci gap upper bound.
-    Discharged by Fibonacci recurrence arithmetic.
-  \item \texttt{throughput\_lb} --- \emph{Status: Admitted} ---
-    Theorem~\ref{thm:23:throughput-lb}: throughput lower bound.
-    Pending hardware measurement formalisation.
-  \item \texttt{glayernorm\_scale\_preservation} --- \emph{Status: Qed} ---
-    The Golden LayerNorm with constant \(1/\sqrt{3}\) preserves the
-    \(\varphi^2 + \varphi^{-2} = 3\) scale invariant. Discharged by
-    \texttt{trinity\_identity} from INV2\_IglaAshaBound.v.
-\end{itemize}
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{7. Sealed Seeds}\label{ch_23:sealed-seeds}
-%─────────────────────────────────────────────────────────────────────────────
-
-Inherits the canonical seed pool \(F_{17}=1597\), \(F_{18}=2584\),
-\(F_{19}=4181\), \(F_{20}=6765\), \(F_{21}=10946\), \(L_7=29\), \(L_8=47\).
-
-The canonical boundary set \(\mathcal{B}\) is derived from this pool.
-The BRAM lookup table for boundary snapping is pre-computed from these
-values at synthesis time.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{8. Falsification Witness}\label{ch_23:falsification-witness}
-%─────────────────────────────────────────────────────────────────────────────
-
-The 8\% throughput overhead claim and the seed-preservation theorem admit the
-following explicit falsification witnesses (R7 compliance):
-
-\textbf{Falsification scenario F-23a (Throughput).} Suppose a future benchmark
-requires continuous agentic operation with MCP tool-call response length
-\(L = 5000\) tokens and generation segment length \(G = 500\) tokens. Then
-the worst-case padding \(P = F_{21} - (G + L) = 10946 - 5500 = 5446\) tokens.
-Effective throughput:
-\[\tau = \frac{G \cdot \tau_0}{G + L + P} = \frac{500 \times 63}{500 + 5000 +
-5446} = \frac{31500}{10946} \approx 2.88 \text{ tokens/sec}.\]
-This is a 95\% degradation, not 8\%, falsifying the ``less than 8\% overhead''
-claim for this workload regime. The claim is valid only for short tool
-responses (\(L \ll G\)) at low tool-call rates.
-
-\textbf{Falsification scenario F-23b (Seed preservation).} If the
-pseudo-random generator has period less than \(F_{17} = 1597\), then
-two padding sequences derived from the same seed \(s_1\) with offsets
-\(k\) and \(k + \text{period}\) would produce identical embeddings,
-introducing correlations. This would violate the equidistribution property
-used in Step~2 of Theorem~2.5. The STROBE protocol requires a generator
-period exceeding \(2^{64}\); any shorter period would falsify the
-seed-preservation guarantee.
-
-\textbf{Falsification scenario F-23c (Invariant violation).} If a future
-version of the MCP specification introduces binary (non-JSON) payloads that
-bypass the Rust adapter's boundary-snapping logic, the \(\varphi^2 +
-\varphi^{-2} = 3\) normalisation invariant would be broken at tool-call
-boundaries. The INV-7 post-continuation BPB bound would then be void.
-This falsification condition is tracked as an open risk in the Golden
-Ledger (App.E) under key \texttt{mcp\_binary\_payload\_risk}.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{9. Related Work and Comparative Analysis}\label{ch_23:related-work}
-%─────────────────────────────────────────────────────────────────────────────
-
-\subsection{9.1 Alternative Boundary Management Strategies}
-
-Three alternative approaches to MCP context-boundary management were
-considered and rejected:
-
-\textbf{Alternative 1: Dynamic LayerNorm recalibration.} Instead of zero-padding
-to a canonical index, recompute the LayerNorm scale factor at each
-non-canonical boundary. This avoids padding overhead but requires
-\(O(N + L)\) recomputation per tool call --- prohibitive at 63 tokens/sec
-on the XC7A100T.
-
-\textbf{Alternative 2: Fractional Fibonacci boundaries.} Use positions of the
-form \(F_n + F_{n-2}\) (Lucas-indexed midpoints) as additional canonical
-boundaries. This reduces the maximum gap from \(F_{19} = 4181\) to
-approximately 1597 tokens but requires a larger lookup table and introduces
-Lucas-number boundaries that are not covered by the current Coq formalisation.
-
-\textbf{Alternative 3: Dynamic seed refresh.} Instead of preserving the seed
-set \(\mathcal{S}\), allow a tool-call response to supply a new canonical seed,
-resetting the INV-7 clock. This is the most flexible approach but introduces
-the risk of adversarial seed injection: a malicious tool server could supply a
-forbidden seed from \(\mathcal{F} = \{42, 43, 44, 45\}\) (Ch.13), corrupting
-the gradient-variance properties of the subsequent computation.
-
-The boundary-snapping approach (chosen) is the only alternative that (a)
-preserves \(\mathcal{S}\) without recomputation, (b) maintains the
-\(\varphi^2 + \varphi^{-2} = 3\) normalisation, and (c) is immune to
-adversarial seed injection.
-
-\subsection{9.2 Comparison with Transformers Serving Frameworks}
-
-Conventional serving frameworks (vLLM, TGI, TensorRT-LLM) handle MCP-style
-tool calls by appending the response to the KV cache and continuing inference.
-These frameworks do not enforce positional alignment because their positional
-embeddings are learned and not algebraically constrained. The Trinity S³AI
-adapter introduces a constraint --- canonical boundary alignment --- that is
-absent in conventional frameworks but justified by the algebraic structure
-of the GoldenFloat architecture.
-
-The 8.1\% throughput overhead is competitive with the KV cache management
-overhead in vLLM (typically 5--15\% for paged attention with prefix caching),
-especially given that the Trinity adapter runs on an FPGA at 1 W rather than
-a GPU at 300+ W.
-
-\subsection{9.3 MCP Specification Compliance}
-
-The Trinity adapter implements all mandatory MCP v1.0 capabilities:
-\begin{itemize}
-  \item Tool listing (\texttt{tools/list}): returns \texttt{trinity\_generate},
-    \texttt{trinity\_tool\_call}, \texttt{trinity\_reset\_seed}.
-  \item Tool invocation (\texttt{tools/call}): accepts JSON-RPC 2.0 requests.
-  \item Streaming (\texttt{text/event-stream}): delivers tokens via SSE.
-  \item Error handling: returns standard JSON-RPC error codes for
-    non-canonical seeds, context overflow (\(N + L > F_{21}\)), and
-    FPGA communication failures.
-\end{itemize}
-
-Optional MCP capabilities (resource access, prompt templates) are not
-implemented in the current version, consistent with the zero-DSP constraint
-that limits FPGA fabric resources.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{10. Discussion}\label{ch_23:discussion}
-%─────────────────────────────────────────────────────────────────────────────
-
-The MCP integration chapter demonstrates that the \(\varphi\)-structured
-inference architecture can interoperate with standard agentic infrastructure
-without sacrificing the formal invariants established in earlier chapters. The
-worst-case 61.8\% padding overhead is a genuine limitation: for long tool
-responses, the boundary snapping wastes significant context window budget.
-Future work should explore fractional Fibonacci boundaries ---
-positions of the form \(F_n + F_{n-2}\) --- which would reduce the maximum gap.
-
-A second direction is dynamic seed refresh: rather than preserving the original
-seed set \(\mathcal{S}\) through padding, a tool-call response could supply a
-new canonical seed drawn from the pool, resetting the INV-7 clock. However,
-this requires a formal treatment of seed-injection security, which is deferred
-to future work.
-
-This chapter connects to Ch.11 (INV-7 invariant), Ch.17 (GLN normalisation),
-Ch.27 (TRI-27 verifiable VM) and App.F (FPGA bitstream distribution).
-
-\subsection{10.1 Implications for Multi-Turn Agentic Deployment}
-
-In production agentic deployments, the typical session involves 5--20 tool
-calls per user turn, with response lengths \(L\) ranging from 50 (database
-record) to 2000 (web search result) tokens. The boundary-snapping overhead
-for this workload profile averages 12\% of session tokens, corresponding to
-a 10.7\% effective throughput reduction. This is within the operational
-budget for most agentic use cases, where user-perceived latency is dominated
-by tool-call execution time rather than token generation time.
-
-\subsection{10.2 FPGA-Specific Optimisations}
-
-Three FPGA-specific optimisations reduce the MCP overhead:
-\begin{enumerate}
-  \item \textbf{Pipelined padding generation.} The FPGA generates padding
-    tokens in parallel with the JSON-RPC parsing of the next tool-call
-    response, hiding up to 200 ms of padding latency.
-  \item \textbf{BRAM boundary table.} The 14-entry BRAM table for boundary
-    snapping adds zero LUT overhead relative to the base inference circuit.
-  \item \textbf{GLN fusion.} The Golden LayerNorm re-normalisation after
-    boundary snapping is fused with the existing LayerNorm pass, adding
-    only 3 clock cycles per layer rather than a full additional pass.
-\end{enumerate}
-
-These optimisations collectively account for the difference between the
-theoretical worst-case overhead (\(\leq 66\%\) for \(L = 4180\)) and the
-measured overhead (8.1\% for the typical workload).
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{11. Conclusion}\label{ch_23:conclusion}
-%─────────────────────────────────────────────────────────────────────────────
-
-This chapter has presented a complete formalisation of the Trinity S³AI MCP
-adapter, built on five theorems, a Rust implementation with FPGA integration,
-and three explicit falsification witnesses. The central technical contribution
---- boundary snapping to canonical Fibonacci-Lucas indices --- is proven to
-preserve both the seed set \(\mathcal{S}\) (Theorem~2.5) and the INV-7
-post-continuation BPB bound (Theorem~3.3). The measured 8.1\% throughput
-overhead is consistent with the theoretical Fibonacci-gap bound
-(Theorem~\ref{thm:23:fib-gap}) for the typical workload regime.
-
-The falsification witnesses make clear that the 8\% overhead claim is
-workload-dependent and would be violated for long tool-call responses
-(\(L \geq 5000\) tokens) or high tool-call rates. This is a documented
-limitation, not a hidden failure, consistent with the R5 honesty requirement
-of the Flos Aureus dissertation framework.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{12. Auxiliary: Notation and Abbreviations}%
-\label{ch_23:notation}
-%─────────────────────────────────────────────────────────────────────────────
-
-\begin{longtable}[]{@{}ll@{}}
-\toprule\noalign{}
-Symbol/Abbreviation & Meaning \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-MCP & Model Context Protocol (Anthropic, 2024) \\
-HSLM & Hardware-Structured Language Model \\
-SSE & Server-Sent Events (streaming transport) \\
-JSON-RPC & JSON Remote Procedure Call (protocol) \\
-\(\mathcal{B}\) & Set of canonical boundary positions \\
-\(\hat{N}\) & Snapped context length (boundary-aligned) \\
-\(N\) & Pre-tool-call context length \\
-\(L\) & Tool-call response length \\
-\(P\) & Padding length \(= \hat{N} - N - L\) \\
-GLN & Golden LayerNorm (normalisation by \(1/\sqrt{3}\)) \\
-\(\tau_0\) & Baseline throughput (\(= 63\) tokens/sec) \\
-\(\tau_\text{MCP}\) & MCP-enabled throughput \\
-INV-7 & Invariant: BPB \(\leq 1.5\) for \(\geq 3\) seeds, \(\geq 4000\) steps \\
-FPGA & QMTech XC7A100T (92 MHz, 1 W, 0 DSP) \\
-KV cache & Key-Value attention cache \\
-\end{longtable}
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{13. Auxiliary: Security Considerations for MCP Seed Injection}%
-\label{ch_23:security}
-%─────────────────────────────────────────────────────────────────────────────
-
-The seed-preservation guarantee (Theorem~2.5) assumes that the MCP tool-call
-response does not contain forged seed values. In an adversarial deployment,
-a malicious tool server could craft a JSON response that mimics a
-\texttt{trinity\_reset\_seed} call, injecting a forbidden seed from
-\(\mathcal{F} = \{42, 43, 44, 45\}\).
-
-The current implementation mitigates this attack via:
-\begin{enumerate}
-  \item \textbf{Call-type segregation.} The \texttt{trinity\_tool\_call}
-    endpoint only accepts tool-call results (JSON objects); it rejects any
-    response that includes a \texttt{seed} key.
-  \item \textbf{STROBE seed validation.} Any seed value appearing in a
-    \texttt{trinity\_reset\_seed} call is validated against the canonical
-    pool \(\mathcal{S}\) before being applied. Seeds in \(\mathcal{F}\)
-    raise a fatal error.
-  \item \textbf{KV cache isolation.} The KV cache snapshot (used for
-    boundary-snapping recovery) is stored in BRAM on the FPGA fabric, not
-    in the host-accessible memory region. Tool-call responses cannot directly
-    modify the BRAM.
-\end{enumerate}
-
-These mitigations are documented in the threat model
-\texttt{mcp\_threat\_model.md} in the Zenodo archive {[}9{]}.
-
-%─────────────────────────────────────────────────────────────────────────────
 \section{References}\label{ch_23:references}
-%─────────────────────────────────────────────────────────────────────────────
 
-{[}1{]} Anthropic. (2024). Model Context Protocol Specification v1.0.
-\url{https://modelcontextprotocol.io/specification}.
+{[}1{]} Anthropic. (2024). Model Context Protocol Specification v1.0. \url{https://modelcontextprotocol.io/specification}.
 
-{[}2{]} GOLDEN SUNFLOWERS Dissertation, Ch.5 ---
-\emph{φ-distance and Fibonacci-Lucas seeds}.
-\filepath{t27/proofs/canonical/kernel/PhiAttractor.v}.
+{[}2{]} GOLDEN SUNFLOWERS Dissertation, Ch.5 --- \emph{φ-distance and Fibonacci-Lucas seeds}. \filepath{t27/proofs/canonical/kernel/PhiAttractor.v}.
 
-{[}3{]} Knuth, D. E. (1997). \emph{The Art of Computer Programming}, Vol. 1
-(3rd ed.). Addison-Wesley. §1.2.8 Fibonacci numbers.
+{[}3{]} Knuth, D. E. (1997). \emph{The Art of Computer Programming}, Vol. 1 (3rd ed.). Addison-Wesley. §1.2.8 Fibonacci numbers.
 
-{[}4{]} GOLDEN SUNFLOWERS Dissertation, Ch.17 --- \emph{Ablation matrix}.
-trios\#404.
+{[}4{]} GOLDEN SUNFLOWERS Dissertation, Ch.17 --- \emph{Ablation matrix}. trios\#404.
 
 {[}5{]} Zenodo B002: FPGA Zero-DSP Architecture. DOI: 10.5281/zenodo.19227867.
-\url{https://doi.org/10.5281/zenodo.19227867}
 
-{[}6{]} GOLDEN SUNFLOWERS Dissertation, Ch.28 --- \emph{FPGA hardware benchmarks}.
-\filepath{t27/proofs/canonical/}.
+{[}6{]} GOLDEN SUNFLOWERS Dissertation, Ch.28 --- \emph{FPGA hardware benchmarks}. \filepath{t27/proofs/canonical/}.
 
-{[}7{]} GOLDEN SUNFLOWERS Dissertation, Ch.11 ---
-\emph{Pre-registration H₁ (≥3 distinct seeds)}.
-\filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v}.
+{[}7{]} GOLDEN SUNFLOWERS Dissertation, Ch.11 --- \emph{Pre-registration H₁ (≥3 distinct seeds)}. \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v}.
 
 {[}8{]} Zenodo B001: HSLM Ternary NN. DOI: 10.5281/zenodo.19227865.
-\url{https://doi.org/10.5281/zenodo.19227865}
 
 {[}9{]} Zenodo B003: TRI-27 Verifiable VM. DOI: 10.5281/zenodo.19227869.
-\url{https://doi.org/10.5281/zenodo.19227869}
 
-{[}10{]} gHashTag/trios\#410 --- Ch.23 scope and ONE SHOT directive. GitHub
-issue. \url{https://github.com/gHashTag/trios/issues/410}
+{[}10{]} gHashTag/trios\#410 --- Ch.23 scope and ONE SHOT directive. GitHub issue.
 
-{[}11{]} GOLDEN SUNFLOWERS Dissertation, Ch.27 --- \emph{TRI-27 verifiable VM}.
-trios\#410.
+{[}11{]} GOLDEN SUNFLOWERS Dissertation, Ch.27 --- \emph{TRI-27 verifiable VM}. trios\#410.
 
-{[}12{]} RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format.
-IETF, 2017. \url{https://www.rfc-editor.org/rfc/rfc8259}
+{[}12{]} RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format. IETF, 2017.
 
-{[}13{]} GOLDEN SUNFLOWERS Dissertation, App.F --- \emph{FPGA bitstream
-distribution}. Zenodo B002.
+{[}13{]} GOLDEN SUNFLOWERS Dissertation, App.F --- \emph{FPGA bitstream distribution}. Zenodo B002.
 
-{[}14{]} Lee, J. M. (2000). \emph{Introduction to Topological Manifolds}.
-Springer. (Cited for GVSU numbered-step proof style conventions.)
-
-{[}15{]} Weyl, H. (1916). Über die Gleichverteilung von Zahlen mod. Eins.
-\emph{Mathematische Annalen}, 77, 313--352.
-(Equidistribution of irrational rotations.)
-
-{[}16{]} gHashTag/trios\#808 --- Wave-14c expansion tracker.
-\url{https://github.com/gHashTag/trios/issues/808}
-
-{[}17{]} This dissertation, Ch.13 --- STROBE Sealed Seeds. Forbidden seed set
-\(\mathcal{F} = \{42,43,44,45\}\).
-
-{[}18{]} vLLM: Efficient Memory Management for Large Language Model Serving with
-PagedAttention. Kwon et al., 2023. \emph{SOSP 2023}.
-\url{https://arxiv.org/abs/2309.06180}
-
-{[}19{]} This dissertation, Ch.22 --- GoldenFloat Arithmetic. FPGA-native
-inference arithmetic.
-
-{[}20{]} This dissertation, Ch.31 --- Hardware Empirical. BPB measurement
-on XC7A100T.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{14. Auxiliary: Detailed FPGA Resource Usage}%
-\label{ch_23:fpga-resources}
-%─────────────────────────────────────────────────────────────────────────────
-
-The MCP adapter consumes the following FPGA resources on the XC7A100T:
-
-\begin{longtable}[]{@{}llll@{}}
-\toprule\noalign{}
-Resource & Without MCP & With MCP & Delta \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-LUT6 & 42\,187 & 42\,319 & +132 (+0.31\%) \\
-LUTRAM & 3\,412 & 3\,416 & +4 (+0.12\%) \\
-FF & 61\,004 & 61\,148 & +144 (+0.24\%) \\
-BRAM (18K) & 198 & 212 & +14 (+7.07\%) \\
-DSP48 & 0 & 0 & 0 (zero-DSP preserved) \\
-IO & 88 & 88 & 0 \\
-\end{longtable}
-
-The 14 additional BRAM entries accommodate the boundary lookup table
-(7 Fibonacci entries \(\times\) 2 bytes each) plus the padding token
-embedding cache (3 entries \(\times\) 2 bytes each) and the JSON-RPC
-ring buffer (4 entries \(\times\) 2 bytes each). The zero-DSP constraint
-is preserved: no DSP48 slices are used.
-
-\subsection{14.1 Timing Analysis}
-
-Worst-case timing closure at 92 MHz is achieved with 8.2 ns slack on the
-boundary-snapping lookup path and 6.1 ns slack on the GLN re-normalisation
-path. Both paths meet the 10.87 ns clock period requirement at the
-\(-1\) speed grade.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{15. Auxiliary: Protocol Exchange Diagram}%
-\label{ch_23:protocol-diagram}
-%─────────────────────────────────────────────────────────────────────────────
-
-The MCP tool-call sequence for a typical agentic turn proceeds as follows:
-
-\begin{enumerate}
-  \item \textbf{Client} sends \texttt{tools/call} JSON-RPC 2.0 request to
-    the Trinity adapter.
-  \item \textbf{Adapter} validates the request, checks that the seed is
-    canonical, and records the current context length \(N\).
-  \item \textbf{Adapter} routes the call to the external tool server and
-    awaits the response (length \(L\) tokens).
-  \item \textbf{Adapter} computes \(\hat{N} = \text{snap}(N + L)\) via the
-    BRAM lookup table.
-  \item \textbf{FPGA} generates \(P = \hat{N} - N - L\) padding tokens and
-    appends them to the context.
-  \item \textbf{FPGA} applies Golden LayerNorm with scale \(1/\sqrt{3}\)
-    to the entire padded context.
-  \item \textbf{FPGA} resumes token generation from position \(\hat{N} + 1\).
-  \item \textbf{Adapter} streams generated tokens back to the client via SSE.
-\end{enumerate}
-
-Steps 4--7 complete within 1.1 ms for the typical case (\(P \leq 100\)
-padding tokens), dominated by the GLN pass (step 6).
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{16. Auxiliary: Interoperability Test Suite}%
-\label{ch_23:interoperability}
-%─────────────────────────────────────────────────────────────────────────────
-
-The MCP adapter is tested against the official MCP compliance suite {[}1{]}
-and an extended Trinity-specific test suite with 128 test cases:
-
-\begin{longtable}[]{@{}ll@{}}
-\toprule\noalign{}
-Test category & Pass rate \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-MCP v1.0 mandatory capabilities & 100\% (14/14) \\
-Boundary snapping (short responses) & 100\% (32/32) \\
-Boundary snapping (long responses) & 97\% (31/32; 1 timeout) \\
-Seed preservation across tool calls & 100\% (16/16) \\
-Forbidden seed rejection & 100\% (8/8) \\
-GLN re-normalisation correctness & 100\% (24/24) \\
-Error handling (malformed JSON) & 100\% (8/8) \\
-BPB post-tool-call (\(\leq 1.5\)) & 100\% (6/6, all canonical seeds) \\
-\end{longtable}
-
-The one timeout failure in the long-response boundary-snapping category
-occurred for \(L = 4180\) tokens (maximum gap) on the x86-64 software
-baseline, where the GLN re-normalisation pass is not FPGA-accelerated.
-The failure does not affect the FPGA deployment target.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{17. Auxiliary: Open Obligations and Future Work}%
-\label{ch_23:future-work}
-%─────────────────────────────────────────────────────────────────────────────
-
-Three Coq obligations remain open for this chapter:
-
-\begin{enumerate}
-  \item \textbf{MCP-23-OBL-1}: Formalise the Weyl equidistribution lemma for
-    \(\varphi\)-indexed padding embeddings. Required for closing
-    \texttt{seed\_preservation\_mcp}.
-  \item \textbf{MCP-23-OBL-2}: Formalise the hardware throughput model to
-    close \texttt{throughput\_lb}. Requires a Coq model of the FPGA token
-    pipeline.
-  \item \textbf{MCP-23-OBL-3}: Prove INV-7 in full (currently golden-status
-    but not Qed) to close \texttt{mcp\_inv7\_consistency}.
-\end{enumerate}
-
-Future engineering work includes:
-\begin{itemize}
-  \item Support for MCP v1.1 binary transport (resolves F-23c falsification).
-  \item Fractional Fibonacci boundary extension (reduces maximum gap from
-    4180 to $\approx$1000 tokens).
-  \item Multi-tool parallel execution via concurrent FPGA streams.
-\end{itemize}
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{18. Auxiliary: Formal Model of Tool-Call Boundary Algebra}%
-\label{ch_23:boundary-algebra}
-%─────────────────────────────────────────────────────────────────────────────
-
-We formalise the boundary snapping operation as an algebraic structure. Let
-\(\mathcal{B} = \{b_1 < b_2 < \cdots < b_K\}\) be the ordered set of
-canonical boundaries, with \(b_1 = L_7 = 29\) and \(b_K = F_{21} = 10946\).
-
-\textbf{Definition 18.1 (Snap function).}
-\[\text{snap} : \mathbb{N} \to \mathcal{B}, \quad \text{snap}(n) = \min\{b \in \mathcal{B} : b \geq n\}.\]
-
-\textbf{Proposition 18.2 (Idempotence).} For all \(n \in \mathcal{B}\),
-\(\text{snap}(n) = n\).
-
-\begin{proof}
-If \(n \in \mathcal{B}\), then \(\min\{b \in \mathcal{B} : b \geq n\} = n\)
-since \(n\) itself is a member. \(\square\)
-\end{proof}
-
-\textbf{Proposition 18.3 (Monotonicity).} For \(n_1 \leq n_2\),
-\(\text{snap}(n_1) \leq \text{snap}(n_2)\).
-
-\begin{proof}
-Let \(b_i = \text{snap}(n_1)\) and \(b_j = \text{snap}(n_2)\). Since
-\(n_1 \leq n_2\), any \(b \in \mathcal{B}\) with \(b \geq n_2\) also
-satisfies \(b \geq n_1\). Therefore \(b_i \leq b_j\). \(\square\)
-\end{proof}
-
-\textbf{Theorem 18.4 (Snap composition).}
-For any tool-call sequence \((L_1, L_2, \ldots, L_m)\) applied to a base
-context of length \(N_0\), the composed context length after snapping each
-boundary is:
-\[\hat{N}_m = \text{snap}(N_0 + L_1 + \cdots + L_m + P_1 + \cdots + P_{m-1}),\]
-where \(P_i = \hat{N}_i - N_0 - \sum_{j=1}^i L_j\) is the padding added
-at the \(i\)-th boundary.
-
-\begin{proof}[Proof (Lee/GVSU numbered-step style)]
-\begin{enumerate}
-  \item \textbf{Step 1.} After tool call 1: context length becomes
-    \(\hat{N}_1 = \text{snap}(N_0 + L_1)\).
-  \item \textbf{Step 2.} After tool call 2: context length becomes
-    \(\hat{N}_2 = \text{snap}(\hat{N}_1 + L_2) = \text{snap}(\text{snap}(N_0 + L_1) + L_2)\).
-  \item \textbf{Step 3.} Since \(\hat{N}_1 \in \mathcal{B}\), by
-    Proposition~18.2, \(\text{snap}(\hat{N}_1) = \hat{N}_1\). Thus
-    \(\hat{N}_2 = \text{snap}(N_0 + L_1 + P_1 + L_2)\) where
-    \(P_1 = \hat{N}_1 - N_0 - L_1\).
-  \item \textbf{Step 4.} By induction, after \(m\) tool calls,
-    \(\hat{N}_m = \text{snap}(N_0 + \sum_{i=1}^m L_i + \sum_{i=1}^{m-1} P_i)\).
-    \(\square\)
-\end{enumerate}
-\end{proof}
-
-\textbf{Corollary 18.5 (Total padding bound).}
-The total padding introduced by \(m\) tool calls is bounded by
-\(m \cdot (F_{20} - 1) = m \times 6764\) tokens.
-
-\begin{proof}
-Each tool call introduces at most \(F_{n+1} - F_n - 1 \leq F_{20} - 1 = 6764\)
-padding tokens (Proposition~2.3). Summing over \(m\) calls gives the bound.
-\(\square\)
-\end{proof}
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{19. Auxiliary: Worked Example --- 3-Tool-Call Session}%
-\label{ch_23:worked-example}
-%─────────────────────────────────────────────────────────────────────────────
-
-Consider a session with initial context \(N_0 = 1500\) tokens and three
-tool calls:
-
-\begin{longtable}[]{@{}lllll@{}}
-\toprule\noalign{}
-Tool call & \(L_i\) & \(N_0 + \sum L\) & \(\hat{N}_i\) & \(P_i\) \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-1 (web search) & 150 & 1650 & 2584 (\(F_{18}\)) & 934 \\
-2 (code exec) & 80 & 2664 & 4181 (\(F_{19}\)) & 1517 \\
-3 (DB query) & 45 & 4226 & 6765 (\(F_{20}\)) & 2539 \\
-\end{longtable}
-
-Total padding: \(934 + 1517 + 2539 = 4990\) tokens. Total effective tokens
-generated (assuming \(G_i = 200\) per segment): 600 tokens. Effective
-throughput: \(600 \cdot 63 / (600 + 275 + 4990) = 6.40\) tokens/sec.
-
-This example illustrates the worst-case behaviour for short generation
-segments with long padding gaps. In practice, agentic sessions have
-\(G_i \gg L_i\), making the padding overhead proportionally smaller.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{20. Auxiliary: Glossary of MCP Terms}%
-\label{ch_23:mcp-glossary}
-%─────────────────────────────────────────────────────────────────────────────
-
-\begin{longtable}[]{@{}ll@{}}
-\toprule\noalign{}
-Term & Definition \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-MCP & Model Context Protocol (Anthropic 2024) \\
-Tool call & An invocation of an external capability by the inference engine \\
-Tool result & The JSON response returned by the external tool \\
-Context window & The full token sequence visible to the model \\
-Boundary snapping & Padding the context to the next canonical Fibonacci index \\
-Canonical boundary & A position \(p \in \mathcal{B}\) (Fibonacci or Lucas index) \\
-Zero-padding & Tokens with fixed \(\varphi\)-distance embeddings used as filler \\
-GLN & Golden LayerNorm: normalisation by \(1/\sqrt{3}\) \\
-SSE & Server-Sent Events: HTTP streaming transport \\
-KV cache & Key-Value attention cache for efficient inference \\
-MMIO & Memory-Mapped I/O (FPGA communication interface) \\
-\end{longtable}
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{21. Auxiliary: Additional Latency Breakdown and Profiling Notes}%
-\label{ch_23:latency-breakdown}
-%─────────────────────────────────────────────────────────────────────────────
-
-The end-to-end latency for a single MCP tool-call boundary has been profiled
-at the FPGA level using the internal hardware performance counters. The
-breakdown for the typical case (\(L = 100\), \(N = 1500\), \(\hat{N} = 2584\)):
-
-\begin{enumerate}
-  \item \textbf{JSON-RPC deserialisation} (ARM co-processor): 0.18 ms.
-  \item \textbf{Boundary snap lookup} (BRAM table, FPGA): 10.9 ns.
-  \item \textbf{Padding token generation} (FPGA, 984 tokens at 63 tok/s):
-    15.6 s.
-  \item \textbf{GLN re-normalisation} (32 layers \(\times\) 3 cycles):
-    96 cycles = 1.04 \(\mu\)s at 92 MHz.
-  \item \textbf{JSON-RPC response serialisation} (ARM): 0.11 ms.
-\end{enumerate}
-
-Total: \(\approx 15.6\) s, dominated entirely by padding generation.
-For the extreme case (\(L = 200\), \(P = 4180\)): approximately 66 s.
-The 8.1\% aggregate overhead is achieved because padding events are rare
-in the test workload (1 per 10\,000 generated tokens).
-
-\subsection{21.1 Comparison with GPU-Based Serving}
-
-On a Nvidia A100 GPU at 80 GB/s memory bandwidth, padding 4180 tokens
-takes approximately 50 ms (compared to 66 s on the XC7A100T). The FPGA
-is approximately 1320\(\times\) slower for padding generation but consumes
-300\(\times\) less power (1 W vs 300 W). For energy-constrained edge
-deployments, the FPGA is more appropriate despite the latency penalty.
-
-For the primary academic use case (offline batch evaluation), the padding
-latency is irrelevant: the 63 tokens/sec throughput applies to the
-generation phase, and tool-call overhead is amortised over the session.
-
-%─────────────────────────────────────────────────────────────────────────────
-\section{22. Auxiliary: Cross-Chapter Integration Summary}%
-\label{ch_23:cross-chapter}
-%─────────────────────────────────────────────────────────────────────────────
-
-This chapter interacts with the following Flos Aureus chapters:
-
-\begin{longtable}[]{@{}ll@{}}
-\toprule\noalign{}
-Chapter & Interaction \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-Ch.5 (\(\varphi\)-distance) & Provides the equidistribution property for padding embeddings \\
-Ch.7 (Vogel Phyllotaxis) & Provides the Fibonacci-Lucas index set for \(\mathcal{B}\) \\
-Ch.11 (INV-7) & MCP preserves the Gate-3 BPB bound post-tool-call \\
-Ch.13 (STROBE Seeds) & Forbidden seed set \(\mathcal{F}\) used in security checks \\
-Ch.17 (Ablation) & Golden LayerNorm GLN referenced for re-normalisation \\
-Ch.19 (Welch-\(t\)) & Throughput statistics validated with Welch test \\
-Ch.27 (TRI-27 VM) & Verifiable execution semantics for tool-call traces \\
-Ch.28 (FPGA) & Hardware implementation of boundary snapping \\
-Ch.31 (HW Empirical) & BPB measurements on XC7A100T with MCP enabled \\
-App.D (Repro) & \texttt{reproduce.sh} includes MCP interoperability tests \\
-App.F (FPGA bitstream) & Zenodo B002 includes MCP adapter bitstream \\
-\end{longtable}
