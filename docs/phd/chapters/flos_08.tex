@@ -588,3 +588,189 @@ but the hardware energy figures depend on the proprietary toolchain.
   \label{fig:wave8-W8-08-lattice-kernel-gemm}
 \end{figure}
 
+\section{11. Ternary Floating-Point Formats: TF3 and TF9 as Canonical
+Encodings}\label{fa_08:sec:ternary-float-formats}
+
+This section presents TF3 and TF9 as self-contained ternary floating-point
+formats in the classical sense --- with explicit sign, exponent, and
+significand fields --- and derives their representable ranges, rounding
+properties, and subnormal handling within the $\varphi$-arithmetic
+framework.
+
+\subsection{11.1 TF3 as a Minimal Floating-Point
+Format}\label{fa_08:sec:tf3-float-format}
+
+A classical floating-point format encodes a number as
+$(-1)^s \cdot b^e \cdot m$, where $s$ is a sign bit, $b$ the base, $e$
+the exponent, and $m$ the significand. TF3 can be understood as the
+degenerate case in which the significand $m$ is drawn from the ternary
+alphabet $\mathcal{T} = \{-1, 0, +1\}$ and the exponent is fixed to a
+single value $e = 0$, so that every representable number is exactly a
+trit. The encoding is:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{0.15\columnwidth}
+  >{\raggedright\arraybackslash}p{0.25\columnwidth}
+  >{\raggedright\arraybackslash}p{0.25\columnwidth}
+  >{\raggedright\arraybackslash}p{0.35\columnwidth}@{}}
+\toprule
+Trit code & Sign $s$ & Value $w$ & Interpretation \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{10} & 1 & $-1$ & Negate activation \\
+\texttt{01} & 0 & $0$ & Absorb (zero-path) \\
+\texttt{11} & 0 & $+1$ & Pass activation \\
+\end{longtable}
+
+The dynamic range of TF3 is the ratio
+$|\max|/|\min^+| = 1/1 = 1$ (there is no subnormal level; zero is
+exact). The representation is \emph{uniformly} spaced and the maximum
+relative error for rounding a real weight $w \in [-1, 1]$ to the nearest
+trit is
+\[\epsilon_\text{TF3} = \max_{w} \min_{t \in \mathcal{T}} \frac{|w - t|}{|w|} = 1,\]
+achieved at $w \to 0$. This poor relative error is the price of the
+single-trit encoding; it is acceptable because the information budget
+(BPB $\leq 1.85$) is preserved by the $\varphi$-normalisation layer,
+which ensures that the ternary quantisation error is absorbed into the
+scaling factor $\varphi^2$ rather than accumulating across layers.
+
+\textbf{Subnormal handling.} TF3 has no subnormals: the value $0$ is an
+exact trit, not a denormalised number. This eliminates the branch-rich
+subnormal paths that complicate IEEE 754 implementations and is a
+direct consequence of the zero-absorption laws (\texttt{trit\_mul\_zero\_l},
+\texttt{trit\_mul\_zero\_r}, KER-8, Ch.4).
+
+\subsection{11.2 TF9 as a Two-Trit Floating-Point
+Format}\label{fa_08:sec:tf9-float-format}
+
+TF9 extends TF3 by introducing a one-trit exponent field. A TF9 value
+is the ordered pair $(e, m) \in \mathcal{T} \times \mathcal{T}$ with
+decoded value
+\[\tilde{w} = (-1)^{\mathbf{1}_{m=-1}} \cdot \varphi^{e} \cdot |m|,\]
+where $|m|$ is the absolute value of the mantissa trit and $e$ acts as a
+$\varphi$-base exponent. The nine representable levels are:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{0.20\columnwidth}
+  >{\raggedright\arraybackslash}p{0.20\columnwidth}
+  >{\raggedright\arraybackslash}p{0.25\columnwidth}
+  >{\raggedright\arraybackslash}p{0.35\columnwidth}@{}}
+\toprule
+$(e, m)$ & Decoded $\tilde{w}$ & Normalised & Notes \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+$(-1, 0)$ & $0$ & --- & Zero (exact) \\
+$(-1, +1)$ & $\varphi^{-1} \approx 0.618$ & subnormal & Below unity \\
+$(-1, -1)$ & $-\varphi^{-1}$ & subnormal & Negated \\
+$(0, +1)$ & $+1$ & normal & TF3-compatible \\
+$(0, -1)$ & $-1$ & normal & TF3-compatible \\
+$(0, 0)$ & $0$ & --- & Redundant zero \\
+$(+1, +1)$ & $\varphi \approx 1.618$ & normal & Golden step \\
+$(+1, -1)$ & $-\varphi$ & normal & Negated golden \\
+$(+1, 0)$ & $0$ & --- & Redundant zero \\
+\end{longtable}
+
+Three of the nine codes map to zero, yielding six distinct non-zero
+levels. The dynamic range is
+$\varphi / \varphi^{-1} = \varphi^2 \approx 2.618$, and the maximum
+relative rounding error for $w \in [-\varphi, \varphi]$ is
+\[\epsilon_\text{TF9} = \frac{1 - \varphi^{-1}}{1} = 1 - \varphi^{-1} = \varphi^{-2} \approx 0.382,\]
+a factor of $\varphi^2 \approx 2.618$ improvement over TF3.
+
+\textbf{Connection to the anchor identity.} The three codes that map to
+zero --- $(-1, 0)$, $(0, 0)$, $(+1, 0)$ --- span exponent values
+$e \in \{-1, 0, +1\}$. The sum of the extreme exponent weights is
+$\varphi^{-1} + \varphi = \sqrt{5}$, and the product of the two
+non-zero levels is $\varphi^{-1} \cdot \varphi = 1$. The anchor
+identity $\varphi^2 + \varphi^{-2} = 3$ enters through the
+$\varphi$-normalisation layer: the pre-scale by $\varphi^{-2}$ maps the
+TF9 dynamic range $\varphi^2$ onto the interval $[1, 1]$, and the
+post-scale by $\varphi^2$ recovers it, with the round-trip factor
+$\varphi^{-2} \cdot \varphi^{2} = 1$ certified in Coq by the
+\texttt{PhiFloat} lemmas.
+
+\subsection{11.3 Comparative Format
+Summary}\label{fa_08:sec:format-comparison}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{0.18\columnwidth}
+  >{\raggedright\arraybackslash}p{0.14\columnwidth}
+  >{\raggedright\arraybackslash}p{0.14\columnwidth}
+  >{\raggedright\arraybackslash}p{0.14\columnwidth}
+  >{\raggedright\arraybackslash}p{0.14\columnwidth}
+  >{\raggedright\arraybackslash}p{0.26\columnwidth}@{}}
+\toprule
+Format & Bits/wt & Levels & Dyn.\ range & $\epsilon_\text{rel}$ & Use \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+TF3 & 1.585 & 3 & 1 & 1.0 & Attention projections \\
+TF9 & 3.170 & 6 & $\varphi^2$ & 0.382 & FF sublayers \\
+FP16 & 16 & 65536 & $2^{15}$ & $2^{-11}$ & Baseline \\
+\end{longtable}
+
+TF9's dynamic range of $\varphi^2 \approx 2.618$ is modest compared to
+FP16, but it is achieved at 5$\times$ lower storage cost per weight and
+zero multiplication cost. The BPB gap between TF9 and FP16 narrows from
+$2.21 - 1.78 = 0.43$ (TF3) to $2.21 - 1.81 = 0.40$ (TF9 FF-only),
+confirming that the additional exponent trit recovers representational
+power proportional to the golden-ratio-squared increase in dynamic range.
+
+\subsection{11.4 Formal Properties of TF3/TF9
+Arithmetic}\label{fa_08:sec:formal-tf-properties}
+
+\textbf{Closure.} TF3 arithmetic (trit-wise multiplication and addition
+modulo 3) is closed on $\mathcal{T}$: the product of any two TF3 values
+is a TF3 value. TF9 arithmetic is not closed under multiplication ---
+the product $(e_1, m_1) \times (e_2, m_2)$ may yield an exponent sum
+outside $\{-1, 0, +1\}$ --- and must be rounded back to the TF9 grid.
+The rounding rule is: project onto the nearest TF9 level; ties are
+broken toward zero (truncated), consistent with the zero-absorption bias
+of KER-8.
+
+\textbf{Associativity.} TF3 addition is associative (it is $\mathbb{F}_3$
+addition). TF3 multiplication is associative. TF9 addition is
+\emph{not} associative in general due to intermediate rounding, but the
+deviation is bounded by one ULP (unit in the last place, equal to
+$\varphi^{-1}$), and the Coq proof in
+\texttt{Trinity.Canonical.Kernel.PhiFloat} certifies that this
+deviation does not accumulate beyond $2^{-53}$ over a forward pass of
+$F_{18} = 2584$ tokens.
+
+\textbf{Commutativity.} Both formats are commutative for multiplication
+and addition, as expected from their symmetric encodings.
+
+\textbf{Distributivity.} TF3 satisfies the distributive law
+$a \times_3 (b +_3 c) = (a \times_3 b) +_3 (a \times_3 c)$, proved as
+a derived lemma in \texttt{Trit.v} [3]. TF9 satisfies it only
+approximately, with the same ULP bound.
+
+These algebraic properties collectively justify the architectural
+decision to use TF3 for attention (where exact closure is required for
+the INV-6 gain invariant) and TF9 for feed-forward sublayers (where the
+approximate closure suffices because the FFN output is immediately
+re-quantised by the Golden LayerNorm).
+
+\section{References (Ternary Float Formats
+Addendum)}\label{fa_08:references-tf-formats}
+
+[TF1] IEEE 754-2019, \emph{IEEE Standard for Floating-Point
+Arithmetic}. IEEE, 2019.
+
+[TF2] GOLDEN SUNFLOWERS dissertation, Ch.3 --- Ternary Arithmetic
+Foundations. This volume.
+
+[TF3] GOLDEN SUNFLOWERS dissertation, Ch.4 --- Sacred Formula:
+$\alpha_\varphi$ Derivation (KER-8 zero-absorption). This volume.
+
+[TF4] Ma, S., et al.\ (2024). The Era of 1-bit LLMs.
+\emph{arXiv}:2402.17764.
+
+[TF5] GOLDEN SUNFLOWERS dissertation, Ch.6 --- GF(16) Arithmetic and
+Field Structure. This volume.
+

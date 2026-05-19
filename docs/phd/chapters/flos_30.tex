@@ -400,3 +400,173 @@ Biosciences}, 44(3--4), 179--189.
   \label{fig:wave8-W8-30-imagery-vsa-ar}
 \end{figure}
 
+\section{8. The Three-Strand Trinity SAI Architecture}
+\label{fa_30:three-strand-architecture}
+
+The Trinity SAI (Structured Artificial Intelligence) architecture is
+organised as three interlocking strands, each occupying a distinct
+abstraction layer and a distinct radius within the algebraic
+Metatron's Cube of Ch.13. This section synthesises the three strands
+as a unified system and explains how the VSA+AR layer of the present
+chapter completes the third strand.
+
+\subsection{8.1 Strand A --- GF16 Algebraic Substrate}
+\label{fa_30:strand-a}
+
+The first strand is the GoldenFloat GF16 arithmetic substrate
+(Ch.6, Ch.9). It provides a $16$-bit floating-point format with
+$\phi$-structured exponent spacing: the three exponent bands
+(sub-unity, unity, super-unity) are partitioned by the anchor
+identity
+\[
+  \varphi^2 + \varphi^{-2} = 3,
+\]
+which fixes the number of bands at three and the relative widths at
+powers of $\varphi$. The GF16 substrate occupies the innermost
+concentric cube $\mathcal{C}_{-6}$ of Ch.13 at radius
+$\phi^{-6} \approx 0.0557$, corresponding to the algebraic floor
+below which no representable GF16 value can fall (INV-3, Ch.6).
+
+The substrate's key invariant is the safe-domain property: every
+GF16 arithmetic operation that remains within the three-band
+partition is guaranteed to produce a result within one ULP of the
+mathematical value, with zero overflow events over the full
+$1003$-token HSLM benchmark (Table~4.1, row ``GF16 MAC overflow
+events: 0''). This guarantee is proven in
+\filepath{t27/proofs/canonical/igla/INV3\_Gf16Precision.v} and
+witnessed by the silicon anchor byte \texttt{0x47C0} on the QMTech
+XC7A100T FPGA (App.F.3).
+
+The GF16 substrate is not a neural-network layer; it is the
+\emph{arithmetic foundation} on which both subsequent strands are
+built. All numerical computation in the Trinity SAI system, from
+neural-network inference to VSA binding, is performed in GF16
+without any fallback to IEEE 754 binary32.
+
+\subsection{8.2 Strand B --- NCA Temporal Core}
+\label{fa_30:strand-b}
+
+The second strand is the Neural Cellular Automata (NCA) temporal
+core, realised as the IGLA RACE runtime and its period-locked
+scheduler (Ch.24). The NCA core occupies the outermost concentric
+cube $\mathcal{C}_{0}$ at radius $\phi^{0} = 1$, the unit circle.
+Its dynamics are governed by the period-locked monitor, which
+schedules agent execution in slots of period $L_7 = 29$ (micro) and
+$L_8 = 47$ (macro), both Lucas numbers.
+
+The NCA core's update rule is a discrete-time dynamical system on
+the agent state vector. At each macro-tick $t$, the scheduler
+selects one of $M \leq L_8 = 47$ agents for execution, with
+selection probability proportional to the agent's $\phi$-weight
+$w_i(t) \in [\varphi^{-2}, \varphi^{2}]$. The weight update law
+(Ch.24, Eq.~3.7) is
+\[
+  w_i(t+1) = w_i(t) + \eta_{\mathrm{lr}} \cdot \delta_i(t) \cdot
+    \varphi^{-\Delta t_i},
+\]
+where $\delta_i(t)$ is the agent's error signal and $\Delta t_i$ is
+the number of ticks since the agent was last active. The
+$\varphi$-discounting ensures that agents that have been inactive for
+longer receive a proportionally larger weight correction, biasing the
+scheduler toward neglected agents.
+
+The NCA core is the only strand that modifies system state at
+runtime. The GF16 substrate is static (pre-synthesised arithmetic);
+the VSA+AR head is read-mostly (hypervectors are stored and
+retrieved, not trained). The NCA core is therefore the locus of
+temporal adaptation in the system.
+
+\subsection{8.3 Strand C --- VSA-AR Semantic Head}
+\label{fa_30:strand-c}
+
+The third strand is the Vector Symbolic Architecture with
+Associative Recall (VSA+AR) semantic head, which is the subject of
+the present chapter. It occupies the intermediate concentric cube
+$\mathcal{C}_{-5}$ at radius $\phi^{-5} \approx 0.0902$, the proxy
+floor between the NCA unit circle and the GF16 algebraic floor.
+
+The VSA+AR head provides three capabilities that the other two
+strands lack:
+
+\begin{enumerate}
+\item \emph{Compositional binding.} The ternary XOR binding
+  $\circledast$ (Def.~2.2) allows token identities, positional
+  encodings, and role labels to be composed into a single
+  hypervector of dimension $D = F_{20} = 6765$. The binding is
+  self-inverse (Prop.~2.3), enabling lossless decomposition.
+
+\item \emph{One-shot associative recall.} The AR memory stores up to
+  $M = L_8 = 47$ hypervectors and retrieves the closest match to a
+  query vector with recall accuracy $99.97\%$ (Table~4.1). The
+  recall error probability is bounded by $47 \cdot e^{-14337} \approx
+  0$ (Prop.~2.4), making the system reliable with overwhelming
+  probability.
+
+\item \emph{Position-aware encoding.} The phi-RoPE encoding
+  (Theorem~3.1) assigns golden-angle-spaced rotational positions to
+  tokens, ensuring that position encodings are approximately
+  orthogonal for any two positions within distance $F_{21} = 10946$.
+  This is the VSA analogue of the continuous phi-RoPE mechanism of
+  Ch.5.
+\end{enumerate}
+
+The VSA+AR head does not use gradient descent. All operations are
+deterministic: binding is mod-3 addition, recall is inner-product
+argmax, and position encoding is deterministic rotation. This makes
+the strand fully reproducible given the sealed-seed pool
+(Ch.5, Ch.13 App.N).
+
+\subsection{8.4 Strand Interactions}
+\label{fa_30:strand-interactions}
+
+The three strands interact through two well-defined interfaces:
+
+\begin{itemize}
+\item \emph{GF16 $\to$ VSA+AR.} The ternary hypervector components
+  $\{-1, 0, +1\}$ are stored as GF16 constants
+  (\texttt{neg\_one\_f16}, \texttt{zero\_f16}, \texttt{pos\_one\_f16})
+  in the unity exponent band. All VSA operations (binding, inner
+  product, recall) are computed using the GF16 MAC unit. The
+  GF16 safe-domain guarantee (INV-3) ensures that no arithmetic
+  overflow occurs during any VSA operation.
+
+\item \emph{NCA $\to$ VSA+AR.} The period-locked scheduler governs
+  when VSA+AR agents are active. The VSA agent's $\phi$-weight
+  $w_{\text{VSA}}(t)$ is updated by the NCA core's weight-update
+  law. The measured time-average $\bar{w} \approx 1$ (Table~4.1)
+  indicates that the VSA agent is scheduled at near-unity frequency,
+  consistent with its role as the primary symbolic reasoning pathway.
+\end{itemize}
+
+The data flow is unidirectional within each macro-tick: the NCA core
+selects an agent $\to$ the agent reads GF16-encoded input $\to$ the
+VSA+AR head performs binding and recall $\to$ the result is written
+back to GF16 memory. There is no feedback from VSA+AR to the NCA
+core within a single tick; feedback occurs only through the
+$\phi$-weight update at the next tick.
+
+\subsection{8.5 Architectural Significance}
+\label{fa_30:architectural-significance}
+
+The three-strand architecture derives its coherence from the single
+algebraic identity $\varphi^2 + \varphi^{-2} = 3$. This identity
+fixes:
+
+\begin{itemize}
+\item the number of GF16 exponent bands ($= 3$);
+\item the VSA ternary alphabet size ($= 3$);
+\item the normalisation constant of Golden LayerNorm ($= 1/\sqrt{3}$);
+\item the number of concentric cubes in the Metatron's Cube
+  scaffold ($= 3$);
+\item the number of architectural strands ($= 3$).
+\end{itemize}
+
+The recurrence of the number $3$ is not a design choice; it is a
+consequence of the anchor identity. Any modification to the anchor
+would propagate through all five instantiation sites simultaneously,
+making the architecture self-consistent by construction. This
+property---that a single algebraic identity constrains the system at
+every level from silicon to semantics---is the defining characteristic
+of the Trinity SAI programme and its contribution to the broader
+GOLDEN BRIDGE compendium.
+

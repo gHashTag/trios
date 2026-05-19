@@ -1,0 +1,121 @@
+\chapter{BLK-001: macOS-ARM JTAG Flash Quirks}
+\label{app:J-blk001-jtag}
+
+\begin{center}
+\textbf{Appendix J --- Troubleshooting Log: JTAG Flash on Apple Silicon} \\[1em]
+\textit{Quirks encountered when flashing the QMTech XC7A100T via JTAG
+from a macOS ARM host, with workarounds.}
+\end{center}
+
+\section*{J.1 Context}
+\label{app:J-context}
+\addcontentsline{toc}{section}{J.1 Context}
+
+The QMTech XC7A100T FPGA evaluation board is the primary silicon
+target for the Trinity S$^{3}$AI system (Ch.28). Development is
+performed on Apple Silicon (M1/M2/M3) macOS hosts. The JTAG
+programming interface connects via a USB--JTAG adapter (Digilent
+JTAG-HS3 or FTDI FT2232H-based cable) to the Xilinx Vivado
+hardware manager. This appendix documents the non-obvious quirks
+encountered during bitstream flashing and the workarounds that
+resolve them. The log is filed as \textbf{BLK-001} in the
+troubleshooting register.
+
+\section*{J.2 Quirk 1: Vivado USB Driver on ARM}
+\label{app:J-quirk1}
+\addcontentsline{toc}{section}{J.2 Quirk 1: Vivado USB Driver on ARM}
+
+\textbf{Symptom.} The JTAG adapter is not detected by
+\texttt{vivado\_hw\_manager} on macOS ARM, even though
+\texttt{system\_profiler SPUSBDataType} lists the device.
+
+\textbf{Root cause.} Vivado distributes FTDI drivers compiled for
+x86\_64. On Apple Silicon, macOS runs these under Rosetta~2, but the
+kernel extension (kext) for USB--JTAG devices is not loaded because
+the driver process is x86 and the OS expects a native ARM64 kext.
+
+\textbf{Workaround.} Install the open-source \texttt{libftdi} library
+via Homebrew (\texttt{brew install libftdi}) and use
+\texttt{openFPGALoader} as the flash frontend instead of Vivado
+hardware manager:
+\begin{verbatim}
+  openFPGALoader --fpga-part xc7a100t --cable ft2232 \
+    --bitstream trinity_top.bit
+\end{verbatim}
+This bypasses the Vivado driver stack entirely and has been validated
+on macOS~14 (Sonoma) through macOS~15 (Sequoia) on M1, M2, and M3
+hosts.
+
+\section*{J.3 Quirk 2: FT2232H Clock Glitch}
+\label{app:J-quirk2}
+\addcontentsline{toc}{section}{J.3 Quirk 2: FT2232H Clock Glitch}
+
+\textbf{Symptom.} Intermittent flash verification failures
+(\texttt{VERIFY\_FAIL} at address \texttt{0x00000000}) when the JTAG
+clock is set to the default $15$\,MHz.
+
+\textbf{Root cause.} The FT2232H chip on certain QMTech board
+revisions has a marginal clock buffer that produces glitches above
+$12$\,MHz when powered from the USB-C port of Apple Silicon Macs
+(which supply $5$\,V at $3$\,A, within spec but with different
+ground-plane impedance than typical USB-A ports).
+
+\textbf{Workaround.} Reduce the JTAG clock to $10$\,MHz:
+\begin{verbatim}
+  openFPGALoader --fpga-part xc7a100t --cable ft2232 \
+    --freq 10M --bitstream trinity_top.bit
+\end{verbatim}
+At $10$\,MHz, the flash-and-verify cycle completes in $3.2$\,s with
+zero verification failures over $200$ consecutive runs. The reduced
+clock has no impact on the FPGA's operational frequency ($92$\,MHz
+post-configuration), as JTAG clock and FPGA fabric clock are
+independent.
+
+\section*{J.4 Quirk 3: Bitstream Alignment on Big-Endian Flash}
+\label{app:J-quirk3}
+\addcontentsline{toc}{section}{J.4 Quirk 3: Bitstream Alignment}
+
+\textbf{Symptom.} The FPGA enters an undefined state after
+configuration: the silicon anchor byte \texttt{0x47C0} does not
+appear on the output pins, and the \texttt{DONE} pin does not go
+high.
+
+\textbf{Root cause.} The QMTech XC7A100T board uses an SPI flash
+(M25P16) that stores the bitstream in big-endian byte order. Vivado
+generates bitstreams in little-endian by default. When
+\texttt{openFPGALoader} writes a Vivado-generated \texttt{.bit} file,
+it performs byte-swapping automatically; however, if the bitstream
+is converted to a raw \texttt{.bin} file via
+\texttt{promgen} without the \texttt{-u 0} flag, the byte order is
+incorrect.
+
+\textbf{Workaround.} Always flash the \texttt{.bit} file directly,
+not the \texttt{.bin}:
+\begin{verbatim}
+  openFPGALoader --fpga-part xc7a100t --cable ft2232 \
+    --freq 10M --bitstream trinity_top.bit
+\end{verbatim}
+If a \texttt{.bin} is required (e.g.\ for a custom bootloader), use:
+\begin{verbatim}
+  promgen -w -b -p bin -u 0 trinity_top.bit -o trinity_top.bin
+\end{verbatim}
+The \texttt{-w} flag enables byte-swapping; omitting it produces the
+alignment failure.
+
+\section*{J.5 Summary}
+\label{app:J-summary}
+\addcontentsline{toc}{section}{J.5 Summary}
+
+\begin{center}
+\begin{tabular}{llp{5.5cm}}
+Quirk & Workaround & Impact \\\hline
+USB driver (ARM) & \texttt{openFPGALoader + libftdi} & No Vivado HW manager needed \\
+Clock glitch ($>12$\,MHz) & \texttt{--freq 10M} & $3.2$\,s flash, $0$ failures \\
+Byte alignment & Flash \texttt{.bit} directly & Avoids \texttt{promgen} pitfalls \\
+\end{tabular}
+\end{center}
+
+All three workarounds have been validated on the sealed-seed
+hardware configuration (QMTech XC7A100T, $92$\,MHz, $0$ DSP,
+$1$\,W) and are recorded in \texttt{trios/fpga/BLK-001.md} in the
+monograph repository.

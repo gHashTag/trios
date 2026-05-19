@@ -568,6 +568,103 @@ P_{\text{save}} = 0.334 \times 185 \text{ mW} \approx 62 \text{ mW},
 \]
 reducing the accumulator's share from 18.9\% to 12.6\% of total power.
 
+\section{9. Future Work}\label{fa_28:future-work}
+
+This section outlines the primary research directions that emerge from
+the zero-DSP ternary FPGA implementation presented in this chapter. Each
+direction is framed as a concrete deliverable with an associated
+gate condition and a rough timeline.
+
+\subsection{9.1 Multi-FPGA Spatial
+Scaling}\label{fa_28:sec:future-multifpga}
+
+The current single-FPGA implementation achieves 63 toks/sec at 1 W. The
+natural scaling path is a multi-FPGA array in which each device holds a
+subset of the model layers, interconnected via a high-speed serial link
+(e.g., Aurora 64B/66B at 6.6 Gbps per lane on Artix-7 GTP transceivers).
+For an $N$-device array, the theoretical throughput scales as $N
+\times 63$ toks/sec if the inter-FPGA communication latency is hidden
+by pipelining. The critical design question is whether the
+$\varphi$-synchronised clock scheme (Proposition 2.4) extends to
+multi-device topologies: if each device runs at $f_c = 92/\varphi^k$ MHz
+for $k = 0, 1, \ldots, N-1$, the combined throughput equals
+$63 \cdot \sum_{k=0}^{N-1} \varphi^{-k} = 63 \cdot F_{N+1}/F_N$ toks/sec
+by the Fibonacci partial-sum identity. A 4-device array would yield
+$63 \cdot F_5/F_4 = 63 \cdot 5/3 = 105$ toks/sec at 4 W, approaching
+the DARPA 3000$\times$ energy target when normalised against a GPU
+baseline of $\sim$300 W for equivalent model sizes.
+
+\subsection{9.2 Advanced Process Node
+Migration}\label{fa_28:sec:future-process}
+
+Migration from the 28 nm Artix-7 to GF12LP (12 nm FinFET) or Intel 3
+is projected to reduce static power by 3--5$\times$ and increase
+maximum clock frequency to $\sim$300 MHz, yielding $\sim$205 toks/sec
+at $\sim$0.3 W. The zero-DSP property is technology-independent and is
+expected to transfer directly, as ternary accumulation requires only
+LUT logic available in any FPGA fabric. The $\varphi$-synchronised clock
+scheme would be recalibrated with $f_c = 300$ MHz and
+$f_m = 300/\varphi^2 \approx 114.5$ MHz, maintaining the golden-ratio
+relationship.
+
+\subsection{9.3 Coq Proof of Translation
+Correctness}\label{fa_28:sec:future-coq}
+
+The current implementation relies on differential fuzzing
+(Section~9.4 of Ch.27) for semantic equivalence between the Zig and
+Verilog backends. A full Coq proof of translation correctness ---
+stating that the Verilog netlist implements the same denotational
+semantics as the TRI27 evaluator --- would elevate the verification
+posture from probabilistic to categorical. The proof would proceed by
+establishing a simulation relation between T27-IR states and Verilog
+register states, showing that each clock cycle advances both systems by
+one evaluation step. Estimated proof effort: 2000--3000 lines of Coq,
+tractable within one proof sprint.
+
+\subsection{9.4 Heterogeneous Ternary--Binary
+Datapath}\label{fa_28:sec:future-heterogeneous}
+
+The attention bottleneck analysis (Section~8.3) reveals that KV-cache
+BRAM access consumes 58\% of per-token time. A hybrid architecture in
+which the KV cache is stored in binary FP8 format and the
+weight--activation accumulation remains ternary would reduce BRAM
+pressure by 4$\times$ (4 bits per entry versus 2 bits per trit pair)
+at the cost of a single binary-to-ternary conversion stage per
+attention head. The $\varphi$-normalisation layer provides a natural
+conversion point: the FP8-to-trit mapping $x \mapsto
+\mathrm{ternise}(x \cdot \varphi^2)$ can be implemented as a 256-entry
+LUT occupying one BRAM tile.
+
+\subsection{9.5 Gate-3 and Beyond}\label{fa_28:sec:future-gate3}
+
+The Gate-3 target of BPB $\leq$ 1.50 requires a further 15.7\%
+reduction in BPB from the current TF3+TF9 combined figure of 1.78.
+Achieving this within the zero-DSP, 1 W envelope will require a new
+quantisation format beyond TF9 --- likely a TF27 (three-trit) encoding
+with $\varphi$-base exponent and two-trit mantissa, giving 27
+representable levels and dynamic range $\varphi^4 \approx 6.854$. The
+cost is one additional BRAM read per weight and a 50\% increase in
+accumulator pipeline depth. Whether TF27 maintains the BPB advantage at
+1 W is an open empirical question to be addressed in Ch.31.
+
+\section{References (Future Work
+Addendum)}\label{fa_28:references-future}
+
+[FW1] Xilinx Aurora 64B/66B LogiCORE IP Product Guide, PG074.
+Xilinx, 2023.
+
+[FW2] GlobalFoundries GF12LP Process Design Kit.
+\url{https://www.globalfoundries.com/process-technology}
+
+[FW3] GOLDEN SUNFLOWERS dissertation, Ch.31 --- FPGA Token Throughput
+Analysis. This volume.
+
+[FW4] GOLDEN SUNFLOWERS dissertation, Ch.34 --- Energy 3000$\times$
+DARPA. This volume.
+
+[FW5] IEEE P3109 Working Group (2024). Draft Standard for Arithmetic
+Formats for Machine Learning, MXFP4 and MXFP8 specification.
+
 \(\varphi^2 + \varphi^{-2} = 3\)
 
 \begin{figure}[h]

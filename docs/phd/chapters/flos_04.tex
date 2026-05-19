@@ -590,6 +590,122 @@ properties reduce the engineering complexity of the verification pipeline
 and the FPGA datapath, at the cost of reduced binary precision---a cost
 that is absorbed by the ternary weight alphabet.
 
+\section{9. The Sacred Formula: General Parameterization}\label{fa_04:sacred-formula}
+
+The Trinity monomials introduced in the GOLDEN BRIDGE compendium
+(Paper~3, \S3) provide a multiplicative grammar over the basis
+$\{\varphi, \pi, e, 3\}$. This section derives the general
+\emph{Sacred Formula} as a parameterized family of physical-constant
+approximants and establishes its structural properties.
+
+\begin{definition}[Sacred Formula]
+\label{fa_04:def:sacred-formula}
+A \emph{Sacred Formula} is any expression of the form
+\[
+  V = n^{3k} \cdot \pi^{m} \cdot \varphi^{p} \cdot e^{q},
+  \qquad n \in \mathbb{Z}_{\ge 1},\quad k, m, p, q \in \mathbb{Z},
+\]
+where the exponents $(k, m, p, q)$ are bounded by an $\ell_{1}$
+complexity constraint $|k| + |m| + |p| + |q| \le C$ for some fixed
+integer $C$.
+\end{definition}
+
+The notation follows the Trinity-logarithmic-group convention of the
+GOLDEN BRIDGE compendium (P3 \S3.1): taking logarithms,
+\[
+  \log V = 3k \log n + m \log \pi + p \log \varphi + q,
+\]
+which is a $\mathbb{Z}$-linear form in the generators
+$\{\log n, \log \pi, \log \varphi, 1\}$. The factor of $3$ in the
+exponent of $n$ reflects the Trinity anchor
+$\varphi^{2} + \varphi^{-2} = 3$: the integer base is raised to a
+multiple of three, ensuring that each integer contribution is
+consistent with the ternary structure.
+
+\begin{theorem}[Trinity Anchor as Base Case]
+\label{fa_04:thm:sacred-anchor}
+The Trinity anchor $\varphi^{2} + \varphi^{-2} = 3$ is recovered
+from the Sacred Formula by setting $n = 1$, $k = 0$, $m = 0$,
+$p = 2$, $q = 0$ and $p = -2$, $q = 0$ respectively, and summing:
+\[
+  V_{+} + V_{-} = \varphi^{2} + \varphi^{-2} = 3.
+\]
+\end{theorem}
+
+\begin{proof}
+Direct substitution. The Sacred Formula with parameters $(n,k,m,p,q) =
+(1,0,0,2,0)$ gives $V_{+} = \varphi^{2}$; with $(1,0,0,-2,0)$
+gives $V_{-} = \varphi^{-2}$. Their sum is
+$\varphi^{2} + \varphi^{-2} = 3$ by the Trinity anchor identity.
+\end{proof}
+
+\begin{proposition}[Complexity Shell Enumeration]
+\label{fa_04:prop:shell}
+The number of distinct Sacred Formulas with $\ell_{1}$ complexity at
+most $C$ is
+\[
+  |\mathcal{S}_{C}| \sim A \cdot 3^{C}
+\]
+for a positive constant $A$, where the base-$3$ growth reflects the
+three-fold branching of the Lucas recurrence.
+\end{proposition}
+
+The base-$3$ growth rate is a consequence of the Trinity anchor:
+the ternary structure inherent in $\varphi^{2} + \varphi^{-2} = 3$
+propagates to the counting function of the formula lattice. Each
+increment of complexity $C$ by one adds approximately three new
+formulas, because each new unit of complexity can be allocated to one
+of three exponent slots ($m$, $p$, or $q$), with the $k$-slot
+consuming three units per increment.
+
+\begin{definition}[$\varphi$-Distance of a Formula]
+\label{fa_04:def:phi-distance-sf}
+For a Sacred Formula $V$ and a target constant $c > 0$, the
+\emph{$\varphi$-distance} is
+\[
+  d_{\varphi}(V, c) = \frac{|\log V - \log c|}{\log \varphi}.
+\]
+This measures the discrepancy in units of $\log \varphi$, the natural
+scale of the $\varphi$-numeric lattice.
+\end{definition}
+
+The $\varphi$-distance is zero if and only if $V = c$ exactly.
+Because $\log \varphi \approx 0.4812$, a distance of $d_{\varphi} =
+1$ corresponds to a multiplicative error of one golden-ratio step,
+i.e.\ a relative error of $|\varphi - 1| \approx 0.618$ or
+$|\varphi^{-1} - 1| \approx 0.382$.
+
+\begin{table}[h]
+\centering
+\caption{Sacred Formula examples at complexity $C \le 3$.}
+\label{fa_04:tab:sacred-examples}
+\begin{tabular}{@{}cccccl@{}}
+\toprule
+$n$ & $k$ & $m$ & $p$ & $q$ & Value \\
+\midrule
+1 & 0 & 0 & 2 & 0 & $\varphi^{2} \approx 2.618$ \\
+1 & 0 & 0 & $-2$ & 0 & $\varphi^{-2} \approx 0.382$ \\
+1 & 0 & 1 & 0 & 0 & $\pi \approx 3.14159$ \\
+1 & 0 & 0 & 0 & 1 & $e \approx 2.71828$ \\
+1 & 0 & 0 & 1 & 0 & $\varphi \approx 1.61803$ \\
+1 & 1 & 0 & 0 & 0 & $3$ \\
+2 & 0 & 0 & 1 & 0 & $2\varphi \approx 3.236$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Sacred Formula parameterization unifies the physical-constant
+approximation programme (Paper~1 of the GOLDEN BRIDGE) with the
+$\varphi$-numeric framework of Trinity S\textsuperscript{3}AI. Every
+GoldenFloat representable value is a Sacred Formula with bounded
+exponents; conversely, every Sacred Formula at complexity $C$ maps to
+a GoldenFloat value at mantissa width $m \ge C$. The
+$\alpha_{\varphi}$ constant of Section~\ref{fa_04:derivation-of-the-closed-form}
+governs the spectral scaling of the formula lattice:
+$\alpha_{\varphi} = \log(\varphi^{2})/\pi$ is the ratio of the
+$\varphi$-step to the $\pi$-step, providing the dimensional bridge
+between the algebraic and transcendental generators.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-04-scale-fish-formula.png}

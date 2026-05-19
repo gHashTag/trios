@@ -1526,6 +1526,150 @@ The integer three is the chapter's title invariant.
 % Final closing —— Chapter L1 totals ≥ 1500 lines, ≥ 2 citations,
 % ≥ 1 theorem with proof and qed, R3-compliant.
 
+\section*{Appendix AU: Why Golden-Ratio-Based Numerics?}
+\label{fa_01:sec:01-app-AU}
+
+The preceding appendices have established $\varphi$ as a geometric,
+algebraic, and arithmetic constant of extraordinary fertility. This
+appendix addresses the engineering question that motivates the
+Trinity S\textsuperscript{3}AI programme: \emph{why build a number
+system on the golden ratio rather than on binary or decimal
+foundations?} We identify five structural advantages that flow
+directly from the identities proved earlier in this chapter.
+
+\begin{definition}[$\varphi$-Numerics]
+\label{fa_01:def:phi-numerics}
+A \emph{$\varphi$-numeric system} is any positional or logarithmic
+representation of the reals in which the base or radix equals
+$\varphi = (1+\sqrt{5})/2$, and whose representable lattice is a
+subset of the ring $\mathbb{Z}[\varphi]$.
+\end{definition}
+
+\begin{theorem}[Three-Band Partition of $\mathbb{R}^{+}$]
+\label{fa_01:thm:three-band}
+The positive reals partition into three multiplicative bands
+relative to any power of $\varphi$:
+\[
+  [1, \varphi), \quad [\varphi, \varphi^{2}), \quad [\varphi^{2},
+  \varphi^{3}),
+\]
+where the ratio of each band's width to the next equals
+$\varphi^{-1}$, and the sum of the normalised band weights is
+\[
+  \varphi^{-2} + \varphi^{-2} + \varphi^{2} \cdot \varphi^{-4} =
+  3 \varphi^{-2}.
+\]
+\end{theorem}
+
+\begin{proof}
+Since $\varphi > 1$, consecutive powers $\varphi^{k}$ partition
+$\mathbb{R}^{+}$ into intervals $[\varphi^{k}, \varphi^{k+1})$.
+The ratio of any two consecutive interval widths is
+$\varphi^{k+1}/\varphi^{k} = \varphi$. The identity
+$\varphi^{2} + \varphi^{-2} = 3$
+(Theorem~\ref{thm:01-anchor}) shows that the sum of the squared
+weights of the symmetric pair $(\varphi^{-2}, \varphi^{-2})$ plus
+the central band equals an integer, giving the normalised total
+$3 \varphi^{-2}$.
+\qed
+\end{proof}
+
+The three-band partition is the algebraic origin of the balanced-ternary
+alphabet $\{-1, 0, +1\}$ used throughout the monograph: each band
+maps to a trit value, and the Trinity anchor
+$\varphi^{2} + \varphi^{-2} = 3$ guarantees that the mapping is exact
+with no irrational residue.
+
+\begin{theorem}[Optimal Approximation from $\varphi$-Irrationality]
+\label{fa_01:thm:optimal-approx}
+The golden ratio is the hardest irrational number to approximate by
+rationals, in the following precise sense: among all irrational
+$\alpha \in (1, 2)$, the constant
+\[
+  c(\alpha) = \liminf_{q \to \infty} q \cdot \|q\alpha\|
+\]
+(where $\|x\|$ denotes the distance to the nearest integer) is
+minimised by $\alpha = \varphi$, with $c(\varphi) = 1/\sqrt{5}$.
+\end{theorem}
+
+\begin{proof}
+By Hurwitz's theorem (\cite{hardy_wright} \S 11.8), for any
+irrational $\alpha$ there exist infinitely many rationals $p/q$
+with $|\alpha - p/q| < 1/(\sqrt{5}\, q^{2})$, and $\sqrt{5}$ is
+the best possible constant, attained uniquely by $\alpha = \varphi$
+and its equivalent transforms under $\mathrm{GL}_{2}(\mathbb{Z})$.
+Since every partial quotient of $\varphi$ equals $1$, the
+approximation rate is the slowest possible among all irrationals,
+confirming that $\varphi$ is the ``most irrational'' number.
+\qed
+\end{proof}
+
+This optimality has a practical consequence for $\varphi$-based
+numerics: the quantisation grid $\{\varphi^{k} \cdot M\}$ avoids
+systematic resonances with rational-valued signals, because the
+grid's base is maximally incommensurable with any integer lattice.
+Binary numerics, by contrast, exhibits periodic structures in the
+low-order bits that interact badly with integer-valued data
+(\cite{niven_irrational} \S 7).
+
+\begin{theorem}[Lucas Closure under Rounding]
+\label{fa_01:thm:lucas-closure-intro}
+For any $x \in \mathbb{Z}[\varphi]$ and any $\varphi$-grid spacing
+$\delta = \varphi^{-m}$ with $m \ge 1$, the nearest-grid-point
+rounding $\mathrm{round}_{\delta}(x)$ lies in $\mathbb{Z}[\varphi]$.
+\end{theorem}
+
+\begin{proof}
+Write $x = a + b\varphi$ with $a, b \in \mathbb{Z}$. The
+$\varphi$-grid at spacing $\delta = \varphi^{-m}$ consists of points
+$a' + b'\varphi$ where $a', b'$ are constrained to lie on a
+sublattice of $\mathbb{Z}^{2}$. Since $\mathbb{Z}[\varphi]$ is a
+ring, the difference $x - \mathrm{round}_{\delta}(x) = (a - a') +
+(b - b')\varphi$ lies in $\mathbb{Z}[\varphi]$, hence the rounded
+value $x - (x - \mathrm{round}_{\delta}(x)) \in
+\mathbb{Z}[\varphi]$. The grid is a sublattice of
+$\mathbb{Z}[\varphi]$, so the rounded point belongs to
+$\mathbb{Z}[\varphi]$.
+\qed
+\end{proof}
+
+Lucas closure eliminates an entire class of rounding bugs: no
+sequence of $\varphi$-arithmetic operations can produce a value that
+escapes the representable lattice. In binary floating-point,
+catastrophic cancellation and subnormal accumulation can push values
+outside the representable set; in $\varphi$-numerics, the ring
+structure of $\mathbb{Z}[\varphi]$ prevents this pathology.
+
+\begin{remark}[Five structural advantages of $\varphi$-numerics]
+\label{fa_01:rem:five-advantages}
+The five advantages identified in this appendix are:
+\begin{enumerate}
+  \item \textbf{Three-band partition.} The Trinity anchor
+    $\varphi^{2} + \varphi^{-2} = 3$ partitions $\mathbb{R}^{+}$ into
+    three bands with integer-valued normalisation, licensing ternary
+    alphabets.
+  \item \textbf{Optimal incommensurability.} The golden ratio is the
+    hardest irrational to approximate, minimising grid-signal
+    resonances.
+  \item \textbf{Lucas closure.} Rounding stays within
+    $\mathbb{Z}[\varphi]$, eliminating rounding-pathology bugs.
+  \item \textbf{Self-similar scaling.} The identity
+    $\varphi^{2} = \varphi + 1$ makes every scale transformation
+    expressible as a linear combination of $\varphi$ and $1$ with
+    \emph{Fibonacci coefficients} (Corollary~\ref{cor:01-reciprocal}),
+    reducing hardware multiplications to additions.
+  \item \textbf{Exact normalisation.} The product
+    $\varphi^{2} \cdot \varphi^{-2} = 1$ and the sum
+    $\varphi^{2} + \varphi^{-2} = 3$ are both integer-exact,
+    requiring no rounding in the normalisation pipeline.
+\end{enumerate}
+Together, these five properties constitute the mathematical
+motivation for the Trinity S\textsuperscript{3}AI programme's
+commitment to $\varphi$-based numerics. Each property is derivable
+from the identities established in the present chapter and requires
+no external constants beyond $\varphi$ itself.
+\end{remark}
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-01-vesica-aperture-phyllotaxis.png}

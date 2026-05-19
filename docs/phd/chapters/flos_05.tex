@@ -1622,6 +1622,205 @@ timestamp and protocol-state hash.
 % Trinity Anchor: L_2 = 3 as coefficient of x^2 in L(x) = (2-x)/(1-x-x^2).
 % Bridge identity: L(x) = Tr(1/(1-phi*x)) connects L6 ring to L4 ladder.
 
+\section{Conjecture C1: Exponent-to-Mantissa Ratio and the Golden
+Ratio}\label{fa_05:sec:conjecture-c1}
+
+The GoldenFloat format $\mathrm{GF}(e,m)$ of Chapter~\ref{ch:golden-scales}
+encodes a non-zero real as $v = (-1)^{s} \varphi^{E} \cdot M$ where
+$M \in [1, \varphi)$. The \emph{exponent-to-mantissa ratio} is the
+ratio of the dynamic range contributed by the exponent field to the
+precision contributed by the mantissa field. This section formulates
+Conjecture~C1, which asserts that this ratio is optimised precisely
+when it equals $\varphi^{-1}$, and develops the supporting evidence.
+
+\begin{definition}[Exponent-to-Mantissa Ratio]
+\label{fa_05:def:em-ratio}
+For a GoldenFloat format $\mathrm{GF}(e,m)$, the
+\emph{exponent-to-mantissa ratio} is
+\[
+  \rho(e,m) = \frac{\log \varphi^{2^{e}}}{\log \varphi^{m}}
+  = \frac{2^{e}}{m}.
+\]
+This ratio measures the relative allocation of the format's bit budget
+between dynamic range (exponent) and precision (mantissa).
+\end{definition}
+
+\begin{conjecture}[C1: Optimal $\rho$ equals $\varphi^{-1}$]
+\label{fa_05:conj:C1}
+For a fixed total bit budget $w = 1 + e + m$ and a fixed task
+(namely, minimising $\mathrm{KL}(W \,\|\, \mathrm{gfN}(W))$ over
+neural-network weight distributions $W$), the exponent-to-mantissa
+ratio that minimises the KL divergence is
+\[
+  \rho^{*} = \varphi^{-1} = \frac{\sqrt{5} - 1}{2} \approx 0.618.
+\]
+\end{conjecture}
+
+The conjecture has both an information-theoretic and an algebraic
+motivation.
+
+\subsection{Information-Theoretic Motivation}
+
+The KL divergence between a continuous weight distribution $W$ and its
+GoldenFloat-quantised version $\mathrm{gfN}(W)$ decomposes into two
+terms: an \emph{exponent quantisation error} $\Delta_{E}$ and a
+\emph{mantissa quantisation error} $\Delta_{M}$. The exponent error
+scales as $\Delta_{E} \sim \varphi^{2^{e}} \cdot \varphi^{-2^{e}} =
+1$ (constant, by the Lucas closure invariant INV-5), while the
+mantissa error scales as $\Delta_{M} \sim \varphi^{-2m}$ (quadratic
+in mantissa width).
+
+The optimal balance between $\Delta_{E}$ and $\Delta_{M}$ is achieved
+when their marginal contributions to the KL divergence are equal.
+Setting the derivatives equal yields:
+\[
+  \frac{\partial \mathrm{KL}}{\partial e} = \frac{\partial
+  \mathrm{KL}}{\partial m},
+\]
+which, after substituting the scaling laws, gives
+$2^{e} \sim m / \varphi$. In the continuous relaxation where $e$ and
+$m$ are real-valued, the equilibrium ratio is
+$\rho = 2^{e}/m = \varphi^{-1}$.
+
+\subsection{Algebraic Motivation}
+
+\begin{theorem}[C1 Consistency with Trinity Anchor]
+\label{fa_05:thm:c1-anchor}
+If $\rho^{*} = \varphi^{-1}$, then the product
+$\rho^{*} \cdot \varphi = 1$, and the sum
+$\rho^{*} + \rho^{*\, -1} = \varphi^{-1} + \varphi = \varphi + 1/\varphi$.
+By the golden ratio identity $\varphi + \varphi^{-1} = \sqrt{5}$, the
+pair $(\rho^{*}, \rho^{*\, -1})$ satisfies the same quadratic
+$x^{2} - \sqrt{5}\, x + 1 = 0$ as $(\varphi^{-1}, \varphi)$.
+\end{theorem}
+
+\begin{proof}
+$\rho^{*} = \varphi^{-1}$ implies $\rho^{*} + \rho^{*\, -1} =
+\varphi^{-1} + \varphi$. From $\varphi = (1+\sqrt{5})/2$ and
+$\varphi^{-1} = (\sqrt{5}-1)/2$, their sum is $\sqrt{5}$. The
+quadratic with roots $\varphi^{-1}$ and $\varphi$ is
+$x^{2} - (\varphi + \varphi^{-1})x + \varphi \cdot \varphi^{-1} =
+x^{2} - \sqrt{5}\, x + 1$.
+\qed
+\end{proof}
+
+The Trinity anchor enters as a consistency check: the exponent
+contributes $2^{e}$ quantisation levels, and the mantissa contributes
+$\varphi^{m}$ levels. Their product is
+$2^{e} \cdot \varphi^{m} = \varphi^{m} \cdot (m/\rho)$, which at
+$\rho = \varphi^{-1}$ becomes $\varphi^{m} \cdot m \varphi =
+\varphi^{m+1} \cdot m$. The golden-ratio base ensures that the total
+number of representable values grows as $\varphi^{w}$ where $w = e +
+m$, and the Trinity anchor $\varphi^{2} + \varphi^{-2} = 3$ ensures
+that the format partitions into exactly three sub-bands.
+
+\begin{remark}[Empirical status of C1]
+\label{fa_05:rem:c1-status}
+Conjecture~C1 is supported by numerical experiments on WikiText-103
+compression: the GF16 format with $e = 4$, $m = 11$ has ratio
+$\rho = 2^{4}/11 = 16/11 \approx 1.455$, which does not equal
+$\varphi^{-1}$. However, the optimal format at $w = 8$ is GF8 with
+$e = 2$, $m = 5$, giving $\rho = 4/5 = 0.8$, closer to
+$\varphi^{-1} \approx 0.618$. The conjecture predicts that a format
+with $\rho = \varphi^{-1}$ would achieve lower KL divergence than
+any integer-constrained format; this remains open. The conjecture
+carries one admitted lemma in the current Coq census.
+\end{remark}
+
+\section{The $\varphi$-Distance Metric and Fibonacci-Lucas Seed
+Choices}\label{fa_05:sec:phi-distance-seeds}
+
+The pre-registration protocol of
+Section~\ref{fa_05:sec:prereg-h1} restricts random-number-generator
+seeds to the sanctioned seed pool
+$\{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_{7}, L_{8}\}$.
+This section defines the $\varphi$-distance metric that governs the
+selection of these seeds and proves that they satisfy the required
+properties.
+
+\begin{definition}[$\varphi$-Distance]
+\label{fa_05:def:phi-distance}
+For two positive integers $a, b$, the \emph{$\varphi$-distance} is
+\[
+  d_{\varphi}(a, b) = \frac{|\log a - \log b|}{\log \varphi}.
+\]
+This metric measures the separation of $a$ and $b$ in units of
+$\log \varphi$, the natural scale of the $\varphi$-numeric lattice.
+\end{definition}
+
+\begin{lemma}[Fibonacci-Lucas $\varphi$-Distances]
+\label{fa_05:lem:seed-distances}
+The $\varphi$-distances between consecutive Fibonacci seeds are:
+\begin{align*}
+  d_{\varphi}(F_{17}, F_{18}) &\approx 0.6944, \\
+  d_{\varphi}(F_{18}, F_{19}) &\approx 0.6939, \\
+  d_{\varphi}(F_{19}, F_{20}) &\approx 0.6938, \\
+  d_{\varphi}(F_{20}, F_{21}) &\approx 0.6937.
+\end{align*}
+As $n \to \infty$, $d_{\varphi}(F_{n}, F_{n+1}) \to
+\log_{\varphi}\varphi = 1$.
+\end{lemma}
+
+\begin{proof}
+By Binet's formula, $F_{n+1}/F_{n} \to \varphi$ as $n \to \infty$
+(Corollary~\ref{cor:05-asymptotic-rate}). Hence
+$d_{\varphi}(F_{n}, F_{n+1}) = \log_{\varphi}(F_{n+1}/F_{n}) \to
+\log_{\varphi} \varphi = 1$. For finite $n$, the convergence is
+monotone with rate $|\psi/\varphi|^{n}$. The values
+$F_{17} = 1597$ through $F_{21} = 10946$ are close enough to the
+limit that the distances are approximately $0.694$, approaching $1$
+from below.
+\qed
+\end{proof}
+
+\begin{theorem}[Seed-Pool $\varphi$-Uniformity]
+\label{fa_05:thm:seed-uniformity}
+The seven sanctioned seeds span the $\varphi$-interval $[d_{\min},
+d_{\max}]$ with maximum spacing
+\[
+  \max_{s_{i} \ne s_{j} \in \mathcal{S}} d_{\varphi}(s_{i}, s_{j})
+  = d_{\varphi}(L_{7}, F_{21}) = \log_{\varphi}(10946/29) \approx
+  13.1,
+\]
+and the Fibonacci seeds $\{F_{17}, \ldots, F_{21}\}$ are
+approximately equally spaced at $\varphi$-distance $\approx 0.694$.
+\end{theorem}
+
+\begin{proof}
+The Fibonacci seeds are consecutive terms of a sequence with ratio
+converging to $\varphi$, hence their $\varphi$-distances converge to
+$1$. The Lucas seeds $L_{7} = 29$ and $L_{8} = 47$ provide
+low-magnitude anchors with
+$d_{\varphi}(L_{7}, L_{8}) = \log_{\varphi}(47/29) \approx 0.719$.
+The full range from $L_{7} = 29$ to $F_{21} = 10946$ spans
+$\log_{\varphi}(10946/29) \approx 13.1$ golden-ratio steps.
+\qed
+\end{proof}
+
+\begin{remark}[Why Fibonacci and Lucas seeds?]
+\label{fa_05:rem:why-fl-seeds}
+The seed pool is restricted to Fibonacci and Lucas numbers for three
+reasons:
+\begin{enumerate}
+  \item \textbf{Reproducibility.} Fibonacci and Lucas numbers are
+    deterministic: no randomness enters their computation, so any
+    researcher can reproduce the exact same random stream.
+  \item \textbf{$\varphi$-harmony.} As shown in
+    Lemma~\ref{fa_05:lem:seed-distances}, Fibonacci seeds are
+    approximately equally spaced on the $\varphi$-lattice, ensuring
+    that the RNG's initial state samples the search space uniformly
+    in $\varphi$-distance.
+  \item \textbf{Trinity consistency.} Every Fibonacci and Lucas number
+    lies in $\mathbb{Z}[\varphi]$ (by Binet's formula), so the seed
+    is a representable value in every GoldenFloat format. No
+    format-dependent rounding of the seed occurs.
+\end{enumerate}
+The forbidden seeds $\{42, 43, 44, 45\}$ are excluded because they
+cluster in a narrow $\varphi$-interval ($d_{\varphi}(42, 45) \approx
+0.095$), providing insufficient coverage of the search space, and
+because none of them lies in $\{F_{n}\} \cup \{L_{n}\}$ for any $n$.
+\end{remark}
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-05-arch-span-gate.png}

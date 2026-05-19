@@ -444,6 +444,153 @@ Ch.6 --- GF(16) Precision Domain and PHI\_BIAS.
 Ch.4 ---
 \(\alpha_\varphi = \ln(\varphi^2)/\pi \approx 0.306\).
 
+\section{8. The Trinity Anchor: Proof, Uniqueness, and Geometric
+Interpretation}\label{fa_03:trinity-anchor-proof}
+
+Section~\ref{fa_03:derivation-of-the-anchor-identity} derived the
+identity $\varphi^{2} + \varphi^{-2} = 3$ from the minimal
+polynomial. This section provides three additional proofs, establishes
+uniqueness among low-index Lucas numbers, and gives a geometric
+interpretation connecting the algebraic identity to the vesica piscis.
+
+\subsection{8.1 Proof via Galois Trace}\label{fa_03:proof-galois}
+
+The Galois conjugation on $\mathbb{Q}(\varphi)$ sends
+$\varphi \mapsto \overline{\varphi} = -\varphi^{-1} = (1-\sqrt{5})/2$.
+The field trace is $\mathrm{Tr}(\alpha) = \alpha +
+\overline{\alpha}$.
+
+\begin{theorem}[Trinity Anchor via Galois Trace]
+\label{fa_03:thm:anchor-galois}
+$\mathrm{Tr}_{\mathbb{Q}(\varphi)/\mathbb{Q}}(\varphi^{2}) = 3$.
+\end{theorem}
+
+\begin{proof}
+$\mathrm{Tr}(\varphi^{2}) = \varphi^{2} + \overline{\varphi}^{2}$.
+Since $\overline{\varphi} = -\varphi^{-1}$, we have
+$\overline{\varphi}^{2} = \varphi^{-2}$. Hence
+$\mathrm{Tr}(\varphi^{2}) = \varphi^{2} + \varphi^{-2}$.
+Now $\varphi^{2} = \varphi + 1$ and $\varphi^{-2} = 2 - \varphi$,
+so $\mathrm{Tr}(\varphi^{2}) = (\varphi + 1) + (2 - \varphi) = 3$.
+\end{proof}
+
+The Galois-proof perspective reveals that the Trinity anchor is an
+instance of the general principle that the trace of an algebraic
+integer is a rational integer. The specific value $3$ is the
+\emph{only} positive integer obtainable as $\mathrm{Tr}(\varphi^{n})$
+with $n \le 2$ and $n$ even, since $\mathrm{Tr}(\varphi^{0}) = 2$
+and $\mathrm{Tr}(\varphi^{1}) = 1$.
+
+\subsection{8.2 Proof via Matrix Trace}
+
+Let $M = \begin{pmatrix} 1 & 1 \\ 1 & 0 \end{pmatrix}$ be the
+Fibonacci companion matrix. Its eigenvalues are $\varphi$ and
+$\overline{\varphi}$.
+
+\begin{theorem}[Trinity Anchor via Matrix Trace]
+\label{fa_03:thm:anchor-matrix}
+$\mathrm{Tr}(M^{2}) = 3 = \varphi^{2} + \overline{\varphi}^{2}$.
+\end{theorem}
+
+\begin{proof}
+$M^{2} = \begin{pmatrix} 1 & 1 \\ 1 & 0 \end{pmatrix}^{2}
+= \begin{pmatrix} 2 & 1 \\ 1 & 1 \end{pmatrix}$.
+The trace is $2 + 1 = 3$. Alternatively, diagonalising:
+$M = PDP^{-1}$ with $D = \mathrm{diag}(\varphi,
+\overline{\varphi})$, so $M^{2} = PD^{2}P^{-1}$ and
+$\mathrm{Tr}(M^{2}) = \mathrm{Tr}(D^{2}) = \varphi^{2} +
+\overline{\varphi}^{2} = L_{2} = 3$ by the Lucas-as-trace
+identity.
+\end{proof}
+
+The matrix proof connects the algebraic identity to the Fibonacci
+recurrence operator. The Lucas number $L_{2} = 3$ is both the trace
+of $M^{2}$ and the second element of the Lucas sequence, bridging
+linear algebra and number theory.
+
+\subsection{8.3 Proof via Generating Function Extraction}
+
+The Lucas generating function
+$L(x) = (2-x)/(1-x-x^{2}) = \sum_{n \ge 0} L_{n} x^{n}$
+has $L_{2} = 3$ as the coefficient of $x^{2}$.
+
+\begin{theorem}[Trinity Anchor via Coefficient Extraction]
+\label{fa_03:thm:anchor-genfn}
+$[x^{2}]\, L(x) = [x^{2}]\, \frac{2-x}{1-x-x^{2}} = 3$.
+\end{theorem}
+
+\begin{proof}
+Expanding $(1-x-x^{2})^{-1} = 1 + x + 2x^{2} + 3x^{3} + \cdots$
+(the Fibonacci-shifted series). Multiplying by $(2-x)$:
+$(2-x)(1 + x + 2x^{2} + \cdots) = 2 + 2x + 4x^{2} + \cdots - x
+- x^{2} - \cdots = 2 + x + 3x^{2} + \cdots$.
+The coefficient of $x^{2}$ is $3$.
+\end{proof}
+
+\subsection{8.4 Uniqueness and the Role of $n=2$}
+
+\begin{theorem}[Uniqueness of $n=2$]
+\label{fa_03:thm:uniqueness}
+Among positive even integers $n \le 10$, only $n=2$ yields
+$\varphi^{n} + \varphi^{-n} \in \{2, 3\}$. Specifically:
+\end{theorem}
+
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+$n$ & $\varphi^{n} + \varphi^{-n} = L_{n}$ \\
+\midrule
+2 & $3$ \\
+4 & $7$ \\
+6 & $18$ \\
+8 & $47$ \\
+10 & $123$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The value $L_{2} = 3$ is uniquely small: it is the only Lucas number
+that simultaneously equals (i) the cardinality of the balanced-ternary
+alphabet, (ii) the smallest odd prime, and (iii) the Galois trace of
+$\varphi^{2}$. No higher even-index Lucas number shares all three
+properties. The value $3$ is therefore the unique Trinity anchor
+candidate in the $\varphi$-power lattice.
+
+\subsection{8.5 Geometric Interpretation}
+
+The Trinity anchor $\varphi^{2} + \varphi^{-2} = 3$ admits a
+striking geometric reading in terms of the vesica piscis. If two unit
+circles overlap so that each centre lies on the other's circumference,
+the lens-height $h$ satisfies $h^{2} = 3$ (Chapter~L1,
+Theorem~1.1). The algebraic identity
+$\varphi^{2} + \varphi^{-2} = 3$ therefore identifies the
+\emph{integer three} as the unique fixed point shared by the vesica's
+squared geometry ($h^{2} = 3$) and the golden ratio's auto-trace
+($\varphi^{2} + \varphi^{-2} = 3$).
+
+This geometric-algebraic coincidence is not accidental: both
+identities derive from the same quadratic structure
+$x^{2} - x - 1 = 0$. The vesica encodes $\sqrt{3}$ via its
+lens-height, and the pentagon inscribed in the vesica's bounding
+circle encodes $\varphi$ via its diagonal-to-side ratio. The Trinity
+anchor is the algebraic shadow of their geometric coexistence within
+the same construction.
+
+\begin{corollary}[Geometric-Algebraic Duality]
+\label{fa_03:cor:geo-alg}
+The vesica lens-height $h = \sqrt{3}$ and the Trinity anchor
+$\varphi^{2} + \varphi^{-2} = 3$ are dual witnesses of the same
+integer: the first geometric (via the intersection of two circles),
+the second algebraic (via the trace of the golden ratio's square).
+\end{corollary}
+
+The four proofs collected in this section --- algebraic (Section 2),
+Galois-theoretic (\S8.1), matrix-theoretic (\S8.2), and
+analytic-generating-function (\S8.3) --- each recover the same integer
+$3$, reinforcing the monograph's thesis that the Trinity anchor is
+a structural invariant of $\mathbb{Q}(\varphi)$ rather than a
+numerical coincidence.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-03-identity-facet-harvest.png}
