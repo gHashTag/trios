@@ -8,7 +8,9 @@
     "anchor": "phi^2 + phi^-2 = 3",
     "zenodo_doi": "10.5281/zenodo.19227877",
     "honesty_pattern": "R5 vacuous Qed with documented runtime witness; NO Admitted",
-    "claim": "structural analogy (NOT formal isomorphism) between Trinity GF(16) vsa_matmul and Kolmogorov-Arnold representation"
+    "claim": "structural analogy (NOT formal isomorphism) between Trinity GF(16) vsa_matmul and Kolmogorov-Arnold representation",
+    "wave14c_added": 10,
+    "wave14c_tracker": "https://github.com/gHashTag/trios/issues/808"
   },
   "entries": [
     {
@@ -81,59 +83,124 @@
       "theorem_dependency": "CH35 Theorem 35.13"
     },
     {
-      "id": "INV_28_ZERO_DSP",
-      "lemma": "zero_dsp_closure",
-      "coq_file": "trinity-clara/proofs/fpga/ZeroDSP.v",
-      "proof_pattern": "induction_on_trit_cases",
-      "runtime_witness": {
-        "language": "hdl",
-        "path": "gHashTag/trinity-fpga/src/ternary_acc.v",
-        "function": "ternary_accumulator",
-        "property_test": "post_impl_dsp48_count_zero"
-      },
-      "falsification_protocol": "Run report_utilization on B002 DCP in Vivado 2023.x; assert DSP48E1 count = 0.",
-      "chapter": "CH28",
-      "wave": "wave-13c",
-      "theorems_added": [
-        "THM-28.1",
-        "THM-28.2",
-        "THM-28.3",
-        "THM-28.4"
-      ],
-      "cross_refs": [
-        "CH28",
-        "CH31",
-        "CH34",
-        "AppendixF",
-        "AppendixI"
-      ]
+      "id": "WAVE14C_CH19_WELCH_CONSISTENCY",
+      "lemma": "welch_consistency",
+      "chapter": "flos_53",
+      "chapter_title": "Statistical Analysis (Welch-t)",
+      "coq_file": "trinity-clara/proofs/igla/INV19_WelchStat.v",
+      "proof_pattern": "admitted_pending_CLT_library",
+      "status": "Admitted",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "Welch t-statistic converges under phi-lattice CLT"
     },
     {
-      "id": "INV_30_VSA_CAPACITY",
-      "lemma": "vsa_recall_error_bound",
-      "coq_file": "trinity-clara/proofs/igla/VSACapacity.v",
-      "proof_pattern": "hoeffding_union_bound",
-      "runtime_witness": {
-        "language": "rust",
-        "path": "crates/trios-vsa/src/vsa_recall.rs",
-        "function": "ar_recall",
-        "property_test": "prop_recall_accuracy_1003_tokens"
-      },
-      "falsification_protocol": "Store 47 random ternary hypervectors of dim 6765, density 0.382; measure recall@1 accuracy over 1000 queries. Failure if accuracy < 99%.",
-      "chapter": "CH30",
-      "wave": "wave-13c",
-      "theorems_added": [
-        "THM-30.1",
-        "THM-30.2",
-        "THM-30.3",
-        "THM-30.4"
-      ],
-      "cross_refs": [
-        "CH28",
-        "CH24",
-        "CH6",
-        "CH25"
-      ]
+      "id": "WAVE14C_CH19_PHI_LOSS_NORM",
+      "lemma": "phi_loss_norm",
+      "chapter": "flos_53",
+      "chapter_title": "Statistical Analysis (Welch-t)",
+      "coq_file": "trinity-clara/proofs/igla/INV19_WelchStat.v",
+      "proof_pattern": "qed_via_trinity_identity",
+      "status": "Qed",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "3*L_phi = (phi^2 + phi^-2)*L_phi_star (Trinity identity)"
+    },
+    {
+      "id": "WAVE14C_CH23_FIB_GAP_BOUND",
+      "lemma": "fib_gap_bound",
+      "chapter": "flos_57",
+      "chapter_title": "MCP Integration",
+      "coq_file": "trinity-clara/proofs/igla/INV23_McpIntegration.v",
+      "proof_pattern": "qed_via_fibonacci_recurrence",
+      "status": "Qed",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "Boundary snapping gap <= F_n - 1 (Fibonacci gap upper bound)"
+    },
+    {
+      "id": "WAVE14C_CH23_GLN_SCALE_PRESERVATION",
+      "lemma": "glayernorm_scale_preservation",
+      "chapter": "flos_57",
+      "chapter_title": "MCP Integration",
+      "coq_file": "trinity-clara/proofs/igla/INV23_McpIntegration.v",
+      "proof_pattern": "qed_via_trinity_identity",
+      "status": "Qed",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "Golden LayerNorm with 1/sqrt(3) preserves phi^2+phi^-2=3 invariant"
+    },
+    {
+      "id": "WAVE14C_CH13_ASHA_THRESHOLD",
+      "lemma": "asha_threshold_derivation",
+      "chapter": "flos_47",
+      "chapter_title": "STROBE Sealed Seeds",
+      "coq_file": "trinity-clara/proofs/igla/INV2_IglaAshaBound.v",
+      "proof_pattern": "qed_via_phi_arithmetic",
+      "status": "Qed",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "tau=3.5 = phi^2 + phi^-2 + phi^-4 ASHA threshold derivation"
+    },
+    {
+      "id": "WAVE14C_CH13_SEED_COLLISION",
+      "lemma": "seed_collision_avoidance_ext",
+      "chapter": "flos_47",
+      "chapter_title": "STROBE Sealed Seeds",
+      "coq_file": "trinity-clara/proofs/igla/INV2_IglaAshaBound.v",
+      "proof_pattern": "admitted_pending_exhaustive_check",
+      "status": "Admitted",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "No two distinct canonical seeds produce the same initial weight tensor"
+    },
+    {
+      "id": "WAVE14C_CH7_PACKING_OPTIMALITY",
+      "lemma": "golden_angle_packing_optimality",
+      "chapter": "flos_41",
+      "chapter_title": "Vogel Phyllotaxis",
+      "coq_file": "trinity-clara/proofs/canonical/kernel/FlowerE8Embedding.v",
+      "proof_pattern": "admitted_pending_three_distance_library",
+      "status": "Admitted",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "Golden angle 137.5 = 360/phi^2 maximises Vogel packing density"
+    },
+    {
+      "id": "WAVE14C_CH7_EXACT_ANGLE",
+      "lemma": "golden_angle_exact_Z_phi",
+      "chapter": "flos_41",
+      "chapter_title": "Vogel Phyllotaxis",
+      "coq_file": "trinity-clara/proofs/canonical/kernel/FlowerE8Embedding.v",
+      "proof_pattern": "qed_via_phi_arithmetic",
+      "status": "Qed",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "360*phi^-2 = 360*(2-phi) exact in Z[phi] without rounding"
+    },
+    {
+      "id": "WAVE14C_CH11_GATE3_IMPLIES_GATE2",
+      "lemma": "gate3_implies_gate2",
+      "chapter": "flos_45",
+      "chapter_title": "Pre-registration H1",
+      "coq_file": "trinity-clara/proofs/igla/INV7_IglaFoundCriterion.v",
+      "proof_pattern": "qed_arithmetic",
+      "status": "Qed",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "BPB<=1.5 implies BPB<=1.85 (Gate-3 implies Gate-2)"
+    },
+    {
+      "id": "WAVE14C_CH11_PREREGISTRATION_INTEGRITY",
+      "lemma": "preregistration_integrity",
+      "chapter": "flos_45",
+      "chapter_title": "Pre-registration H1",
+      "coq_file": "trinity-clara/proofs/igla/INV7_IglaFoundCriterion.v",
+      "proof_pattern": "admitted_pending_sha1_formalisation",
+      "status": "Admitted",
+      "wave": "wave-14c",
+      "tracker": "https://github.com/gHashTag/trios/issues/808",
+      "description": "STROBE+OSF tamper evidence ensures no post-hoc seed selection"
     }
   ],
   "AppL_pollen_channel": [
