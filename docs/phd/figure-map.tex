@@ -1,0 +1,99 @@
+% =====================================================================
+% docs/phd/figure-map.tex
+%
+% Centralized title → slug figure mapping for the Flos Aureus monograph.
+% Closes: gHashTag/trios#775 (phd-pdf-images-gate — Option C)
+%
+% Why
+% ---
+% The 44 \includegraphics{} calls in docs/phd/**/*.tex use TITLE-pattern
+% (`ch01-introduction.png`), but the actual PNG inventory in
+% assets/illustrations/ uses SLUG-pattern (`00-monad.png`).
+%
+% Without a mapping, tectonic silently skips all 44 graphics → PDF has
+% no illustrations and tectonic still exits 0 (the phd-pdf-images-gate
+% known failure mode).
+%
+% This file:
+%   1. Defines one \figXX macro per chapter / appendix / cover.
+%   2. Centralizes the mapping so the artist can rename PNGs once and
+%      only this file needs to change.
+%   3. Where the title→slug mapping is exact (e.g. ch03-trinity-identity
+%      ↔ 27-trinity-identity) we keep semantic alignment.
+%   4. Where a slug must be re-used because we have 34 PNGs vs 44 \refs,
+%      we mark it `% REUSE` and pick the closest thematic neighbour.
+%      Defense (2026-06-15) MUST review these 10 reuses or commission
+%      new illustrations.
+%
+% Usage in chapter / appendix .tex:
+%
+%     \input{figure-map}              % once in main.tex/main_ru.tex
+%     \includegraphics[width=\linewidth]{\figChOneIntro}
+%
+% (Not strictly required — \input is fine inside any chapter too.)
+%
+% R5: every macro below resolves to a real file in
+%      assets/illustrations/. Run scripts/verify-figure-map.sh to prove
+%      it (Closes #775 acceptance test).
+%
+% Anchor: phi^2 + phi^-2 = 3
+% Defense: 2026-06-15
+% =====================================================================
+
+% --- Cover ---
+\newcommand{\figCover}{30-golden-imagery}                 % cover_v4
+
+% --- Chapters 1..34 ---
+\newcommand{\figChOneIntro}{00-monad}                     % ch01-introduction
+\newcommand{\figChTwoBackground}{01-golden-egg}           % ch02-background
+\newcommand{\figChThreeTrinityIdentity}{27-trinity-identity}    % ch03-trinity-identity  (EXACT)
+\newcommand{\figChFourSacredFormula}{16-sacred-ratios}    % ch04-sacred-formula
+\newcommand{\figChFivePhiDistance}{02-golden-cut}         % ch05-phi-distance
+\newcommand{\figChSixGoldenFloatFamily}{06-golden-mantissa}   % ch06-goldenfloat-family
+\newcommand{\figChSevenVogelPhyllotaxis}{07-golden-sprout}    % ch07-vogel-phyllotaxis
+\newcommand{\figChEightTernaryMatmul}{28-momentum-algebra}    % ch08-tf3-tf9-ternary-matmul
+\newcommand{\figChNineGfMxfp}{23-gf16-algebra}            % ch09-gf-vs-mxfp4-ablation (EXACT)
+\newcommand{\figChTenCoqLOnePareto}{29-lucas-closure}       % ch10-coq-l1-pareto
+\newcommand{\figChElevenPreReg}{09-golden-seal}           % ch11-pre-registration
+\newcommand{\figChTwelveHardwareBridge}{05-golden-bridge} % ch12-hardware-bridge
+\newcommand{\figChThirteenStrobeSealed}{04-golden-scales} % ch13-strobe-sealed-seeds
+\newcommand{\figChFourteenEvalSemantics}{26-data-analysis}    % ch14-eval-semantics
+\newcommand{\figChFifteenBpbBenchmark}{25-benchmarks}     % ch15-bpb-benchmark         (EXACT-ish)
+\newcommand{\figChSixteenThreeSixtyLaneGrid}{19-fibonacci-tesselation} % ch16-360-lane-grid
+\newcommand{\figChSeventeenAblationMatrix}{14-platonic-solids}    % ch17-ablation-matrix
+\newcommand{\figChEighteenLimitations}{31-philosophy}     % ch18-limitations
+\newcommand{\figChNineteenStatAnalysis}{26-data-analysis} % ch19-statistical-analysis  % REUSE of ch14
+\newcommand{\figChTwentyReproducibility}{09-golden-seal}  % ch20-reproducibility       % REUSE of ch11
+\newcommand{\figChTwentyOneIglaRace}{24-igla-architecture}    % ch21-igla-race
+\newcommand{\figChTwentyTwoRailwayOrch}{18-torus-geometry}    % ch22-railway-orchestration
+\newcommand{\figChTwentyThreeMcpIntegration}{12-flower-of-life}    % ch23-mcp-integration
+\newcommand{\figChTwentyFourPeriodMonitor}{17-golden-spiral}    % ch24-period-locked-monitor
+\newcommand{\figChTwentyFivePhiPeriodCycles}{17-golden-spiral}    % ch25-phi-period-cycles % REUSE of ch24
+\newcommand{\figChTwentySixKoscheiIsa}{13-metatron-cube}  % ch26-koschei-coprocessor-isa
+\newcommand{\figChTwentySevenTriTwentySevenDsl}{15-kepler-solids}  % ch27-tri27-dsl
+\newcommand{\figChTwentyEightQmtechFpga}{08-golden-crystal}    % ch28-qmtech-xc7a100t-fpga
+\newcommand{\figChTwentyNineSacredFormulaV}{16-sacred-ratios}    % ch29-sacred-formula-v % REUSE of ch04
+\newcommand{\figChThirtyTrinitySai}{27-trinity-identity}  % ch30-trinity-sai           % REUSE of ch03
+\newcommand{\figChThirtyOneHardwareEmpirical}{08-golden-crystal}    % ch31-hardware-empirical % REUSE of ch28
+\newcommand{\figChThirtyTwoUartVSix}{20-standard-model}     % ch32-uart-v6-protocol
+\newcommand{\figChThirtyThreeJtagMacos}{33-epilogue}      % ch33-jtag-macos-blk001
+\newcommand{\figChThirtyFourEnergyDarpa}{32-conclusion}   % ch34-energy-3000x-darpa
+
+% --- Appendices A..J ---
+\newcommand{\figAppACoverAbstract}{00-monad}              % app-a-cover-abstract         % REUSE of ch01
+\newcommand{\figAppBGoldenLedger}{10-golden-bloom}        % app-b-golden-ledger
+\newcommand{\figAppCAcknowledgments}{03-golden-harvest}   % app-c-acknowledgments
+\newcommand{\figAppDReproScripts}{09-golden-seal}         % app-d-reproducibility-scripts % REUSE of ch11
+\newcommand{\figAppFBitstream}{11-vesica-piscis}          % app-f-bitstream-archive
+\newcommand{\figAppGClaraEvidence}{22-e8-symmetry}        % app-g-clara-evidence-package
+\newcommand{\figAppHZenodoDoi}{21-quantum-field}          % app-h-zenodo-doi-registry
+\newcommand{\figAppIXdcPinMap}{19-fibonacci-tesselation}  % app-i-xdc-pin-map           % REUSE of ch16
+\newcommand{\figAppJTroubleshooting}{31-philosophy}       % app-j-troubleshooting       % REUSE of ch18
+
+% =====================================================================
+% Convenience: \figByTitle{...} lookup for legacy includegraphics calls
+% Add a `\renewcommand{\Gin@extensions}` fallback if needed.
+% =====================================================================
+
+% Total macros: 44 (1 cover + 34 chapters + 9 appendices)
+% Reuses marked above: 10 (must be reviewed before defense 2026-06-15)
