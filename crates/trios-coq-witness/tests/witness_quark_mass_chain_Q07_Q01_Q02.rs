@@ -1,17 +1,27 @@
 #![allow(non_snake_case)]
-//! Runtime-witness placeholder for Coq theorem
-//! `quark_mass_chain_Q07_Q01_Q02` in
-//! `docs/phd/theorems/trinity/ConsistencyChecks.v` (line 67).
+//! Runtime-witness for Coq theorem `quark_mass_chain_Q07_Q01_Q02`
+//! in `docs/phd/theorems/trinity/ConsistencyChecks.v` (line 67).
 //!
-//! Coq strategy: real proof via `Interval.Tactic` (R8 falsified — chain
-//! relation is broken by ~12600% with current Chimera v1.0 formulas).
-//! No Admitted; runtime witness is documentation-only.
+//! Falsification check: Q07/Q01 does NOT equal Q02 — the chain
+//! relation is broken by a large relative error.
 //!
-//! TODO ticket: trios#587.
 //! Anchor: phi^2 + phi^-2 = 3.
 
 #[test]
-#[ignore = "TODO: numerical witness for quark_mass_chain_Q07_Q01_Q02 (Coq theorem already proven). Tracker: trios#587."]
 fn witness_quark_mass_chain_Q07_Q01_Q02() {
-    // TODO: assert |(Q07/Q01) - Q02| / Q02 > tolerance_L (= 5e-2).
+    let phi: f64 = (1.0_f64 + 5.0_f64.sqrt()) / 2.0;
+    let pi: f64 = std::f64::consts::PI;
+    let e: f64 = std::f64::consts::E;
+    let tolerance_l: f64 = 0.05;
+
+    let Q07 = 24.0 * phi * phi / pi;
+    let Q01 = pi / (9.0 * e * e);
+    let Q02 = 4.0 * phi * phi / pi;
+
+    let rel = ((Q07 / Q01) - Q02).abs() / Q02;
+    assert!(
+        rel > tolerance_l,
+        "|(Q07/Q01) - Q02|/Q02 = {} <= {}",
+        rel, tolerance_l
+    );
 }
