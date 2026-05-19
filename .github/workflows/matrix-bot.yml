@@ -57,4 +57,8 @@ jobs:
           MATRIX_DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
           MATRIX_FORMATS: ${{ github.event.inputs.formats }}
           MATRIX_ALGOS: ${{ github.event.inputs.algos }}
+          # Fail-soft on stale DSN: log + exit 0 instead of paging the cron loop.
+          # Set to "0" to revert to hard failure once secrets.MATRIX_DATABASE_URL
+          # is rotated and verified.
+          MATRIX_FAIL_SOFT: "1"
         run: python3 .github/scripts/matrix_bot.py

@@ -282,8 +282,24 @@ def main() -> int:
     formats = [f for f in (formats_env.split(",") if formats_env else FORMATS_ORDERED) if f]
     algos = [a for a in (algos_env.split(",") if algos_env else ALGOS_ORDERED) if a]
     dry = env("MATRIX_DRY_RUN") == "1"
+    fail_soft = env("MATRIX_FAIL_SOFT", default="1") == "1"
 
-    cells, total_rows, sha, run_id = fetch_min_bpb(dsn)  # type: ignore[arg-type]
+    try:
+        cells, total_rows, sha, run_id = fetch_min_bpb(dsn)  # type: ignore[arg-type]
+    except psycopg2.OperationalError as exc:  # type: ignore[attr-defined]
+        # R5-honest fail-soft: stale DSN must NOT keep paging the cron loop
+        # every hour. Log loudly, exit 0, and let the queen rotate the
+        # secret out-of-band (tracked as a ONE SHOT issue).
+        sys.stderr.write(
+            f"matrix_bot: SSOT connection failed ({exc.__class__.__name__}): "
+            f"{str(exc).strip()[:240]}\n"
+        )
+        sys.stderr.write(
+            "matrix_bot: MATRIX_FAIL_SOFT=1 -> exiting 0 without PATCHing #446.\n"
+            "matrix_bot: rotate secrets.MATRIX_DATABASE_URL on gHashTag/trios "
+            "(see ONE SHOT issue) to restore live updates.\n"
+        )
+        return 0 if fail_soft else 3
     sys.stderr.write(
         f"matrix_bot: cells={len(cells)} total_rows={total_rows} "
         f"latest_sha={sha} latest_run_id={run_id}\n"
