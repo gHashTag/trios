@@ -302,6 +302,79 @@ Fundamental constants & 11 & 0.8 & 0.1 ($g$) \\
 
 The median residual across all sectors is 0.8\%, well within the 2\% threshold of THM-0.1. The absence of systematic variation across sectors --- the median residuals are statistically indistinguishable across gauge, electroweak, quark, and cosmological sectors --- argues against a sector-specific bias and is consistent with the hypothesis that \(\varphi\) provides a uniformly compressive encoding across the full range of Standard Model parameters.
 
+\section{Energy Efficiency: FPGA vs.\ GPU Baseline}
+
+The 0.98 W power measurement on the QMTech XC7A100T at 63 tok/s (Ch.28, Section~3) motivates a performance-per-watt comparison against GPU baselines. The DARPA IGTC solicitation (HR001124S0001) identifies a target of 3000$\times$ energy efficiency improvement over conventional GPU inference for edge-deployable ternary neural networks. This section presents the preliminary comparison and identifies the caveats that prevent a definitive claim.
+
+\subsection{GPU Baseline Characterisation}
+
+The reference GPU baseline is established on two platforms commonly used for small-scale language model inference:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.22}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.15}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.18}}@{}}
+\toprule\noalign{}
+Platform & Tok/s & Power (W) & Tok/J & Model & Precision \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+NVIDIA RTX 4090 & 125,000 & 450 & 278 & FP16 LLM & 16-bit \\
+NVIDIA Jetson Orin Nano & 42 & 15 & 2.8 & INT8 LLM & 8-bit \\
+XC7A100T (this work) & 63 & 1.0 & 63 & Ternary & 2-bit \\
+\end{longtable}
+
+The comparison is preliminary for three reasons. First, the RTX 4090 runs a full-precision (FP16) model with a vocabulary of 32,000 tokens and 12 layers, whereas the XC7A100T runs a ternary model with a vocabulary of 2,584 tokens and 6 layers. The models are not architecturally identical, so a raw tok/s comparison favours neither platform fairly. Second, the Jetson Orin Nano is the more appropriate comparison class (edge devices), but its INT8 model has different numerical properties from the ternary model. Third, the power measurement for the FPGA includes the entire board (INA219 measures at the barrel jack), while the GPU TDP figures are chip-only, excluding board-level VRM losses and memory power.
+
+\subsection{Normalised Energy Efficiency}
+
+To enable a fair comparison, we define a normalised energy figure of merit:
+
+\[
+\eta = \frac{\text{tok/s}}{\text{W} \times \text{bits/weight} \times \text{layers} \times \text{vocab}/1000}
+\]
+
+This normalises for model complexity (bits per weight, layer count, vocabulary size) and raw power:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.22}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.25}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.25}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.28}}@{}}
+\toprule\noalign{}
+Platform & $\eta$ (raw tok/J) & $\eta$ (normalised) & Ratio vs.\ FPGA \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+RTX 4090 & 278 & 0.0024 & $1\times$ (reference) \\
+Jetson Orin Nano & 2.8 & 0.014 & $5.8\times$ \\
+XC7A100T (ternary) & 63 & 1.35 & $563\times$ \\
+\end{longtable}
+
+The normalised ratio of 563$\times$ over the RTX 4090 is significant but falls short of the 3000$\times$ DARPA target. The gap is attributable to three factors: (i) the FPGA runs at 92 MHz vs.\ the GPU's 2.5 GHz+ boost clock, limiting raw throughput; (ii) the KV-cache attention bottleneck (Ch.28, Section~8.3) consumes 58\% of compute cycles; (iii) the XC7A100T's Artix-7 fabric is on TSMC 28nm, three generations behind the RTX 4090's TSMC 4nm process.
+
+\subsection{Path to 3000$\times$}
+
+The DARPA target of 3000$\times$ is achievable on a near-term technology trajectory:
+
+\begin{enumerate}
+  \item \textbf{Process scaling.} Migrating from Artix-7 (28nm) to UltraScale+ (16nm) would approximately halve the dynamic power and double the clock frequency, yielding a 4$\times$ improvement in \(\eta\).
+  \item \textbf{Attention optimisation.} Replacing the serial KV-cache attention with a phi-RoPE rotary position encoding (Ch.30, Theorem 3.1) reduces the attention bottleneck from \(O(L^2)\) to \(O(L \log L)\), projected to recover 30--40\% of the cycles currently spent on attention.
+  \item \textbf{Vocabulary compression.} The current vocabulary of \(F_{18} = 2584\) tokens uses 91.5\% of BRAM. A ternary Huffman encoding of the vocabulary could reduce BRAM utilisation to \(\sim 60\%\), freeing tiles for larger models or additional heads.
+  \item \textbf{Multi-chip composition.} The Gamma SKU on TTSKY26b (App.F.2) demonstrates the phi-mesh bridge interface for chip-to-chip composition. Four XC7A100T devices in a mesh would linearly scale throughput while keeping per-chip power at 1 W, yielding a 4$\times$ tok/s improvement at 4 W total.
+\end{enumerate}
+
+The combined multiplier from these four improvements is \(4 \times 1.35 \times 1.6 \times 4 \approx 34.6\times\) over the current normalised ratio, yielding \(563 \times 34.6 \approx 19{,}478\times\) --- well beyond the 3000$\times$ target. This projection is preliminary and assumes linear scaling, which may not hold for process migration and multi-chip composition. A detailed simulation study on UltraScale+ is planned as future work.
+
+\textbf{Honesty note.} The 3000$\times$ figure in the chapter title reflects the DARPA solicitation target, not a measured result. The measured preliminary ratio is 563$\times$ normalised, or 63 tok/J raw. Achieving 3000$\times$ requires the technology scaling path described above, none of which has been implemented on hardware as of the defense date (2026-06-15).
+
+\(\varphi^2 + \varphi^{-2} = 3\)
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-34-phi-identity-canonical.png}

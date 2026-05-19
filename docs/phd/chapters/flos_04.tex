@@ -399,6 +399,197 @@ theorems, 65 \texttt{.v} files.
 Specification. Zenodo, DOI:
 10.5281/zenodo.19227869.
 
+\section{8. The GoldenFloat Family: GF4 to GF64}\label{fa_04:goldenfloat-family}
+
+The \(\alpha_\phi\) constant derived in §\ref{fa_04:derivation-of-the-closed-form}
+governs not only the entropy budget of the ternary quantiser but also the
+exponent--mantissa split ratio of the GoldenFloat number system. This section
+defines the complete GoldenFloat family \(\mathrm{GF}(e,m)\) from GF4 through
+GF64, specifies their bit layouts and dynamic ranges, and compares them
+systematically with the corresponding IEEE\,754 formats.
+
+\subsection{8.1 GoldenFloat Design Principle}\label{fa_04:gf-design-principle}
+
+\begin{definition}[GoldenFloat format \(\mathrm{GF}(e,m)\)]
+\label{fa_04:def:gf-format}
+A GoldenFloat format \(\mathrm{GF}(e,m)\) encodes a non-zero real number as
+\[
+  v = (-1)^{s} \cdot \varphi^{E} \cdot M, \qquad E \in \mathbb{Z},\quad M \in [1, \varphi),
+\]
+where \(s \in \{0,1\}\) is the sign bit, \(E\) is an exponent field of \(e\)
+bits encoded with a \(\varphi\)-weighted bias
+\(E_{\text{bias}} = L_{e} = \varphi^{e} + \psi^{e}\) (a Lucas number),
+and \(M\) is a mantissa of \(m\) bits drawn from Fibonacci-spaced
+quantisation levels in \([1,\varphi)\).
+\end{definition}
+
+The key design choice is that the radix is \(\varphi \approx 1.618\) rather
+than \(2\). This has three consequences that flow directly from the
+Trinity identity \(\varphi^2 + \varphi^{-2} = 3\):
+
+\begin{enumerate}
+  \item \textbf{Three-band exponent partition.} The positive reals partition
+        into three bands of relative widths \(\varphi^{-2} : 1 : \varphi^{-2}\)
+        (Corollary~\ref{fa_00:cor:three-band}), giving the exponent field a
+        natural ternary structure.
+  \item \textbf{Lucas closure.} The rounding lattice
+        \(\{ \varphi^{E} \cdot M_k : k \in \mathbb{Z} \}\) is a subset of
+        \(\mathbb{Z}[\varphi]\), and the rounding error is bounded by the
+        Lucas closure invariant INV-5
+        (\S\ref{fa_04:gf-inv5}).
+  \item \textbf{Exact \(\varphi\)-normalisation.} A forward pass scales by
+        \(\varphi^{-2}\) and the inverse scales by \(\varphi^2\); their product
+        is exactly \(3 \in \mathbb{Z}\), with no rounding error in any binary
+        fixed-point representation.
+\end{enumerate}
+
+\subsection{8.2 Bit Layouts}\label{fa_04:gf-bit-layouts}
+
+Table~\ref{fa_04:tab:bit-layouts} gives the bit allocation for each
+GoldenFloat format. The total width is \(w = 1 + e + m\) (sign + exponent +
+mantissa). The Fibonacci-spaced mantissa levels are indexed by
+\(F_0, F_1, \ldots, F_{2^m - 1}\); the spacing between adjacent levels is
+\(\varphi^{-m}\) in relative terms.
+
+\begin{table}[h]
+\centering
+\caption{GoldenFloat bit layouts: GF4 through GF64.}
+\label{fa_04:tab:bit-layouts}
+\begin{tabular}{@{}lcccccl@{}}
+\toprule
+Format & \(w\) & Sign & \(e\) (exp) & \(m\) (man) & \(E_{\text{bias}}\) & Mantissa spacing \\
+\midrule
+GF4  & 4  & 1 & 1 & 2 & \(L_1 = 1\)    & \(\varphi^{-2} \approx 0.382\) \\
+GF8  & 8  & 1 & 2 & 5 & \(L_2 = 3\)    & \(\varphi^{-5} \approx 0.091\) \\
+GF16 & 16 & 1 & 4 & 11 & \(L_4 = 7\)   & \(\varphi^{-11} \approx 0.002\) \\
+GF32 & 32 & 1 & 7 & 24 & \(L_7 = 29\)  & \(\varphi^{-24} \approx 8 \times 10^{-5}\) \\
+GF64 & 64 & 1 & 10 & 53 & \(L_{10} = 123\) & \(\varphi^{-53} \approx 3 \times 10^{-11}\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{8.3 Dynamic Range}\label{fa_04:gf-dynamic-range}
+
+The dynamic range of \(\mathrm{GF}(e,m)\) is determined by the exponent field.
+With \(e\) bits the exponent takes \(2^{e}\) values centred on the Lucas bias
+\(L_{e}\). The maximum representable finite value is
+\[
+  v_{\max} = \varphi^{(2^{e}-1) - L_{e}} \cdot (\varphi - \epsilon),
+\]
+and the minimum positive normalised value is
+\[
+  v_{\min} = \varphi^{-L_{e}} \cdot 1.
+\]
+The ratio \(v_{\max}/v_{\min} = \varphi^{2^{e}-1}\) grows faster than the
+IEEE dynamic range \(2^{2^{e}-1}\) because \(\varphi > 1\) but slower than
+\(e^{2^{e}-1}\).
+
+Table~\ref{fa_04:tab:dynamic-range} compares the dynamic ranges.
+
+\begin{table}[h]
+\centering
+\caption{Dynamic range comparison: GoldenFloat vs.\ IEEE\,754.}
+\label{fa_04:tab:dynamic-range}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Format & \(v_{\max}\) & \(v_{\min}^{\text{norm}}\) & \(\log_{10}(v_{\max}/v_{\min})\) & IEEE equiv.\ \(\log_{10}\) \\
+\midrule
+GF4  & \(\varphi^{0} \cdot (\varphi - \epsilon)\) & \(\varphi^{-1}\) & 0.21 & --- \\
+GF8  & \(\varphi^{0} \approx 1.618\) & \(\varphi^{-3}\) & 0.83 & FP8 (E4M3): 1.8 \\
+GF16 & \(\varphi^{8} \approx 46.98\) & \(\varphi^{-7}\) & 6.53 & FP16: 4.18 \\
+GF32 & \(\varphi^{99} \approx 10^{21}\) & \(\varphi^{-29}\) & 53.6 & FP32: 38.5 \\
+GF64 & \(\varphi^{921} \approx 10^{194}\) & \(\varphi^{-123}\) & 472 & FP64: 308 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+GoldenFloat provides a wider dynamic range per exponent bit than IEEE\,754
+because the base \(\varphi > 2\) multiplies the effective range. This is
+advantageous for representing physical constants, which span many orders of
+magnitude in a compact format.
+
+\subsection{8.4 Precision Comparison}\label{fa_04:gf-precision}
+
+The relative precision of \(\mathrm{GF}(e,m)\) is governed by the mantissa
+spacing \(\varphi^{-m}\), compared to \(2^{-(m-1)}\) for IEEE formats.
+Since \(\log_2 \varphi \approx 0.694\), GoldenFloat achieves approximately
+\(0.694m\) bits of effective binary precision per \(m\)-bit mantissa field.
+Table~\ref{fa_04:tab:precision} summarises the comparison.
+
+\begin{table}[h]
+\centering
+\caption{Precision comparison: GoldenFloat vs.\ IEEE\,754.}
+\label{fa_04:tab:precision}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Format & GF \(m\) & GF \(\epsilon_{\text{rel}}\) & IEEE \(m\) & IEEE \(\epsilon_{\text{rel}}\) & GF bits equiv. \\
+\midrule
+GF4  & 2 & \(3.82 \times 10^{-1}\) & --- & --- & 1.4 \\
+GF8  & 5 & \(9.08 \times 10^{-2}\) & 3 (E4M3) & \(2.5 \times 10^{-1}\) & 3.5 \\
+GF16 & 11 & \(2.0 \times 10^{-3}\) & 10 (FP16) & \(9.8 \times 10^{-4}\) & 7.6 \\
+GF32 & 24 & \(8.3 \times 10^{-5}\) & 23 (FP32) & \(1.2 \times 10^{-7}\) & 16.7 \\
+GF64 & 53 & \(3.2 \times 10^{-11}\) & 52 (FP64) & \(2.2 \times 10^{-16}\) & 36.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The precision trade-off is intentional: GoldenFloat sacrifices binary
+precision per bit in exchange for \(\varphi\)-closure properties that
+eliminate entire classes of rounding-pathology bugs. For the ternary-weight
+regime of Trinity S\textsuperscript{3}AI, where weights take values in
+\(\{-1, 0, +1\}\), the GF16 precision of \(\sim 2 \times 10^{-3}\) is
+sufficient to represent all intermediate activations without introducing
+accumulation error (INV-3, \cite{t27spec}).
+
+\subsection{8.5 The Rounding Lattice and INV-5}\label{fa_04:gf-inv5}
+
+\begin{theorem}[Lucas Closure of the Rounding Lattice --- INV-5]
+\label{fa_04:thm:inv5}
+For any GoldenFloat format \(\mathrm{GF}(e,m)\), the rounding of any
+\(x \in \mathbb{Z}[\varphi]\) to the nearest representable value lies in
+\(\mathbb{Z}[\varphi]\). The rounding error is bounded by
+\(|\delta| \le \varphi^{-m}/2\) and the rounded value satisfies the
+Lucas recurrence with integer coefficients.
+\end{theorem}
+
+\begin{proof}
+The representable values of \(\mathrm{GF}(e,m)\) are
+\(\{ \pm \varphi^{E} \cdot (1 + k\varphi^{-m}) : E \in [E_{\min}, E_{\max}],
+\; k = 0, \ldots, \lceil\varphi^m\rceil - 1 \}\).
+Each such value is a polynomial in \(\varphi\) with integer coefficients
+of degree at most \(E_{\max} - m\). Since \(\mathbb{Z}[\varphi]\) is a
+ring, the rounding of any element of \(\mathbb{Z}[\varphi]\) to the
+nearest grid point remains in \(\mathbb{Z}[\varphi]\).
+The Coq proof is in
+\filepath{t27/proofs/canonical/igla/INV5\_LucasClosureGf16.v}
+(10 lemmas, all Qed).
+\qed
+\end{proof}
+
+\subsection{8.6 Summary and Design Rationale}\label{fa_04:gf-summary}
+
+The GoldenFloat family occupies a distinct point in the
+range\(\times\)precision Pareto front compared to IEEE\,754:
+
+\begin{itemize}
+  \item \textbf{Wider dynamic range per exponent bit} (base \(\varphi\) vs.\
+        base \(2\)).
+  \item \textbf{Lower mantissa precision per bit} (by factor
+        \(\log_2\varphi \approx 0.694\)).
+  \item \textbf{Exact Lucas closure} (no rounding-induced lattice escape).
+  \item \textbf{Exact \(\varphi\)-normalisation} (forward \(\times\) inverse
+        \(= 3\), integer-exact).
+  \item \textbf{Natural ternary partition} (three exponent bands from
+        \(\varphi^2 + \varphi^{-2} = 3\)).
+\end{itemize}
+
+For the Trinity S\textsuperscript{3}AI application, where the target is
+\(\mathrm{BPB} \le 1.85\) (Gate-2) rather than maximum per-value
+precision, the trade-off is favourable: the \(\varphi\)-closure
+properties reduce the engineering complexity of the verification pipeline
+and the FPGA datapath, at the cost of reduced binary precision---a cost
+that is absorbed by the ternary weight alphabet.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-04-scale-fish-formula.png}

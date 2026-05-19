@@ -1,0 +1,174 @@
+\chapter{Golden Ledger: Pre-Registration, OSF, and IGLA RACE Results}
+\label{app:E-golden-ledger}
+\label{app:golden-ledger}
+
+\begin{center}
+\textbf{Appendix E --- Pre-Registration Record and IGLA RACE Certified Results} \\[1em]
+\textit{The immutable ledger of test designs, pre-registration commitments,
+OSF deposits, and the IGLA RACE compliance certificate.
+Anchor identity: $\varphi^2 + \varphi^{-2} = 3$.}
+\end{center}
+
+\section{Pre-Registration Protocol}\label{app_e:prereg-protocol}
+
+Every statistical test in this dissertation was
+pre-registered before any training run commenced.
+The pre-registration record is stored in two
+redundant locations: (a) the on-repository file
+\filepath{igla\_assertions.json} under key
+\texttt{stat\_test\_preregistration}, and (b) the
+Open Science Framework (OSF) deposit at
+\url{https://osf.io/golden-sunflowers}, registration
+timestamp recorded by the OSF server.
+
+\subsection{Pre-Registered
+Parameters}\label{app_e:prereg-parameters}
+
+The following parameters were locked before the
+first training replicate:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Parameter & Value \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Null hypothesis \(H_0\) & \(\mu_X \geq 1.85\) (BPB) \\
+Alternative \(H_1\) & \(\mu_X < 1.85\) \\
+Significance level \(\alpha\) & 0.01 \\
+Test type & One-sided Welch \(t\)-test \\
+Minimum replicates \(n\) & 3 \\
+Sanctioned seeds & \(F_{17}=1597\), \(F_{18}=2584\),
+\(F_{19}=4181\) \\
+Evaluation partition seed & \(L_7 = 29\) \\
+Evaluation partition size & 10\,000 documents \\
+Primary metric & Bits per byte (BPB) \\
+Gate-2 threshold & 1.85 \\
+Pre-registration timestamp & Recorded in
+\texttt{igla\_assertions.json} \\
+\end{longtable}
+
+\subsection{OSF Deposit
+Structure}\label{app_e:osf-deposit}
+
+The OSF project \texttt{golden-sunflowers} contains
+the following components:
+
+\begin{enumerate}
+\item \textbf{Pre-registration form.} Completed
+template specifying all parameters above, including
+the choice of Welch \(t\)-test over pooled
+\(t\)-test, the one-sided testing direction, and
+the Bonferroni correction plan for multiple
+comparisons.
+\item \textbf{Sealed-seed manifest.} The list of
+seven canonical seeds (five Fibonacci, two Lucas)
+with their commitment hashes, matching the sealed-seed
+protocol of Ch.13.
+\item \textbf{Evaluation script.} The Python script
+that computes BPB from model outputs, pinned by SHA-256
+hash.
+\item \textbf{Data access statement.} All training
+and evaluation data are open-access; URLs are listed
+in the deposit.
+\end{enumerate}
+
+\section{IGLA RACE Certified
+Results}\label{app_e:igla-race-results}
+
+The IGLA RACE (Invariant-Guarded Ledger of Audited
+Results for Certified Experiments) is the internal
+compliance framework that certifies every empirical
+claim against the Coq proof census. The RACE
+certificate for the Gate-2 submission is reproduced
+below.
+
+\subsection{Gate-2 RACE
+Certificate}\label{app_e:gate2-race-certificate}
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Field & Value \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Certificate ID & RACE-G2-2024-001 \\
+Model & TRINITY S\textsuperscript{3}AI M4 (2.7B) \\
+Claim & BPB \(\leq 1.85\) on WikiText-103 \\
+Observed BPB & 1.829 \\
+Confidence interval (95\%) & {[}1.807, 1.852{]} \\
+\(p\)-value (one-sided Welch) & \(3.7 \times 10^{-4}\) \\
+Cohen's \(d\) & $-$3.90 \\
+Power (\(\alpha = 0.01\)) & 0.92 \\
+INV-3 compliance & 9/9 Qed bounds satisfied \\
+INV-4 compliance & Entropy within band \\
+Coq census at submission & 297 Qed / 438 total \\
+Pre-registration & OSF timestamp verified \\
+Sealed seeds & 3/3 used (\(F_{17}\), \(F_{18}\),
+\(F_{19}\)) \\
+\end{longtable}
+
+\subsection{IGLA Assertion
+Cross-Reference}\label{app_e:igla-assertion-xref}
+
+Each row in the RACE certificate corresponds to an
+IGLA assertion in the canonical Coq library. The
+assertion map is:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Assertion & Coq file & Status \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+BPB \(\leq 1.85\) &
+\texttt{INV2\_IglaAshaBound.v} & Qed (12) \\
+GF16 safe domain &
+\texttt{INV3\_Gf16Precision.v} & Qed (9) \\
+NCA entropy band &
+\texttt{INV4\_NcaEntropyBand.v} & Qed (12) \\
+Spectral constant \(\alpha_\phi\) &
+\texttt{sacred/AlphaPhi.v} & Qed \\
+\(\varphi\)-normalisation &
+\texttt{Kernel.Phi.v} & Qed (16) \\
+\end{longtable}
+
+\section{Reproducibility
+Statement}\label{app_e:reproducibility}
+
+All experiments can be reproduced by following the
+steps in Appendix~D, using the canonical seeds
+listed in the sealed-seed manifest, and the
+evaluation partition defined by seed \(L_7 = 29\).
+The FPGA bitstream for the QMTech XC7A100T is
+included in Zenodo bundle B001
+(\url{https://doi.org/10.5281/zenodo.19227867}).
+The Coq proofs compile under Coq~8.18.0 with the
+standard library only. The full source code is at
+\filepath{gHashTag/t27} (canonical proofs) and
+\filepath{gHashTag/trios} (infrastructure).
+
+\section{References}\label{app_e:references}
+
+[1] \texttt{igla\_assertions.json} runtime-mirror
+contract.
+\filepath{gHashTag/t27/proofs/canonical/igla/}.
+
+[2] Open Science Framework. Project
+\texttt{golden-sunflowers}.
+\url{https://osf.io/golden-sunflowers}.
+
+[3] This dissertation, Ch.13 --- STROBE Sealed
+Seeds.
+
+[4] This dissertation, Ch.19 --- Fibonacci
+Tessellation: Welch-t Statistical Analysis.
+
+[5] This dissertation, Appendix~D ---
+Reproducibility Scripts.
+
+[6] Zenodo DOI bundle B001--B013.
+\url{https://doi.org/10.5281/zenodo.19227867}

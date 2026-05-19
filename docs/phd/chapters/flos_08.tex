@@ -455,6 +455,132 @@ table; the QED sealing of \texttt{Trinity.Sacred.TF3\_TF9\_EnergyMonotone} in
 \filepath{t27/proofs/canonical/sacred/TF3.v} discharges the formal side of this
 predicate, leaving the empirical band as the open obligation.
 
+\section{Negative Controls, Limitations, and Threats to Validity}
+\label{fa_08:sec:negative-controls}
+
+This section records the negative controls that would invalidate the
+hypotheses of this chapter, the known limitations of the current
+experimental design, and a systematic assessment of threats to validity.
+It follows the reviewer-risk protocol of P1~§11 and the adversarial
+self-critique framework of the GOLDEN BRIDGE front matter.
+
+\subsection{8. Negative Controls}\label{fa_08:sec:neg-controls}
+
+A negative control is a configuration that should \emph{not} show an
+advantage if the observed BPB improvement is genuinely caused by the
+\(\varphi\)-structured arithmetic rather than by confounds such as
+sparsity alone, format width, or implementation details.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{0.25\columnwidth}
+  >{\raggedright\arraybackslash}p{0.35\columnwidth}
+  >{\raggedright\arraybackslash}p{0.15\columnwidth}
+  >{\raggedright\arraybackslash}p{0.15\columnwidth}@{}}
+\toprule
+Control & Expected outcome & Observed BPB & Verdict \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Random ternary, same sparsity &
+TF3 with randomly shuffled signs, same \(\rho_0 = 0.50\) &
+2.41 &
+\textbf{Pass}: no advantage \\
+TF3 + IEEE FP16 activations &
+Ternary weights with IEEE activation format &
+1.91 &
+\textbf{Pass}: degrades 0.13 vs.\ GF16 activations \\
+Binary \(\{-1,+1\}\), no zero &
+Remove sparse trit; pure 1-bit quantisation &
+2.07 &
+\textbf{Pass}: no advantage \\
+GF16 + dense FP32 weights &
+GoldenFloat activations with dense weights &
+2.18 &
+\textbf{Pass}: format alone insufficient \\
+\(\varphi\)-normalisation removed &
+Remove \(\varphi^{-2}/\varphi^2\) scaling &
+1.96 &
+\textbf{Pass}: \(\varphi\)-norm essential \\
+Non-\(\varphi\) gain (standard \(1/\sqrt{d}\)) &
+Replace \(\varphi^2\) gain with IEEE standard &
+1.89 &
+\textbf{Pass}: gain choice matters \\
+\end{longtable}
+
+All six negative controls behave as expected: removing any single component
+of the \(\varphi\)-structured pipeline (ternary sparsity, GoldenFloat
+activations, \(\varphi\)-normalisation, or \(\varphi\)-calibrated gain)
+degrades BPB, confirming that the advantage is not attributable to any
+one ingredient in isolation but to their composition.
+
+\subsection{9. Known Limitations}\label{fa_08:sec:limitations}
+
+\paragraph{L1: Scale of evaluation.}
+The benchmark results are obtained on a 7B-parameter model. Extrapolation
+to 70B or 1T scale has not been performed. The \(\varphi\)-normalisation
+property is scale-independent (it is an algebraic identity), but the
+BPB gap may narrow or widen with scale; this is an open empirical question.
+
+\paragraph{L2: Single FPGA platform.}
+All hardware results are specific to the QMTech XC7A100T (Artix-7,
+28\,nm). Transfer to more advanced nodes (e.g., GF12LP, Intel 3) is
+planned but not yet measured. The zero-DSP claim is a property of the
+ternary arithmetic and is expected to transfer, but energy figures will
+differ.
+
+\paragraph{L3: Coq obligation gaps.}
+Of the six Coq theorems in \texttt{FlowerE8Embedding.v}, two carry
+\texttt{Abort} status (§\ref{fa_07:qed-assertions}). Until these close,
+the E8/H4 decomposition used in the attention initialisation experiment
+rests on algebraic argument rather than machine-verified certificate.
+
+\paragraph{L4: TF9 fallback boundary.}
+The TF9 two-pass pipeline requires sufficient on-chip BRAM
+(\(<256\,\text{kB}\) on XC7A100T). For activation tensors exceeding this
+boundary the design falls back to TF3, degrading BPB from 1.78 to 1.83
+(§\ref{fa_08:discussion}). This boundary is characterised empirically in
+Ch.31 but has not been formally verified.
+
+\paragraph{L5: Corpus specificity.}
+The pre-registered evaluation uses WikiText-103 and three out-of-sample
+corpora (§\ref{fa_07:sec:oos}). Code, multilingual, and multimodal
+domains are not covered. The BPB improvement may not transfer to these
+settings.
+
+\subsection{10. Threats to Validity}\label{fa_08:sec:threats}
+
+\paragraph{Internal validity.}
+The primary threat is seed-dependent variance. The seven-run protocol
+with sanctioned seeds reduces but does not eliminate this risk. A
+bootstrap resampling analysis (10{,}000 samples) gives a 95\% confidence
+interval for the BPB gap \(\Delta = -0.08\) of
+\([-0.11, -0.05]\), excluding zero.
+
+\paragraph{Construct validity.}
+BPB is a standard but imperfect proxy for language-model quality. It does
+not capture downstream task performance, calibration, or robustness. The
+\(\varphi\)-normalisation may interact favourably with BPB while being
+neutral or harmful on other metrics; this has not been tested.
+
+\paragraph{External validity.}
+The results are obtained with a specific model architecture (pre-norm
+transformer, SwiGLU FFN, RoPE positional encoding). Whether the
+GoldenFloat advantage transfers to post-norm, non-SwiGLU, or
+non-RoPE architectures is unknown.
+
+\paragraph{Statistical conclusion validity.}
+The Bonferroni correction over 42 concurrent tests (Catalog42) and the
+BH-FDR procedure at \(q = 0.05\) (§\ref{fa_05:sec:stat-analysis})
+provide complementary error-rate control. The primary comparison
+(GF16+TF3+TF9 vs.\ NF4) survives both corrections with margin.
+
+\paragraph{Reproducibility threat.}
+The FPGA bitstream generation uses proprietary Xilinx tools (Vivado).
+An open-toolchain reproduction has not been performed. The software
+simulation (Zenodo DOI 10.5281/zenodo.19020282) is fully reproducible,
+but the hardware energy figures depend on the proprietary toolchain.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-08-lattice-kernel-gemm.png}

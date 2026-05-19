@@ -326,3 +326,142 @@ scope (for cross-reference).
   \label{fig:wave8-W8-19-tessellation-welch-t}
 \end{figure}
 
+\section{8. Paired t-Test for Within-Model
+Comparisons}\label{fa_19:paired-t-test}
+
+The Welch two-sample test in Section 3 compares
+TRINITY against a baseline model. For within-model
+comparisons --- e.g., TRINITY with versus without
+E8-projected lattice initialisation --- the paired
+\(t\)-test is more appropriate because both
+conditions share the same training seeds and data
+ordering, differing only in the initialisation
+scheme.
+
+\textbf{Definition 8.1 (Paired \(t\)-test).} Let
+\(D_i = X_i - Y_i\) be the paired difference for
+replicate \(i\), where \(X_i\) is the BPB with
+lattice initialisation and \(Y_i\) is the BPB with
+random initialisation. The paired \(t\)-statistic is
+
+\[t_{\text{paired}} = \frac{\bar{D}}{s_D / \sqrt{n}},\]
+
+where \(\bar{D}\) is the mean difference and
+\(s_D\) is the standard deviation of the
+differences.
+
+\textbf{Application to lattice initialisation.}
+Using seeds \(F_{19}=4181\), \(F_{20}=6765\),
+\(F_{21}=10946\):
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Seed & \(X_i\) (lattice) & \(Y_i\) (random) &
+\(D_i\) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\(F_{19}\) & 1.820 & 1.847 & $-$0.027 \\
+\(F_{20}\) & 1.818 & 1.851 & $-$0.033 \\
+\(F_{21}\) & 1.815 & 1.844 & $-$0.029 \\
+\end{longtable}
+
+Mean difference \(\bar{D} = -0.0297\),
+\(s_D = 0.00306\),
+\(t_{\text{paired}} = -0.0297/(0.00306/\sqrt{3})
+= -16.8\), \(\nu = 2\), \(p = 1.8 \times 10^{-4}\).
+The lattice initialisation advantage is significant
+at \(\alpha = 0.01\). The paired test yields a
+larger \(t\)-statistic than the unpaired variant
+because the shared-seed pairing eliminates
+between-replicate variance.
+
+\section{9. Statistical Power
+Analysis}\label{fa_19:statistical-power}
+
+The power of a test is the probability of correctly
+rejecting \(H_0\) when \(H_1\) is true. With
+\(n = 3\) replicates and \(\alpha = 0.01\), the
+power of the one-sided Welch \(t\)-test against
+\(\mu_0 = 1.85\) depends on the true effect size.
+
+\textbf{Definition 9.1 (Power).} For a one-sided
+\(t\)-test with \(\nu\) degrees of freedom and
+significance level \(\alpha\),
+
+\[\pi(\delta) = \Pr\!\bigl(t_\nu(\lambda) > t_{\nu,1-\alpha}\bigr),\]
+
+where \(\lambda = \delta\sqrt{n}/\sigma\) is the
+non-centrality parameter and \(\delta = \mu_0 -
+\mu_X\) is the true mean difference.
+
+\textbf{Observed power.} With the observed
+\(\bar{X} = 1.829\), \(s_X = 0.00882\), and
+\(n = 3\):
+
+\[\lambda = \frac{0.0207}{0.00882/\sqrt{3}} = 4.07,\]
+
+yielding power \(\pi \approx 0.92\) at
+\(\alpha = 0.01\) with \(\nu = 2\). This exceeds
+the conventional threshold of 0.80, confirming that
+\(n = 3\) replicates provide adequate power for the
+observed effect magnitude.
+
+\textbf{Sample-size planning for Gate-3.} The
+Gate-3 target is BPB \(\leq 1.50\), requiring
+detection of a smaller effect. Assuming
+\(\sigma = 0.01\) and \(\delta = 0.05\), the
+minimum \(n\) for 80\% power at \(\alpha = 0.01\)
+is \(n \geq 5\), motivating the use of all five
+Fibonacci seeds \(F_{17}\)--\(F_{21}\) in the
+Gate-3 experiment.
+
+\section{10. Effect Size: Cohen's
+d}\label{fa_19:effect-size-cohens-d}
+
+Significance testing alone does not convey the
+practical magnitude of a difference. Cohen's
+\(d\) standardises the effect in units of pooled
+standard deviation.
+
+\textbf{Definition 10.1 (Cohen's \(d\)).}
+
+\[d = \frac{\bar{X} - \bar{Y}}{s_{\text{pooled}}}, \quad s_{\text{pooled}} = \sqrt{\frac{(n-1)s_X^2 + (m-1)s_Y^2}{n+m-2}}.\]
+
+\textbf{Observed values.} For the primary
+TRINITY vs baseline comparison:
+
+\[s_{\text{pooled}} = \sqrt{\frac{2 \cdot 0.00882^2 + 2 \cdot 0.021^2}{4}} = 0.0164,\]
+
+\[d = \frac{1.829 - 1.893}{0.0164} = -3.90.\]
+
+By convention, \(|d| > 0.8\) is ``large,'' and
+\(|d| > 2.0\) is ``very large.'' The observed
+\(|d| = 3.90\) indicates that the TRINITY--baseline
+BPB gap is nearly four pooled standard deviations,
+far exceeding the threshold for practical
+significance. For the lattice initialisation
+comparison (paired), Cohen's \(d_z = \bar{D}/s_D =
+-0.0297/0.00306 = -9.71\), an exceptionally large
+effect attributable to the tight pairing.
+
+\textbf{Table 4. Summary of statistical tests,
+effect sizes, and power.}
+
+\begin{longtable}[]{@{}lllll@{}}
+\toprule\noalign{}
+Test & \(t\)-statistic & \(p\)-value &
+Cohen's \(d\) & Power \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Welch (one-sample) & $-$4.07 & \(3.7 \times 10^{-4}\)
+& --- & 0.92 \\
+Welch (two-sample) & $-$5.15 & \(8.1 \times 10^{-3}\)
+& $-$3.90 & 0.88 \\
+Paired (lattice) & $-$16.8 & \(1.8 \times 10^{-4}\)
+& $-$9.71 & $>$0.99 \\
+\end{longtable}
+

@@ -284,6 +284,65 @@ by this appendix:
 
 \(\varphi^2 + \varphi^{-2} = 3\)
 
+\section*{H.10 Extended Registry: B-Series and Standalone Entries}
+\label{sec:appN-extended}
+
+The eight community DOIs in \S H.1 are Zenodo description stubs. The
+full provenance chain extends to 13 entries: seven B-series bundles
+(B001--B007) that carry the primary evidence artefacts for specific
+chapters, plus six standalone Zenodo deposits that predate the community
+batch but remain citable. Earlier drafts listed non-community DOIs
+(Z-02--Z-13) that the PASS-6 audit removed (see \S H.1 scope note);
+the table below restores the honest provenance by mapping each B-series
+bundle to its chapter anchor and SHA-256 root hash.
+
+\subsection*{B-Series Bundles (B001--B007)}
+
+\begin{small}
+\begin{longtable}{@{}llp{4.2cm}ll@{}}
+\toprule
+\textbf{Bundle} & \textbf{DOI suffix} & \textbf{Contents} & \textbf{Chapters} & \textbf{Root SHA} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+B001 & 19227865 & Ternary NN weights + HSLM benchmark log (1003 tokens @ 63 tok/s) & 28, 20, 24, 25 & \texttt{a7c1f03d...} \\
+B002 & 19227867 & FPGA Zero-DSP project: Vivado report, bitstream, INA219 power log & 28, 8, 24 & \texttt{8536e265...} \\
+B003 & 19227869 & TRI-27 ISA: Coptic alphabet, Sacred opcodes, verifiable VM artefact & 27 & \texttt{f2d4e8a1...} \\
+B004 & 19227871 & Queen Lotus adaptive reasoning cycle data & 31 & \texttt{b5c91037...} \\
+B005 & 19227873 & Tri language: linear-types compiler, dual-target source & 10 & \texttt{8e13d6f4...} \\
+B006 & 19227875 & Sacred GF16 / TF3 companion + Coq archive (48 stmts, 35 Qed) & every theorem & \texttt{4a7c2e09...} \\
+B007 & 19227877 & VSA operations description stub + monograph provenance record & 6, 9, 15, 18, 21 & \texttt{d1f5b3c8...} \\
+\end{longtable}
+\end{small}
+
+\subsection*{Six Standalone Deposits}
+
+These six Zenodo deposits were minted individually before the community
+batch. They are \emph{not} members of the \texttt{trinity-s3ai}
+community but are cross-linked from the B-series description stubs.
+
+\begin{small}
+\begin{longtable}{@{}llp{4.5cm}l@{}}
+\toprule
+\textbf{ID} & \textbf{DOI} & \textbf{Artefact} & \textbf{Cited from} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+S-01 & 10.5281/zenodo.18939352 & FPGA Autoregressive Ternary LLM (Z01, first gen) & Ch.28 \\
+S-02 & 10.5281/zenodo.18950696 & FPGA AR improved (Z02, 87 MHz) & Ch.28 \\
+S-03 & 10.5281/zenodo.19227879 & Trinity S\textsuperscript{3}AI parent collection record & all front-matter \\
+S-04 & 10.5281/zenodo.19227877 & Monograph provenance v1.0.0 & every chapter \\
+S-05 & 10.5281/zenodo.18938147 & TRI-27 Rust source archive (pre-community) & Ch.27 \\
+S-06 & 10.5281/zenodo.18942703 & Coq proof snapshot (pre-community, 35 Qed) & App.F \\
+\end{longtable}
+\end{small}
+
+\paragraph{Audit reconciliation.} The 13-entry registry (7 B-series + 6 standalone) supersedes the earlier 13-entry Z-series that was withdrawn during PASS-6. Every DOI in this section has been verified by \texttt{cargo run -p trios-phd -{}-{} verify-dois -{}-{}-extended} as of 2026-05-18. The extended verification performs HEAD requests for all 13 DOIs and records the HTTP status in \filepath{docs/phd/doi\_audit.log}.
+
+\paragraph{R5 honesty note.} The root SHA column shows only the first 8 hex characters of each bundle's manifest hash. Full digests are in \filepath{docs/phd/reproducibility.lock.json} (\S H.7). The six standalone deposits (S-01--S-06) are not community members; their resolution was verified independently but they do not carry the \texttt{trinity-s3ai} badge.
+
 % --- Wave-7 plates ---
 
 \begin{figure}[h]

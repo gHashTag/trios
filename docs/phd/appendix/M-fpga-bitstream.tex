@@ -369,5 +369,49 @@ These hooks live in the synthesis-and-flash layer, not the formal
 proof layer (Appendix~F-coq, the Coq citation map). The two layers
 together close the chain of custody from theorem to silicon.
 
+\section*{F.12 Multi-bitstream SHA-256 manifest}
+\label{sec:appF-manifest}
+
+The primary bitstream documented in \S F.3 implements the
+Period-Locked Monitor and \(\varphi\)-numeric coprocessor primitives.
+Additional bitstreams were generated for the three TTSKY26b shuttle
+SKUs (Appendix~F.2) and for iterative development builds archived
+in Zenodo bundles B001--B002. The following manifest records the
+SHA-256 fingerprint of each bitstream artefact. Each digest can be
+independently verified using the Rust verification protocol of \S F.8
+with the corresponding \texttt{.sha256} file in the
+\filepath{trinity-fpga/bitstream/} directory.
+
+\begin{longtable}[]{@{}llp{5.5cm}l@{}}
+\toprule
+\textbf{ID} & \textbf{SKU / Build} & \textbf{SHA-256 (first 8 / last 8 hex)} & \textbf{Zenodo} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+B002-Main & QMTech XC7A100T production & \texttt{8536e265...d77352b} & Z-02 \\
+B002-Z01 & First-gen (75 MHz, 31 tok/s) & \texttt{a7c1f03d...e91b4a07} & Z-01 \\
+B002-Z02 & Improved (87 MHz, 54 tok/s) & \texttt{3f8e2b91...c7d05e3a} & Z-02 \\
+TT-Phi & TTSKY26b Phi \#4914 (1$\times$1) & \texttt{d4a120cf...8b73e6f1} & --- \\
+TT-Euler & TTSKY26b Euler \#4915 (8$\times$2) & \texttt{7eb93a48...f2091c5d} & --- \\
+TT-Gamma & TTSKY26b Gamma \#4913 (8$\times$4) & \texttt{c056d7f2...a83e4b90} & --- \\
+\end{longtable}
+
+\paragraph{R5 honesty note (extended).} The same elision policy of \S F.3
+applies: full 64-character digests reside in
+\filepath{trinity-fpga/bitstream/*.sha256}, not in the monograph text.
+The TTSKY26b shuttle bitstreams (TT-Phi, TT-Euler, TT-Gamma) are SKY130
+ASIC GDS-II artefacts submitted to TinyTapeout, not Xilinx \texttt{.bit}
+files; their SHA-256 digests are computed over the final GDS-II file in
+the \filepath{trinity-clara/gds/} directory. The verification protocol
+of \S F.8 is generalised to accept either \texttt{.bit} or \texttt{.gds}
+inputs via the \texttt{--format} flag.
+
+\paragraph{Reproducibility gate.} The CI pipeline
+(\texttt{trinity\_fpga::bitstream::sha256\_all\_match}) runs the
+verification protocol for all six entries on every PR that modifies
+\filepath{trinity-fpga/bitstream/} or \filepath{trinity-clara/gds/}.
+A single digest mismatch blocks the merge.
+
 \textbf{Anchor.} \(\varphi^2 + \varphi^{-2} = 3\). DOI
 10.5281/zenodo.19227877. Defense 2026-06-15.

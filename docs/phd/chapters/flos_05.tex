@@ -1517,6 +1517,107 @@ analytic, and $\varphi$-disciplined: a Trinity of perspectives.
 \centerline{\textit{Formal, analytic, $\varphi$-disciplined: three views, one bridge.}}
 \bigskip
 
+\section{Pre-Registration Protocol and Primary Hypothesis H1}
+\label{fa_05:sec:prereg-h1}
+
+This section records the pre-registration protocol governing the empirical
+claims made in the GoldenFloat and ternary-arithmetic chapters
+(Chapters~\ref{ch:golden-scales}--\ref{ch:fibonacci}) and states the primary
+hypothesis H1 whose evaluation drives the benchmark programme of
+Chapter~\ref{ch:data-analysis}.
+
+\subsection{Pre-Registration Methodology}\label{fa_05:sec:prereg-method}
+
+Following the pre-registration framework established in the GOLDEN BRIDGE
+front matter (cf.\ \emph{Methodology and Scientific Rigor --- Pre-Registered
+Protocol}), the following experimental protocol is frozen before any
+benchmark computation is performed:
+
+\begin{enumerate}
+  \item \textbf{Dataset freeze.} The evaluation corpus (WikiText-103,
+        1003-token held-out sequence) is fixed with SHA-256 hash committed
+        to the repository before the first training run.
+  \item \textbf{Seed freeze.} Only the sanctioned seed pool
+        \(\{F_{17}=1597, F_{18}=2584, F_{19}=4181, F_{20}=6765,
+        F_{21}=10946, L_7=29, L_8=47\}\) is used for all RNG
+        initialisation. The forbidden seeds \(\{42, 43, 44, 45\}\) are
+        excluded (cf.\ STROBE sealed-seed protocol, Ch.13).
+  \item \textbf{Metric freeze.} The primary quality metric is
+        bits-per-byte (BPB) on the held-out sequence. Accept band:
+        \(\mathrm{BPB} \le 1.85\) (Gate-2). Reject band:
+        \(\mathrm{BPB} > 1.92\).
+  \item \textbf{Format freeze.} The GoldenFloat configurations under test
+        are fixed: GF4, GF8, GF16, GF32, and GF64 with the bit layouts of
+        Table~\ref{fa_04:tab:bit-layouts} (Ch.4). No format parameter may
+        be adjusted after the first benchmark result is recorded.
+  \item \textbf{Null model freeze.} Three null models are pre-registered:
+        (i) random ternary weights with the same sparsity profile,
+        (ii) MXFP4 quantisation at equivalent bit budget, and
+        (iii) FP16 with stochastic rounding. All null-model hyperparameters
+        are committed before the experimental runs.
+\end{enumerate}
+
+Any violation of the above protocol---for example, adjusting the GF16
+mantissa width after inspecting BPB results---voids the statistical
+interpretation and requires a new protocol registration with a fresh
+timestamp.
+
+\subsection{Primary Hypothesis H1}\label{fa_05:sec:h1}
+
+\begin{hypothesis}[H1: GoldenFloat Superiority]
+\label{fa_05:hyp:H1}
+For language-model weight compression at fixed bit budget \(B \le 2\)
+bits per weight, the GoldenFloat-ternary pipeline
+(GF16 activations \(+\) TF3/TF9 weights) achieves a strictly lower BPB
+than any IEEE-derived quantisation scheme at the same bit budget, with
+the advantage mediated by the Lucas-closure rounding invariant INV-5
+(Theorem~\ref{fa_04:thm:inv5}).
+\end{hypothesis}
+
+Formally, let \(\mathrm{BPB}_{\varphi}(B)\) denote the BPB achieved by the
+GoldenFloat-ternary pipeline at bit budget \(B\), and let
+\(\mathrm{BPB}_{\mathrm{IEEE}}(B)\) denote the best BPB achievable by any
+IEEE-derived scheme (FP16, MXFP4, INT8, NF4) at the same budget. Then:
+
+\begin{equation}
+  H_1:\quad \mathrm{BPB}_{\varphi}(B) < \mathrm{BPB}_{\mathrm{IEEE}}(B)
+  \quad \text{for all } B \in [1.585, 2.0],
+  \label{fa_05:eq:H1}
+\end{equation}
+
+where the lower bound \(1.585 = \log_2 3\) is the information-theoretic
+minimum for ternary encoding and the upper bound is the Gate-2 ceiling.
+
+The null hypothesis is:
+
+\begin{equation}
+  H_0:\quad \mathrm{BPB}_{\varphi}(B) \ge \mathrm{BPB}_{\mathrm{IEEE}}(B)
+  \quad \text{for at least one } B \in [1.585, 2.0].
+  \label{fa_05:eq:H0}
+\end{equation}
+
+\subsection{Falsification Criteria for H1}\label{fa_05:sec:H1-falsification}
+
+Hypothesis H1 is falsified if any of the following is observed:
+
+\begin{itemize}
+  \item \textbf{F-1.} A reproduction run on the sanctioned seed pool
+        produces \(\mathrm{BPB}_{\varphi}(1.585) \ge 1.92\) (the reject
+        band), indicating that TF3 alone fails to improve upon the null.
+  \item \textbf{F-2.} An IEEE-derived scheme at \(B = 2\) (e.g., MXFP4
+        with group quantisation) achieves
+        \(\mathrm{BPB}_{\mathrm{IEEE}}(2) \le 1.80\), beating the
+        GoldenFloat result of \(\mathrm{BPB}_{\varphi}(1.78) = 1.78\) at
+        equivalent budget.
+  \item \textbf{F-3.} The INV-5 rounding invariant is shown to be
+        violated for GF16 at any representable value, which would
+        undermine the theoretical basis for the compression advantage.
+\end{itemize}
+
+Each criterion is binary and requires no subjective judgement. The
+falsification ledger records the outcome of every seed-by-seed run with
+timestamp and protocol-state hash.
+
 % End of chapter L5 — Fibonacci-Lucas generating function bridge.
 % Trinity Anchor: L_2 = 3 as coefficient of x^2 in L(x) = (2-x)/(1-x-x^2).
 % Bridge identity: L(x) = Tr(1/(1-phi*x)) connects L6 ring to L4 ladder.

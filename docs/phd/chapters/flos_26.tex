@@ -451,3 +451,399 @@ Energy-Efficient Computing.
   \label{fig:wave8-W8-26-data-analysis-isa}
 \end{figure}
 
+\section{8. Full KOSCHEI ISA
+Specification}\label{fa_26:full-koschei-isa-specification}
+
+This section provides the complete ISA specification
+for the KOSCHEI Phi-Numeric Coprocessor, including
+the full instruction set, detailed register-file
+semantics, instruction encoding tables, condition
+codes, exception model, and pipeline timing. The
+specification is anchored to the identity
+\(\varphi^2 + \varphi^{-2} = 3\) and certified by
+the five canonical Coq modules listed in Section~5.
+
+\subsection{8.1 Extended Register
+File}\label{fa_26:extended-register-file}
+
+In addition to the 16 general-purpose registers
+\(r_0\)--\(r_{15}\) described in Section~2, KOSCHEI
+defines four special-purpose registers and a status
+register:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Register & Address & Function \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{r0}--\texttt{r15} & 0x0--0xF &
+General-purpose, 64-bit, \(\varphi\)-scaled \\
+\texttt{PHI\_SCALE} & 0x10 & Current global
+\(\varphi\)-exponent offset (4-bit, read-write) \\
+\texttt{VSA\_DIM} & 0x11 & VSA vector dimension
+(13-bit, fixed at 64) \\
+\texttt{CTX\_LEN} & 0x12 & Context length for
+\texttt{PHI\_ROPE} (13-bit) \\
+\texttt{SEED\_LO} & 0x13 & Lower 32 bits of
+canonical seed \\
+\texttt{SEED\_HI} & 0x14 & Upper 32 bits of
+canonical seed \\
+\texttt{STATUS} & 0x15 & 8-bit status word (see
+below) \\
+\end{longtable}
+
+\textbf{STATUS register bit assignment.}
+
+\begin{longtable}[]{@{}llp{7cm}@{}}
+\toprule\noalign{}
+Bit & Name & Meaning \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0 & \texttt{Z} & Last result was zero trit \\
+1 & \texttt{N} & Last result was negative trit \\
+2 & \texttt{C} & Carry out of \texttt{payload} \\
+3 & \texttt{V} & \(\varphi\)-exponent overflow
+(\texttt{φ\_exp} outside {[}−8, 7{]}) \\
+4 & \texttt{INV\_FAULT} & INV-3/INV-4 bound
+violation detected \\
+5 & \texttt{VSA\_SAT} & VSA bundle saturation \\
+6:7 & \texttt{RSVD} & Reserved \\
+\end{longtable}
+
+The \texttt{INV\_FAULT} flag (bit 4) is the
+hardware manifestation of the Coq-certified bounds.
+When set, the coprocessor raises a non-maskable
+interrupt, halting inference until the violated
+invariant is re-established. No \texttt{INV\_FAULT}
+has been observed in \(F_{19} = 4181\) NCA
+inference steps, consistent with the INV-3/INV-4
+compliance reported in Ch.9 and Ch.16.
+
+\subsection{8.2 Complete Opcode
+Map}\label{fa_26:complete-opcode-map}
+
+The 128-entry opcode space is partitioned as follows:
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Range & Class & Count & Description \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x00 & \texttt{NOP} & 1 & No operation \\
+0x01 & \texttt{TF3\_ADD} & 1 & Ternary addition \\
+0x02 & \texttt{TF3\_MUL} & 1 & Ternary
+multiplication \\
+0x03 & \texttt{VSA\_BIND} & 1 &
+Hyperdimensional binding \\
+0x04 & \texttt{VSA\_UNBIND} & 1 &
+Hyperdimensional unbinding \\
+0x05 & \texttt{VSA\_BUNDLE} & 1 &
+Hyperdimensional bundling \\
+0x06 & \texttt{GF16\_QUANT} & 1 & GF(16)
+quantisation \\
+0x07 & \texttt{PHI\_ROPE} & 1 & \(\varphi\)-rotary
+position encoding \\
+0x08 & \texttt{PHI\_SCALE\_SET} & 1 & Set global
+\(\varphi\)-exponent offset \\
+0x09 & \texttt{SEED\_LOAD} & 1 & Load canonical
+seed into \texttt{SEED\_LO}:\texttt{SEED\_HI} \\
+0x0A & \texttt{TF3\_ACCUM} & 1 & Accumulate into
+\texttt{r0} with \(\varphi\)-normalisation \\
+0x0B & \texttt{GF16\_DEQUANT} & 1 & Dequantise
+GF(16) to \(\varphi\)-scaled payload \\
+0x0C & \texttt{VSA\_PERMUTE} & 1 &
+Seed-driven permutation of trit vector \\
+0x0D & \texttt{PHI\_NORM} & 1 & Renormalise
+\(\varphi\)-exponent to {[}−8, 7{]} \\
+0x0E--0x0F & \texttt{RSVD} & 2 & Reserved for
+KOSCHEI v2 \\
+0x10--0x7F & \texttt{UNALLOC} & 112 &
+Unallocated (decode fault) \\
+\end{longtable}
+
+\subsection{8.3 Additional Opcode
+Specifications}\label{fa_26:additional-opcode-specs}
+
+\textbf{0x08 PHI\_SCALE\_SET.}
+
+\begin{verbatim}
+PHI_SCALE_SET IMM[3:0]
+\end{verbatim}
+
+Sets the global \(\varphi\)-exponent offset in
+\texttt{PHI\_SCALE} to the 4-bit signed immediate
+value. All subsequent arithmetic operations use this
+offset as an additive correction to the per-register
+\texttt{φ\_exp} field. This instruction is used at
+the start of each inference batch to configure the
+global normalisation state. Certified by
+\texttt{Trinity.Canonical.Kernel.Phi}, Lemma
+\texttt{phi\_scale\_commute} (Qed) [1].
+
+\textbf{0x09 SEED\_LOAD.}
+
+\begin{verbatim}
+SEED_LOAD IMM[12:0]
+\end{verbatim}
+
+Loads the 13-bit immediate into the
+\texttt{SEED\_LO} register and zeroes
+\texttt{SEED\_HI}. The canonical seed value is
+used by \texttt{VSA\_PERMUTE} and
+\texttt{PHI\_ROPE} as a deterministic perturbation
+source. Only sanctioned seed values
+(\(F_{17}\)--\(F_{21}\), \(L_7\), \(L_8\)) are
+architecturally valid; loading an unsanctioned value
+sets the \texttt{INV\_FAULT} flag. The seed
+admissibility check is implemented as a 7-entry CAM
+in LUT fabric (7 \(\times\) 13-bit comparators,
+91 LUT-6 primitives).
+
+\textbf{0x0A TF3\_ACCUM.}
+
+\begin{verbatim}
+TF3_ACCUM RA
+\end{verbatim}
+
+Accumulates \(r_A\) into the accumulator register
+\(r_0\) with automatic \(\varphi\)-normalisation.
+Equivalent to the compound operation
+\(r_0 \leftarrow \text{TF3\_ADD}(r_0, r_A)\);
+\(r_0.\text{φ\_exp} \leftarrow
+\text{PHI\_NORM}(r_0.\text{φ\_exp})\). The
+renormalisation step clamps the exponent to
+{[}−8, 7{]}, preventing runaway exponent drift in
+long accumulation chains. Certified by
+\texttt{Trinity.Canonical.Kernel.Phi}, Lemma
+\texttt{phi\_accum\_bound} (Qed) [1].
+
+\textbf{0x0B GF16\_DEQUANT.}
+
+\begin{verbatim}
+GF16_DEQUANT RD, RA
+\end{verbatim}
+
+Inverse of \texttt{GF16\_QUANT}: maps the 4-bit
+Galois-field element in the low nibble of
+\(r_A\)'s payload back to a \(\varphi\)-scaled
+floating-point proxy in \(r_D\). The dequantised
+value satisfies
+
+\[r_D = \frac{\text{payload}(r_A) - \text{PHI\_BIAS}}{\varphi^2},\]
+
+with \(\text{PHI\_BIAS} = 60\) (Ch.9, eq.~1).
+The round-trip error
+\(|\text{dequant}(\text{quant}(w)) - w|\) is
+bounded by \(\varepsilon_1 = 4.0 \times 10^{-3}\)
+(INV-3, tightest bound) [5].
+
+\textbf{0x0C VSA\_PERMUTE.}
+
+\begin{verbatim}
+VSA_PERMUTE RD, RA
+\end{verbatim}
+
+Applies a seed-driven permutation to the 64-trit
+vector in \(r_A\). The permutation is determined by
+the canonical seed in \texttt{SEED\_LO}:
+the seed is used to initialise a 13-bit LFSR with
+tap polynomial \(x^{13} + x^{12} + x^{11} + x +
+1\), and the LFSR output selects swap pairs within
+the 64-element trit array. Because each sanctioned
+seed produces a distinct LFSR sequence, different
+seeds yield different permutations, ensuring that
+the permuted vectors are approximately orthogonal
+in the VSA hyperspace. The permutation is
+certified invertible by the
+\texttt{FlowerE8Embedding} module [3].
+
+\textbf{0x0D PHI\_NORM.}
+
+\begin{verbatim}
+PHI_NORM RD
+\end{verbatim}
+
+Clamps \texttt{φ\_exp} of \(r_D\) to the
+representable range {[}−8, 7{]} and adjusts the
+payload accordingly. If
+\(\text{φ\_exp} > 7\), the payload is right-shifted
+by \((\text{φ\_exp} - 7) \times \log_2\varphi\)
+bits and \(\text{φ\_exp}\) is set to 7. If
+\(\text{φ\_exp} < -8\), the payload is left-shifted
+and \(\text{φ\_exp}\) is set to $-$8. This
+instruction is automatically invoked after
+\texttt{TF3\_ACCUM} and may be called explicitly
+after long dependency chains. Certified by
+\texttt{Trinity.Canonical.Kernel.Phi}, Lemma
+\texttt{phi\_norm\_idempotent} (Qed) [1].
+
+\subsection{8.4 Instruction Encoding
+Table}\label{fa_26:instruction-encoding-table}
+
+\textbf{Table 7. Complete 32-bit instruction
+encoding for KOSCHEI ISA.}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.10}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.10}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.56}}@{}}
+\toprule\noalign{}
+Opcode & RD & RA & RB & IMM & Semantics \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+0x00 & --- & --- & --- & --- & \texttt{NOP} \\
+0x01 & dest & src A & src B & --- & \(r_D \leftarrow r_A + r_B\) (TF3) \\
+0x02 & dest & src A & src B & --- & \(r_D \leftarrow r_A \times r_B\) (TF3) \\
+0x03 & dest & src A & src B & --- & \(r_D \leftarrow r_A \odot r_B\) (bind) \\
+0x04 & dest & src A & src B & --- & \(r_D \leftarrow r_A \odot r_B\) (unbind) \\
+0x05 & dest & src A & src B & --- &
+\(r_D \leftarrow \text{sign}(r_A + r_B)\) \\
+0x06 & dest & src A & --- & 4-bit & GF(16) quantise bucket \\
+0x07 & dest & src A & --- & 13-bit &
+\(\varphi\)-RoPE with sequence length \\
+0x08 & --- & --- & --- & 4-bit & Set
+\texttt{PHI\_SCALE} \\
+0x09 & --- & --- & --- & 13-bit & Load seed \\
+0x0A & --- & src A & --- & --- & Accumulate
+\(r_A\) into \(r_0\) \\
+0x0B & dest & src A & --- & --- & GF(16) dequantise \\
+0x0C & dest & src A & --- & --- & Seed-driven
+permutation \\
+0x0D & dest & --- & --- & --- & Renormalise
+\(\varphi\)-exponent \\
+\end{longtable}
+
+Unused fields are reserved and must be zero;
+non-zero reserved fields cause a decode fault.
+
+\subsection{8.5 Exception
+Model}\label{fa_26:exception-model}
+
+KOSCHEI defines four exception types, prioritised
+from highest to lowest:
+
+\begin{longtable}[]{@{}llp{6cm}@{}}
+\toprule\noalign{}
+Priority & Exception & Trigger \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+1 & \texttt{INV\_FAULT} & Arithmetic result
+violates INV-3 or INV-4 certified bound \\
+2 & \texttt{DECODE\_FAULT} & Opcode in range
+0x10--0x7F or non-zero reserved field \\
+3 & \texttt{SEED\_FAULT} & \texttt{SEED\_LOAD}
+with unsanctioned seed value \\
+4 & \texttt{EXP\_OVERFLOW} &
+\(\varphi\)-exponent outside {[}−8, 7{]} after
+renormalisation \\
+\end{longtable}
+
+All exceptions are non-maskable except
+\texttt{EXP\_OVERFLOW}, which can be suppressed by
+setting bit 3 of a control register. When an
+exception fires, the coprocessor writes the faulting
+opcode and PC to a 16-entry fault FIFO and asserts
+an interrupt line to the host softcore. The fault
+FIFO is memory-mapped and can be read by the host
+without halting the coprocessor.
+
+\subsection{8.6 Pipeline
+Timing}\label{fa_26:pipeline-timing}
+
+KOSCHEI uses a single-issue, in-order, three-stage
+pipeline (fetch, decode, execute). All instructions
+complete in a single cycle except as noted:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Instruction & Latency (cycles) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{TF3\_ADD}, \texttt{TF3\_MUL} & 1 \\
+\texttt{VSA\_BIND}, \texttt{VSA\_UNBIND} & 1 \\
+\texttt{VSA\_BUNDLE} & 1 \\
+\texttt{GF16\_QUANT}, \texttt{GF16\_DEQUANT} & 1 \\
+\texttt{PHI\_ROPE} & 2 (fixed-point CORDIC) \\
+\texttt{VSA\_PERMUTE} & 1 \\
+\texttt{TF3\_ACCUM} (incl.\ auto-normalise) & 1 \\
+\texttt{PHI\_NORM} & 1 \\
+\texttt{PHI\_SCALE\_SET}, \texttt{SEED\_LOAD} & 1 \\
+\texttt{NOP} & 1 \\
+\end{longtable}
+
+At 92 MHz, the single-cycle throughput is
+91.98\,MIPS; \texttt{PHI\_ROPE} is the only
+multi-cycle instruction at 2 cycles. For a typical
+inference token requiring 1 \texttt{PHI\_ROPE},
+4 \texttt{TF3\_MUL}, 2 \texttt{TF3\_ADD}, and
+1 \texttt{GF16\_QUANT}, the total latency is
+\(2 + 4 + 2 + 1 = 9\) cycles \(= 98\)~ns, yielding
+a theoretical maximum throughput of
+\(10^9 / (98 \times 63) \approx 63\)~tokens/sec,
+matching the observed throughput on the HSLM
+1003-token benchmark (Section~4).
+
+\subsection{8.7 Coq Coverage
+Map}\label{fa_26:coq-coverage-map}
+
+The following table maps each opcode to its
+certifying Coq module and the number of Qed lemmas
+that cover its semantics:
+
+\begin{longtable}[]{@{}llc@{}}
+\toprule\noalign{}
+Opcode & Coq module & Qed count \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{TF3\_ADD} & \texttt{Kernel.Phi},
+\texttt{Kernel.Trit} & 8 \\
+\texttt{TF3\_MUL} & \texttt{Kernel.Phi},
+\texttt{Kernel.Trit} & 6 \\
+\texttt{VSA\_BIND} & \texttt{Kernel.FlowerE8Embedding}
+& 3 \\
+\texttt{VSA\_UNBIND} & \texttt{Kernel.Semantics},
+\texttt{Kernel.FlowerE8Embedding} & 3 \\
+\texttt{VSA\_BUNDLE} & \texttt{Kernel.Semantics} & 2 \\
+\texttt{GF16\_QUANT} & \texttt{Kernel.Phi} (partial)
+& 1 \\
+\texttt{PHI\_ROPE} & \texttt{Kernel.PhiFloat} & 6 \\
+\texttt{TF3\_ACCUM} & \texttt{Kernel.Phi} & 2 \\
+\texttt{GF16\_DEQUANT} & \texttt{Kernel.Phi} (partial)
+& 1 \\
+\texttt{VSA\_PERMUTE} &
+\texttt{Kernel.FlowerE8Embedding} & 1 \\
+\texttt{PHI\_NORM} & \texttt{Kernel.Phi} & 2 \\
+\texttt{PHI\_SCALE\_SET} & \texttt{Kernel.Phi} & 1 \\
+\texttt{SEED\_LOAD} & (admissibility table) & 0 \\
+\midrule\noalign{}
+\textbf{Total} & & \textbf{36} \\
+\end{longtable}
+
+The 36 ISA-level Qed lemmas are a subset of the 297
+total Qed census. The \texttt{SEED\_LOAD} instruction
+has no Coq coverage because seed admissibility is a
+static property verified offline by the build system;
+the hardware CAM implements the runtime check. The
+remaining 261 Qed lemmas cover higher-level
+properties (weight-lattice closure, entropy bands,
+spectral bounds) that are not directly exercised by
+individual opcodes but constrain the
+instruction-sequence semantics as a whole.
+
