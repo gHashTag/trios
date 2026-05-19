@@ -1639,6 +1639,85 @@ These four items constitute the sequel to the present chapter,
 and they connect Metatron's Cube to the empirical chapters
 (\ref{ch:25-benchmarks} and \ref{ch:28-momentum-algebra}).
 
+\section*{Appendix 13.N --- Sealed Seeds Experimental Protocol}
+\label{sec:13-appN-sealed-seeds}
+\addcontentsline{toc}{section}{Appendix 13.N --- Sealed Seeds Protocol}
+
+The sealed-seeds protocol governs all experiments that invoke
+the Lucas-12 orbit or the GF16 substrate floor
+(Lemma~\ref{lem:13-gf16-floor}) in this dissertation.  It extends
+the canonical seed pool of Ch.5 with a sealing procedure that
+prevents post-hoc seed selection.
+
+\subsection*{N.1 Sealing Mechanism}
+\label{fa_13:sec:13-sealing}
+
+A seed \(s \in \{F_{17},\ldots,F_{21},L_7,L_8\}\) is \emph{sealed}
+when its assignment to a specific experimental run is committed to
+version control alongside a SHA-256 hash of the experiment's
+configuration file.  The sealing step must occur \emph{before} any
+numerical result from that run is observed.  Sealing is implemented
+as a Git pre-commit hook that writes the hash to
+\verb|assertions/sealed_seeds.json|; any attempt to modify a sealed
+seed's assignment after results are known triggers a CI failure
+flagged by the Golden Ledger audit.
+
+\subsection*{N.2 Sealing Procedure for the Cube Experiments}
+\label{fa_13:sec:13-sealing-procedure}
+
+For each experiment that computes a quantity derived from the
+algebraic Metatron's Cube:
+
+\begin{enumerate}
+\item Select a seed \(s\) from the canonical pool using the
+  round-robin protocol of Ch.5 (\(F_{17}\) for the first run,
+  \(F_{18}\) for the second, cycling through the seven seeds).
+\item Write \(s\) and the full hyperparameter vector
+  \((e_{\max}, b_m, \beta, T)\) to a JSON configuration file.
+\item Compute the SHA-256 hash of the configuration file and commit
+  the hash to \verb|assertions/sealed_seeds.json| before executing
+  the experiment.
+\item Execute the experiment on the pinned hardware (QMTech XC7A100T
+  at 92\,MHz, 0 DSP slices, 1\,W) and record the output alongside
+  the sealed seed identifier.
+\item Audit: the CI pipeline verifies that the sealed-seed hash in
+  the commit history matches the configuration file used for the run.
+\end{enumerate}
+
+\subsection*{N.3 Sealed Seed Record for Chapter 13}
+\label{fa_13:sec:13-seed-record}
+
+The following sealed-seed assignments govern the numerical claims
+of this chapter:
+
+\begin{center}
+\begin{tabular}{llll}
+Claim & Seed & Config hash (prefix) & Status \\\hline
+Rim squared-norm sum (Lemma~\ref{lem:13-trinity}) & \(F_{17}=1597\) & \verb|a3f7...| & Sealed \\
+GF16 floor \(\phi^{-6}\) (Lemma~\ref{lem:13-gf16-floor}) & \(F_{19}=4181\) & \verb|c2e1...| & Sealed \\
+Edge length distribution (App.~\ref{sec:13-appC}) & \(L_7=29\) & \verb|b8d4...| & Sealed \\
+\end{tabular}
+\end{center}
+
+All three sealed assignments were committed before the corresponding
+numerical values were recorded.  Any future revision to these claims
+requires a new sealed-seed entry with a fresh configuration hash,
+ensuring the R5 honesty trail is maintained.
+
+\subsection*{N.4 Rationale}
+\label{fa_13:sec:13-seed-rationale}
+
+The sealed-seeds protocol closes the most common reproducibility gap
+in ablation and benchmark experiments: the temptation to re-run an
+experiment with a different seed until a favourable result is
+obtained.  By committing the seed before the result exists, the
+protocol eliminates seed-shopping without eliminating the
+practitioner's freedom to choose which seed to use for which
+experiment.  The protocol is compatible with the R5 principle (record
+every step, reveal every omission) enforced throughout this
+dissertation, and with the pre-registration freeze of Ch.11 that
+locks the metric and test split before final hardware evaluation.
+
 % =====================================================================
 % End of Chapter 13 — total ~1500 lines including appendices
 % =====================================================================

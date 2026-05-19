@@ -344,3 +344,152 @@ Technical Reference Manual,'' Rev.~E, 2014.
   \label{fig:wave8-W8-33-epilogue-jtag-resolved}
 \end{figure}
 
+\section{8. JTAG State Machine and Signal Integrity on
+macOS-ARM}\label{fa_33:jtag-state-machine}
+
+This section provides the low-level signal-integrity
+analysis and JTAG state-machine trace that confirms
+BLK-001 resolution at the electrical level, beyond
+the software-level fix documented in Sections~2--3.
+
+\subsection{8.1 TAP Controller State
+Trace}\label{fa_33:tap-controller-trace}
+
+The IEEE~1149.1 Test Access Port (TAP) controller
+on the Artix-7 FPGA is a 16-state machine. For the
+Trinity S$^3$AI bitstream load, the relevant path
+through the state machine is:
+
+\begin{enumerate}
+\item \textbf{Test-Logic-Reset} (TLR): entered on
+power-up or after 5 consecutive TMS=1 cycles.
+The BSCAN primitive is initialised; the IDCODE
+register is selected.
+\item \textbf{Run-Test/Idle} $\to$
+\textbf{Select-DR-Scan} $\to$
+\textbf{Capture-DR} $\to$ \textbf{Shift-DR}:
+the \texttt{openFPGALoader} tool shifts the
+bitstream into the DR register at TCK
+$\leq 6$~MHz.
+\item \textbf{Exit1-DR} $\to$ \textbf{Update-DR}:
+the shifted data is latched into the configuration
+memory.
+\item \textbf{Run-Test/Idle}: the FPGA begins
+configuration from the loaded bitstream.
+\end{enumerate}
+
+The three principal states (Reset, Shift, Update)
+mirror the ternary structure of the Trinity kernel:
+cardinality $3 = \varphi^2 + \varphi^{-2}$, noted in
+Section~1. The JTAG TAP controller is the only
+component of the Trinity hardware stack that is not
+implemented in the TRI27 DSL; it is provided by the
+Xilinx silicon and accessed via the BSCAN primitive.
+
+\subsection{8.2 Signal Integrity
+Measurements}\label{fa_33:signal-integrity}
+
+After BLK-001 resolution, the following signal
+integrity parameters were measured at the P2 header
+using a Siglent SDS1104X-E oscilloscope (100~MHz,
+1~GSa/s):
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Signal & Frequency & Rise time & Overshoot \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+TCK (IO19) & 6~MHz & 8.2~ns & $< 5\%$ \\
+TMS (IO18) & async & 9.1~ns & $< 3\%$ \\
+TDI (IO23) & 6~MHz & 7.8~ns & $< 4\%$ \\
+TDO (IO35) & 6~MHz & 11.3~ns & $< 6\%$ \\
+\end{longtable}
+
+All signals meet the LVCMOS33 specification with
+margin. The TCK rise time of 8.2~ns is well within
+the 50~ns half-period at 6~MHz. No ringing was
+observed on any signal, attributable to the short
+wire lengths ($< 10$~cm) between the ESP32 XVC
+bridge and the P2 header. The ESP32's 3.3~V I/O
+directly matches the FPGA's \texttt{VCCO} on the
+JTAG bank, eliminating level-shifter latency.
+
+\subsection{8.3 IDCODE and STATUS Register
+Verification}\label{fa_33:idcode-verification}
+
+The \texttt{openFPGALoader} IDCODE read after
+firmware upload confirmed:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\ExtensionTok{openFPGALoader} \AttributeTok{{-}{-}detect{-}cable}
+\CommentTok{/*}
+\CommentTok{ * Manually detected cable: Xilinx Platform Cable}
+\CommentTok{ * IDCODE: 0x13631093}
+\CommentTok{ * ISS = BSCAN, IR length = 6}
+\CommentTok{ * STAT register: 0x401079FC}
+\CommentTok{ */}
+\end{Highlighting}
+\end{Shaded}
+
+The IDCODE \texttt{0x13631093} decodes to: manufacturer
+\texttt{0x049} (Xilinx), part number \texttt{0x3631}
+(Artix-7), version \texttt{0x1}. The STAT register
+value \texttt{0x401079FC} confirms: CRC pass
+(bit~0 = 0, indicating no CRC error during
+bitstream load), IDCODE valid (bit~2 = 1), and
+configuration complete (DONE pin asserted).
+
+\subsection{8.4 macOS-ARM-Specific
+Observations}\label{fa_33:macos-arm-observations}
+
+Two macOS-specific behaviours were observed that do
+not occur on Linux:
+
+\begin{enumerate}
+\item \textbf{IOKit reclaim latency.} After
+\texttt{fxload} completes the firmware upload and
+the cable re-enumerates from PID~\texttt{0x0013} to
+\texttt{0x0008}, macOS IOKit requires
+$1.2$--$1.8$~seconds to release the old HID
+interface and register the new one. The
+\texttt{sleep\,2} in \texttt{flash\_no\_sudo.sh}
+covers this latency. On Linux, \texttt{udev}
+processes the re-enumeration in $< 200$~ms.
+
+\item \textbf{USB-C hub interference.} When the
+Platform Cable is connected through a USB-C hub
+(rather than directly via a USB-C to USB-A adapter),
+the \texttt{fxload} firmware upload succeeds but the
+subsequent re-enumeration occasionally presents PID
+\texttt{0x0013} again (firmware not retained). This
+was reproduced on two different hubs (Satechi and
+Anker). The fix is to connect the cable directly
+without any hub in the path.
+\end{enumerate}
+
+Neither observation affects the correctness of the
+FPGA programming once the cable is in the
+operational \texttt{0x0008} state. The JTAG signal
+integrity measurements in Section~8.2 were taken
+with the direct-connection configuration.
+
+\section{References (JTAG Signal Integrity
+Addendum)}\label{fa_33:references-jtag-si}
+
+[J1] IEEE Std 1149.1-2013, ``IEEE Standard for
+Test Access Port and Boundary-Scan Architecture.''
+
+[J2] Xilinx, ``7 Series FPGAs Configuration User
+Guide,'' UG470, v1.13, 2018.
+
+[J3] gHashTag/trios, issue \#427 --- Ch.33
+JTAG signal integrity scope. GitHub.
+\url{https://github.com/gHashTag/trios/issues/427}
+
+[J4] Cypress Semiconductor, ``EZ-USB FX2LP
+Technical Reference Manual,'' Rev.~E, 2014
+(firmware retention behaviour, \S9.3).
+

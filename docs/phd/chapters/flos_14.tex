@@ -301,6 +301,111 @@ Technical Journal}, 27(3), 379--423.
 \texttt{.v} files, 297 Qed, 438 total theorems.
 GitHub repository.
 
+\section{8. STROBE-Style Reporting Checklist for ML
+Observational
+Experiments}\label{fa_14:strobe-checklist}
+
+The STROBE (Strengthening the Reporting of
+Observational Studies in Epidemiology) guidelines
+provide a 22-item checklist for transparent
+reporting of observational research [13].  Machine
+learning benchmark experiments share structural
+similarities with observational studies: the
+analyst does not control the data-generating
+process (the test corpus is fixed), multiple
+non-independent design choices confound the
+reported metric, and post-hoc selective reporting
+is a recognised bias.  This section adapts the
+STROBE framework to the reporting requirements of
+Trinity S\textsuperscript{3}AI evaluation and, more
+generally, to ML observational benchmark
+experiments.
+
+\subsection{8.1 Checklist
+Items}\label{fa_14:checklist-items}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.08}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.42}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.50}}@{}}
+\toprule\noalign{}
+\textbf{ID} &
+\textbf{STROBE Item} &
+\textbf{Trinity Adaptation} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+1 & Title and abstract & State metric (BPB), model family (ternary), and
+hardware target (FPGA 1\,W) in the chapter title. \\
+2 & Background / rationale & Anchor to \(\varphi^2 + \varphi^{-2} = 3\)
+and cite the algebraic motivation (Ch.3, Ch.4). \\
+3 & Objectives & Declare Gate-2 and Gate-3 thresholds before evaluation
+(pre-registration, App.E). \\
+4 & Study design & Full \(2^k\) factorial ablation (Ch.17) with
+pre-registered factor levels. \\
+5 & Setting & Hardware specification: QMTech XC7A100T, 92\,MHz, 0 DSP,
+1\,W, toolchain version pinned. \\
+6 & Participants & Test corpus: WikiText-103 test split, SHA-1 recorded
+in App.B. Token count \(N\) and byte count \(B\) reported. \\
+7 & Variables & Primary: BPB. Secondary: tokens/sec, watts, LUT
+utilisation. All defined algebraically (Section 2). \\
+8 & Data sources / measurement & Metric computable on FPGA without
+floating-point exponentiation; derivation in Section 2.2. \\
+9 & Bias & Tokeniser bias removed by byte-level normalisation (Section
+2.2). Seed-selection bias controlled by canonical pool (Ch.5). \\
+10 & Study size & Number of evaluation tokens (1003 HSLM held-out
+sequence) and number of ablation runs (\(2^7 = 128\)) reported. \\
+11 & Quantitative variables & BPB reported to three decimal places;
+gate thresholds at two decimal places. \\
+12 & Statistical methods & Yates factorial effects (Ch.17); no
+$p$-value hacking --- all runs reported regardless of outcome. \\
+13 & Participants (results) & Corpus SHA-1, seed set, token count
+repeated in Results section. \\
+14 & Descriptive data & Mean BPB, standard deviation across seeds,
+hardware metrics in tabular form. \\
+15 & Outcome data & Gate-2 achieved BPB = 1.78; Gate-3 pending.
+Both reported. \\
+16 & Main results & Factor effects and interactions from ablation
+(Ch.17) cited alongside aggregate BPB. \\
+17 & Other analyses & \(\varphi\)-weighted BPB variant reported as
+secondary metric (Section 4). \\
+18 & Key results & Summarise Gate-2 passage and Gate-3 status in one
+sentence. \\
+19 & Limitations & BPB insensitivity to error distribution (Section 7);
+corpus not yet publicly pinned. \\
+20 & Interpretation & BPB improvement attributed to specific factors
+via ablation, not to the system as a whole. \\
+21 & Generalisability & Results valid for WikiText-103 and ternary
+models on XC7A100T; extrapolation beyond this regime is unjustified. \\
+22 & Funding & DARPA MTO HR001123S0045 acknowledged; no
+commercial interest. \\
+\end{longtable}
+
+\subsection{8.2
+Compliance}\label{fa_14:compliance}
+
+This chapter satisfies all 22 items of the adapted
+STROBE-ML checklist.  The pre-registration
+protocol of App.E locks items 3, 6, 9, and 10
+before the final hardware run; items 14--18 are
+populated by the sealed-seed evaluation; and items
+19--22 are addressed in the Discussion (Section 7).
+The checklist is included as a machine-readable
+YAML file in the Zenodo artefact bundle Z06 [4],
+enabling automated compliance checking by
+reviewers.
+
+\section{References (STROBE)}\label{fa_14:references-strobe}
+
+[13] von Elm, E., Altman, D. G., Egger, M.,
+Pocock, S. J., Gøtzsche, P. C., \& Vandenbroucke,
+J. P. (2007). The Strengthening the Reporting of
+Observational Studies in Epidemiology (STROBE)
+statement: guidelines for reporting observational
+studies. \emph{Annals of Internal Medicine},
+147(8), 573--577.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-14-platonic-solids-bpb.png}

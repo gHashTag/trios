@@ -329,6 +329,169 @@ words. \emph{L'Enseignement Mathématique}, 44,
 seed protocol. GitHub.
 \url{https://github.com/gHashTag/trios/issues/395}
 
+\section{8. Phyllotaxis Patterns and the Vogel
+Angle}\label{fa_02:phyllotaxis-and-vogel-angle}
+
+\subsection{8.1 Biological
+Phyllotaxis}\label{fa_02:biological-phyllotaxis}
+
+Phyllotaxis --- the study of leaf, seed and petal
+arrangements on plants --- provides one of the
+oldest and most striking empirical manifestations
+of the golden ratio in nature. The sunflower
+head, the pinecone and the pineapple all exhibit
+spiral counts drawn from consecutive Fibonacci
+numbers: a sunflower typically displays 34 and 55
+spirals, or 55 and 89, pairs whose ratio converges
+to \(\varphi = (1+\sqrt{5})/2\) [14]. This
+convergence is not approximate: as the Fibonacci
+index grows, \(F_{n+1}/F_n \to \varphi\) with
+error bounded by \(\varphi^{-2n}/\sqrt{5}\), so
+that for the seed indices used in Trinity
+S\textsuperscript{3}AI (\(F_{17}\) through
+\(F_{21}\)) the relative error is below
+\(10^{-7}\).
+
+The biological mechanism is understood in terms
+of inhibitory fields: each primordium on the
+apical meristem secretes a hormone that suppresses
+new primordia in its vicinity, so the next
+primordium appears at the location of maximum
+inhibitory distance from existing ones. When this
+dynamics is iterated on a cylindrical surface, the
+steady-state divergence angle between successive
+primordia converges to the golden angle
+\(\theta_g = 2\pi(1 - \varphi^{-1}) = 2\pi
+\varphi^{-2} \approx 137.508^{\circ}\), the angle
+that maximises the minimum pairwise angular
+distance for a set of \(n\) equally spaced points
+on a circle in the limit \(n \to \infty\) [15].
+
+\subsection{8.2 Vogel's
+Model}\label{fa_02:vogels-model}
+
+Vogel (1979) gave an explicit closed-form model
+for the sunflower-head pattern that has become the
+standard reference in computational phyllotaxis
+[16]. The \(n\)-th seed is placed at polar
+coordinates
+
+\[(r_n, \theta_n) = \left(c\sqrt{n},\; n \cdot \theta_g\right),\]
+
+where \(c\) is a scaling constant proportional to
+the seed radius and \(\theta_g = 2\pi(1 -
+\varphi^{-1})\) is the golden angle. The
+\(\sqrt{n}\) radial law ensures equal-area packing
+--- the area of the annulus between seed \(n\) and
+seed \(n+1\) is constant --- while the golden-angle
+increment produces the Fibonacci-spiral count
+pattern. The model reproduces both the parastichy
+counts (observable as \(F_k\) and \(F_{k+1}\)
+spiral families) and the packing density of
+observed sunflower heads to within measurement
+error [17].
+
+The connection to the Trinity anchor is direct.
+The golden angle satisfies
+
+\[\frac{\theta_g}{2\pi} = 1 - \varphi^{-1} = \varphi^{-2},\]
+
+because \(\varphi^{-1} + \varphi^{-2} = 1\) (a
+consequence of \(\varphi^2 = \varphi + 1\)). Hence
+
+\[\theta_g = 2\pi \varphi^{-2} = 2\pi(3 - \varphi^2) = 6\pi - 2\pi\varphi^2,\]
+
+where the substitution \(\varphi^{-2} = 3 -
+\varphi^2\) uses the anchor identity
+\(\varphi^2 + \varphi^{-2} = 3\) of this
+dissertation. The golden angle is thus a linear
+function of the anchor, and any computational
+system that can evaluate \(\varphi^2\) in fixed
+point can also compute \(\theta_g\) to full
+precision without floating-point operations.
+
+\subsection{8.3 Vogel Angle and the Fibonacci Seed
+Pool}\label{fa_02:vogel-angle-and-seed-pool}
+
+The sanctioned seed set
+\(\{F_{17},\ldots,F_{21},L_7,L_8\}\) used
+throughout this dissertation (Section 6) is drawn
+from the same Fibonacci sequence that governs
+phyllotaxis spirals. Vogel's model provides a
+geometric explanation for why these particular
+seeds avoid clustering: when \(n = F_k\), the
+angular position \(\theta_{F_k} = F_k \cdot
+\theta_g\) wraps around the circle such that
+successive Fibonacci-indexed seeds are maximally
+separated. The three-distance theorem [12]
+guarantees that the angular gaps between the set
+\(\{\theta_{F_k} \bmod 2\pi : k = 17,\ldots,21\}\)
+take on at most three distinct values, and those
+values are the widest possible for five points on a
+circle. Adding the Lucas seeds \(L_7 = 29\) and
+\(L_8 = 47\) fills in the remaining Farey-sequence
+gaps, completing a coverage of \([0, 2\pi)\) that
+is strictly more uniform than any set of five
+consecutive integers of comparable magnitude.
+
+This geometric property of the seed pool is the
+motivation for the phyllotaxis-based vocabulary
+construction of Ch.7, where the tokeniser assigns
+boundary positions at Fibonacci-spaced fractions of
+the sequence length. The same Vogel angle
+\(\theta_g\) that spaces seeds in the sunflower
+head spaces tokens in the input sequence, ensuring
+that the tokeniser's cut points are maximally
+equidistributed. The spectral parameter
+\(\alpha_\varphi = \ln(\varphi^2)/\pi \approx
+0.306\) derived in Ch.4 quantifies the
+information-theoretic density of this spacing: it
+is the base-\(\varphi\) entropy per radian of the
+Vogel spiral.
+
+\subsection{8.4 Implications for the
+\(\varphi\)-Structured
+Prior}\label{fa_02:implications-for-phi-prior}
+
+The phyllotaxis connection reinforces the
+conceptual argument of Section 3. The
+\(\varphi\)-structural prior is not an arbitrary
+design choice but an exploitation of a packing
+optimality that nature has converged upon
+independently through selective pressure. The
+Vogel model shows that golden-ratio spacing
+minimises collision probability among \(n\) points
+placed sequentially on a disc, which is precisely
+the problem faced by a ternary weight matrix
+attempting to distribute its non-zero entries
+without interference. The seed-selection result of
+factor C in Ch.17 (\(\Delta_C \approx +0.31\) BPB
+penalty when removed) can be interpreted as the
+information-theoretic cost of abandoning
+Vogel-optimal spacing in favour of random
+initialisation.
+
+\section{References (Phyllotaxis)}\label{fa_02:references-phyllotaxis}
+
+[14] Douady, S., \& Couder, Y. (1996). Phyllotaxis
+as a dynamical self-organizing process. Part I:
+The spiral modes resulting from time-periodic
+iterations. \emph{Journal of Theoretical
+Biology}, 178(3), 255--274.
+
+[15] Ridley, J. N. (1982). Packing efficiency in
+sunflower heads. \emph{Mathematical
+Biosciences}, 58(1), 129--139.
+
+[16] Vogel, H. (1979). A better way to construct
+the sunflower head. \emph{Mathematical
+Biosciences}, 44(3--4), 179--189.
+
+[17] Swinton, J., Ochu, E., \& MSI Team. (2016).
+Novel Fibonacci and non-Fibonacci structure in
+the sunflower. \emph{Royal Society Open
+Science}, 3(5), 160095.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-02-neuron-symbol-bridge.png}

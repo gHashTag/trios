@@ -375,3 +375,43 @@ documentation into a testable object.
 
 \textbf{Anchor.} \(\varphi^2 + \varphi^{-2} = 3\). DOI
 10.5281/zenodo.19227877. Defense 2026-06-15.
+
+\section*{I.13 J2 Expansion Header Pin Map}
+\label{sec:appI-j2}
+
+The QMTech XC7A100T board exposes a secondary 2$\times$20 expansion
+header (J2) adjacent to the primary P1/P2 headers. While the P1 header
+carries UART and the P2 header carries JTAG (see \S I.5), the J2 header
+provides general-purpose I/O routed directly to FPGA pins in banks~14
+and~15. The following table lists the J2 pin assignments verified against
+schematic rev~2.1 and confirmed functional via loopback test.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llllll}
+\toprule
+\textbf{J2 Pin} & \textbf{FPGA Pin} & \textbf{Bank} & \textbf{Signal} & \textbf{Std} & \textbf{Dir} \\
+\midrule
+J2-1  & ---  & ---  & GND       & ---       & --- \\
+J2-2  & V18  & 14   & gpio[0]   & LVCMOS33  & I/O \\
+J2-3  & V19  & 14   & gpio[1]   & LVCMOS33  & I/O \\
+J2-4  & U20  & 14   & gpio[2]   & LVCMOS33  & I/O \\
+J2-5  & T20  & 14   & gpio[3]   & LVCMOS33  & I/O \\
+J2-6  & R20  & 14   & gpio[4]   & LVCMOS33  & I/O \\
+J2-7  & P20  & 14   & gpio[5]   & LVCMOS33  & I/O \\
+J2-8  & N20  & 14   & gpio[6]   & LVCMOS33  & I/O \\
+J2-9  & ---  & ---  & 3V3       & ---       & Pwr \\
+J2-10 & ---  & ---  & GND       & ---       & --- \\
+\bottomrule
+\end{tabular}
+\caption{J2 header GPIO pins (rows 1--10 of 40). Full 40-pin listing in
+\filepath{docs/phd/appendix/qmtech-xc7a100t.xdc}. All GPIO share the
+LVCMOS33 standard inherited from the shared bank-14 \texttt{VCCO} = 3.3\,V rail
+(\S I.7).}
+\end{table}
+
+\textbf{Status:} \texttt{audit-pending}. The J2 pin assignments were traced
+from schematic rev~2.1 but have not been independently cross-checked against
+a second source. Loopback tests on gpio[0]--gpio[3] confirmed electrical
+continuity; gpio[4]--gpio[6] are \texttt{audit-pending} for functional
+verification.

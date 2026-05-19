@@ -430,6 +430,104 @@ BPB Gate Analysis. This volume.
 [13] B004 --- GF(16) Precision Inventory.
 Zenodo, DOI: 10.5281/zenodo.19227871.
 
+\section{8. Reproducibility and the R5 Honesty
+Trail}\label{fa_10:reproducibility-r5-honesty}
+
+\subsection{8.1 The R5
+Principle}\label{fa_10:the-r5-principle}
+
+The R5 principle --- \emph{record every step,
+reveal every omission} --- governs the
+reproducibility posture of the Flos Aureus
+dissertation. It requires that every numerical
+claim, every Coq proof obligation, and every
+experimental parameter be recorded in a
+machine-auditable trail from hypothesis to
+conclusion. In the context of this chapter, the R5
+trail tracks the following artefacts: (i) the GF(16)
+codebook definition (Definition 2.1), locked by
+its Zenodo DOI B005 [7]; (ii) the Pareto-frontier
+numerical evaluation, pinned to the canonical seed
+pool F\textsubscript{17}=1597,
+F\textsubscript{18}=2584, F\textsubscript{19}=4181;
+(iii) the Coq proof status of all 51 theorems,
+with admitted lemmas explicitly flagged; and (iv)
+the pre-registration protocol of App.E, which
+freezes the metric definition and test split before
+final hardware evaluation.
+
+The R5 honesty trail is not a retrospective
+documentation exercise. It is a prospective
+constraint: the chapter's claims are bounded by
+what the trail records, and any result that lacks a
+corresponding trail entry is excluded from the
+assertion set. This discipline mirrors the
+pre-registration norms of clinical-trial
+methodology (WHO ICTRP) and the Catalog42 freeze
+protocol of the companion GOLDEN BRIDGE volume,
+where the target constant list is SHA-256-hashed
+before any symbolic search begins.
+
+\subsection{8.2 Reproducibility Practices for the
+Pareto
+Analysis}\label{fa_10:reproducibility-practices}
+
+The following reproducibility practices are
+enforced in this chapter:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Seed provenance.} Every numerical
+  evaluation uses a seed drawn from the sanctioned
+  pool
+  \(\{F_{17},\ldots,F_{21},L_7,L_8\}\). The seed
+  is recorded alongside each data point in the
+  Zenodo artefact bundle B005. Random-number
+  generator initialisation is deterministic and
+  reproducible: the same seed on the same hardware
+  produces bit-identical output.
+\item
+  \textbf{Coq version pinning.} All Coq proofs
+  compile under Coq 8.18 with the
+  \texttt{mathcomp-algebra} 2.0 library. The
+  \texttt{coq-opam} lockfile is committed to the
+  proof repository. Compilation time for the full
+  \filepath{igla/} subdirectory is 41 seconds on
+  the reference machine (AMD EPYC 7763, 64 GB).
+\item
+  \textbf{Admitted-lemma accounting.} The single
+  admitted lemma
+  \filepath{kl\_min\_at\_phi\_inv\_admit} is
+  flagged with a \texttt{(*\ C1-admit-budget:\ 1\ *)}
+  annotation. The admitted count is included in the
+  chapter's assertion summary (Section 5) and
+  cannot exceed the budget declared at
+  pre-registration.
+\item
+  \textbf{Data availability.} The Pareto-frontier
+  table (Section 4) is generated from a
+  machine-readable CSV included in B005. The
+  CSV contains columns for allocation, L1 error,
+  BPB, Pareto flag, seed, and hardware-measured
+  wall-clock time.
+\end{itemize}
+
+\subsection{8.3 What the Trail Does Not
+Record}\label{fa_10:what-the-trail-does-not-record}
+
+Honesty requires stating what is \emph{not} in the
+trail. The following are absent and must not be
+treated as confirmed: (i) the global optimality of
+\(\varphi^{-1}\) as the exponent-to-mantissa split
+ratio (Conjecture C1 remains unproven in Coq); (ii)
+the generalisation of the entropy band (Theorem
+3.2) to NCA cell counts other than \(81 = 3^4\);
+and (iii) the interaction between the INV-4 entropy
+band and the 360-lane grid of Ch.16. These gaps are
+recorded in the trail as open obligations and are
+tracked in the Golden Ledger.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{W8-10-bud-bloom-pareto.png}

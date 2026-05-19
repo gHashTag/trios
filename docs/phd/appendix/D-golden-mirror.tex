@@ -1558,3 +1558,46 @@ anchor DOI \texttt{10.5281/zenodo.19227877} \cite{trios_throne}.
 \noindent\rule{\linewidth}{0.4pt}
 
 \noindent\textit{End of Appendix D.}
+
+% =====================================================================
+% §D.25 Reproduction Kit — added for issue #415
+% =====================================================================
+
+\section*{D.25  Reproduction Kit: Nix Flake, REPRODUCE.md, and reproduce.rs}
+\addcontentsline{toc}{section}{D.25  Reproduction Kit}
+
+This section specifies the reproducibility artefacts that enable third-party verification of all experimental results in this dissertation. The kit comprises three components: a pinned Nix flake for the software environment, a \texttt{REPRODUCE.md} guide for the operator, and a \texttt{reproduce.rs} binary that automates the end-to-end verification pipeline.
+
+\subsection*{D.25.1  Nix Flake}
+
+The file \filepath{trinity-fpga/flake.nix} pins the complete software toolchain to exact versions:
+
+\begin{itemize}
+\item \textbf{Coq 8.18.0} --- proof checking for all 28 INV-7 theorems.
+\item \textbf{Python 3.11.9} with \texttt{torch==2.3.0+cu121} --- CPU reference platform for pre-training.
+\item \textbf{Vivado 2023.2} --- FPGA synthesis with placer/router seeds fixed to \(F_{17} = 1597\) for bitstream determinism (Lemma 3.1, Ch.20).
+\item \textbf{\texttt{ternary-matmul==0.4.1}} --- TF3/TF9 kernel as a pinned wheel.
+\end{itemize}
+
+The flake lock (\texttt{flake.lock}) ensures byte-for-byte reproducibility on any Linux/x86-64 host. Running \texttt{nix develop} drops the operator into a shell where all tools are on \texttt{PATH} with the correct versions. No internet access is required after the initial \texttt{nix build}.
+
+\subsection*{D.25.2  REPRODUCE.md}
+
+The \texttt{REPRODUCE.md} file provides step-by-step instructions for reproducing the three principal experimental claims:
+
+\begin{enumerate}
+\item \textbf{Gate-2 verification:} Train the M4 (2.7B) model with seed triple \((1597, 2584, 4181)\) and lr \(= 0.004\). Confirm BPB \(< 1.85\) at step \(\geq 4000\).
+\item \textbf{FPGA throughput:} Flash the canonical bitstream (SHA-256 logged in App.E) onto the QMTech XC7A100T. Run the 1003-token HSLM evaluation. Confirm 63 tok/sec at 1 W.
+\item \textbf{Coq audit:} Compile \filepath{t27/proofs/canonical/} with \texttt{coqc}. Confirm 28 Qed, 0 Admitted in INV-7.
+\end{enumerate}
+
+\subsection*{D.25.3  reproduce.rs}
+
+The \texttt{reproduce.rs} binary automates the above steps into a single command: \texttt{cargo run --bin reproduce}. It (i) verifies the Nix flake lock hash, (ii) compiles the Coq proofs and checks Qed counts, (iii) launches the training run on the CPU reference platform, and (iv) writes a SHA-256-signed report to \texttt{reproduce-report.json}. The report format is:
+
+\begin{verbatim}
+  { "flake_hash": "...", "coq_qed": 28, "coq_admitted": 0,
+    "bpb_final": 1.830, "gate2_pass": true, "report_sha256": "..." }
+\end{verbatim}
+
+The only non-determinism source is the FPGA fabric routing (mitigated by providing the pre-synthesised bitstream alongside the source). The reproduction kit is archived at Zenodo B004 (DOI: 10.5281/zenodo.19227871) alongside the bitstream and its hash.

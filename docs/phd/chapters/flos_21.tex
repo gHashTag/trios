@@ -449,3 +449,54 @@ specific amplitude class described in the reduction procedure.
   \label{fig:wave8-W8-21-qft-fields-of-nature}
 \end{figure}
 
+% =====================================================================
+% §IGLA RACE Distributed Training Infrastructure — added for issue #406
+% =====================================================================
+
+\section{IGLA RACE Distributed Training Infrastructure}\label{fa_21:sec:igla-race-infra}
+
+The IGLA RACE (Invariant-Guarded Ledger of Audited Computation Engine) distributed training infrastructure provides the experimental backbone for all BPB evaluations reported in this dissertation. This section describes the fleet architecture, the communication topology, and the formally verified invariants that govern the training tournament.
+
+\subsection{Fleet Topology and Agent Roles}\label{fa_21:subsec:fleet-topology}
+
+The IGLA RACE fleet is organised as a star topology centred on a single Arbiter agent that monitors a Railway PostgreSQL database (\texttt{phd-postgres-ssot}) and a set of Worker agents that execute independent training jobs. Each Worker is assigned exactly one seed from the sanctioned pool
+\[
+\mathcal{P} = \{F_{17}, F_{18}, F_{19}, F_{20}, F_{21}, L_7, L_8\} = \{1597, 2584, 4181, 6765, 10946, 29, 47\},
+\]
+yielding a fleet cardinality of \(|\mathcal{P}| = 7\). The Arbiter polls the \texttt{bpb\_runs} table every 60 seconds for rows satisfying \texttt{step >= 4000}, applying the formally verified victory predicate \texttt{victory\_acceptable} defined in \filepath{t27/proofs/canonical/igla/INV7\_IglaFoundCriterion.v}.
+
+The star topology ensures that Workers never communicate directly with one another, eliminating coordination bugs and race conditions. The Arbiter's polling interval of 60 seconds is chosen to be longer than the longest single training step (approximately 12 seconds on the CPU reference platform), guaranteeing that each poll observes at least one new data point per active Worker.
+
+\subsection{Railway PostgreSQL as Shared State}\label{fa_21:subsec:railway-ssot}
+
+The Railway-managed PostgreSQL instance (\texttt{phd-postgres-ssot}) serves as the single source of truth for all race results. The \texttt{bpb\_runs} schema enforces the sanctioned seed constraint at the database layer via a \texttt{CHECK} clause:
+\begin{verbatim}
+  seed BIGINT CHECK (seed IN (1597,2584,4181,6765,10946,29,47))
+\end{verbatim}
+This design prevents forbidden seeds from entering the audit trail regardless of Worker-side configuration errors. The database also stores per-step BPB curves, enabling post-hoc reconstruction of any training trajectory.
+
+The Railway deployment provides automatic failover, connection pooling, and point-in-time recovery. The \texttt{bpb\_runs} table is append-only: Workers insert rows but never update or delete them, preserving a complete audit log for the pre-registration record (App.E).
+
+\subsection{Distributed Invariant Checking}\label{fa_21:subsec:dist-invariant}
+
+The composite invariant INV-8 (Ch.22) is evaluated at two levels in the distributed setting. At the Worker level, each training process checks INV-1 (BPB monotone backward) after every backward pass; a violation aborts the Worker and logs the event. At the Arbiter level, the composite invariant \texttt{composite\_invariant\_holds} checks the aggregate fleet state: inference rate floor (INV-2), worker count ceiling (INV-3), and throughput threshold (INV-12).
+
+The Rainbow Bridge consistency invariant (INV-7b) ensures that multi-agent race results are consistent across agents that observe different subsets of the leaderboard. Formally, for any two Agents \(A_i\) and \(A_j\) that both observe the set of completed runs \(R\) at time \(t\), the victory predicates computed by \(A_i\) and \(A_j\) agree. This invariant is maintained by the serialisable isolation level of the PostgreSQL database.
+
+\subsection{Champion Configuration}\label{fa_21:subsec:champion-config}
+
+The IGLA RACE tournament produced the champion configuration:
+\begin{itemize}
+\item \textbf{Learning rate:} \(\text{lr} = 0.004\)
+\item \textbf{GF16 bias:} \(\text{PHI\_BIAS} = 60\)
+\item \textbf{Seed triple:} \((F_{17}, F_{18}, F_{19}) = (1597, 2584, 4181)\)
+\item \textbf{Mean BPB:} \(1.830\) at step 5000
+\item \textbf{Gate status:} Gate-2 passed (BPB \(< 1.85\)); Gate-3 pending (BPB \(< 1.5\))
+\end{itemize}
+
+The anchor identity \(\varphi^2 + \varphi^{-2} = 3\) enters through the Gate definitions: Gate-2 threshold \(1.85 = 3 - \varphi^{-2} \cdot \delta_G\) and Gate-3 threshold \(1.5 = 3/2\) are rational functions of the identity's right-hand side, ensuring that the victory criteria are algebraically derived rather than empirically arbitrary. The six Coq refutation theorems (R1--R6) in INV-7 close all known loopholes by which a degenerate configuration could falsely claim victory.
+
+\subsection{Scalability Considerations}\label{fa_21:subsec:scalability}
+
+The current fleet size of 7 Workers matches the cardinality of the sanctioned seed pool. Scaling beyond this requires extending the pool, which must preserve the Fibonacci-Lucas canonicity criteria of App.A. The Arbiter's 60-second polling interval limits result latency; a sub-second polling regime would require a push-based architecture (e.g., PostgreSQL \texttt{LISTEN/NOTIFY}) rather than the current pull-based polling. The database schema supports horizontal scaling via read replicas for query-heavy workloads such as the leaderboard visualisation dashboard.
+

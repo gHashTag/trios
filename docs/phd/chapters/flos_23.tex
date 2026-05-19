@@ -571,3 +571,91 @@ Architecture 36 Crates.
   \label{fig:wave8-W8-23-gf16-clock-mcp}
 \end{figure}
 
+% =====================================================================
+% §MCP Server v2.2 Endpoints and Architecture — added for issue #408
+% =====================================================================
+
+\section{MCP Server v2.2 Endpoints and Architecture}\label{fa_23:sec:mcp-v22}
+
+The Model Context Protocol integration described in Sections 2--3 is served by two complementary MCP implementations: a browser-automation server (\texttt{trios-mcp}) exposing 14 tools via stdio, and a RAG server (\texttt{trios-mcp-rag}) exposing 5 tools over stdio JSON-RPC 2.0 with a Railway PostgreSQL backend. This section specifies the v2.2 endpoint architecture, the tool catalogue, and the request--response contracts.
+
+\subsection{Architecture Overview}\label{fa_23:subsec:mcp-arch}
+
+The MCP server stack follows a three-ring architecture mirroring the crate structure:
+
+\begin{enumerate}
+\item \textbf{SR-00 (Browser Connector):} A lightweight HTTP server running on the host machine alongside the browser. It captures console logs, network traffic, DOM state, and screenshots via the Chrome DevTools Protocol (CDP). Exposes REST endpoints at \texttt{localhost:3025} with HTTP Basic Auth.
+
+\item \textbf{SR-01 (Protocol Layer):} Implements the MCP JSON-RPC 2.0 specification over stdio, handling \texttt{initialize}, \texttt{tools/list}, and \texttt{tools/call} methods. Manages the protocol handshake, capability negotiation, and error propagation.
+
+\item \textbf{SR-02 (MCP Server):} The public-facing stdio server that aggregates SR-00 endpoints into MCP tool definitions. Each tool call translates to an HTTP request against SR-00 and wraps the response in the MCP content format.
+\end{enumerate}
+
+The RAG server (\texttt{trios-mcp-rag}) operates independently, querying the \texttt{ssot\_brochure.chapters} table in the Railway PostgreSQL database via \texttt{tokio-postgres}. It responds to the same JSON-RPC 2.0 protocol on stdio, making it compatible with any MCP client (Claude Desktop, Perplexity, BrowserOS).
+
+\subsection{Browser Automation Tool Catalogue}\label{fa_23:subsec:tool-catalogue}
+
+The 14 browser-automation tools exposed by \texttt{trios-mcp} SR-02 are:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.30}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.40}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.30}}@{}}
+\toprule\noalign{}
+\textbf{Tool} & \textbf{SR-00 Endpoint} & \textbf{Returns} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{getConsoleLogs} & \texttt{GET /console-logs} & Console messages \\
+\texttt{getConsoleErrors} & \texttt{GET /console-errors} & Error-level entries \\
+\texttt{getNetworkErrors} & \texttt{GET /network-errors} & HTTP $\geq$ 400 \\
+\texttt{getNetworkLogs} & \texttt{GET /network-success} & All HTTP traffic \\
+\texttt{getSelectedElement} & \texttt{GET /selected-element} & DOM node snapshot \\
+\texttt{wipeLogs} & \texttt{POST /wipelogs} & Confirmation \\
+\texttt{takeScreenshot} & \texttt{POST /capture-screenshot} & PNG base64 \\
+\texttt{runAccessibilityAudit} & \texttt{POST /accessibility-audit} & Lighthouse report \\
+\texttt{runPerformanceAudit} & \texttt{POST /performance-audit} & Lighthouse report \\
+\texttt{runSeoAudit} & \texttt{POST /seo-audit} & Lighthouse report \\
+\texttt{runBestPracticesAudit} & \texttt{POST /best-practices-audit} & Lighthouse report \\
+\texttt{runNextJSAudit} & \texttt{(local checklist)} & SEO checklist \\
+\texttt{runDebuggerMode} & \texttt{(local guide)} & 8-step workflow \\
+\texttt{runAuditMode} & \texttt{(local guide)} & Full optimisation \\
+\end{longtable}
+
+All tools return responses in the MCP content format: \texttt{\{"content": [\{"type": "text", "text": ...\}], "isError": bool\}}.
+
+\subsection{RAG Server Endpoints}\label{fa_23:subsec:rag-endpoints}
+
+The \texttt{trios-mcp-rag} server exposes five tools for querying the Railway PostgreSQL SSOT:
+
+\begin{enumerate}
+\item \textbf{\texttt{search\_chapters}:} Full-text ILIKE search across all 80 GOLDEN BRIDGE chapters, returning slug, kind, title, and a 500-character snippet. Accepts \texttt{query} (string) and optional \texttt{limit} (integer, default 10).
+
+\item \textbf{\texttt{get\_chapter}:} Fetches the full body, word count, and metadata for a single chapter by slug. Returns the complete Markdown source for rendering or analysis.
+
+\item \textbf{\texttt{list\_chapters}:} Lists all chapter slugs with order key, kind, title, and word count, sorted by canonical order.
+
+\item \textbf{\texttt{forbidden\_audit}:} Scans all chapter bodies for a curated list of forbidden terms (e.g., competitive claims, proprietary names, unverified assertions). Returns \texttt{CLEAN} or a list of violations.
+
+\item \textbf{\texttt{build\_cover}:} Generates the LaTeX titlepage for the GOLDEN BRIDGE compendium, embedding live word counts and chapter totals from the database.
+\end{enumerate}
+
+The server identity is declared in the \texttt{initialize} response as \texttt{\{"protocolVersion": "2024-11-05", "serverInfo": \{"name": "trios-mcp-rag", ...\}\}}, conforming to the MCP specification.
+
+\subsection{Protocol Flow and Error Handling}\label{fa_23:subsec:protocol-flow}
+
+The MCP v2.2 request lifecycle proceeds in three phases:
+
+\begin{enumerate}
+\item \textbf{Handshake:} The client sends \texttt{initialize} with its capabilities. The server responds with \texttt{protocolVersion}, \texttt{capabilities}, and \texttt{serverInfo}. The client acknowledges with \texttt{notifications/initialized}.
+
+\item \textbf{Discovery:} The client calls \texttt{tools/list} to enumerate available tools and their JSON Schema input specifications.
+
+\item \textbf{Invocation:} The client calls \texttt{tools/call} with a tool name and arguments. The server dispatches to the corresponding handler and returns a content array.
+\end{enumerate}
+
+Error handling follows the JSON-RPC 2.0 convention: unknown tools produce \texttt{\{"isError": true, "content": [\{"type": "text", "text": "Unknown tool: ..."\}]\}}. The SR-02 dispatcher matches tool names via a static match expression, ensuring compile-time exhaustiveness. Unknown JSON-RPC methods return a descriptive error response without crashing the server loop.
+
+The stdio transport reads one JSON object per line from stdin and writes one JSON object per line to stdout, enabling simple integration with any process-spawning runtime. The RAG server connects to Railway PostgreSQL per-request (no persistent connection pool), trading latency for resilience against connection drops during long idle periods.
+

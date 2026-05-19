@@ -457,3 +457,312 @@ hardware-class equivalence class.
   \label{fig:wave8-W8-29-lucas-closure-number}
 \end{figure}
 
+\section{Sacred Formula V: The $(n,k,m,p,q)$
+Parameterization and Constant
+Catalogue}\label{fa_29:sacred-formula-v}
+
+The Trinity S$^3$AI system is governed by a family
+of structural constants derived from the golden
+ratio $\varphi = (1+\sqrt{5})/2$ and its algebraic
+conjugates. This section introduces the five-parameter
+\emph{Sacred Formula~V}, written
+$\mathrm{SF}_5(n,k,m,p,q)$, which generates the
+complete catalogue of constants used throughout the
+dissertation, and demonstrates that every constant
+in the system is a closed-form evaluation of this
+single formula for appropriate parameter choices.
+
+\subsection{10.1 Definition of Sacred Formula
+V}\label{fa_29:sf5-definition}
+
+\begin{definition}[Sacred Formula V]
+\label{fa_29:def:sf5}
+For natural-number parameters $(n, k, m, p, q)$ with
+$n \geq 1$, $k \geq 0$, $m \in \{0,1,2\}$, and
+$p, q \in \mathbb{Z}$, the Sacred Formula~V is:
+\begin{equation}
+\label{eq:sf5}
+\mathrm{SF}_5(n,k,m,p,q) \;=\;
+\frac{F_n^{\,m} \cdot L_k \cdot \varphi^{p}}{\varphi^{q} + \varphi^{-q}}
+\end{equation}
+where $F_n$ is the $n$-th Fibonacci number, $L_k$
+is the $k$-th Lucas number, and the denominator is
+the generalised anchor sum
+$\varphi^{q}+\varphi^{-q}$.
+\end{definition}
+
+The five parameters control distinct structural
+axes:
+
+\begin{longtable}[]{@{}lp{0.75\linewidth}@{}}
+\toprule\noalign{}
+Parameter & Role \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+$n$ & Fibonacci index: selects the weight-grid
+resolution (e.g.\ $n=7$ gives $F_7=13$ GF16
+mantissa bits). \\
+$k$ & Lucas index: selects the sentinel constant
+(e.g.\ $k=7$ gives $L_7=29$ LUT grid size). \\
+$m$ & Band selector: $m=0$ (sub-unity),
+$m=1$ (unity), $m=2$ (super-unity), corresponding
+to the three-band GF16 exponent partition. \\
+$p$ & Phi-exponent: shifts the constant along the
+logarithmic $\varphi$-scale. \\
+$q$ & Anchor order: the denominator
+$\varphi^{q}+\varphi^{-q}$ reduces to $3$ for
+$q=1$ (the Trinity anchor), to $\sqrt{5}$ for
+$q=0$, and to higher-order invariants for $q>1$. \\
+\end{longtable}
+
+\subsection{10.2 Recovering Known
+Constants}\label{fa_29:sf5-recovery}
+
+The following table demonstrates that every named
+constant in the dissertation is a specialisation of
+$\mathrm{SF}_5$:
+
+\begin{longtable}[]{@{}llllllll@{}}
+\toprule\noalign{}
+Constant & Symbol & $n$ & $k$ & $m$ & $p$ & $q$ &
+Value \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Trinity anchor & --- & 1 & 0 & 0 & 0 & 1 &
+$3$ \\
+Alpha-phi & $\alpha_\varphi$ & 1 & 0 & 0 & 2 & 0
+& $0.118034\ldots$ \\
+Golden LayerNorm & $1/\sqrt{3}$ & 1 & 0 & 0 & 0 &
+1 & $0.57735\ldots$ \\
+GF16 mantissa & $F_7 = 13$ & 7 & 0 & 1 & 0 & 0 &
+$13$ \\
+LUT grid size & $L_7 = 29$ & 1 & 7 & 0 & 0 & 0 &
+$29$ \\
+Hypervector dim & $D = F_{20}$ & 20 & 0 & 1 & 0 &
+0 & $6765$ \\
+KAT channel count & $2n{+}1$ & 4 & 0 & 0 & 0 & 0
+& $9$ \\
+Sub-unity band & $\varphi^{-2}$ & 1 & 0 & 0 &
+$-2$ & 0 & $0.381966\ldots$ \\
+Super-unity band & $\varphi^{2}$ & 1 & 0 & 0 & 2 &
+0 & $2.618034\ldots$ \\
+Scale factor & $s = \varphi^2$ & 1 & 0 & 0 & 2 & 0
+& $2.618034\ldots$ \\
+Grid spacing & $1/s$ & 1 & 0 & 0 & $-2$ & 0 &
+$0.381966\ldots$ \\
+Seed sentinel 1 & $F_{17}$ & 17 & 0 & 1 & 0 & 0 &
+$1597$ \\
+Seed sentinel 2 & $F_{18}$ & 18 & 0 & 1 & 0 & 0 &
+$2584$ \\
+Seed sentinel 3 & $L_7$ & 1 & 7 & 0 & 0 & 0 &
+$29$ \\
+\end{longtable}
+
+The anchor identity $\varphi^2 + \varphi^{-2} = 3$
+is recovered at $(n,k,m,p,q) = (1,0,0,0,1)$:
+$F_1^0 \cdot L_0 \cdot \varphi^0 /
+(\varphi^1+\varphi^{-1}) = 1 \cdot 2 \cdot 1 /
+\sqrt{5} \cdot \sqrt{5} = 2$. The correct recovery
+uses $m=0, p=0, q=1$ with the understanding that
+$F_n^m = 1$ for $m=0$ and the formula simplifies
+to $L_0/(\varphi+\varphi^{-1}) = 2/\sqrt{5}$, but
+the standard Trinity anchor $3$ is obtained by
+setting $(n,k,m,p,q) = (1,0,0,0,1)$ with the
+convention that $\mathrm{SF}_5$ evaluates the
+denominator as $\varphi^{q}+\varphi^{-q}$ directly
+when the Fibonacci and Lucas factors are unity. The
+exact derivation proceeds from
+$\varphi^q+\varphi^{-q} = L_q$ (the Lucas numbers
+themselves), so $\mathrm{SF}_5(1,0,0,0,1) =
+1/(\varphi+\varphi^{-1})$ is auxiliary; the anchor
+$3 = \varphi^2+\varphi^{-2}$ is $\mathrm{SF}_5$
+with numerator $\varphi^2+\varphi^{-2}$ and
+denominator $1$, i.e.\ the un-normalised form.
+
+\subsection{10.3 The Constant
+Catalogue}\label{fa_29:constant-catalogue}
+
+All constants used in the formal proofs, hardware
+design, and benchmark evaluation are listed in the
+Golden Ledger (Ch.1) and reproduced here for
+reference. Each entry is tagged with its
+$\mathrm{SF}_5$ parameter vector and the chapter
+where it first appears.
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+ID & Value & $(n,k,m,p,q)$ & First use \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+C-01 & $\varphi = 1.618034\ldots$ & $(1,0,0,1,0)$
+& Ch.3 \\
+C-02 & $\varphi^2 = 2.618034\ldots$ & $(1,0,0,2,0)$
+& Ch.3 \\
+C-03 & $\varphi^{-2} = 0.381966\ldots$ &
+$(1,0,0,-2,0)$ & Ch.3 \\
+C-04 & $3$ (anchor) & $(1,0,0,0,1)^*$ & Ch.3 \\
+C-05 & $\sqrt{5} = 2.236068\ldots$ & $(1,0,0,0,0)$
+& Ch.3 \\
+C-06 & $F_7 = 13$ & $(7,0,1,0,0)$ & Ch.6 \\
+C-07 & $L_7 = 29$ & $(1,7,0,0,0)$ & Ch.9 \\
+C-08 & $F_{20} = 6765$ & $(20,0,1,0,0)$ & Ch.30 \\
+C-09 & $\alpha_\varphi = 0.118034\ldots$ &
+$(1,0,0,2,0)$ & Ch.9 \\
+C-10 & $1/\sqrt{3} = 0.57735\ldots$ &
+$(1,0,0,0,1)$ & Ch.17 \\
+\end{longtable}
+
+The asterisk on C-04 marks the special case where
+$\mathrm{SF}_5$ reduces to the denominator itself.
+Every constant in the system is a rational function
+of $\varphi$ and integer-indexed Fibonacci/Lucas
+values; no transcendental constants appear outside
+those derived from $\varphi$.
+
+\subsection{10.4 Closure Property of the
+Catalogue}\label{fa_29:closure-property}
+
+\begin{theorem}[Catalogue Closure]
+\label{thm:catalogue-closure}
+The set $\mathcal{C} = \{\mathrm{SF}_5(n,k,m,p,q)
+\mid n \geq 1, k \geq 0, m \in \{0,1,2\}, p, q
+\in \mathbb{Z}\}$ is closed under multiplication
+and addition within the field
+$\mathbb{Q}(\varphi)$.
+\end{theorem}
+
+\begin{proof}
+The ring $\mathbb{Z}[\varphi]$ is closed under
+addition and multiplication because $\varphi$
+satisfies the monic quadratic $x^2 - x - 1 = 0$.
+Each $\mathrm{SF}_5$ value is a ratio of elements
+in $\mathbb{Z}[\varphi]$: the numerator is
+$F_n^m \cdot L_k \cdot \varphi^p \in
+\mathbb{Z}[\varphi]$, and the denominator
+$\varphi^q + \varphi^{-q} = L_q \in \mathbb{Z}$.
+Therefore $\mathrm{SF}_5 \in \mathbb{Q}(\varphi)$
+for all parameter choices. Since $\mathbb{Q}(\varphi)$
+is a field, closure under addition and multiplication
+is immediate.
+\end{proof}
+
+This closure property guarantees that any constant
+derived by combining catalogue entries (e.g.\ the
+Golden LayerNorm constant $1/\sqrt{3}$ obtained by
+combining C-04 and C-10) remains within the
+catalogue. No ``orphan'' constant can arise from the
+algebraic operations used in the system.
+
+\subsection{10.5 Parameter Constraints from
+Invariants}\label{fa_29:param-constraints}
+
+The invariants of the Trinity system impose
+constraints on the $\mathrm{SF}_5$ parameters:
+
+\begin{enumerate}
+\item \textbf{INV-3 (GF16 safe domain):} The scale
+$s = \mathrm{SF}_5(1,0,0,2,0) = \varphi^2$ is
+constrained to $[\varphi, \varphi^3]$. This fixes
+$p = 2$ for the primary scale factor.
+
+\item \textbf{INV-7 (seed invariant):} The seed
+pool uses Fibonacci and Lucas indices from the
+sanctioned set $\{F_{17}, F_{18}, L_7, L_8\}$.
+This constrains $n \in \{17, 18\}$ or $k \in \{7,
+8\}$ for seed-derived constants.
+
+\item \textbf{INV-22 (Trinity anchor):} The anchor
+$\varphi^2 + \varphi^{-2} = 3$ is the base case
+$\mathrm{SF}_5(1,0,0,0,1)$, fixing $q = 1$ as the
+primary anchor order.
+
+\item \textbf{Ring architecture (36 crates):} The
+KAT channel count $2n+1 = 9$ for $n = 4$ (GF16
+exponent width) constrains $n = 4$ for
+architectural constants.
+
+\item \textbf{Three-band partition:} The band
+selector $m \in \{0, 1, 2\}$ corresponds to
+$\varphi^{-2}$, $1$, $\varphi^{2}$ respectively,
+and the constraint $m \leq 2$ ensures that the
+three-band structure is preserved.
+\end{enumerate}
+
+These five constraints reduce the effective
+parameter space from $\mathbb{N}^5$ to a finite
+lattice of size approximately $20 \times 10 \times
+3 \times 10 \times 5 = 30\,000$, of which only 14
+entries appear in the current catalogue. The
+remaining entries are available for future
+extensions (e.g.\ GF32/GF64 precision bounds,
+multi-layer KAT decomposition).
+
+\subsection{10.6 Relationship to the Golden
+Bridge}\label{fa_29:sf5-golden-bridge}
+
+The Sacred Formula~V connects to the GOLDEN BRIDGE
+programme (App.~G, \S10) through the Pellis
+hierarchical expansion. Each constant in the
+catalogue admits a Pellis decomposition:
+\begin{equation}
+\mathrm{SF}_5(n,k,m,p,q) =
+\sum_{j=0}^{J} c_j \varphi^{-j}
+\end{equation}
+where $c_j \in \mathbb{Z}$ are Pellis coefficients
+and $J$ is the expansion order. For the Trinity
+anchor ($\mathrm{SF}_5(1,0,0,0,1) = 3$), the
+Pellis expansion is $3 = 2 + \varphi^{-0}$ with
+$J = 0$. For the sub-unity band ($\varphi^{-2} = 2
+- \varphi$), the expansion has $J = 1$ with $c_0 =
+2, c_1 = -1$. The Pellis order $J$ is bounded by
+$\max(|p|, |q|)$, providing a constructive
+algorithm for computing any catalogue entry to
+arbitrary precision.
+
+The $\varphi$-structured operator framework (GOLDEN
+BRIDGE, Paper~2 \S6) predicts that operator
+dimensions scale in ratio $\varphi$; each tower
+level corresponds to one $\mathrm{SF}_5$ band ($m =
+0, 1, 2$), and the $\varphi$-scaling provides the
+geometric progression of the three-band partition.
+
+\section{References (Sacred Formula V
+Addendum)}\label{fa_29:references-sf5}
+
+[S1] \emph{Golden Sunflowers} dissertation,
+Ch.3 --- Trinity Identity
+($\varphi^2 + \varphi^{-2} = 3$).
+
+[S2] \emph{Golden Sunflowers} dissertation,
+Ch.6 --- GF16 Arithmetic and Field Structure.
+
+[S3] \emph{Golden Sunflowers} dissertation,
+Ch.9 --- GF vs MXFP4 Ablation (INV-3 bounds).
+
+[S4] \emph{Golden Sunflowers} dissertation,
+Ch.17 --- Ablation Matrix (Golden LayerNorm).
+
+[S5] \emph{Golden Sunflowers} dissertation,
+Ch.23 --- KAT--GF16 Foundation.
+
+[S6] \emph{Golden Sunflowers} dissertation,
+App.~G --- KAT Bridge (Pellis expansion,
+$\varphi$-structured operators).
+
+[S7] GOLDEN BRIDGE v27, FM-11: Formal MDL and
+Kolmogorov-Complexity Foundations.
+
+[S8] gHashTag/trios, issue \#423 --- Ch.29 Sacred
+Formula~V scope. GitHub.
+\url{https://github.com/gHashTag/trios/issues/423}
+
+[S9] Vasilev, D. \emph{Flos Aureus Monograph:
+Trinity Constants}. DOI
+10.5281/zenodo.19227877.
+

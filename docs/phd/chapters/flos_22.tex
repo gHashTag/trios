@@ -427,3 +427,47 @@ Formal Spec. Zenodo, DOI: 10.5281/zenodo.19227877.
   \label{fig:wave8-W8-22-e8-orchestration}
 \end{figure}
 
+% =====================================================================
+% §Railway Cloud Deployment and Tailscale Networking — added for issue #407
+% =====================================================================
+
+\section{Railway Cloud Deployment and Tailscale Networking}\label{fa_22:sec:railway-tailscale}
+
+The Railway/Trios orchestration described in Sections 2--5 is realised through a two-layer networking architecture: Railway provides the managed container platform for long-running services, while Tailscale furnishes a WireGuard-based mesh overlay for secure inter-node communication and public ingress. This section describes the deployment topology and the networking invariants that complement the worker-pool invariants of INV-8.
+
+\subsection{Railway Service Mesh}\label{fa_22:subsec:railway-mesh}
+
+The Trinity S\textsuperscript{3}AI deployment on Railway consists of three persistent services:
+
+\begin{enumerate}
+\item \textbf{\texttt{phd-postgres-ssot}}: A managed PostgreSQL 15 instance serving as the single source of truth for BPB trajectories, IGLA RACE results, and the Rainbow Bridge audit log. Connection pooling via PgBouncer (maximum 20 connections) prevents Worker saturation under concurrent writes.
+
+\item \textbf{\texttt{trios-mcp-rag}}: A stateless MCP (Model Context Protocol) stdio-to-HTTP adapter exposing five tools (\texttt{search\_chapters}, \texttt{get\_chapter}, \texttt{list\_chapters}, \texttt{forbidden\_audit}, \texttt{build\_cover}) over JSON-RPC 2.0. The service queries \texttt{phd-postgres-ssot} and responds with chapter content from the \texttt{ssot\_brochure.chapters} table.
+
+\item \textbf{\texttt{trios-server}}: An Axum-based MCP HTTP server on port 9005 that hosts the 14 browser-automation tools, worker-status endpoints, and the health check at \texttt{/.identity}.
+\end{enumerate}
+
+Each Railway service is deployed as a Docker container with a pinned Nix-derived image, ensuring byte-for-byte reproducibility of the runtime environment. Environment variables are injected via Railway's encrypted secret store; no credentials appear in the repository or the Docker image.
+
+\subsection{Tailscale Mesh Overlay}\label{fa_22:subsec:tailscale-mesh}
+
+The 27-Coptic-agent development grid uses Tailscale as the VPN overlay, providing mutual TLS authentication, MagicDNS resolution, and network-enforced anti-collision. Each agent runs on a dedicated Tailscale-tagged node with a unique codename (Alpha, Beta, Gamma, \ldots, Sho). The ACL policy, stored in \filepath{.trinity/tailscale/acl.hujson}, enforces three rules:
+
+\begin{enumerate}
+\item Agents may communicate only with the LEAD orchestrator node.
+\item Agent-to-agent traffic is denied, preventing cross-crate file access.
+\item The operator (human developer) retains admin access to all nodes.
+\end{enumerate}
+
+The Tailscale Funnel provides public ingress for the MCP server and the dashboard. The \texttt{tri-tunnel} crate manages the Funnel lifecycle, exposing the trios-server on \texttt{https://<tailnet>.ts.net:443} with automatic TLS certificate provisioning.
+
+\subsection{Networking Invariants}\label{fa_22:subsec:net-invariants}
+
+The two-layer architecture satisfies two networking invariants that complement INV-8:
+
+\textbf{NI-1 (Reachability).} Every Railway service is reachable from every Tailscale node within one network hop. Latency p95 is bounded at 200 ms for the Tailscale Funnel path, as enforced by the \texttt{FUNNEL\_LATENCY\_P95\_MS} constant in \filepath{trios-rainbow-bridge/src/lib.rs}.
+
+\textbf{NI-2 (Isolation).} No Tailscale agent node can reach another agent node's filesystem or process space. This is enforced by the Tailscale ACL at the network level, independent of OS-level permissions.
+
+The three-tier service topology (PostgreSQL + MCP + Axum) maps to the three terms of the anchor identity \(\varphi^2 + \varphi^{-2} = 3\): the data tier (\(\varphi^{-2}\)-weighted), the protocol tier (unity), and the application tier (\(\varphi^2\)-weighted), with resource allocation following the same \(\phi\)-partition as the worker pool (Section 3).
+
