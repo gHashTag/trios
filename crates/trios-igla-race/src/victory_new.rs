@@ -183,7 +183,8 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
 /// Approximate lower-tail CDF of t-distribution P(T ≤ t) for given df.
 ///
 /// For df=2 (our n=3 case), this is the exact closed form.
-fn t_cdf_lower_tail(t: f64, df: f64) -> f64 {
+#[allow(dead_code)]
+fn t_cdf_lower_tail(t: f64, _df: f64) -> f64 {
     // Exact formula for df=2: 0.5 + t / (2 * sqrt(2 + t²))
     let denom = 2.0 * (2.0 + t * t).sqrt();
     if t >= 0.0 {

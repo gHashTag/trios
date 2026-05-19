@@ -256,10 +256,7 @@ pub fn simulate_bpb_v2(lr: f64, rung_step: u32, seed: u64, use_gf16: bool) -> f6
     // LR from its built-in champion config. The bridge contract is BPB-out,
     // not full hyperparameter passthrough (extension tracked as L-FH7).
     let _ = lr;
-    match forward_real_bpb(seed, fmt, rung_step) {
-        Ok(bpb) => bpb,
-        Err(_) => f64::NAN,
-    }
+    forward_real_bpb(seed, fmt, rung_step).unwrap_or(f64::NAN)
 }
 
 /// Deterministic [0, 1) value from `(seed, rung)`. Avoids pulling rand for

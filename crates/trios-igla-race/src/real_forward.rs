@@ -135,8 +135,7 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
     let output = cmd.output()?;
 
     if !output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             format!("cpu_train exit={:?}", output.status.code()),
         ));
     }
