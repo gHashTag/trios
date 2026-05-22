@@ -52,6 +52,7 @@ pub use application_data_aead_nonce_reuse::{
 };
 
 pub mod cover_traffic_decoy_indistinguishability;
+pub mod welcome_init_secret_kdf_label_confusion;
 pub use cover_traffic_decoy_indistinguishability::{
     validate_cover_packet, CoverPacket, CoverPacketError, CoverPacketView,
     COVER_AAD_LEN, COVER_AEAD_NONCE_LEN, COVER_AEAD_TAG_LEN,
