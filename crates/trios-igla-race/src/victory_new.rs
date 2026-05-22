@@ -600,9 +600,11 @@ mod tests {
         }
     }
 
-    /// Falsification 3: duplicate seed rejected.
+    /// Falsification 3 (INV-7): duplicate seed rejected.
+    /// Companion to `falsify_duplicate_seed` above; kept under a
+    /// distinct name to avoid E0428 after the INV-7 set was merged in.
     #[test]
-    fn falsify_duplicate_seed() {
+    fn falsify_duplicate_seed_inv7() {
         let r = vec![
             SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() },
             SeedResult { seed: 42, bpb: 1.41, step: 5000, sha: "b".into() },
@@ -655,18 +657,23 @@ mod tests {
         }
     }
 
-    /// Falsification 6: non-finite BPB rejected.
+    /// Falsification 6 (INV-7): non-finite BPB rejected.
+    /// Companion to `falsify_non_finite_bpb` above; kept under a
+    /// distinct name to avoid E0428 after the INV-7 set was merged in.
     #[test]
-    fn falsify_non_finite_bpb() {
+    fn falsify_non_finite_bpb_inv7() {
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             let r = vec![
                 SeedResult { seed: 42, bpb: bad, step: 5000, sha: "a".into() },
                 SeedResult { seed: 43, bpb: 1.45, step: 5000, sha: "b".into() },
                 SeedResult { seed: 44, bpb: 1.39, step: 5000, sha: "c".into() },
             ];
+            // The bad value lives on seed=42 in this set (the INV-7
+            // companion uses raw seed numbers, not the mk() helper
+            // which maps to seed=1). Pin the actual seed under test.
             match check_victory(&r) {
-                Err(VictoryError::NonFiniteBpb { seed: 1, .. }) => {}
-                other => panic!("expected NonFiniteBpb for {bad}, got {other:?}"),
+                Err(VictoryError::NonFiniteBpb { seed: 42, .. }) => {}
+                other => panic!("expected NonFiniteBpb for seed=42, {bad}, got {other:?}"),
             }
         }
     }
