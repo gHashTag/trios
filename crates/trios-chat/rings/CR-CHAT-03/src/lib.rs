@@ -29,6 +29,7 @@ pub mod commit_signature;
 pub mod concurrent_add_remove;
 pub mod confirmation_tag_chain;
 pub mod external_commit;
+pub mod external_commit_resumption_psk_misbinding;
 pub mod external_proposal_origin_unbound;
 pub mod external_psk_id_provenance;
 pub mod leaf_node_signature_validation;

@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY · COMMIT-PATH-SECRET-AEAD-KEYING · APP-MSG-SKIP-DOS`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY · COMMIT-PATH-SECRET-AEAD-KEYING · APP-MSG-SKIP-DOS · KEYPACKAGE-LIFETIME-GRACE · EXT-COMMIT-RESUMPTION-PSK`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-36: **~628 tests · 25/25 e2e · 3500/3500 falsifier · 70 categories · 341 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-37: **~648 tests · 25/25 e2e · 3600/3600 falsifier · 72 categories · 351 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -103,6 +103,38 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-37 — KeyPackage lifetime grace-window expiry + ExternalCommit ResumptionPSK misbinding (RFC 9420 §10.1 + §11.2.1+§15.1)
+
+**Lane A — `key_package_lifetime_grace_window_expiry` (CR-CHAT-01).**
+`validate_key_package_lifetime` enforces RFC 9420 §10.1 KeyPackage validity:
+the declared `(not_before, not_after)` window must be canonical-length-anchored
+to a 16-byte LeafID, monotone, capped at the 90-day ceiling, accept the
+`now == not_after` boundary inclusively, reject `not_before` more than
+30 days in the past (harvest-grace floor), and reject the `not_after = 0`
+sentinel that crosses integer boundaries in many stacks. 10 deterministic
+tests `KPLGW-01..10`. Constructive guard against KeyPackage hoarding +
+clock-skew abuse.
+
+**Lane B — `external_commit_resumption_psk_misbinding` (CR-CHAT-03).**
+`validate_external_commit_resumption_psk` enforces RFC 9420 §11.2.1 + §15.1:
+an ExternalCommit MUST carry **exactly one** PSKid of type `Resumption`
+(0x01 — not `External`/0x02), whose `group_id` matches the local group,
+whose `epoch` equals the immediately prior epoch (`local_epoch`), and
+whose `psk_nonce` matches the rejoiner-declared nonce with canonical
+32-byte length. 10 deterministic tests `ECRPM-01..10`. Constructive
+barrier against cross-group splicing + stale-resumption replay that
+would undo Post-Compromise Security healing.
+
+**Falsifier corpus.** +50 `key_package_lifetime_grace_window_expiry` +
++50 `external_commit_resumption_psk_misbinding` (PI-KPLGW-001..050,
+PI-ECRPM-001..050) bringing cumulative falsifier corpus to **3600/3600**
+across 72 categories. 100% deny-pattern coverage offline-verified, 0
+collisions with `expected_block=false` entries.
+
+**Coq Section TrinityChatWave37.** `INV-CHAT-238..247` (10 theorems) +
+4 helper lemmas, **0 new axioms / 0 admissions**. Cumulative Qed:
+341 → **351**. R5 admissions budget unchanged at 0/10.
 
 ### Wave-36 — Commit path-secret AEAD keying mismatch + Application-message generation skip-window DoS (RFC 9420 §7.7+§8+§12.4 + §9.3+§15.2)
 
