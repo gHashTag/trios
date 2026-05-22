@@ -2,6 +2,13 @@
 name = "trios-train-cpu"
 version = "0.1.0"
 edition = "2021"
+# T-JEPA training binaries in src/bin/ depend on modules
+# (jepa, objective, MuonOptimizer, AdamW, NgramModel, …) that
+# are not yet implemented in this crate. Disable Cargo bin
+# auto-discovery until the training stack is restored so the
+# workspace `cargo test --all` keeps compiling. Tracked by
+# the upstream T-JEPA owner; see ROADMAP.
+autobins = false
 
 [dependencies]
 anyhow = "1.0"
