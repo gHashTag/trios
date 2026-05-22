@@ -2,12 +2,13 @@
 name = "trios-chat"
 version = "0.1.0"
 edition = "2021"
-description = "Trinity Secure Chat — privacy-first chat for users ↔ agent bots over trios-mesh-node"
+description = "Trinity Secure Chat — thin re-export shim over the BR-OUTPUT-CHAT assembler ring (rings/CR-CHAT-*). EPIC trinity-fpga#28."
 license = "MIT"
 repository = "https://github.com/gHashTag/trios"
 
 # Anchor: phi^2 + phi^-2 = 3 · TRINITY · CHAT · ZERO-METADATA
 # Builds on trinity-fpga#22 (LANDED) → addresses trinity-fpga#28 EPIC
+# L-ARCH-001 / R-RING-DEP-002: this crate is a re-export shim only.
 
 [lib]
 name = "trios_chat"
@@ -22,20 +23,17 @@ name = "falsifier_runner"
 path = "src/bin/falsifier_runner.rs"
 
 [dependencies]
-# crypto — re-uses primitives validated by trios-mesh-node #629
-x25519-dalek      = { version = "2", features = ["static_secrets"] }
+# Re-export ring — the only allowed runtime dep.
+trios-chat-br-output = { path = "rings/BR-OUTPUT-CHAT" }
+
+# Bins (`e2e_chat_25`, `falsifier_runner`) need a few crates directly to
+# generate randomness and parse the corpus. These are NOT used by the
+# library itself.
 ed25519-dalek     = { version = "2", features = ["rand_core"] }
-chacha20poly1305  = "0.10"
-sha2              = "0.10"
-hkdf              = "0.12"
-rand              = { workspace = true }
-rand_core         = "0.6"
-hex               = "0.4"
-base64            = "0.22"
+x25519-dalek      = { version = "2", features = ["static_secrets"] }
+rand_core         = { version = "0.6", features = ["getrandom", "std"] }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
-zeroize           = { version = "1.7", features = ["derive"] }
-thiserror         = { workspace = true }
 
 [dev-dependencies]
 rand              = { workspace = true }

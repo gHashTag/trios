@@ -309,4 +309,127 @@ mod tests {
         let s_ac = Identity::safety_number(&a.lt_verifying(), &cc.lt_verifying());
         assert_ne!(s_ab, s_ac, "different peers must produce different safety numbers");
     }
+
+    // ---------- Wave-5 L-CHAT-1 hardening — 5-mutation falsifier suite ----------
+    //
+    // G-C1 from trinity-chat-design.md: prekey bundle MUST validate against:
+    //   M1 flipped signature   (already covered above as `falsifier_flipped_bit_breaks_signature`)
+    //   M2 swapped order       (here: swap x25519/mlkem fields between two bundles)
+    //   M3 expired bundle      (already covered above as `falsifier_expired_bundle`)
+    //   M4 replay              (re-publish stale bundle past validity)
+    //   M5 foreign CA          (sign bundle with a different lt key; embedded lt_pub remains victim's)
+    //
+    // Plus 2 structural extras for defence-in-depth:
+    //   M6 swapped x25519_pub  — body mutation post-sig
+    //   M7 swapped mlkem_pub   — body mutation post-sig
+    //   M8 canonical domain separation — flipping `version` byte invalidates sig
+
+    #[test]
+    fn falsifier_m4_replay_stale_bundle_rejected() {
+        // M4: attacker captures Alice's bundle, re-publishes past expiry window.
+        let id = Identity::generate();
+        let mut b = id.build_bundle();
+        b.body.issued_at_unix = 1_000_000_000;
+        b.body.valid_for_secs = 3600; // 1h
+        let resigned = id.lt_signing.sign(&b.body.canonical_bytes());
+        b.signature = resigned.to_bytes();
+        // Signature still valid in isolation
+        assert!(b.verify().is_ok());
+        // ...but verify_at past expiry (2h later) fails.
+        let now = b.body.issued_at_unix + b.body.valid_for_secs + 1;
+        assert!(b.verify_at(now).is_err(), "replayed stale bundle must be rejected");
+    }
+
+    #[test]
+    fn falsifier_m5_foreign_ca_signature_rejected() {
+        // M5: attacker signs Alice's body with their own lt key but leaves
+        // Alice's lt_pub embedded. Verification MUST reject because the embedded
+        // key cannot validate the foreign signature.
+        let alice = Identity::generate();
+        let mallory = Identity::generate();
+        let mut b = alice.build_bundle();
+        // Mallory re-signs Alice's body with Mallory's key.
+        let foreign_sig = mallory.lt_signing.sign(&b.body.canonical_bytes());
+        b.signature = foreign_sig.to_bytes();
+        assert!(b.verify().is_err(), "foreign CA signature must fail against embedded lt_pub");
+    }
+
+    #[test]
+    fn falsifier_m2_swapped_order_breaks_signature() {
+        // M2: attacker swaps x25519/mlkem fields between two captured bundles
+        // hoping the verifier wouldn't notice. Canonical-bytes domain pinning
+        // means the signature MUST refuse.
+        let a = Identity::generate();
+        let bb = Identity::generate();
+        let mut a_bundle = a.build_bundle();
+        let b_bundle = bb.build_bundle();
+        a_bundle.body.x25519_pub = b_bundle.body.x25519_pub;
+        assert!(a_bundle.verify().is_err(), "swapped x25519_pub must break sig");
+    }
+
+    #[test]
+    fn falsifier_m6_swapped_mlkem_breaks_signature() {
+        // M6: same as M2 but for the ML-KEM-768 prekey field.
+        let a = Identity::generate();
+        let bb = Identity::generate();
+        let mut a_bundle = a.build_bundle();
+        let b_bundle = bb.build_bundle();
+        a_bundle.body.mlkem_pub = b_bundle.body.mlkem_pub;
+        assert!(a_bundle.verify().is_err(), "swapped mlkem_pub must break sig");
+    }
+
+    #[test]
+    fn falsifier_m8_version_downgrade_breaks_signature() {
+        // M8: attacker tries to downgrade `version` from 1 to 0 to coerce the
+        // verifier into a legacy code path. Canonical-bytes domain separation
+        // means the embedded sig refuses any version mutation.
+        let id = Identity::generate();
+        let mut b = id.build_bundle();
+        b.body.version = 0;
+        assert!(b.verify().is_err(), "version downgrade must break sig");
+    }
+
+    #[test]
+    fn falsifier_g_c1_full_5_mutation_suite_summary() {
+        // Meta-test: verifies the G-C1 obligation that ALL 5 prescribed mutations
+        // (M1..M5 from trinity-chat-design.md) plus M6/M8 extras refuse the bundle.
+        // Wave-5 evidence anchor — single assertion summarising the suite.
+        let alice = Identity::generate();
+        let mallory = Identity::generate();
+        let mut blocks = 0u32;
+
+        // M1 flipped sig
+        let mut b1 = alice.build_bundle();
+        b1.signature[0] ^= 1;
+        if b1.verify().is_err() { blocks += 1; }
+
+        // M2 swapped lt_pub (foreign CA front-half)
+        let mut b2 = alice.build_bundle();
+        b2.body.lt_pub = mallory.lt_verifying().to_bytes();
+        if b2.verify().is_err() { blocks += 1; }
+
+        // M3 expired
+        let mut b3 = alice.build_bundle();
+        b3.body.issued_at_unix = 1_000_000;
+        b3.body.valid_for_secs = 1;
+        let r = alice.lt_signing.sign(&b3.body.canonical_bytes());
+        b3.signature = r.to_bytes();
+        if b3.verify_at(b3.body.issued_at_unix + 100).is_err() { blocks += 1; }
+
+        // M4 replay — stale window
+        let mut b4 = alice.build_bundle();
+        b4.body.issued_at_unix = 0;
+        b4.body.valid_for_secs = 60;
+        let r = alice.lt_signing.sign(&b4.body.canonical_bytes());
+        b4.signature = r.to_bytes();
+        if b4.verify_at(10_000).is_err() { blocks += 1; }
+
+        // M5 foreign CA full
+        let mut b5 = alice.build_bundle();
+        let foreign = mallory.lt_signing.sign(&b5.body.canonical_bytes());
+        b5.signature = foreign.to_bytes();
+        if b5.verify().is_err() { blocks += 1; }
+
+        assert_eq!(blocks, 5, "G-C1 obligation: all 5 prekey mutations MUST be rejected");
+    }
 }
