@@ -23,10 +23,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod commit_secret_export_collision;
 pub mod commit_signature;
 pub mod concurrent_add_remove;
 pub mod confirmation_tag_chain;
 pub mod external_commit;
+pub mod external_proposal_origin_unbound;
 pub mod external_psk_id_provenance;
 pub mod leaf_node_signature_validation;
 pub mod pcs_healing;
@@ -34,6 +36,10 @@ pub mod proposal_ref_collision;
 pub mod proposal_validation;
 pub mod psk_external_injection;
 pub mod reinit_freshness;
+pub use commit_secret_export_collision::{
+    validate_commit_secret_export, CommitSecretError, CommitSecretView, ExportedCommitSecret,
+    COMMIT_SECRET_LEN, COMMIT_TRANSCRIPT_HASH_MAX_LEN,
+};
 pub use commit_signature::{
     verify_commit_signature, CommitSigError, CommitTranscript, CommitVerifierView, SignedCommit,
 };
@@ -45,6 +51,11 @@ pub use concurrent_add_remove::{
     apply_concurrent, ConcurrencyError, HashId, Leaf, MembershipDelta, Proposal,
 };
 pub use external_commit::{check_external_commit, ExternalCommit, ExternalCommitError};
+pub use external_proposal_origin_unbound::{
+    validate_external_proposal_origin, ExternalOrigin, ExternalProposal, ExternalProposalError,
+    ExternalProposalKind, ExternalProposalView, EXTERNAL_PROPOSAL_ID_MAX_LEN,
+    ORIGIN_SIGNATURE_LEN,
+};
 pub use external_psk_id_provenance::{
     validate_external_psk_id, ExternalPskIdError, ExternalPskProposal, ExternalPskView,
     EXTERNAL_PSK_ID_MAX_LEN, EXTERNAL_PSK_NONCE_LEN,

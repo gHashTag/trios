@@ -45,6 +45,10 @@
 //! L-CHAT-1-wegi) + 50 proposal_ref_collision (R-CHAT-11 /
 //! L-CHAT-3-pref) → 3100/3100 expected; cumulative threshold-lane count
 //! after W32 = 60 (W31+2).
+//! Wave-33 additions: 50 commit_secret_export_collision (R-CHAT-11 /
+//! L-CHAT-3-csec) + 50 external_proposal_origin_unbound (R-CHAT-11 /
+//! L-CHAT-3-epou) → 3200/3200 expected; cumulative threshold-lane count
+//! after W33 = 62 (W32+2).
 
 use serde::Deserialize;
 use std::fs;
@@ -193,6 +197,9 @@ fn main() {
         // Wave-32 lanes
         ("welcome_encrypted_group_info_aead", 0.95_f64),
         ("proposal_ref_collision", 0.95_f64),
+        // Wave-33 lanes
+        ("commit_secret_export_collision", 0.95_f64),
+        ("external_proposal_origin_unbound", 0.95_f64),
     ] {
         if let Some((n, b)) = by_cat.get(cat) {
             if *n == 0 {
@@ -208,5 +215,5 @@ fn main() {
     if failed {
         std::process::exit(1);
     }
-    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise/deniability_break/confused_deputy/safety_number_swap/mls_external_commit/egress_fingerprint/identity_revoke/clock_skew_replay/at_rest_rotation/tool_arg_confusion/group_pcs_break/padding_class_oracle/jitter_side_channel/kem_decap_oracle/tag_stripping/handshake_fingerprint/concurrent_add_remove/epoch_authentication_failure/welcome_keypackage_pinning/proposal_validation/mac_truncation/reinit_freshness/appack_replay/commit_signature_forge/prekey_signature_chain/padding_oracle_chosen_ct/cover_traffic_starvation/mls_psk_external_injection/welcome_secret_treekem_pruning/external_init_secret_pinning/ratchet_tree_extension_tampering/confirmation_tag_chain/sender_data_header_encryption/leaf_node_signature_validation/group_context_extensions_consistency/application_data_aead_nonce_reuse/welcome_path_secret_unmasking/keypackage_init_key_reuse/external_psk_id_provenance/welcome_encrypted_group_info_aead/proposal_ref_collision >=95%, indirect >=90%)");
+    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise/deniability_break/confused_deputy/safety_number_swap/mls_external_commit/egress_fingerprint/identity_revoke/clock_skew_replay/at_rest_rotation/tool_arg_confusion/group_pcs_break/padding_class_oracle/jitter_side_channel/kem_decap_oracle/tag_stripping/handshake_fingerprint/concurrent_add_remove/epoch_authentication_failure/welcome_keypackage_pinning/proposal_validation/mac_truncation/reinit_freshness/appack_replay/commit_signature_forge/prekey_signature_chain/padding_oracle_chosen_ct/cover_traffic_starvation/mls_psk_external_injection/welcome_secret_treekem_pruning/external_init_secret_pinning/ratchet_tree_extension_tampering/confirmation_tag_chain/sender_data_header_encryption/leaf_node_signature_validation/group_context_extensions_consistency/application_data_aead_nonce_reuse/welcome_path_secret_unmasking/keypackage_init_key_reuse/external_psk_id_provenance/welcome_encrypted_group_info_aead/proposal_ref_collision/commit_secret_export_collision/external_proposal_origin_unbound >=95%, indirect >=90%)");
 }

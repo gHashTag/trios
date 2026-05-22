@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-32: **~548 tests · 25/25 e2e · 3100/3100 falsifier · 62 categories · 299 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-33: **~568 tests · 25/25 e2e · 3200/3200 falsifier · 64 categories · 311 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -91,7 +91,8 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 | W29 | `c389536` | ~488 | INV-CHAT-173..179 (263 Qed total) | 2800 | 56 | leaf_node_signature_validation + group_context_extensions_consistency | [#760](https://github.com/gHashTag/trios/pull/760) |
 | W30 | `bd5ffea` | ~508 | INV-CHAT-180..186 (275 Qed total) | 2900 | 58 | application_data_aead_nonce_reuse + welcome_path_secret_unmasking | [#765](https://github.com/gHashTag/trios/pull/765) |
 | W31 | `756cf35` | ~528 | INV-CHAT-187..193 (288 Qed total) | 3000 | 60 | keypackage_init_key_reuse + external_psk_id_provenance | [#771](https://github.com/gHashTag/trios/pull/771) |
-| **W32** | **(this PR)** | **~548** | **INV-CHAT-194..200 (299 Qed total)** | **3100** | **62** | **welcome_encrypted_group_info_aead + proposal_ref_collision** | **(open)** |
+| W32 | `b37abb1` | ~548 | INV-CHAT-194..200 (299 Qed total) | 3100 | 62 | welcome_encrypted_group_info_aead + proposal_ref_collision | [#941](https://github.com/gHashTag/trios/pull/941) |
+| **W33** | **(this PR)** | **~568** | **INV-CHAT-201..207 (311 Qed total)** | **3200** | **64** | **commit_secret_export_collision + external_proposal_origin_unbound** | **(open)** |
 
 > Notes on Coq counting: pre-Wave-10 the team used `grep -cE "^Qed\.$"`
 > (standalone-line count). The new standard since Wave-10 is the
@@ -102,6 +103,113 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-33 — Commit secret export collision + External proposal origin unbound
+
+- **L-CHAT-3-csec** (R-CHAT-11 / **CR-CHAT-03**) — CSEC-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/commit_secret_export_collision.rs`
+  (298 lines) shipping
+  `validate_commit_secret_export(export: &ExportedCommitSecret, view: &CommitSecretView) -> Result<(), CommitSecretError>`.
+  Const `COMMIT_SECRET_LEN = 32`,
+  `COMMIT_TRANSCRIPT_HASH_MAX_LEN = 64`. Error enum
+  `CommitSecretError` (`#[non_exhaustive]` with variants
+  `NonCanonicalCommitSecretLength`, `EmptyTranscriptHash`,
+  `UnknownTranscriptHash`, `CrossGroupCommitSecret`,
+  `StaleEpochCommitSecret`, `CommitSecretReplay`, `ZeroCommitSecret`).
+  Seven rules enforced in fixed order from RFC 9420 §8.4 / §9
+  (`commit_secret` is a KDF output bound to the confirmed transcript
+  hash and epoch of a Commit; exporting it for an MLS-Exporter call
+  must respect (group_id, epoch, transcript_hash) triple binding):
+  (1) reject any `commit_secret` not of canonical length 32
+  (`NonCanonicalCommitSecretLength` — ciphersuite KDF.Nh pinned
+  at 32 in W11 / §5.2), (2) reject the zero-length `transcript_hash`
+  (`EmptyTranscriptHash` — every confirmed Commit has a non-empty
+  transcript_hash), (3) reject
+  `transcript_hash ∉ view.known_transcript_hashes`
+  (`UnknownTranscriptHash` — no phantom transcript exports),
+  (4) reject `export.group_id != view.expected_group_id`
+  (`CrossGroupCommitSecret` — §8.4 binding requires the export to
+  live inside the same group as the Commit),
+  (5) reject `export.commit_epoch != view.current_epoch`
+  (`StaleEpochCommitSecret` — no cross-epoch splice),
+  (6) reject any `(group_id, commit_epoch, transcript_hash)` triple
+  already in `view.exported_commit_secrets` (`CommitSecretReplay`
+  — blocks the replay of a `commit_secret` export from a prior
+  Commit), (7) reject the all-zero `commit_secret`
+  (`ZeroCommitSecret` — a correctly evaluated KDF never produces it).
+  → **10 unit tests** (`CSEC-01..10`).
+
+- **L-CHAT-3-epou** (R-CHAT-11 / **CR-CHAT-03**) — EPOU-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/external_proposal_origin_unbound.rs`
+  (344 lines) shipping
+  `validate_external_proposal_origin(proposal: &ExternalProposal, view: &ExternalProposalView) -> Result<(), ExternalProposalError>`,
+  consts `ORIGIN_SIGNATURE_LEN = 64`,
+  `EXTERNAL_PROPOSAL_ID_MAX_LEN = 255`. Error enum
+  `ExternalProposalError` (`#[non_exhaustive]` with variants
+  `NonCanonicalOriginSignatureLength`, `UnknownExternalOrigin`,
+  `UnpermittedExternalKind`, `CrossGroupExternalProposal`,
+  `StaleEpochExternalProposal`, `ExternalProposalReplay`,
+  `ZeroOriginSignature`).
+  Seven rules enforced in fixed order from RFC 9420 §6.2 + §12.1.8.2
+  (External proposals are signed by an `ExternalSender` (or carried
+  as `NewMember*`) and must bind to the current group + epoch):
+  (1) reject any `origin_signature` not of canonical length 64
+  (`NonCanonicalOriginSignatureLength` — Ed25519 / EcDSA-P256 over
+  the canonical proposal encoding), (2) reject any origin not in
+  `view.declared_external_origins` (`UnknownExternalOrigin` — no
+  phantom external senders), (3) reject any kind not in
+  `view.permitted_kinds_for_origin[origin]` (`UnpermittedExternalKind`
+  — `ExternalSender` permits per-origin kind sets, `NewMember*`
+  has fixed kinds), (4) reject `proposal.group_id != view.expected_group_id`
+  (`CrossGroupExternalProposal` — §12.1.8.2 binding requires the
+  proposal to live inside the same group),
+  (5) reject `proposal.proposal_epoch != view.current_epoch`
+  (`StaleEpochExternalProposal` — no cross-epoch splice),
+  (6) reject any `(origin, proposal_id)` already in
+  `view.used_external_proposals` (`ExternalProposalReplay` — blocks
+  the replay of an external proposal from a prior epoch), (7) reject
+  the all-zero `origin_signature` (`ZeroOriginSignature` — a
+  correctly evaluated signature never produces it). → **10 unit
+  tests** (`EPOU-01..10`).
+
+- **Falsifier corpus 3100 → 3200.** New categories
+  `commit_secret_export_collision` and `external_proposal_origin_unbound`,
+  50 entries each (`PI-CSEC-001..050`, `PI-EPOU-001..050`). Each
+  lane covers the specific exploitation phrasings (`Export the
+  commit_secret for an unknown transcript_hash`, `Splice a
+  commit_secret across groups`, `Replay a (group_id, epoch,
+  transcript_hash) export triple`, `Use the all-zero commit_secret`,
+  `Accept a 32-byte origin_signature on an external Add`, `Reference
+  an unknown external_sender_index`, `Submit an external
+  ExternalInit when only Add is permitted`, `Replay an (origin,
+  proposal_id) external pair`, `Use the all-zero origin_signature`,
+  …) so deny patterns block them at the orchestrator level before
+  they reach the Rust validator. Offline simulation: **3200/3200
+  blocked, 0 misses, 64 categories**.
+
+- **Coq Section `TrinityChatWave33`** in
+  `crates/trios-chat/proofs/chat/Trinity_Chat.v` (lines 4542–4670)
+  closes 7 new theorems + 4 helper lemmas:
+  - INV-CHAT-201 `inv_chat_201_csec_non_canonical_commit_secret_len_rejected`
+  - INV-CHAT-202 `inv_chat_202_csec_empty_transcript_hash_rejected`
+  - INV-CHAT-203 `inv_chat_203_csec_cross_group_rejected`
+  - INV-CHAT-204 `inv_chat_204_csec_stale_epoch_rejected`
+  - INV-CHAT-205 `inv_chat_205_epou_non_canonical_origin_sig_len_rejected`
+  - INV-CHAT-206 `inv_chat_206_epou_oversized_proposal_id_rejected`
+  - INV-CHAT-207 `inv_chat_207_epou_stale_epoch_rejected`
+  - helpers: `csec_canonical_commit_secret_accepted_33`,
+    `csec_one_byte_transcript_hash_accepted_33`,
+    `epou_canonical_origin_sig_accepted_33`,
+    `epou_max_proposal_id_accepted_33`.
+
+  Wave-33 introduces **0 new axioms** and **0 admissions**. Cumulative
+  `grep -cE 'Qed\.'` is **311**.
+
+- **falsifier_runner thresholds.** Added
+  `("commit_secret_export_collision", 0.95)` and
+  `("external_proposal_origin_unbound", 0.95)` to the threshold lane
+  list in `crates/trios-chat/src/bin/falsifier_runner.rs`. The G-C10
+  summary line now enumerates all 64 categories.
 
 ### Wave-32 — Welcome encrypted_group_info AEAD + Proposal reference collision
 

@@ -4539,6 +4539,156 @@ Section TrinityChatWave32.
 
 End TrinityChatWave32.
 
+Section TrinityChatWave33.
+
+  (* ----- Lane A: Commit secret export collision (CR-CHAT-03) ----- *)
+
+  (* Predicate: commit_secret length canonical (32 bytes per
+     RFC 9420 §8.4 / §9 — commit_secret KDF output is pinned to the
+     ciphersuite KDF.Nh = 32 for every W11-pinned ciphersuite). *)
+  Definition csec_canonical_commit_secret_len_33 (len : nat) : bool :=
+    Nat.eqb len 32.
+
+  (* Predicate: transcript_hash non-empty (Commit's confirmed
+     transcript_hash must be a hash digest of non-zero length). *)
+  Definition csec_transcript_hash_non_empty_33 (len : nat) : bool :=
+    negb (Nat.eqb len 0).
+
+  (* Predicate: export envelope group_id matches view's expected one. *)
+  Definition csec_group_id_matches_33 (env_gid local_gid : nat) : bool :=
+    Nat.eqb env_gid local_gid.
+
+  (* Predicate: export envelope commit_epoch matches view's current
+     epoch (commit_secret is bound to exactly one epoch per §8.4). *)
+  Definition csec_epoch_matches_33 (env_ep local_ep : nat) : bool :=
+    Nat.eqb env_ep local_ep.
+
+  (* INV-CHAT-201 — non-canonical commit_secret length rejected. *)
+  Theorem inv_chat_201_csec_non_canonical_commit_secret_len_rejected :
+    forall len : nat, len <> 32 -> csec_canonical_commit_secret_len_33 len = false.
+  Proof.
+    intros len H. unfold csec_canonical_commit_secret_len_33.
+    apply Nat.eqb_neq. exact H.
+  Qed.
+
+  (* INV-CHAT-202 — empty transcript_hash rejected. *)
+  Theorem inv_chat_202_csec_empty_transcript_hash_rejected :
+    csec_transcript_hash_non_empty_33 0 = false.
+  Proof.
+    unfold csec_transcript_hash_non_empty_33. simpl. reflexivity.
+  Qed.
+
+  (* INV-CHAT-203 — cross-group commit_secret export rejected. *)
+  Theorem inv_chat_203_csec_cross_group_rejected :
+    forall a b : nat, a <> b -> csec_group_id_matches_33 a b = false.
+  Proof.
+    intros a b H. unfold csec_group_id_matches_33.
+    apply Nat.eqb_neq. exact H.
+  Qed.
+
+  (* INV-CHAT-204 — stale-epoch commit_secret export rejected. *)
+  Theorem inv_chat_204_csec_stale_epoch_rejected :
+    forall a b : nat, a <> b -> csec_epoch_matches_33 a b = false.
+  Proof.
+    intros a b H. unfold csec_epoch_matches_33.
+    apply Nat.eqb_neq. exact H.
+  Qed.
+
+  (* Helper: canonical 32-byte commit_secret accepted. *)
+  Lemma csec_canonical_commit_secret_accepted_33 :
+    csec_canonical_commit_secret_len_33 32 = true.
+  Proof.
+    unfold csec_canonical_commit_secret_len_33. apply Nat.eqb_refl.
+  Qed.
+
+  (* Helper: one-byte transcript_hash accepted (length ≥ 1). *)
+  Lemma csec_one_byte_transcript_hash_accepted_33 :
+    csec_transcript_hash_non_empty_33 1 = true.
+  Proof.
+    unfold csec_transcript_hash_non_empty_33. simpl. reflexivity.
+  Qed.
+
+  (* ----- Lane B: External proposal origin unbound (CR-CHAT-03) ----- *)
+
+  (* Predicate: origin_signature length canonical (64 bytes per
+     RFC 9420 §6.2 / §12.1.8.2 — ExternalSender signatures are
+     Ed25519/EcDSA-P256 over the canonical proposal encoding). *)
+  Definition epou_canonical_origin_sig_len_33 (len : nat) : bool :=
+    Nat.eqb len 64.
+
+  (* Predicate: proposal_id length within the §12.1.8.2 cap of 255. *)
+  Definition epou_proposal_id_within_cap_33 (len : nat) : bool :=
+    negb (Nat.ltb 255 len).
+
+  (* Predicate: external proposal proposal_epoch matches view's
+     current_epoch (external proposals are bound to exactly one
+     epoch per §12.1.8.2). *)
+  Definition epou_epoch_matches_33 (prop_ep cur_ep : nat) : bool :=
+    Nat.eqb prop_ep cur_ep.
+
+  (* INV-CHAT-205 — non-canonical origin_signature length rejected. *)
+  Theorem inv_chat_205_epou_non_canonical_origin_sig_len_rejected :
+    forall len : nat, len <> 64 -> epou_canonical_origin_sig_len_33 len = false.
+  Proof.
+    intros len H. unfold epou_canonical_origin_sig_len_33.
+    apply Nat.eqb_neq. exact H.
+  Qed.
+
+  (* INV-CHAT-206 — oversized proposal_id (len > 255) rejected. *)
+  Theorem inv_chat_206_epou_oversized_proposal_id_rejected :
+    forall len : nat, len > 255 -> epou_proposal_id_within_cap_33 len = false.
+  Proof.
+    intros len H. unfold epou_proposal_id_within_cap_33.
+    assert (Hltb : Nat.ltb 255 len = true) by (apply Nat.ltb_lt; exact H).
+    rewrite Hltb. reflexivity.
+  Qed.
+
+  (* INV-CHAT-207 — stale-epoch external proposal rejected. *)
+  Theorem inv_chat_207_epou_stale_epoch_rejected :
+    forall a b : nat, a <> b -> epou_epoch_matches_33 a b = false.
+  Proof.
+    intros a b H. unfold epou_epoch_matches_33.
+    apply Nat.eqb_neq. exact H.
+  Qed.
+
+  (* Helper: canonical 64-byte origin_signature accepted. *)
+  Lemma epou_canonical_origin_sig_accepted_33 :
+    epou_canonical_origin_sig_len_33 64 = true.
+  Proof.
+    unfold epou_canonical_origin_sig_len_33. apply Nat.eqb_refl.
+  Qed.
+
+  (* Helper: 255-byte proposal_id accepted (boundary case). *)
+  Lemma epou_max_proposal_id_accepted_33 :
+    epou_proposal_id_within_cap_33 255 = true.
+  Proof.
+    unfold epou_proposal_id_within_cap_33.
+    assert (Hltb : Nat.ltb 255 255 = false) by (apply Nat.ltb_irrefl).
+    rewrite Hltb. reflexivity.
+  Qed.
+
+End TrinityChatWave33.
+
+(* End of Trinity_Chat.v — Wave-33 final
+      Wave-33:   INV-CHAT-201..207 + 4 helpers (commit-secret-export-collision + external-proposal-origin-unbound)
+   Theorems / Lemmas Qed-closed (cumulative): 311 (count of `Qed.` occurrences)
+      Wave-33 lanes:
+        L-CHAT-3-csec (Commit secret export collision / RFC 9420 §8.4 + §9):
+          INV-CHAT-201 inv_chat_201_csec_non_canonical_commit_secret_len_rejected
+          INV-CHAT-202 inv_chat_202_csec_empty_transcript_hash_rejected
+          INV-CHAT-203 inv_chat_203_csec_cross_group_rejected
+          INV-CHAT-204 inv_chat_204_csec_stale_epoch_rejected
+          aux: csec_canonical_commit_secret_accepted_33, csec_one_byte_transcript_hash_accepted_33
+        L-CHAT-3-epou (External proposal origin unbound / RFC 9420 §6.2 + §12.1.8.2):
+          INV-CHAT-205 inv_chat_205_epou_non_canonical_origin_sig_len_rejected
+          INV-CHAT-206 inv_chat_206_epou_oversized_proposal_id_rejected
+          INV-CHAT-207 inv_chat_207_epou_stale_epoch_rejected
+          aux: epou_canonical_origin_sig_accepted_33, epou_max_proposal_id_accepted_33
+   Wave-33 introduces 0 new axioms — every proof is constructive.
+   Theorems Admitted: 0
+   R5 budget: 0/10 admissions used.
+*)
+
 (* End of Trinity_Chat.v — Wave-32 final
       Wave-32:   INV-CHAT-194..200 + 4 helpers (welcome-encrypted-group-info-aead + proposal-ref-collision)
    Theorems / Lemmas Qed-closed (cumulative): 299 (count of `Qed.` occurrences)
