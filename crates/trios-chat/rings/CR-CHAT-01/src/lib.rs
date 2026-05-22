@@ -27,6 +27,7 @@
 #![warn(missing_docs)]
 
 pub mod appack_replay;
+pub mod ephemeral_mailbox_unlinkability;
 pub mod handshake_fingerprint;
 pub mod identity;
 pub mod kem;
@@ -40,6 +41,11 @@ pub mod welcome_encrypted_group_info_aead;
 
 pub use appack_replay::{
     AppAckError, AppAckLeaf, AppAckLedger, AppAckProposal, Generation, MessageRange,
+};
+
+pub use ephemeral_mailbox_unlinkability::{
+    validate_ephemeral_mailbox_envelope, EphemeralMailboxEnvelope, EphemeralMailboxError,
+    EphemeralMailboxView, ENVELOPE_BINDING_TAG_LEN, EPHEMERAL_MAILBOX_TOKEN_LEN,
 };
 
 pub use handshake_fingerprint::{
