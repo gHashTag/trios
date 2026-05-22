@@ -75,6 +75,12 @@ pub use ratchet_tree_extension_tampering::{
     RatchetTreeView, RTX_MIN_LEAVES,
 };
 
+pub mod blind_signature_sender_token;
+pub use blind_signature_sender_token::{
+    validate_blind_signature_sender_token, BlindSenderToken, BlindTokenError, BlindTokenView,
+    BLIND_SIGNATURE_LEN, BLIND_TOKEN_NONCE_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

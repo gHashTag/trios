@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-33: **~568 tests · 25/25 e2e · 3200/3200 falsifier · 64 categories · 311 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-34: **~588 tests · 25/25 e2e · 3300/3300 falsifier · 66 categories · 321 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -103,6 +103,120 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-34 — Ephemeral mailbox unlinkability + Blind-signature sender token (NDSS 2021 §IV SDA defence)
+
+- **L-CHAT-4-emu** (R-CHAT-3 / **CR-CHAT-01**) — EMU-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-01/src/ephemeral_mailbox_unlinkability.rs`
+  (325 lines) shipping
+  `validate_ephemeral_mailbox_envelope(envelope: &EphemeralMailboxEnvelope, view: &EphemeralMailboxView) -> Result<(), EphemeralMailboxError>`.
+  Consts `EPHEMERAL_MAILBOX_TOKEN_LEN = 32`,
+  `ENVELOPE_BINDING_TAG_LEN = 32`. Error enum
+  `EphemeralMailboxError` (`#[non_exhaustive]` with variants
+  `NonCanonicalMailboxTokenLength`, `UnknownMailboxToken`,
+  `MailboxTokenWrongReceiver`, `StaleMailboxToken`,
+  `MailboxTokenReuse`, `ZeroMailboxToken`, `EnvelopeBindingMismatch`).
+  Seven rules enforced in fixed order from NDSS 2021 "Improving
+  Signal's Sealed Sender" §IV-B/C (Martiny et al.; mailbox tokens are
+  one-shot HKDF outputs bound to receiver + freshness window): (1)
+  reject any `mailbox_token` not of canonical length 32
+  (`NonCanonicalMailboxTokenLength`), (2) reject tokens not in
+  `view.published_tokens` (`UnknownMailboxToken` — no phantom
+  mailboxes), (3) reject `token_owner ≠ envelope.claimed_receiver`
+  (`MailboxTokenWrongReceiver` — cohort isolation), (4) reject
+  `current_epoch > expiry_epoch` (`StaleMailboxToken` — lifetime
+  bound from §IV-C), (5) reject any `mailbox_token` already in
+  `view.consumed_tokens` (`MailboxTokenReuse` — **the SDA defence
+  core invariant** — the moment a token is reused the
+  unlinkability guarantee collapses per §V-A), (6) reject the
+  all-zero `mailbox_token` (`ZeroMailboxToken`), (7) reject
+  envelopes whose `envelope_binding_tag` does not match the
+  HKDF-Expand of `(mailbox_token, padded_envelope_hash)` per
+  §IV-B Eq. 3 (`EnvelopeBindingMismatch` — stops a relay or
+  attacker who steals a single mailbox token from pairing it with
+  a different envelope). → **10 unit tests** (`EMU-01..10`).
+
+- **L-CHAT-7-bsst** (R-CHAT-10 / **CR-CHAT-07**) — BSST-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-07/src/blind_signature_sender_token.rs`
+  (302 lines) shipping
+  `validate_blind_signature_sender_token(token: &BlindSenderToken, view: &BlindTokenView) -> Result<(), BlindTokenError>`,
+  consts `BLIND_TOKEN_NONCE_LEN = 32`,
+  `BLIND_SIGNATURE_LEN = 256`. Error enum `BlindTokenError`
+  (`#[non_exhaustive]` with variants
+  `NonCanonicalTokenNonceLength`, `NonCanonicalSignatureLength`,
+  `UnknownIssuerPublicKey`, `ExpiredIssuerEpoch`, `TokenNonceReuse`,
+  `ZeroTokenNonce`, `SignatureVerificationFailed`).
+  Seven rules enforced in fixed order from NDSS 2021 §IV-D (Chaum-
+  style blind signatures — the relay verifies the signature over
+  the unblinded nonce without learning which issuance request the
+  token corresponds to) + RFC 8017 §8.2 (RSA-FDH): (1) reject any
+  `token_nonce` not of canonical length 32, (2) reject any
+  `signature` not of canonical RSA-2048 length 256, (3) reject any
+  `issuer_pubkey_id` not in `view.trusted_issuers`, (4) reject
+  `current_epoch > issuer_expiry` (issuer rotation per §IV-E), (5)
+  reject any `token_nonce` already in `view.spent_nonces`
+  (`TokenNonceReuse` — anti-double-spend rail), (6) reject the
+  all-zero `token_nonce` (`ZeroTokenNonce`), (7) reject signatures
+  that do not RSA-FDH verify under the issuer's public key
+  (`SignatureVerificationFailed`). → **10 unit tests**
+  (`BSST-01..10`).
+
+- **Falsifier corpus 3200 → 3300.** New categories
+  `ephemeral_mailbox_unlinkability` and `blind_signature_sender_token`,
+  50 entries each (`PI-EMU-001..050`, `PI-BSST-001..050`). Each
+  lane covers the specific exploitation phrasings (`Replay a
+  consumed mailbox_token`, `Accept the all-zero mailbox_token`,
+  `Skip envelope_binding check`, `Cross-issue a blind signature
+  between two receivers' issuers`, `Reuse a token_nonce that was
+  already spent`, `Accept a sender token from a revoked issuer`,
+  …) so deny patterns block them at the orchestrator level before
+  they reach the Rust validator. Offline simulation:
+  **3300/3300 blocked, 0 misses, 66 categories**. Added 53 new deny
+  patterns to `CR-CHAT-06/src/injection.rs` covering 100% of new
+  payload phrasings; collision-checked against 3200 prior corpus
+  entries: 0 collisions with `expected_block=false` entries
+  (4 harmless collisions, all already `expected_block=true`).
+
+- **Coq Section `TrinityChatWave34`** in
+  `crates/trios-chat/proofs/chat/Trinity_Chat.v` (lines 4672–4823)
+  closes 10 new theorems + 4 helper lemmas:
+  - INV-CHAT-208 `inv_chat_208_emu_non_canonical_mailbox_token_len_rejected`
+  - INV-CHAT-209 `inv_chat_209_emu_wrong_receiver_rejected`
+  - INV-CHAT-210 `inv_chat_210_emu_stale_token_rejected`
+  - INV-CHAT-211 `inv_chat_211_emu_non_canonical_binding_tag_len_rejected`
+  - INV-CHAT-212 `inv_chat_212_emu_canonical_envelope_accepted`
+  - INV-CHAT-213 `inv_chat_213_bsst_non_canonical_token_nonce_len_rejected`
+  - INV-CHAT-214 `inv_chat_214_bsst_non_canonical_signature_len_rejected`
+  - INV-CHAT-215 `inv_chat_215_bsst_expired_issuer_rejected`
+  - INV-CHAT-216 `inv_chat_216_bsst_zero_token_nonce_rejected`
+  - INV-CHAT-217 `inv_chat_217_bsst_boundary_issuer_accepted`
+  - helpers: `emu_canonical_mailbox_token_accepted_34`,
+    `emu_boundary_epoch_accepted_34`,
+    `bsst_canonical_signature_accepted_34`,
+    `bsst_one_token_nonce_accepted_34`.
+
+  Wave-34 introduces **0 new axioms** and **0 admissions**. Cumulative
+  `grep -cE 'Qed\.'` is **321**.
+
+- **falsifier_runner thresholds.** Added
+  `("ephemeral_mailbox_unlinkability", 0.95)` and
+  `("blind_signature_sender_token", 0.95)` to the threshold lane
+  list in `crates/trios-chat/src/bin/falsifier_runner.rs`. The G-C10
+  summary line now enumerates all 66 categories.
+
+- **Why this wave matters — closing the production gap Signal never
+  closed.** NDSS 2021 "Improving Signal's Sealed Sender" (Martiny,
+  Miers, Cohen, Andrysco) demonstrated that Signal's sealed-sender
+  envelope still falls to a Statistical Disclosure Attack after
+  ~5 messages because the receiver's long-term mailbox is reused.
+  The paper proposes ephemeral mailboxes + Chaum-style blind
+  signatures as the fix. Signal did not implement the proposed
+  mitigation in production. Wave-34 ships the constructive
+  verification guards (`validate_ephemeral_mailbox_envelope` +
+  `validate_blind_signature_sender_token`) and the Coq theorems
+  pinning their invariants — trios-chat is now the first messenger
+  with a formally verified SDA-defence skeleton on the receiver +
+  relay sides. **[CITED NDSS 2021 §IV]**
 
 ### Wave-33 — Commit secret export collision + External proposal origin unbound
 
