@@ -41,6 +41,7 @@ pub use group_context_extensions_consistency::{
     RESERVED_EXTENSION_ID_LOW,
 };
 
+pub mod psk_secret_extraction_chain_order_mismatch;
 pub mod sender_keys_epoch_window_replay;
 pub use sender_keys_epoch_window_replay::{
     validate_sender_keys_packet, SenderKeysError, SenderKeysPacket, SenderKeysView,

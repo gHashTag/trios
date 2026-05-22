@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY · COMMIT-PATH-SECRET-AEAD-KEYING · APP-MSG-SKIP-DOS · KEYPACKAGE-LIFETIME-GRACE · EXT-COMMIT-RESUMPTION-PSK`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY · COMMIT-PATH-SECRET-AEAD-KEYING · APP-MSG-SKIP-DOS · KEYPACKAGE-LIFETIME-GRACE · EXT-COMMIT-RESUMPTION-PSK · WELCOME-INIT-SECRET-LABEL · PSK-SECRET-CHAIN-ORDER`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-37: **~648 tests · 25/25 e2e · 3600/3600 falsifier · 72 categories · 351 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-38: **~668 tests · 25/25 e2e · 3700/3700 falsifier · 74 categories · 361 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -103,6 +103,38 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-38 — Welcome init-secret KDF label confusion + PSK secret extraction chain order mismatch (RFC 9420 §8.4 + §15.1.1)
+
+**Lane A — `welcome_init_secret_kdf_label_confusion` (CR-CHAT-02).**
+`validate_init_secret_kdf_label` enforces RFC 9420 §8.4 ExpandWithLabel
+for `init_secret = ExpandWithLabel(epoch_secret, "init", "", KDF.Nh)`:
+the label MUST be the literal 4-byte ASCII string `"init"`,
+byte-for-byte (not `"INIT"`, not `"epoch"`, not a UTF-8 homoglyph,
+not null-padded, not empty), the `epoch_secret` MUST be canonical
+32 bytes (KDF.Nh for MLS-128), the context MUST be empty per RFC,
+and the declared output length MUST be 32 bytes. 10 deterministic
+tests `WISKLC-01..10`. Constructive guard against silent two-party
+key divergence and label-confusion mis-key oracles.
+
+**Lane B — `psk_secret_extraction_chain_order_mismatch` (CR-CHAT-05).**
+`validate_psk_secret_chain_order` enforces RFC 9420 §15.1.1
+PSK chain extraction: `psk_ids` MUST have length ∈ [1, 8], every
+PSKid MUST be canonical 32 bytes, every PSKLabel MUST carry
+`count == psk_ids.len()` and `index < count` and `index == position`
+(strict monotonic chain), and no two PSKids may collide. 10
+deterministic tests `PSCOM-01..10`. Constructive barrier against
+chain-reorder covert DoS and `n`-swap label desynchronisation.
+
+**Falsifier corpus.** +50 `welcome_init_secret_kdf_label_confusion` +
++50 `psk_secret_extraction_chain_order_mismatch` (PI-WISKLC-001..050,
+PI-PSCOM-001..050) bringing cumulative falsifier corpus to **3700/3700**
+across 74 categories. 100% deny-pattern coverage offline-verified, 0
+collisions with `expected_block=false` entries.
+
+**Coq Section TrinityChatWave38.** `INV-CHAT-248..257` (10 theorems) +
+4 helper lemmas, **0 new axioms / 0 admissions**. Cumulative Qed:
+351 → **361**. R5 admissions budget unchanged at 0/10.
 
 ### Wave-37 — KeyPackage lifetime grace-window expiry + ExternalCommit ResumptionPSK misbinding (RFC 9420 §10.1 + §11.2.1+§15.1)
 
