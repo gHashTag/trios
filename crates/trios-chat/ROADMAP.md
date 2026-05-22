@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY · COMMIT-PATH-SECRET-AEAD-KEYING · APP-MSG-SKIP-DOS`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-35: **~608 tests · 25/25 e2e · 3400/3400 falsifier · 68 categories · 331 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-36: **~628 tests · 25/25 e2e · 3500/3500 falsifier · 70 categories · 341 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -103,6 +103,94 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-36 — Commit path-secret AEAD keying mismatch + Application-message generation skip-window DoS (RFC 9420 §7.7+§8+§12.4 + §9.3+§15.2)
+
+- **L-CHAT-3-cpakm** (R-CHAT-3 / **CR-CHAT-03**) — CPAKM-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-03/src/commit_path_secret_aead_keying_mismatch.rs`
+  shipping
+  `validate_commit_path_secret(commit: &CommitUpdatePath, view: &UpdatePathView) -> Result<(), PathSecretAeadKeyingError>`.
+  Consts `CPAKM_GROUP_ID_LEN = 32`, `CPAKM_INIT_KEY_LEN = 32`,
+  `CPAKM_AAD_CONTEXT_LEN = 56` (32 + 8 + 8 + 8),
+  `CPAKM_PATH_SECRET_CIPHERTEXT_LEN = 48`. Error enum
+  `PathSecretAeadKeyingError` (`#[non_exhaustive]` with variants
+  `NonCanonicalGroupIdLength`, `EpochMismatch`,
+  `SenderLeafOutOfRange`, `ResolutionSlotOutOfRange`,
+  `RecipientInitKeyMismatch`, `AadContextMismatch`,
+  `NonCanonicalCiphertextLength`). Seven rules enforced in fixed
+  order: (1) MLS GroupID is exactly 32 bytes; (2) Commit epoch
+  advances local epoch by exactly 1 (RFC 9420 §7.5); (3) sender's
+  leaf index is within the ratchet-tree bounds; (4) the local
+  receiver's `local_resolution_index` is within `update_path_slots`
+  bounds; (5) the targeted slot's `recipient_init_key` equals the
+  receiver's own HPKE init_key — a slot sealed under any other
+  leaf's key is rejected pre-decap; (6) the slot's `aad_context`
+  equals the canonical encoding
+  `group_id ‖ epoch_u64_be ‖ sender_leaf_u64_be ‖ node_index_u64_be`
+  AND `slot.node_index == view.local_node_index` — AAD drift on
+  any of those four bound fields is rejected; (7) sealed
+  path-secret ciphertext length is exactly 48 bytes (32-byte sealed
+  secret + 16-byte Poly1305 tag per R-CHAT-3). `[CITED]` RFC 9420
+  §7.7 "Updating Tree State" + §8 "Encrypting and Decrypting
+  to/from Tree Nodes" + §12.4.3.2 commit verification.
+- **L-CHAT-4-amgsd** (R-CHAT-4 / **CR-CHAT-04**) — AMGSD-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-04/src/application_message_generation_skip_dos.rs`
+  shipping
+  `validate_app_message_skip(packet: &AppMessagePacket, view: &AppMessageView) -> Result<(), AppMessageSkipError>`.
+  Consts `APP_MSG_SENDER_ID_LEN = 16`, `APP_MSG_SKIP_WINDOW = 1024`
+  (OpenMLS default + RFC 9420 §9.3 bounded-skip recommendation).
+  Error enum `AppMessageSkipError` (`#[non_exhaustive]` with
+  variants `NonCanonicalSenderIdLength`, `UnknownSender`,
+  `ZeroGeneration`, `NonMonotonicGeneration`,
+  `SkipDistanceExceeded`, `EpochMismatch`, `CiphertextEmpty`).
+  Seven rules enforced in fixed order: (1) sender_id is exactly 16
+  bytes (MLS LeafNodeRef per RFC 9420 §6.1); (2) sender_id is in
+  `view.known_senders`; (3) packet epoch equals `view.current_epoch`
+  — cross-epoch packets are W35's domain, not this lane's; (4)
+  ciphertext is non-empty; (5) generation > 0 (MLS counter starts
+  at 1); (6) generation strictly greater than the last seen value
+  for `(sender, epoch)`; (7) skip distance
+  `(generation - last_seen - 1) <= APP_MSG_SKIP_WINDOW` — the
+  DoS-resistance core: a single attacker packet claiming
+  `generation = u64::MAX` is denied **before** any HKDF
+  key-schedule work. `[CITED]` RFC 9420 §9.3 "Message Receiving"
+  bounded skip window + §15.2 "Application Messages".
+- **Falsifier corpus** `crates/trios-chat/corpus/prompt_injection.jsonl`
+  — +100 entries (`PI-CPAKM-001..050` + `PI-AMGSD-001..050`),
+  categories `commit_path_secret_aead_keying_mismatch` +
+  `application_message_generation_skip_dos`. Cumulative corpus
+  size after W36: 3500 entries across 70 categories. Format used:
+  `{"id","category","payload","expected_block":true}`.
+- **Deny patterns** `crates/trios-chat/rings/CR-CHAT-06/src/injection.rs`
+  — +99 patterns covering 100% of W36 payload phrasings (verified
+  via offline collision-coverage script). 0 collisions with prior
+  `expected_block=false` entries; harmless overlaps with prior
+  `expected_block=true` entries.
+- **falsifier_runner** — new threshold tuples
+  `("commit_path_secret_aead_keying_mismatch", 0.95)` and
+  `("application_message_generation_skip_dos", 0.95)` registered
+  alongside the W35 entries; G-C10 summary line extended.
+- **Coq** `crates/trios-chat/proofs/chat/Trinity_Chat.v` — new
+  `Section TrinityChatWave36` with 10 INV theorems
+  (`INV-CHAT-228..237`) + 4 helper lemmas, all closed by `Qed`.
+  Wave-36 introduces **0 new axioms** and **0 admissions**.
+  Cumulative Qed: 331 → 341.
+- **Why this wave matters.** Wave-35 closed the *metadata-resistant
+  transport* surface (cover-traffic shape indistinguishability +
+  sender-keys cross-epoch replay). Wave-36 turns inward to the
+  MLS *group-state* and *application-key* layers and pins two
+  rules that real RFC 9420 implementations commonly leave
+  un-enforced: (i) **commit UPDATE-PATH HPKE keying binding** —
+  mainstream MLS libraries decrypt the slot under the receiver's
+  init_key but rarely verify the slot's `aad_context` matches the
+  canonical `(group_id ‖ epoch ‖ sender_leaf ‖ node_index)`
+  encoding, leaving a mis-keying poison-pill open against
+  malicious senders, and (ii) **bounded application-key skip
+  window** — the RFC's §9.3 security considerations cite a
+  bounded ceiling but the protocol does not mandate one, so a
+  packet claiming `generation = u64::MAX` forces tens-of-billions
+  of HKDF rounds. trios-chat now enforces both constructively at
+  the boundary.
 
 ### Wave-35 — Cover-traffic decoy indistinguishability + Sender-keys epoch window replay (NDSS 2021 §V + RFC 9420 §15.5)
 

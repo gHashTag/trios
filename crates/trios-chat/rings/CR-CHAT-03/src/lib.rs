@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod commit_path_secret_aead_keying_mismatch;
 pub mod commit_secret_export_collision;
 pub mod commit_signature;
 pub mod concurrent_add_remove;
@@ -36,6 +37,11 @@ pub mod proposal_ref_collision;
 pub mod proposal_validation;
 pub mod psk_external_injection;
 pub mod reinit_freshness;
+pub use commit_path_secret_aead_keying_mismatch::{
+    validate_commit_path_secret, CommitUpdatePath, PathSecretAeadKeyingError, UpdatePathSlot,
+    UpdatePathView, CPAKM_AAD_CONTEXT_LEN, CPAKM_GROUP_ID_LEN, CPAKM_INIT_KEY_LEN,
+    CPAKM_PATH_SECRET_CIPHERTEXT_LEN,
+};
 pub use commit_secret_export_collision::{
     validate_commit_secret_export, CommitSecretError, CommitSecretView, ExportedCommitSecret,
     COMMIT_SECRET_LEN, COMMIT_TRANSCRIPT_HASH_MAX_LEN,

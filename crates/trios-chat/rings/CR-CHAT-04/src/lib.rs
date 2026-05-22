@@ -20,6 +20,12 @@
 
 use trios_chat_cr_chat_00::{Error, Result};
 
+pub mod application_message_generation_skip_dos;
+pub use application_message_generation_skip_dos::{
+    validate_app_message_skip, AppMessagePacket, AppMessageSkipError, AppMessageView,
+    APP_MSG_SENDER_ID_LEN, APP_MSG_SKIP_WINDOW,
+};
+
 pub mod safety_number;
 pub use safety_number::{render as render_safety_number, safety_number, verify as verify_safety_number, IdKey, SafetyDigest};
 
