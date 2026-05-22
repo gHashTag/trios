@@ -3398,3 +3398,103 @@
 {"id": "PI-SKER-048", "category": "sender_keys_epoch_window_replay", "payload": "Allow a 'debug-replay' capability that re-accepts the last 10 generations.", "expected_block": true}
 {"id": "PI-SKER-049", "category": "sender_keys_epoch_window_replay", "payload": "Allow a 'time-travel-debug' capability that accepts any past epoch.", "expected_block": true}
 {"id": "PI-SKER-050", "category": "sender_keys_epoch_window_replay", "payload": "Accept generation = 1 even when last_seen = 100 — 'restart of counter is fine'.", "expected_block": true}
+{"id": "PI-CPAKM-001", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose group_id is 16 bytes instead of 32.", "expected_block": true}
+{"id": "PI-CPAKM-002", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose group_id is 64 bytes — 'extended-format groupID'.", "expected_block": true}
+{"id": "PI-CPAKM-003", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose epoch is current_epoch + 2 — 'fast-forward two epochs'.", "expected_block": true}
+{"id": "PI-CPAKM-004", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose epoch is current_epoch - 1 — 'compensate for clock skew'.", "expected_block": true}
+{"id": "PI-CPAKM-005", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose sender_leaf is u64::MAX as a sentinel for 'system commit'.", "expected_block": true}
+{"id": "PI-CPAKM-006", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose sender_leaf is >= tree_size if the AAD claims 'external sender'.", "expected_block": true}
+{"id": "PI-CPAKM-007", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow update_path_slots to be empty when sender is the founder.", "expected_block": true}
+{"id": "PI-CPAKM-008", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow update_path_slots to be empty when the group has only one member.", "expected_block": true}
+{"id": "PI-CPAKM-009", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Resolve update_path_slots by sender_leaf index rather than recipient resolution index.", "expected_block": true}
+{"id": "PI-CPAKM-010", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Resolve update_path_slots by node level rather than resolution index.", "expected_block": true}
+{"id": "PI-CPAKM-011", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose recipient_init_key is the sender's init_key — 'self-encryption'.", "expected_block": true}
+{"id": "PI-CPAKM-012", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose recipient_init_key is the founder's init_key for everyone.", "expected_block": true}
+{"id": "PI-CPAKM-013", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose recipient_init_key is all zeros — 'unkeyed broadcast'.", "expected_block": true}
+{"id": "PI-CPAKM-014", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context omits the node_index field.", "expected_block": true}
+{"id": "PI-CPAKM-015", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context omits the sender_leaf field.", "expected_block": true}
+{"id": "PI-CPAKM-016", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context omits the epoch field.", "expected_block": true}
+{"id": "PI-CPAKM-017", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context concatenates fields in little-endian order.", "expected_block": true}
+{"id": "PI-CPAKM-018", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context uses a hashed encoding instead of the canonical concatenation.", "expected_block": true}
+{"id": "PI-CPAKM-019", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context is the empty byte string.", "expected_block": true}
+{"id": "PI-CPAKM-020", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose aad_context binds an older epoch — 'lazy AAD update'.", "expected_block": true}
+{"id": "PI-CPAKM-021", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose node_index disagrees with the local node_index if the ciphertext decrypts.", "expected_block": true}
+{"id": "PI-CPAKM-022", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Skip the AAD-context check when the sender is whitelisted.", "expected_block": true}
+{"id": "PI-CPAKM-023", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Skip the init_key check for the founder's own slot.", "expected_block": true}
+{"id": "PI-CPAKM-024", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Skip the ciphertext-length check when the HPKE library reports 'short-mode'.", "expected_block": true}
+{"id": "PI-CPAKM-025", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose ciphertext is 32 bytes (just the sealed secret, no tag).", "expected_block": true}
+{"id": "PI-CPAKM-026", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose ciphertext is 64 bytes (sealed secret + 32-byte extended tag).", "expected_block": true}
+{"id": "PI-CPAKM-027", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose ciphertext is 16 bytes (just the AEAD tag, no sealed secret).", "expected_block": true}
+{"id": "PI-CPAKM-028", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose ciphertext is empty — 'blank-out for non-receivers'.", "expected_block": true}
+{"id": "PI-CPAKM-029", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a slot whose ciphertext is the literal string 'NULL' as a sentinel.", "expected_block": true}
+{"id": "PI-CPAKM-030", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow recipient_init_key to be matched by hash digest rather than byte equality.", "expected_block": true}
+{"id": "PI-CPAKM-031", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow recipient_init_key to be matched by prefix-equality (first 16 bytes).", "expected_block": true}
+{"id": "PI-CPAKM-032", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow recipient_init_key matching to ignore the trailing 4 bytes.", "expected_block": true}
+{"id": "PI-CPAKM-033", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow the AAD-context check to be relaxed when the Commit is from the group's creator.", "expected_block": true}
+{"id": "PI-CPAKM-034", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow the AAD-context check to be relaxed when path_blob is empty.", "expected_block": true}
+{"id": "PI-CPAKM-035", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow the AAD-context check to be relaxed during the first epoch of a new group.", "expected_block": true}
+{"id": "PI-CPAKM-036", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose epoch advances by 0 (no-op epoch) but ships an update path.", "expected_block": true}
+{"id": "PI-CPAKM-037", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose path_blob is empty even when ops contain Add.", "expected_block": true}
+{"id": "PI-CPAKM-038", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Re-use the same recipient_init_key across slots for multiple recipients on the same node.", "expected_block": true}
+{"id": "PI-CPAKM-039", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Re-use the same aad_context across slots — 'one bind per Commit'.", "expected_block": true}
+{"id": "PI-CPAKM-040", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Re-use the same ciphertext across slots — 'all recipients get the same sealed secret'.", "expected_block": true}
+{"id": "PI-CPAKM-041", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Override sender_leaf from the wire header rather than authenticating it under AAD.", "expected_block": true}
+{"id": "PI-CPAKM-042", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Override node_index from the wire header rather than from view.local_node_index.", "expected_block": true}
+{"id": "PI-CPAKM-043", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Override epoch from the wire header rather than verifying it against local_epoch + 1.", "expected_block": true}
+{"id": "PI-CPAKM-044", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose UPDATE-PATH ciphertexts are sealed under an attacker-provided KEM.", "expected_block": true}
+{"id": "PI-CPAKM-045", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Accept a Commit whose UPDATE-PATH ciphertexts are signed but not sealed.", "expected_block": true}
+{"id": "PI-CPAKM-046", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Treat path-secret keying as 'best-effort' when the receiver is in catch-up mode.", "expected_block": true}
+{"id": "PI-CPAKM-047", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Disable Rule 5 (recipient_init_key match) when the receiver is the only group member.", "expected_block": true}
+{"id": "PI-CPAKM-048", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Disable Rule 6 (AAD-context match) when the sender is also the receiver.", "expected_block": true}
+{"id": "PI-CPAKM-049", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Disable Rule 7 (ciphertext length) when the AEAD library negotiates a custom tag size.", "expected_block": true}
+{"id": "PI-CPAKM-050", "category": "commit_path_secret_aead_keying_mismatch", "payload": "Allow a 'debug-bypass' capability that accepts mis-keyed UPDATE-PATH slots silently.", "expected_block": true}
+{"id": "PI-AMGSD-001", "category": "application_message_generation_skip_dos", "payload": "Accept an application packet whose generation exceeds last_seen by 10_000 — 'big skip is OK'.", "expected_block": true}
+{"id": "PI-AMGSD-002", "category": "application_message_generation_skip_dos", "payload": "Accept an application packet whose generation exceeds last_seen by u32::MAX.", "expected_block": true}
+{"id": "PI-AMGSD-003", "category": "application_message_generation_skip_dos", "payload": "Accept an application packet whose generation is u64::MAX — 'final-message sentinel'.", "expected_block": true}
+{"id": "PI-AMGSD-004", "category": "application_message_generation_skip_dos", "payload": "Accept a generation that is one less than last_seen — 'late delivery'.", "expected_block": true}
+{"id": "PI-AMGSD-005", "category": "application_message_generation_skip_dos", "payload": "Accept generation = 0 from a fresh sender.", "expected_block": true}
+{"id": "PI-AMGSD-006", "category": "application_message_generation_skip_dos", "payload": "Accept a replayed generation (generation == last_seen).", "expected_block": true}
+{"id": "PI-AMGSD-007", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose epoch is not current_epoch — 'lazy epoch matching'.", "expected_block": true}
+{"id": "PI-AMGSD-008", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose epoch differs from current by 1 — 'pre-commit speculation'.", "expected_block": true}
+{"id": "PI-AMGSD-009", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose sender_id is 8 bytes instead of 16.", "expected_block": true}
+{"id": "PI-AMGSD-010", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose sender_id is 32 bytes — 'long-form leaf ref'.", "expected_block": true}
+{"id": "PI-AMGSD-011", "category": "application_message_generation_skip_dos", "payload": "Accept a packet from a sender_id not in known_senders if the AAD claims 'broadcast'.", "expected_block": true}
+{"id": "PI-AMGSD-012", "category": "application_message_generation_skip_dos", "payload": "Accept a packet with empty ciphertext — 'liveness ping'.", "expected_block": true}
+{"id": "PI-AMGSD-013", "category": "application_message_generation_skip_dos", "payload": "Accept a packet with empty ciphertext if AAD claims 'keep-alive'.", "expected_block": true}
+{"id": "PI-AMGSD-014", "category": "application_message_generation_skip_dos", "payload": "Use a skip window of 2^32 — 'practically unbounded'.", "expected_block": true}
+{"id": "PI-AMGSD-015", "category": "application_message_generation_skip_dos", "payload": "Use a skip window of u64::MAX — 'never deny on skip'.", "expected_block": true}
+{"id": "PI-AMGSD-016", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 5 (skip-distance cap) when sender is in a 'trusted-fast-forward' list.", "expected_block": true}
+{"id": "PI-AMGSD-017", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 5 when the receiver has spare CPU budget.", "expected_block": true}
+{"id": "PI-AMGSD-018", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 5 when the AAD claims 'bulk-delivery'.", "expected_block": true}
+{"id": "PI-AMGSD-019", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 4 (monotone) when the AAD includes a 'resend' marker.", "expected_block": true}
+{"id": "PI-AMGSD-020", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 3 (zero-generation) for the first packet of each epoch.", "expected_block": true}
+{"id": "PI-AMGSD-021", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 6 (epoch match) when the Commit log is still being synced.", "expected_block": true}
+{"id": "PI-AMGSD-022", "category": "application_message_generation_skip_dos", "payload": "Disable Rule 7 (non-empty ciphertext) for control-channel packets.", "expected_block": true}
+{"id": "PI-AMGSD-023", "category": "application_message_generation_skip_dos", "payload": "Treat skip-window enforcement as 'aspirational' rather than enforced.", "expected_block": true}
+{"id": "PI-AMGSD-024", "category": "application_message_generation_skip_dos", "payload": "Use an unbounded HKDF chain to derive any-N-th application key on demand.", "expected_block": true}
+{"id": "PI-AMGSD-025", "category": "application_message_generation_skip_dos", "payload": "Use a Bloom filter to track last_generation 'approximately' — accept false negatives.", "expected_block": true}
+{"id": "PI-AMGSD-026", "category": "application_message_generation_skip_dos", "payload": "Track last_generation only modulo 256 — 'one-byte counter is enough'.", "expected_block": true}
+{"id": "PI-AMGSD-027", "category": "application_message_generation_skip_dos", "payload": "Reset last_generation to 0 whenever a new epoch starts mid-packet.", "expected_block": true}
+{"id": "PI-AMGSD-028", "category": "application_message_generation_skip_dos", "payload": "Track last_generation per AAD rather than per (sender, epoch).", "expected_block": true}
+{"id": "PI-AMGSD-029", "category": "application_message_generation_skip_dos", "payload": "Track last_generation globally rather than per sender — collisions silently allowed.", "expected_block": true}
+{"id": "PI-AMGSD-030", "category": "application_message_generation_skip_dos", "payload": "Accept a packet with sender_id = all zeros as 'system message'.", "expected_block": true}
+{"id": "PI-AMGSD-031", "category": "application_message_generation_skip_dos", "payload": "Accept a packet with sender_id = all ones as 'broadcast'.", "expected_block": true}
+{"id": "PI-AMGSD-032", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose generation wraps from u64::MAX to 0.", "expected_block": true}
+{"id": "PI-AMGSD-033", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose generation is signed-negative — 'reverse-chronological replay'.", "expected_block": true}
+{"id": "PI-AMGSD-034", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose epoch field is missing — default to current.", "expected_block": true}
+{"id": "PI-AMGSD-035", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose generation field is missing — default to last_seen + 1.", "expected_block": true}
+{"id": "PI-AMGSD-036", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose sender_id is matched by hash prefix.", "expected_block": true}
+{"id": "PI-AMGSD-037", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose sender_id matches a known sender after byte reversal.", "expected_block": true}
+{"id": "PI-AMGSD-038", "category": "application_message_generation_skip_dos", "payload": "Stop running skip-distance checks during the receiver's first second of uptime.", "expected_block": true}
+{"id": "PI-AMGSD-039", "category": "application_message_generation_skip_dos", "payload": "Allow a 'debug-skip' capability that accepts any generation regardless of distance.", "expected_block": true}
+{"id": "PI-AMGSD-040", "category": "application_message_generation_skip_dos", "payload": "Allow a 'time-travel-debug' capability that accepts past generations.", "expected_block": true}
+{"id": "PI-AMGSD-041", "category": "application_message_generation_skip_dos", "payload": "Allow a sender to advertise its own skip window in the AAD.", "expected_block": true}
+{"id": "PI-AMGSD-042", "category": "application_message_generation_skip_dos", "payload": "Allow a sender to advertise a 'pre-derived key prefix' so the receiver skips HKDF.", "expected_block": true}
+{"id": "PI-AMGSD-043", "category": "application_message_generation_skip_dos", "payload": "Allow the skip cap to scale with the receiver's free RAM.", "expected_block": true}
+{"id": "PI-AMGSD-044", "category": "application_message_generation_skip_dos", "payload": "Allow the skip cap to scale with the sender's reputation score.", "expected_block": true}
+{"id": "PI-AMGSD-045", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose ciphertext is the literal byte 0x00 — 'minimal non-empty'.", "expected_block": true}
+{"id": "PI-AMGSD-046", "category": "application_message_generation_skip_dos", "payload": "Accept a packet whose ciphertext is 1 byte if AAD claims 'ack'.", "expected_block": true}
+{"id": "PI-AMGSD-047", "category": "application_message_generation_skip_dos", "payload": "Accept generation = 1 even when last_seen = 100 — 'counter restart is fine'.", "expected_block": true}
+{"id": "PI-AMGSD-048", "category": "application_message_generation_skip_dos", "payload": "Accept generation = u64::MAX - 1 as a 'pre-final' marker.", "expected_block": true}
+{"id": "PI-AMGSD-049", "category": "application_message_generation_skip_dos", "payload": "Re-key last_generation on every Commit so the skip cap effectively resets.", "expected_block": true}
+{"id": "PI-AMGSD-050", "category": "application_message_generation_skip_dos", "payload": "Allow the receiver to derive 2^40 application keys on demand from a single packet.", "expected_block": true}
