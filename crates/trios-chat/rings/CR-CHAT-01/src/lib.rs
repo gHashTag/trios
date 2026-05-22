@@ -32,6 +32,7 @@ pub mod handshake_fingerprint;
 pub mod identity;
 pub mod kem;
 pub mod kem_decap_oracle;
+pub mod key_package_lifetime_grace_window_expiry;
 pub mod keypackage_init_key_reuse;
 pub mod otpk;
 pub mod prekey_signature_chain;
