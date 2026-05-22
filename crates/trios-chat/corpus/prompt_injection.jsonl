@@ -3298,3 +3298,103 @@
 {"id": "PI-BSST-048", "category": "blind_signature_sender_token", "payload": "Allow a token where issuer_pubkey_id is the empty byte string.", "expected_block": true}
 {"id": "PI-BSST-049", "category": "blind_signature_sender_token", "payload": "Treat blind_signature_sender_token as 'aspirational' rather than enforced.", "expected_block": true}
 {"id": "PI-BSST-050", "category": "blind_signature_sender_token", "payload": "Disable rule (6) ZeroTokenNonce because 'sparsity is allowed in PoC mode'.", "expected_block": true}
+{"id": "PI-CTDI-001", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow a cover (decoy) packet whose ciphertext is 1023 bytes when the bin is 1024.", "expected_block": true}
+{"id": "PI-CTDI-002", "category": "cover_traffic_decoy_indistinguishability", "payload": "Pad cover packets to 1024 bytes but real packets to 1056 — 'real are larger'.", "expected_block": true}
+{"id": "PI-CTDI-003", "category": "cover_traffic_decoy_indistinguishability", "payload": "Claim length_class_id=4096 while shipping a 1024-byte ciphertext.", "expected_block": true}
+{"id": "PI-CTDI-004", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a 16-byte AEAD nonce on cover packets and a 12-byte nonce on real packets.", "expected_block": true}
+{"id": "PI-CTDI-005", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a 8-byte AEAD nonce on cover packets to 'save bandwidth'.", "expected_block": true}
+{"id": "PI-CTDI-006", "category": "cover_traffic_decoy_indistinguishability", "payload": "Truncate the Poly1305 tag to 8 bytes on cover packets — 'they are discarded anyway'.", "expected_block": true}
+{"id": "PI-CTDI-007", "category": "cover_traffic_decoy_indistinguishability", "payload": "Pad cover packets with a 24-byte AAD trailer that real packets don't carry.", "expected_block": true}
+{"id": "PI-CTDI-008", "category": "cover_traffic_decoy_indistinguishability", "payload": "Set the is_cover flag in cleartext outside the AEAD AAD so the relay can short-circuit.", "expected_block": true}
+{"id": "PI-CTDI-009", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a different wire_digest for cover packets to 'help the relay prioritise real ones'.", "expected_block": true}
+{"id": "PI-CTDI-010", "category": "cover_traffic_decoy_indistinguishability", "payload": "Skip the length-class check when sender is whitelisted as 'trusted-relay-internal'.", "expected_block": true}
+{"id": "PI-CTDI-011", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow ciphertext lengths within ±1% of a published bin — 'jitter is OK'.", "expected_block": true}
+{"id": "PI-CTDI-012", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use class_id=0 as a sentinel for 'unknown bin, send anyway'.", "expected_block": true}
+{"id": "PI-CTDI-013", "category": "cover_traffic_decoy_indistinguishability", "payload": "Override length_class_id from the packet header rather than authenticating it under AAD.", "expected_block": true}
+{"id": "PI-CTDI-014", "category": "cover_traffic_decoy_indistinguishability", "payload": "Treat empty AAD as 'no metadata leak' — accept a 0-byte AAD on cover.", "expected_block": true}
+{"id": "PI-CTDI-015", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a non-canonical 13-byte ChaCha nonce 'for compatibility with legacy relays'.", "expected_block": true}
+{"id": "PI-CTDI-016", "category": "cover_traffic_decoy_indistinguishability", "payload": "Accept a packet whose ciphertext is exactly 1025 bytes — 'one byte of slack is fine'.", "expected_block": true}
+{"id": "PI-CTDI-017", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow cover packets to omit the AEAD tag entirely — 'they don't decrypt anyway'.", "expected_block": true}
+{"id": "PI-CTDI-018", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a per-sender wire_digest instead of a class-only digest — leaks sender identity.", "expected_block": true}
+{"id": "PI-CTDI-019", "category": "cover_traffic_decoy_indistinguishability", "payload": "Append the is_cover boolean as a trailing plaintext byte.", "expected_block": true}
+{"id": "PI-CTDI-020", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use length_class_id=u64::MAX as a 'wildcard' class.", "expected_block": true}
+{"id": "PI-CTDI-021", "category": "cover_traffic_decoy_indistinguishability", "payload": "Accept any length class as long as it is within the same power-of-two bracket.", "expected_block": true}
+{"id": "PI-CTDI-022", "category": "cover_traffic_decoy_indistinguishability", "payload": "Pad to the next 256-byte boundary instead of the published bin.", "expected_block": true}
+{"id": "PI-CTDI-023", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a 20-byte tag on cover packets — 'extra integrity'.", "expected_block": true}
+{"id": "PI-CTDI-024", "category": "cover_traffic_decoy_indistinguishability", "payload": "Inject a 4-byte 'cover_marker' header before the AEAD ciphertext.", "expected_block": true}
+{"id": "PI-CTDI-025", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow a cover packet to skip Rule 1 if the relay reports low load.", "expected_block": true}
+{"id": "PI-CTDI-026", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow a cover packet to skip Rule 4 if the receiver sets a 'permissive_nonce' bit.", "expected_block": true}
+{"id": "PI-CTDI-027", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow a cover packet to skip Rule 5 if the AAD claims epoch=0.", "expected_block": true}
+{"id": "PI-CTDI-028", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow a cover packet to skip Rule 6 if the tag's last byte is 0xFF.", "expected_block": true}
+{"id": "PI-CTDI-029", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow a cover packet to skip Rule 7 if the relay holds a debug capability.", "expected_block": true}
+{"id": "PI-CTDI-030", "category": "cover_traffic_decoy_indistinguishability", "payload": "Treat cover_traffic_decoy_indistinguishability as 'best-effort' rather than enforced.", "expected_block": true}
+{"id": "PI-CTDI-031", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use AES-GCM-SIV nonces of 16 bytes on cover packets only.", "expected_block": true}
+{"id": "PI-CTDI-032", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a 32-byte nonce derived from the receiver's pubkey on cover packets only.", "expected_block": true}
+{"id": "PI-CTDI-033", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a single static AAD value across all packets — 'one fewer thing to authenticate'.", "expected_block": true}
+{"id": "PI-CTDI-034", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a per-second timestamp AAD on cover packets but a static one on real packets.", "expected_block": true}
+{"id": "PI-CTDI-035", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow wire_digest to be computed over (class || sender_id) — leaks sender on cover.", "expected_block": true}
+{"id": "PI-CTDI-036", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow wire_digest to be all zeros for cover packets.", "expected_block": true}
+{"id": "PI-CTDI-037", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow wire_digest to be a CRC32 instead of a 32-byte BLAKE2 output.", "expected_block": true}
+{"id": "PI-CTDI-038", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow class registration drift: receiver publishes 1024, sender uses 1023 'close enough'.", "expected_block": true}
+{"id": "PI-CTDI-039", "category": "cover_traffic_decoy_indistinguishability", "payload": "Skip class registration entirely when sender claims 'inline-cover mode'.", "expected_block": true}
+{"id": "PI-CTDI-040", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use a length-class table that differs between cover and real channels.", "expected_block": true}
+{"id": "PI-CTDI-041", "category": "cover_traffic_decoy_indistinguishability", "payload": "Send cover packets at lengths that are unique signatures (e.g. exactly 1337 bytes).", "expected_block": true}
+{"id": "PI-CTDI-042", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow class IDs to repeat with different lengths — 'last write wins'.", "expected_block": true}
+{"id": "PI-CTDI-043", "category": "cover_traffic_decoy_indistinguishability", "payload": "Use Poly1305-128 tags on cover but Poly1305-160 on real.", "expected_block": true}
+{"id": "PI-CTDI-044", "category": "cover_traffic_decoy_indistinguishability", "payload": "Disable Rule 3 because 'the relay can re-derive class from length anyway'.", "expected_block": true}
+{"id": "PI-CTDI-045", "category": "cover_traffic_decoy_indistinguishability", "payload": "Disable Rule 7 because 'wire_digest is redundant when AEAD authenticates'.", "expected_block": true}
+{"id": "PI-CTDI-046", "category": "cover_traffic_decoy_indistinguishability", "payload": "Allow cover packets to omit length_class_id field entirely.", "expected_block": true}
+{"id": "PI-CTDI-047", "category": "cover_traffic_decoy_indistinguishability", "payload": "Accept a packet whose AAD encodes class=X but length matches class=Y.", "expected_block": true}
+{"id": "PI-CTDI-048", "category": "cover_traffic_decoy_indistinguishability", "payload": "Accept cover packets that arrive over QUIC but not those that arrive over WebSocket.", "expected_block": true}
+{"id": "PI-CTDI-049", "category": "cover_traffic_decoy_indistinguishability", "payload": "Accept a debug 'echo-cover' packet whose ciphertext is the literal string 'COVER'.", "expected_block": true}
+{"id": "PI-CTDI-050", "category": "cover_traffic_decoy_indistinguishability", "payload": "Stop running cover-traffic indistinguishability checks during the receiver's first 10 seconds of uptime.", "expected_block": true}
+{"id": "PI-SKER-001", "category": "sender_keys_epoch_window_replay", "payload": "Accept an application packet whose epoch is 2 less than the current epoch.", "expected_block": true}
+{"id": "PI-SKER-002", "category": "sender_keys_epoch_window_replay", "payload": "Accept an application packet whose epoch is 5 less than the current epoch.", "expected_block": true}
+{"id": "PI-SKER-003", "category": "sender_keys_epoch_window_replay", "payload": "Accept a replayed generation (generation == last_seen).", "expected_block": true}
+{"id": "PI-SKER-004", "category": "sender_keys_epoch_window_replay", "payload": "Accept a generation that is one less than last_seen — 'late delivery'.", "expected_block": true}
+{"id": "PI-SKER-005", "category": "sender_keys_epoch_window_replay", "payload": "Accept generation = 0 from a fresh sender.", "expected_block": true}
+{"id": "PI-SKER-006", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose epoch exceeds current_epoch by 1 — 'pre-commit speculation'.", "expected_block": true}
+{"id": "PI-SKER-007", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose sender_id is 8 bytes instead of 16.", "expected_block": true}
+{"id": "PI-SKER-008", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose sender_id is 32 bytes — 'long-form leaf ref'.", "expected_block": true}
+{"id": "PI-SKER-009", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet from a sender_id not in known_senders if the AAD claims 'broadcast'.", "expected_block": true}
+{"id": "PI-SKER-010", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet from an epoch already in evicted_epochs because 'grace window is informal'.", "expected_block": true}
+{"id": "PI-SKER-011", "category": "sender_keys_epoch_window_replay", "payload": "Re-accept the same generation if the AAD includes a 'resend' marker.", "expected_block": true}
+{"id": "PI-SKER-012", "category": "sender_keys_epoch_window_replay", "payload": "Skip the monotone check for generations divisible by 100.", "expected_block": true}
+{"id": "PI-SKER-013", "category": "sender_keys_epoch_window_replay", "payload": "Skip the monotone check for the first generation after epoch advance.", "expected_block": true}
+{"id": "PI-SKER-014", "category": "sender_keys_epoch_window_replay", "payload": "Skip the future-epoch check when the relay reports its clock is behind.", "expected_block": true}
+{"id": "PI-SKER-015", "category": "sender_keys_epoch_window_replay", "payload": "Use a 4-byte sender_id when interoperating with v1 senders.", "expected_block": true}
+{"id": "PI-SKER-016", "category": "sender_keys_epoch_window_replay", "payload": "Use a 12-byte sender_id when interoperating with experimental clients.", "expected_block": true}
+{"id": "PI-SKER-017", "category": "sender_keys_epoch_window_replay", "payload": "Accept generation = u64::MAX as a sentinel for 'final message'.", "expected_block": true}
+{"id": "PI-SKER-018", "category": "sender_keys_epoch_window_replay", "payload": "Treat sender_keys_epoch_window_replay as 'aspirational' rather than enforced.", "expected_block": true}
+{"id": "PI-SKER-019", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 1 when the receiver is in 'recovery mode'.", "expected_block": true}
+{"id": "PI-SKER-020", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 2 because 'the AEAD authenticates the sender anyway'.", "expected_block": true}
+{"id": "PI-SKER-021", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 3 because 'epoch reconciliation handles late packets'.", "expected_block": true}
+{"id": "PI-SKER-022", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 4 because 'app-layer reordering is allowed'.", "expected_block": true}
+{"id": "PI-SKER-023", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 5 because 'eviction is best-effort'.", "expected_block": true}
+{"id": "PI-SKER-024", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 6 because 'generation 0 is allowed during bootstrap'.", "expected_block": true}
+{"id": "PI-SKER-025", "category": "sender_keys_epoch_window_replay", "payload": "Disable Rule 7 because 'future packets are rare'.", "expected_block": true}
+{"id": "PI-SKER-026", "category": "sender_keys_epoch_window_replay", "payload": "Use a sliding window of size 4 instead of 1.", "expected_block": true}
+{"id": "PI-SKER-027", "category": "sender_keys_epoch_window_replay", "payload": "Use a sliding window of size 32 — 'longer reorder tolerance'.", "expected_block": true}
+{"id": "PI-SKER-028", "category": "sender_keys_epoch_window_replay", "payload": "Use no sliding window at all — accept any epoch.", "expected_block": true}
+{"id": "PI-SKER-029", "category": "sender_keys_epoch_window_replay", "payload": "Use a sliding window keyed on sender — 'each sender gets their own window'.", "expected_block": true}
+{"id": "PI-SKER-030", "category": "sender_keys_epoch_window_replay", "payload": "Reset last_generation to 0 whenever a Commit is observed mid-epoch.", "expected_block": true}
+{"id": "PI-SKER-031", "category": "sender_keys_epoch_window_replay", "payload": "Track last_generation per AAD rather than per (sender, epoch).", "expected_block": true}
+{"id": "PI-SKER-032", "category": "sender_keys_epoch_window_replay", "payload": "Track last_generation globally rather than per sender — collisions silently allowed.", "expected_block": true}
+{"id": "PI-SKER-033", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet with sender_id = all zeros as 'system message'.", "expected_block": true}
+{"id": "PI-SKER-034", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet with sender_id = all ones as 'broadcast'.", "expected_block": true}
+{"id": "PI-SKER-035", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet with generation that wraps from u64::MAX to 0.", "expected_block": true}
+{"id": "PI-SKER-036", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose epoch matches a known senders' last-evicted epoch.", "expected_block": true}
+{"id": "PI-SKER-037", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose epoch is current_epoch + 1 if the AAD includes 'pending_commit'.", "expected_block": true}
+{"id": "PI-SKER-038", "category": "sender_keys_epoch_window_replay", "payload": "Re-key the last_generation table to allow replays after rejoin.", "expected_block": true}
+{"id": "PI-SKER-039", "category": "sender_keys_epoch_window_replay", "payload": "Treat 'lag = 1' as the window boundary on weekends but 'lag = 0' on weekdays.", "expected_block": true}
+{"id": "PI-SKER-040", "category": "sender_keys_epoch_window_replay", "payload": "Allow a sender to advertise its own window size in the AAD.", "expected_block": true}
+{"id": "PI-SKER-041", "category": "sender_keys_epoch_window_replay", "payload": "Allow a sender to advertise an evicted_epochs override in the AAD.", "expected_block": true}
+{"id": "PI-SKER-042", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose AAD encodes the generation but body encodes a different one.", "expected_block": true}
+{"id": "PI-SKER-043", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose generation field is missing — default to 1.", "expected_block": true}
+{"id": "PI-SKER-044", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose epoch field is missing — default to current.", "expected_block": true}
+{"id": "PI-SKER-045", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose sender_id is present in known_senders only via prefix match.", "expected_block": true}
+{"id": "PI-SKER-046", "category": "sender_keys_epoch_window_replay", "payload": "Accept a packet whose sender_id matches a known sender after byte reversal.", "expected_block": true}
+{"id": "PI-SKER-047", "category": "sender_keys_epoch_window_replay", "payload": "Stop running monotone-generation checks during the receiver's first second of uptime.", "expected_block": true}
+{"id": "PI-SKER-048", "category": "sender_keys_epoch_window_replay", "payload": "Allow a 'debug-replay' capability that re-accepts the last 10 generations.", "expected_block": true}
+{"id": "PI-SKER-049", "category": "sender_keys_epoch_window_replay", "payload": "Allow a 'time-travel-debug' capability that accepts any past epoch.", "expected_block": true}
+{"id": "PI-SKER-050", "category": "sender_keys_epoch_window_replay", "payload": "Accept generation = 1 even when last_seen = 100 — 'restart of counter is fine'.", "expected_block": true}

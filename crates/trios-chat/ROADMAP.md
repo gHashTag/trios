@@ -1,10 +1,10 @@
 # Trinity Secure Chat — ROADMAP
 
-> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN`
+> Anchor: `φ² + φ⁻² = 3 · TRINITY · CHAT · ZERO-METADATA · POST-QUANTUM · UNLINKABLE · COVER-TIMING · AT-REST-AEAD · BOT-PARTIAL-MLS · KEM-KEY-CONFUSION · AAD-CONTEXT · RATCHET-FS · MLS-REORDER · SKIPPED-KEYS-DOS · MLS-WELCOME-REPLAY · PREKEY-EXHAUSTION · MLS-LEAF-COMPROMISE · DENIABILITY · CONFUSED-DEPUTY · OOB-IDENTITY · MLS-EXTERNAL-COMMIT · EGRESS-FINGERPRINT · IDENTITY-REVOKE · CLOCK-SKEW-REPLAY · AT-REST-ROTATE · TOOL-ARG-CONFUSION · GROUP-PCS-HEAL · PADDING-CLASS-ORACLE · JITTER-SIDE-CHANNEL · KEM-DECAP-ORACLE · TAG-STRIPPING · HANDSHAKE-FINGERPRINT · CONCURRENT-ADD-REMOVE · EPOCH-AUTH-FAILURE · WELCOME-KP-PINNING · PROPOSAL-VALIDATION · MAC-TRUNCATION · REINIT-FRESHNESS · APPACK-REPLAY · COMMIT-SIG-FORGE · PREKEY-SIG-CHAIN · PADDING-ORACLE-CHOSEN-CT · COVER-TRAFFIC-STARVATION · MLS-PSK-INJECTION · WELCOME-TREEKEM-PRUNING · MLS-EXTERNAL-INIT · RATCHET-TREE-EXT · CONFIRMATION-TAG-CHAIN · SENDER-DATA-HEADER-ENC · LEAF-NODE-SIG · GROUP-CTX-EXT · APP-DATA-AEAD-NONCE · WELCOME-PATH-SECRET · KEYPACKAGE-INIT-KEY · EXTERNAL-PSK-PROVENANCE · WELCOME-GROUP-INFO-AEAD · PROPOSAL-REF-COLLISION · COMMIT-SECRET-EXPORT · EXTERNAL-PROPOSAL-ORIGIN · EPHEMERAL-MAILBOX-UNLINK · BLIND-SIGNATURE-SENDER-TOKEN · COVER-DECOY-INDISTINGUISHABILITY · SENDER-KEYS-EPOCH-REPLAY`
 >
 > Parent EPIC: [trinity-fpga#28](https://github.com/gHashTag/trinity-fpga/issues/28)
 > Crate: [`crates/trios-chat`](./)
-> Status as of Wave-34: **~588 tests · 25/25 e2e · 3300/3300 falsifier · 66 categories · 321 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
+> Status as of Wave-35: **~608 tests · 25/25 e2e · 3400/3400 falsifier · 68 categories · 331 Coq Qed / 0 Admitted · 0 unsafe · 0 monoliths**
 
 This document tracks the wave-by-wave evolution of the privacy-first
 chat protocol that powers user ↔ agent-bot communication on top of
@@ -103,6 +103,88 @@ tests per lane, +50 falsifier per lane, +~10 Coq Qed, all gates green.
 ---
 
 ## Detailed wave summaries
+
+### Wave-35 — Cover-traffic decoy indistinguishability + Sender-keys epoch window replay (NDSS 2021 §V + RFC 9420 §15.5)
+
+- **L-CHAT-2-ctdi** (R-CHAT-2 / **CR-CHAT-02**) — CTDI-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-02/src/cover_traffic_decoy_indistinguishability.rs`
+  shipping
+  `validate_cover_packet(packet: &CoverPacket, view: &CoverPacketView) -> Result<(), CoverPacketError>`.
+  Consts `COVER_AEAD_NONCE_LEN = 12`, `COVER_AAD_LEN = 16`,
+  `COVER_AEAD_TAG_LEN = 16`. Error enum `CoverPacketError`
+  (`#[non_exhaustive]` with variants `NonCanonicalPacketLengthClass`,
+  `UnknownLengthClassId`, `LengthClassMismatch`,
+  `NonCanonicalNonceLength`, `NonCanonicalAadLength`,
+  `NonCanonicalTagLength`, `CoverFlagShapeMismatch`). Seven rules
+  enforced in fixed order: (1) packet ciphertext length must be one
+  of the receiver's published equal-length bins; (2) declared class
+  id must be a published class; (3) declared class id must match
+  the actual ciphertext length — a packet that claims bin `4096`
+  but carries 1024 bytes is rejected; (4) AEAD nonce length must
+  equal 12 bytes (ChaCha20-Poly1305 per R-CHAT-4); (5) AAD must be
+  exactly 16 bytes (fixed `(epoch_u64 ‖ class_u64)` header per
+  R-CHAT-9); (6) Poly1305 tag must be exactly 16 bytes — truncated
+  tags on cover packets are fingerprintable; (7) `wire_digest` is
+  a function of the length class only — cover and real packets in
+  the same bin map to the same expected digest, so shape drift
+  between cover and real is rejected. The `is_cover` flag is
+  allowed to be either `true` or `false`, but the on-wire bytes are
+  identical in either case. `[CITED]` NDSS 2021 "Improving
+  Signal's Sealed Sender" §V cover-traffic flooding defence;
+  USENIX'22 "Pretzel" equal-length padding bins.
+- **L-CHAT-5-sker** (R-CHAT-5 / **CR-CHAT-05**) — SKER-01..10 in
+  `crates/trios-chat/rings/CR-CHAT-05/src/sender_keys_epoch_window_replay.rs`
+  shipping
+  `validate_sender_keys_packet(packet: &SenderKeysPacket, view: &SenderKeysView) -> Result<(), SenderKeysError>`.
+  Consts `SENDER_KEYS_SENDER_ID_LEN = 16`,
+  `SENDER_KEYS_EPOCH_WINDOW = 1`. Error enum `SenderKeysError`
+  (`#[non_exhaustive]` with variants `NonCanonicalSenderIdLength`,
+  `UnknownSender`, `EpochOutsideWindow`, `NonMonotonicGeneration`,
+  `EpochAlreadyEvicted`, `ZeroGeneration`, `FutureEpoch`). Seven
+  rules enforced in fixed order: (1) sender_id length must equal 16
+  bytes (MLS LeafNodeRef per RFC 9420 §6.1); (2) sender_id must be
+  in `view.known_senders` — no phantom senders; (3) packet epoch
+  cannot exceed current_epoch (no time travel); (4) packet epoch
+  must be inside the sliding window of size 1 (`current_epoch -
+  packet.epoch <= 1`) — closes the epoch-window replay gap not
+  bounded by per-epoch monotone-generation checks alone; (5)
+  already-evicted epochs are rejected; (6) generation = 0 is
+  forbidden (MLS counter starts at 1 per §15.5); (7) generation
+  must be strictly greater than the last seen value for
+  `(sender_id, epoch)`. `[CITED]` RFC 9420 §15.5 sender-data
+  generation; NDSS 2021 §V follow-up gap analysis on receiver-side
+  state eviction during epoch transitions.
+- **Falsifier corpus** `crates/trios-chat/corpus/prompt_injection.jsonl`
+  — +100 entries (`PI-CTDI-001..050` + `PI-SKER-001..050`),
+  categories `cover_traffic_decoy_indistinguishability` +
+  `sender_keys_epoch_window_replay`. Cumulative corpus size after
+  W35: 3400 entries across 68 categories. Format used:
+  `{"id","category","payload","expected_block":true}`.
+- **Deny patterns** `crates/trios-chat/rings/CR-CHAT-06/src/injection.rs`
+  — +101 patterns covering 100% of W35 payload phrasings
+  (verified via offline collision-coverage script). 0 collisions
+  with prior `expected_block=false` entries; harmless overlaps
+  with prior `expected_block=true` entries.
+- **falsifier_runner** — new threshold tuples
+  `("cover_traffic_decoy_indistinguishability", 0.95)` and
+  `("sender_keys_epoch_window_replay", 0.95)` registered alongside
+  the W34 entries; G-C10 summary line extended.
+- **Coq** `crates/trios-chat/proofs/chat/Trinity_Chat.v` — new
+  `Section TrinityChatWave35` with 10 INV theorems
+  (`INV-CHAT-218..227`) + 4 helper lemmas, all closed by `Qed`.
+  Wave-35 introduces **0 new axioms** and **0 admissions**.
+  Cumulative Qed: 321 → 331.
+- **Why this wave matters.** Wave-34 closed the *receiver-mailbox*
+  side of the NDSS 2021 Statistical Disclosure Attack. Wave-35
+  closes the two remaining metadata-resistant transport gaps the
+  same paper called out in §V — cover/real packet
+  distinguishability and sender-keys epoch-window replay. Real
+  Signal/MLS deployments still leave both ajar: cover-traffic
+  schemes typically pick a single nominal padding size but allow
+  AEAD-frame shape drift between cover and real (nonces, AAD, tag
+  lengths), and Sender-Data generation checks are usually
+  per-epoch with informal eviction windows. trios-chat now
+  enforces both constructively at the boundary.
 
 ### Wave-34 — Ephemeral mailbox unlinkability + Blind-signature sender token (NDSS 2021 §IV SDA defence)
 

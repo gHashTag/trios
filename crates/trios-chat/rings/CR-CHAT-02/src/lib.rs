@@ -51,6 +51,12 @@ pub use application_data_aead_nonce_reuse::{
     ApplicationDataView, APPLICATION_DATA_AEAD_NONCE_LEN, MAX_GENERATION_WINDOW,
 };
 
+pub mod cover_traffic_decoy_indistinguishability;
+pub use cover_traffic_decoy_indistinguishability::{
+    validate_cover_packet, CoverPacket, CoverPacketError, CoverPacketView,
+    COVER_AAD_LEN, COVER_AEAD_NONCE_LEN, COVER_AEAD_TAG_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

@@ -41,6 +41,12 @@ pub use group_context_extensions_consistency::{
     RESERVED_EXTENSION_ID_LOW,
 };
 
+pub mod sender_keys_epoch_window_replay;
+pub use sender_keys_epoch_window_replay::{
+    validate_sender_keys_packet, SenderKeysError, SenderKeysPacket, SenderKeysView,
+    SENDER_KEYS_EPOCH_WINDOW, SENDER_KEYS_SENDER_ID_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

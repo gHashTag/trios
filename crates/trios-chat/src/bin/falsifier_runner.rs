@@ -55,6 +55,12 @@
 //! after W34 = 64 (W33+2). Lanes implement NDSS 2021 §IV Statistical
 //! Disclosure Attack mitigation — the production gap Signal never
 //! closed despite publishing the paper.
+//! Wave-35 additions: 50 cover_traffic_decoy_indistinguishability
+//! (R-CHAT-2 / L-CHAT-2-ctdi) + 50 sender_keys_epoch_window_replay
+//! (R-CHAT-5 / L-CHAT-5-sker) → 3400/3400 expected; cumulative
+//! threshold-lane count after W35 = 66 (W34+2). Lanes implement
+//! NDSS 2021 §V cover-traffic flooding defence + RFC 9420 §15.5
+//! Sender-Data sliding-window replay bound.
 
 use serde::Deserialize;
 use std::fs;
@@ -209,6 +215,9 @@ fn main() {
         // Wave-34 lanes (NDSS 2021 §IV SDA defence)
         ("ephemeral_mailbox_unlinkability", 0.95_f64),
         ("blind_signature_sender_token", 0.95_f64),
+        // Wave-35 lanes (NDSS 2021 §V cover-traffic flooding defence + RFC 9420 §15.5)
+        ("cover_traffic_decoy_indistinguishability", 0.95_f64),
+        ("sender_keys_epoch_window_replay", 0.95_f64),
     ] {
         if let Some((n, b)) = by_cat.get(cat) {
             if *n == 0 {
@@ -224,5 +233,5 @@ fn main() {
     if failed {
         std::process::exit(1);
     }
-    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise/deniability_break/confused_deputy/safety_number_swap/mls_external_commit/egress_fingerprint/identity_revoke/clock_skew_replay/at_rest_rotation/tool_arg_confusion/group_pcs_break/padding_class_oracle/jitter_side_channel/kem_decap_oracle/tag_stripping/handshake_fingerprint/concurrent_add_remove/epoch_authentication_failure/welcome_keypackage_pinning/proposal_validation/mac_truncation/reinit_freshness/appack_replay/commit_signature_forge/prekey_signature_chain/padding_oracle_chosen_ct/cover_traffic_starvation/mls_psk_external_injection/welcome_secret_treekem_pruning/external_init_secret_pinning/ratchet_tree_extension_tampering/confirmation_tag_chain/sender_data_header_encryption/leaf_node_signature_validation/group_context_extensions_consistency/application_data_aead_nonce_reuse/welcome_path_secret_unmasking/keypackage_init_key_reuse/external_psk_id_provenance/welcome_encrypted_group_info_aead/proposal_ref_collision/commit_secret_export_collision/external_proposal_origin_unbound/ephemeral_mailbox_unlinkability/blind_signature_sender_token >=95%, indirect >=90%)");
+    println!("G-C10 thresholds met (direct/multi/cap/metadata/replay/pq_downgrade/group_state_rollback/sender_unlinkability/traffic_analysis/persistence_at_rest/cover_traffic_correlation/partial_mls_bot/envelope_padding_leak/kem_key_confusion/aad_context_confusion/ratchet_forward_secrecy/mls_commit_reorder/skipped_keys_dos/mls_welcome_replay/prekey_exhaustion/mls_leaf_compromise/deniability_break/confused_deputy/safety_number_swap/mls_external_commit/egress_fingerprint/identity_revoke/clock_skew_replay/at_rest_rotation/tool_arg_confusion/group_pcs_break/padding_class_oracle/jitter_side_channel/kem_decap_oracle/tag_stripping/handshake_fingerprint/concurrent_add_remove/epoch_authentication_failure/welcome_keypackage_pinning/proposal_validation/mac_truncation/reinit_freshness/appack_replay/commit_signature_forge/prekey_signature_chain/padding_oracle_chosen_ct/cover_traffic_starvation/mls_psk_external_injection/welcome_secret_treekem_pruning/external_init_secret_pinning/ratchet_tree_extension_tampering/confirmation_tag_chain/sender_data_header_encryption/leaf_node_signature_validation/group_context_extensions_consistency/application_data_aead_nonce_reuse/welcome_path_secret_unmasking/keypackage_init_key_reuse/external_psk_id_provenance/welcome_encrypted_group_info_aead/proposal_ref_collision/commit_secret_export_collision/external_proposal_origin_unbound/ephemeral_mailbox_unlinkability/blind_signature_sender_token/cover_traffic_decoy_indistinguishability/sender_keys_epoch_window_replay >=95%, indirect >=90%)");
 }
