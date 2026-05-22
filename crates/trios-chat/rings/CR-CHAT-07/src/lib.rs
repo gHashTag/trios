@@ -50,6 +50,31 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod egress_fingerprint;
+pub use egress_fingerprint::{
+    uniform_burst_ms, uniform_length_class, AlpnId, CipherId, EgressFingerprint,
+    EgressObservables, TlsClass, CANONICAL_BURST_GAPS_MS, CANONICAL_LENGTH_CLASSES,
+    CANONICAL_TLS_CLASS,
+};
+
+pub mod jitter_side_channel;
+pub use jitter_side_channel::{
+    validate_history as validate_jitter_history, GapObservation, GapRecorder, JitterError,
+    JitterPolicy, WireKind,
+};
+
+pub mod cover_traffic_starvation;
+pub use cover_traffic_starvation::{
+    validate_window as validate_cover_window, CoverStarvationError, MIN_COVER_RATIO_DEN,
+    MIN_COVER_RATIO_NUM, WINDOW_MIN_EMISSIONS,
+};
+
+pub mod ratchet_tree_extension_tampering;
+pub use ratchet_tree_extension_tampering::{
+    validate_ratchet_tree_extension, RatchetTreeExtError, RatchetTreeExtension, RatchetTreeNode,
+    RatchetTreeView, RTX_MIN_LEAVES,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

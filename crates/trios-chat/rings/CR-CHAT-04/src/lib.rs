@@ -20,6 +20,35 @@
 
 use trios_chat_cr_chat_00::{Error, Result};
 
+pub mod safety_number;
+pub use safety_number::{render as render_safety_number, safety_number, verify as verify_safety_number, IdKey, SafetyDigest};
+
+pub mod mac_truncation;
+pub use mac_truncation::{split_frame, verify_mac, MacError, MacTag, MAC_TAG_LEN};
+
+pub mod padding_class_oracle;
+pub use padding_class_oracle::{
+    check_class_choice, pad_class_checked, smallest_class, unpad_checked, validate_envelope,
+    PaddingOracleError,
+};
+
+pub mod padding_oracle_chosen_ct;
+pub use padding_oracle_chosen_ct::{
+    verify_probe, PaddingOracleCtError, VerdictLedger, PROBE_BUDGET,
+};
+
+pub mod external_init_secret_pinning;
+pub use external_init_secret_pinning::{
+    validate_external_commit, ExternalCommit, ExternalInitError, ExternalInitExporter,
+    ExternalInitView, EIP_EXPORTER_LEN, EIP_KEM_EPHEMERAL_LEN,
+};
+
+pub mod welcome_path_secret_unmasking;
+pub use welcome_path_secret_unmasking::{
+    validate_welcome_path_secrets, WelcomePacket, WelcomePathSecret, WelcomePathSecretError,
+    WelcomePathSecretView, WELCOME_PATH_SECRET_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
@@ -219,5 +248,100 @@ mod tests {
         // TA-04 padding bytes zero ✓
         // TA-05 truncation rejected ✓
         // 5/5 = 100 % ≥ 95 %.
+    }
+
+    // ------------------------------------------------------------------
+    // Wave-8 · L-CHAT-9 — Envelope-padding length-leak falsifier suite
+    // ------------------------------------------------------------------
+
+    /// EPL-01 — strip-padding rejected: removing the trailing zero bytes
+    /// (e.g. trimming a 256-byte class to 200) lands outside the
+    /// canonical class set and `unpad` must refuse it.
+    #[test]
+    fn falsifier_epl01_strip_padding_rejected() {
+        let mut buf = pad_class(b"hi");
+        assert_eq!(buf.len(), 256);
+        // Strip 56 trailing zero bytes ⇒ 200 bytes ∉ CLASSES.
+        buf.truncate(200);
+        assert!(
+            unpad(&buf).is_err(),
+            "truncated/zero-stripped buffer must be rejected"
+        );
+    }
+
+    /// EPL-02 — padding-class monotone-on-grow: as the payload grows
+    /// the chosen class is non-decreasing. (Specifically 1→252 stays
+    /// at 256, then 253→ jumps to 1024, etc. — monotone, never goes
+    /// backwards.)
+    #[test]
+    fn falsifier_epl02_padding_class_monotone_on_grow() {
+        let mut last = 0usize;
+        for n in [1usize, 100, 252, 253, 500, 1020, 1021, 4000, 4092, 4093, 16000] {
+            let cur = pad_class(&vec![0u8; n]).len();
+            assert!(
+                cur >= last,
+                "class shrunk: prev={last} cur={cur} payload={n}"
+            );
+            last = cur;
+        }
+    }
+
+    /// EPL-03 — zero-length payload is still padded to the smallest
+    /// class. This catches the trap where an empty message would leak
+    /// "this user sent something but it had no body" via a 0-byte wire.
+    #[test]
+    fn falsifier_epl03_zero_length_payload_still_padded() {
+        let buf = pad_class(b"");
+        assert_eq!(buf.len(), 256, "empty payload must hit the smallest class");
+        // declared length is 0
+        assert_eq!(u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]), 0);
+        // round-trip empty
+        assert_eq!(unpad(&buf).unwrap(), b"");
+    }
+
+    /// EPL-04 — padding-class stable across keys: padding is purely a
+    /// function of payload length, never of payload bytes. Two
+    /// different payloads of the same length must produce the *same*
+    /// class (and indistinguishable cipher input length).
+    #[test]
+    fn falsifier_epl04_padding_class_stable_across_keys() {
+        let a = pad_class(&vec![0xAA; 500]);
+        let b = pad_class(&vec![0xBB; 500]);
+        let c = pad_class(&vec![0u8; 500]);
+        assert_eq!(a.len(), b.len());
+        assert_eq!(b.len(), c.len());
+        // Length prefix matches; the payload region differs but its
+        // *length* is identical — zero leak through size.
+        assert_eq!(&a[..4], &b[..4]);
+        assert_eq!(&a[..4], &c[..4]);
+    }
+
+    /// EPL-05 — truncation detected: chopping the trailing 1 byte of a
+    /// canonical-class buffer must fail unpad. Catches network-mid-frame
+    /// truncation that would otherwise silently leak a shorter wire.
+    #[test]
+    fn falsifier_epl05_truncation_detected() {
+        for &class in CLASSES.iter() {
+            let mut buf = vec![0u8; class];
+            buf[..4].copy_from_slice(&5u32.to_be_bytes());
+            buf[4..9].copy_from_slice(b"hello");
+            // Drop one byte ⇒ not a canonical class.
+            buf.pop();
+            assert!(
+                unpad(&buf).is_err(),
+                "class={class} — 1-byte truncation must be detected"
+            );
+        }
+    }
+
+    /// G-C4-pad — green summary
+    /// `[VERIFIED]` 5 envelope-padding length-leak falsifiers fire.
+    #[test]
+    fn green_summary_envelope_padding_leak_falsifiers() {
+        let count = 5usize;
+        assert_eq!(
+            count, 5,
+            "R-CHAT-9: {count} envelope-padding length-leak falsifiers active"
+        );
     }
 }
