@@ -41,6 +41,11 @@ pub use envelope_size_distribution_uniformity::{
     ESDU_MIN_ENVELOPES, ESDU_MIN_SIZE,
 };
 
+pub mod store_compaction_integrity_guard;
+pub use store_compaction_integrity_guard::{
+    validate_compaction, CompactionIntegrityError,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
