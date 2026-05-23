@@ -44,6 +44,11 @@ pub use skipped_message_key_exhaustion::{
     SMKE_MAX_GAP, SMKE_MAX_SKIPPED, SMKE_MAX_TOTAL,
 };
 
+pub mod forward_secrecy_key_wipe;
+pub use forward_secrecy_key_wipe::{
+    validate_key_derivations, KeyDerivation, KeyWipeError, FSKW_KEY_LEN, FSKW_MAX_DERIVATIONS,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

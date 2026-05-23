@@ -52,6 +52,11 @@ pub mod leaf_node_priority_inversion_guard;
 pub use leaf_node_priority_inversion_guard::{
     validate_leaf_priority, LeafPriorityError, PriorityProposal, LNPI_MAX_LEAF, LNPI_MAX_PROPOSALS,
 };
+
+pub mod treekem_update_path_validation;
+pub use treekem_update_path_validation::{
+    validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
+};
 pub use commit_path_secret_aead_keying_mismatch::{
     validate_commit_path_secret, CommitUpdatePath, PathSecretAeadKeyingError, UpdatePathSlot,
     UpdatePathView, CPAKM_AAD_CONTEXT_LEN, CPAKM_GROUP_ID_LEN, CPAKM_INIT_KEY_LEN,
