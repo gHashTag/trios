@@ -14,9 +14,8 @@ use trios_ext_ring_ex03 as bridge;
 
 // Re-export bridge functions for JavaScript access
 pub use bridge::comet::{
-    comet_bridge_init, comet_bridge_connect, comet_bridge_disconnect,
-    comet_send_chat, comet_is_connected,
-    CometBridge,
+    comet_bridge_connect, comet_bridge_disconnect, comet_bridge_init, comet_is_connected,
+    comet_send_chat, CometBridge,
 };
 
 // Re-export background init
@@ -54,9 +53,7 @@ pub fn run() {
 /// This function lives in the entry ring because it crosses ring boundaries
 /// (DOM ring ↔ MCP ring), which neither ring should depend on directly.
 fn setup_chat_listener(doc: &Document) -> Result<(), JsValue> {
-    let input = doc
-        .get_element_by_id("chat-input")
-        .ok_or("no chat-input")?;
+    let input = doc.get_element_by_id("chat-input").ok_or("no chat-input")?;
     let input: HtmlInputElement = input.dyn_into()?;
 
     let closure =

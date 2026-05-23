@@ -54,7 +54,9 @@ impl CometBridge {
                         Payload::ChatMessage { content, role, .. } => {
                             dom::append_message(role, content);
                         }
-                        Payload::AgentHeartbeat { agent_id, status, .. } => {
+                        Payload::AgentHeartbeat {
+                            agent_id, status, ..
+                        } => {
                             dom::set_agent_list(&format!("{}: {}", agent_id, status));
                         }
                         Payload::AgentConnected { agent_id } => {

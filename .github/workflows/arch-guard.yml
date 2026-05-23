@@ -31,7 +31,7 @@ jobs:
             | grep '^crates/trios-ext/' || true)
 
           FORBIDDEN=$(echo "$CHANGED" \
-            | grep -vE '(^crates/trios-ext/src/dom\.rs$|^crates/trios-ext/Cargo\.toml$|^crates/trios-ext/style\.css$|^crates/trios-ext/README\.md$|^crates/trios-ext/TASK\.md$|^crates/trios-ext/AGENTS\.md$)' \
+            | grep -vE '(^crates/trios-ext/src/dom\.rs$|^crates/trios-ext/Cargo\.toml$|^crates/trios-ext/style\.css$|^crates/trios-ext/README\.md$|^crates/trios-ext/TASK\.md$|^crates/trios-ext/AGENTS\.md$|^crates/trios-ext/rings/)' \
             | grep -v '^$' || true)
 
           if [ -n "$FORBIDDEN" ]; then
@@ -42,6 +42,7 @@ jobs:
             echo "  - crates/trios-ext/src/dom.rs (≤15 строк)"
             echo "  - crates/trios-ext/Cargo.toml"
             echo "  - crates/trios-ext/style.css (удаление)"
+            echo "  - crates/trios-ext/rings/** (ring-isolated code, allowed)"
             echo ""
             echo "См. AGENTS.md (корневой) и issue #243."
             exit 1
