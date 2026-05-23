@@ -25,6 +25,11 @@ pub use cross_session_duplicate_envelope::{
     CSDUP_MIN_CT_LEN,
 };
 
+pub mod key_rotation_replay_guard;
+pub use key_rotation_replay_guard::{
+    validate_rotation_chain, KeyRotationReplayError, RotationEvent, KRRG_MAX_ROTATIONS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

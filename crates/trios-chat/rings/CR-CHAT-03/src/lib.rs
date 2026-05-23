@@ -47,6 +47,11 @@ pub use group_membership_authorization_guard::{
     validate_group_proposal, GroupMembershipError, GroupOp, GroupProposal, GroupState,
     GMAZ_MAX_LEAF_INDEX, GMAZ_MIN_MEMBERS,
 };
+
+pub mod leaf_node_priority_inversion_guard;
+pub use leaf_node_priority_inversion_guard::{
+    validate_leaf_priority, LeafPriorityError, PriorityProposal, LNPI_MAX_LEAF, LNPI_MAX_PROPOSALS,
+};
 pub use commit_path_secret_aead_keying_mismatch::{
     validate_commit_path_secret, CommitUpdatePath, PathSecretAeadKeyingError, UpdatePathSlot,
     UpdatePathView, CPAKM_AAD_CONTEXT_LEN, CPAKM_GROUP_ID_LEN, CPAKM_INIT_KEY_LEN,
