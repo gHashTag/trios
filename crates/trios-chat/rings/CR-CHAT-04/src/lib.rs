@@ -77,6 +77,11 @@ pub use padding_class_downgrade_guard::{
     validate_padding_downgrade, PadDowngradeError, PCDG_CLASSES, PCDG_MAX_TRANSITIONS,
 };
 
+pub mod padding_metadata_leak_guard;
+pub use padding_metadata_leak_guard::{
+    validate_padding_metadata, PadMetaLeakError, PMLG_CLASSES, PMLG_PREFIX,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

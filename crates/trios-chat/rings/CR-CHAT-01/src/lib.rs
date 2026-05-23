@@ -41,6 +41,7 @@ pub mod epoch_advancement_guard;
 pub mod prekey_bundle_expiry_guard;
 pub mod prekey_signature_algorithm_downgrade;
 pub mod prekey_bundle_freshness_guard;
+pub mod identity_key_rotation_guard;
 pub mod revocation;
 pub mod sealed;
 pub mod welcome_encrypted_group_info_aead;
@@ -76,6 +77,9 @@ pub use prekey_signature_algorithm_downgrade::{
 pub use prekey_bundle_freshness_guard::{
     validate_bundle_batch, validate_bundle_freshness, BundleCheck, BundleFreshnessError,
     PBFG_MAX_AGE_MS, PBFG_MAX_BUNDLES, PBFG_VERSION,
+};
+pub use identity_key_rotation_guard::{
+    validate_id_key_rotations, IdKeyRotation, IdKeyRotationError, IKRG_KEY_LEN, IKRG_MAX_ROTATIONS,
 };
 pub use prekey_signature_chain::{
     validate_prekey_chain, ChainBindingTag, PrekeyChainBundle, PrekeyChainError, PrekeyChainKey,
