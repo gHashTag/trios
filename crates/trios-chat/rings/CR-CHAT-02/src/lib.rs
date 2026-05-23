@@ -55,6 +55,11 @@ pub use dh_output_validation::{
     DHOV_WEAK_ZERO,
 };
 
+pub mod kdf_label_domain_separation;
+pub use kdf_label_domain_separation::{
+    validate_kdf_labels, KdfLabelError, KLDL_MAX_LABELS, KLDL_MAX_LEN, KLDL_MIN_LEN,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

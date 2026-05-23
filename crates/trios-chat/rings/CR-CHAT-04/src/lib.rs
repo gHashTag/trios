@@ -82,6 +82,11 @@ pub use padding_metadata_leak_guard::{
     validate_padding_metadata, PadMetaLeakError, PMLG_CLASSES, PMLG_PREFIX,
 };
 
+pub mod wire_frame_integrity_guard;
+pub use wire_frame_integrity_guard::{
+    validate_wire_frame, WireFrameError, WFGI_MAX_FRAME, WFGI_MAX_HEADER, WFGI_TAG_LEN,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,
