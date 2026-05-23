@@ -55,6 +55,12 @@ pub use welcome_path_secret_unmasking::{
     WelcomePathSecretView, WELCOME_PATH_SECRET_LEN,
 };
 
+pub mod mls_plaintext_framing_integrity;
+pub use mls_plaintext_framing_integrity::{
+    validate_mls_frame, MlsContentType, MlsFrame, MlsFramingError, MlsGroupView,
+    MLF_MAX_AAD_LEN, MLF_MAX_LEAF_INDEX, MLF_MIN_AEAD_CT_LEN, MLF_WIRE_VERSION_MLS10,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

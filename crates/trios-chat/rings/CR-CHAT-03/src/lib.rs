@@ -38,6 +38,7 @@ pub mod proposal_ref_collision;
 pub mod proposal_validation;
 pub mod psk_external_injection;
 pub mod reinit_freshness;
+pub mod treekem_parent_hash_binding;
 pub use commit_path_secret_aead_keying_mismatch::{
     validate_commit_path_secret, CommitUpdatePath, PathSecretAeadKeyingError, UpdatePathSlot,
     UpdatePathView, CPAKM_AAD_CONTEXT_LEN, CPAKM_GROUP_ID_LEN, CPAKM_INIT_KEY_LEN,
