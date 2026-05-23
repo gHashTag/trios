@@ -34,6 +34,7 @@ pub mod kem;
 pub mod kem_decap_oracle;
 pub mod key_package_lifetime_grace_window_expiry;
 pub mod keypackage_init_key_reuse;
+pub mod keypackage_capabilities_binding;
 pub mod otpk;
 pub mod prekey_signature_chain;
 pub mod prekey_bundle_expiry_guard;

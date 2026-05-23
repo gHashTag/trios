@@ -61,6 +61,12 @@ pub use mls_plaintext_framing_integrity::{
     MLF_MAX_AAD_LEN, MLF_MAX_LEAF_INDEX, MLF_MIN_AEAD_CT_LEN, MLF_WIRE_VERSION_MLS10,
 };
 
+pub mod padding_class_transition_audit;
+pub use padding_class_transition_audit::{
+    audit_padding_transitions, PaddingChoice, PaddingTransitionError,
+    PCTA_CLASSES, PCTA_MIN_PER_CLASS, PCTA_WINDOW_SIZE,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
