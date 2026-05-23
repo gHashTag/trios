@@ -21,6 +21,7 @@ pub mod injection;
 pub mod session_capability_replay;
 pub mod tag_stripping;
 pub mod tool_arg_confusion;
+pub mod tool_output_sanitization;
 
 pub use capability::{CapError, CapabilityToken, Scope, ToolManifest};
 pub use confused_deputy::{check_invocation, DeputyError, Invocation, NonceLedger};
@@ -30,6 +31,9 @@ pub use session_capability_replay::{
 };
 pub use tag_stripping::{
     parse_structured_output, serialise_structured_output, Span, SpanTag, TagSplit,
+};
+pub use tool_output_sanitization::{
+    sanitize_tool_output, ToolOutputError, TOUT_MAX_LEN, TOUT_NESTED_SENTINEL,
 };
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
