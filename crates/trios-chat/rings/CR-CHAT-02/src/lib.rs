@@ -57,6 +57,8 @@ pub use cover_traffic_decoy_indistinguishability::{
     COVER_AAD_LEN, COVER_AEAD_NONCE_LEN, COVER_AEAD_TAG_LEN,
 };
 
+pub mod welcome_init_secret_kdf_label_confusion;
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

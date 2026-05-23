@@ -11,6 +11,8 @@
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
+pub mod psk_secret_extraction_chain_order_mismatch;
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
