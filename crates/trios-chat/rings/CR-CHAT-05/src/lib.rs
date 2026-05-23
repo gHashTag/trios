@@ -35,6 +35,12 @@ pub use store_integrity_hash_chain::{
     validate_hash_chain, ChainLink, HashChainError, SIHC_GENESIS, SIHC_MAX_CHAIN,
 };
 
+pub mod envelope_size_distribution_uniformity;
+pub use envelope_size_distribution_uniformity::{
+    validate_size_uniformity, SizeDistributionError, ESDU_CLASSES, ESDU_MAX_STORE,
+    ESDU_MIN_ENVELOPES, ESDU_MIN_SIZE,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

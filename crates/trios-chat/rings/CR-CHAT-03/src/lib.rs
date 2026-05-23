@@ -57,6 +57,12 @@ pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
 };
+
+pub mod group_context_hash_consistency_guard;
+pub use group_context_hash_consistency_guard::{
+    validate_group_context_consistency, GroupContextError, MemberContext,
+    GCHC_HASH_LEN, GCHC_MIN_MEMBERS,
+};
 pub use commit_path_secret_aead_keying_mismatch::{
     validate_commit_path_secret, CommitUpdatePath, PathSecretAeadKeyingError, UpdatePathSlot,
     UpdatePathView, CPAKM_AAD_CONTEXT_LEN, CPAKM_GROUP_ID_LEN, CPAKM_INIT_KEY_LEN,
