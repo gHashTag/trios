@@ -27,6 +27,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod ratchet_replay_window_guard;
+pub use ratchet_replay_window_guard::{
+    check_replay_window, validate_counter_advance, RatchetReplayError,
+    RPL_MAX_COUNTER, RPL_MAX_GAP, RPL_MAX_WINDOW,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
