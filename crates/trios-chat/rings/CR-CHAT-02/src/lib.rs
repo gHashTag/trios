@@ -38,6 +38,12 @@ pub use key_package_hash_pinning::{
     KeyPackagePinError, PinTable, KPHP_HASH_LEN, KPHP_MAX_PINS,
 };
 
+pub mod skipped_message_key_exhaustion;
+pub use skipped_message_key_exhaustion::{
+    validate_chain_skipped, validate_total_skipped, SkippedKeyError,
+    SMKE_MAX_GAP, SMKE_MAX_SKIPPED, SMKE_MAX_TOTAL,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

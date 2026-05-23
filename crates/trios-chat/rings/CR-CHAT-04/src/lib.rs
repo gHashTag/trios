@@ -72,6 +72,11 @@ pub use padding_oracle_timing_sidechannel::{
     validate_padded_envelope, PaddingTimingError, POTC_LEN_PREFIX,
 };
 
+pub mod padding_class_downgrade_guard;
+pub use padding_class_downgrade_guard::{
+    validate_padding_downgrade, PadDowngradeError, PCDG_CLASSES, PCDG_MAX_TRANSITIONS,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,
