@@ -33,6 +33,7 @@ pub mod external_commit_resumption_psk_misbinding;
 pub mod external_proposal_origin_unbound;
 pub mod external_psk_id_provenance;
 pub mod leaf_node_signature_validation;
+pub mod membership_tag_binding;
 pub mod pcs_healing;
 pub mod proposal_ref_collision;
 pub mod proposal_validation;

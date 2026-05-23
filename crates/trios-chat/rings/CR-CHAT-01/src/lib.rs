@@ -36,6 +36,7 @@ pub mod key_package_lifetime_grace_window_expiry;
 pub mod keypackage_init_key_reuse;
 pub mod otpk;
 pub mod prekey_signature_chain;
+pub mod prekey_bundle_expiry_guard;
 pub mod revocation;
 pub mod sealed;
 pub mod welcome_encrypted_group_info_aead;
