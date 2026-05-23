@@ -44,13 +44,9 @@ fn build_ext() {
         .current_dir(&root_workspace)
         .status()
         .expect("failed to run cargo build");
-    assert!(
-        status.success(),
-        "cargo build for trios-ext-ring-ex00 failed"
-    );
+    assert!(status.success(), "cargo build for trios-ext-ring-ex00 failed");
 
-    let wasm_input =
-        root_workspace.join("target/wasm32-unknown-unknown/release/trios_ext_ring_ex00.wasm");
+    let wasm_input = root_workspace.join("target/wasm32-unknown-unknown/release/trios_ext_ring_ex00.wasm");
 
     if !wasm_input.exists() {
         eprintln!("[xtask] ERROR: {} not found", wasm_input.display());
@@ -70,10 +66,7 @@ fn build_ext() {
         .arg(&wasm_input)
         .status()
         .expect("failed to run wasm-bindgen");
-    assert!(
-        status.success(),
-        "wasm-bindgen for trios-ext-ring-ex00 failed"
-    );
+    assert!(status.success(), "wasm-bindgen for trios-ext-ring-ex00 failed");
 
     let js_out = dist_dir.join("trios_ext_ring_ex00.js");
     let wasm_out = dist_dir.join("trios_ext_ring_ex00_bg.wasm");
@@ -114,8 +107,7 @@ fn build_sidepanel() {
         .expect("failed to run cargo build");
     assert!(status.success(), "cargo build for trios-ui-br-app failed");
 
-    let wasm_input =
-        root_workspace.join("target/wasm32-unknown-unknown/release/trios_ui_br_app.wasm");
+    let wasm_input = root_workspace.join("target/wasm32-unknown-unknown/release/trios_ui_br_app.wasm");
 
     if !wasm_input.exists() {
         eprintln!("[xtask] ERROR: {} not found", wasm_input.display());

@@ -223,27 +223,14 @@ mod tests {
             params: None,
         };
         let s = serde_json::to_string(&req).unwrap();
-        assert!(
-            !s.contains("params"),
-            "params must not appear when None: {s}"
-        );
+        assert!(!s.contains("params"), "params must not appear when None: {s}");
     }
 
     #[test]
     fn mcp_request_increments_id_field() {
         // Проверяем что каждый запрос получает уникальный id
-        let r1 = McpRequest {
-            jsonrpc: "2.0".into(),
-            id: 1,
-            method: "a".into(),
-            params: None,
-        };
-        let r2 = McpRequest {
-            jsonrpc: "2.0".into(),
-            id: 2,
-            method: "a".into(),
-            params: None,
-        };
+        let r1 = McpRequest { jsonrpc: "2.0".into(), id: 1, method: "a".into(), params: None };
+        let r2 = McpRequest { jsonrpc: "2.0".into(), id: 2, method: "a".into(), params: None };
         assert_ne!(r1.id, r2.id);
     }
 

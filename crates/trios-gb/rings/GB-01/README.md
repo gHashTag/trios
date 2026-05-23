@@ -1,0 +1,26 @@
+# Ring GB-01 — gb middle
+
+> Часть крейта `trios-gb` · Scaffolded for issue #380 · Invariant I5
+
+## Назначение / Purpose
+
+Ring scaffold for the `trios-gb` ring graph (gb middle). Placeholder ring satisfying
+arch-guard invariant I5 (каждое кольцо имеет README+TASK+AGENTS).
+
+## Файлы / Expected files
+
+| File | Role |
+|------|------|
+| `README.md` | This file — ring identity |
+| `TASK.md` | Incremental migration checklist |
+| `AGENTS.md` | Agent instructions for this ring |
+
+## Зависимости / Dependency position
+
+See parent crate `../../README.md` for the ring graph.
+
+## Ссылки / Links
+
+- Parent crate: [`trios-gb`](../../README.md)
+- Anchor: `φ² + φ⁻² = 3 · TRINITY`
+- Invariant: I5 (ring docs compliance)
