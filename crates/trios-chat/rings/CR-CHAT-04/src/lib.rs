@@ -61,6 +61,12 @@ pub use mls_plaintext_framing_integrity::{
     MLF_MAX_AAD_LEN, MLF_MAX_LEAF_INDEX, MLF_MIN_AEAD_CT_LEN, MLF_WIRE_VERSION_MLS10,
 };
 
+pub mod padding_class_collision_guard;
+pub use padding_class_collision_guard::{
+    validate_padding_classes, PadClassError, CLASS_ALIGNMENT, MAX_CLASS_SIZE,
+    MAX_COLLISION_SPAN, MIN_CLASS_SPAN,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

@@ -37,6 +37,7 @@ pub mod keypackage_init_key_reuse;
 pub mod keypackage_capabilities_binding;
 pub mod otpk;
 pub mod prekey_signature_chain;
+pub mod epoch_advancement_guard;
 pub mod prekey_bundle_expiry_guard;
 pub mod revocation;
 pub mod sealed;
@@ -62,6 +63,10 @@ pub use keypackage_init_key_reuse::{
     KEYPACKAGE_INIT_KEY_LEN,
 };
 pub use otpk::{JoinStrategy, Otpk, OtpkPool};
+pub use epoch_advancement_guard::{
+    validate_epoch_chain, validate_epoch_transition, EpochAdvanceError, EpochTransition,
+    EPOCH_MAX_GAP, EPOCH_MAX_VALUE,
+};
 pub use prekey_signature_chain::{
     validate_prekey_chain, ChainBindingTag, PrekeyChainBundle, PrekeyChainError, PrekeyChainKey,
     PrekeyChainView,
