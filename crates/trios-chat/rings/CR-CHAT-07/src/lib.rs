@@ -89,6 +89,12 @@ pub use emission_cadence_uniformity::{
     ECAD_MIN_WINDOW,
 };
 
+pub mod wire_timing_anomaly_guard;
+pub use wire_timing_anomaly_guard::{
+    validate_timing_distribution, TimingAnomalyError, WTAG_CANONICAL_GAPS_MS, WTAG_MAX_CLASS_FRAC_DEN,
+    WTAG_MAX_CLASS_FRAC_NUM, WTAG_MAX_OBSERVATIONS, WTAG_MAX_STDDEV, WTAG_MIN_SAMPLES,
+};
+
 pub mod cover_traffic_burst_detection;
 pub use cover_traffic_burst_detection::{
     validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,
