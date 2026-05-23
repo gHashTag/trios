@@ -95,6 +95,12 @@ pub use wire_timing_anomaly_guard::{
     WTAG_MAX_CLASS_FRAC_NUM, WTAG_MAX_OBSERVATIONS, WTAG_MAX_STDDEV, WTAG_MIN_SAMPLES,
 };
 
+pub mod cover_traffic_entropy_fingerprint;
+pub use cover_traffic_entropy_fingerprint::{
+    validate_cover_entropy, CoverEntropyError, CTEF_ALIGNMENT, CTEF_MAX_ZERO_RUN, CTEF_MIN_COVER_LEN,
+    CTEF_MIN_ENTROPY,
+};
+
 pub mod cover_traffic_burst_detection;
 pub use cover_traffic_burst_detection::{
     validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,
