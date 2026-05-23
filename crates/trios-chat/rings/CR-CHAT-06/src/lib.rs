@@ -56,6 +56,11 @@ pub use capability_scope_escalation_guard::{
     validate_scope_history, validate_scope_transition, ScopeEscalationError, ScopeSnapshot,
     CSEG_MAX_CHANGES,
 };
+
+pub mod tool_call_chain_depth_guard;
+pub use tool_call_chain_depth_guard::{
+    validate_tool_chain, ChainStep, ToolChainError, TCCD_MAX_DEPTH, TCCD_MAX_TOTAL_INPUT,
+};
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

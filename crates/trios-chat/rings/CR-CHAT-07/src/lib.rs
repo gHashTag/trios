@@ -113,6 +113,12 @@ pub use traffic_volume_correlation_guard::{
     TVCG_MAX_SINGLE, TVCG_MAX_WINDOW, TVCG_MIN_EMISSIONS,
 };
 
+pub mod receiver_side_traffic_analysis;
+pub use receiver_side_traffic_analysis::{
+    validate_receiver_analysis, ReceiverAnalysisError, RTAR_MAX_BURST, RTAR_MAX_OBS,
+    RTAR_MAX_STDDEV, RTAR_MIN_SENDERS,
+};
+
 pub mod cover_traffic_burst_detection;
 pub use cover_traffic_burst_detection::{
     validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,
