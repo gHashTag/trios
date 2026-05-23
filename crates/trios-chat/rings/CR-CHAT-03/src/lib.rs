@@ -53,6 +53,11 @@ pub use leaf_node_priority_inversion_guard::{
     validate_leaf_priority, LeafPriorityError, PriorityProposal, LNPI_MAX_LEAF, LNPI_MAX_PROPOSALS,
 };
 
+pub mod ratchet_tree_resolution_guard;
+pub use ratchet_tree_resolution_guard::{
+    validate_tree_resolution, TreeResolutionError, RTRS_MAX_RESOLUTION, RTRS_MAX_TREE,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

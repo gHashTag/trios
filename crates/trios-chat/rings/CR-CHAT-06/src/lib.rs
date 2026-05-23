@@ -61,6 +61,12 @@ pub mod tool_call_chain_depth_guard;
 pub use tool_call_chain_depth_guard::{
     validate_tool_chain, ChainStep, ToolChainError, TCCD_MAX_DEPTH, TCCD_MAX_TOTAL_INPUT,
 };
+pub mod agent_output_rate_limit_guard;
+pub use agent_output_rate_limit_guard::{
+    validate_output_rate, OutputRateError, OutputEvent,
+    AORL_MAX_BYTES, AORL_MAX_OUTPUTS, AORL_MAX_WINDOW_MS, AORL_MIN_INTERVAL_MS,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
