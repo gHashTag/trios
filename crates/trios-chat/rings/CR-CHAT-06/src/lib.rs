@@ -23,6 +23,7 @@ pub mod tag_stripping;
 pub mod tool_arg_confusion;
 pub mod tool_output_sanitization;
 pub mod tool_response_size_bound;
+pub mod injection_pattern_depth_guard;
 
 pub use capability::{CapError, CapabilityToken, Scope, ToolManifest};
 pub use confused_deputy::{check_invocation, DeputyError, Invocation, NonceLedger};
@@ -39,6 +40,10 @@ pub use tool_output_sanitization::{
 pub use tool_response_size_bound::{
     validate_tool_response_size, ToolResponseSizeError, TRSB_MAX_BYTES, TRSB_MAX_LINE_LEN,
     TRSB_MAX_LINES,
+};
+pub use injection_pattern_depth_guard::{
+    count_nesting_depth, validate_injection_depth, InjectionDepthError, INJECTION_SENTINEL,
+    IPDG_MAX_DEPTH, IPDG_MAX_INPUT_LEN,
 };
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
