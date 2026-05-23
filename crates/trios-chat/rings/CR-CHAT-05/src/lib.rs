@@ -19,6 +19,12 @@ pub use session_isolation_verification::{
     SISO_MIN_CT_LEN,
 };
 
+pub mod cross_session_duplicate_envelope;
+pub use cross_session_duplicate_envelope::{
+    validate_cross_session_dedup, CrossSessionDupError, DupEnvelope, CSDUP_MAX_ENVELOPES,
+    CSDUP_MIN_CT_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

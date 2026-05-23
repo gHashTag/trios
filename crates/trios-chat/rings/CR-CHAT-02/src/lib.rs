@@ -33,6 +33,11 @@ pub use ratchet_replay_window_guard::{
     RPL_MAX_COUNTER, RPL_MAX_GAP, RPL_MAX_WINDOW,
 };
 
+pub mod key_package_hash_pinning;
+pub use key_package_hash_pinning::{
+    KeyPackagePinError, PinTable, KPHP_HASH_LEN, KPHP_MAX_PINS,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
