@@ -49,6 +49,12 @@ pub use forward_secrecy_key_wipe::{
     validate_key_derivations, KeyDerivation, KeyWipeError, FSKW_KEY_LEN, FSKW_MAX_DERIVATIONS,
 };
 
+pub mod dh_output_validation;
+pub use dh_output_validation::{
+    validate_dh_output, DhOutputError, DHOV_MIN_ENTROPY, DHOV_SS_LEN, DHOV_WEAK_ONES,
+    DHOV_WEAK_ZERO,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

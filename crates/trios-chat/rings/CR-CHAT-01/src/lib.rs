@@ -42,6 +42,7 @@ pub mod prekey_bundle_expiry_guard;
 pub mod prekey_signature_algorithm_downgrade;
 pub mod prekey_bundle_freshness_guard;
 pub mod identity_key_rotation_guard;
+pub mod prekey_bundle_binding_guard;
 pub mod revocation;
 pub mod sealed;
 pub mod welcome_encrypted_group_info_aead;
@@ -80,6 +81,10 @@ pub use prekey_bundle_freshness_guard::{
 };
 pub use identity_key_rotation_guard::{
     validate_id_key_rotations, IdKeyRotation, IdKeyRotationError, IKRG_KEY_LEN, IKRG_MAX_ROTATIONS,
+};
+pub use prekey_bundle_binding_guard::{
+    BundleTracker, PrekeyBundleBinding, BundleBindingError,
+    PKBB_ID_LEN, PKBB_KEM_LEN, PKBB_MAX_TRACKED, PKBB_PREKEY_LEN,
 };
 pub use prekey_signature_chain::{
     validate_prekey_chain, ChainBindingTag, PrekeyChainBundle, PrekeyChainError, PrekeyChainKey,
