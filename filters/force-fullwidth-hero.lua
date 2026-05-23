@@ -12,6 +12,14 @@
 ---      `hero-image` and `hero-caption`, so chapter.template.tex can render
 ---      it via \chapterhero{}{} at the top.
 ---
+--- TRIOS_PHD_NO_IMAGE_TRAIN: this filter promotes EXACTLY ONE hero image
+--- per chapter. Additional standalone images are left in place at their
+--- authored positions so they stay semantically anchored to the nearest
+--- substantive heading and body text, never grouped as a gallery / image
+--- train. The keep-together discipline (\Needspace before \section and
+--- \chapter) is enforced in templates/chapter.template.tex and
+--- docs/phd/main.tex — NOT here, and NOT via \clearpage.
+---
 --- Pairs with:
 ---   - templates/chapter.template.tex
 ---   - migrations/005_hero_fullwidth.sql (which prepends a Markdown image

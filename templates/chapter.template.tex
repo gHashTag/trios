@@ -17,11 +17,19 @@
 \usepackage{hyperref}
 \usepackage{caption}
 \usepackage{fontspec}     % requires xelatex / lualatex / tectonic
+% TRIOS_PHD_NO_IMAGE_TRAIN — see docs/pdf-rendering.md.
+% Soft keep-together so a section heading is never orphaned above its
+% hero image. This is NOT a hard \clearpage (which produces title-only
+% pages and was rejected by QA).
+\usepackage{needspace}
 
 % Hero figure: ALWAYS full text-width, ALWAYS at the start of the chapter.
 % #1 = path or URL of the image (resolved before pandoc invocation)
 % #2 = optional caption text (rendered in italic, no figure number)
 \newcommand{\chapterhero}[2]{%
+  % TRIOS_PHD_NO_IMAGE_TRAIN: reserve enough vertical space so the chapter
+  % heading + hero figure cannot be split. Soft, not \clearpage.
+  \Needspace*{0.58\textheight}%
   \begin{figure}[H]
     \centering
     \includegraphics[width=\linewidth,keepaspectratio]{#1}%
@@ -29,6 +37,17 @@
   \end{figure}%
   \vspace{0.5em}%
 }
+
+% TRIOS_PHD_NO_IMAGE_TRAIN: wrap \section so headings stay with the body
+% (and any hero/context block immediately following). SOFT keep-together
+% only — never a hard \clearpage.
+\makeatletter
+\let\trios@orig@section\section
+\renewcommand{\section}{%
+  \Needspace*{0.58\textheight}%
+  \trios@orig@section
+}
+\makeatother
 
 \begin{document}
 

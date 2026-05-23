@@ -158,3 +158,37 @@ cargo clippy --all-targets -- -D warnings || exit 1
 3. Если да — **ОСТАНОВИСЬ** и открой обсуждение в issue.
 
 Если пропустил этот шаг — PR будет закрыт автоматически.
+
+---
+
+## TRIOS_PHD — PDF rendering rules
+
+The TRIOS PhD monograph PDF pipeline has its own canonical contract.
+Every agent touching the renderer, templates, hero images, or chapter
+sources MUST read and follow:
+
+- **[docs/pdf-rendering.md](docs/pdf-rendering.md)** — canonical pipeline.
+
+Headline rules (full detail in the doc above):
+
+- `TRIOS_PHD_CANONICAL_PIPELINE` — Rust TRIOS MCP / `trios-phd` →
+  Railway/Postgres SSOT → Markdown → pandoc → LaTeX → tectonic → PDF.
+  PDF is an export target, never a source of truth.
+- `TRIOS_PHD_RENDERER_FIRST` — placement / typography / image changes
+  go in `templates/chapter.template.tex`, `docs/phd/main.tex`, or
+  `filters/force-fullwidth-hero.lua`. Never patch individual chapters
+  for visual concerns and never post-process the PDF.
+- `TRIOS_PHD_STYLE_LOCK` — white academic title page, serif typography,
+  large engraved / ornamental S3AI hero panels, book margins, large
+  images. QA baseline: 150 A4 pages, qpdf clean, 0 duplicate long
+  paragraphs, 0 duplicate numbered headings, 0 Cyrillic hits, 0
+  secret / stale / math anomalies, 0 very-short non-empty pages,
+  at most 1 image-heavy / low-context page (the title page).
+- `TRIOS_PHD_NO_IMAGE_TRAIN` — hero panels are anchored to the
+  nearest substantive heading and body, never grouped as a gallery /
+  image train. Enforced by `\Needspace*{0.58\textheight}` before every
+  `\section` and `\chapter` (soft keep-together), defined in
+  `docs/phd/main.tex` and `templates/chapter.template.tex`.
+- Hard `\clearpage` before sections / hero figures is **forbidden**:
+  it produced short title-only pages and was rejected by QA. Tune the
+  `\Needspace*` reservation size instead.
