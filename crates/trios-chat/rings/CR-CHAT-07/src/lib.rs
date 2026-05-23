@@ -81,6 +81,14 @@ pub use blind_signature_sender_token::{
     BLIND_SIGNATURE_LEN, BLIND_TOKEN_NONCE_LEN,
 };
 
+pub mod emission_cadence_uniformity;
+pub use emission_cadence_uniformity::{
+    validate_emission_cadence, CadenceError, EmissionKind as CadenceEmissionKind,
+    ECAD_MAX_CONSECUTIVE_COVER, ECAD_MAX_CONSECUTIVE_REAL, ECAD_MAX_COVER_FRAC_DEN,
+    ECAD_MAX_COVER_FRAC_NUM, ECAD_MAX_WINDOW, ECAD_MIN_COVER_FRAC_DEN, ECAD_MIN_COVER_FRAC_NUM,
+    ECAD_MIN_WINDOW,
+};
+
 pub mod cover_traffic_burst_detection;
 pub use cover_traffic_burst_detection::{
     validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,

@@ -12,6 +12,12 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 pub mod psk_secret_extraction_chain_order_mismatch;
+pub mod session_isolation_verification;
+
+pub use session_isolation_verification::{
+    verify_session_isolation, SessionData, SessionIsolationError, SISO_MAX_SESSIONS,
+    SISO_MIN_CT_LEN,
+};
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
