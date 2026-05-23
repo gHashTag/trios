@@ -60,6 +60,12 @@ pub use kdf_label_domain_separation::{
     validate_kdf_labels, KdfLabelError, KLDL_MAX_LABELS, KLDL_MAX_LEN, KLDL_MIN_LEN,
 };
 
+pub mod chain_key_forward_seed_uniqueness_guard;
+pub use chain_key_forward_seed_uniqueness_guard::{
+    validate_chain_seed_uniqueness, ChainSeedError, CKFU_MAX_CHAIN_LEN, CKFU_MAX_SEED_LEN,
+    CKFU_MIN_SEED_LEN,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

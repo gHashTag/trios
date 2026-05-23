@@ -43,7 +43,12 @@ pub use envelope_size_distribution_uniformity::{
 
 pub mod store_compaction_integrity_guard;
 pub use store_compaction_integrity_guard::{
-    validate_compaction, CompactionIntegrityError,
+    validate_compaction, CompactionIntegrityError as CompactionError,
+};
+
+pub mod snapshot_atomicity_guard;
+pub use snapshot_atomicity_guard::{
+    validate_snapshot_atomicity, SnapshotAtomicityError, SNAT_MAX_SIZE, SNAT_REQUIRED_FIELDS,
 };
 
 use std::collections::BTreeMap;
