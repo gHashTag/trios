@@ -101,6 +101,11 @@ pub use welcome_encrypted_group_info_aead::{
     WELCOME_GROUP_INFO_AEAD_NONCE_LEN, WELCOME_GROUP_INFO_MIN_CT_LEN,
 };
 
+pub mod key_package_expiry_guard;
+pub use key_package_expiry_guard::{
+    validate_key_package_expiry, KeyPackageExpiryError, KPX_MAX_LIFETIME_SECS, KPX_MIN_LIFETIME_SECS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

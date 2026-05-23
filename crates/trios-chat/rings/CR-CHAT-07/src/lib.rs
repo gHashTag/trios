@@ -125,6 +125,12 @@ pub use cover_traffic_burst_detection::{
     BURST_MAX_EMISSIONS, BURST_MAX_SILENCE_MS, BURST_MIN_GAP_MS, BURST_WINDOW_MS,
 };
 
+pub mod traffic_shaping_burst_uniformity_guard;
+pub use traffic_shaping_burst_uniformity_guard::{
+    validate_burst_uniformity, BurstUniformityError, ShapedBurst,
+    TSBU_MAX_BURST, TSBU_MAX_COUNT, TSBU_MIN_BURST, TSBU_MIN_COUNT,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
