@@ -135,23 +135,24 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     let sample_std = variance.sqrt();
 
     // t-statistic: (x̄ - μ₀) / (s / √n)
-    let std_error = if sample_std > 0.0 {
-        sample_std / (n as f64).sqrt()
-    } else {
-        0.0
-    };
-
-    let t_statistic = (sample_mean - TTEST_BASELINE_MU0) / std_error;
-
-    // Degrees of freedom for one-sample t-test
+    // When all samples are identical (std=0), t is ±∞ depending on sign of
+    // (mean - baseline). We handle this explicitly to avoid NaN in p_value.
     let df = (n - 1) as f64;
-
-    // One-tailed p-value using approximation for t-distribution
-    // For df=2, we use the exact form: 0.5 + t / (2 * sqrt(2 + t²))
-    let p_value = if t_statistic >= 0.0 {
-        0.5 - t_statistic.abs() / (2.0 * (2.0 + t_statistic * t_statistic).sqrt())
+    let (t_statistic, p_value) = if sample_std == 0.0 {
+        // Degenerate case: all values identical.
+        // Lower-tail CDF(+∞) = 1.0 (mean ≥ baseline → rejection).
+        // Lower-tail CDF(-∞) = 0.0 (mean < baseline → would pass).
+        if sample_mean >= TTEST_BASELINE_MU0 {
+            (f64::INFINITY, 1.0_f64)
+        } else {
+            (f64::NEG_INFINITY, 0.0_f64)
+        }
     } else {
-        0.5 + t_statistic.abs() / (2.0 * (2.0 + t_statistic.abs() * t_statistic).sqrt())
+        let std_error = sample_std / (n as f64).sqrt();
+        let t = (sample_mean - TTEST_BASELINE_MU0) / std_error;
+        // Exact lower-tail CDF for df=2: P(T ≤ t) = 0.5 + t / (2·√(2+t²))
+        let p = 0.5 + t / (2.0 * (2.0 + t * t).sqrt());
+        (t, p)
     };
 
     // Test passes if p < α AND t < 0 (mean below baseline)

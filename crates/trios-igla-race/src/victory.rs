@@ -139,20 +139,25 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     let sample_std = variance.sqrt();
 
     // t-statistic: (x̄ - μ₀) / (s / √n)
-    let std_error = if sample_std > 0.0 {
-        sample_std / (n as f64).sqrt()
-    } else {
-        0.0
-    };
-
-    let t_statistic = (sample_mean - BPB_VICTORY_TARGET) / std_error;
-
-    // Degrees of freedom for one-sample t-test
+    // When all samples are identical (std=0), t is ±∞ depending on sign of
+    // (mean - baseline). We handle this explicitly to avoid NaN in p_value.
     let df = (n - 1) as f64;
-
-    // One-tailed p-value using approximation for t-distribution
-    // For df=2, we use the exact t-distribution CDF
-    let p_value = t_cdf_lower_tail(t_statistic, df);
+    let (t_statistic, p_value) = if sample_std == 0.0 {
+        // Degenerate case: all values identical.
+        // Lower-tail CDF(+∞) = 1.0 (mean ≥ baseline → rejection).
+        // Lower-tail CDF(-∞) = 0.0 (mean < baseline → would pass).
+        if sample_mean >= BPB_VICTORY_TARGET {
+            (f64::INFINITY, 1.0_f64)
+        } else {
+            (f64::NEG_INFINITY, 0.0_f64)
+        }
+    } else {
+        let std_error = sample_std / (n as f64).sqrt();
+        let t = (sample_mean - BPB_VICTORY_TARGET) / std_error;
+        // Exact lower-tail CDF for df=2: P(T ≤ t) = 0.5 + t / (2·√(2+t²))
+        let p = t_cdf_lower_tail(t, df);
+        (t, p)
+    };
 
     // Test passes if p < α AND t < 0 (mean below baseline)
     let passed = p_value < TTEST_ALPHA && t_statistic < 0.0;
@@ -598,23 +603,24 @@ mod tests {
     #[test]
     fn ttest_rejects_when_p_value_above_alpha() {
         // Pre-registered analysis: Welch's t-test, alpha = 0.01
-        // Three seeds ALL near baseline mu0 = 1.55 — p > 0.01, gate refuses.
+        // Three seeds at 1.51 (> BPB_VICTORY_TARGET = 1.50) — mean ≥ baseline
+        // → t = +∞, p = 1.0 ≫ 0.01, gate refuses.
         let r = vec![
             SeedResult {
                 seed: 42,
-                bpb: 1.49,
+                bpb: 1.51,
                 step: 5000,
                 sha: "a".into(),
             },
             SeedResult {
                 seed: 43,
-                bpb: 1.49,
+                bpb: 1.51,
                 step: 5000,
                 sha: "b".into(),
             },
             SeedResult {
                 seed: 44,
-                bpb: 1.49,
+                bpb: 1.51,
                 step: 5000,
                 sha: "c".into(),
             },
