@@ -40,6 +40,7 @@ pub mod prekey_signature_chain;
 pub mod epoch_advancement_guard;
 pub mod prekey_bundle_expiry_guard;
 pub mod prekey_signature_algorithm_downgrade;
+pub mod prekey_bundle_freshness_guard;
 pub mod revocation;
 pub mod sealed;
 pub mod welcome_encrypted_group_info_aead;
@@ -71,6 +72,10 @@ pub use epoch_advancement_guard::{
 pub use prekey_signature_algorithm_downgrade::{
     validate_signature_bundle, validate_signature_entry, SigAlgoDowngradeError, SignatureEntry,
     ALGO_ED25519, APPROVED_ALGOS, ED25519_PK_LEN, ED25519_SIG_LEN,
+};
+pub use prekey_bundle_freshness_guard::{
+    validate_bundle_batch, validate_bundle_freshness, BundleCheck, BundleFreshnessError,
+    PBFG_MAX_AGE_MS, PBFG_MAX_BUNDLES, PBFG_VERSION,
 };
 pub use prekey_signature_chain::{
     validate_prekey_chain, ChainBindingTag, PrekeyChainBundle, PrekeyChainError, PrekeyChainKey,

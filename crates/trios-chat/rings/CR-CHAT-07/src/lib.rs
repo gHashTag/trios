@@ -101,6 +101,12 @@ pub use cover_traffic_entropy_fingerprint::{
     CTEF_MIN_ENTROPY,
 };
 
+pub mod decoy_payload_indistinguishability;
+pub use decoy_payload_indistinguishability::{
+    validate_decoy, validate_decoy_pairs, DecoyIndentError, DPIG_MIN_LEN, DPIG_MIN_PAIRS,
+    DPIG_MAX_PATTERN,
+};
+
 pub mod cover_traffic_burst_detection;
 pub use cover_traffic_burst_detection::{
     validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,
