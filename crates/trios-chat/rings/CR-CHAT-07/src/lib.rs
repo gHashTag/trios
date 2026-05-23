@@ -107,6 +107,12 @@ pub use decoy_payload_indistinguishability::{
     DPIG_MAX_PATTERN,
 };
 
+pub mod traffic_volume_correlation_guard;
+pub use traffic_volume_correlation_guard::{
+    validate_volume_correlation, VolumeCorrelationError, TVCG_DEVIATION, TVCG_EXPECTED_PER_EMISSION,
+    TVCG_MAX_SINGLE, TVCG_MAX_WINDOW, TVCG_MIN_EMISSIONS,
+};
+
 pub mod cover_traffic_burst_detection;
 pub use cover_traffic_burst_detection::{
     validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,

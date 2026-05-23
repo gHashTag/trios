@@ -50,6 +50,12 @@ pub mod tool_cot_leak_guard;
 pub use tool_cot_leak_guard::{
     validate_no_cot_leak, CotLeakError, TCOT_MAX_LEN,
 };
+
+pub mod capability_scope_escalation_guard;
+pub use capability_scope_escalation_guard::{
+    validate_scope_history, validate_scope_transition, ScopeEscalationError, ScopeSnapshot,
+    CSEG_MAX_CHANGES,
+};
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
