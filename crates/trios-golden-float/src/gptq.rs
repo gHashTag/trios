@@ -77,7 +77,7 @@ pub fn f16_bits_to_f32(bits: u16) -> f32 {
                 e += 1;
             }
             m &= 0x3ff;
-            let exp_f32 = (127 - 15 + 1 - e) as u32;
+            let exp_f32 = 127 - 15 + 1 - e;
             ((sign as u32) << 31) | (exp_f32 << 23) | (m << 13)
         }
     } else if exp16 == 31 {
