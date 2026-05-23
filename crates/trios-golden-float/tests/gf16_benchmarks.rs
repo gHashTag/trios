@@ -56,13 +56,13 @@ fn bench_001_quantization_error() {
 
     // Test edge cases
     let test_values = [
-        0.0f32,            // Zero
-        1.0f32,            // One
-        -1.0f32,           // Negative one
-        phi,                // Golden ratio
-        0.5f32,            // Half
-        2.0f32,            // Two
-        0.618_f32,          // 1/φ
+        0.0f32,              // Zero
+        1.0f32,              // One
+        -1.0f32,             // Negative one
+        phi,                 // Golden ratio
+        0.5f32,              // Half
+        2.0f32,              // Two
+        0.618_f32,           // 1/φ
         1.0 / 1.618_034_f32, // φ reciprocal
     ];
 
@@ -73,7 +73,9 @@ fn bench_001_quantization_error() {
         assert!(
             relative_error < 0.05,
             "BENCH-001: {} -> GF16 -> {}: relative error {}",
-            value, recovered, relative_error
+            value,
+            recovered,
+            relative_error
         );
     }
 }
@@ -88,12 +90,7 @@ fn bench_001_bf16_comparison() {
     // This test requires actual bf16 implementation for comparison
     // Placeholder: validate that GF16 doesn't lose critical precision
 
-    let test_cases = vec![
-        0.123_456f32,
-        0.987_654f32,
-        -0.555_555f32,
-        1.618_034f32,
-    ];
+    let test_cases = vec![0.123_456f32, 0.987_654f32, -0.555_555f32, 1.618_034f32];
 
     for &value in &test_cases {
         let gf16 = GF16::from_f32(value);
@@ -104,7 +101,9 @@ fn bench_001_bf16_comparison() {
         assert!(
             (gf16_back - value).abs() < value.abs() * 0.001,
             "BENCH-001/bf16: {} lost significant precision: {} vs {}",
-            value, gf16_back, value
+            value,
+            gf16_back,
+            value
         );
     }
 }
@@ -167,7 +166,11 @@ fn bench_002_mul_correctness() {
         assert!(
             error < expected.abs() * 0.01, // Allow 1% relative error
             "BENCH-002/mul: {} × {} = {} (expected {}), error = {}",
-            a, b, result_f32, expected, error
+            a,
+            b,
+            result_f32,
+            expected,
+            error
         );
     }
 }
@@ -193,7 +196,11 @@ fn bench_002_div_correctness() {
         assert!(
             error < expected.abs() * 0.02, // Division has higher error tolerance
             "BENCH-002/div: {} ÷ {} = {} (expected {}), error = {}",
-            a, b, result_f32, expected, error
+            a,
+            b,
+            result_f32,
+            expected,
+            error
         );
     }
 }
@@ -228,16 +235,14 @@ fn bench_003_frozen_synthetic() {
     // Placeholder for BENCH-003
     // Should test that GF16 inference on frozen synthetic weights matches f32
 
-    let inputs = vec![
-        0.1f32, 0.5f32, 1.0f32, 1.5f32, 2.0f32,
-    ];
+    let inputs = vec![0.1f32, 0.5f32, 1.0f32, 1.5f32, 2.0f32];
 
     for &input in &inputs {
         let gf_input = GF16::from_f32(input);
 
         // Apply synthetic network layers
         let h1 = gf_input.mul(GF16::from_f32(0.5f32)); // First layer weight
-        let h2 = h1.add(GF16::from_f32(0.1f32));    // Bias
+        let h2 = h1.add(GF16::from_f32(0.1f32)); // Bias
 
         let output = h2.to_f32();
 
@@ -293,7 +298,8 @@ fn bench_004a_random_weights() {
     assert!(
         (gf16_pct - f32_pct).abs() < 20.0,
         "BENCH-004a: GF16 and f32 diverge too much on random: {} vs {}",
-        gf16_pct, f32_pct
+        gf16_pct,
+        f32_pct
     );
 }
 
@@ -326,8 +332,10 @@ fn bench_004b_mnist_mlp() {
     // 4. Compare accuracy
 
     // For now, verify our implementation structure supports this test
-    assert_eq!(expected_f32_accuracy, expected_gf16_accuracy,
-        "BENCH-004b: GF16 should match f32 accuracy (0.00% gap)");
+    assert_eq!(
+        expected_f32_accuracy, expected_gf16_accuracy,
+        "BENCH-004b: GF16 should match f32 accuracy (0.00% gap)"
+    );
 
     // When implementing, verify:
     // assert!((gf16_accuracy - f32_accuracy).abs() < 0.01,
@@ -344,9 +352,9 @@ fn bench_004b_mnist_mlp() {
 fn bench_004b_gradient_preservation() {
     // Simulate gradient flow through layers
     let gradients = vec![
-        0.001f32,   // Small gradient
-        0.01f32,    // Medium gradient
-        0.1f32,     // Large gradient
+        0.001f32,     // Small gradient
+        0.01f32,      // Medium gradient
+        0.1f32,       // Large gradient
         1.618_034f32, // φ-scaled gradient
     ];
 
@@ -360,7 +368,9 @@ fn bench_004b_gradient_preservation() {
             assert!(
                 relative_error < 0.1,
                 "BENCH-004b/grad: Small gradient {} lost: {} vs {}",
-                grad, recovered, grad
+                grad,
+                recovered,
+                grad
             );
         }
     }
@@ -383,8 +393,11 @@ fn gf16_bit_representation() {
     {
         let bits = gf16.to_bits();
         assert!(bits < u16::MAX, "GF16 bits exceed u16 range");
-        assert_eq!(bits.count_ones() + bits.count_zeros(), 16,
-            "GF16 must be 16 bits");
+        assert_eq!(
+            bits.count_ones() + bits.count_zeros(),
+            16,
+            "GF16 must be 16 bits"
+        );
     }
 
     // Zero should be all zeros
@@ -434,8 +447,10 @@ fn gf16_phi_optimization() {
     let phi: f64 = 1.618_033_988_749_894_848;
     let phi_from_f32 = 1.618_034f32;
 
-    assert!((phi - phi_from_f32 as f64).abs() < 1e-9,
-        "φ constant precision");
+    assert!(
+        (phi - phi_from_f32 as f64).abs() < 1e-9,
+        "φ constant precision"
+    );
 
     // Test that φ can be represented in GF16
     let gf16_phi = GF16::from_f32(phi_from_f32);
@@ -443,9 +458,13 @@ fn gf16_phi_optimization() {
 
     // φ should roundtrip with <1% error
     let relative_error = (phi_back - phi_from_f32).abs() / phi_from_f32.abs();
-    assert!(relative_error < 0.01,
+    assert!(
+        relative_error < 0.01,
         "GF16 φ roundtrip error: {} -> {} ({})",
-        phi_from_f32, phi_back, relative_error);
+        phi_from_f32,
+        phi_back,
+        relative_error
+    );
 }
 
 /// Test GF16 associativity (within quantization bounds).
@@ -466,9 +485,12 @@ fn gf16_associativity() {
 
     let difference = (left_f32 - right_f32).abs();
     // Allow some quantization noise
-    assert!(difference < 0.1f32,
+    assert!(
+        difference < 0.1f32,
         "GF16 associativity violation: {} vs {}",
-        left_f32, right_f32);
+        left_f32,
+        right_f32
+    );
 }
 
 /// Test GF16 commutativity (exact property).
@@ -491,9 +513,11 @@ fn gf16_commutativity() {
         let ab_f32 = ab.to_f32();
         let ba_f32 = ba.to_f32();
 
-        assert_eq!(ab_f32, ba_f32,
+        assert_eq!(
+            ab_f32, ba_f32,
             "GF16 commutativity failed: {} ≠ {}",
-            ab_f32, ba_f32);
+            ab_f32, ba_f32
+        );
     }
 }
 
@@ -514,9 +538,13 @@ fn gf16_distributivity() {
     let right_f32 = right.to_f32();
 
     let relative_error = (left_f32 - right_f32).abs() / left_f32.abs().max(0.001);
-    assert!(relative_error < 0.05,
+    assert!(
+        relative_error < 0.05,
         "GF16 distributivity error: {} vs {} (rel: {})",
-        left_f32, right_f32, relative_error);
+        left_f32,
+        right_f32,
+        relative_error
+    );
 }
 
 // ============================================================================
@@ -548,9 +576,13 @@ fn gf16_dot_product() {
     let expected = 8.0f32;
     let relative_error = (result_f32 - expected).abs() / expected;
 
-    assert!(relative_error < 0.05,
+    assert!(
+        relative_error < 0.05,
         "GF16 dot product: {} (expected {}), error: {}",
-        result_f32, expected, relative_error);
+        result_f32,
+        expected,
+        relative_error
+    );
 }
 
 /// Test GF16 dot product with zero vectors.
@@ -590,9 +622,11 @@ fn gf16_dot_product_symmetry() {
     let ab_f32 = ab.to_f32();
     let ba_f32 = ba.to_f32();
 
-    assert_eq!(ab_f32, ba_f32,
+    assert_eq!(
+        ab_f32, ba_f32,
         "Dot product should be symmetric: {} ≠ {}",
-        ab_f32, ba_f32);
+        ab_f32, ba_f32
+    );
 }
 
 // ============================================================================
@@ -604,21 +638,36 @@ fn gf16_dot_product_symmetry() {
 #[cfg(has_zig_lib)]
 fn gf16_compress_weights() {
     let weights = vec![
-        0.1f32, 0.2f32, 0.3f32, 0.4f32, 0.5f32,
-        1.618_034f32, -0.618_034f32, 0.0f32, 1.0f32, -1.0f32,
+        0.1f32,
+        0.2f32,
+        0.3f32,
+        0.4f32,
+        0.5f32,
+        1.618_034f32,
+        -0.618_034f32,
+        0.0f32,
+        1.0f32,
+        -1.0f32,
     ];
 
     let compressed = GF16::compress_weights(&weights);
-    assert_eq!(compressed.len(), weights.len(),
-        "Compressed length mismatch");
+    assert_eq!(
+        compressed.len(),
+        weights.len(),
+        "Compressed length mismatch"
+    );
 
     for (i, &original) in weights.iter().enumerate() {
         let gf16 = GF16::from_bits(compressed[i]);
         let recovered = gf16.to_f32();
         let relative_error = (recovered - original).abs() / original.abs().max(0.001);
-        assert!(relative_error < 0.05,
+        assert!(
+            relative_error < 0.05,
             "Weight {} compression error: {} vs {}",
-            i, recovered, original);
+            i,
+            recovered,
+            original
+        );
     }
 }
 
@@ -626,9 +675,7 @@ fn gf16_compress_weights() {
 #[test]
 #[cfg(has_zig_lib)]
 fn gf16_decompress_weights() {
-    let original = vec![
-        0.1f32, 0.2f32, 0.3f32, 0.4f32, 0.5f32,
-    ];
+    let original = vec![0.1f32, 0.2f32, 0.3f32, 0.4f32, 0.5f32];
 
     let compressed = GF16::compress_weights(&original);
     let decompressed = GF16::decompress_weights(&compressed);
@@ -638,9 +685,13 @@ fn gf16_decompress_weights() {
     for (i, &exp) in original.iter().enumerate() {
         let got = decompressed[i];
         let relative_error = (got - exp).abs() / exp.abs().max(0.001);
-        assert!(relative_error < 0.05,
+        assert!(
+            relative_error < 0.05,
             "Weight {} decompression error: {} vs {}",
-            i, got, exp);
+            i,
+            got,
+            exp
+        );
     }
 }
 
@@ -664,9 +715,7 @@ fn gf16_compression_ratio() {
 #[cfg(has_zig_lib)]
 fn gf16_quantize_matrix() {
     let data = vec![
-        0.1f32, 0.2f32, 0.3f32,
-        0.4f32, 0.5f32, 0.6f32,
-        0.7f32, 0.8f32, 0.9f32,
+        0.1f32, 0.2f32, 0.3f32, 0.4f32, 0.5f32, 0.6f32, 0.7f32, 0.8f32, 0.9f32,
     ];
 
     let rows = 3usize;
@@ -681,9 +730,13 @@ fn gf16_quantize_matrix() {
         let gf16_val = GF16::from_bits(quantized[i]);
         let recovered = gf16_val.to_f32();
         let relative_error = (recovered - original).abs() / original.abs();
-        assert!(relative_error < 0.05,
+        assert!(
+            relative_error < 0.05,
             "Matrix element {} quantization error: {} vs {}",
-            i, recovered, original);
+            i,
+            recovered,
+            original
+        );
     }
 }
 
@@ -723,9 +776,12 @@ fn gf16_additive_identity() {
     let result_f32 = result.to_f32();
 
     let relative_error = (result_f32 - value).abs() / value.abs();
-    assert!(relative_error < 0.01,
+    assert!(
+        relative_error < 0.01,
         "Additive identity failed: {} vs {}",
-        result_f32, value);
+        result_f32,
+        value
+    );
 }
 
 /// Test GF16 identity element for multiplication.
@@ -740,9 +796,12 @@ fn gf16_multiplicative_identity() {
     let result_f32 = result.to_f32();
 
     let relative_error = (result_f32 - value).abs() / value.abs();
-    assert!(relative_error < 0.01,
+    assert!(
+        relative_error < 0.01,
         "Multiplicative identity failed: {} vs {}",
-        result_f32, value);
+        result_f32,
+        value
+    );
 }
 
 /// Test GF16 multiplicative inverse.
@@ -759,7 +818,10 @@ fn gf16_multiplicative_inverse() {
     let result = inverse.to_f32();
     let relative_error = (result - expected).abs() / expected;
 
-    assert!(relative_error < 0.02,
+    assert!(
+        relative_error < 0.02,
         "Multiplicative inverse failed: {} vs {}",
-        result, expected);
+        result,
+        expected
+    );
 }

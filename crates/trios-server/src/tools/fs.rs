@@ -43,7 +43,9 @@ async fn fs_read_file(input: &Value) -> Result<Value> {
     // Validate against allowed roots
     let roots = allowed_roots();
     if !roots.is_empty() {
-        let canonical = path.canonicalize().map_err(|e| anyhow::anyhow!("invalid path: {}", e))?;
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| anyhow::anyhow!("invalid path: {}", e))?;
         let permitted = roots.iter().any(|root| {
             let canonical_root = root.canonicalize().unwrap_or_else(|_| root.clone());
             canonical.starts_with(&canonical_root)
@@ -85,7 +87,9 @@ async fn fs_write_file(input: &Value) -> Result<Value> {
     let roots = allowed_roots();
     if !roots.is_empty() {
         let parent = path.parent().context("path has no parent directory")?;
-        let canonical = parent.canonicalize().map_err(|e| anyhow::anyhow!("invalid parent dir: {}", e))?;
+        let canonical = parent
+            .canonicalize()
+            .map_err(|e| anyhow::anyhow!("invalid parent dir: {}", e))?;
         let permitted = roots.iter().any(|root| {
             let canonical_root = root.canonicalize().unwrap_or_else(|_| root.clone());
             canonical.starts_with(&canonical_root)
@@ -121,7 +125,9 @@ async fn fs_list_dir(input: &Value) -> Result<Value> {
     // Validate against allowed roots
     let roots = allowed_roots();
     if !roots.is_empty() {
-        let canonical = path.canonicalize().map_err(|e| anyhow::anyhow!("invalid path: {}", e))?;
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| anyhow::anyhow!("invalid path: {}", e))?;
         let permitted = roots.iter().any(|root| {
             let canonical_root = root.canonicalize().unwrap_or_else(|_| root.clone());
             canonical.starts_with(&canonical_root)

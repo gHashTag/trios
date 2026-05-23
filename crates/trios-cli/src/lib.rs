@@ -25,4 +25,4 @@ pub use db::{Entry, Leaderboard, Stats};
 pub use gh::{AgentIssue, GhClient};
 pub use lock::LockGuard;
 pub use metrics::{validate_bpb, validate_param_count, validate_time};
-pub use table::{parse_table, TableRow, update_table};
+pub use table::{parse_table, update_table, TableRow};

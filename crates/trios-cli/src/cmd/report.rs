@@ -20,17 +20,14 @@ pub fn report(agent: &str, status: &str, bpb: Option<f64>) -> Result<()> {
     let _config = Config::load();
 
     // Acquire lock for #143 table update
-    let _lock = LockGuard::acquire()
-        .context("Failed to acquire lock for issue #143")?;
+    let _lock = LockGuard::acquire().context("Failed to acquire lock for issue #143")?;
 
     // Get current issue #143 body
     let issue_num = 143;
-    let body = GhClient::issue_body(issue_num)
-        .context("Failed to fetch issue #143")?;
+    let body = GhClient::issue_body(issue_num).context("Failed to fetch issue #143")?;
 
     // Parse existing table
-    let rows = parse_table(&body)
-        .context("Failed to parse #143 table")?;
+    let rows = parse_table(&body).context("Failed to parse #143 table")?;
 
     // Check if agent already has a row
     let existing_row = rows.iter().find(|r| r.agent == agent);
@@ -46,12 +43,11 @@ pub fn report(agent: &str, status: &str, bpb: Option<f64>) -> Result<()> {
         .unwrap_or_else(|| "#143".to_string());
 
     // Update table
-    let updated_body = update_table(&body, agent, status, bpb)
-        .context("Failed to update #143 table")?;
+    let updated_body =
+        update_table(&body, agent, status, bpb).context("Failed to update #143 table")?;
 
     // Write back to issue
-    GhClient::issue_edit(issue_num, &updated_body)
-        .context("Failed to update issue #143")?;
+    GhClient::issue_edit(issue_num, &updated_body).context("Failed to update issue #143")?;
 
     println!("✓ Reported {}={} to #143", agent, status);
 

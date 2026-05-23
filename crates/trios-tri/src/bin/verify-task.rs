@@ -38,12 +38,17 @@ fn main() {
 
     // I3: 0 WASM imports in SW (comments ok, imports not)
     {
-        let bg = fs::read_to_string("crates/trios-ext/extension/dist/bg-sw.js")
-            .unwrap_or_default();
-        let has_wasm_import = bg.lines()
+        let bg = fs::read_to_string("crates/trios-ext/extension/dist/bg-sw.js").unwrap_or_default();
+        let has_wasm_import = bg
+            .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .any(|l| l.contains("WebAssembly") || l.contains("import") && l.contains("wasm"));
-        check("I3: 0 WASM imports in SW", !has_wasm_import, &mut pass, &mut fail);
+        check(
+            "I3: 0 WASM imports in SW",
+            !has_wasm_import,
+            &mut pass,
+            &mut fail,
+        );
     }
 
     // I4: 0 WebSocket in extension code
@@ -67,8 +72,8 @@ fn main() {
 
     // I7: CSP wasm-unsafe-eval
     {
-        let manifest = fs::read_to_string("crates/trios-ext/extension/manifest.json")
-            .unwrap_or_default();
+        let manifest =
+            fs::read_to_string("crates/trios-ext/extension/manifest.json").unwrap_or_default();
         check(
             "I7: CSP wasm-unsafe-eval",
             manifest.contains("wasm-unsafe-eval"),
@@ -79,8 +84,8 @@ fn main() {
 
     // I12: --target web output
     {
-        let js = fs::read_to_string("crates/trios-ext/extension/dist/trios_ext.js")
-            .unwrap_or_default();
+        let js =
+            fs::read_to_string("crates/trios-ext/extension/dist/trios_ext.js").unwrap_or_default();
         check(
             "I12: --target web output",
             js.contains("import.meta.url"),
@@ -92,7 +97,12 @@ fn main() {
     // I13: Accept header in mcp.rs
     {
         let mcp = fs::read_to_string("crates/trios-ext/src/mcp.rs").unwrap_or_default();
-        check("I13: Accept header", mcp.contains("Accept"), &mut pass, &mut fail);
+        check(
+            "I13: Accept header",
+            mcp.contains("Accept"),
+            &mut pass,
+            &mut fail,
+        );
     }
 
     // I14: Chat REST endpoint
@@ -107,9 +117,7 @@ fn main() {
     }
 
     // Summary
-    println!(
-        "\n=== Results: \x1b[32m{pass} passed\x1b[0m, \x1b[31m{fail} failed\x1b[0m ==="
-    );
+    println!("\n=== Results: \x1b[32m{pass} passed\x1b[0m, \x1b[31m{fail} failed\x1b[0m ===");
 
     if fail > 0 {
         println!("\x1b[31mBLOCKED: {fail} invariant(s) violated. Do not merge.\x1b[0m");

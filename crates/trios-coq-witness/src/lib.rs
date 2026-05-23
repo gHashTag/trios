@@ -23,6 +23,9 @@ mod tests {
     #[test]
     fn anchor_phi_identity_holds() {
         let v = anchor_value();
-        assert!((v - 3.0).abs() < 1e-12, "phi^2 + phi^-2 must equal 3 (got {v})");
+        assert!(
+            (v - 3.0).abs() < 1e-12,
+            "phi^2 + phi^-2 must equal 3 (got {v})"
+        );
     }
 }

@@ -5,18 +5,14 @@
 
 use anyhow::{Context, Result};
 
-use crate::{
-    config::Config,
-    metrics::validate_bpb,
-};
+use crate::{config::Config, metrics::validate_bpb};
 
 /// Submit experiment result with BPB and artifact
 pub fn submit(bpb: f64, artifact: &str) -> Result<()> {
     println!("📤 Submitting result: bpb={:.4} artifact={}", bpb, artifact);
 
     // Validate BPB
-    validate_bpb(bpb)
-        .context("Invalid BPB value")?;
+    validate_bpb(bpb).context("Invalid BPB value")?;
 
     // Check artifact exists
     if !std::path::Path::new(artifact).exists() {

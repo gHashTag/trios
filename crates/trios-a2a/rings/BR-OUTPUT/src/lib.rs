@@ -3,10 +3,10 @@
 //! Assembles all rings into a unified A2A service.
 //! Provides the `A2ARouter` that dispatches MCP tool calls to the registry.
 
-use trios_a2a_sr01::TaskState;
-use trios_a2a_sr02::{SharedRegistry, shared_registry};
 use serde_json::Value;
 use std::sync::Arc;
+use trios_a2a_sr01::TaskState;
+use trios_a2a_sr02::{shared_registry, SharedRegistry};
 
 /// A2A Router — dispatches MCP tool calls to the registry.
 #[derive(Clone)]
@@ -45,8 +45,14 @@ impl A2ARouter {
             }
             "a2a_assign_task" => {
                 let title = params.get("title").and_then(|v| v.as_str()).unwrap_or("");
-                let created_by = params.get("created_by").and_then(|v| v.as_str()).unwrap_or("");
-                let assign_to = params.get("assign_to").and_then(|v| v.as_str()).unwrap_or("");
+                let created_by = params
+                    .get("created_by")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let assign_to = params
+                    .get("assign_to")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 reg.assign_task(title, created_by, assign_to)
             }
             "a2a_task_status" => {
@@ -63,7 +69,9 @@ impl A2ARouter {
                     "completed" => TaskState::Completed,
                     "failed" => TaskState::Failed,
                     "cancelled" => TaskState::Cancelled,
-                    _ => return serde_json::json!({"error": format!("unknown state: {}", state_str)}),
+                    _ => {
+                        return serde_json::json!({"error": format!("unknown state: {}", state_str)})
+                    }
                 };
                 reg.update_task(task_id, state)
             }
@@ -75,8 +83,8 @@ impl A2ARouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trios_a2a_sr00::AgentCard;
     use serde_json::json;
+    use trios_a2a_sr00::AgentCard;
 
     #[test]
     fn test_router_register_and_list() {
@@ -94,21 +102,27 @@ mod tests {
     #[test]
     fn test_router_assign_and_status() {
         let router = A2ARouter::new();
-        let result = router.call("a2a_assign_task", json!({
-            "title": "Test task",
-            "created_by": "lead",
-            "assign_to": "alpha"
-        }));
+        let result = router.call(
+            "a2a_assign_task",
+            json!({
+                "title": "Test task",
+                "created_by": "lead",
+                "assign_to": "alpha"
+            }),
+        );
         assert_eq!(result["ok"], true);
         let task_id = result["task_id"].as_str().unwrap();
 
         let status = router.call("a2a_task_status", json!({"task_id": task_id}));
         assert_eq!(status["state"], "assigned");
 
-        let update = router.call("a2a_update_task", json!({
-            "task_id": task_id,
-            "state": "completed"
-        }));
+        let update = router.call(
+            "a2a_update_task",
+            json!({
+                "task_id": task_id,
+                "state": "completed"
+            }),
+        );
         assert_eq!(update["ok"], true);
     }
 

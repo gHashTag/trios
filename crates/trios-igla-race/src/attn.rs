@@ -145,7 +145,7 @@ impl QkHead {
         if num_heads > NUM_HEADS_MAX {
             return Err(QkHeadError::TooManyHeads);
         }
-        if !d_model.is_multiple_of(num_heads) {
+        if d_model % num_heads != 0 {
             return Err(QkHeadError::DModelNotDivisible);
         }
         let head_dim = d_model / num_heads;

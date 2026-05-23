@@ -63,7 +63,7 @@ pub const INV1_SMOOTHNESS_L: f64 = 2.0;
 /// INV-2: ASHA threshold = φ² + φ⁻² + φ⁻⁴ = 3.5 (conservative bound)
 /// Coq: `asha_champion_survives` in asha_champion_survives.v
 pub const INV2_BPB_PRUNE_THRESHOLD: f64 = 3.5;
-pub const INV2_WARMUP_BLIND_STEPS: u64 = 4000;  // ≈ φ¹⁶ (structural)
+pub const INV2_WARMUP_BLIND_STEPS: u64 = 4000; // ≈ φ¹⁶ (structural)
 
 /// INV-3: GF16 safe domain — d_model must be ≥ 256 = 2⁸
 /// Coq: `gf16_safe_domain` in gf16_safe_domain.v
@@ -74,26 +74,26 @@ pub const INV3_ERROR_BOUND: f64 = PHI_INV_6;
 /// Coq: `nca_entropy_stability_certified` and `empirical` in nca_entropy_stability.v
 ///
 /// CERTIFIED BAND (from A₅/E₈ algebraic structure)
-pub const INV4_ENTROPY_CERTIFIED_LO: f64 = PHI;      // φ
-pub const INV4_ENTROPY_CERTIFIED_HI: f64 = PHI_SQ;    // φ²
+pub const INV4_ENTROPY_CERTIFIED_LO: f64 = PHI; // φ
+pub const INV4_ENTROPY_CERTIFIED_HI: f64 = PHI_SQ; // φ²
 ///
 /// EMPIRICAL BAND (from BENCH measurements)
 pub const INV4_ENTROPY_EMPIRICAL_LO: f64 = 1.5;
 pub const INV4_ENTROPY_EMPIRICAL_HI: f64 = 2.8;
 ///
 /// Grid parameters: Trinity-aligned
-pub const INV4_NCA_GRID: usize = 81;   // 3⁴ = (φ²+φ⁻²)⁴
+pub const INV4_NCA_GRID: usize = 81; // 3⁴ = (φ²+φ⁻²)⁴
 pub const INV4_NCA_K_STATES: usize = 9; // 3² = (φ²+φ⁻²)²
 
 /// INV-5: GF16 Lucas closure consistency
 /// Coq: `lucas_closure_gf16` in lucas_closure_gf16.v — FULLY PROVEN, 0 Admitted
-pub const INV5_GF16_BITS: usize = 4;      // GF(2⁴)
+pub const INV5_GF16_BITS: usize = 4; // GF(2⁴)
 pub const INV5_GF16_ELEMENTS: usize = 15; // 2⁴ - 1
 
 /// Lucas integer values (L(n) = φⁿ + φ⁻ⁿ)
 /// Coq: lucas_even function in lucas_closure_gf16.v
 pub const LUCAS_0: i64 = 2;
-pub const LUCAS_1: i64 = 3;  // = φ² + φ⁻² = Trinity Identity
+pub const LUCAS_1: i64 = 3; // = φ² + φ⁻² = Trinity Identity
 pub const LUCAS_2: i64 = 7;
 pub const LUCAS_3: i64 = 18;
 pub const LUCAS_4: i64 = 47;
@@ -148,18 +148,30 @@ pub enum InvError {
 impl fmt::Display for InvError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InvError::Inv1BadGradient =>
-                write!(f, "INV-1 VIOLATED: gradient=ConstantProxy. Fix TASK-5D: use real MSE from loss.rs"),
-            InvError::Inv1LrOutOfBand(lr) =>
-                write!(f, "INV-1 VIOLATED: lr={lr} outside φ-safe [{INV1_LR_SAFE_LO}, {INV1_LR_SAFE_HI}]"),
-            InvError::Inv2ThresholdTooLow(t) =>
-                write!(f, "INV-2 VIOLATED: threshold={t} < 3.5 kills champion. Set bpb_prune_threshold=3.5"),
-            InvError::Inv3UnsafeDomain(d) =>
-                write!(f, "INV-3 VIOLATED: GF16 with d_model={d} < 256. Error > φ^{{-6}} guaranteed"),
-            InvError::Inv4GridMismatch { grid, k } =>
-                write!(f, "INV-4 VIOLATED: NCA grid={grid} K={k}, expected 81/9 (3^4/3^2)"),
-            InvError::Inv5LucasClosureBroken =>
-                write!(f, "INV-5 VIOLATED: GF16 Lucas closure broken — φ²ⁿ + φ⁻²ⁿ ∉ ℤ for some n"),
+            InvError::Inv1BadGradient => write!(
+                f,
+                "INV-1 VIOLATED: gradient=ConstantProxy. Fix TASK-5D: use real MSE from loss.rs"
+            ),
+            InvError::Inv1LrOutOfBand(lr) => write!(
+                f,
+                "INV-1 VIOLATED: lr={lr} outside φ-safe [{INV1_LR_SAFE_LO}, {INV1_LR_SAFE_HI}]"
+            ),
+            InvError::Inv2ThresholdTooLow(t) => write!(
+                f,
+                "INV-2 VIOLATED: threshold={t} < 3.5 kills champion. Set bpb_prune_threshold=3.5"
+            ),
+            InvError::Inv3UnsafeDomain(d) => write!(
+                f,
+                "INV-3 VIOLATED: GF16 with d_model={d} < 256. Error > φ^{{-6}} guaranteed"
+            ),
+            InvError::Inv4GridMismatch { grid, k } => write!(
+                f,
+                "INV-4 VIOLATED: NCA grid={grid} K={k}, expected 81/9 (3^4/3^2)"
+            ),
+            InvError::Inv5LucasClosureBroken => write!(
+                f,
+                "INV-5 VIOLATED: GF16 Lucas closure broken — φ²ⁿ + φ⁻²ⁿ ∉ ℤ for some n"
+            ),
         }
     }
 }
@@ -338,7 +350,10 @@ mod tests {
     fn test_inv2_old_threshold_blocked() {
         let mut cfg = champion_config();
         cfg.bpb_prune_threshold = 2.65; // original bug value
-        assert_eq!(validate_config(&cfg), Err(InvError::Inv2ThresholdTooLow(2.65)));
+        assert_eq!(
+            validate_config(&cfg),
+            Err(InvError::Inv2ThresholdTooLow(2.65))
+        );
     }
 
     #[test]
@@ -353,7 +368,10 @@ mod tests {
     fn test_inv4_wrong_grid_blocked() {
         let mut cfg = champion_config();
         cfg.nca_grid = 64; // not 3^4
-        assert_eq!(validate_config(&cfg), Err(InvError::Inv4GridMismatch { grid: 64, k: 9 }));
+        assert_eq!(
+            validate_config(&cfg),
+            Err(InvError::Inv4GridMismatch { grid: 64, k: 9 })
+        );
     }
 
     #[test]
@@ -379,22 +397,30 @@ mod tests {
     fn test_trinity_identity() {
         // φ² + φ⁻² = 3 (the Trinity Identity)
         let trinity = PHI * PHI + PHI_INV * PHI_INV;
-        assert!((trinity - 3.0).abs() < 1e-10,
-                "Trinity identity violated: φ² + φ⁻² = {trinity}, expected 3");
+        assert!(
+            (trinity - 3.0).abs() < 1e-10,
+            "Trinity identity violated: φ² + φ⁻² = {trinity}, expected 3"
+        );
     }
 
     #[test]
     fn test_phi_inv_eq_phi_minus_one() {
         // φ⁻¹ = φ - 1
-        assert!((PHI_INV - (PHI - 1.0)).abs() < 1e-10,
-                "φ⁻¹ = φ - 1 violated: {PHI_INV} vs {}", PHI - 1.0);
+        assert!(
+            (PHI_INV - (PHI - 1.0)).abs() < 1e-10,
+            "φ⁻¹ = φ - 1 violated: {PHI_INV} vs {}",
+            PHI - 1.0
+        );
     }
 
     #[test]
     fn test_phi_sq_eq_phi_plus_one() {
         // φ² = φ + 1
-        assert!((PHI_SQ - (PHI + 1.0)).abs() < 1e-10,
-                "φ² = φ + 1 violated: {PHI_SQ} vs {}", PHI + 1.0);
+        assert!(
+            (PHI_SQ - (PHI + 1.0)).abs() < 1e-10,
+            "φ² = φ + 1 violated: {PHI_SQ} vs {}",
+            PHI + 1.0
+        );
     }
 
     // ================================================================
@@ -404,8 +430,10 @@ mod tests {
     #[test]
     fn test_inv5_lucas_closure() {
         // φ²ⁿ + φ⁻²ⁿ must be integer for n = 1..8
-        assert!(inv5_check_lucas_closure().is_ok(),
-                "Lucas closure check failed — φ²ⁿ + φ⁻²ⁿ not integer for some n");
+        assert!(
+            inv5_check_lucas_closure().is_ok(),
+            "Lucas closure check failed — φ²ⁿ + φ⁻²ⁿ not integer for some n"
+        );
     }
 
     #[test]
@@ -413,7 +441,10 @@ mod tests {
         // n=1: φ² + φ⁻² = 3
         let sum = PHI * PHI + PHI_INV * PHI_INV;
         let rounded = sum.round();
-        assert!((sum - rounded).abs() < 1e-10, "n=1: {sum} not close to integer {rounded}");
+        assert!(
+            (sum - rounded).abs() < 1e-10,
+            "n=1: {sum} not close to integer {rounded}"
+        );
     }
 
     // ================================================================
@@ -423,8 +454,10 @@ mod tests {
     #[test]
     fn test_enforce_all_invariants_passes() {
         // All invariants should pass in a clean environment
-        assert!(enforce_all_invariants().is_ok(),
-                "enforce_all_invariants should pass with valid runtime");
+        assert!(
+            enforce_all_invariants().is_ok(),
+            "enforce_all_invariants should pass with valid runtime"
+        );
     }
 
     #[test]
@@ -432,7 +465,10 @@ mod tests {
         // Test LR at exact lower bound
         let mut cfg = champion_config();
         cfg.lr = INV1_LR_SAFE_LO;
-        assert!(validate_config(&cfg).is_ok(), "LR at lower bound should pass");
+        assert!(
+            validate_config(&cfg).is_ok(),
+            "LR at lower bound should pass"
+        );
     }
 
     #[test]
@@ -440,7 +476,10 @@ mod tests {
         // Test LR at exact upper bound
         let mut cfg = champion_config();
         cfg.lr = INV1_LR_SAFE_HI;
-        assert!(validate_config(&cfg).is_ok(), "LR at upper bound should pass");
+        assert!(
+            validate_config(&cfg).is_ok(),
+            "LR at upper bound should pass"
+        );
     }
 
     #[test]
@@ -448,6 +487,9 @@ mod tests {
         // Test warmup steps at threshold
         let mut cfg = champion_config();
         cfg.warmup_blind_steps = INV2_WARMUP_BLIND_STEPS;
-        assert!(validate_config(&cfg).is_ok(), "Warmup at threshold should pass");
+        assert!(
+            validate_config(&cfg).is_ok(),
+            "Warmup at threshold should pass"
+        );
     }
 }

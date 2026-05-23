@@ -11,8 +11,7 @@ use std::process;
 use serde::{Deserialize, Serialize};
 
 use trios_igla_race::proxies::{
-    EnsembleScore, GradNormScore, HistoricalDataPoint,
-    SynFlowScore, spearman_correlation,
+    spearman_correlation, EnsembleScore, GradNormScore, HistoricalDataPoint, SynFlowScore,
 };
 
 /// Configuration for proxy scoring

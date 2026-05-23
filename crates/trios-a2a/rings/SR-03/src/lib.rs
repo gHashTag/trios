@@ -423,9 +423,7 @@ mod tests {
     fn test_mcp_tool_definitions() {
         let tools = mcp_browser_tool_definitions();
         assert_eq!(tools.len(), 12);
-        let names: Vec<&str> = tools.iter()
-            .map(|t| t["name"].as_str().unwrap())
-            .collect();
+        let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"browser_navigate"));
         assert!(names.contains(&"browser_eval"));
         assert!(names.contains(&"browser_screenshot"));

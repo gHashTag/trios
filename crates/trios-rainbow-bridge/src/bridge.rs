@@ -27,7 +27,9 @@ use crate::{HEARTBEAT_MAX_S, LATENCY_P95_MS};
 #[derive(Debug, Error, PartialEq)]
 pub enum BridgeError {
     /// Two distinct agents claimed the same lane at the same lamport.
-    #[error("duplicate claim on lane {lane} by agents {agent_a} and {agent_b} at lamport {lamport}")]
+    #[error(
+        "duplicate claim on lane {lane} by agents {agent_a} and {agent_b} at lamport {lamport}"
+    )]
     DuplicateClaim {
         /// Lane identifier that was double-claimed.
         lane: String,

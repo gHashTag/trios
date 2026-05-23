@@ -39,13 +39,13 @@
 //! is empirically refuted and the gate must be tightened before merging.
 //!
 //! Refs: trios#143 lane L7 · TASK-COQ-001 · INV-7 · L-R14 · R8.
-	
+
 use std::collections::HashSet;
 
 use crate::invariants::INV2_WARMUP_BLIND_STEPS;
 
+use crate::hive_automaton::{BPB_VICTORY_TARGET, VICTORY_SEED_TARGET};
 use crate::IGLA_TARGET_BPB;
-use crate::hive_automaton::{VICTORY_SEED_TARGET, BPB_VICTORY_TARGET};
 
 // ----------------------------------------------------------------------
 // INV-7: Welch's t-test for statistical strength (pre-registered)
@@ -127,10 +127,7 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
 
     // Compute sample standard deviation (Bessel's correction)
     let variance: f64 = if n > 1 {
-        let mean_diff_sq: f64 = bpbs
-            .iter()
-            .map(|&b| (b - sample_mean).powi(2))
-            .sum();
+        let mean_diff_sq: f64 = bpbs.iter().map(|&b| (b - sample_mean).powi(2)).sum();
         mean_diff_sq / (n - 1) as f64
     } else {
         0.0
@@ -249,11 +246,7 @@ pub enum VictoryError {
     },
     /// At least one reported result has `bpb >= IGLA_TARGET_BPB`.  Listed
     /// for diagnostics; the gate counts only seeds *strictly below* target.
-    BpbAboveTarget {
-        seed: u64,
-        bpb: f64,
-        target: f64,
-    },
+    BpbAboveTarget { seed: u64, bpb: f64, target: f64 },
     /// Same seed reported twice.  Distinct-seed reproducibility is
     /// whole point of gate; silently de-duplicating would let two
     /// runs of the same seed masquerade as three.
@@ -329,10 +322,7 @@ pub fn check_victory(results: &[SeedResult]) -> Result<VictoryReport, VictoryErr
     }
 
     // 3. count distinct passing seeds (strict <)
-    let passing: Vec<&SeedResult> = results
-        .iter()
-        .filter(|r| r.bpb < IGLA_TARGET_BPB)
-        .collect();
+    let passing: Vec<&SeedResult> = results.iter().filter(|r| r.bpb < IGLA_TARGET_BPB).collect();
 
     if passing.len() < VICTORY_SEED_TARGET as usize {
         // Surface the first non-passing result for diagnostics, if any.
@@ -432,11 +422,14 @@ mod tests {
     /// must reject (predicate is strict `<`, not `≤`).
     #[test]
     fn falsify_bpb_equal_target_strict_lt() {
-        let r = vec![mk(1, IGLA_TARGET_BPB), mk(2, IGLA_TARGET_BPB), mk(3, IGLA_TARGET_BPB)];
+        let r = vec![
+            mk(1, IGLA_TARGET_BPB),
+            mk(2, IGLA_TARGET_BPB),
+            mk(3, IGLA_TARGET_BPB),
+        ];
         assert!(matches!(
             check_victory(&r),
-            Err(VictoryError::BpbAboveTarget { .. })
-                | Err(VictoryError::InsufficientSeeds { .. })
+            Err(VictoryError::BpbAboveTarget { .. }) | Err(VictoryError::InsufficientSeeds { .. })
         ));
     }
 
@@ -568,7 +561,12 @@ mod tests {
     /// Falsification 1: fewer than 3 distinct seeds.
     #[test]
     fn falsify_insufficient_seeds() {
-        let r = vec![SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() }];
+        let r = vec![SeedResult {
+            seed: 42,
+            bpb: 1.40,
+            step: 5000,
+            sha: "a".into(),
+        }];
         match check_victory(&r) {
             Err(VictoryError::InsufficientSeeds {
                 passing_distinct,
@@ -585,9 +583,24 @@ mod tests {
     #[test]
     fn falsify_bpb_above_target() {
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.51, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.48, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 1.51,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.49,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 44,
+                bpb: 1.48,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         match check_victory(&r) {
             Err(VictoryError::BpbAboveTarget { seed, bpb, target }) => {
@@ -606,9 +619,24 @@ mod tests {
     #[test]
     fn falsify_duplicate_seed_inv7() {
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() },
-            SeedResult { seed: 42, bpb: 1.41, step: 5000, sha: "b".into() },
-            SeedResult { seed: 43, bpb: 1.42, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 1.40,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 42,
+                bpb: 1.41,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.42,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         match check_victory(&r) {
             Err(VictoryError::DuplicateSeed { seed }) => {
@@ -622,9 +650,24 @@ mod tests {
     #[test]
     fn falsify_jepa_proxy_detected() {
         let r = vec![
-            SeedResult { seed: 42, bpb: 0.014, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.40, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.39, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 0.014,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.40,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 44,
+                bpb: 1.39,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         match check_victory(&r) {
             Err(VictoryError::JepaProxyDetected { seed, bpb }) => {
@@ -664,9 +707,24 @@ mod tests {
     fn falsify_non_finite_bpb_inv7() {
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             let r = vec![
-                SeedResult { seed: 42, bpb: bad, step: 5000, sha: "a".into() },
-                SeedResult { seed: 43, bpb: 1.45, step: 5000, sha: "b".into() },
-                SeedResult { seed: 44, bpb: 1.39, step: 5000, sha: "c".into() },
+                SeedResult {
+                    seed: 42,
+                    bpb: bad,
+                    step: 5000,
+                    sha: "a".into(),
+                },
+                SeedResult {
+                    seed: 43,
+                    bpb: 1.45,
+                    step: 5000,
+                    sha: "b".into(),
+                },
+                SeedResult {
+                    seed: 44,
+                    bpb: 1.39,
+                    step: 5000,
+                    sha: "c".into(),
+                },
             ];
             // The bad value lives on seed=42 in this set (the INV-7
             // companion uses raw seed numbers, not the mk() helper
@@ -684,9 +742,24 @@ mod tests {
         // Pre-registered analysis: Welch's t-test, TTEST_ALPHA = 0.01
         // Three seeds ALL near baseline mu0 = 1.55 — p > 0.01, gate refuses.
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.49, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.49, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 1.49,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.49,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 44,
+                bpb: 1.49,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         match stat_strength(&r) {
             Err(VictoryError::TtestFailed {
@@ -708,9 +781,24 @@ mod tests {
     fn ttest_passes_when_distribution_clearly_below_baseline() {
         // Three seeds with mean = 1.40, significantly below baseline 1.55
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.39, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.41, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 1.40,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.39,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 44,
+                bpb: 1.41,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         let report = stat_strength(&r).expect("expected t-test pass");
         assert!(report.passed);

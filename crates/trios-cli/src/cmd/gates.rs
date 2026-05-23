@@ -9,10 +9,10 @@ use anyhow::{Context, Result};
 /// Quality gate thresholds
 #[allow(dead_code)]
 const GATES: &[(&str, f64)] = &[
-    ("bpab_target", 6.0),   // Target BPB for BigramHash(729)
-    ("bpab_max", 8.0),      // Maximum acceptable BPB
+    ("bpab_target", 6.0),        // Target BPB for BigramHash(729)
+    ("bpab_max", 8.0),           // Maximum acceptable BPB
     ("params_max", 1_000_000.0), // Max 1M params
-    ("time_max", 3600.0),   // Max 1 hour training time
+    ("time_max", 3600.0),        // Max 1 hour training time
 ];
 
 /// Check specific gate
@@ -42,7 +42,10 @@ fn check_bpab(value: Option<f64>) -> Result<GateStatus> {
         GateStatus::Fail
     };
 
-    println!("🚦 BPB gate: {} (target={}, max={}) → {:?}", v, target, max, status);
+    println!(
+        "🚦 BPB gate: {} (target={}, max={}) → {:?}",
+        v, target, max, status
+    );
 
     Ok(status)
 }

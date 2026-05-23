@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::payload::IpcPayload;
+use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_VERSION: u8 = 1;
 

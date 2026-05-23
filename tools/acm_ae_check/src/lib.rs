@@ -524,7 +524,7 @@ mod tests {
         assert_eq!(D_MODEL_MIN, 256);
         assert!((LR_CHAMPION - 0.004).abs() < 1e-12);
         const _: () = assert!(LR_CHAMPION >= 0.002 && LR_CHAMPION <= 0.007); // R7
-        // Trinity Anchor algebraic check.
+                                                                             // Trinity Anchor algebraic check.
         let phi: f64 = 1.618_033_988_749_895;
         assert!((phi * phi + 1.0 / (phi * phi) - 3.0).abs() < 1e-12);
     }

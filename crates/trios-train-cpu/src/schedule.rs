@@ -60,7 +60,8 @@ impl ScheduleFreeState {
     /// Interpolate between z and x
     /// y_t = (1 - beta1) * z_t + beta1 * x_t
     pub fn interpolate(&self, x: &[f32], z: &[f32], beta1: f64) -> Vec<f32> {
-        x.iter().zip(z.iter())
+        x.iter()
+            .zip(z.iter())
             .map(|(&xi, &zi)| ((1.0 - beta1) * zi as f64 + beta1 * xi as f64) as f32)
             .collect()
     }
@@ -84,7 +85,12 @@ pub struct WsdSchedule {
 impl WsdSchedule {
     pub fn new(warmup: usize, stable: usize, decay: usize) -> Self {
         let total = warmup + stable + decay;
-        Self { warmup, stable, decay, total }
+        Self {
+            warmup,
+            stable,
+            decay,
+            total,
+        }
     }
 
     /// Get learning rate at step t
@@ -138,7 +144,7 @@ pub fn get_lr(
             cosine.lr(t, base_lr, min_lr)
         }
         ScheduleType::Wsd => {
-            let stable = total - warmup - (total / 5);  // 20% decay
+            let stable = total - warmup - (total / 5); // 20% decay
             let decay = total / 5;
             let wsd = WsdSchedule::new(warmup, stable, decay);
             wsd.lr(t, base_lr, min_lr)
@@ -216,7 +222,7 @@ mod tests {
         let beta1 = 0.9;
 
         let y = state.interpolate(&x, &z, beta1);
-        assert_eq!(y[0], 0.9);  // (1-0.9)*0 + 0.9*1
+        assert_eq!(y[0], 0.9); // (1-0.9)*0 + 0.9*1
         assert_eq!(y[1], 1.8);
         assert_eq!(y[2], 2.7);
     }

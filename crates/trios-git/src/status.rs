@@ -72,7 +72,9 @@ mod tests {
         fs::write(dir.path().join("hello.rs"), "fn main() {}").unwrap();
         let changes = get_status(dir.path()).unwrap();
         assert!(!changes.is_empty());
-        assert!(changes.iter().any(|c| c.path.to_str().unwrap().contains("hello.rs")));
+        assert!(changes
+            .iter()
+            .any(|c| c.path.to_str().unwrap().contains("hello.rs")));
     }
 
     #[test]

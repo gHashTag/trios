@@ -133,9 +133,7 @@ pub enum MergeOrderError {
     /// A pre-registered Phase A prerequisite never appears in the
     /// transcript at all, even though chapter merges DO appear.  This
     /// implies the merge wave bypassed the registry entirely.
-    #[error(
-        "merge-order-gate: chapter merges present but prerequisite {prereq} never merged"
-    )]
+    #[error("merge-order-gate: chapter merges present but prerequisite {prereq} never merged")]
     PrereqNeverMerged {
         /// Branch name of the missing prerequisite.
         prereq: String,
@@ -426,11 +424,36 @@ mod tests {
     #[test]
     fn admits_prereqs_then_chapter() {
         let mut body = String::new();
-        body.push_str(&merge_line("aaaaaa1", 288, "gHashTag", "feat/phd-appendix-F-restore"));
-        body.push_str(&merge_line("aaaaaa2", 289, "gHashTag", "feat/phd-lf-frontmatter"));
-        body.push_str(&merge_line("aaaaaa3", 294, "gHashTag", "feat/phd-lb-springer"));
-        body.push_str(&merge_line("bbbbbb1", 300, "gHashTag", "feat/phd-ch02-golden-cut"));
-        body.push_str(&merge_line("bbbbbb2", 301, "gHashTag", "feat/phd-ch24-igla"));
+        body.push_str(&merge_line(
+            "aaaaaa1",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa2",
+            289,
+            "gHashTag",
+            "feat/phd-lf-frontmatter",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa3",
+            294,
+            "gHashTag",
+            "feat/phd-lb-springer",
+        ));
+        body.push_str(&merge_line(
+            "bbbbbb1",
+            300,
+            "gHashTag",
+            "feat/phd-ch02-golden-cut",
+        ));
+        body.push_str(&merge_line(
+            "bbbbbb2",
+            301,
+            "gHashTag",
+            "feat/phd-ch24-igla",
+        ));
 
         let report = audit_str(&body).unwrap();
         assert!(report.all_pass);
@@ -441,8 +464,18 @@ mod tests {
     #[test]
     fn admits_when_only_prereqs_present() {
         let mut body = String::new();
-        body.push_str(&merge_line("aaaaaa1", 288, "gHashTag", "feat/phd-appendix-F-restore"));
-        body.push_str(&merge_line("aaaaaa2", 289, "gHashTag", "feat/phd-lf-frontmatter"));
+        body.push_str(&merge_line(
+            "aaaaaa1",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa2",
+            289,
+            "gHashTag",
+            "feat/phd-lf-frontmatter",
+        ));
 
         let report = audit_str(&body).unwrap();
         assert!(report.all_pass);
@@ -455,11 +488,31 @@ mod tests {
     fn admits_with_unrelated_merges_interleaved() {
         let mut body = String::new();
         body.push_str(&merge_line("aaaaaa1", 1, "gHashTag", "fix/random-ci-flake"));
-        body.push_str(&merge_line("aaaaaa2", 288, "gHashTag", "feat/phd-appendix-F-restore"));
+        body.push_str(&merge_line(
+            "aaaaaa2",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
         body.push_str(&merge_line("aaaaaa3", 2, "gHashTag", "chore/bump-deps"));
-        body.push_str(&merge_line("aaaaaa4", 289, "gHashTag", "feat/phd-lf-frontmatter"));
-        body.push_str(&merge_line("aaaaaa5", 294, "gHashTag", "feat/phd-lb-springer"));
-        body.push_str(&merge_line("bbbbbb1", 300, "gHashTag", "feat/phd-ch02-golden-cut"));
+        body.push_str(&merge_line(
+            "aaaaaa4",
+            289,
+            "gHashTag",
+            "feat/phd-lf-frontmatter",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa5",
+            294,
+            "gHashTag",
+            "feat/phd-lb-springer",
+        ));
+        body.push_str(&merge_line(
+            "bbbbbb1",
+            300,
+            "gHashTag",
+            "feat/phd-ch02-golden-cut",
+        ));
 
         let report = audit_str(&body).unwrap();
         assert!(report.all_pass);
@@ -521,10 +574,30 @@ mod tests {
     fn falsify_chapter_before_prereq() {
         // Chapter merges first; prereqs land after — strict-mode violation.
         let mut body = String::new();
-        body.push_str(&merge_line("bbbbbb1", 300, "gHashTag", "feat/phd-ch02-golden-cut"));
-        body.push_str(&merge_line("aaaaaa1", 288, "gHashTag", "feat/phd-appendix-F-restore"));
-        body.push_str(&merge_line("aaaaaa2", 289, "gHashTag", "feat/phd-lf-frontmatter"));
-        body.push_str(&merge_line("aaaaaa3", 294, "gHashTag", "feat/phd-lb-springer"));
+        body.push_str(&merge_line(
+            "bbbbbb1",
+            300,
+            "gHashTag",
+            "feat/phd-ch02-golden-cut",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa1",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa2",
+            289,
+            "gHashTag",
+            "feat/phd-lf-frontmatter",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa3",
+            294,
+            "gHashTag",
+            "feat/phd-lb-springer",
+        ));
 
         let err = audit_str_strict(&body).unwrap_err();
         match err {
@@ -557,10 +630,30 @@ mod tests {
     fn falsify_partial_prereq_before_chapter() {
         // Only two of three prereqs land before the chapter; missing #294 → strict failure.
         let mut body = String::new();
-        body.push_str(&merge_line("aaaaaa1", 288, "gHashTag", "feat/phd-appendix-F-restore"));
-        body.push_str(&merge_line("aaaaaa2", 289, "gHashTag", "feat/phd-lf-frontmatter"));
-        body.push_str(&merge_line("bbbbbb1", 300, "gHashTag", "feat/phd-ch02-golden-cut"));
-        body.push_str(&merge_line("aaaaaa3", 294, "gHashTag", "feat/phd-lb-springer"));
+        body.push_str(&merge_line(
+            "aaaaaa1",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa2",
+            289,
+            "gHashTag",
+            "feat/phd-lf-frontmatter",
+        ));
+        body.push_str(&merge_line(
+            "bbbbbb1",
+            300,
+            "gHashTag",
+            "feat/phd-ch02-golden-cut",
+        ));
+        body.push_str(&merge_line(
+            "aaaaaa3",
+            294,
+            "gHashTag",
+            "feat/phd-lb-springer",
+        ));
 
         let err = audit_str_strict(&body).unwrap_err();
         match err {
@@ -580,8 +673,18 @@ mod tests {
     fn falsify_prereq_never_merged() {
         // Chapter merged; only ONE prereq EVER appears → 2 prereqs never merged.
         let mut body = String::new();
-        body.push_str(&merge_line("aaaaaa1", 288, "gHashTag", "feat/phd-appendix-F-restore"));
-        body.push_str(&merge_line("bbbbbb1", 300, "gHashTag", "feat/phd-ch02-golden-cut"));
+        body.push_str(&merge_line(
+            "aaaaaa1",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
+        body.push_str(&merge_line(
+            "bbbbbb1",
+            300,
+            "gHashTag",
+            "feat/phd-ch02-golden-cut",
+        ));
 
         let err = audit_str_strict(&body).unwrap_err();
         // The strict check raises PrereqNeverMerged before ChapterBeforePrereq
@@ -597,8 +700,18 @@ mod tests {
         // Same transcript as `falsify_partial_prereq_before_chapter`; report mode
         // must surface the violation in the JSON without raising.
         let mut body = String::new();
-        body.push_str(&merge_line("aaaaaa1", 288, "gHashTag", "feat/phd-appendix-F-restore"));
-        body.push_str(&merge_line("bbbbbb1", 300, "gHashTag", "feat/phd-ch02-golden-cut"));
+        body.push_str(&merge_line(
+            "aaaaaa1",
+            288,
+            "gHashTag",
+            "feat/phd-appendix-F-restore",
+        ));
+        body.push_str(&merge_line(
+            "bbbbbb1",
+            300,
+            "gHashTag",
+            "feat/phd-ch02-golden-cut",
+        ));
 
         let report = audit_str(&body).unwrap();
         assert!(!report.all_pass);

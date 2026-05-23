@@ -53,7 +53,10 @@ pub fn issue_new(template: &str, args: &[String]) -> Result<u32> {
                 &["enhancement"][..],
             )
         }
-        _ => anyhow::bail!("Unknown template: {}. Use: experiment, bug, feature", template),
+        _ => anyhow::bail!(
+            "Unknown template: {}. Use: experiment, bug, feature",
+            template
+        ),
     };
 
     let num = GhClient::issue_create(&title, &body, labels)?;

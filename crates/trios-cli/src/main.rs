@@ -4,29 +4,31 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use trios_cli::{
-    cmd::{
-        agent::agent_dispatch,
-        commit::commit,
-        dash::{dash_refresh, dash_sync},
-        gates::{gate_check, GateStatus},
-        issue::{issue_close, issue_new},
-        lang::run as lang_run,
-        leaderboard::leaderboard_show,
-        race::{init as race_init, status as race_status},
-        report::report,
-        roster::roster_update,
-        railway::{run as railway_run, RailwayCommand},
-        run::run,
-        status::run as status_run,
-        sweep::sweep,
-        submit::submit,
-        train::train_cpu,
-    },
+use trios_cli::cmd::{
+    agent::agent_dispatch,
+    commit::commit,
+    dash::{dash_refresh, dash_sync},
+    gates::{gate_check, GateStatus},
+    issue::{issue_close, issue_new},
+    lang::run as lang_run,
+    leaderboard::leaderboard_show,
+    race::{init as race_init, status as race_status},
+    railway::{run as railway_run, RailwayCommand},
+    report::report,
+    roster::roster_update,
+    run::run,
+    status::run as status_run,
+    submit::submit,
+    sweep::sweep,
+    train::train_cpu,
 };
 
 #[derive(Parser)]
-#[command(name = "tri", version = "0.1.0", about = "Trinity IGLA CLI — Needle Hunt Automation")]
+#[command(
+    name = "tri",
+    version = "0.1.0",
+    about = "Trinity IGLA CLI — Needle Hunt Automation"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -42,10 +44,7 @@ enum Cmd {
     },
 
     /// Parameter sweep
-    Sweep {
-        param: String,
-        values: Vec<String>,
-    },
+    Sweep { param: String, values: Vec<String> },
 
     /// Report result to issue #143
     Report {
@@ -62,10 +61,7 @@ enum Cmd {
     },
 
     /// Update agent roster
-    Roster {
-        agent: String,
-        status: String,
-    },
+    Roster { agent: String, status: String },
 
     /// Dashboard operations
     Dash {
@@ -95,15 +91,10 @@ enum Cmd {
     },
 
     /// Dispatch task to agent
-    Agent {
-        nato: String,
-        task: String,
-    },
+    Agent { nato: String, task: String },
 
     /// Git commit (atomic)
-    Commit {
-        msg: String,
-    },
+    Commit { msg: String },
 
     /// Railway deployment
     Railway {
@@ -112,9 +103,7 @@ enum Cmd {
     },
 
     /// Language mode (ru/en)
-    Lang {
-        lang: String,
-    },
+    Lang { lang: String },
 
     /// Show loop status
     Status {
@@ -155,8 +144,15 @@ enum Cmd {
 
 #[derive(Subcommand)]
 enum IssueSub {
-    New { template: String, args: Vec<String> },
-    Close { num: u32, #[arg(long)] bpb: Option<f64> },
+    New {
+        template: String,
+        args: Vec<String>,
+    },
+    Close {
+        num: u32,
+        #[arg(long)]
+        bpb: Option<f64>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -244,12 +240,31 @@ fn main() -> Result<()> {
         Cmd::Status { json } => {
             status_run(trios_cli::cmd::status::StatusCmd { json })?;
         }
-        Cmd::Train { steps, hidden, lr, seeds, activation, parallel, residual, dropout, warmup, wd } => {
-            let seed_list: Vec<u64> = seeds.split(',')
+        Cmd::Train {
+            steps,
+            hidden,
+            lr,
+            seeds,
+            activation,
+            parallel,
+            residual,
+            dropout,
+            warmup,
+            wd,
+        } => {
+            let seed_list: Vec<u64> = seeds
+                .split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
             let config = trios_cli::cmd::train::TrainConfig {
-                steps, hidden, lr, activation, residual, dropout, warmup, wd,
+                steps,
+                hidden,
+                lr,
+                activation,
+                residual,
+                dropout,
+                warmup,
+                wd,
             };
             let results = train_cpu(seed_list, config, parallel)?;
             let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
@@ -259,7 +274,12 @@ fn main() -> Result<()> {
             RaceSub::Init { study, neon_url } => {
                 let config = trios_cli::cmd::race::RaceConfig {
                     study_name: study,
-                    neon_url: neon_url.unwrap_or_else(|| std::env::var("NEON_DATABASE_URL").unwrap_or_else(|_| "postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb".to_string())),
+                    neon_url: neon_url.unwrap_or_else(|| {
+                        std::env::var("NEON_DATABASE_URL").unwrap_or_else(|_| {
+                            "postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb"
+                                .to_string()
+                        })
+                    }),
                     ..Default::default()
                 };
                 race_init(config)?;

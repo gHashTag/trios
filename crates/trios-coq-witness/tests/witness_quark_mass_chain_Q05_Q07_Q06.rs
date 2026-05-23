@@ -18,9 +18,5 @@ fn witness_quark_mass_chain_Q05_Q07_Q06() {
     let Q06 = Q05 * Q07;
 
     let diff = (Q05 * Q07 - Q06).abs();
-    assert!(
-        diff < 1e-9,
-        "|Q05*Q07 - Q06| = {} >= 1e-9",
-        diff
-    );
+    assert!(diff < 1e-9, "|Q05*Q07 - Q06| = {} >= 1e-9", diff);
 }

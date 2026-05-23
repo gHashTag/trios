@@ -4,7 +4,8 @@
 //! pulling `ed25519_dalek` symbols into every module.
 
 use ed25519_dalek::{
-    Signature, SigningKey, VerifyingKey as DalekVerifyingKey, SECRET_KEY_LENGTH, Signer as _, Verifier as _,
+    Signature, Signer as _, SigningKey, Verifier as _, VerifyingKey as DalekVerifyingKey,
+    SECRET_KEY_LENGTH,
 };
 use rand_core::OsRng;
 use thiserror::Error;
@@ -70,11 +71,7 @@ impl HoneySigner {
     }
 
     /// Verify `signature` on `bytes` against `key`.
-    pub fn verify(
-        key: &VerifyingKey,
-        bytes: &[u8],
-        signature: &[u8],
-    ) -> Result<(), SigningError> {
+    pub fn verify(key: &VerifyingKey, bytes: &[u8], signature: &[u8]) -> Result<(), SigningError> {
         let sig_array: [u8; 64] = signature
             .try_into()
             .map_err(|_| SigningError::InvalidSignatureBytes)?;

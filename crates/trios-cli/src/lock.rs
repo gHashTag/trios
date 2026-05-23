@@ -41,11 +41,7 @@ impl LockGuard {
                 Ok(guard) => return Ok(guard),
                 Err(e) => {
                     if start.elapsed().as_millis() > LOCK_TIMEOUT_MS {
-                        anyhow::bail!(
-                            "Failed to acquire lock after {}ms: {}",
-                            LOCK_TIMEOUT_MS,
-                            e
-                        );
+                        anyhow::bail!("Failed to acquire lock after {}ms: {}", LOCK_TIMEOUT_MS, e);
                     }
 
                     if let Ok(stale) = Self::is_lock_stale(&lock_path) {
@@ -79,10 +75,7 @@ impl LockGuard {
 
     fn is_lock_stale(lock_path: &Path) -> Result<bool> {
         let content = fs::read_to_string(lock_path)?;
-        let pid: u32 = content
-            .trim()
-            .parse()
-            .context("Failed to parse lock PID")?;
+        let pid: u32 = content.trim().parse().context("Failed to parse lock PID")?;
 
         #[cfg(unix)]
         {

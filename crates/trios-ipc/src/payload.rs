@@ -1,5 +1,5 @@
+use crate::types::{AgentInfo, BrowserCommandReq, McpToolInfo};
 use serde::{Deserialize, Serialize};
-use crate::types::{AgentInfo, McpToolInfo, BrowserCommandReq};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -11,7 +11,9 @@ pub enum IpcPayload {
     },
     ListAgents,
     ListMcpTools,
-    ExecuteBrowserCommand { command: BrowserCommandReq },
+    ExecuteBrowserCommand {
+        command: BrowserCommandReq,
+    },
 
     ConnectionStatus {
         connected: bool,
@@ -23,15 +25,21 @@ pub enum IpcPayload {
         agent_did: String,
         timestamp: u64,
     },
-    AgentList { agents: Vec<AgentInfo> },
-    McpToolList { tools: Vec<McpToolInfo> },
+    AgentList {
+        agents: Vec<AgentInfo>,
+    },
+    McpToolList {
+        tools: Vec<McpToolInfo>,
+    },
     BrowserCommandAck {
         command_id: String,
         success: bool,
         error: Option<String>,
     },
 
-    PollBrowserCommands { agent_id: String },
+    PollBrowserCommands {
+        agent_id: String,
+    },
     ReportBrowserResult {
         command_id: String,
         agent_id: String,
@@ -39,6 +47,11 @@ pub enum IpcPayload {
         result: serde_json::Value,
     },
 
-    Error { code: String, message: String },
-    Pong { echo_id: String },
+    Error {
+        code: String,
+        message: String,
+    },
+    Pong {
+        echo_id: String,
+    },
 }

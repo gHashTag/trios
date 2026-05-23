@@ -33,13 +33,15 @@ fn witness_V_ud_PDG() {
     assert!(
         (V_ud_formula - V_ud_exp).abs() / V_ud_exp > tolerance_v,
         "V_ud falsification failed: formula = {}, exp = {}",
-        V_ud_formula, V_ud_exp
+        V_ud_formula,
+        V_ud_exp
     );
 
     // Unitarity-derived vs PDG
     assert!(
         (V_ud - V_ud_exp).abs() / V_ud_exp < tolerance_v,
         "V_ud vs PDG tolerance failed: V_ud = {}, exp = {}",
-        V_ud, V_ud_exp
+        V_ud,
+        V_ud_exp
     );
 }

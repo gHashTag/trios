@@ -130,8 +130,8 @@ fn load_rows(jsonl: &Path) -> Result<Vec<Row>> {
         if line.trim().is_empty() {
             continue;
         }
-        let env: ChunkEnvelope = serde_json::from_str(&line)
-            .with_context(|| format!("parse line {}", lineno + 1))?;
+        let env: ChunkEnvelope =
+            serde_json::from_str(&line).with_context(|| format!("parse line {}", lineno + 1))?;
         let c = env.config;
         out.push(Row {
             chapter_slug: slug_from_path(&c.file),
@@ -156,11 +156,7 @@ async fn main() -> Result<()> {
 
     eprintln!("[ingest_rag_chunks] anchor: {ANCHOR}");
     let rows = load_rows(&cli.jsonl)?;
-    eprintln!(
-        "[load] {} chunks from {}",
-        rows.len(),
-        cli.jsonl.display()
-    );
+    eprintln!("[load] {} chunks from {}", rows.len(), cli.jsonl.display());
 
     if cli.dry_run {
         let mut kinds = std::collections::BTreeMap::<String, usize>::new();
@@ -171,7 +167,11 @@ async fn main() -> Result<()> {
             .iter()
             .map(|r| r.chapter_slug.as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        println!("[dry-run] rows={} distinct_slugs={}", rows.len(), slugs.len());
+        println!(
+            "[dry-run] rows={} distinct_slugs={}",
+            rows.len(),
+            slugs.len()
+        );
         for (k, n) in kinds {
             println!("[dry-run] {k}: {n}");
         }

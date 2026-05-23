@@ -49,20 +49,90 @@ struct AppendixSpec {
 }
 
 const APPENDICES: &[AppendixSpec] = &[
-    AppendixSpec { file_stem: "A-catalogue",         slug: "ap-a-catalogue",         chapter_no: 1001, title: "Appendix A — Catalogue of Theorems & Definitions" },
-    AppendixSpec { file_stem: "B-falsification",     slug: "ap-b-falsification",     chapter_no: 1002, title: "Appendix B — Falsifiability of phi-Numeric Claims" },
-    AppendixSpec { file_stem: "C-golden-benchmark",  slug: "ap-c-golden-benchmark",  chapter_no: 1003, title: "Appendix C — Golden Benchmark: GF4/GF8/GF16 Tables" },
-    AppendixSpec { file_stem: "D-golden-mirror",     slug: "ap-d-golden-mirror",     chapter_no: 1004, title: "Appendix D — Golden Mirror: Trinity ↔ Flos Aureus Symmetry" },
-    AppendixSpec { file_stem: "E-lexicon",           slug: "ap-e-lexicon",           chapter_no: 1005, title: "Appendix E — Lexicon of phi-Numeric Terms" },
-    AppendixSpec { file_stem: "F-coq-citation-map",  slug: "ap-f-coq-citation-map",  chapter_no: 1006, title: "Appendix F — Coq Citation Map (R14)" },
-    AppendixSpec { file_stem: "F-fpga-bitstream",    slug: "ap-f-fpga-bitstream",    chapter_no: 1007, title: "Appendix F — FPGA Bitstream Archive (iCE40 + SHA-256)" },
-    AppendixSpec { file_stem: "G-data-availability", slug: "ap-g-data-availability", chapter_no: 1008, title: "Appendix G — Data Availability (ACM AE)" },
-    AppendixSpec { file_stem: "H-acm-ae-checklist",  slug: "ap-h-acm-ae-checklist",  chapter_no: 1009, title: "Appendix H — ACM Artefact Evaluation Checklist" },
-    AppendixSpec { file_stem: "H-zenodo-doi",        slug: "ap-h-zenodo-doi",        chapter_no: 1010, title: "Appendix H — Zenodo DOI Registry (13 records)" },
-    AppendixSpec { file_stem: "I-xdc-pin-map",       slug: "ap-i-xdc-pin-map",       chapter_no: 1011, title: "Appendix I — XDC Pin Map: QMTech XC7A100T/200T" },
-    AppendixSpec { file_stem: "J-troubleshooting",   slug: "ap-j-troubleshooting",   chapter_no: 1012, title: "Appendix J — Hardware Troubleshooting Log (BLK-001..005)" },
-    AppendixSpec { file_stem: "K-agent-memory",      slug: "ap-k-agent-memory",      chapter_no: 1013, title: "Appendix K — Agent Memory & Replay Protocol" },
-    AppendixSpec { file_stem: "L-pollen-channel",    slug: "ap-l-pollen-channel",    chapter_no: 1014, title: "Appendix L — Pollen Channel: Inter-Agent Hand-off" },
+    AppendixSpec {
+        file_stem: "A-catalogue",
+        slug: "ap-a-catalogue",
+        chapter_no: 1001,
+        title: "Appendix A — Catalogue of Theorems & Definitions",
+    },
+    AppendixSpec {
+        file_stem: "B-falsification",
+        slug: "ap-b-falsification",
+        chapter_no: 1002,
+        title: "Appendix B — Falsifiability of phi-Numeric Claims",
+    },
+    AppendixSpec {
+        file_stem: "C-golden-benchmark",
+        slug: "ap-c-golden-benchmark",
+        chapter_no: 1003,
+        title: "Appendix C — Golden Benchmark: GF4/GF8/GF16 Tables",
+    },
+    AppendixSpec {
+        file_stem: "D-golden-mirror",
+        slug: "ap-d-golden-mirror",
+        chapter_no: 1004,
+        title: "Appendix D — Golden Mirror: Trinity ↔ Flos Aureus Symmetry",
+    },
+    AppendixSpec {
+        file_stem: "E-lexicon",
+        slug: "ap-e-lexicon",
+        chapter_no: 1005,
+        title: "Appendix E — Lexicon of phi-Numeric Terms",
+    },
+    AppendixSpec {
+        file_stem: "F-coq-citation-map",
+        slug: "ap-f-coq-citation-map",
+        chapter_no: 1006,
+        title: "Appendix F — Coq Citation Map (R14)",
+    },
+    AppendixSpec {
+        file_stem: "F-fpga-bitstream",
+        slug: "ap-f-fpga-bitstream",
+        chapter_no: 1007,
+        title: "Appendix F — FPGA Bitstream Archive (iCE40 + SHA-256)",
+    },
+    AppendixSpec {
+        file_stem: "G-data-availability",
+        slug: "ap-g-data-availability",
+        chapter_no: 1008,
+        title: "Appendix G — Data Availability (ACM AE)",
+    },
+    AppendixSpec {
+        file_stem: "H-acm-ae-checklist",
+        slug: "ap-h-acm-ae-checklist",
+        chapter_no: 1009,
+        title: "Appendix H — ACM Artefact Evaluation Checklist",
+    },
+    AppendixSpec {
+        file_stem: "H-zenodo-doi",
+        slug: "ap-h-zenodo-doi",
+        chapter_no: 1010,
+        title: "Appendix H — Zenodo DOI Registry (13 records)",
+    },
+    AppendixSpec {
+        file_stem: "I-xdc-pin-map",
+        slug: "ap-i-xdc-pin-map",
+        chapter_no: 1011,
+        title: "Appendix I — XDC Pin Map: QMTech XC7A100T/200T",
+    },
+    AppendixSpec {
+        file_stem: "J-troubleshooting",
+        slug: "ap-j-troubleshooting",
+        chapter_no: 1012,
+        title: "Appendix J — Hardware Troubleshooting Log (BLK-001..005)",
+    },
+    AppendixSpec {
+        file_stem: "K-agent-memory",
+        slug: "ap-k-agent-memory",
+        chapter_no: 1013,
+        title: "Appendix K — Agent Memory & Replay Protocol",
+    },
+    AppendixSpec {
+        file_stem: "L-pollen-channel",
+        slug: "ap-l-pollen-channel",
+        chapter_no: 1014,
+        title: "Appendix L — Pollen Channel: Inter-Agent Hand-off",
+    },
 ];
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -95,8 +165,7 @@ async fn main() -> Result<()> {
             skipped_missing += 1;
             continue;
         }
-        let body = fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let body = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         // The body_md column accepts any text; we store the raw .tex as the
         // canonical body so the SSOT row is byte-faithful to the artefact
         // included by main.tex. Markdown-mirror and pandoc-rendered prose

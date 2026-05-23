@@ -9,7 +9,10 @@ use trios_igla_race::neon::NeonDb;
 use trios_igla_race::status;
 
 #[derive(Parser)]
-#[command(name = "trios-igla-race", about = "IGLA RACE — distributed hunt for BPB < 1.5")]
+#[command(
+    name = "trios-igla-race",
+    about = "IGLA RACE — distributed hunt for BPB < 1.5"
+)]
 struct Cli {
     #[command(subcommand)]
     command: RaceCommand,
@@ -34,8 +37,7 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let neon_url = std::env::var("NEON_URL")
-        .expect("NEON_URL env var must be set");
+    let neon_url = std::env::var("NEON_URL").expect("NEON_URL env var must be set");
 
     match cli.command {
         RaceCommand::Start { machine, workers } => {
@@ -48,9 +50,7 @@ async fn main() -> Result<()> {
                 let url = neon_url.clone();
                 let mid = machine.clone();
                 let best = Arc::clone(&best_bpb);
-                set.spawn(async move {
-                    run_worker(&url, &mid, wid as u64, best).await
-                });
+                set.spawn(async move { run_worker(&url, &mid, wid as u64, best).await });
             }
 
             while let Some(res) = set.join_next().await {
@@ -62,7 +62,9 @@ async fn main() -> Result<()> {
                     Ok(Ok(bpb)) => {
                         info!("worker finished, best={bpb:.4}");
                         let mut best = best_bpb.write().unwrap();
-                        if bpb < *best { *best = bpb; }
+                        if bpb < *best {
+                            *best = bpb;
+                        }
                     }
                     Ok(Err(e)) => eprintln!("worker error: {e}"),
                     Err(e) => eprintln!("join error: {e}"),

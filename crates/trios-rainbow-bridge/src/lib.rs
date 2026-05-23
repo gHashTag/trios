@@ -37,7 +37,7 @@ pub mod signer;
 pub mod subscriber;
 
 pub use bridge::{Bridge, BridgeError};
-pub use channel::{Channel, Payload, channel_of_payload};
+pub use channel::{channel_of_payload, Channel, Payload};
 pub use event::RainbowEvent;
 pub use funnel_client::{FunnelClient, InMemoryFunnel};
 pub use lamport::LamportClock;

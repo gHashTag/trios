@@ -62,7 +62,12 @@ fn deploy_parallel(seeds: u32, start_seed: u64, dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("🚀 Railway deployment plan for {} seeds ({}-{})...", seeds, start_seed, start_seed + seeds as u64 - 1);
+    println!(
+        "🚀 Railway deployment plan for {} seeds ({}-{})...",
+        seeds,
+        start_seed,
+        start_seed + seeds as u64 - 1
+    );
     println!();
 
     // Railway CLI requires TTY for interactive prompts - provide manual commands
@@ -74,13 +79,20 @@ fn deploy_parallel(seeds: u32, start_seed: u64, dry_run: bool) -> Result<()> {
         let service_name = format!("igla-trainer-seed-{}", seed);
 
         println!("# Seed {}", seed);
-        println!("railway add --service {} --variables \"RAILWAY_SEED={}\"", service_name, seed);
+        println!(
+            "railway add --service {} --variables \"RAILWAY_SEED={}\"",
+            service_name, seed
+        );
         println!("railway up --service {}", service_name);
         println!();
     }
 
     println!("Or one-liner for all seeds:");
-    println!("for seed in {} {}; do", start_seed, start_seed + seeds as u64 - 1);
+    println!(
+        "for seed in {} {}; do",
+        start_seed,
+        start_seed + seeds as u64 - 1
+    );
     println!("  railway add --service \"igla-trainer-seed-{{seed}}\" --variables \"RAILWAY_SEED={{seed}}\"");
     println!("  railway up --service \"igla-trainer-seed-{{seed}}\"");
     println!("done");

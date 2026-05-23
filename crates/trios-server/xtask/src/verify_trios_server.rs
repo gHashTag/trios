@@ -4,7 +4,9 @@ use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt().with_env_filter("trios_server=debug").init();
+    tracing_subscriber::fmt()
+        .with_env_filter("trios_server=debug")
+        .init();
 
     let host = env::var("TRIOS_HOST").unwrap_or_else(|_| "localhost".to_string());
     let port: u16 = env::var("TRIOS_PORT")
@@ -67,7 +69,8 @@ async fn check_ws_upgrade(host: &str, port: u16, path: &str) -> Result<()> {
     let url = format!("ws://{host}:{port}{path}");
     info!("[3] Checking WebSocket {path}...");
 
-    let (mut ws, resp) = tokio_tungstenite::connect_async(&url).await
+    let (mut ws, resp) = tokio_tungstenite::connect_async(&url)
+        .await
         .with_context(|| format!("WebSocket connection failed to {url}"))?;
 
     // RFC 6455: 101 Switching Protocols

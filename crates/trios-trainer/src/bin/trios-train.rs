@@ -6,10 +6,10 @@
 //!     --config crates/trios-trainer/configs/champion.toml --seed 43
 //! ```
 
-use clap::Parser;
 use anyhow::Result;
-use trios_trainer::{Config, run};
+use clap::Parser;
 use std::path::PathBuf;
+use trios_trainer::{run, Config};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -57,7 +57,10 @@ fn main() -> Result<()> {
 
     // Validate INV-8: lr in phi-band
     if !trios_trainer::config::validate_lr_phi_band(config.training.lr) {
-        anyhow::bail!("LR {} violates INV-8: must be in [0.001, 0.01]", config.training.lr);
+        anyhow::bail!(
+            "LR {} violates INV-8: must be in [0.001, 0.01]",
+            config.training.lr
+        );
     }
 
     println!("Config validated (INV-8 OK)");
@@ -69,7 +72,10 @@ fn main() -> Result<()> {
         println!("LR: {}", config.training.lr);
         println!("d_model: {}", config.model.d_model);
         println!("n_layers: {}", config.model.n_layers);
-        println!("Checkpoint interval: {}", config.training.checkpoint_interval);
+        println!(
+            "Checkpoint interval: {}",
+            config.training.checkpoint_interval
+        );
         return Ok(());
     }
 

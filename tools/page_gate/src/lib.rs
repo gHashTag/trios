@@ -264,7 +264,10 @@ mod tests {
         let r = count_pages(&p);
         let _ = std::fs::remove_file(&p);
         assert!(
-            matches!(r, Err(PageGateError::Malformed { .. } | PageGateError::Io { .. })),
+            matches!(
+                r,
+                Err(PageGateError::Malformed { .. } | PageGateError::Io { .. })
+            ),
             "expected Malformed/Io, got {r:?}"
         );
     }

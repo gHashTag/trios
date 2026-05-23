@@ -230,8 +230,8 @@ fn count_bib_entries(path: &Path) -> Result<usize> {
     if !path.is_file() {
         return Err(anyhow!("bibliography file not found at {}", path.display()));
     }
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     Ok(content
         .lines()
         .filter(|l| {
@@ -409,19 +409,22 @@ fn compile_resilient(phd_root: &Path, max_rounds: usize) -> Result<()> {
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
         let combined = format!("{}\n{}", stdout, stderr);
 
-        let bad = locate_offender(&combined, phd_root)
-            .ok_or_else(|| {
-                anyhow!(
-                    "could not identify offending file in tectonic output:\n{}",
-                    combined.lines().rev().take(40).collect::<Vec<_>>().join("\n")
-                )
-            })?;
+        let bad = locate_offender(&combined, phd_root).ok_or_else(|| {
+            anyhow!(
+                "could not identify offending file in tectonic output:\n{}",
+                combined
+                    .lines()
+                    .rev()
+                    .take(40)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        })?;
 
-        let rel = bad
-            .strip_prefix(phd_root)
-            .unwrap_or(&bad)
-            .to_path_buf();
-        let stem = rel.file_stem().map(|s| s.to_string_lossy().into_owned())
+        let rel = bad.strip_prefix(phd_root).unwrap_or(&bad).to_path_buf();
+        let stem = rel
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".into());
         let qpath = quarantine.join(format!("{}.tex", stem));
         if qpath.exists() {
@@ -436,7 +439,10 @@ fn compile_resilient(phd_root: &Path, max_rounds: usize) -> Result<()> {
         let placeholder = build_deferred_stub(&stem);
         std::fs::write(&bad, placeholder)?;
     }
-    Err(anyhow!("max_rounds={} reached without a green build", max_rounds))
+    Err(anyhow!(
+        "max_rounds={} reached without a green build",
+        max_rounds
+    ))
 }
 
 /// Build a multi-page R5-honest deferred stub for a quarantined chapter/appendix.
@@ -449,7 +455,7 @@ fn build_deferred_stub(stem: &str) -> String {
     // Strip leading numeric/letter prefix and replace dashes/underscores with spaces.
     // Pattern handles: "02-golden-cut" -> "golden cut", "ch_05" -> "05", "L-pollen-channel" -> "pollen channel"
     let after_prefix: &str = if let Some(idx) = stem.find(['-', '_']) {
-        &stem[idx+1..]
+        &stem[idx + 1..]
     } else {
         stem
     };
@@ -462,10 +468,16 @@ fn build_deferred_stub(stem: &str) -> String {
             cap_next = false;
         } else {
             human.push(c);
-            if c == ' ' { cap_next = true; }
+            if c == ' ' {
+                cap_next = true;
+            }
         }
     }
-    let title = if human.is_empty() { stem.to_string() } else { human };
+    let title = if human.is_empty() {
+        stem.to_string()
+    } else {
+        human
+    };
     // Escape underscores for LaTeX (e.g. `ch_01` -> `ch\_01`).
     let stem_tex = stem.replace('_', "\\_");
 
@@ -656,23 +668,30 @@ fn locate_offender(output: &str, phd_root: &Path) -> Option<PathBuf> {
 
 fn materialize_stubs(phd_root: &Path) -> Result<()> {
     let main_tex = phd_root.join("main.tex");
-    let src = std::fs::read_to_string(&main_tex)
-        .map_err(|e| anyhow!("cannot read main.tex: {}", e))?;
+    let src =
+        std::fs::read_to_string(&main_tex).map_err(|e| anyhow!("cannot read main.tex: {}", e))?;
     // Capture every \include{<dir>/<stem>}
     let re = regex_lite_global(&src, "\\include{");
     let mut created = 0usize;
     for start in re {
         let after = &src[start..];
         // find closing brace
-        let close = match after.find('}') { Some(i) => i, None => continue };
+        let close = match after.find('}') {
+            Some(i) => i,
+            None => continue,
+        };
         let body = &after["\\include{".len()..close];
         // body is like "chapters/ch_05" or "appendix/L-pollen-channel"
         let parts: Vec<&str> = body.splitn(2, '/').collect();
-        if parts.len() != 2 { continue; }
+        if parts.len() != 2 {
+            continue;
+        }
         let dir = parts[0];
         let stem = parts[1];
         let target = phd_root.join(dir).join(format!("{stem}.tex"));
-        if target.is_file() { continue; }
+        if target.is_file() {
+            continue;
+        }
         // Make sure parent exists
         if let Some(p) = target.parent() {
             std::fs::create_dir_all(p).ok();
@@ -714,12 +733,11 @@ fn fix_common_latex(phd_root: &Path) -> Result<()> {
             if p.extension().and_then(|s| s.to_str()) != Some("tex") {
                 continue;
             }
-            let original = std::fs::read_to_string(&p)
-                .with_context(|| format!("read {}", p.display()))?;
+            let original =
+                std::fs::read_to_string(&p).with_context(|| format!("read {}", p.display()))?;
             let fixed = mechanical_latex_fixes(&original);
             if fixed != original {
-                std::fs::write(&p, &fixed)
-                    .with_context(|| format!("write {}", p.display()))?;
+                std::fs::write(&p, &fixed).with_context(|| format!("write {}", p.display()))?;
                 eprintln!("  fixed: {}", p.display());
                 total += 1;
             }
@@ -743,7 +761,9 @@ fn mechanical_latex_fixes(s: &str) -> String {
         // 1. bare `[` followed by newline at line start → `\[`
         if at_line_start && c == '[' {
             let mut j = i + 1;
-            while j < n && (chars[j] == ' ' || chars[j] == '\t') { j += 1; }
+            while j < n && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
             if j < n && chars[j] == '\n' {
                 out.push('\\');
                 out.push('[');
@@ -754,17 +774,22 @@ fn mechanical_latex_fixes(s: &str) -> String {
         }
 
         // 2. `\textbf{X**` → `\textbf{X}` (where X has no `}`)
-        let textbf_open: [char; 8] = ['\\','t','e','x','t','b','f','{'];
-        if c == '\\' && i + 7 < n && (0..8).all(|k| chars[i+k] == textbf_open[k]) {
+        let textbf_open: [char; 8] = ['\\', 't', 'e', 'x', 't', 'b', 'f', '{'];
+        if c == '\\' && i + 7 < n && (0..8).all(|k| chars[i + k] == textbf_open[k]) {
             // find closing `}` or `**`
             let mut j = i + 8;
             let mut content = String::new();
             let mut found_starstar = false;
             let mut found_brace = false;
             while j < n {
-                if chars[j] == '\n' { break; }
-                if chars[j] == '}' { found_brace = true; break; }
-                if chars[j] == '*' && j + 1 < n && chars[j+1] == '*' {
+                if chars[j] == '\n' {
+                    break;
+                }
+                if chars[j] == '}' {
+                    found_brace = true;
+                    break;
+                }
+                if chars[j] == '*' && j + 1 < n && chars[j + 1] == '*' {
                     found_starstar = true;
                     break;
                 }
@@ -782,14 +807,16 @@ fn mechanical_latex_fixes(s: &str) -> String {
         }
 
         // 3. markdown `**X**` → `\textbf{X}` when `X` has no newline.
-        if c == '*' && i + 1 < n && chars[i+1] == '*' {
+        if c == '*' && i + 1 < n && chars[i + 1] == '*' {
             // find closing `**` on same line
             let mut j = i + 2;
             let mut content = String::new();
             let mut closed = false;
             while j + 1 < n {
-                if chars[j] == '\n' { break; }
-                if chars[j] == '*' && chars[j+1] == '*' {
+                if chars[j] == '\n' {
+                    break;
+                }
+                if chars[j] == '*' && chars[j + 1] == '*' {
                     closed = true;
                     break;
                 }
@@ -827,9 +854,7 @@ fn regex_lite_capture<F: Fn(&str) -> bool>(
         for prefix in prefixes {
             if let Some(idx) = line.find(prefix) {
                 let rest = &line[idx..];
-                let end = rest
-                    .find([':', ' ', ')', ','])
-                    .unwrap_or(rest.len());
+                let end = rest.find([':', ' ', ')', ',']).unwrap_or(rest.len());
                 let candidate = &rest[..end];
                 if candidate.ends_with(".tex") {
                     return Some(PathBuf::from(candidate));
@@ -857,12 +882,7 @@ fn regex_lite_capture<F: Fn(&str) -> bool>(
 // R1 (CROWN): pure Rust orchestrator. Pandoc is invoked as an external binary,
 // not via shell scripts.
 
-fn build_book(
-    phd_root: &Path,
-    md_dir: &Path,
-    _assets_dir: &Path,
-    max_rounds: usize,
-) -> Result<()> {
+fn build_book(phd_root: &Path, md_dir: &Path, _assets_dir: &Path, max_rounds: usize) -> Result<()> {
     eprintln!("=== build-book: phase 1/4 materialize-stubs ===");
     materialize_stubs(phd_root)?;
 
@@ -901,7 +921,11 @@ fn build_book(
             if num.is_empty() {
                 continue;
             }
-            let pad = if num.len() == 1 { format!("0{}", num) } else { num.clone() };
+            let pad = if num.len() == 1 {
+                format!("0{}", num)
+            } else {
+                num.clone()
+            };
             let target = chapters_out.join(format!("ch_{}.tex", pad));
             let status = std::process::Command::new("pandoc")
                 .arg(&src)
@@ -919,9 +943,16 @@ fn build_book(
                 Err(e) => eprintln!("  pandoc {} skipped: {}", stem, e),
             }
         }
-        eprintln!("  rendered {} chapter(s) from {}", rendered, md_root.display());
+        eprintln!(
+            "  rendered {} chapter(s) from {}",
+            rendered,
+            md_root.display()
+        );
     } else {
-        eprintln!("  md_dir {} not present — skipping pandoc phase", md_root.display());
+        eprintln!(
+            "  md_dir {} not present — skipping pandoc phase",
+            md_root.display()
+        );
     }
 
     eprintln!("=== build-book: phase 3/4 fix-common-latex ===");
@@ -1031,9 +1062,7 @@ fn compile_chapters(
             .arg(out_dir)
             .arg(&tex_out)
             .status()
-            .with_context(|| {
-                "failed to spawn `tectonic` — install via `cargo install tectonic`"
-            })?;
+            .with_context(|| "failed to spawn `tectonic` — install via `cargo install tectonic`")?;
         if !tectonic_status.success() {
             failed.push((stem.to_string(), format!("tectonic {tectonic_status}")));
             continue;
@@ -1129,9 +1158,11 @@ fn main() -> ExitCode {
         Cmd::CompileResilient { max_rounds } => compile_resilient(&cli.phd_root, *max_rounds),
         Cmd::FixCommonLatex => fix_common_latex(&cli.phd_root),
         Cmd::MaterializeStubs => materialize_stubs(&cli.phd_root),
-        Cmd::BuildBook { md_dir, assets_dir, max_rounds } => {
-            build_book(&cli.phd_root, md_dir, assets_dir, *max_rounds)
-        }
+        Cmd::BuildBook {
+            md_dir,
+            assets_dir,
+            max_rounds,
+        } => build_book(&cli.phd_root, md_dir, assets_dir, *max_rounds),
         Cmd::CompileChapters {
             chapters_dir,
             template,
@@ -1336,7 +1367,11 @@ mod tests {
         let chapters = d.path().join("chapters");
         std::fs::create_dir_all(&chapters).unwrap();
         let template = d.path().join("chapter.template.tex");
-        std::fs::write(&template, "\\documentclass{article}\\begin{document}$body$\\end{document}\n").unwrap();
+        std::fs::write(
+            &template,
+            "\\documentclass{article}\\begin{document}$body$\\end{document}\n",
+        )
+        .unwrap();
         std::fs::write(chapters.join("ch-1.md"), "![hero](x.png)\n\n# t\n").unwrap();
         let out = d.path().join("out");
         let err = compile_chapters(
@@ -1357,7 +1392,11 @@ mod tests {
         std::fs::create_dir_all(&chapters).unwrap();
         let template = d.path().join("chapter.template.tex");
         let lua = d.path().join("force-fullwidth-hero.lua");
-        std::fs::write(&template, "\\documentclass{article}\\begin{document}$body$\\end{document}\n").unwrap();
+        std::fs::write(
+            &template,
+            "\\documentclass{article}\\begin{document}$body$\\end{document}\n",
+        )
+        .unwrap();
         std::fs::write(&lua, "function Pandoc(d) return d end\n").unwrap();
         let out = d.path().join("out");
         let err = compile_chapters(&chapters, &template, &lua, &out, true).unwrap_err();

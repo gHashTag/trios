@@ -23,14 +23,7 @@ pub fn create_commit(repo_path: &Path, message: &str) -> Result<CommitResult> {
     };
     let parents: Vec<&git2::Commit> = parent_commits.iter().collect();
 
-    let commit_oid = repo.commit(
-        Some("HEAD"),
-        &sig,
-        &sig,
-        message,
-        &tree,
-        &parents,
-    )?;
+    let commit_oid = repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
 
     Ok(CommitResult {
         oid: commit_oid.to_string(),
@@ -42,9 +35,9 @@ pub fn create_commit(repo_path: &Path, message: &str) -> Result<CommitResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stage::stage_files;
     use std::fs;
     use tempfile::TempDir;
-    use crate::stage::stage_files;
 
     fn init_repo() -> (TempDir, git2::Repository) {
         let dir = TempDir::new().unwrap();

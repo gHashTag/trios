@@ -22,9 +22,9 @@
 use trios_igla_race::race::simulate_bpb_v2;
 
 const SEEDS: [u64; 3] = [42, 43, 44];
-const STEPS: u32 = 200;          // tiny: ~30 s on CPU per seed × 2 formats
-const LR: f64 = 0.005;            // INV1_CHAMPION_LR; passed for parity
-const MIN_DELTA_BPB: f64 = 1e-6;  // acceptance threshold
+const STEPS: u32 = 200; // tiny: ~30 s on CPU per seed × 2 formats
+const LR: f64 = 0.005; // INV1_CHAMPION_LR; passed for parity
+const MIN_DELTA_BPB: f64 = 1e-6; // acceptance threshold
 
 #[test]
 #[ignore = "requires TRIOS_USE_REAL_BPB=1 and cpu_train binary on PATH"]
@@ -41,12 +41,18 @@ fn test_real_forward_distinguishes_f32_from_gf16() {
     let mut all_zero_count = 0u32;
 
     for &seed in &SEEDS {
-        let bpb_f32  = simulate_bpb_v2(LR, STEPS, seed, false);
+        let bpb_f32 = simulate_bpb_v2(LR, STEPS, seed, false);
         let bpb_gf16 = simulate_bpb_v2(LR, STEPS, seed, true);
 
         // Bridge errors surface as NaN — that is itself a falsification signal.
-        assert!(bpb_f32.is_finite(),  "f32 bridge returned NaN for seed={seed}");
-        assert!(bpb_gf16.is_finite(), "gf16 bridge returned NaN for seed={seed}");
+        assert!(
+            bpb_f32.is_finite(),
+            "f32 bridge returned NaN for seed={seed}"
+        );
+        assert!(
+            bpb_gf16.is_finite(),
+            "gf16 bridge returned NaN for seed={seed}"
+        );
 
         let delta = (bpb_f32 - bpb_gf16).abs();
         if delta == 0.0 {

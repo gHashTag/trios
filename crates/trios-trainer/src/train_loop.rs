@@ -3,8 +3,8 @@
 //! This is a skeleton placeholder.
 //! In PR-2, this will be populated with actual training logic migrated from trios-train-cpu.
 
-use crate::{Config};
-use crate::ledger::{LedgerRow, EmbargoBlock};
+use crate::ledger::{EmbargoBlock, LedgerRow};
+use crate::Config;
 use anyhow::Result;
 use std::time::SystemTime;
 
@@ -48,7 +48,11 @@ pub fn run(config: &Config) -> Result<RunResult> {
                     sha: crate::ledger::get_commit_sha().unwrap_or_else(|_| "unknown".into()),
                     step,
                     ts: format_timestamp(),
-                    gate_status: if bpb < 1.85 { "above_target_evidence".to_string() } else { "below_target_evidence".to_string() },
+                    gate_status: if bpb < 1.85 {
+                        "above_target_evidence".to_string()
+                    } else {
+                        "below_target_evidence".to_string()
+                    },
                 };
 
                 let embargo = EmbargoBlock::new();
@@ -85,13 +89,15 @@ fn format_timestamp() -> String {
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| {
             let secs = d.as_secs();
-            format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+            format!(
+                "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
                 1970 + secs / 31536000,
                 (secs % 31536000) / 2592000,
                 (secs % 2592000) / 86400,
                 (secs % 86400) / 3600,
                 (secs % 3600) / 60,
-                secs % 60)
+                secs % 60
+            )
         })
         .unwrap_or_else(|_| "unknown".into())
 }

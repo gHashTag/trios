@@ -8,7 +8,12 @@ use trios_core::git::GitOrchestrator;
 use trios_git::Git2Orchestrator;
 
 /// Dispatch git extended tools.
-pub async fn dispatch(name: &str, input: &Value, repo: &std::path::Path, git: &Git2Orchestrator) -> Option<Result<Value>> {
+pub async fn dispatch(
+    name: &str,
+    input: &Value,
+    repo: &std::path::Path,
+    git: &Git2Orchestrator,
+) -> Option<Result<Value>> {
     match name {
         "git_log" => Some(git_log(repo, git, input).await),
         "git_diff" => Some(git_diff(repo, git, input).await),
@@ -20,10 +25,7 @@ pub async fn dispatch(name: &str, input: &Value, repo: &std::path::Path, git: &G
 
 /// Get git log.
 async fn git_log(repo: &std::path::Path, git: &Git2Orchestrator, input: &Value) -> Result<Value> {
-    let limit = input
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(10) as usize;
+    let limit = input.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
     let entries = git.log(repo, limit).await?;
     Ok(serde_json::to_value(entries)?)
 }
@@ -42,7 +44,11 @@ async fn git_stash(repo: &std::path::Path, git: &Git2Orchestrator) -> Result<Val
 }
 
 /// Checkout branch.
-async fn git_checkout(repo: &std::path::Path, git: &Git2Orchestrator, input: &Value) -> Result<Value> {
+async fn git_checkout(
+    repo: &std::path::Path,
+    git: &Git2Orchestrator,
+    input: &Value,
+) -> Result<Value> {
     let branch_name = input
         .get("branch")
         .and_then(|v| v.as_str())

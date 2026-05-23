@@ -55,5 +55,8 @@ fn test_no_force_merge_patterns() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let result = checks::check_no_force_merge(&root);
     assert!(result.name == "no_force_merge");
-    assert!(result.passed, "Should have no force merge patterns in anti-ban crate");
+    assert!(
+        result.passed,
+        "Should have no force merge patterns in anti-ban crate"
+    );
 }

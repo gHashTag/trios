@@ -20,7 +20,12 @@ fn allowed_roots() -> Vec<PathBuf> {
 }
 
 /// Dispatch git basic tools.
-pub async fn dispatch(name: &str, input: &Value, repo: &Path, git: &Git2Orchestrator) -> Option<Result<Value>> {
+pub async fn dispatch(
+    name: &str,
+    input: &Value,
+    repo: &Path,
+    git: &Git2Orchestrator,
+) -> Option<Result<Value>> {
     match name {
         "git_status" => Some(git_status(repo, git).await),
         "git_stage_files" => Some(git_stage_files(repo, git, input).await),
@@ -77,7 +82,10 @@ async fn git_commit(repo: &Path, git: &Git2Orchestrator, input: &Value) -> Resul
     if message.is_empty() {
         bail!("commit message cannot be empty");
     }
-    let result = git.commit(repo, message).await.map_err(|e| anyhow::anyhow!(e))?;
+    let result = git
+        .commit(repo, message)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
     Ok(serde_json::to_value(result)?)
 }
 
@@ -90,8 +98,11 @@ async fn git_create_branch(repo: &Path, git: &Git2Orchestrator, input: &Value) -
     if branch_name.is_empty() {
         bail!("branch name cannot be empty");
     }
-    if branch_name.contains(' ') || branch_name.contains("..") || branch_name.contains('~')
-        || branch_name.contains('^') || branch_name.contains(':')
+    if branch_name.contains(' ')
+        || branch_name.contains("..")
+        || branch_name.contains('~')
+        || branch_name.contains('^')
+        || branch_name.contains(':')
     {
         bail!("branch name contains invalid characters");
     }

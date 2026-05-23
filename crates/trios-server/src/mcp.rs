@@ -1,6 +1,6 @@
 use rust_mcp_schema::{
-    CallToolRequestParams, CallToolResult, ContentBlock, ListToolsResult, TextContent,
-    Tool, ToolInputSchema,
+    CallToolRequestParams, CallToolResult, ContentBlock, ListToolsResult, TextContent, Tool,
+    ToolInputSchema,
 };
 use serde_json::{json, Value};
 use std::sync::LazyLock;
@@ -35,12 +35,7 @@ fn build_tool_definitions() -> Vec<Tool> {
             description: Some(description.into()),
             input_schema: ToolInputSchema::new(
                 required.into_iter().map(String::from).collect(),
-                Some(
-                    properties
-                        .into_iter()
-                        .map(|(k, v)| (k.into(), v))
-                        .collect(),
-                ),
+                Some(properties.into_iter().map(|(k, v)| (k.into(), v)).collect()),
                 None,
             ),
             annotations: None,
@@ -103,7 +98,13 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec!["repo_path"],
             vec![
                 ("repo_path", prop_type("string")),
-                ("limit", json!({"type": "integer", "default": 10}).as_object().unwrap().clone()),
+                (
+                    "limit",
+                    json!({"type": "integer", "default": 10})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
             ],
         ),
         make_tool(
@@ -182,7 +183,10 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec![
                 ("entity_type", prop_type("string")),
                 ("name", prop_type("string")),
-                ("properties", json!({"type": "object"}).as_object().unwrap().clone()),
+                (
+                    "properties",
+                    json!({"type": "object"}).as_object().unwrap().clone(),
+                ),
             ],
         ),
         make_tool(
@@ -193,7 +197,10 @@ fn build_tool_definitions() -> Vec<Tool> {
                 ("source", prop_type("string")),
                 ("target", prop_type("string")),
                 ("edge_type", prop_type("string")),
-                ("weight", json!({"type": "number"}).as_object().unwrap().clone()),
+                (
+                    "weight",
+                    json!({"type": "number"}).as_object().unwrap().clone(),
+                ),
             ],
         ),
         make_tool(
@@ -202,7 +209,10 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec!["query"],
             vec![
                 ("query", prop_type("string")),
-                ("limit", json!({"type": "integer"}).as_object().unwrap().clone()),
+                (
+                    "limit",
+                    json!({"type": "integer"}).as_object().unwrap().clone(),
+                ),
             ],
         ),
         make_tool(
@@ -211,7 +221,10 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec!["source"],
             vec![
                 ("source", prop_type("string")),
-                ("max_depth", json!({"type": "integer"}).as_object().unwrap().clone()),
+                (
+                    "max_depth",
+                    json!({"type": "integer"}).as_object().unwrap().clone(),
+                ),
             ],
         ),
         // === A2A Protocol (7) ===
@@ -238,7 +251,10 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec![
                 ("from", prop_type("string")),
                 ("to", prop_type("string")),
-                ("payload", json!({"type": "object"}).as_object().unwrap().clone()),
+                (
+                    "payload",
+                    json!({"type": "object"}).as_object().unwrap().clone(),
+                ),
             ],
         ),
         make_tool(
@@ -247,7 +263,10 @@ fn build_tool_definitions() -> Vec<Tool> {
             vec!["from"],
             vec![
                 ("from", prop_type("string")),
-                ("payload", json!({"type": "object"}).as_object().unwrap().clone()),
+                (
+                    "payload",
+                    json!({"type": "object"}).as_object().unwrap().clone(),
+                ),
             ],
         ),
         make_tool(
@@ -314,9 +333,7 @@ impl McpService {
 
                 CallToolResult {
                     content: vec![ContentBlock::TextContent(TextContent::new(
-                        text,
-                        None,
-                        None,
+                        text, None, None,
                     ))],
                     is_error: Some(false),
                     meta: None,

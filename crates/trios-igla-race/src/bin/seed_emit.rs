@@ -278,10 +278,7 @@ pub fn render_row(row: &EmitRow) -> String {
 /// End-to-end emit: validate, check duplicates against the existing
 /// ledger text, return the line to write.  Pure function — `main`
 /// supplies the I/O and the timestamp.
-pub fn emit(
-    row: &EmitRow,
-    existing_ledger: &str,
-) -> Result<String, EmitError> {
+pub fn emit(row: &EmitRow, existing_ledger: &str) -> Result<String, EmitError> {
     validate_row(row)?;
     if seeds_in_ledger(existing_ledger).contains(&row.seed) {
         return Err(EmitError::DuplicateSeed { seed: row.seed });
@@ -406,7 +403,10 @@ mod tests {
         row.bpb = 1.62;
         let line = emit(&row, "").unwrap();
         let parsed: Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(parsed["gate_action"].as_str(), Some("below_target_evidence"));
+        assert_eq!(
+            parsed["gate_action"].as_str(),
+            Some("below_target_evidence")
+        );
     }
 
     /// NaN BPB → NonFiniteBpb, exit 21.
@@ -417,7 +417,14 @@ mod tests {
         match emit(&row, "") {
             Err(EmitError::NonFiniteBpb { seed, .. }) => {
                 assert_eq!(seed, 3);
-                assert_eq!(EmitError::NonFiniteBpb { seed: 3, bpb: f64::NAN }.exit_code(), 21);
+                assert_eq!(
+                    EmitError::NonFiniteBpb {
+                        seed: 3,
+                        bpb: f64::NAN
+                    }
+                    .exit_code(),
+                    21
+                );
             }
             other => panic!("expected NonFiniteBpb, got {:?}", other),
         }
@@ -559,7 +566,12 @@ mod tests {
     fn exit_codes_are_distinct() {
         let codes: Vec<u8> = vec![
             EmitError::NonFiniteBpb { seed: 0, bpb: 0.0 }.exit_code(),
-            EmitError::BeforeWarmup { seed: 0, step: 0, warmup: 4000 }.exit_code(),
+            EmitError::BeforeWarmup {
+                seed: 0,
+                step: 0,
+                warmup: 4000,
+            }
+            .exit_code(),
             EmitError::JepaProxyDetected { seed: 0, bpb: 0.0 }.exit_code(),
             EmitError::BpbOutOfRange { seed: 0, bpb: 0.0 }.exit_code(),
             EmitError::DuplicateSeed { seed: 0 }.exit_code(),

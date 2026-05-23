@@ -22,7 +22,10 @@ impl Lcg {
         Lcg(seed ^ 0x5555_5555_5555_5555)
     }
     fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0
     }
     #[allow(dead_code)]
@@ -96,12 +99,9 @@ fn gptq_n0_byte_identical_to_naive() {
     );
     for (i, (g, n)) in gptq_out.iter().zip(naive_out.iter()).enumerate() {
         assert_eq!(
-            g,
-            n,
+            g, n,
             "byte mismatch at index {}: gptq=0x{:04x} naive=0x{:04x}",
-            i,
-            g,
-            n
+            i, g, n
         );
     }
 }

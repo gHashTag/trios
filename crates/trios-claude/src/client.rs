@@ -51,7 +51,8 @@ impl ClaudeClient {
 
         let response = process.send_prompt(prompt).await?;
 
-        self.add_message(session_id, Role::Assistant, &response).await;
+        self.add_message(session_id, Role::Assistant, &response)
+            .await;
 
         Ok(response)
     }

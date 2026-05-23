@@ -159,7 +159,8 @@ mod tests {
 
     #[test]
     fn test_broadcast_message() {
-        let msg = A2AMessage::broadcast(AgentId::new("alpha"), serde_json::json!({"event": "ping"}));
+        let msg =
+            A2AMessage::broadcast(AgentId::new("alpha"), serde_json::json!({"event": "ping"}));
         assert_eq!(msg.msg_type, A2AMessageType::Broadcast);
         assert_eq!(msg.to.as_str(), "broadcast");
     }

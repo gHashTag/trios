@@ -4,9 +4,21 @@ use uuid::Uuid;
 
 pub async fn assign(state: &AppState, params: Option<Value>) -> Value {
     let params = params.unwrap_or(json!({}));
-    let agent_id = params.get("agent_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let task = params.get("task").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let context = params.get("context").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let agent_id = params
+        .get("agent_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let task = params
+        .get("task")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let context = params
+        .get("context")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     if agent_id.is_empty() {
         return json!({"error": "agent_id is required"});
@@ -19,7 +31,15 @@ pub async fn assign(state: &AppState, params: Option<Value>) -> Value {
     let entry = TaskEntry {
         id: task_id.clone(),
         agent_id: agent_id.clone(),
-        task: format!("{}{}", task, if context.is_empty() { String::new() } else { format!(" | ctx: {}", context) }),
+        task: format!(
+            "{}{}",
+            task,
+            if context.is_empty() {
+                String::new()
+            } else {
+                format!(" | ctx: {}", context)
+            }
+        ),
         status: "assigned".to_string(),
     };
 

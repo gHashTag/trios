@@ -14,7 +14,13 @@ pub fn get_log(repo_path: &Path, limit: usize) -> Result<Vec<LogEntry>> {
         let commit = repo.find_commit(oid)?;
         entries.push(LogEntry {
             oid: oid.to_string(),
-            message: commit.message().unwrap_or_default().lines().next().unwrap_or_default().to_string(),
+            message: commit
+                .message()
+                .unwrap_or_default()
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .to_string(),
             author: commit.author().name().unwrap_or_default().to_string(),
             timestamp: commit.time().seconds(),
         });
@@ -25,8 +31,8 @@ pub fn get_log(repo_path: &Path, limit: usize) -> Result<Vec<LogEntry>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stage::stage_files;
     use crate::commit::create_commit;
+    use crate::stage::stage_files;
     use std::fs;
     use tempfile::TempDir;
 

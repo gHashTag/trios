@@ -117,12 +117,13 @@ async fn main() -> Result<()> {
     eprintln!("[embed_rag] pending chunks: {total}");
 
     // ---- 3. Boot the embedder ---------------------------------------------
-    eprintln!("[embed_rag] loading BAAI/bge-m3 (first run downloads ~600MB to fastembed cache) ...");
-    let cache_dir = env::var("FASTEMBED_CACHE")
-        .unwrap_or_else(|_| {
-            let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-            format!("{home}/.cache/fastembed")
-        });
+    eprintln!(
+        "[embed_rag] loading BAAI/bge-m3 (first run downloads ~600MB to fastembed cache) ..."
+    );
+    let cache_dir = env::var("FASTEMBED_CACHE").unwrap_or_else(|_| {
+        let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        format!("{home}/.cache/fastembed")
+    });
     std::fs::create_dir_all(&cache_dir).ok();
     let opts = InitOptions::new(EmbeddingModel::BGEM3)
         .with_cache_dir(cache_dir.into())
@@ -171,7 +172,11 @@ async fn main() -> Result<()> {
             written += 1;
         }
         let elapsed = started.elapsed().as_secs_f64();
-        let rate = if elapsed > 0.0 { written as f64 / elapsed } else { 0.0 };
+        let rate = if elapsed > 0.0 {
+            written as f64 / elapsed
+        } else {
+            0.0
+        };
         eprintln!(
             "[embed_rag] {:>4}/{:>4} chunks  ({:.1}/s)",
             written, total, rate
@@ -212,4 +217,3 @@ fn format_pg_vector(v: &[f32]) -> String {
     s.push(']');
     s
 }
-

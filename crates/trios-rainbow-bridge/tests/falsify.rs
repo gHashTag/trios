@@ -157,9 +157,7 @@ fn falsify_unsigned_honey() {
         1,
         "alpha",
         Channel::Green,
-        Payload::Honey {
-            line: "{}".into(),
-        },
+        Payload::Honey { line: "{}".into() },
         0,
         vec![], // empty signature
     );

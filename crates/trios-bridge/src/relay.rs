@@ -8,9 +8,7 @@
 
 use axum::{
     extract::State,
-    response::{
-        sse::{Event, KeepAlive, Sse},
-    },
+    response::sse::{Event, KeepAlive, Sse},
     routing::{get, post},
     Json, Router,
 };
@@ -93,7 +91,9 @@ pub async fn serve_relay(server: Arc<BridgeServer>, addr: SocketAddr) -> anyhow:
 /// const es = new EventSource('http://localhost:7475/events');
 /// es.onmessage = (e) => console.log(JSON.parse(e.data));
 /// ```
-async fn sse_events(State(state): State<RelayState>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+async fn sse_events(
+    State(state): State<RelayState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = state.server.subscribe();
     let stream = BroadcastStream::new(rx).filter_map(|result| {
         match result {
@@ -123,11 +123,8 @@ async fn dispatch_task(
 
     if req.agent_id == "broadcast" {
         // Broadcast to all agents
-        let msg = crate::protocol::BridgeMessage::send_command(
-            "broadcast".to_string(),
-            req.task,
-            false,
-        );
+        let msg =
+            crate::protocol::BridgeMessage::send_command("broadcast".to_string(), req.task, false);
         match state.server.broadcast_message(&msg) {
             Ok(()) => Json(DispatchResponse {
                 ok: true,
@@ -152,14 +149,15 @@ async fn dispatch_task(
         }
 
         router
-            .update_status(&req.agent_id, crate::protocol::AgentStatus::Working, req.task.clone())
+            .update_status(
+                &req.agent_id,
+                crate::protocol::AgentStatus::Working,
+                req.task.clone(),
+            )
             .await;
 
-        let msg = crate::protocol::BridgeMessage::send_command(
-            req.agent_id.clone(),
-            req.task,
-            false,
-        );
+        let msg =
+            crate::protocol::BridgeMessage::send_command(req.agent_id.clone(), req.task, false);
         match state.server.broadcast_message(&msg) {
             Ok(()) => Json(DispatchResponse {
                 ok: true,

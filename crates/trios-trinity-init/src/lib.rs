@@ -65,9 +65,7 @@ pub fn trinity_init(shape: &[usize]) -> Vec<f32> {
 
     let mut rng = rand::thread_rng();
 
-    (0..size)
-        .map(|_| rng.gen_range(-bound..=bound))
-        .collect()
+    (0..size).map(|_| rng.gen_range(-bound..=bound)).collect()
 }
 
 #[cfg(test)]
@@ -102,15 +100,9 @@ mod tests {
     #[test]
     fn test_determinism_with_fixed_seed() {
         // Note: thread_rng is non-deterministic, so we test statistical properties
-        let w1: Vec<f32> = trinity_init(&[100, 100])
-            .into_iter()
-            .take(10)
-            .collect();
+        let w1: Vec<f32> = trinity_init(&[100, 100]).into_iter().take(10).collect();
 
-        let w2: Vec<f32> = trinity_init(&[100, 100])
-            .into_iter()
-            .take(10)
-            .collect();
+        let w2: Vec<f32> = trinity_init(&[100, 100]).into_iter().take(10).collect();
 
         // Should not be identical (probabilistic)
         assert_ne!(w1, w2, "different calls should produce different values");

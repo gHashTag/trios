@@ -8,8 +8,8 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::router::AgentRouter;
 use crate::protocol::BridgeMessage;
+use crate::router::AgentRouter;
 
 /// Bridge server state.
 #[derive(Clone)]
@@ -137,15 +137,27 @@ impl BridgeServer {
             }
 
             BridgeMessage::ClaimIssue(cmd) => {
-                tracing::info!("🎯 ClaimIssue: agent {} claims #{}", cmd.agent_id, cmd.issue_number);
-                self.router.claim_issue(&cmd.agent_id, cmd.issue_number, cmd.branch.clone()).await;
+                tracing::info!(
+                    "🎯 ClaimIssue: agent {} claims #{}",
+                    cmd.agent_id,
+                    cmd.issue_number
+                );
+                self.router
+                    .claim_issue(&cmd.agent_id, cmd.issue_number, cmd.branch.clone())
+                    .await;
                 let agents = self.router.list().await;
                 self.broadcast_message(&BridgeMessage::board_state(agents, vec![]))?;
             }
 
             BridgeMessage::UpdateStatus(cmd) => {
-                tracing::info!("📊 UpdateStatus: agent {} -> {:?}", cmd.agent_id, cmd.status);
-                self.router.update_status(&cmd.agent_id, cmd.status, cmd.message.clone()).await;
+                tracing::info!(
+                    "📊 UpdateStatus: agent {} -> {:?}",
+                    cmd.agent_id,
+                    cmd.status
+                );
+                self.router
+                    .update_status(&cmd.agent_id, cmd.status, cmd.message.clone())
+                    .await;
                 let agents = self.router.list().await;
                 self.broadcast_message(&BridgeMessage::board_state(agents, vec![]))?;
             }

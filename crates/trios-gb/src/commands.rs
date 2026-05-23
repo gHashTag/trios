@@ -14,7 +14,9 @@ fn which_gb() -> Result<std::path::PathBuf> {
             return Ok(path);
         }
     }
-    bail!("gitbutler-cli not found on PATH — install from https://github.com/gitbutlerapp/gitbutler")
+    bail!(
+        "gitbutler-cli not found on PATH — install from https://github.com/gitbutlerapp/gitbutler"
+    )
 }
 
 /// List GitButler virtual branches for a repo
@@ -28,8 +30,7 @@ pub async fn gb_list_branches(repo_path: &Path) -> Result<Vec<GbBranch>> {
             .current_dir(&path)
             .output()
     })
-    .await??
-    ;
+    .await??;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -54,8 +55,7 @@ pub async fn gb_push_stack(repo_path: &Path, branch_name: &str) -> Result<()> {
             .current_dir(&path)
             .output()
     })
-    .await??
-    ;
+    .await??;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

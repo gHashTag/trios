@@ -64,8 +64,14 @@ pub const LANE_COUNT: usize = 14;
 // away from the JSON anchors. `const _: ()` is the canonical Rust idiom for
 // build-time invariants.
 const _: () = {
-    assert!(VICTORY_SEED_TARGET == 3, "JSON requires 3 distinct victory seeds");
-    assert!(LANE_COUNT == 14, "lane_ownership in JSON has 14 entries (L0..L13)");
+    assert!(
+        VICTORY_SEED_TARGET == 3,
+        "JSON requires 3 distinct victory seeds"
+    );
+    assert!(
+        LANE_COUNT == 14,
+        "lane_ownership in JSON has 14 entries (L0..L13)"
+    );
     // BPB_VICTORY_TARGET cannot be checked with `const fn` float compare on
     // stable, but the runtime test `test_bpb_target_matches_lib` enforces it.
 };
@@ -272,7 +278,10 @@ impl HiveAutomaton {
 
     /// Construct from an explicit priority queue (used in tests).
     pub fn with_queue(queue: Vec<Lane>) -> Self {
-        Self { state: State::Boot, priority_queue: queue }
+        Self {
+            state: State::Boot,
+            priority_queue: queue,
+        }
     }
 
     pub fn state(&self) -> State {
@@ -282,7 +291,10 @@ impl HiveAutomaton {
     /// Pick the highest-priority free lane from the queue, falling back to
     /// `None` if every queue entry is currently claimed by someone else.
     fn pick_free_lane(&self, world: &World) -> Option<Lane> {
-        self.priority_queue.iter().find(|&&lane| world.free_lanes.contains(&lane)).copied()
+        self.priority_queue
+            .iter()
+            .find(|&&lane| world.free_lanes.contains(&lane))
+            .copied()
     }
 
     /// **The pure transition function.**
@@ -573,7 +585,11 @@ mod tests {
         assert_eq!(h.state(), State::Done);
         // The next tick MUST be RescanIssue, not Halt.
         let a = h.next_action(&w);
-        assert_eq!(a, AgentAction::RescanIssue, "Done must cycle to Scan, never Idle");
+        assert_eq!(
+            a,
+            AgentAction::RescanIssue,
+            "Done must cycle to Scan, never Idle"
+        );
         assert_eq!(h.state(), State::Scan);
         assert!(!h.state().is_absorbing());
     }
@@ -597,7 +613,10 @@ mod tests {
         let mut w = world_after_boot();
         w.deadline_passed = true;
         let a = h.next_action(&w);
-        assert_eq!(a, AgentAction::Halt(HaltCause::HardAbort(AbortReason::DeadlinePassed)));
+        assert_eq!(
+            a,
+            AgentAction::Halt(HaltCause::HardAbort(AbortReason::DeadlinePassed))
+        );
         assert_eq!(h.state(), State::HardAbort);
     }
 
@@ -609,7 +628,9 @@ mod tests {
         let a = h.next_action(&w);
         assert_eq!(
             a,
-            AgentAction::Halt(HaltCause::HardAbort(AbortReason::R7ForbiddenValueIntroduced))
+            AgentAction::Halt(HaltCause::HardAbort(
+                AbortReason::R7ForbiddenValueIntroduced
+            ))
         );
     }
 
@@ -661,7 +682,10 @@ mod tests {
     fn test_priority_queue_default_matches_json() {
         // L7, L6, L9, L11, L12 — see `assertions/hive_automaton.json::lane_priority_queue`.
         let h = HiveAutomaton::new();
-        assert_eq!(h.priority_queue, vec![Lane::L7, Lane::L6, Lane::L9, Lane::L11, Lane::L12]);
+        assert_eq!(
+            h.priority_queue,
+            vec![Lane::L7, Lane::L6, Lane::L9, Lane::L11, Lane::L12]
+        );
     }
 
     #[test]

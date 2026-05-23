@@ -29,7 +29,10 @@ pub async fn start(port: u16) -> Result<()> {
     if !funnel_active {
         // Try alternative check - see if port is listening
         if !is_port_listening(port).await? {
-            anyhow::bail!("Funnel started but port {} is not listening. Check Tailscale logs.", port);
+            anyhow::bail!(
+                "Funnel started but port {} is not listening. Check Tailscale logs.",
+                port
+            );
         }
     }
 
@@ -76,8 +79,8 @@ pub async fn status() -> Result<()> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let json: serde_json::Value = serde_json::from_str(&stdout)
-        .context("Failed to parse Tailscale status JSON")?;
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).context("Failed to parse Tailscale status JSON")?;
 
     // Check if funnel is active
     let funnel_active = check_status().await?;
@@ -95,7 +98,14 @@ pub async fn status() -> Result<()> {
         }
     }
 
-    println!("║ Funnel: {:<28} ║", if funnel_active { "ACTIVE ✅" } else { "INACTIVE ❌" });
+    println!(
+        "║ Funnel: {:<28} ║",
+        if funnel_active {
+            "ACTIVE ✅"
+        } else {
+            "INACTIVE ❌"
+        }
+    );
 
     if funnel_active {
         if let Some(self_info) = json.get("Self").and_then(|v| v.as_object()) {
@@ -121,7 +131,8 @@ async fn check_status() -> Result<bool> {
     match output {
         Ok(result) if result.status.success() => {
             let stdout = String::from_utf8_lossy(&result.stdout);
-            let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or(serde_json::json!({}));
+            let json: serde_json::Value =
+                serde_json::from_str(&stdout).unwrap_or(serde_json::json!({}));
 
             // Check if "Web" key exists (indicates funnel is active)
             if json.get("Web").and_then(|v| v.as_object()).is_some() {

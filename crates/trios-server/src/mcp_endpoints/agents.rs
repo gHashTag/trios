@@ -1,6 +1,6 @@
 use crate::ws_handler::AppState;
 use serde_json::{json, Value};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 const SYSTEM_PROMPT: &str = "You are Trinity — an AI agent orchestrator built on the trios stack. \
 You help developers manage agents, tasks, and tools. \
@@ -16,7 +16,10 @@ pub async fn list(state: &AppState) -> Value {
 
 pub async fn chat(state: &AppState, params: Option<Value>) -> Value {
     let params = params.unwrap_or(json!({}));
-    let agent_id = params.get("agent_id").and_then(|v| v.as_str()).unwrap_or("");
+    let agent_id = params
+        .get("agent_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let message = params.get("message").and_then(|v| v.as_str()).unwrap_or("");
 
     if agent_id.is_empty() {
@@ -53,13 +56,22 @@ async fn call_zai(state: &AppState, message: &str) -> Value {
 
     for attempt in 0..MAX_RETRIES {
         // Round-robin: each retry picks the next key
-        let idx = state.zai_key_idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % n_keys;
+        let idx = state
+            .zai_key_idx
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % n_keys;
         let key = &state.zai_keys[idx];
 
-        info!("[z.ai] POST {} attempt={} key_idx={} msg={} bytes",
-            state.zai_api, attempt, idx, message.len());
+        info!(
+            "[z.ai] POST {} attempt={} key_idx={} msg={} bytes",
+            state.zai_api,
+            attempt,
+            idx,
+            message.len()
+        );
 
-        let resp = state.http_client
+        let resp = state
+            .http_client
             .post(&state.zai_api)
             .header("x-api-key", key.as_str())
             .header("anthropic-version", "2023-06-01")
@@ -83,7 +95,10 @@ async fn call_zai(state: &AppState, message: &str) -> Value {
 
         // Retry on rate-limit or server errors
         if status.as_u16() == 429 || status.is_server_error() {
-            warn!("[z.ai] HTTP {} attempt={} — retrying with next key", status, attempt);
+            warn!(
+                "[z.ai] HTTP {} attempt={} — retrying with next key",
+                status, attempt
+            );
             if attempt + 1 == MAX_RETRIES {
                 return json!({"error": format!("z.ai HTTP {} after {} retries", status, MAX_RETRIES)});
             }
@@ -105,7 +120,8 @@ async fn call_zai(state: &AppState, message: &str) -> Value {
 
         if let Ok(val) = serde_json::from_str::<Value>(&text) {
             if let Some(content) = val.get("content").and_then(|c| c.as_array()) {
-                let reply: String = content.iter()
+                let reply: String = content
+                    .iter()
                     .filter_map(|block| {
                         if block.get("type").and_then(|t| t.as_str()) == Some("text") {
                             block.get("text").and_then(|t| t.as_str())
@@ -115,7 +131,11 @@ async fn call_zai(state: &AppState, message: &str) -> Value {
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
-                info!("[z.ai] response: {} bytes (attempt={})", reply.len(), attempt);
+                info!(
+                    "[z.ai] response: {} bytes (attempt={})",
+                    reply.len(),
+                    attempt
+                );
                 return json!({"response": reply});
             }
         }

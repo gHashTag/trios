@@ -200,22 +200,15 @@ mod tests {
     #[tokio::test]
     async fn test_operator_ping() {
         let state = AppState::new();
-        let result = handle_operator_message(
-            r#"{"method":"operator/ping"}"#,
-            &state,
-        )
-        .await;
+        let result = handle_operator_message(r#"{"method":"operator/ping"}"#, &state).await;
         assert!(result.get("pong").unwrap().as_bool().unwrap());
     }
 
     #[tokio::test]
     async fn test_operator_extension_state() {
         let state = AppState::new();
-        let result = handle_operator_message(
-            r#"{"method":"operator/extension/state"}"#,
-            &state,
-        )
-        .await;
+        let result =
+            handle_operator_message(r#"{"method":"operator/extension/state"}"#, &state).await;
         assert!(result.get("panel_open").is_some());
         assert!(result.get("agents").is_some());
         assert!(result.get("chat_log").is_some());
@@ -246,22 +239,14 @@ mod tests {
     #[tokio::test]
     async fn test_operator_agent_list() {
         let state = AppState::new();
-        let result = handle_operator_message(
-            r#"{"method":"operator/agent/list"}"#,
-            &state,
-        )
-        .await;
+        let result = handle_operator_message(r#"{"method":"operator/agent/list"}"#, &state).await;
         assert!(result.is_array());
     }
 
     #[tokio::test]
     async fn test_operator_health() {
         let state = AppState::new();
-        let result = handle_operator_message(
-            r#"{"method":"operator/health"}"#,
-            &state,
-        )
-        .await;
+        let result = handle_operator_message(r#"{"method":"operator/health"}"#, &state).await;
         assert_eq!(result.get("status").unwrap().as_str().unwrap(), "ok");
         assert_eq!(
             result.get("server").unwrap().as_str().unwrap(),
@@ -272,11 +257,7 @@ mod tests {
     #[tokio::test]
     async fn test_operator_unknown_method() {
         let state = AppState::new();
-        let result = handle_operator_message(
-            r#"{"method":"operator/nonexistent"}"#,
-            &state,
-        )
-        .await;
+        let result = handle_operator_message(r#"{"method":"operator/nonexistent"}"#, &state).await;
         assert!(result.get("error").is_some());
     }
 

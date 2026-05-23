@@ -27,24 +27,24 @@ impl LayerType {
     /// Get computational cost multiplier (relative to f32)
     pub fn cost_multiplier(&self) -> f32 {
         match self {
-            LayerType::GF16 => 1.0,        // Same as f32 (uses DSP)
-            LayerType::Ternary => 0.0,    // Zero DSP cost (ternary only)
+            LayerType::GF16 => 1.0,    // Same as f32 (uses DSP)
+            LayerType::Ternary => 0.0, // Zero DSP cost (ternary only)
         }
     }
 
     /// Get DSP units per parameter (XC7A100T)
     pub fn dsp_per_param(&self) -> u32 {
         match self {
-            LayerType::GF16 => 16,         // 16 DSP per MAC-16 operation
-            LayerType::Ternary => 0,        // Ternary uses only LUT
+            LayerType::GF16 => 16,   // 16 DSP per MAC-16 operation
+            LayerType::Ternary => 0, // Ternary uses only LUT
         }
     }
 
     /// Get LUT units per parameter (XC7A100T)
     pub fn lut_per_param(&self) -> u32 {
         match self {
-            LayerType::GF16 => 118,        // From whitepaper BENCH-005
-            LayerType::Ternary => 2,        // From whitepaper BENCH-005
+            LayerType::GF16 => 118,  // From whitepaper BENCH-005
+            LayerType::Ternary => 2, // From whitepaper BENCH-005
         }
     }
 }
@@ -135,7 +135,7 @@ impl MemoryBudget {
     pub fn mb_16() -> Self {
         Self {
             target_bytes: 16 * 1024 * 1024,
-            max_compression_ratio: 4.0,  // GF16 + zstd achieves ~4x
+            max_compression_ratio: 4.0, // GF16 + zstd achieves ~4x
         }
     }
 
@@ -191,7 +191,6 @@ pub static STATIC_ROUTING_TABLE: &[(&str, LayerType)] = &[
     ("attn_out", LayerType::GF16),
     ("final_norm", LayerType::GF16),
     ("output", LayerType::GF16),
-
     // Bulk computation layers → Ternary
     ("mlp_gate", LayerType::Ternary),
     ("mlp_up", LayerType::Ternary),
@@ -229,7 +228,7 @@ impl PrecisionFormat {
     pub fn bits_per_param(&self) -> f32 {
         match self {
             PrecisionFormat::GF16 => 16.0,
-            PrecisionFormat::Ternary => 1.58,  // log2(3) ≈ 1.585
+            PrecisionFormat::Ternary => 1.58, // log2(3) ≈ 1.585
         }
     }
 
@@ -284,8 +283,7 @@ impl RoutingPlan {
         self.estimated_lut = total_lut;
         self.estimated_size_bytes = (total_bits / 8) as u32;
         self.fits_budget =
-            budget.fits(self.estimated_size_bytes) &&
-            total_dsp <= dsp_budget.available_dsp();
+            budget.fits(self.estimated_size_bytes) && total_dsp <= dsp_budget.available_dsp();
     }
 }
 
@@ -302,9 +300,7 @@ pub struct PrecisionRouter {
 impl PrecisionRouter {
     /// Create new precision router
     pub fn new(use_static_policy: bool) -> Self {
-        Self {
-            use_static_policy,
-        }
+        Self { use_static_policy }
     }
 
     /// Plan routing for all layers
@@ -422,6 +418,6 @@ mod tests {
         let budget = DspBudget::xc7a100t();
         assert_eq!(budget.total_dsp, 240);
         assert_eq!(budget.max_utilization, 0.95);
-        assert_eq!(budget.available_dsp(), 228);  // 240 * 0.95
+        assert_eq!(budget.available_dsp(), 228); // 240 * 0.95
     }
 }

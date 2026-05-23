@@ -6,10 +6,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::{
-    config::Config,
-    gh::GhClient,
-};
+use crate::{config::Config, gh::GhClient};
 
 /// Update agent roster status
 pub fn roster_update(agent: &str, status: &str) -> Result<()> {
@@ -18,10 +15,12 @@ pub fn roster_update(agent: &str, status: &str) -> Result<()> {
     let _config = Config::load();
 
     // Find agent roster issue (search for agent: NATO in issues)
-    let issues = GhClient::list_agent_issues(agent)
-        .context("Failed to search for agent issues")?;
+    let issues = GhClient::list_agent_issues(agent).context("Failed to search for agent issues")?;
 
-    if let Some(roster_issue) = issues.iter().find(|i| i.title.contains("roster") || i.title.contains("Roster")) {
+    if let Some(roster_issue) = issues
+        .iter()
+        .find(|i| i.title.contains("roster") || i.title.contains("Roster"))
+    {
         println!("Found roster issue: #{}", roster_issue.number);
 
         // TODO: Update roster issue body with new status
