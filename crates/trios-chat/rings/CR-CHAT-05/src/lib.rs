@@ -25,6 +25,11 @@ pub use key_rotation::{
     JournalEntry, KeyEpoch, RotatableRow, RotatingColumn, RotationJournal, Rotator,
 };
 
+pub mod envelope_ordering_integrity;
+pub use envelope_ordering_integrity::{
+    validate_envelope_order, EnvelopeOrderError, StoredEnvelope, EORD_MAX_COUNTER_SPAN,
+};
+
 pub mod welcome_keypackage_pinning;
 pub use welcome_keypackage_pinning::{
     KeyPackageHash, KeyPackagePin, WelcomeError, WKP_DOMAIN, WKP_LEN,

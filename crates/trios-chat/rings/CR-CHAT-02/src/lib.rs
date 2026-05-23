@@ -59,6 +59,11 @@ pub use cover_traffic_decoy_indistinguishability::{
 
 pub mod welcome_init_secret_kdf_label_confusion;
 
+pub mod root_key_derivation_chain;
+pub use root_key_derivation_chain::{
+    validate_root_key_chain, RootKeyChainError, RootKeyStep, RKDC_KEY_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
