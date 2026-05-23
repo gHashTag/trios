@@ -30,6 +30,11 @@ pub use key_rotation_replay_guard::{
     validate_rotation_chain, KeyRotationReplayError, RotationEvent, KRRG_MAX_ROTATIONS,
 };
 
+pub mod store_integrity_hash_chain;
+pub use store_integrity_hash_chain::{
+    validate_hash_chain, ChainLink, HashChainError, SIHC_GENESIS, SIHC_MAX_CHAIN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

@@ -45,6 +45,11 @@ pub use injection_pattern_depth_guard::{
     count_nesting_depth, validate_injection_depth, InjectionDepthError, INJECTION_SENTINEL,
     IPDG_MAX_DEPTH, IPDG_MAX_INPUT_LEN,
 };
+
+pub mod tool_cot_leak_guard;
+pub use tool_cot_leak_guard::{
+    validate_no_cot_leak, CotLeakError, TCOT_MAX_LEN,
+};
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
