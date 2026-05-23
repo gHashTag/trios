@@ -81,6 +81,12 @@ pub use blind_signature_sender_token::{
     BLIND_SIGNATURE_LEN, BLIND_TOKEN_NONCE_LEN,
 };
 
+pub mod cover_traffic_burst_detection;
+pub use cover_traffic_burst_detection::{
+    validate_burst_pattern, BurstError, EmissionKind, EmissionRecord,
+    BURST_MAX_EMISSIONS, BURST_MAX_SILENCE_MS, BURST_MIN_GAP_MS, BURST_WINDOW_MS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
