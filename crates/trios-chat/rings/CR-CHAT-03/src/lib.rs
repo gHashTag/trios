@@ -121,6 +121,12 @@ pub use treekem_epoch_transition_integrity_guard::{
     TETI_HASH_LEN, TETI_MAX_DEPTH, TETI_MAX_TRANSITIONS,
 };
 
+pub mod treekem_parent_node_resolution_depth_guard;
+pub use treekem_parent_node_resolution_depth_guard::{
+    validate_node_resolutions, NodeResolution, ResolutionError,
+    TPNR_MAX_DEPTH, TPNR_MAX_NODES, TPNR_MAX_RESOLUTIONS,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

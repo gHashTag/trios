@@ -200,6 +200,12 @@ pub use cover_traffic_inter_epoch_continuity_guard::{
     CTIC_MAX_EPOCHS, CTIC_MAX_RATE, CTIC_MAX_RATE_DEV, CTIC_MIN_RATE,
 };
 
+pub mod cover_traffic_volume_stability_guard;
+pub use cover_traffic_volume_stability_guard::{
+    validate_volume_stability, VolumeStabilityError, VolumeWindow,
+    CTSG_MAX_DEVIATION, CTSG_MAX_VOLUME, CTSG_MAX_WINDOWS, CTSG_MIN_VOLUME,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
