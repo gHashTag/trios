@@ -134,6 +134,12 @@ pub use store_session_isolation_verification_guard::{
     SSIV_HASH_LEN, SSIV_MAX_RECORDS, SSIV_SESSION_LEN,
 };
 
+pub mod store_encryption_key_derivation_context_guard;
+pub use store_encryption_key_derivation_context_guard::{
+    validate_key_contexts, KeyContextError, KeyContextRecord,
+    SEKC_CONTEXT_LEN, SEKC_KEY_HASH_LEN, SEKC_MAX_RECORDS, SEKC_SESSION_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

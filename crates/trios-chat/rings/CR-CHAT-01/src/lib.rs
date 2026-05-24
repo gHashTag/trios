@@ -184,6 +184,12 @@ pub use prekey_bundle_lifetime_enforcement_guard::{
     PBLE_BUNDLE_ID_LEN, PBLE_MAX_BUNDLES, PBLE_MAX_LIFETIME_MS,
 };
 
+pub mod identity_key_predecessor_acknowledgment_guard;
+pub use identity_key_predecessor_acknowledgment_guard::{
+    validate_predecessor_chain, PredecessorError, RotationAck,
+    IKPA_HASH_LEN, IKPA_MAX_ROTATIONS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
