@@ -128,6 +128,13 @@ pub use agent_response_length_bound_guard::{
     ARLB_MAX_BATCH, ARLB_MAX_CUMULATIVE, ARLB_MAX_RESPONSE_LEN, ARLB_ID_LEN,
 };
 
+pub mod agent_session_concurrency_limit_guard;
+pub use agent_session_concurrency_limit_guard::{
+    validate_session_concurrency, ConcurrencyError, SessionRecord,
+    ASCL_MAX_BATCH, ASCL_MAX_CONCURRENT, ASCL_MAX_PER_USER, ASCL_MAX_PRIORITY,
+    ASCL_MIN_PRIORITY, ASCL_SESSION_ID_LEN, ASCL_USER_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

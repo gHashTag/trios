@@ -115,6 +115,12 @@ pub use treekem_update_path_coverage_guard::{
     TUPC_MAX_LEAVES, TUPC_MAX_PATHS,
 };
 
+pub mod treekem_epoch_transition_integrity_guard;
+pub use treekem_epoch_transition_integrity_guard::{
+    validate_epoch_transitions, EpochTransition, EpochTransitionError,
+    TETI_HASH_LEN, TETI_MAX_DEPTH, TETI_MAX_TRANSITIONS,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
