@@ -196,6 +196,12 @@ pub use prekey_bundle_signature_algorithm_consistency_guard::{
     PBAC_APPROVED_ALGOS, PBAC_BUNDLE_ID_LEN, PBAC_MAX_BUNDLES, PBAC_PK_LEN,
 };
 
+pub mod prekey_bundle_rotation_rate_limit_guard;
+pub use prekey_bundle_rotation_rate_limit_guard::{
+    validate_rotation_rate, RotationRateError,
+    PBRL_BUNDLE_ID_LEN, PBRL_MAX_INTERVAL_MS, PBRL_MAX_ROTATIONS, PBRL_MIN_INTERVAL_MS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

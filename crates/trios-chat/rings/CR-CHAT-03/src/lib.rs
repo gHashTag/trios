@@ -153,6 +153,12 @@ pub use treekem_sibling_node_independence_guard::{
     TSNI_KEY_HASH_LEN, TSNI_MAX_LEVEL, TSNI_MAX_NODES,
 };
 
+pub mod treekem_leaf_node_key_freshness_guard;
+pub use treekem_leaf_node_key_freshness_guard::{
+    validate_leaf_freshness, LeafFreshnessError, LeafKeyRecord,
+    TLNF_HASH_LEN, TLNF_MAX_AGE_MS, TLNF_MAX_LEAVES,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
