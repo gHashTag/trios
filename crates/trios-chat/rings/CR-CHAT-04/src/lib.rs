@@ -148,6 +148,12 @@ pub use padding_key_rotation_uniformity_guard::{
     PKRU_KEY_ID_LEN, PKRU_MAX_INTERVAL, PKRU_MAX_ROTATIONS, PKRU_MIN_INTERVAL,
 };
 
+pub mod padding_nonce_reuse_detection_guard;
+pub use padding_nonce_reuse_detection_guard::{
+    validate_nonce_reuse, NonceRecord, NonceReuseError,
+    PNRD_KEY_ID_LEN, PNRD_MAX_NONCE, PNRD_MAX_RECORDS, PNRD_NONCE_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

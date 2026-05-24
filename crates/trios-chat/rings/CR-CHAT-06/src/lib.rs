@@ -135,6 +135,12 @@ pub use agent_session_concurrency_limit_guard::{
     ASCL_MIN_PRIORITY, ASCL_SESSION_ID_LEN, ASCL_USER_ID_LEN,
 };
 
+pub mod agent_tool_authorization_scope_guard;
+pub use agent_tool_authorization_scope_guard::{
+    validate_tool_authorization, ScopeAuthError, ToolInvocation,
+    ATAS_MAX_RECORDS, ATAS_MAX_SCOPE_DEPTH, ATAS_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
