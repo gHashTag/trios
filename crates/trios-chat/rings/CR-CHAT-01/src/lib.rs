@@ -221,6 +221,12 @@ pub use prekey_bundle_signature_validity_window_guard::{
     PBSV_BUNDLE_ID_LEN, PBSV_MAX_BUNDLES, PBSV_MAX_WINDOW_MS,
 };
 
+pub mod prekey_bundle_cipher_suite_consistency_guard;
+pub use prekey_bundle_cipher_suite_consistency_guard::{
+    validate_cipher_suite_consistency, BundleCipherRecord, CipherSuiteConsistencyError,
+    PBCC_BUNDLE_ID_LEN, PBCC_MAX_BATCH,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

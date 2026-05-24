@@ -196,6 +196,12 @@ pub use padding_ciphertext_length_class_balance_guard::{
     PCLB_MAX_CHI_SQUARED, PCLB_MAX_RECORDS, PCLB_MIN_RECORDS, PCLB_NUM_CLASSES, PCLB_RECORD_ID_LEN,
 };
 
+pub mod padding_block_size_alignment_guard;
+pub use padding_block_size_alignment_guard::{
+    validate_padding_block_alignment, BlockAlignmentError, PaddingBlockRecord,
+    PBSA_BLOCK_ID_LEN, PBSA_MAX_BATCH, PBSA_MAX_BLOCK, PBSA_MIN_BLOCK,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
