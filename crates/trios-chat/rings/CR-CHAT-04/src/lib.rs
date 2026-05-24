@@ -124,6 +124,12 @@ pub use padding_class_selection_entropy_guard::{
     PCSE_NUM_CLASSES,
 };
 
+pub mod padding_alignment_boundary_guard;
+pub use padding_alignment_boundary_guard::{
+    validate_padding_alignment, AlignmentError, PaddedMessage,
+    PALB_CLASSES, PALB_PREFIX_LEN,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

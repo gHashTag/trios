@@ -175,6 +175,12 @@ pub use cover_traffic_emission_jitter_guard::{
     CTEJ_MAX_EMISSIONS, CTEJ_MAX_JITTER_MS, CTEJ_MIN_JITTER_MS,
 };
 
+pub mod decoy_message_payload_entropy_guard;
+pub use decoy_message_payload_entropy_guard::{
+    validate_decoy_entropy, DecoyEntropyError, DecoyMessage,
+    DMPE_MAX_DECOYS, DMPE_MAX_LEN, DMPE_MIN_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
