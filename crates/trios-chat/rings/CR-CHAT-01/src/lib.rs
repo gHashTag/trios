@@ -258,6 +258,12 @@ pub use identity_key_signature_algorithm_consistency_guard::{
     IKSC_MAX_SIG_LEN, IKSC_MAX_SIGNATURES, IKSC_SIGNER_ID_LEN,
 };
 
+pub mod prekey_bundle_signature_field_coverage_guard;
+pub use prekey_bundle_signature_field_coverage_guard::{
+    validate_field_coverage, CoverageRecord, FieldCoverageError,
+    PBSF_BUNDLE_ID_LEN, PBSF_MAX_BUNDLES, PBSF_MAX_FIELDS, PBSF_REQUIRED_TAGS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

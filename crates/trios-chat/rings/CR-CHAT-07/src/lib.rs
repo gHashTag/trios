@@ -284,6 +284,14 @@ pub use cover_traffic_burst_interval_regularity_guard::{
     CTBI_BURST_ID_LEN, CTBI_MAX_BURSTS, CTBI_MIN_BURSTS, CTBI_MIN_STD_DEV,
 };
 
+pub mod cover_traffic_size_distribution_guard;
+pub use cover_traffic_size_distribution_guard::{
+    validate_size_distribution as validate_cover_size_distribution,
+    SizeDistributionError as CoverSizeDistributionError,
+    SizeObservation as DistSizeObservation,
+    CTSD_MAX_DISTANCE, CTSD_MAX_OBS, CTSD_MIN_OBS, CTSD_OBS_ID_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
