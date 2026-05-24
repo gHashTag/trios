@@ -146,6 +146,12 @@ pub use store_migration_compat_guard::{
     SMCG_HASH_LEN, SMCG_MAX_MIGRATIONS, SMCG_MAX_VERSION,
 };
 
+pub mod store_snapshot_hash_chain_continuity_guard;
+pub use store_snapshot_hash_chain_continuity_guard::{
+    validate_snapshot_chain, SnapshotChainError, SnapshotLink,
+    SSHC_GENESIS, SSHC_HASH_LEN, SSHC_MAX_SNAPSHOTS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

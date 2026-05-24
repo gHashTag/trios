@@ -142,9 +142,15 @@ pub use treekem_update_path_uniqueness_guard::{
 
 pub mod treekem_group_membership_change_rate_guard;
 pub use treekem_group_membership_change_rate_guard::{
-    validate_membership_rate, MembershipRateError, MembershipWindow,
-    CHANGE_JOIN, CHANGE_LEAVE, CHANGE_UPDATE,
-    GMCR_MAX_CHANGES, GMCR_MAX_WINDOWS, GMCR_MIN_WINDOW_MS, GMCR_VALID_CHANGES,
+    validate_membership_rate, MembershipWindow, MembershipRateError,
+    GMCR_MAX_CHANGES, GMCR_MAX_WINDOWS, GMCR_MIN_WINDOW_MS,
+};
+
+pub mod treekem_sibling_node_independence_guard;
+pub use treekem_sibling_node_independence_guard::{
+    validate_sibling_independence, SiblingIndependenceError,
+    TreeNode as SiblingTreeNode,
+    TSNI_KEY_HASH_LEN, TSNI_MAX_LEVEL, TSNI_MAX_NODES,
 };
 
 pub mod treekem_update_path_validation;
