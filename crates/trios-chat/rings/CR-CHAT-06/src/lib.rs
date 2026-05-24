@@ -171,6 +171,12 @@ pub use agent_tool_call_dependency_cycle_guard::{
     ATDC_MAX_EDGES, ATDC_TOOL_ID_LEN,
 };
 
+pub mod agent_output_format_validation_guard;
+pub use agent_output_format_validation_guard::{
+    validate_output_format, FormatValidationError, OutputRecord,
+    AOFV_APPROVED_TYPES, AOFV_MAX_LEN, AOFV_MAX_OUTPUTS, AOFV_OUTPUT_ID_LEN, AOFV_TEXT_FORBIDDEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

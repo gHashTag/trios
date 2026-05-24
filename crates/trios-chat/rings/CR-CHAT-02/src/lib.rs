@@ -193,6 +193,14 @@ pub use root_key_forward_secrecy_verification_guard::{
     RKFS_HASH_LEN, RKFS_MAX_STEPS,
 };
 
+pub mod chain_key_derivation_domain_separation_guard;
+pub use chain_key_derivation_domain_separation_guard::{
+    validate_domain_separation as validate_chain_domain_separation,
+    DerivationRecord as ChainDerivationRecord,
+    DomainSepError as ChainDomainSepError,
+    CKDS_APPROVED_DOMAINS, CKDS_CHAIN_ID_LEN, CKDS_HASH_LEN, CKDS_MAX_DERIVATIONS,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
