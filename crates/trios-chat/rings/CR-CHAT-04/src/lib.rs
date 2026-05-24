@@ -166,6 +166,12 @@ pub use padding_key_derivation_domain_separation_guard::{
     PKDS_APPROVED_LABELS, PKDS_CONTEXT_LEN, PKDS_MAX_DERIVATIONS,
 };
 
+pub mod padding_payload_entropy_minimum_guard;
+pub use padding_payload_entropy_minimum_guard::{
+    validate_payload_entropy, PayloadEntropyError, PayloadRecord,
+    PPEM_HASH_LEN, PPEM_MAX_LEN, PPEM_MAX_PAYLOADS, PPEM_MIN_ENTROPY, PPEM_MIN_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

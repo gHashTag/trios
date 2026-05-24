@@ -181,6 +181,12 @@ pub use skipped_message_key_cache_size_bound_guard::{
     SMKB_MAX_ENTRIES, SMKB_MAX_PER_CHAIN,
 };
 
+pub mod ephemeral_public_key_reuse_detection_guard;
+pub use ephemeral_public_key_reuse_detection_guard::{
+    validate_ephemeral_key_reuse, EphemeralKeyRecord, EphemeralReuseError,
+    EPKR_KEY_LEN, EPKR_MAX_RECORDS, EPKR_SESSION_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
