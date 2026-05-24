@@ -110,6 +110,12 @@ pub use store_record_deletion_integrity_guard::{
     SRDI_MAX_RECORDS,
 };
 
+pub mod store_record_tombstone_gc_guard;
+pub use store_record_tombstone_gc_guard::{
+    validate_tombstone_gc, GcTombstone, GcTombstoneError,
+    STGC_MAX_AGE_MS, STGC_MAX_TOMBSTONES, STGC_RECORD_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

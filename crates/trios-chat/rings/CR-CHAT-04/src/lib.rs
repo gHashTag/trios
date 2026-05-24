@@ -142,6 +142,12 @@ pub use padding_class_transition_audit::{
     PCTA_CLASSES, PCTA_MIN_PER_CLASS, PCTA_WINDOW_SIZE,
 };
 
+pub mod padding_key_rotation_uniformity_guard;
+pub use padding_key_rotation_uniformity_guard::{
+    validate_key_rotations, KeyRotation, KeyRotationError,
+    PKRU_KEY_ID_LEN, PKRU_MAX_INTERVAL, PKRU_MAX_ROTATIONS, PKRU_MIN_INTERVAL,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
