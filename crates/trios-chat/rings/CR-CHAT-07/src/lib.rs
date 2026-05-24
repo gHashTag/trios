@@ -156,6 +156,12 @@ pub use cover_traffic_timing_correlation_guard::{
     CTCG_MAX_WINDOW, CTCG_MIN_COVER_BETWEEN_REAL,
 };
 
+pub mod observer_fingerprint_rotation_guard;
+pub use observer_fingerprint_rotation_guard::{
+    validate_fingerprint_rotation, FingerprintRotationError, SessionFingerprint,
+    OFRG_MAX_FP_LEN, OFRG_MAX_ROTATIONS, OFRG_MAX_SESSIONS, OFRG_MAX_TRACKED,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

@@ -127,6 +127,13 @@ pub use identity_key_usage_count_guard::{
     IKUC_MAX_SIGNATURES, IKUC_WARN_SIGNATURES,
 };
 
+pub mod sealed_sender_replay_guard;
+pub use sealed_sender_replay_guard::{
+    validate_sealed_sender_replay,
+    SealedReplayError,
+    SSRG_KEY_LEN, SSRG_MAX_KEYS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
