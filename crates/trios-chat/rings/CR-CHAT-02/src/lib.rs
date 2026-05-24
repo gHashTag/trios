@@ -187,6 +187,12 @@ pub use ephemeral_public_key_reuse_detection_guard::{
     EPKR_KEY_LEN, EPKR_MAX_RECORDS, EPKR_SESSION_LEN,
 };
 
+pub mod root_key_forward_secrecy_verification_guard;
+pub use root_key_forward_secrecy_verification_guard::{
+    validate_forward_secrecy, ForwardSecrecyError, RatchetStep,
+    RKFS_HASH_LEN, RKFS_MAX_STEPS,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

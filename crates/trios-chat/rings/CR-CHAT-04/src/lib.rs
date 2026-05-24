@@ -172,6 +172,12 @@ pub use padding_payload_entropy_minimum_guard::{
     PPEM_HASH_LEN, PPEM_MAX_LEN, PPEM_MAX_PAYLOADS, PPEM_MIN_ENTROPY, PPEM_MIN_LEN,
 };
 
+pub mod padding_block_cipher_mode_uniformity_guard;
+pub use padding_block_cipher_mode_uniformity_guard::{
+    validate_block_uniformity, BlockRecord, BlockUniformityError,
+    PBCU_BLOCK_SIZE, PBCU_HASH_LEN, PBCU_MAX_BLOCKS, PBCU_MIN_ENTROPY,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
