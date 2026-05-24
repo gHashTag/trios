@@ -68,6 +68,11 @@ pub use unmerged_leaves_bound_guard::{
     validate_unmerged_leaves, UnmergedLeavesError, ULBG_MAX_TREE, ULBG_MAX_UNMERGED,
 };
 
+pub mod ratchet_tree_blank_node_depth_guard;
+pub use ratchet_tree_blank_node_depth_guard::{
+    validate_blank_node_depth, BlankDepthError, TreeNode, RBND_MAX_BLANK_DEPTH, RBND_MAX_TREE_DEPTH,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

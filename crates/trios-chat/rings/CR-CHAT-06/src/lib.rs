@@ -79,6 +79,11 @@ pub use agent_context_window_budget_guard::{
     ACWB_MAX_BUDGET, ACWB_MAX_ENTRIES,
 };
 
+pub mod tool_response_timeout_guard;
+pub use tool_response_timeout_guard::{
+    validate_tool_timeout, ToolTimeoutError, TRTO_MAX_TIMEOUT_MS, TRTO_MIN_TIMEOUT_MS,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
