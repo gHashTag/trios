@@ -144,6 +144,12 @@ pub use mixnet_path_diversity_guard::{
     MPDG_MAX_OVERLAP, MPDG_MAX_PATH_LEN, MPDG_MIN_PATH_LEN,
 };
 
+pub mod replay_detection_window_guard;
+pub use replay_detection_window_guard::{
+    validate_replay_window, ReplayWindowError,
+    RPDW_MAX_MESSAGES, RPDW_MAX_WINDOW, RPDW_MIN_WINDOW,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

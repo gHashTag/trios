@@ -77,6 +77,12 @@ pub use epoch_rollover_wraparound_guard::{
     EPRW_DANGER_ZONE, EPRW_MAX_ROTATIONS, EPRW_ROTATION_THRESHOLD,
 };
 
+pub mod message_key_derivation_binding_guard;
+pub use message_key_derivation_binding_guard::{
+    validate_msg_key_binding, MsgKeyBindError, MsgKeyBinding,
+    MKDB_KEY_LEN, MKDB_MAX_CHAIN_INDEX,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
