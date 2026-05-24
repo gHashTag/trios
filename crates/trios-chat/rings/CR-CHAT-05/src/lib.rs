@@ -86,6 +86,12 @@ pub use session_store_key_expiry_guard::{
     SSKG_MAX_KEYS, SSKG_MAX_TTL_SECS,
 };
 
+pub mod store_tombstone_purging_consistency_guard;
+pub use store_tombstone_purging_consistency_guard::{
+    validate_tombstone_purging, PurgeError, TombstoneEntry,
+    STPC_MAX_RETENTION, STPC_MAX_TOMBSTONES, STPC_MIN_RETENTION,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

@@ -117,6 +117,13 @@ pub use padding_key_derivation_uniqueness_guard::{
     PKDU_KEY_LEN, PKDU_MAX_DERIVATIONS,
 };
 
+pub mod padding_class_selection_entropy_guard;
+pub use padding_class_selection_entropy_guard::{
+    validate_class_entropy, ClassEntropyError, ClassSelection,
+    PCSE_CLASSES, PCSE_MAX_SAMPLES, PCSE_MIN_PER_CLASS, PCSE_MIN_SAMPLES,
+    PCSE_NUM_CLASSES,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,
