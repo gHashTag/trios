@@ -68,6 +68,12 @@ pub use wal_entry_checksum_guard::{
     WLCS_CHECKSUM_LEN, WLCS_MAX_ENTRIES, WLCS_MAX_ENTRY_LEN,
 };
 
+pub mod store_revision_monotonicity_guard;
+pub use store_revision_monotonicity_guard::{
+    validate_revision_monotonicity, RevisionError,
+    SRVM_MAX_REVISION, SRVM_MAX_REVISIONS, SRVM_MIN_REVISION,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

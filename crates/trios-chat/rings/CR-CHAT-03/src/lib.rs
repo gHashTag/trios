@@ -73,6 +73,12 @@ pub use ratchet_tree_blank_node_depth_guard::{
     validate_blank_node_depth, BlankDepthError, TreeNode, RBND_MAX_BLANK_DEPTH, RBND_MAX_TREE_DEPTH,
 };
 
+pub mod treekem_path_secret_forward_secrecy_guard;
+pub use treekem_path_secret_forward_secrecy_guard::{
+    validate_path_secret_order, PathSecretError,
+    TPSF_MAX_PATH, TPSF_MIN_PATH, TPSF_SECRET_LEN,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
