@@ -66,6 +66,11 @@ pub use chain_key_forward_seed_uniqueness_guard::{
     CKFU_MIN_SEED_LEN,
 };
 
+pub mod sender_chain_fork_detection_guard;
+pub use sender_chain_fork_detection_guard::{
+    detect_chain_fork, ChainForkError, SCFD_KEY_LEN, SCFD_MAX_ENTRIES, SCFD_MAX_SENDERS,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
