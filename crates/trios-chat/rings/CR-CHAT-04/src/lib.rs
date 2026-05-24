@@ -178,6 +178,12 @@ pub use padding_block_cipher_mode_uniformity_guard::{
     PBCU_BLOCK_SIZE, PBCU_HASH_LEN, PBCU_MAX_BLOCKS, PBCU_MIN_ENTROPY,
 };
 
+pub mod padding_timing_side_channel_guard;
+pub use padding_timing_side_channel_guard::{
+    validate_timing_constancy, TimingMeasurement, TimingSideChannelError,
+    PTSC_MAX_DURATION_US, PTSC_MAX_OPS, PTSC_MAX_VARIANCE_US, PTSC_MIN_DURATION_US, PTSC_OP_ID_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

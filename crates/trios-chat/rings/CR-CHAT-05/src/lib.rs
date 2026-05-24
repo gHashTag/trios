@@ -152,6 +152,12 @@ pub use store_snapshot_hash_chain_continuity_guard::{
     SSHC_GENESIS, SSHC_HASH_LEN, SSHC_MAX_SNAPSHOTS,
 };
 
+pub mod store_record_size_distribution_uniformity_guard;
+pub use store_record_size_distribution_uniformity_guard::{
+    validate_size_distribution, RecordSizeObservation, SizeDistUniformityError,
+    SRSD_MAX_CHI_SQUARED, SRSD_MAX_SIZE, SRSD_MIN_RECORDS, SRSD_MIN_SIZE, SRSD_NUM_CLASSES,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
