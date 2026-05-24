@@ -58,6 +58,11 @@ pub use ratchet_tree_resolution_guard::{
     validate_tree_resolution, TreeResolutionError, RTRS_MAX_RESOLUTION, RTRS_MAX_TREE,
 };
 
+pub mod parent_hash_chain_validation_guard;
+pub use parent_hash_chain_validation_guard::{
+    validate_parent_hash_chain, HashNode, ParentHashError, PHCV_HASH_LEN, PHCV_MAX_DEPTH,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

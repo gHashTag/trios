@@ -51,6 +51,11 @@ pub use snapshot_atomicity_guard::{
     validate_snapshot_atomicity, SnapshotAtomicityError, SNAT_MAX_SIZE, SNAT_REQUIRED_FIELDS,
 };
 
+pub mod wal_fsync_barrier_guard;
+pub use wal_fsync_barrier_guard::{
+    validate_wal_fsync_barriers, WalEntry, WalFsyncError, WFSB_MAX_ENTRIES,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
