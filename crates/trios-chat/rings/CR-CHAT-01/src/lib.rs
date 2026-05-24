@@ -111,6 +111,11 @@ pub use credential_chain_path_length_guard::{
     validate_credential_chain, Credential, CredentialChainError, CCPL_MAX_DEPTH,
 };
 
+pub mod signature_algorithm_pinning_guard;
+pub use signature_algorithm_pinning_guard::{
+    validate_sig_algo_pinning, SigAlgoPinError, SAPN_ALLOWED_ALGOS, SAPN_MAX_PINS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

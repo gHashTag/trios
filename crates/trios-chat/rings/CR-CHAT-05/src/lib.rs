@@ -56,6 +56,12 @@ pub use wal_fsync_barrier_guard::{
     validate_wal_fsync_barriers, WalEntry, WalFsyncError, WFSB_MAX_ENTRIES,
 };
 
+pub mod tombstone_retention_guard;
+pub use tombstone_retention_guard::{
+    validate_tombstone_retention, Tombstone, TombstoneRetentionError,
+    TSRT_MAX_RETENTION_SECS, TSRT_MAX_TOMBSTONES, TSRT_MIN_RETENTION_SECS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
