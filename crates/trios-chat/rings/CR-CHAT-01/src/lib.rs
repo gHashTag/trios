@@ -152,6 +152,12 @@ pub use signed_prekey_signature_binding_guard::{
     SPSB_KEY_LEN, SPSB_MAX_BINDINGS,
 };
 
+pub mod one_time_prekey_exhaustion_guard;
+pub use one_time_prekey_exhaustion_guard::{
+    validate_prekey_exhaustion, ExhaustionError, PrekeyStatus,
+    OTPE_MAX_PREKEYS, OTPE_MIN_REMAINING,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

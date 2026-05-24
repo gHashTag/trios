@@ -130,6 +130,12 @@ pub use padding_alignment_boundary_guard::{
     PALB_CLASSES, PALB_PREFIX_LEN,
 };
 
+pub mod padding_class_transition_monotonicity_guard;
+pub use padding_class_transition_monotonicity_guard::{
+    validate_class_transitions, ClassTransition, OscillationError,
+    PCTM_CLASSES, PCTM_MAX_OSCILLATIONS, PCTM_MAX_TRANSITIONS, PCTM_MIN_STREAK,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,
