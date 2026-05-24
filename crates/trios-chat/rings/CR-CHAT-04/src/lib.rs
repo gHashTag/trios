@@ -222,6 +222,12 @@ pub use padding_fill_byte_randomness_guard::{
     PFBR_BLOCK_ID_LEN, PFBR_MAX_BLOCKS, PFBR_MAX_CHI_SQUARED, PFBR_MIN_BLOCK, PFBR_MIN_UNIQUE,
 };
 
+pub mod padding_timing_uniformity_guard;
+pub use padding_timing_uniformity_guard::{
+    validate_timing_uniformity, TimingObservation, TimingUniformityError,
+    PTU_MAX_CV, PTU_MAX_OBS, PTU_MIN_MEAN_US, PTU_MIN_OBS, PTU_OBS_ID_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
