@@ -127,6 +127,13 @@ pub use treekem_parent_node_resolution_depth_guard::{
     TPNR_MAX_DEPTH, TPNR_MAX_NODES, TPNR_MAX_RESOLUTIONS,
 };
 
+pub mod treekem_blank_leaf_count_bound_guard;
+pub use treekem_blank_leaf_count_bound_guard::{
+    validate_blank_leaf_counts, BlankLeafError, TreeSnapshot,
+    BLCB_MAX_BLANK_DEN, BLCB_MAX_BLANK_NUM, BLCB_MAX_LEAVES,
+    BLCB_MAX_TREES, BLCB_MIN_LEAVES,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

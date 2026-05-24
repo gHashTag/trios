@@ -154,6 +154,12 @@ pub use padding_nonce_reuse_detection_guard::{
     PNRD_KEY_ID_LEN, PNRD_MAX_NONCE, PNRD_MAX_RECORDS, PNRD_NONCE_LEN,
 };
 
+pub mod padding_ciphertext_length_consistency_guard;
+pub use padding_ciphertext_length_consistency_guard::{
+    validate_length_consistency, CiphertextRecord, LengthConsistencyError,
+    PCLG_CLASSES, PCLG_MAX_CIPHERTEXTS,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
