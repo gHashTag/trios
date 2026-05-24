@@ -172,6 +172,12 @@ pub use prekey_bundle_sig_algo_downgrade_prevention_guard::{
     ALGO_ED25519 as SADP_ALGO_ED25519,
 };
 
+pub mod identity_key_cross_device_binding_guard;
+pub use identity_key_cross_device_binding_guard::{
+    validate_cross_device_bindings, CrossDeviceError, DeviceBinding,
+    ICDB_KEY_LEN, ICDB_MAX_BINDINGS, ICDB_MAX_DEVICES,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

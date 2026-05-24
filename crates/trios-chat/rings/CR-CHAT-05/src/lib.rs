@@ -122,6 +122,12 @@ pub use store_checkpoint_consistency_guard::{
     SCCG_HASH_LEN, SCCG_MAX_CHECKPOINTS,
 };
 
+pub mod store_write_ordering_monotonicity_guard;
+pub use store_write_ordering_monotonicity_guard::{
+    validate_write_ordering, StoreWrite, WriteOrderError,
+    SWOM_MAX_WRITES, SWOM_MIN_SIZE, SWOM_SESSION_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
