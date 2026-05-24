@@ -263,6 +263,14 @@ pub use cover_traffic_payload_length_distribution_guard::{
     CTPL_MAX_CLASSES, CTPL_MIN_CLASSES, CTPL_MIN_OBSERVATIONS,
 };
 
+pub mod cover_traffic_inter_arrival_autocorrelation_guard;
+pub use cover_traffic_inter_arrival_autocorrelation_guard::{
+    validate_inter_arrival_autocorr,
+    AutocorrelationError,
+    IntervalObservation as AutocorrIntervalObservation,
+    CTIA_MAX_AUTOCORR, CTIA_MAX_OBSERVATIONS, CTIA_MIN_INTERVALS, CTIA_MIN_MEAN_US, CTIA_OBS_ID_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

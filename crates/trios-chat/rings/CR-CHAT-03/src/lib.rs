@@ -252,6 +252,14 @@ pub use treekem_leaf_node_version_monotonicity_guard::{
     TLNV_GROUP_ID_LEN, TLNV_LEAF_ID_LEN, TLNV_MAX_RECORDS,
 };
 
+pub mod treekem_update_path_length_bound_guard;
+pub use treekem_update_path_length_bound_guard::{
+    validate_path_length as validate_update_path_length,
+    PathLengthError,
+    UpdatePathRecord as UpdatePathLengthRecord,
+    TUPL_MAX_PATH_LEN, TUPL_MAX_PATHS, TUPL_MIN_PATH_LEN, TUPL_TREE_ID_LEN,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
