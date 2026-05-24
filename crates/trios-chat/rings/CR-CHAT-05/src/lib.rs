@@ -158,6 +158,12 @@ pub use store_record_size_distribution_uniformity_guard::{
     SRSD_MAX_CHI_SQUARED, SRSD_MAX_SIZE, SRSD_MIN_RECORDS, SRSD_MIN_SIZE, SRSD_NUM_CLASSES,
 };
 
+pub mod store_wal_entry_sequence_continuity_guard;
+pub use store_wal_entry_sequence_continuity_guard::{
+    validate_wal_sequence, WalSequenceEntry, WalSequenceError,
+    WSCG_GENESIS, WSCG_HASH_LEN, WSCG_MAX_ENTRIES,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

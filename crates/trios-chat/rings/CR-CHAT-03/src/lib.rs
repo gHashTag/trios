@@ -159,6 +159,14 @@ pub use treekem_leaf_node_key_freshness_guard::{
     TLNF_HASH_LEN, TLNF_MAX_AGE_MS, TLNF_MAX_LEAVES,
 };
 
+pub mod treekem_update_path_secret_uniqueness_guard;
+pub use treekem_update_path_secret_uniqueness_guard::{
+    validate_path_secret_uniqueness as validate_update_path_secrets,
+    PathSecretRecord as UpdatePathSecretRecord,
+    PathSecretUniquenessError as UpdatePathSecretError,
+    TPSU_HASH_LEN, TPSU_MAX_NODE_INDEX, TPSU_MAX_SECRETS, TPSU_UPDATE_ID_LEN,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
