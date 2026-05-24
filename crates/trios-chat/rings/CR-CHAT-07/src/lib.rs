@@ -168,6 +168,13 @@ pub use traffic_burst_pattern_uniformity_guard::{
     TBPU_MAX_BURSTS, TBPU_MAX_INTERVAL_MS, TBPU_MAX_VARIANCE_MS, TBPU_MIN_INTERVAL_MS,
 };
 
+pub mod cover_traffic_emission_jitter_guard;
+pub use cover_traffic_emission_jitter_guard::{
+    validate_cover_jitter, CoverEmission,
+    JitterError as EmissionJitterError,
+    CTEJ_MAX_EMISSIONS, CTEJ_MAX_JITTER_MS, CTEJ_MIN_JITTER_MS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
