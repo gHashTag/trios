@@ -272,6 +272,12 @@ pub use treekem_path_secret_freshness_guard::{
     TPSF2_MAX_NODES, TPSF2_MAX_UPDATES, TPSF2_SECRET_LEN, TPSF2_UPDATE_ID_LEN,
 };
 
+pub mod treekem_group_membership_epoch_continuity_guard;
+pub use treekem_group_membership_epoch_continuity_guard::{
+    validate_epoch_continuity, EpochContinuityError, MembershipOp,
+    TGMC_MAX_OPS, TGMC_OP_ID_LEN, TGMC_VALID_OP_TYPES,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};

@@ -234,6 +234,12 @@ pub use agent_tool_response_content_type_guard::{
     CTCT_ALLOWED_TYPES, CTCT_MAX_RESPONSES, CTCT_MAX_TYPE_LEN, CTCT_TOOL_ID_LEN,
 };
 
+pub mod agent_rate_limit_burst_detection_guard;
+pub use agent_rate_limit_burst_detection_guard::{
+    validate_rate_limit_burst, RateLimitBurstError, RateSession,
+    ARLB_MAX_ACTIONS, ARLB_MAX_SESSIONS, ARLB_MAX_WINDOW_MS, ARLB_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
