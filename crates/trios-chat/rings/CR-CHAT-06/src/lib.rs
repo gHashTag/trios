@@ -183,6 +183,12 @@ pub use agent_tool_result_cache_staleness_guard::{
     ATRC_ENTRY_ID_LEN, ATRC_HASH_LEN, ATRC_MAX_AGE_MS, ATRC_MAX_ENTRIES,
 };
 
+pub mod agent_context_window_overflow_guard;
+pub use agent_context_window_overflow_guard::{
+    validate_context_overflow, ContextOverflowError, ContextWindowEntry,
+    ACWO_ENTRY_ID_LEN, ACWO_MAX_BUDGET, ACWO_MAX_ENTRIES, ACWO_MAX_PRIORITY,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
