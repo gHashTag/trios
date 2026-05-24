@@ -97,6 +97,12 @@ pub use leaf_node_key_uniqueness_guard::{
     LNKU_KEY_LEN, LNKU_MAX_LEAVES,
 };
 
+pub mod treekem_path_secret_uniqueness_guard;
+pub use treekem_path_secret_uniqueness_guard::{
+    validate_path_secret_uniqueness, PathSecretNode, PathSecretUniquenessError,
+    TPSU_MAX_NODES, TPSU_SECRET_LEN,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

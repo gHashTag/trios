@@ -101,6 +101,12 @@ pub use message_key_commitment_binding_guard::{
     MKCB_HASH_LEN, MKCB_MAX_COMMITMENTS,
 };
 
+pub mod chain_key_epoch_transition_guard;
+pub use chain_key_epoch_transition_guard::{
+    validate_epoch_transitions, EpochTransition, EpochTransitionError,
+    CKET_KEY_LEN, CKET_MAX_EPOCHS,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
