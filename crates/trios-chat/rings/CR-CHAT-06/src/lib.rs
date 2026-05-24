@@ -207,6 +207,12 @@ pub use agent_tool_argument_schema_compliance_guard::{
     TASC_MAX_ARG_LEN, TASC_MAX_ARGS, TASC_MAX_CALLS, TASC_MIN_ARGS, TASC_TOOL_ID_LEN,
 };
 
+pub mod agent_capability_scope_boundary_guard;
+pub use agent_capability_scope_boundary_guard::{
+    validate_scope_boundary, ScopeActionRecord, ScopeBoundaryError,
+    ACSB_MAX_ACTIONS, ACSB_MAX_SCOPE_TAGS, ACSB_SCOPE_TAG_LEN, ACSB_SESSION_ID_LEN,
+};
+
 pub mod agent_session_token_expiry_enforcement_guard;
 pub use agent_session_token_expiry_enforcement_guard::{
     validate_token_expiry, SessionTokenRecord, TokenExpiryError,

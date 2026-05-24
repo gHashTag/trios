@@ -216,6 +216,12 @@ pub use padding_response_timing_fingerprint_guard::{
     PRTF_MIN_MEAN_US, PRTF_MIN_SAMPLES, PRTF_SAMPLE_ID_LEN,
 };
 
+pub mod padding_fill_byte_randomness_guard;
+pub use padding_fill_byte_randomness_guard::{
+    validate_fill_randomness, FillRandomnessError, FillRandomnessRecord,
+    PFBR_BLOCK_ID_LEN, PFBR_MAX_BLOCKS, PFBR_MAX_CHI_SQUARED, PFBR_MIN_BLOCK, PFBR_MIN_UNIQUE,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
