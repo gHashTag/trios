@@ -158,6 +158,12 @@ pub use one_time_prekey_exhaustion_guard::{
     OTPE_MAX_PREKEYS, OTPE_MIN_REMAINING,
 };
 
+pub mod identity_key_fingerprint_consistency_guard;
+pub use identity_key_fingerprint_consistency_guard::{
+    validate_fingerprint_consistency, FingerprintDerivation, FingerprintError,
+    IKFC_FP_LEN, IKFC_KEY_LEN, IKFC_MAX_DERIVATIONS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

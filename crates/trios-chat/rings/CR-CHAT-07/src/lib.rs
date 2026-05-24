@@ -187,6 +187,13 @@ pub use network_flow_direction_uniformity_guard::{
     NFDU_MAX_OBSERVATIONS, NFDU_MAX_RATIO_DEN, NFDU_MAX_RATIO_NUM, NFDU_MIN_PER_DIRECTION,
 };
 
+pub mod message_size_class_distribution_guard;
+pub use message_size_class_distribution_guard::{
+    validate_size_distribution, SizeDistError, SizeObservation,
+    MSCD_CLASSES, MSCD_MAX_OBSERVATIONS, MSCD_MAX_RATIO_DEN, MSCD_MAX_RATIO_NUM,
+    MSCD_MIN_OBSERVATIONS, MSCD_MIN_PER_CLASS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
