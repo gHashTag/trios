@@ -164,6 +164,14 @@ pub use identity_key_fingerprint_consistency_guard::{
     IKFC_FP_LEN, IKFC_KEY_LEN, IKFC_MAX_DERIVATIONS,
 };
 
+pub mod prekey_bundle_sig_algo_downgrade_prevention_guard;
+pub use prekey_bundle_sig_algo_downgrade_prevention_guard::{
+    validate_sig_algo_downgrade_prevention, BundleAlgo, SigDowngradeError,
+    ALGO_DILITHIUM3, ALGO_HYBRID_ED_DIL,
+    SADP_APPROVED, SADP_MAX_BUNDLES,
+    ALGO_ED25519 as SADP_ALGO_ED25519,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

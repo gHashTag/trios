@@ -194,6 +194,12 @@ pub use message_size_class_distribution_guard::{
     MSCD_MIN_OBSERVATIONS, MSCD_MIN_PER_CLASS,
 };
 
+pub mod cover_traffic_inter_epoch_continuity_guard;
+pub use cover_traffic_inter_epoch_continuity_guard::{
+    validate_inter_epoch_continuity, ContinuityError, EpochRate,
+    CTIC_MAX_EPOCHS, CTIC_MAX_RATE, CTIC_MAX_RATE_DEV, CTIC_MIN_RATE,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
