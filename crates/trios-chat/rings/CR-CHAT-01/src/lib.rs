@@ -190,6 +190,12 @@ pub use identity_key_predecessor_acknowledgment_guard::{
     IKPA_HASH_LEN, IKPA_MAX_ROTATIONS,
 };
 
+pub mod prekey_bundle_signature_algorithm_consistency_guard;
+pub use prekey_bundle_signature_algorithm_consistency_guard::{
+    validate_algo_consistency, AlgoConsistencyError, BundleAlgoRecord,
+    PBAC_APPROVED_ALGOS, PBAC_BUNDLE_ID_LEN, PBAC_MAX_BUNDLES, PBAC_PK_LEN,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
