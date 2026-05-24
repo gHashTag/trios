@@ -234,6 +234,12 @@ pub use prekey_bundle_timestamp_freshness_guard::{
     PBTF_BUNDLE_ID_LEN, PBTF_MAX_AGE_MS, PBTF_MAX_BATCH,
 };
 
+pub mod sealed_sender_recipient_hash_uniqueness_guard;
+pub use sealed_sender_recipient_hash_uniqueness_guard::{
+    validate_recipient_hash_uniqueness, RecipientHashError, RecipientHashRecord,
+    SSRU_DEST_HASH_LEN, SSRU_ENVELOPE_ID_LEN, SSRU_MAX_BATCH,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

@@ -229,6 +229,12 @@ pub use store_snapshot_integrity_hash_guard::{
     SSIH_HASH_LEN, SSIH_MAX_SNAPSHOTS, SSIH_SNAPSHOT_ID_LEN,
 };
 
+pub mod envelope_counter_gap_detection_guard;
+pub use envelope_counter_gap_detection_guard::{
+    validate_counter_contiguity, CounterGapError, CounterGapRecord,
+    ECGD_MAX_ENTRIES, ECGD_SESSION_ID_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
