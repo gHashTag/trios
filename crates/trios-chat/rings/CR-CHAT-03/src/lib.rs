@@ -260,6 +260,12 @@ pub use treekem_update_path_length_bound_guard::{
     TUPL_MAX_PATH_LEN, TUPL_MAX_PATHS, TUPL_MIN_PATH_LEN, TUPL_TREE_ID_LEN,
 };
 
+pub mod treekem_resolution_path_node_uniqueness_guard;
+pub use treekem_resolution_path_node_uniqueness_guard::{
+    validate_resolution_path_uniqueness, PathNodeUniquenessError, ResolutionPathRecord,
+    TRNU_MAX_PATH_LEN, TRNU_MAX_PATHS, TRNU_NODE_ID_LEN, TRNU_TREE_ID_LEN,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};

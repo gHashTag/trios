@@ -246,6 +246,12 @@ pub use identity_key_rotation_age_freshness_guard::{
     IKRF_KEY_ID_LEN, IKRF_MAX_AGE_MS, IKRF_MAX_KEYS,
 };
 
+pub mod prekey_bundle_single_use_enforcement_guard;
+pub use prekey_bundle_single_use_enforcement_guard::{
+    validate_single_use, BundleUsageRecord, SingleUseError,
+    PBSU_BUNDLE_ID_LEN, PBSU_MAX_RECORDS, PBSU_SESSION_ID_LEN,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
