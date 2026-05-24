@@ -249,6 +249,14 @@ pub use header_key_derivation_epoch_separation_guard::{
     HKDE_HEADER_ID_LEN, HKDE_LABEL_LEN, HKDE_MAX_HEADERS,
 };
 
+pub mod root_key_rotation_frequency_bound_guard;
+pub use root_key_rotation_frequency_bound_guard::{
+    validate_rotation_frequency,
+    RotationFrequencyError,
+    RotationRecord as RotationFrequencyRecord,
+    RKRF_MAX_INTERVAL_MS, RKRF_MAX_ROTATIONS, RKRF_ROTATION_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

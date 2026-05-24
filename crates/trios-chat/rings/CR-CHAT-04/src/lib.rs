@@ -228,6 +228,14 @@ pub use padding_timing_uniformity_guard::{
     PTU_MAX_CV, PTU_MAX_OBS, PTU_MIN_MEAN_US, PTU_MIN_OBS, PTU_OBS_ID_LEN,
 };
 
+pub mod padding_class_transition_entropy_guard;
+pub use padding_class_transition_entropy_guard::{
+    validate_transition_entropy,
+    TransitionEntropyError,
+    TransitionObservation as ClassTransitionObservation,
+    PCTE_MAX_OBS, PCTE_MIN_OBS, PCTE_MIN_TRANSITIONS, PCTE_OBS_ID_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
