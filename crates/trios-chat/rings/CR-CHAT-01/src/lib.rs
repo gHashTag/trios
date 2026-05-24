@@ -227,6 +227,13 @@ pub use prekey_bundle_cipher_suite_consistency_guard::{
     PBCC_BUNDLE_ID_LEN, PBCC_MAX_BATCH,
 };
 
+pub mod prekey_bundle_timestamp_freshness_guard;
+pub use prekey_bundle_timestamp_freshness_guard::{
+    validate_bundle_freshness as validate_timestamp_freshness,
+    BundleFreshnessRecord, FreshnessError as TimestampFreshnessError,
+    PBTF_BUNDLE_ID_LEN, PBTF_MAX_AGE_MS, PBTF_MAX_BATCH,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

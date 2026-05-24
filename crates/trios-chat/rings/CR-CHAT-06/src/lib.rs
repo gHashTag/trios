@@ -195,6 +195,12 @@ pub use agent_prompt_injection_depth_accumulation_guard::{
     APID_MAX_CUMULATIVE_DEPTH, APID_MAX_ENTRIES, APID_MAX_SINGLE_DEPTH, APID_SESSION_ID_LEN,
 };
 
+pub mod agent_tool_call_frequency_burst_guard;
+pub use agent_tool_call_frequency_burst_guard::{
+    validate_tool_call_burst, BurstError, ToolCallBurst,
+    ATCF_MAX_BURST, ATCF_MAX_ENTRIES, ATCF_MAX_WINDOW_MS, ATCF_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
