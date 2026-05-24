@@ -140,6 +140,13 @@ pub use treekem_update_path_uniqueness_guard::{
     TPUN_HASH_LEN, TPUN_MAX_PATHS,
 };
 
+pub mod treekem_group_membership_change_rate_guard;
+pub use treekem_group_membership_change_rate_guard::{
+    validate_membership_rate, MembershipRateError, MembershipWindow,
+    CHANGE_JOIN, CHANGE_LEAVE, CHANGE_UPDATE,
+    GMCR_MAX_CHANGES, GMCR_MAX_WINDOWS, GMCR_MIN_WINDOW_MS, GMCR_VALID_CHANGES,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

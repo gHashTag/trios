@@ -153,6 +153,12 @@ pub use agent_output_redaction_completeness_guard::{
     AORC_MAX_OUTPUTS, AORC_MIN_REDACT_LEN, AORC_OUTPUT_ID_LEN,
 };
 
+pub mod agent_session_timeout_enforcement_guard;
+pub use agent_session_timeout_enforcement_guard::{
+    validate_session_timeouts, SessionTimeout, SessionTimeoutError,
+    ASTE_MAX_SESSIONS, ASTE_MAX_TIMEOUT_MS, ASTE_MIN_TIMEOUT_MS, ASTE_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
