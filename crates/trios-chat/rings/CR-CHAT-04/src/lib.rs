@@ -111,6 +111,12 @@ pub use padding_length_distribution_guard::{
     PLDG_MAX_SAMPLES, PLDG_MIN_CLASSES, PLDG_MIN_SAMPLES,
 };
 
+pub mod padding_key_derivation_uniqueness_guard;
+pub use padding_key_derivation_uniqueness_guard::{
+    validate_pad_key_derivations, PadKeyDerivation, PadKeyError,
+    PKDU_KEY_LEN, PKDU_MAX_DERIVATIONS,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

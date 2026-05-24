@@ -162,6 +162,12 @@ pub use observer_fingerprint_rotation_guard::{
     OFRG_MAX_FP_LEN, OFRG_MAX_ROTATIONS, OFRG_MAX_SESSIONS, OFRG_MAX_TRACKED,
 };
 
+pub mod traffic_burst_pattern_uniformity_guard;
+pub use traffic_burst_pattern_uniformity_guard::{
+    validate_burst_patterns, BurstPatternError, MessageBurst,
+    TBPU_MAX_BURSTS, TBPU_MAX_INTERVAL_MS, TBPU_MAX_VARIANCE_MS, TBPU_MIN_INTERVAL_MS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
