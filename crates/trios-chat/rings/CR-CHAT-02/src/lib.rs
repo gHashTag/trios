@@ -156,6 +156,12 @@ pub use root_key_derivation_chain::{
     validate_root_key_chain, RootKeyChainError, RootKeyStep, RKDC_KEY_LEN,
 };
 
+pub mod sending_chain_advancement_limit_guard;
+pub use sending_chain_advancement_limit_guard::{
+    validate_chain_advances, ChainAdvance, ChainAdvanceError,
+    SCAL_CHAIN_ID_LEN, SCAL_MAX_ADVANCES, SCAL_MAX_STEPS,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

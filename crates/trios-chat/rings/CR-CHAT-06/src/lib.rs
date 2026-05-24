@@ -122,6 +122,12 @@ pub use agent_tool_output_size_validation_guard::{
     ATOS_MAX_ACCUMULATED, ATOS_MAX_OUTPUTS, ATOS_MAX_SINGLE,
 };
 
+pub mod agent_response_length_bound_guard;
+pub use agent_response_length_bound_guard::{
+    validate_response_lengths, AgentResponse, ResponseLengthError,
+    ARLB_MAX_BATCH, ARLB_MAX_CUMULATIVE, ARLB_MAX_RESPONSE_LEN, ARLB_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
