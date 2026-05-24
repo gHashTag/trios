@@ -235,6 +235,12 @@ pub use envelope_counter_gap_detection_guard::{
     ECGD_MAX_ENTRIES, ECGD_SESSION_ID_LEN,
 };
 
+pub mod store_record_tombstone_resurrection_guard;
+pub use store_record_tombstone_resurrection_guard::{
+    validate_tombstone_resurrection, TombstoneRecord, TombstoneResurrectionError,
+    SRTG_KEY_LEN, SRTG_MAX_ENTRIES,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

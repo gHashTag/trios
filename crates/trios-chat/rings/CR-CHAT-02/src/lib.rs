@@ -237,6 +237,12 @@ pub use message_key_usage_lifetime_bound_guard::{
     MKUL_KEY_ID_LEN, MKUL_MAX_AGE_MS, MKUL_MAX_KEYS, MKUL_MAX_USAGES,
 };
 
+pub mod sending_chain_key_seed_diversity_guard;
+pub use sending_chain_key_seed_diversity_guard::{
+    validate_seed_diversity, SeedDiversityError, SeedDiversityRecord,
+    SCKS_CHAIN_ID_LEN, SCKS_MAX_SEEDS, SCKS_MIN_ENTROPY_BITS, SCKS_MIN_SEED_LEN, SCKS_SEED_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
