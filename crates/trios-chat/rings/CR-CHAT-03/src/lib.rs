@@ -103,6 +103,12 @@ pub use treekem_path_secret_uniqueness_guard::{
     TPSU_MAX_NODES, TPSU_SECRET_LEN,
 };
 
+pub mod group_member_removal_verification_guard;
+pub use group_member_removal_verification_guard::{
+    validate_member_removals, MemberRemoval, RemovalError,
+    GMRV_MAX_REMOVALS,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

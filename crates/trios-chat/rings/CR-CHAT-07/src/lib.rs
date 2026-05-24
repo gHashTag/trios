@@ -181,6 +181,12 @@ pub use decoy_message_payload_entropy_guard::{
     DMPE_MAX_DECOYS, DMPE_MAX_LEN, DMPE_MIN_LEN,
 };
 
+pub mod network_flow_direction_uniformity_guard;
+pub use network_flow_direction_uniformity_guard::{
+    validate_flow_uniformity, FlowDirection, FlowError, FlowObservation,
+    NFDU_MAX_OBSERVATIONS, NFDU_MAX_RATIO_DEN, NFDU_MAX_RATIO_NUM, NFDU_MIN_PER_DIRECTION,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
