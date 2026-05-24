@@ -146,6 +146,12 @@ pub use identity_key_rotation_proof_guard::{
     IKRP_KEY_LEN, IKRP_MAX_ROTATIONS,
 };
 
+pub mod signed_prekey_signature_binding_guard;
+pub use signed_prekey_signature_binding_guard::{
+    validate_prekey_bindings, PrekeyBinding, PrekeyBindingError,
+    SPSB_KEY_LEN, SPSB_MAX_BINDINGS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

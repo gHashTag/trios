@@ -110,6 +110,12 @@ pub use agent_tool_call_rate_limit_guard::{
     ATCR_MAX_CALLS, ATCR_MAX_CALL_IDS, ATCR_WINDOW_MS,
 };
 
+pub mod agent_tool_input_sanitization_guard;
+pub use agent_tool_input_sanitization_guard::{
+    validate_tool_inputs, SanitizationError, ToolInput,
+    ATIS_MAX_INPUT_LEN, ATIS_MAX_INPUTS,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
