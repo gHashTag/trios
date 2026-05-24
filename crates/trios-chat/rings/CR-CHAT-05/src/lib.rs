@@ -170,6 +170,12 @@ pub use store_encryption_key_version_monotonicity_guard::{
     SEKV_GENESIS, SEKV_HASH_LEN, SEKV_MAX_ENTRIES, SEKV_MAX_VERSION,
 };
 
+pub mod store_encryption_nonce_uniqueness_guard;
+pub use store_encryption_nonce_uniqueness_guard::{
+    validate_nonce_uniqueness, NonceRecord, NonceUniquenessError,
+    SENU_KEY_HASH_LEN, SENU_MAX_RECORDS, SENU_NONCE_LEN, SENU_RECORD_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
