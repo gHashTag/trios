@@ -80,6 +80,12 @@ pub use data_store_encryption_at_rest_guard::{
     DSER_MAX_CT_LEN, DSER_MAX_RECORDS, DSER_MIN_CT_LEN,
 };
 
+pub mod session_store_key_expiry_guard;
+pub use session_store_key_expiry_guard::{
+    validate_session_key_expiry, KeyExpiryError, SessionKeyEntry,
+    SSKG_MAX_KEYS, SSKG_MAX_TTL_SECS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

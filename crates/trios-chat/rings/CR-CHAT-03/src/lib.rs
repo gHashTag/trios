@@ -85,6 +85,12 @@ pub use group_epoch_commit_ordering_guard::{
     GECO_MAX_COMMITS, GECO_MAX_EPOCH_GAP, GECO_MIN_EPOCH,
 };
 
+pub mod ratchet_tree_update_integrity_guard;
+pub use ratchet_tree_update_integrity_guard::{
+    validate_tree_updates, TreeUpdate, TreeUpdateError,
+    RTUI_MAX_BATCH, RTUI_MAX_NODES,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
