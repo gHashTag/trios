@@ -223,6 +223,12 @@ pub use wal_entry_crc_chain_integrity_guard::{
     WCCI_ENTRY_ID_LEN, WCCI_MAX_BATCH,
 };
 
+pub mod store_snapshot_integrity_hash_guard;
+pub use store_snapshot_integrity_hash_guard::{
+    validate_snapshot_integrity, SnapshotIntegrityError, SnapshotIntegrityRecord,
+    SSIH_HASH_LEN, SSIH_MAX_SNAPSHOTS, SSIH_SNAPSHOT_ID_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
