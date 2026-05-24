@@ -141,6 +141,12 @@ pub use agent_tool_authorization_scope_guard::{
     ATAS_MAX_RECORDS, ATAS_MAX_SCOPE_DEPTH, ATAS_SESSION_ID_LEN,
 };
 
+pub mod agent_prompt_injection_detection_rate_guard;
+pub use agent_prompt_injection_detection_rate_guard::{
+    validate_detection_rate, DetectionRateError, DetectionSample,
+    PIDR_MAX_FP_RATE, PIDR_MAX_RECORDS, PIDR_MIN_RATE, PIDR_MIN_SAMPLES,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

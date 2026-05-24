@@ -168,6 +168,12 @@ pub use receiving_chain_gap_bound_guard::{
     RCGB_MAX_BATCH, RCGB_MAX_GAP, RCGB_MAX_TOTAL_GAPS,
 };
 
+pub mod root_key_derivation_salt_uniqueness_guard;
+pub use root_key_derivation_salt_uniqueness_guard::{
+    validate_salt_uniqueness, SaltDerivation, SaltUniquenessError,
+    RKDS_MAX_DERIVATIONS, RKDS_SALT_LEN, RKDS_SESSION_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
