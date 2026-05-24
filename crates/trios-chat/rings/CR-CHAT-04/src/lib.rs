@@ -209,6 +209,13 @@ pub use padding_byte_pattern_uniformity_guard::{
     PBPU_MAX_SAMPLES, PBPU_MIN_BLOCK, PBPU_MIN_SAMPLES,
 };
 
+pub mod padding_response_timing_fingerprint_guard;
+pub use padding_response_timing_fingerprint_guard::{
+    validate_timing_fingerprint, TimingFingerprintError, TimingSample,
+    PRTF_MAX_CV_DEN, PRTF_MAX_CV_NUM, PRTF_MAX_SAMPLES,
+    PRTF_MIN_MEAN_US, PRTF_MIN_SAMPLES, PRTF_SAMPLE_ID_LEN,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 

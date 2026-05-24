@@ -231,6 +231,12 @@ pub use root_key_derivation_context_label_guard::{
     RKDL_CONTEXT_ID_LEN, RKDL_MAX_DERIVATIONS, RKDL_MAX_LABEL_LEN, RKDL_MIN_LABEL_LEN,
 };
 
+pub mod message_key_usage_lifetime_bound_guard;
+pub use message_key_usage_lifetime_bound_guard::{
+    validate_key_lifetime, KeyLifetimeError, KeyLifetimeRecord,
+    MKUL_KEY_ID_LEN, MKUL_MAX_AGE_MS, MKUL_MAX_KEYS, MKUL_MAX_USAGES,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
