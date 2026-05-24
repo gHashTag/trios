@@ -128,6 +128,12 @@ pub use store_write_ordering_monotonicity_guard::{
     SWOM_MAX_WRITES, SWOM_MIN_SIZE, SWOM_SESSION_ID_LEN,
 };
 
+pub mod store_session_isolation_verification_guard;
+pub use store_session_isolation_verification_guard::{
+    validate_session_isolation, IsolationError, IsolationRecord,
+    SSIV_HASH_LEN, SSIV_MAX_RECORDS, SSIV_SESSION_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

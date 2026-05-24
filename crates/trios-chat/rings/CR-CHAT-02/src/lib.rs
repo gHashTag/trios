@@ -174,6 +174,13 @@ pub use root_key_derivation_salt_uniqueness_guard::{
     RKDS_MAX_DERIVATIONS, RKDS_SALT_LEN, RKDS_SESSION_ID_LEN,
 };
 
+pub mod skipped_message_key_cache_size_bound_guard;
+pub use skipped_message_key_cache_size_bound_guard::{
+    validate_cache_bounds, CacheBoundError, CacheEntry,
+    SMKB_MAX_CACHE_SIZE, SMKB_CHAIN_ID_LEN,
+    SMKB_MAX_ENTRIES, SMKB_MAX_PER_CHAIN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
