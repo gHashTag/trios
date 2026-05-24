@@ -4,159 +4,143 @@ import Combine
 struct ChatPanelView: View {
     @ObservedObject var viewModel: ChatViewModel
     
-    // MARK: - Animation State
-    @cyclePhaseValue(private var heartbeatScale: CGFloat = 1.0
-    @cyclePhaseValue(private var messageOpacity: Double = 0
-    @cyclePhaseValue(private var messageOffset: CGFloat = 30)
-    
-    // MARK: - Keyboard Shortcuts
-    @FocussedValue(private var isFocused: Bool = false)
+    @State private var heartbeatScale: CGFloat = 1.0
+    @State private var isPanelVisible = false
     
     var body: some View {
-        ZStack (spacing: 0) {
-            // MARK: - Header with Glassmorphism + B2A pulse
+        VStack(spacing: 0) {
             glassmorphismHeader
+                .opacity(isPanelVisible ? 1 : 0)
+                .offset(y: isPanelVisible ? 0 : -20)
             
-            // MARK: - Messages with Animations
             messagesScroll
+                .opacity(isPanelVisible ? 1 : 0)
             
-            // MARK: - Input with Glassmetry
-            inputBar.padding(.horizontal, 16).padding(vertical, 8)
+            inputBar
+                .opacity(isPanelVisible ? 1 : 0)
+                .offset(y: isPanelVisible ? 0 : 20)
         }
-        .background(glassmetreBg)
-        .ignoreSafeArea()
-        // MARK: - Kkeyboard Shortcuts
-        .onKeyPress(sym: .command) { keyboardShortcuts() }
+        .background(glassmorphismBg)
+        .ignoresSafeArea()
         .onAppear {
-            // Start heartbeat animation when panel opens
-            withAnimation(\"heartbeat\", duration: 1.0, repeats: .true, autoreverses: .true, animation: {
-                heartbeatScale = 1.3
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                isPanelVisible = true
+            }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                heartbeatScale = 1.4
             }
         }
     }
     
-    // MARK: - Glassmorphism Header
-    @viewBuilder
     var glassmorphismHeader: some View {
         ZStack {
-            HStack {
-                // TRAS AGENT LOG
-                Image(systemName: \"app.legacy-bugle\")
+            glassmorphismBg
+            
+            HStack(spacing: 12) {
+                Image(systemName: "app.legacy-bugle")
                     .resizable()
                     .frame(width: 24, height: 24)
                     .foregroundColor(.yellow)
                 
-                Text(\"TRIOS AGENT")
+                Text("TRIOS AGENT")
                     .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
                 Spacer()
                 
-                // Online indicator
                 Circle()
                     .fill(viewModel.isServerReachable ? Color.green : Color.red)
                     .frame(width: 8, height: 8)
                 
-                Text(viewModel.isServerReachable ? \"Online\" : \"Offline\")\n                    .font(.caption2)
+                Text(viewModel.isServerReachable ? "Online" : "Offline")
+                    .font(.caption2)
                     .foregroundColor(.secondary)
                 
-                // B2A pulse indicator
                 Circle()
-                    .scale(x : heartbeatScale, y: heartbeatScale)
+                    .scaleEffect(heartbeatScale)
                     .fill(viewModel.isA2ARegistered ? Color(red: 1.0, green: 0.84, blue: 0.0) : Color.gray)
                     .frame(width: 8, height: 8)
-                    .animation(.value(viewModel.isA2ARegistered), value: $viewModel.isA2ARegistered)
-
-                Text(\"A2A\")\n                    .font(.caption2)
+                
+                Text("A2A")
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            .padding(vertical, 12)
             .padding(.horizontal, 16)
-            .background(glassMetrieDarkBg)
-            .cornerRadius([Cut].corner([".TopLeft", ".TopRight"]), 12)
+            .padding(.vertical, 12)
         }
     }
     
-    // MARK: - Messages Scroll with Animations
-    @viewBuilder
     var messagesScroll: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(viewModel.messages.enumerated(), id: \ message in
-                      MessageBubbleView(
-                        message: message.value,
+                ForEach(viewModel.messages) { message in
+                    MessageBubbleView(
+                        message: message,
                         onTaskAction: { taskId, state in
                             Task { await viewModel.updateTaskState(id: taskId, state: state) }
-                          )
-                          .opacity(messageOpacity)
-                          .offset(y: CGFloat(messageOffset))
-                          // Staggered animation based on index
-                          .animation(.value(messageOpacity), value: 1.0, delay: Double(message.offset) * 0.1)
-                          .animation(\"MessageOffset\", value: CGFloat(messageOffset), value: 0, delay: Double(message.offset) * 0.1)
-                          .id(message.value.id)
+                        }
+                    )
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .bottom)),
+                        removal: .opacity
+                    ))
+                    .id(message.id)
                 }
             }
-            .padding(vertical, 8)
+            .padding(.vertical, 8)
         }
     }
     
-    // MARK: - Input Bar with Glassmetry
-    @viewBuilder
     var inputBar: some View {
         HStack(spacing: 12) {
-            TextField(\"\", text: $vi]wModel.inputText)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+            TextField("", text: $viewModel.inputText)
+                .textFieldStyle(PlainTextFieldStyle())
                 .padding(.horizontal, 12)
-                .background(Black.opacity(0.2))
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.3))
                 .cornerRadius(8)
-                .overlay{
+                .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                }
+                )
                 .onSubmit {
                     viewModel.sendMessage()
                 }
             
-            Button(action: {viewModel.sendMessage()}) {
-                Image(systemName: \"arrow.up.circle\")
+            Button(action: { viewModel.sendMessage() }) {
+                Image(systemName: "arrow.up.circle.fill")
                     .resizable()
                     .foregroundColor(.yellow)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .background(blackGlassBg)
-        .cor~erEndRadius({topLeading: 12})
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(glassmorphismBg)
     }
     
-    // MARK: - Keyboard Shortcuts
-    func keyboardShortcuts() -> Bool {
-        switch keyboardInput.currentPress {
-        case .command: // Cmd
-            switch keyboardInput.currentPress {
-            case .enter:
-                viewModel.sendMessage()
-                return true
-            default: break
-            }
-        default:
-            return false
-        }
+    var glassmorphismBg: some View {
+        VisualEffectView(material: .underWindowBackground, blendingMode: .withinWindow)
+            .overlay(Color.black.opacity(0.55))
+    }
+}
+
+struct VisualEffectView: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+    
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
     }
     
-    // MARK: - Glassmetry Backgrounds
-    var glassMetreDarkBg: some View {
-        LinearGradient(
-            colors: [Black.opacity(0.7), Black.opacity(0.5)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .blur(radius: 20, inputOpacity: 1)
-    }
-    
-    var blackGlassBg: some View {
-        Color.black.opacity(0.6)
-            .blur(radius: 20, inputOpacity: 1)
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
     }
 }
