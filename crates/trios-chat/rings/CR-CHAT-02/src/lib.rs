@@ -89,6 +89,12 @@ pub use skipped_message_key_gap_bound_guard::{
     SMKG_MAX_GAP, SMKG_MAX_INDEX, SMKG_MAX_SKIPPED,
 };
 
+pub mod ratchet_skip_message_bound_guard;
+pub use ratchet_skip_message_bound_guard::{
+    validate_skip_bounds, EpochSkipCount, SkipBoundError,
+    RSMB_MAX_TOTAL_SKIPPED, RSMB_MAX_PER_EPOCH, RSMB_MAX_EPOCHS,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

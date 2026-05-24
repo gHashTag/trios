@@ -92,6 +92,12 @@ pub use agent_prompt_injection_depth_guard::{
     PIDP_MAX_DEPTH, PIDP_MAX_REPROMPT_LEN, PIDP_MAX_TOTAL_BYTES,
 };
 
+pub mod agent_tool_call_audit_log_guard;
+pub use agent_tool_call_audit_log_guard::{
+    validate_audit_log, AuditEntry, AuditLogError,
+    TCAL_MAX_ENTRIES,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
