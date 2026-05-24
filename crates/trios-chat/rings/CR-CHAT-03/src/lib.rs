@@ -234,6 +234,12 @@ pub use reinit_freshness::{
     MAX_SUPPORTED_VERSION,
 };
 
+pub mod treekem_unmerged_leaf_count_accumulation_guard;
+pub use treekem_unmerged_leaf_count_accumulation_guard::{
+    validate_unmerged_leaf_count, UnmergedLeafError, UnmergedLeafRecord,
+    TULB_MAX_ENTRIES, TULB_MAX_UNMERGED, TULB_MIN_LEAVES, TULB_GROUP_ID_LEN,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};

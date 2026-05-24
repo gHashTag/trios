@@ -189,6 +189,12 @@ pub use agent_context_window_overflow_guard::{
     ACWO_ENTRY_ID_LEN, ACWO_MAX_BUDGET, ACWO_MAX_ENTRIES, ACWO_MAX_PRIORITY,
 };
 
+pub mod agent_prompt_injection_depth_accumulation_guard;
+pub use agent_prompt_injection_depth_accumulation_guard::{
+    validate_injection_depth_accum, InjectionDepthAccumError, RepromptDepthRecord,
+    APID_MAX_CUMULATIVE_DEPTH, APID_MAX_ENTRIES, APID_MAX_SINGLE_DEPTH, APID_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
