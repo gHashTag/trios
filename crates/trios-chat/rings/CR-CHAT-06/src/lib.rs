@@ -201,6 +201,12 @@ pub use agent_tool_call_frequency_burst_guard::{
     ATCF_MAX_BURST, ATCF_MAX_ENTRIES, ATCF_MAX_WINDOW_MS, ATCF_SESSION_ID_LEN,
 };
 
+pub mod agent_tool_argument_schema_compliance_guard;
+pub use agent_tool_argument_schema_compliance_guard::{
+    validate_schema_compliance, SchemaComplianceError, ToolArgRecord,
+    TASC_MAX_ARG_LEN, TASC_MAX_ARGS, TASC_MAX_CALLS, TASC_MIN_ARGS, TASC_TOOL_ID_LEN,
+};
+
 pub mod agent_session_token_expiry_enforcement_guard;
 pub use agent_session_token_expiry_enforcement_guard::{
     validate_token_expiry, SessionTokenRecord, TokenExpiryError,

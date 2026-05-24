@@ -240,6 +240,12 @@ pub use sealed_sender_recipient_hash_uniqueness_guard::{
     SSRU_DEST_HASH_LEN, SSRU_ENVELOPE_ID_LEN, SSRU_MAX_BATCH,
 };
 
+pub mod identity_key_rotation_age_freshness_guard;
+pub use identity_key_rotation_age_freshness_guard::{
+    validate_rotation_freshness, KeyRotationRecord, RotationFreshnessError,
+    IKRF_KEY_ID_LEN, IKRF_MAX_AGE_MS, IKRF_MAX_KEYS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
