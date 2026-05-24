@@ -109,6 +109,12 @@ pub use group_member_removal_verification_guard::{
     GMRV_MAX_REMOVALS,
 };
 
+pub mod treekem_update_path_coverage_guard;
+pub use treekem_update_path_coverage_guard::{
+    validate_update_path_coverage, PathCoverageError, UpdatePathRecord,
+    TUPC_MAX_LEAVES, TUPC_MAX_PATHS,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

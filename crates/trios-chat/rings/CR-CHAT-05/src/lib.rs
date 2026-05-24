@@ -104,6 +104,12 @@ pub use store_write_atomicity_guard::{
     SWAT_MAX_BATCH,
 };
 
+pub mod store_record_deletion_integrity_guard;
+pub use store_record_deletion_integrity_guard::{
+    validate_deletion_integrity, DeletedRecord, DeletionError,
+    SRDI_MAX_RECORDS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
