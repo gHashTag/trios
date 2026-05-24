@@ -116,6 +116,12 @@ pub use store_record_tombstone_gc_guard::{
     STGC_MAX_AGE_MS, STGC_MAX_TOMBSTONES, STGC_RECORD_ID_LEN,
 };
 
+pub mod store_checkpoint_consistency_guard;
+pub use store_checkpoint_consistency_guard::{
+    validate_checkpoints, Checkpoint, CheckpointError,
+    SCCG_HASH_LEN, SCCG_MAX_CHECKPOINTS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

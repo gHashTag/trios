@@ -162,6 +162,12 @@ pub use sending_chain_advancement_limit_guard::{
     SCAL_CHAIN_ID_LEN, SCAL_MAX_ADVANCES, SCAL_MAX_STEPS,
 };
 
+pub mod receiving_chain_gap_bound_guard;
+pub use receiving_chain_gap_bound_guard::{
+    validate_chain_gaps, ChainGap, GapBoundError,
+    RCGB_MAX_BATCH, RCGB_MAX_GAP, RCGB_MAX_TOTAL_GAPS,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
