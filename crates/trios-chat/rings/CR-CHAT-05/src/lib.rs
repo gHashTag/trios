@@ -253,6 +253,12 @@ pub use store_record_deletion_depth_bound_guard::{
     SRDD_MAX_DEPTH, SRDD_MAX_RECORDS, SRDD_RECORD_ID_LEN,
 };
 
+pub mod store_envelope_counter_monotonicity_guard;
+pub use store_envelope_counter_monotonicity_guard::{
+    validate_counter_monotonicity, CounterMonotonicityError, EnvelopeCounterRecord,
+    SECM_MAX_ENVELOPES, SECM_MAX_GAP, SECM_SESSION_ID_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

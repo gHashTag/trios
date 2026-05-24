@@ -257,6 +257,12 @@ pub use root_key_rotation_frequency_bound_guard::{
     RKRF_MAX_INTERVAL_MS, RKRF_MAX_ROTATIONS, RKRF_ROTATION_ID_LEN,
 };
 
+pub mod chain_key_epoch_transition_timing_guard;
+pub use chain_key_epoch_transition_timing_guard::{
+    validate_transition_timing, TransitionTimingError, TransitionTimingRecord,
+    CKETT_MAX_DELAY_MS, CKETT_MAX_TRANSITIONS, CKETT_TRANSITION_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
