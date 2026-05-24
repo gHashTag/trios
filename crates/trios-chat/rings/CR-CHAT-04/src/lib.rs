@@ -228,6 +228,12 @@ pub use padding_timing_uniformity_guard::{
     PTU_MAX_CV, PTU_MAX_OBS, PTU_MIN_MEAN_US, PTU_MIN_OBS, PTU_OBS_ID_LEN,
 };
 
+pub mod padding_block_alignment_uniformity_guard;
+pub use padding_block_alignment_uniformity_guard::{
+    validate_alignment_uniformity, AlignmentRecord, AlignmentUniformityError,
+    PBAU_BLOCK_ID_LEN, PBAU_MAX_BLOCKS, PBAU_MIN_ALIGNMENT,
+};
+
 pub mod padding_class_transition_entropy_guard;
 pub use padding_class_transition_entropy_guard::{
     validate_transition_entropy,

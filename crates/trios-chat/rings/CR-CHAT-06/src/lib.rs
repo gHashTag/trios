@@ -240,6 +240,14 @@ pub use agent_rate_limit_burst_detection_guard::{
     ARLB_MAX_ACTIONS, ARLB_MAX_SESSIONS, ARLB_MAX_WINDOW_MS, ARLB_SESSION_ID_LEN,
 };
 
+pub mod agent_prompt_injection_depth_bound_guard;
+pub use agent_prompt_injection_depth_bound_guard::{
+    validate_injection_depth as validate_bound_injection_depth,
+    InjectionDepthError as BoundInjectionDepthError,
+    PromptDepthRecord,
+    APIDB_MAX_DEPTH, APIDB_MAX_PROMPTS, APIDB_PROMPT_ID_LEN, APIDB_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
