@@ -167,6 +167,12 @@ pub use treekem_update_path_secret_uniqueness_guard::{
     TPSU_HASH_LEN, TPSU_MAX_NODE_INDEX, TPSU_MAX_SECRETS, TPSU_UPDATE_ID_LEN,
 };
 
+pub mod treekem_resolution_node_coverage_guard;
+pub use treekem_resolution_node_coverage_guard::{
+    validate_resolution_coverage, CoverageEntry, CoverageError,
+    TRNC_MAX_ENTRIES, TRNC_MAX_POSITION, TRNC_RESOLUTION_ID_LEN,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

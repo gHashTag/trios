@@ -237,6 +237,12 @@ pub use cover_traffic_generation_rate_stability_guard::{
     CGRS_MAX_CV, CGRS_MAX_EPOCHS, CGRS_MAX_RATE, CGRS_MIN_EPOCHS, CGRS_MIN_RATE,
 };
 
+pub mod cover_traffic_emission_pattern_randomness_guard;
+pub use cover_traffic_emission_pattern_randomness_guard::{
+    validate_pattern_randomness, IntervalObservation, PatternRandomnessError,
+    CEPR_MAX_INTERVAL, CEPR_MAX_INTERVALS, CEPR_MIN_ENTROPY, CEPR_MIN_INTERVALS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
