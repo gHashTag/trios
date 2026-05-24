@@ -243,6 +243,12 @@ pub use sending_chain_key_seed_diversity_guard::{
     SCKS_CHAIN_ID_LEN, SCKS_MAX_SEEDS, SCKS_MIN_ENTROPY_BITS, SCKS_MIN_SEED_LEN, SCKS_SEED_LEN,
 };
 
+pub mod header_key_derivation_epoch_separation_guard;
+pub use header_key_derivation_epoch_separation_guard::{
+    validate_epoch_separation, EpochSeparationError, HeaderDerivationRecord,
+    HKDE_HEADER_ID_LEN, HKDE_LABEL_LEN, HKDE_MAX_HEADERS,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

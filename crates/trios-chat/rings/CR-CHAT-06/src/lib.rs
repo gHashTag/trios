@@ -219,6 +219,13 @@ pub use agent_session_token_expiry_enforcement_guard::{
     ASTX_MAX_TOKENS, ASTX_TOKEN_ID_LEN,
 };
 
+pub mod agent_response_size_burst_bound_guard;
+pub use agent_response_size_burst_bound_guard::{
+    validate_response_burst, ResponseBurstError, ResponseSizeRecord,
+    ARSB_MAX_BURST_TOTAL, ARSB_MAX_RESPONSES, ARSB_MAX_SIZE,
+    ARSB_RESPONSE_ID_LEN, ARSB_SESSION_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
