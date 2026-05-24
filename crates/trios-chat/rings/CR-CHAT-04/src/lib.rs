@@ -92,6 +92,12 @@ pub use padding_crypto_binding_guard::{
     validate_padding_binding, PaddingBindingError, PCBG_AD_LEN, PCBG_ALIGN, PCBG_MAX_PADDING,
 };
 
+pub mod header_extension_order_guard;
+pub use header_extension_order_guard::{
+    validate_header_ext_order, HeaderExtension, HeaderExtError,
+    HEXO_MAX_EXTENSIONS, HEXO_MAX_PAYLOAD, HEXO_MIN_TYPE,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

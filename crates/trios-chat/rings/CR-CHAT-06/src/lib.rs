@@ -73,6 +73,12 @@ pub use tool_argument_schema_guard::{
     TASG_MAX_PROPS, TASG_MAX_STRING_LEN,
 };
 
+pub mod agent_context_window_budget_guard;
+pub use agent_context_window_budget_guard::{
+    validate_context_budget, ContextEntry, ContextBudgetError,
+    ACWB_MAX_BUDGET, ACWB_MAX_ENTRIES,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
