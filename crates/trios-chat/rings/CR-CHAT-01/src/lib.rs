@@ -134,6 +134,12 @@ pub use sealed_sender_replay_guard::{
     SSRG_KEY_LEN, SSRG_MAX_KEYS,
 };
 
+pub mod identity_key_compromise_recovery_guard;
+pub use identity_key_compromise_recovery_guard::{
+    validate_recovery_transitions, RecoveryError, RecoveryTransition,
+    IKCR_KEY_LEN, IKCR_MAX_RECOVERIES,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

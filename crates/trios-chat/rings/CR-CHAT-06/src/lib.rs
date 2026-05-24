@@ -98,6 +98,12 @@ pub use agent_tool_call_audit_log_guard::{
     TCAL_MAX_ENTRIES,
 };
 
+pub mod agent_output_content_type_validation_guard;
+pub use agent_output_content_type_validation_guard::{
+    validate_content_types, ContentType, ContentTypeError, ToolOutput,
+    OCTV_MAX_MISMATCHES, OCTV_MAX_PAYLOAD, OCTV_MIN_PAYLOAD,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
