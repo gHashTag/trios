@@ -177,6 +177,12 @@ pub use agent_output_format_validation_guard::{
     AOFV_APPROVED_TYPES, AOFV_MAX_LEN, AOFV_MAX_OUTPUTS, AOFV_OUTPUT_ID_LEN, AOFV_TEXT_FORBIDDEN,
 };
 
+pub mod agent_tool_result_cache_staleness_guard;
+pub use agent_tool_result_cache_staleness_guard::{
+    validate_cache_staleness, CacheEntry, CacheStalenessError,
+    ATRC_ENTRY_ID_LEN, ATRC_HASH_LEN, ATRC_MAX_AGE_MS, ATRC_MAX_ENTRIES,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

@@ -201,6 +201,12 @@ pub use chain_key_derivation_domain_separation_guard::{
     CKDS_APPROVED_DOMAINS, CKDS_CHAIN_ID_LEN, CKDS_HASH_LEN, CKDS_MAX_DERIVATIONS,
 };
 
+pub mod sending_chain_advancement_bound_guard;
+pub use sending_chain_advancement_bound_guard::{
+    validate_chain_bound, ChainAdvanceRecord, ChainBoundError,
+    SCAB_CHAIN_ID_LEN, SCAB_HASH_LEN, SCAB_MAX_RECORDS, SCAB_MAX_STEPS,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
