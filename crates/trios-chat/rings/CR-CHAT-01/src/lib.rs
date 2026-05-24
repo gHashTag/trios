@@ -209,6 +209,12 @@ pub use sealed_sender_replay_window_consistency_guard::{
     SSRW_KEY_LEN, SSRW_MAX_ENTRIES, SSRW_MAX_WINDOW,
 };
 
+pub mod prekey_bundle_hash_chain_integrity_guard;
+pub use prekey_bundle_hash_chain_integrity_guard::{
+    validate_bundle_chain, BundleChainEntry, BundleChainError,
+    PBHC_BUNDLE_ID_LEN, PBHC_GENESIS_SEQ, PBHC_HASH_LEN, PBHC_MAX_BUNDLES,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

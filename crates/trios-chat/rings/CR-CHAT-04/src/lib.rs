@@ -184,6 +184,12 @@ pub use padding_timing_side_channel_guard::{
     PTSC_MAX_DURATION_US, PTSC_MAX_OPS, PTSC_MAX_VARIANCE_US, PTSC_MIN_DURATION_US, PTSC_OP_ID_LEN,
 };
 
+pub mod padding_length_class_transition_uniformity_guard;
+pub use padding_length_class_transition_uniformity_guard::{
+    validate_transition_uniformity, TransitionObservation, TransitionUniformityError,
+    PLCT_MAX_CHI_SQUARED, PLCT_MAX_TRANSITIONS, PLCT_MIN_TRANSITIONS, PLCT_NUM_CLASSES,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
