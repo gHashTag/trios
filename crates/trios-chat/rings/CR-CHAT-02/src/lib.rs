@@ -113,6 +113,12 @@ pub use root_key_derivation_chain_length_guard::{
     RKCL_HASH_LEN, RKCL_MAX_CHAIN_LEN,
 };
 
+pub mod double_ratchet_sending_chain_rotation_guard;
+pub use double_ratchet_sending_chain_rotation_guard::{
+    validate_sending_chain_rotation, ChainRotationError, SendingChain,
+    DSCR_MAX_CHAINS, DSCR_MAX_MESSAGES,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

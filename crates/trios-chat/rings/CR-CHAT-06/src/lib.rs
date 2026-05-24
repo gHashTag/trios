@@ -116,6 +116,12 @@ pub use agent_tool_input_sanitization_guard::{
     ATIS_MAX_INPUT_LEN, ATIS_MAX_INPUTS,
 };
 
+pub mod agent_tool_output_size_validation_guard;
+pub use agent_tool_output_size_validation_guard::{
+    validate_tool_output_sizes, OutputSizeError, ToolOutputRecord,
+    ATOS_MAX_ACCUMULATED, ATOS_MAX_OUTPUTS, ATOS_MAX_SINGLE,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
