@@ -213,6 +213,12 @@ pub use cover_traffic_destination_uniformity_guard::{
     CDUG_MIN_EMISSIONS, CDUG_MIN_PER_DEST, CDUG_NUM_DESTINATIONS,
 };
 
+pub mod cover_traffic_replay_detection_guard;
+pub use cover_traffic_replay_detection_guard::{
+    validate_cover_replay, CoverReplayError, CoverWindow,
+    CTRD_HASH_LEN, CTRD_MAX_WINDOWS, CTRD_MIN_EMISSIONS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

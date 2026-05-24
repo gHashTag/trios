@@ -160,6 +160,12 @@ pub use padding_ciphertext_length_consistency_guard::{
     PCLG_CLASSES, PCLG_MAX_CIPHERTEXTS,
 };
 
+pub mod padding_key_derivation_domain_separation_guard;
+pub use padding_key_derivation_domain_separation_guard::{
+    validate_domain_separation, DerivationRecord, DomainSepError,
+    PKDS_APPROVED_LABELS, PKDS_CONTEXT_LEN, PKDS_MAX_DERIVATIONS,
+};
+
 /// Padding classes — every chat ciphertext fits exactly one of these.
 pub const CLASSES: [usize; 4] = [256, 1024, 4096, 16384];
 
