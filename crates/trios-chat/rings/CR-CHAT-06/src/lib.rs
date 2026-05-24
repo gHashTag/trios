@@ -165,6 +165,12 @@ pub use agent_resource_usage_limit_guard::{
     ARUL_MAX_CPU_MS, ARUL_MAX_DISK, ARUL_MAX_MEMORY, ARUL_MAX_RECORDS, ARUL_SESSION_ID_LEN,
 };
 
+pub mod agent_tool_call_dependency_cycle_guard;
+pub use agent_tool_call_dependency_cycle_guard::{
+    validate_no_cycles, DependencyCycleError, DependencyEdge,
+    ATDC_MAX_EDGES, ATDC_TOOL_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

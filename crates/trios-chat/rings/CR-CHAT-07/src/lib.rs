@@ -225,6 +225,12 @@ pub use cover_traffic_inter_destination_timing_uniformity_guard::{
     CIDT_DEST_LEN, CIDT_MAX_EMISSIONS, CIDT_MAX_STDDEV, CIDT_MIN_PER_DEST,
 };
 
+pub mod cover_traffic_payload_size_variance_guard;
+pub use cover_traffic_payload_size_variance_guard::{
+    validate_size_variance, CoverSizeObservation, SizeVarianceError,
+    CPSV_MAX_CV, CPSV_MAX_EMISSIONS, CPSV_MAX_SIZE, CPSV_MIN_SIZE,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
