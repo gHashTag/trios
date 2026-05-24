@@ -226,6 +226,14 @@ pub use agent_response_size_burst_bound_guard::{
     ARSB_RESPONSE_ID_LEN, ARSB_SESSION_ID_LEN,
 };
 
+pub mod agent_tool_response_content_type_guard;
+pub use agent_tool_response_content_type_guard::{
+    validate_content_types as validate_response_content_types,
+    ContentTypeError as ResponseContentTypeError,
+    ContentTypeRecord,
+    CTCT_ALLOWED_TYPES, CTCT_MAX_RESPONSES, CTCT_MAX_TYPE_LEN, CTCT_TOOL_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

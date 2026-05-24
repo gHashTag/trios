@@ -247,6 +247,12 @@ pub use store_write_amplification_bound_guard::{
     SWAB_MAX_AMP_DEN, SWAB_MAX_AMP_NUM, SWAB_MAX_SESSIONS, SWAB_SESSION_ID_LEN,
 };
 
+pub mod store_record_deletion_depth_bound_guard;
+pub use store_record_deletion_depth_bound_guard::{
+    validate_deletion_depth, DeletionDepthError, DeletionRecord,
+    SRDD_MAX_DEPTH, SRDD_MAX_RECORDS, SRDD_RECORD_ID_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
