@@ -84,6 +84,14 @@ pub use tool_response_timeout_guard::{
     validate_tool_timeout, ToolTimeoutError, TRTO_MAX_TIMEOUT_MS, TRTO_MIN_TIMEOUT_MS,
 };
 
+pub mod agent_prompt_injection_depth_guard;
+pub use agent_prompt_injection_depth_guard::{
+    validate_injection_depth as validate_prompt_depth,
+    InjectionDepthError as PromptDepthError,
+    RepromptEntry,
+    PIDP_MAX_DEPTH, PIDP_MAX_REPROMPT_LEN, PIDP_MAX_TOTAL_BYTES,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

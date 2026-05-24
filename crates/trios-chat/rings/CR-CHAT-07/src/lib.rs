@@ -150,6 +150,12 @@ pub use replay_detection_window_guard::{
     RPDW_MAX_MESSAGES, RPDW_MAX_WINDOW, RPDW_MIN_WINDOW,
 };
 
+pub mod cover_traffic_timing_correlation_guard;
+pub use cover_traffic_timing_correlation_guard::{
+    validate_cover_timing, CoverTimingError, EmissionType, TimingEmission,
+    CTCG_MAX_WINDOW, CTCG_MIN_COVER_BETWEEN_REAL,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
