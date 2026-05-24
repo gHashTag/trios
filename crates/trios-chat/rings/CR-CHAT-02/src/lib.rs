@@ -219,6 +219,12 @@ pub use skipped_message_key_eviction_policy_guard::{
     SMEP_CHAIN_ID_LEN, SMEP_HASH_LEN, SMEP_MAX_AGE_MS, SMEP_MAX_PER_CHAIN, SMEP_MAX_RECORDS, SMEP_MAX_TOTAL,
 };
 
+pub mod double_ratchet_chain_key_rotation_bound_guard;
+pub use double_ratchet_chain_key_rotation_bound_guard::{
+    validate_rotation_bound, RotationBoundError, RotationRecord,
+    DRCB_MAX_BATCH, DRCB_MAX_ROTATIONS, DRCB_SESSION_ID_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

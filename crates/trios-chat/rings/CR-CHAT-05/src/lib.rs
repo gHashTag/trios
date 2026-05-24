@@ -217,6 +217,12 @@ pub use sender_keys_epoch_window_replay::{
     SENDER_KEYS_EPOCH_WINDOW, SENDER_KEYS_SENDER_ID_LEN,
 };
 
+pub mod wal_entry_crc_chain_integrity_guard;
+pub use wal_entry_crc_chain_integrity_guard::{
+    validate_crc_chain, CrcChainError, WalCrcRecord,
+    WCCI_ENTRY_ID_LEN, WCCI_MAX_BATCH,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
