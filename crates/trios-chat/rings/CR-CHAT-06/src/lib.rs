@@ -147,6 +147,12 @@ pub use agent_prompt_injection_detection_rate_guard::{
     PIDR_MAX_FP_RATE, PIDR_MAX_RECORDS, PIDR_MIN_RATE, PIDR_MIN_SAMPLES,
 };
 
+pub mod agent_output_redaction_completeness_guard;
+pub use agent_output_redaction_completeness_guard::{
+    validate_redaction, RedactionCheck, RedactionError,
+    AORC_MAX_OUTPUTS, AORC_MIN_REDACT_LEN, AORC_OUTPUT_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

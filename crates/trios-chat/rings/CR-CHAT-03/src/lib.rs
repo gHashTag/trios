@@ -134,6 +134,12 @@ pub use treekem_blank_leaf_count_bound_guard::{
     BLCB_MAX_TREES, BLCB_MIN_LEAVES,
 };
 
+pub mod treekem_update_path_uniqueness_guard;
+pub use treekem_update_path_uniqueness_guard::{
+    validate_update_path_uniqueness, PathUniquenessError, UpdatePath,
+    TPUN_HASH_LEN, TPUN_MAX_PATHS,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
