@@ -62,6 +62,12 @@ pub use tombstone_retention_guard::{
     TSRT_MAX_RETENTION_SECS, TSRT_MAX_TOMBSTONES, TSRT_MIN_RETENTION_SECS,
 };
 
+pub mod wal_entry_checksum_guard;
+pub use wal_entry_checksum_guard::{
+    validate_wal_checksums, WalChecksumEntry, WalChecksumError,
+    WLCS_CHECKSUM_LEN, WLCS_MAX_ENTRIES, WLCS_MAX_ENTRY_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

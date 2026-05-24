@@ -116,6 +116,11 @@ pub use signature_algorithm_pinning_guard::{
     validate_sig_algo_pinning, SigAlgoPinError, SAPN_ALLOWED_ALGOS, SAPN_MAX_PINS,
 };
 
+pub mod prekey_bundle_one_time_use_guard;
+pub use prekey_bundle_one_time_use_guard::{
+    validate_prekey_one_time, PrekeyReuseError, PBOU_MAX_BUNDLE, PBOU_MAX_CONSUMED,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
