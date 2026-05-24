@@ -92,6 +92,12 @@ pub use store_tombstone_purging_consistency_guard::{
     STPC_MAX_RETENTION, STPC_MAX_TOMBSTONES, STPC_MIN_RETENTION,
 };
 
+pub mod store_encryption_key_rotation_integrity_guard;
+pub use store_encryption_key_rotation_integrity_guard::{
+    validate_key_rotation, KeyRotation, KeyRotationError, RotatedRecord,
+    SEKR_MAX_RECORDS,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 

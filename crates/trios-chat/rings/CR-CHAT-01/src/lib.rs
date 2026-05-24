@@ -140,6 +140,12 @@ pub use identity_key_compromise_recovery_guard::{
     IKCR_KEY_LEN, IKCR_MAX_RECOVERIES,
 };
 
+pub mod identity_key_rotation_proof_guard;
+pub use identity_key_rotation_proof_guard::{
+    validate_rotation_proofs, RotationProof, RotationProofError,
+    IKRP_KEY_LEN, IKRP_MAX_ROTATIONS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
