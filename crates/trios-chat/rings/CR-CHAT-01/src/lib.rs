@@ -178,6 +178,12 @@ pub use identity_key_cross_device_binding_guard::{
     ICDB_KEY_LEN, ICDB_MAX_BINDINGS, ICDB_MAX_DEVICES,
 };
 
+pub mod prekey_bundle_lifetime_enforcement_guard;
+pub use prekey_bundle_lifetime_enforcement_guard::{
+    validate_bundle_lifetimes, BundleLifetime, BundleLifetimeError,
+    PBLE_BUNDLE_ID_LEN, PBLE_MAX_BUNDLES, PBLE_MAX_LIFETIME_MS,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 

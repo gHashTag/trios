@@ -206,6 +206,13 @@ pub use cover_traffic_volume_stability_guard::{
     CTSG_MAX_DEVIATION, CTSG_MAX_VOLUME, CTSG_MAX_WINDOWS, CTSG_MIN_VOLUME,
 };
 
+pub mod cover_traffic_destination_uniformity_guard;
+pub use cover_traffic_destination_uniformity_guard::{
+    validate_dest_uniformity, DestCoverEmission, DestUniformityError,
+    CDUG_DEST_LEN, CDUG_MAX_EMISSIONS, CDUG_MAX_RATIO_DEN, CDUG_MAX_RATIO_NUM,
+    CDUG_MIN_EMISSIONS, CDUG_MIN_PER_DEST, CDUG_NUM_DESTINATIONS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
