@@ -207,6 +207,12 @@ pub use sending_chain_advancement_bound_guard::{
     SCAB_CHAIN_ID_LEN, SCAB_HASH_LEN, SCAB_MAX_RECORDS, SCAB_MAX_STEPS,
 };
 
+pub mod message_key_derivation_label_uniqueness_guard;
+pub use message_key_derivation_label_uniqueness_guard::{
+    validate_label_uniqueness, DerivationLabel, LabelUniquenessError,
+    MKDL_CHAIN_ID_LEN, MKDL_HASH_LEN, MKDL_MAX_DERIVATIONS, MKDL_MAX_LABEL_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;

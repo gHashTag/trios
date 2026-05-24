@@ -164,6 +164,12 @@ pub use store_wal_entry_sequence_continuity_guard::{
     WSCG_GENESIS, WSCG_HASH_LEN, WSCG_MAX_ENTRIES,
 };
 
+pub mod store_encryption_key_version_monotonicity_guard;
+pub use store_encryption_key_version_monotonicity_guard::{
+    validate_key_version_monotonicity, KeyVersionEntry, KeyVersionError,
+    SEKV_GENESIS, SEKV_HASH_LEN, SEKV_MAX_ENTRIES, SEKV_MAX_VERSION,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
