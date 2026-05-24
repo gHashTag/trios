@@ -140,6 +140,12 @@ pub use store_encryption_key_derivation_context_guard::{
     SEKC_CONTEXT_LEN, SEKC_KEY_HASH_LEN, SEKC_MAX_RECORDS, SEKC_SESSION_LEN,
 };
 
+pub mod store_migration_compat_guard;
+pub use store_migration_compat_guard::{
+    validate_migration_compat, MigrationCompatError, MigrationRecord,
+    SMCG_HASH_LEN, SMCG_MAX_MIGRATIONS, SMCG_MAX_VERSION,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
