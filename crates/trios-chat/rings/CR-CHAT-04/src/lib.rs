@@ -105,6 +105,12 @@ pub use padding_byte_entropy_guard::{
     PBEG_MIN_LEN, PBEG_MIN_UNIQUE,
 };
 
+pub mod padding_length_distribution_guard;
+pub use padding_length_distribution_guard::{
+    validate_padding_length_distribution, PadLenDistError,
+    PLDG_MAX_SAMPLES, PLDG_MIN_CLASSES, PLDG_MIN_SAMPLES,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

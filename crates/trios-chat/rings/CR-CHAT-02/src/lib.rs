@@ -83,6 +83,12 @@ pub use message_key_derivation_binding_guard::{
     MKDB_KEY_LEN, MKDB_MAX_CHAIN_INDEX,
 };
 
+pub mod skipped_message_key_gap_bound_guard;
+pub use skipped_message_key_gap_bound_guard::{
+    validate_skipped_key_gaps, SkippedGapError,
+    SMKG_MAX_GAP, SMKG_MAX_INDEX, SMKG_MAX_SKIPPED,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
