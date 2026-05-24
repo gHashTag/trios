@@ -79,6 +79,12 @@ pub use treekem_path_secret_forward_secrecy_guard::{
     TPSF_MAX_PATH, TPSF_MIN_PATH, TPSF_SECRET_LEN,
 };
 
+pub mod group_epoch_commit_ordering_guard;
+pub use group_epoch_commit_ordering_guard::{
+    validate_commit_ordering, CommitOrderError, CommitRecord,
+    GECO_MAX_COMMITS, GECO_MAX_EPOCH_GAP, GECO_MIN_EPOCH,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

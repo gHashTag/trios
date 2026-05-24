@@ -74,6 +74,12 @@ pub use store_revision_monotonicity_guard::{
     SRVM_MAX_REVISION, SRVM_MAX_REVISIONS, SRVM_MIN_REVISION,
 };
 
+pub mod data_store_encryption_at_rest_guard;
+pub use data_store_encryption_at_rest_guard::{
+    validate_encrypt_at_rest, EncryptAtRestError, StoredRecord,
+    DSER_MAX_CT_LEN, DSER_MAX_RECORDS, DSER_MIN_CT_LEN,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
