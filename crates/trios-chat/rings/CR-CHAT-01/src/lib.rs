@@ -252,6 +252,12 @@ pub use prekey_bundle_single_use_enforcement_guard::{
     PBSU_BUNDLE_ID_LEN, PBSU_MAX_RECORDS, PBSU_SESSION_ID_LEN,
 };
 
+pub mod identity_key_signature_algorithm_consistency_guard;
+pub use identity_key_signature_algorithm_consistency_guard::{
+    validate_signature_consistency, SignatureConsistencyError, SignatureRecord,
+    IKSC_MAX_SIG_LEN, IKSC_MAX_SIGNATURES, IKSC_SIGNER_ID_LEN,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
