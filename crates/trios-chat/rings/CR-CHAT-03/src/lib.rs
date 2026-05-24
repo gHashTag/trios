@@ -240,6 +240,12 @@ pub use treekem_unmerged_leaf_count_accumulation_guard::{
     TULB_MAX_ENTRIES, TULB_MAX_UNMERGED, TULB_MIN_LEAVES, TULB_GROUP_ID_LEN,
 };
 
+pub mod treekem_parent_hash_chain_continuity_guard;
+pub use treekem_parent_hash_chain_continuity_guard::{
+    validate_parent_hash_chains, ParentChainError, ParentHashChain, ParentHashNode,
+    TPHC_HASH_LEN, TPHC_MAX_CHAINS, TPHC_MAX_DEPTH, TPHC_NODE_ID_LEN,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};

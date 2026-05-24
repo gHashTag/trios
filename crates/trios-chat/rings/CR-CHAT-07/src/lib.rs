@@ -249,6 +249,13 @@ pub use cover_traffic_destination_rotation_frequency_guard::{
     CDRF_DEST_LEN, CDRF_EMISSION_ID_LEN, CDRF_MAX_EMISSIONS, CDRF_MAX_PER_DEST, CDRF_MIN_DESTINATIONS,
 };
 
+pub mod cover_traffic_timing_jitter_uniformity_guard;
+pub use cover_traffic_timing_jitter_uniformity_guard::{
+    validate_jitter_uniformity, JitterObservation, JitterUniformityError,
+    CTJU_MAX_CV_DEN, CTJU_MAX_CV_NUM, CTJU_MAX_INTERVALS, CTJU_MAX_OBSERVATIONS,
+    CTJU_MIN_INTERVALS, CTJU_MIN_MEAN_US, CTJU_OBS_ID_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
