@@ -91,6 +91,12 @@ pub use ratchet_tree_update_integrity_guard::{
     RTUI_MAX_BATCH, RTUI_MAX_NODES,
 };
 
+pub mod leaf_node_key_uniqueness_guard;
+pub use leaf_node_key_uniqueness_guard::{
+    validate_leaf_key_uniqueness, LeafKeyError, LeafNode,
+    LNKU_KEY_LEN, LNKU_MAX_LEAVES,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,

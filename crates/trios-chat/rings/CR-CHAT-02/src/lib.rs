@@ -95,6 +95,12 @@ pub use ratchet_skip_message_bound_guard::{
     RSMB_MAX_TOTAL_SKIPPED, RSMB_MAX_PER_EPOCH, RSMB_MAX_EPOCHS,
 };
 
+pub mod message_key_commitment_binding_guard;
+pub use message_key_commitment_binding_guard::{
+    validate_msg_key_commitments, CommitmentError, MsgKeyCommitment,
+    MKCB_HASH_LEN, MKCB_MAX_COMMITMENTS,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 
