@@ -107,6 +107,12 @@ pub use chain_key_epoch_transition_guard::{
     CKET_KEY_LEN, CKET_MAX_EPOCHS,
 };
 
+pub mod root_key_derivation_chain_length_guard;
+pub use root_key_derivation_chain_length_guard::{
+    validate_root_key_chain_length, ChainLengthError, RootKeyLink,
+    RKCL_HASH_LEN, RKCL_MAX_CHAIN_LEN,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

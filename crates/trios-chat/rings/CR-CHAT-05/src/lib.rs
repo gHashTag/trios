@@ -98,6 +98,12 @@ pub use store_encryption_key_rotation_integrity_guard::{
     SEKR_MAX_RECORDS,
 };
 
+pub mod store_write_atomicity_guard;
+pub use store_write_atomicity_guard::{
+    validate_write_atomicity, AtomicityError, WriteBatch, WriteRecord,
+    SWAT_MAX_BATCH,
+};
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
