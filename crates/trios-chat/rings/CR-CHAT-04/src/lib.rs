@@ -98,6 +98,13 @@ pub use header_extension_order_guard::{
     HEXO_MAX_EXTENSIONS, HEXO_MAX_PAYLOAD, HEXO_MIN_TYPE,
 };
 
+pub mod padding_byte_entropy_guard;
+pub use padding_byte_entropy_guard::{
+    validate_padding_entropy, PaddingEntropyError,
+    PBEG_MAX_LEN, PBEG_MAX_FREQ_RATIO_DEN, PBEG_MAX_FREQ_RATIO_NUM,
+    PBEG_MIN_LEN, PBEG_MIN_UNIQUE,
+};
+
 pub mod padding_class_transition_audit;
 pub use padding_class_transition_audit::{
     audit_padding_transitions, PaddingChoice, PaddingTransitionError,

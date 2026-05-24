@@ -121,6 +121,12 @@ pub use prekey_bundle_one_time_use_guard::{
     validate_prekey_one_time, PrekeyReuseError, PBOU_MAX_BUNDLE, PBOU_MAX_CONSUMED,
 };
 
+pub mod identity_key_usage_count_guard;
+pub use identity_key_usage_count_guard::{
+    key_needs_rotation, validate_key_usage, KeyUsageError,
+    IKUC_MAX_SIGNATURES, IKUC_WARN_SIGNATURES,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
