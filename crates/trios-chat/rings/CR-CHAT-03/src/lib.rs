@@ -246,6 +246,12 @@ pub use treekem_parent_hash_chain_continuity_guard::{
     TPHC_HASH_LEN, TPHC_MAX_CHAINS, TPHC_MAX_DEPTH, TPHC_NODE_ID_LEN,
 };
 
+pub mod treekem_leaf_node_version_monotonicity_guard;
+pub use treekem_leaf_node_version_monotonicity_guard::{
+    validate_leaf_version_monotonicity, LeafVersionRecord, VersionMonotonicityError,
+    TLNV_GROUP_ID_LEN, TLNV_LEAF_ID_LEN, TLNV_MAX_RECORDS,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};

@@ -201,6 +201,12 @@ pub use agent_tool_call_frequency_burst_guard::{
     ATCF_MAX_BURST, ATCF_MAX_ENTRIES, ATCF_MAX_WINDOW_MS, ATCF_SESSION_ID_LEN,
 };
 
+pub mod agent_session_token_expiry_enforcement_guard;
+pub use agent_session_token_expiry_enforcement_guard::{
+    validate_token_expiry, SessionTokenRecord, TokenExpiryError,
+    ASTX_MAX_TOKENS, ASTX_TOKEN_ID_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,
