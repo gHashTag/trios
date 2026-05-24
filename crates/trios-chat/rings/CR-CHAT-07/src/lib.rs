@@ -243,6 +243,12 @@ pub use cover_traffic_emission_pattern_randomness_guard::{
     CEPR_MAX_INTERVAL, CEPR_MAX_INTERVALS, CEPR_MIN_ENTROPY, CEPR_MIN_INTERVALS,
 };
 
+pub mod cover_traffic_destination_rotation_frequency_guard;
+pub use cover_traffic_destination_rotation_frequency_guard::{
+    validate_dest_rotation, DestEmission, DestRotationError,
+    CDRF_DEST_LEN, CDRF_EMISSION_ID_LEN, CDRF_MAX_EMISSIONS, CDRF_MAX_PER_DEST, CDRF_MIN_DESTINATIONS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

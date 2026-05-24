@@ -213,6 +213,12 @@ pub use message_key_derivation_label_uniqueness_guard::{
     MKDL_CHAIN_ID_LEN, MKDL_HASH_LEN, MKDL_MAX_DERIVATIONS, MKDL_MAX_LABEL_LEN,
 };
 
+pub mod skipped_message_key_eviction_policy_guard;
+pub use skipped_message_key_eviction_policy_guard::{
+    validate_eviction_policy, EvictionPolicyError, SkippedKeyRecord,
+    SMEP_CHAIN_ID_LEN, SMEP_HASH_LEN, SMEP_MAX_AGE_MS, SMEP_MAX_PER_CHAIN, SMEP_MAX_RECORDS, SMEP_MAX_TOTAL,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
