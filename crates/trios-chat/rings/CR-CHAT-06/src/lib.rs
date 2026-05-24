@@ -67,6 +67,12 @@ pub use agent_output_rate_limit_guard::{
     AORL_MAX_BYTES, AORL_MAX_OUTPUTS, AORL_MAX_WINDOW_MS, AORL_MIN_INTERVAL_MS,
 };
 
+pub mod tool_argument_schema_guard;
+pub use tool_argument_schema_guard::{
+    validate_tool_args, SchemaArgValue, PropertyDef, SchemaError, SchemaType,
+    TASG_MAX_PROPS, TASG_MAX_STRING_LEN,
+};
+
 pub use tool_arg_confusion::{
     validate_tool_call, ArgKind, ArgSpec, ArgValue, ToolCall, ToolCallError, ToolEntry,
     ToolManifest as ToolArgManifest, NESTED_TOOL_CALL_SENTINEL,

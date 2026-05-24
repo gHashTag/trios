@@ -106,6 +106,11 @@ pub use key_package_expiry_guard::{
     validate_key_package_expiry, KeyPackageExpiryError, KPX_MAX_LIFETIME_SECS, KPX_MIN_LIFETIME_SECS,
 };
 
+pub mod credential_chain_path_length_guard;
+pub use credential_chain_path_length_guard::{
+    validate_credential_chain, Credential, CredentialChainError, CCPL_MAX_DEPTH,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
