@@ -71,6 +71,12 @@ pub use sender_chain_fork_detection_guard::{
     detect_chain_fork, ChainForkError, SCFD_KEY_LEN, SCFD_MAX_ENTRIES, SCFD_MAX_SENDERS,
 };
 
+pub mod epoch_rollover_wraparound_guard;
+pub use epoch_rollover_wraparound_guard::{
+    validate_epoch_rollover, EpochRolloverError,
+    EPRW_DANGER_ZONE, EPRW_MAX_ROTATIONS, EPRW_ROTATION_THRESHOLD,
+};
+
 pub mod deniable;
 pub use deniable::{forge_transcript, mac as deniable_mac, verify as deniable_verify, DeniableMacKey, Tag as DeniableTag};
 

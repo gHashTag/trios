@@ -138,6 +138,12 @@ pub use cover_decoy_ratio_governor::{
     CDRG_MIN_RATIO_DEN, CDRG_MIN_RATIO_NUM, CDRG_MIN_WINDOW,
 };
 
+pub mod mixnet_path_diversity_guard;
+pub use mixnet_path_diversity_guard::{
+    validate_path_diversity, PathDiversityError,
+    MPDG_MAX_OVERLAP, MPDG_MAX_PATH_LEN, MPDG_MIN_PATH_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.
