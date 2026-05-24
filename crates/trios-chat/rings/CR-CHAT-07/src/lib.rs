@@ -231,6 +231,12 @@ pub use cover_traffic_payload_size_variance_guard::{
     CPSV_MAX_CV, CPSV_MAX_EMISSIONS, CPSV_MAX_SIZE, CPSV_MIN_SIZE,
 };
 
+pub mod cover_traffic_generation_rate_stability_guard;
+pub use cover_traffic_generation_rate_stability_guard::{
+    validate_rate_stability, EpochRateObservation, RateStabilityError,
+    CGRS_MAX_CV, CGRS_MAX_EPOCHS, CGRS_MAX_RATE, CGRS_MIN_EPOCHS, CGRS_MIN_RATE,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

@@ -202,6 +202,13 @@ pub use prekey_bundle_rotation_rate_limit_guard::{
     PBRL_BUNDLE_ID_LEN, PBRL_MAX_INTERVAL_MS, PBRL_MAX_ROTATIONS, PBRL_MIN_INTERVAL_MS,
 };
 
+pub mod sealed_sender_replay_window_consistency_guard;
+pub use sealed_sender_replay_window_consistency_guard::{
+    validate_replay_window as validate_sealed_replay_window,
+    ReplayEntry, ReplayWindowError as SealedReplayWindowError,
+    SSRW_KEY_LEN, SSRW_MAX_ENTRIES, SSRW_MAX_WINDOW,
+};
+
 /// Trinity Chat protocol version this ring implements.
 pub const PROTOCOL_VERSION: u16 = 1;
 
