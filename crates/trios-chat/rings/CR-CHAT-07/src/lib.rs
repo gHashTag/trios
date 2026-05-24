@@ -271,6 +271,13 @@ pub use cover_traffic_inter_arrival_autocorrelation_guard::{
     CTIA_MAX_AUTOCORR, CTIA_MAX_OBSERVATIONS, CTIA_MIN_INTERVALS, CTIA_MIN_MEAN_US, CTIA_OBS_ID_LEN,
 };
 
+pub mod cover_traffic_volume_ratio_stability_guard;
+pub use cover_traffic_volume_ratio_stability_guard::{
+    validate_ratio_stability, RatioObservation, RatioStabilityError,
+    CTVS_MAX_RATIO_CV_DEN, CTVS_MAX_RATIO_CV_NUM, CTVS_MAX_WINDOWS,
+    CTVS_MIN_OBS, CTVS_MIN_RATIO_DEN, CTVS_MIN_RATIO_NUM, CTVS_WINDOW_ID_LEN,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

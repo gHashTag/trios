@@ -241,6 +241,12 @@ pub use store_record_tombstone_resurrection_guard::{
     SRTG_KEY_LEN, SRTG_MAX_ENTRIES,
 };
 
+pub mod store_write_amplification_bound_guard;
+pub use store_write_amplification_bound_guard::{
+    validate_write_amplification, WriteAmpError, WriteAmpRecord,
+    SWAB_MAX_AMP_DEN, SWAB_MAX_AMP_NUM, SWAB_MAX_SESSIONS, SWAB_SESSION_ID_LEN,
+};
+
 /// One envelope row exactly as it lives at rest. The `ciphertext` is
 /// already AEAD-sealed and padded to a fixed length class (R-CHAT-9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
