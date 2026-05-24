@@ -256,6 +256,13 @@ pub use cover_traffic_timing_jitter_uniformity_guard::{
     CTJU_MIN_INTERVALS, CTJU_MIN_MEAN_US, CTJU_OBS_ID_LEN,
 };
 
+pub mod cover_traffic_payload_length_distribution_guard;
+pub use cover_traffic_payload_length_distribution_guard::{
+    validate_length_distribution, LengthDistError, LengthDistRecord,
+    CTPL_CLASS_ID_LEN, CTPL_MAX_BATCHES, CTPL_MAX_CHI_SQUARED,
+    CTPL_MAX_CLASSES, CTPL_MIN_CLASSES, CTPL_MIN_OBSERVATIONS,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

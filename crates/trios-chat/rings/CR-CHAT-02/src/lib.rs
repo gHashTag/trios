@@ -225,6 +225,12 @@ pub use double_ratchet_chain_key_rotation_bound_guard::{
     DRCB_MAX_BATCH, DRCB_MAX_ROTATIONS, DRCB_SESSION_ID_LEN,
 };
 
+pub mod root_key_derivation_context_label_guard;
+pub use root_key_derivation_context_label_guard::{
+    validate_context_labels, ContextLabelError, DerivationContextRecord,
+    RKDL_CONTEXT_ID_LEN, RKDL_MAX_DERIVATIONS, RKDL_MAX_LABEL_LEN, RKDL_MIN_LABEL_LEN,
+};
+
 use std::collections::BTreeMap;
 
 use hkdf::Hkdf;
