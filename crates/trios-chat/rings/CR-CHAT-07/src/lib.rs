@@ -131,6 +131,13 @@ pub use traffic_shaping_burst_uniformity_guard::{
     TSBU_MAX_BURST, TSBU_MAX_COUNT, TSBU_MIN_BURST, TSBU_MIN_COUNT,
 };
 
+pub mod cover_decoy_ratio_governor;
+pub use cover_decoy_ratio_governor::{
+    validate_decoy_ratio, DecoyRatioError,
+    CDRG_MAX_RATIO_DEN, CDRG_MAX_RATIO_NUM, CDRG_MAX_WINDOW,
+    CDRG_MIN_RATIO_DEN, CDRG_MIN_RATIO_NUM, CDRG_MIN_WINDOW,
+};
+
 /// Canonical inter-envelope gap classes (milliseconds). Quantising every
 /// real gap into one of these foils per-envelope timing leaks below the
 /// 4-class resolution.

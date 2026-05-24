@@ -63,6 +63,11 @@ pub use parent_hash_chain_validation_guard::{
     validate_parent_hash_chain, HashNode, ParentHashError, PHCV_HASH_LEN, PHCV_MAX_DEPTH,
 };
 
+pub mod unmerged_leaves_bound_guard;
+pub use unmerged_leaves_bound_guard::{
+    validate_unmerged_leaves, UnmergedLeavesError, ULBG_MAX_TREE, ULBG_MAX_UNMERGED,
+};
+
 pub mod treekem_update_path_validation;
 pub use treekem_update_path_validation::{
     validate_update_path, PathNode, UpdatePathError, TKUP_MAX_LEAF, TKUP_MAX_PATH_LEN,
