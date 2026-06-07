@@ -1,7 +1,7 @@
 //! GitHub API integration — parse issue comments for agent status.
 
-use anyhow::Result;
 use crate::protocol::{AgentStatus, BridgeMessage};
+use anyhow::Result;
 
 /// GitHub API client for issue comment parsing.
 pub struct GitHubClient {
@@ -28,9 +28,7 @@ impl GitHubClient {
             None => octocrab::Octocrab::builder().build()?,
         };
 
-        let (owner, repo) = self.repo
-            .split_once('/')
-            .unwrap_or(("gHashTag", "trios"));
+        let (owner, repo) = self.repo.split_once('/').unwrap_or(("gHashTag", "trios"));
 
         let page = octocrab
             .issues(owner, repo)
@@ -38,10 +36,7 @@ impl GitHubClient {
             .send()
             .await?;
 
-        let comments: Vec<octocrab::models::issues::Comment> = page
-            .items
-            .into_iter()
-            .collect();
+        let comments: Vec<octocrab::models::issues::Comment> = page.items.into_iter().collect();
 
         Ok(comments
             .into_iter()

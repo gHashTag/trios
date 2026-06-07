@@ -54,10 +54,9 @@ pub enum BpbError {
 impl core::fmt::Display for BpbError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            BpbError::BeforeWarmup => write!(
-                f,
-                "BPB observation before INV2_WARMUP_BLIND_STEPS — reject"
-            ),
+            BpbError::BeforeWarmup => {
+                write!(f, "BPB observation before INV2_WARMUP_BLIND_STEPS — reject")
+            }
             BpbError::JepaProxyDetected => write!(
                 f,
                 "BPB ≤ JEPA_PROXY_BPB_FLOOR (0.1) — TASK-5D proxy artefact, reject"
@@ -364,14 +363,8 @@ mod tests {
     #[test]
     fn falsify_bad_alpha_rejected_at_construction() {
         // α out of (0, 1] propagates as BpbError::EmaRejected.
-        assert_eq!(
-            BpbTracker::new(0, 0.0).unwrap_err(),
-            BpbError::EmaRejected
-        );
-        assert_eq!(
-            BpbTracker::new(0, 2.0).unwrap_err(),
-            BpbError::EmaRejected
-        );
+        assert_eq!(BpbTracker::new(0, 0.0).unwrap_err(), BpbError::EmaRejected);
+        assert_eq!(BpbTracker::new(0, 2.0).unwrap_err(), BpbError::EmaRejected);
     }
 
     #[test]
@@ -413,7 +406,8 @@ mod tests {
             BpbTracker::phi_default(303),
         ];
         for (i, t) in trackers.iter_mut().enumerate() {
-            t.record(POST_WARMUP, 1.5 - 0.05 * (i as f64 + 1.0)).unwrap();
+            t.record(POST_WARMUP, 1.5 - 0.05 * (i as f64 + 1.0))
+                .unwrap();
         }
         let results: Vec<SeedResult> = trackers
             .iter()

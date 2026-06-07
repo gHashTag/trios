@@ -34,9 +34,7 @@ fn read_file_content(path: &Path) -> String {
 
 /// Check 1: NO .SH FILES - No shell scripts (Rust or TypeScript only)
 pub fn check_no_sh_files(root: &Path) -> super::CheckResult {
-    let found = scan_files(root, |p| {
-        p.extension().map(|e| e == "sh").unwrap_or(false)
-    });
+    let found = scan_files(root, |p| p.extension().map(|e| e == "sh").unwrap_or(false));
 
     if found.is_empty() {
         super::CheckResult {
@@ -94,11 +92,19 @@ pub fn check_no_fixed_ports(root: &Path) -> super::CheckResult {
 
     for path in scan_files(root, |p| {
         p.extension()
-            .map(|e| matches!(e.to_str(), Some("rs" | "toml" | "yaml" | "yml" | "ts" | "js")))
+            .map(|e| {
+                matches!(
+                    e.to_str(),
+                    Some("rs" | "toml" | "yaml" | "yml" | "ts" | "js")
+                )
+            })
             .unwrap_or(false)
     }) {
         let content = read_file_content(Path::new(&path));
-        for cap in port_regex_1.captures_iter(&content).chain(port_regex_2.captures_iter(&content)) {
+        for cap in port_regex_1
+            .captures_iter(&content)
+            .chain(port_regex_2.captures_iter(&content))
+        {
             let port = cap.get(1).map(|m| m.as_str()).unwrap_or("");
             // Allow 9005 (trios-server), 80, 443 (standard web)
             if port != "9005" && port != "80" && port != "443" && !port.is_empty() {
@@ -117,7 +123,11 @@ pub fn check_no_fixed_ports(root: &Path) -> super::CheckResult {
         super::CheckResult {
             name: "no_fixed_ports".into(),
             passed: false,
-            message: format!("Found {} fixed port violations:\n{}", violations.len(), violations.join("\n")),
+            message: format!(
+                "Found {} fixed port violations:\n{}",
+                violations.len(),
+                violations.join("\n")
+            ),
         }
     }
 }
@@ -125,8 +135,9 @@ pub fn check_no_fixed_ports(root: &Path) -> super::CheckResult {
 /// Check 4: NO UUID USAGE - No hardcoded UUIDs
 pub fn check_no_uuid_usage(root: &Path) -> super::CheckResult {
     let uuid_regex = regex::Regex::new(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-    ).unwrap();
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+    )
+    .unwrap();
     let mut violations = Vec::new();
 
     for path in scan_files(root, |p| {
@@ -150,7 +161,11 @@ pub fn check_no_uuid_usage(root: &Path) -> super::CheckResult {
         super::CheckResult {
             name: "no_uuid_usage".into(),
             passed: false,
-            message: format!("Found UUIDs in {} files:\n{}", violations.len(), violations.join("\n")),
+            message: format!(
+                "Found UUIDs in {} files:\n{}",
+                violations.len(),
+                violations.join("\n")
+            ),
         }
     }
 }
@@ -158,7 +173,8 @@ pub fn check_no_uuid_usage(root: &Path) -> super::CheckResult {
 /// Check 5: NO SEQUENTIAL NAMING - No sequential file naming (test1.rs, test2.rs)
 pub fn check_no_sequential_naming(root: &Path) -> super::CheckResult {
     let sequential_regex = regex::Regex::new(r"[a-z_]+(\d+)\.(rs|ts|js)$").unwrap();
-    let mut sequences: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut sequences: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     for path in scan_files(root, |p| {
         p.extension()
@@ -168,10 +184,7 @@ pub fn check_no_sequential_naming(root: &Path) -> super::CheckResult {
         if let Some(name) = Path::new(&path).file_name().and_then(|n| n.to_str()) {
             if let Some(cap) = sequential_regex.captures(name) {
                 let prefix = cap.get(0).map(|m| m.as_str()).unwrap_or("").to_string();
-                sequences
-                    .entry(prefix)
-                    .or_default()
-                    .push(path.clone());
+                sequences.entry(prefix).or_default().push(path.clone());
             }
         }
     }
@@ -192,7 +205,11 @@ pub fn check_no_sequential_naming(root: &Path) -> super::CheckResult {
         super::CheckResult {
             name: "no_sequential_naming".into(),
             passed: false,
-            message: format!("Found {} sequentially named files:\n{}", violations.len(), violations.join("\n")),
+            message: format!(
+                "Found {} sequentially named files:\n{}",
+                violations.len(),
+                violations.join("\n")
+            ),
         }
     }
 }
@@ -280,7 +297,9 @@ pub fn check_no_force_merge(root: &Path) -> super::CheckResult {
         p.extension()
             .map(|e| matches!(e.to_str(), Some("yml" | "yaml")))
             .unwrap_or(false)
-            || p.to_str().map(|s| s.contains(".github/workflows")).unwrap_or(false)
+            || p.to_str()
+                .map(|s| s.contains(".github/workflows"))
+                .unwrap_or(false)
     }) {
         let content = read_file_content(Path::new(&path));
         for pattern in &force_patterns {
@@ -300,7 +319,11 @@ pub fn check_no_force_merge(root: &Path) -> super::CheckResult {
         super::CheckResult {
             name: "no_force_merge".into(),
             passed: false,
-            message: format!("Found {} force merge violations:\n{}", violations.len(), violations.join("\n")),
+            message: format!(
+                "Found {} force merge violations:\n{}",
+                violations.len(),
+                violations.join("\n")
+            ),
         }
     }
 }

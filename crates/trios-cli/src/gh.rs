@@ -20,28 +20,45 @@ impl GhClient {
 
     pub fn issue_body(num: u32) -> Result<String> {
         let output = Command::new("gh")
-            .args(["issue", "view", &num.to_string(), "--json", "body", "-q", ".body"])
+            .args([
+                "issue",
+                "view",
+                &num.to_string(),
+                "--json",
+                "body",
+                "-q",
+                ".body",
+            ])
             .output()?;
-        
+
         if !output.status.success() {
-            anyhow::bail!("gh issue view failed: {}", String::from_utf8_lossy(&output.stderr));
+            anyhow::bail!(
+                "gh issue view failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
-        
+
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
     pub fn issue_edit(num: u32, body: &str) -> Result<()> {
         let temp = std::env::temp_dir().join("tri-issue-body.md");
         std::fs::write(&temp, body)?;
-        
+
         let status = Command::new("gh")
-            .args(["issue", "edit", &num.to_string(), "--body-file", temp.to_str().unwrap()])
+            .args([
+                "issue",
+                "edit",
+                &num.to_string(),
+                "--body-file",
+                temp.to_str().unwrap(),
+            ])
             .status()?;
-        
+
         if !status.success() {
             anyhow::bail!("gh issue edit failed");
         }
-        
+
         Ok(())
     }
 
@@ -53,11 +70,11 @@ impl GhClient {
             .args(["-b", body])
             .args(["-l", &label_arg])
             .output()?;
-        
+
         if !output.status.success() {
             anyhow::bail!("gh issue create failed");
         }
-        
+
         // Parse URL to get issue number
         let url = String::from_utf8_lossy(&output.stdout);
         url.split("/issues/")
@@ -71,7 +88,7 @@ impl GhClient {
         Command::new("gh")
             .args(["issue", "comment", &issue.to_string(), "-b", body])
             .status()?;
-        
+
         Ok(())
     }
 
@@ -79,12 +96,18 @@ impl GhClient {
     pub fn list_agent_issues(agent: &str) -> Result<Vec<AgentIssue>> {
         let output = Command::new("gh")
             .args([
-                "issue", "list",
-                "-R", "gHashTag/trios",
-                "--search", agent,
-                "--limit", "50",
-                "--json", "number,title",
-                "-q", ".[] | \"\\(.number) \\(.title)\""
+                "issue",
+                "list",
+                "-R",
+                "gHashTag/trios",
+                "--search",
+                agent,
+                "--limit",
+                "50",
+                "--json",
+                "number,title",
+                "-q",
+                ".[] | \"\\(.number) \\(.title)\"",
             ])
             .output()?;
 

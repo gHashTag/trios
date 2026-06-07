@@ -97,8 +97,12 @@ pub enum Payload {
         content: String,
         role: String,
     },
-    AgentConnected { agent_id: String },
-    AgentDisconnected { agent_id: String },
+    AgentConnected {
+        agent_id: String,
+    },
+    AgentDisconnected {
+        agent_id: String,
+    },
     McpToolCall {
         tool: String,
         params: serde_json::Value,
@@ -154,7 +158,11 @@ mod tests {
         let env = Envelope::from_json(raw).unwrap();
         assert_eq!(env.event_type, "chat:message");
         match env.payload {
-            Payload::ChatMessage { agent_id, content, role } => {
+            Payload::ChatMessage {
+                agent_id,
+                content,
+                role,
+            } => {
                 assert_eq!(agent_id, "BRAVO-02");
                 assert_eq!(content, "Hello");
                 assert_eq!(role, "assistant");
@@ -171,7 +179,9 @@ mod tests {
         let rt = Envelope::from_json(&env.to_json().unwrap()).unwrap();
         assert_eq!(rt.event_type, "agent:heartbeat");
         match rt.payload {
-            Payload::AgentHeartbeat { agent_id, status, .. } => {
+            Payload::AgentHeartbeat {
+                agent_id, status, ..
+            } => {
                 assert_eq!(agent_id, "ALPHA");
                 assert_eq!(status, "idle");
             }
@@ -185,7 +195,11 @@ mod tests {
         let rt = Envelope::from_json(&env.to_json().unwrap()).unwrap();
         assert_eq!(rt.event_type, "chat:message");
         match rt.payload {
-            Payload::ChatMessage { agent_id, content, role } => {
+            Payload::ChatMessage {
+                agent_id,
+                content,
+                role,
+            } => {
                 assert_eq!(agent_id, "BETA");
                 assert_eq!(content, "test content");
                 assert_eq!(role, "user");
@@ -287,25 +301,43 @@ mod tests {
     #[test]
     fn payload_event_type_all_variants() {
         assert_eq!(
-            Payload::AgentHeartbeat { agent_id: "x".into(), status: "ok".into(), timestamp: 0 }
-                .event_type(),
+            Payload::AgentHeartbeat {
+                agent_id: "x".into(),
+                status: "ok".into(),
+                timestamp: 0
+            }
+            .event_type(),
             "agent:heartbeat"
         );
         assert_eq!(
-            Payload::ChatMessage { agent_id: "x".into(), content: "c".into(), role: "user".into() }
-                .event_type(),
+            Payload::ChatMessage {
+                agent_id: "x".into(),
+                content: "c".into(),
+                role: "user".into()
+            }
+            .event_type(),
             "chat:message"
         );
         assert_eq!(
-            Payload::AgentConnected { agent_id: "x".into() }.event_type(),
+            Payload::AgentConnected {
+                agent_id: "x".into()
+            }
+            .event_type(),
             "agent:connected"
         );
         assert_eq!(
-            Payload::AgentDisconnected { agent_id: "x".into() }.event_type(),
+            Payload::AgentDisconnected {
+                agent_id: "x".into()
+            }
+            .event_type(),
             "agent:disconnected"
         );
         assert_eq!(
-            Payload::McpToolCall { tool: "t".into(), params: json!({}) }.event_type(),
+            Payload::McpToolCall {
+                tool: "t".into(),
+                params: json!({})
+            }
+            .event_type(),
             "mcp:tool_call"
         );
     }
@@ -317,7 +349,11 @@ mod tests {
         let env = Envelope::chat_message("ZETA", "hello world", "assistant");
         assert_eq!(env.event_type, "chat:message");
         match env.payload {
-            Payload::ChatMessage { agent_id, content, role } => {
+            Payload::ChatMessage {
+                agent_id,
+                content,
+                role,
+            } => {
                 assert_eq!(agent_id, "ZETA");
                 assert_eq!(content, "hello world");
                 assert_eq!(role, "assistant");
@@ -365,7 +401,11 @@ mod tests {
         let env = Envelope::chat_message("", "", "");
         let rt = Envelope::from_json(&env.to_json().unwrap()).unwrap();
         match rt.payload {
-            Payload::ChatMessage { agent_id, content, role } => {
+            Payload::ChatMessage {
+                agent_id,
+                content,
+                role,
+            } => {
                 assert_eq!(agent_id, "");
                 assert_eq!(content, "");
                 assert_eq!(role, "");

@@ -89,7 +89,10 @@ const _: () = assert!(
     "EXAMINER_MIN_SECTIONS must be >= 1 (R8)"
 );
 const _: () = assert!(QA_MIN_PAIRS >= 1, "QA_MIN_PAIRS must be >= 1 (R8)");
-const _: () = assert!(SLIDES_MIN_FRAMES >= 1, "SLIDES_MIN_FRAMES must be >= 1 (R8)");
+const _: () = assert!(
+    SLIDES_MIN_FRAMES >= 1,
+    "SLIDES_MIN_FRAMES must be >= 1 (R8)"
+);
 
 // ---------------------------------------------------------------------------
 // Error model — exit codes 100..=104 (disjoint per coq-runtime-invariants v1.1)
@@ -281,9 +284,7 @@ pub fn audit_report(defense_dir: &Path) -> Result<DefenseReport, DefenseGateErro
     match collected.examiner_sections {
         None => violations.push(format!(
             "missing examiner pack: {}",
-            defense_dir
-                .join(EXAMINER_PACK_FILENAME)
-                .display()
+            defense_dir.join(EXAMINER_PACK_FILENAME).display()
         )),
         Some(n) if n < EXAMINER_MIN_SECTIONS => violations.push(format!(
             "examiner pack {} sections < floor {}",
@@ -306,10 +307,9 @@ pub fn audit_report(defense_dir: &Path) -> Result<DefenseReport, DefenseGateErro
             "missing slides: {}",
             defense_dir.join(SLIDES_FILENAME).display()
         )),
-        Some(n) if n < SLIDES_MIN_FRAMES => violations.push(format!(
-            "slides frames {} < floor {}",
-            n, SLIDES_MIN_FRAMES
-        )),
+        Some(n) if n < SLIDES_MIN_FRAMES => {
+            violations.push(format!("slides frames {} < floor {}", n, SLIDES_MIN_FRAMES))
+        }
         Some(_) => {}
     }
 
@@ -378,32 +378,29 @@ fn read_optional(path: &Path) -> Result<Option<String>, DefenseGateError> {
     }
 }
 
-fn apply_strict_checks(
-    defense_dir: &Path,
-    collected: &Collected,
-) -> Result<(), DefenseGateError> {
+fn apply_strict_checks(defense_dir: &Path, collected: &Collected) -> Result<(), DefenseGateError> {
     // Missingness wins over floor violations — if the file isn't there,
     // counting zero is meaningless.
     let examiner_path = defense_dir.join(EXAMINER_PACK_FILENAME);
     let qa_path = defense_dir.join(QA_FILENAME);
     let slides_path = defense_dir.join(SLIDES_FILENAME);
 
-    let n_examiner = collected
-        .examiner_sections
-        .ok_or_else(|| DefenseGateError::MissingDefenseFile {
-            path: examiner_path.display().to_string(),
-        })?;
+    let n_examiner =
+        collected
+            .examiner_sections
+            .ok_or_else(|| DefenseGateError::MissingDefenseFile {
+                path: examiner_path.display().to_string(),
+            })?;
     let n_qa = collected
         .qa_pairs
         .ok_or_else(|| DefenseGateError::MissingDefenseFile {
             path: qa_path.display().to_string(),
         })?;
-    let n_slides =
-        collected
-            .slides_frames
-            .ok_or_else(|| DefenseGateError::MissingDefenseFile {
-                path: slides_path.display().to_string(),
-            })?;
+    let n_slides = collected
+        .slides_frames
+        .ok_or_else(|| DefenseGateError::MissingDefenseFile {
+            path: slides_path.display().to_string(),
+        })?;
 
     if n_examiner < EXAMINER_MIN_SECTIONS {
         return Err(DefenseGateError::ExaminerPackTooShort {
@@ -551,7 +548,10 @@ mod tests {
     fn qa_with_n(n: usize) -> String {
         let mut s = String::new();
         for i in 0..n {
-            s.push_str(&format!("\\textbf{{Q{}}}: question\n\\textbf{{A}}: answer\n", i));
+            s.push_str(&format!(
+                "\\textbf{{Q{}}}: question\n\\textbf{{A}}: answer\n",
+                i
+            ));
         }
         s
     }
@@ -559,10 +559,7 @@ mod tests {
     fn slides_with_n(n: usize) -> String {
         let mut s = String::new();
         for i in 0..n {
-            s.push_str(&format!(
-                "\\begin{{frame}}\nslide {}\n\\end{{frame}}\n",
-                i
-            ));
+            s.push_str(&format!("\\begin{{frame}}\nslide {}\n\\end{{frame}}\n", i));
         }
         s
     }
@@ -649,9 +646,7 @@ mod tests {
         write_file(d.path(), SLIDES_FILENAME, &slides_with_n(30));
         let err = audit_strict(d.path()).expect_err("expected ExaminerPackTooShort");
         match err {
-            DefenseGateError::ExaminerPackTooShort {
-                actual, floor, ..
-            } => {
+            DefenseGateError::ExaminerPackTooShort { actual, floor, .. } => {
                 assert_eq!(actual, 10);
                 assert_eq!(floor, EXAMINER_MIN_SECTIONS);
             }
@@ -673,9 +668,15 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
-        assert_eq!(102, DefenseGateError::QaPairsBelowFloor {
-            path: "x".into(), actual: 0, floor: 1,
-        }.exit_code());
+        assert_eq!(
+            102,
+            DefenseGateError::QaPairsBelowFloor {
+                path: "x".into(),
+                actual: 0,
+                floor: 1,
+            }
+            .exit_code()
+        );
     }
 
     #[test]

@@ -25,7 +25,8 @@ fn witness_consistency_checks_summary() {
         assert!(
             rel > tolerance_sg,
             "alpha_consistency: |alpha_from_g01 - alpha_phi|/alpha_phi = {} <= {}",
-            rel, tolerance_sg
+            rel,
+            tolerance_sg
         );
     }
 
@@ -38,7 +39,8 @@ fn witness_consistency_checks_summary() {
         assert!(
             rel > tolerance_l,
             "quark_chain_Q07_Q01_Q02: |(Q07/Q01)-Q02|/Q02 = {} <= {}",
-            rel, tolerance_l
+            rel,
+            tolerance_l
         );
     }
 
@@ -76,7 +78,8 @@ fn witness_consistency_checks_summary() {
         assert!(
             rel > tolerance_v,
             "gauge_mass_chain: |H02*0.881 - H03|/H03 = {} <= {}",
-            rel, tolerance_v
+            rel,
+            tolerance_v
         );
     }
 
@@ -89,7 +92,8 @@ fn witness_consistency_checks_summary() {
         assert!(
             diff > tolerance_v,
             "PMNS_sum: |N01 + PM2 + (1-N03) - 1| = {} <= {}",
-            diff, tolerance_v
+            diff,
+            tolerance_v
         );
     }
 }

@@ -17,9 +17,7 @@ use std::io::Write;
 use std::process::Command;
 use std::time::Instant;
 
-use trios_golden_float::gptq::{
-    f16_bits_to_f32, gf16_quantize_matrix_gptq,
-};
+use trios_golden_float::gptq::{f16_bits_to_f32, gf16_quantize_matrix_gptq};
 
 // ---------------------------------------------------------------------------
 // Ablation configuration
@@ -45,7 +43,8 @@ impl Lcg {
         Lcg(seed ^ 0xdeadbeef_cafebabe)
     }
     fn next_u64(&mut self) -> u64 {
-        self.0 = self.0
+        self.0 = self
+            .0
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         self.0
@@ -108,7 +107,7 @@ fn paired_t_one_tail(deltas: &[f64]) -> (f64, f64) {
 
     // One-tailed p-value for df=2 via t-distribution approximation
     // For df=2, the CDF of t-distribution is analytically tractable.
-    // P(T ≤ t) = 0.5 + t/(2*sqrt(2)) * (1 + t²/4)^(-3/2) * (3/4)^(1/2) ... 
+    // P(T ≤ t) = 0.5 + t/(2*sqrt(2)) * (1 + t²/4)^(-3/2) * (3/4)^(1/2) ...
     // We use the simple approximation for df=2:
     // p-value = one-tail = P(T ≤ t_stat) where H1: mean < 0, so p = P(T ≤ t)
     let p = t_cdf_df2(t);
@@ -162,9 +161,7 @@ fn main() {
     let mut mse_vals: Vec<Vec<f64>> = vec![vec![0.0; 3]; 3]; // [seed][n_idx]
     let mut all_rows: Vec<String> = Vec::new();
 
-    println!(
-        "Wave 26 GPTQ-ON-GF16 calibration ablation — 3 seeds × N∈{{0,16,32}}"
-    );
+    println!("Wave 26 GPTQ-ON-GF16 calibration ablation — 3 seeds × N∈{{0,16,32}}");
     println!(
         "NOTE: bpb_proxy = log2(reconstruction_mse_val + 1) — synthetic proxy, NOT real model BPB."
     );
@@ -273,12 +270,8 @@ fn main() {
 
     println!("{}", "=".repeat(78));
     println!("Wrote {} rows to {out_path}", all_rows.len());
-    println!(
-        "Summary: paired_t(0→16): t={t_0_16:.4} p={p_0_16:.4} verdict={verdict_0_16}"
-    );
-    println!(
-        "         paired_t(16→32): t={t_16_32:.4} p={p_16_32:.4} verdict={verdict_16_32}"
-    );
+    println!("Summary: paired_t(0→16): t={t_0_16:.4} p={p_0_16:.4} verdict={verdict_0_16}");
+    println!("         paired_t(16→32): t={t_16_32:.4} p={p_16_32:.4} verdict={verdict_16_32}");
 
     if verdict_0_16 == "PASS" && verdict_16_32 == "PASS" {
         println!("CONCLUSION: H0 REJECTED — calibration lever lifts GF16 reconstruction (p<0.25).");

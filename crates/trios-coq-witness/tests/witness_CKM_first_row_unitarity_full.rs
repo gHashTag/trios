@@ -36,7 +36,8 @@ fn witness_CKM_first_row_unitarity_full() {
     assert!(
         (sin2_theta13_th - sin2_theta13_exp).abs() / sin2_theta13_exp < tolerance_v,
         "PMNS theta13 tolerance failed: th = {}, exp = {}",
-        sin2_theta13_th, sin2_theta13_exp
+        sin2_theta13_th,
+        sin2_theta13_exp
     );
 
     // PMNS first row unitarity

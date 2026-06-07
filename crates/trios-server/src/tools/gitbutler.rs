@@ -8,7 +8,12 @@ use trios_core::git::GitOrchestrator;
 use trios_git::Git2Orchestrator;
 
 /// Dispatch GitButler tools.
-pub async fn dispatch(name: &str, input: &Value, repo: &std::path::Path, git: &Git2Orchestrator) -> Option<Result<Value>> {
+pub async fn dispatch(
+    name: &str,
+    input: &Value,
+    repo: &std::path::Path,
+    git: &Git2Orchestrator,
+) -> Option<Result<Value>> {
     match name {
         "gb_list_branches" => Some(gb_list_branches(repo).await),
         "gb_push_stack" => Some(gb_push_stack(repo, input).await),

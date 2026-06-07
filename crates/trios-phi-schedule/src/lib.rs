@@ -142,7 +142,10 @@ mod tests {
         let lr_1 = phi_schedule(1, base_lr, warmup);
         let phi = gf_constants().phi as f32;
 
-        assert!((lr_1 - lr_0 / phi).abs() < 1e-6, "LR should decay by factor of φ");
+        assert!(
+            (lr_1 - lr_0 / phi).abs() < 1e-6,
+            "LR should decay by factor of φ"
+        );
     }
 
     #[test]

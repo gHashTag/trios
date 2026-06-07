@@ -25,7 +25,8 @@ fn witness_Q05_monomial_and_tolerance() {
     assert!(
         (Q05_th - Q05_exp).abs() / Q05_exp > tolerance_v,
         "Q05 falsification failed: th = {}, exp = {}",
-        Q05_th, Q05_exp
+        Q05_th,
+        Q05_exp
     );
 
     // Q06 within tolerance
@@ -35,13 +36,15 @@ fn witness_Q05_monomial_and_tolerance() {
     assert!(
         (Q06_th - Q06_exp).abs() / Q06_exp < tolerance_v,
         "Q06 tolerance failed: th = {}, exp = {}",
-        Q06_th, Q06_exp
+        Q06_th,
+        Q06_exp
     );
 
     // Chain exact
     assert!(
         (Q05_th * Q07_th - Q06_th).abs() < 1e-9,
         "Chain exact check failed: Q05*Q07 = {}, Q06 = {}",
-        Q05_th * Q07_th, Q06_th
+        Q05_th * Q07_th,
+        Q06_th
     );
 }

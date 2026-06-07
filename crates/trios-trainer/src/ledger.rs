@@ -4,9 +4,9 @@
 //!
 //! Embargo list: SHA values that must be blocked from ledger.
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use anyhow::Result;
 
 /// Triplet — minimal validation format for every ledger row
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,8 +75,7 @@ pub fn emit_row<P: AsRef<Path>>(
     }
 
     // Validate triplet format
-    let jsonl = serde_json::to_string(row)
-        .map_err(|e| EmitError::SerializeError(e.to_string()))?;
+    let jsonl = serde_json::to_string(row).map_err(|e| EmitError::SerializeError(e.to_string()))?;
 
     // Append to ledger
     use std::fs::OpenOptions;
@@ -88,8 +87,7 @@ pub fn emit_row<P: AsRef<Path>>(
         .open(ledger_path.as_ref())
         .map_err(|e| EmitError::WriteError(e.to_string()))?;
 
-    writeln!(file, "{}", jsonl)
-        .map_err(|e| EmitError::WriteError(e.to_string()))?;
+    writeln!(file, "{}", jsonl).map_err(|e| EmitError::WriteError(e.to_string()))?;
 
     // Validate triplet format in output
     let triplet = Triplet {
@@ -128,9 +126,7 @@ pub enum EmitError {
 pub fn get_commit_sha() -> Result<String> {
     use std::process::Command;
 
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()?;
+    let output = Command::new("git").args(["rev-parse", "HEAD"]).output()?;
 
     if !output.status.success() {
         return Err(anyhow::anyhow!("git rev-parse failed"));

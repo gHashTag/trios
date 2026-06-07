@@ -42,8 +42,8 @@
 
 use std::collections::HashSet;
 
+use crate::hive_automaton::{BPB_VICTORY_TARGET, VICTORY_SEED_TARGET};
 use crate::invariants::INV2_WARMUP_BLIND_STEPS;
-use crate::hive_automaton::{VICTORY_SEED_TARGET, BPB_VICTORY_TARGET};
 
 // Sanity: constants match (L-R14)
 const _: () = assert!((BPB_VICTORY_TARGET - 1.5).abs() < f64::EPSILON);
@@ -131,10 +131,7 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
 
     // Compute sample standard deviation (Bessel's correction)
     let variance: f64 = if n > 1 {
-        let mean_diff_sq: f64 = bpbs
-            .iter()
-            .map(|&b| (b - sample_mean).powi(2))
-            .sum();
+        let mean_diff_sq: f64 = bpbs.iter().map(|&b| (b - sample_mean).powi(2)).sum();
         mean_diff_sq / (n - 1) as f64
     } else {
         0.0
@@ -142,20 +139,25 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     let sample_std = variance.sqrt();
 
     // t-statistic: (x̄ - μ₀) / (s / √n)
-    let std_error = if sample_std > 0.0 {
-        sample_std / (n as f64).sqrt()
-    } else {
-        0.0
-    };
-
-    let t_statistic = (sample_mean - BPB_VICTORY_TARGET) / std_error;
-
-    // Degrees of freedom for one-sample t-test
+    // When all samples are identical (std=0), t is ±∞ depending on sign of
+    // (mean - baseline). We handle this explicitly to avoid NaN in p_value.
     let df = (n - 1) as f64;
-
-    // One-tailed p-value using approximation for t-distribution
-    // For df=2, we use the exact t-distribution CDF
-    let p_value = t_cdf_lower_tail(t_statistic, df);
+    let (t_statistic, p_value) = if sample_std == 0.0 {
+        // Degenerate case: all values identical.
+        // Lower-tail CDF(+∞) = 1.0 (mean ≥ baseline → rejection).
+        // Lower-tail CDF(-∞) = 0.0 (mean < baseline → would pass).
+        if sample_mean >= BPB_VICTORY_TARGET {
+            (f64::INFINITY, 1.0_f64)
+        } else {
+            (f64::NEG_INFINITY, 0.0_f64)
+        }
+    } else {
+        let std_error = sample_std / (n as f64).sqrt();
+        let t = (sample_mean - BPB_VICTORY_TARGET) / std_error;
+        // Exact lower-tail CDF for df=2: P(T ≤ t) = 0.5 + t / (2·√(2+t²))
+        let p = t_cdf_lower_tail(t, df);
+        (t, p)
+    };
 
     // Test passes if p < α AND t < 0 (mean below baseline)
     let passed = p_value < TTEST_ALPHA && t_statistic < 0.0;
@@ -286,11 +288,7 @@ pub enum VictoryError {
     /// At least one reported result has `bpb >= BPB_VICTORY_TARGET`.  Listed
     /// for diagnostics; gate counts only seeds *strictly below* the
     /// target.
-    BpbAboveTarget {
-        seed: u64,
-        bpb: f64,
-        target: f64,
-    },
+    BpbAboveTarget { seed: u64, bpb: f64, target: f64 },
     /// Same seed reported twice.  Distinct-seed reproducibility is the
     /// whole point of the gate; silently de-duplicating would let two
     /// runs of the same seed masquerade as three.
@@ -469,11 +467,14 @@ mod tests {
     /// must reject (predicate is strict `<`, not `≤`).
     #[test]
     fn falsify_bpb_equal_target_strict_lt() {
-        let r = vec![mk(1, BPB_VICTORY_TARGET), mk(2, BPB_VICTORY_TARGET), mk(3, BPB_VICTORY_TARGET)];
+        let r = vec![
+            mk(1, BPB_VICTORY_TARGET),
+            mk(2, BPB_VICTORY_TARGET),
+            mk(3, BPB_VICTORY_TARGET),
+        ];
         assert!(matches!(
             check_victory(&r),
-            Err(VictoryError::BpbAboveTarget { .. })
-                | Err(VictoryError::InsufficientSeeds { .. })
+            Err(VictoryError::BpbAboveTarget { .. }) | Err(VictoryError::InsufficientSeeds { .. })
         ));
     }
 
@@ -602,15 +603,34 @@ mod tests {
     #[test]
     fn ttest_rejects_when_p_value_above_alpha() {
         // Pre-registered analysis: Welch's t-test, alpha = 0.01
-        // Three seeds ALL near baseline mu0 = 1.55 — p > 0.01, gate refuses.
+        // Three seeds at 1.51 (> BPB_VICTORY_TARGET = 1.50) — mean ≥ baseline
+        // → t = +∞, p = 1.0 ≫ 0.01, gate refuses.
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.49, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.49, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 1.51,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.51,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 44,
+                bpb: 1.51,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         match stat_strength(&r) {
             Err(VictoryError::TtestFailed {
-                t_statistic, p_value, alpha }) => {
+                t_statistic,
+                p_value,
+                alpha,
+            }) => {
                 assert!(p_value >= TTEST_ALPHA);
                 assert!((alpha - TTEST_ALPHA).abs() < f64::EPSILON);
                 // t_statistic >= 0 indicates mean >= baseline
@@ -625,9 +645,24 @@ mod tests {
     fn ttest_passes_when_distribution_clearly_below_baseline() {
         // Three seeds with mean = 1.40, significantly below baseline 1.55
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.39, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.41, step: 5000, sha: "c".into() },
+            SeedResult {
+                seed: 42,
+                bpb: 1.40,
+                step: 5000,
+                sha: "a".into(),
+            },
+            SeedResult {
+                seed: 43,
+                bpb: 1.39,
+                step: 5000,
+                sha: "b".into(),
+            },
+            SeedResult {
+                seed: 44,
+                bpb: 1.41,
+                step: 5000,
+                sha: "c".into(),
+            },
         ];
         let report = stat_strength(&r).expect("expected t-test pass");
         assert!(report.passed);

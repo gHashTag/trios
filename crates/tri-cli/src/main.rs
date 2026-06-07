@@ -66,7 +66,15 @@ async fn start_server_and_tunnel(port: u16) -> Result<()> {
         // Start Funnel
         println!("🌐 Starting Tailscale Funnel...");
         Command::new("cargo")
-            .args(["run", "-p", TUNNEL_CLI, "--", "start", "--port", &port.to_string()])
+            .args([
+                "run",
+                "-p",
+                TUNNEL_CLI,
+                "--",
+                "start",
+                "--port",
+                &port.to_string(),
+            ])
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
             .spawn()?;
@@ -101,9 +109,7 @@ async fn stop_all() -> Result<()> {
         .output();
 
     // Find and kill trios-server
-    let _ = Command::new("pkill")
-        .args(["-f", "trios-server"])
-        .output();
+    let _ = Command::new("pkill").args(["-f", "trios-server"]).output();
 
     println!("✅ Stopped!");
     Ok(())
@@ -172,7 +178,10 @@ async fn run_article(args: Vec<String>) -> Result<()> {
     if !status.success() {
         anyhow::bail!(
             "tri article: runner exited with {}",
-            status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into())
+            status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "signal".into())
         );
     }
     Ok(())

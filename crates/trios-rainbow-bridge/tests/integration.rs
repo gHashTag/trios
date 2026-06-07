@@ -11,13 +11,7 @@ use trios_rainbow_bridge::{
     Bridge,
 };
 
-fn mk(
-    lamport: u64,
-    agent: &str,
-    channel: Channel,
-    payload: Payload,
-    sig: Vec<u8>,
-) -> RainbowEvent {
+fn mk(lamport: u64, agent: &str, channel: Channel, payload: Payload, sig: Vec<u8>) -> RainbowEvent {
     RainbowEvent {
         lamport,
         agent: agent.into(),

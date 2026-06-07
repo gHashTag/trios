@@ -17,9 +17,5 @@ fn witness_lepton_mass_chain_L01_L02_L03() {
     let L03 = 8.0 * phi.powi(7) * std::f64::consts::PI / (e * e * e);
 
     let rel = (L01 * L02 - L03).abs() / L03;
-    assert!(
-        rel < 1e-12,
-        "|L01*L02 - L03|/L03 = {} >= 1e-12",
-        rel
-    );
+    assert!(rel < 1e-12, "|L01*L02 - L03|/L03 = {} >= 1e-12", rel);
 }

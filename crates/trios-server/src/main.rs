@@ -9,8 +9,8 @@ mod ws_handler;
 
 use axum::extract::State;
 use axum::response::Json;
-use axum::Router;
 use axum::routing::{get, post};
+use axum::Router;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
@@ -70,7 +70,10 @@ async fn main() -> anyhow::Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("trios-server listening on 0.0.0.0:{}", port);
     info!("  WS:  ws://0.0.0.0:{}/ws", port);
-    info!("  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)", port);
+    info!(
+        "  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)",
+        port
+    );
     info!("  REST: http://0.0.0.0:{}/api/chat", port);
     info!("  MCP tools: {} registered", tools::count());
 
@@ -84,10 +87,7 @@ async fn health() -> &'static str {
     "ok"
 }
 
-async fn api_chat(
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> Json<Value> {
+async fn api_chat(State(state): State<AppState>, Json(body): Json<Value>) -> Json<Value> {
     let text = serde_json::to_string(&body).unwrap_or_default();
     let response = ws_handler::handle_message(&text, &state).await;
     Json(json!({"result": response.result}))

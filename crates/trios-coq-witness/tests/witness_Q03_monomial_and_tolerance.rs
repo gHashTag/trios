@@ -24,6 +24,7 @@ fn witness_Q03_monomial_and_tolerance() {
     assert!(
         (Q03_th - Q03_exp).abs() / Q03_exp > tolerance_v,
         "Q03 falsification failed: th = {}, exp = {}",
-        Q03_th, Q03_exp
+        Q03_th,
+        Q03_exp
     );
 }

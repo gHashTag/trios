@@ -162,11 +162,8 @@ pub fn spearman_correlation(data: &[HistoricalDataPoint]) -> Option<f64> {
         .collect();
     proxy_sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-    let mut bpb_sorted: Vec<(usize, f64)> = data
-        .iter()
-        .enumerate()
-        .map(|(i, p)| (i, p.bpb))
-        .collect();
+    let mut bpb_sorted: Vec<(usize, f64)> =
+        data.iter().enumerate().map(|(i, p)| (i, p.bpb)).collect();
     bpb_sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
     // Create rank maps: index -> rank
@@ -227,18 +224,25 @@ mod tests {
 
     #[test]
     fn test_ensemble_score() {
-        let ensemble = EnsembleScore::new()
-            .with_synflow(0.8)
-            .with_gradnorm(0.6);
+        let ensemble = EnsembleScore::new().with_synflow(0.8).with_gradnorm(0.6);
         assert!((ensemble.score() - 0.7).abs() < 1e-6);
     }
 
     #[test]
     fn test_spearman_perfect_correlation() {
         let data = vec![
-            HistoricalDataPoint { proxy_score: 1.0, bpb: 1.0 },
-            HistoricalDataPoint { proxy_score: 2.0, bpb: 2.0 },
-            HistoricalDataPoint { proxy_score: 3.0, bpb: 3.0 },
+            HistoricalDataPoint {
+                proxy_score: 1.0,
+                bpb: 1.0,
+            },
+            HistoricalDataPoint {
+                proxy_score: 2.0,
+                bpb: 2.0,
+            },
+            HistoricalDataPoint {
+                proxy_score: 3.0,
+                bpb: 3.0,
+            },
         ];
         let tau = spearman_correlation(&data).unwrap();
         assert!((tau - 1.0).abs() < 1e-6);
@@ -247,9 +251,18 @@ mod tests {
     #[test]
     fn test_spearman_negative_correlation() {
         let data = vec![
-            HistoricalDataPoint { proxy_score: 3.0, bpb: 1.0 },
-            HistoricalDataPoint { proxy_score: 2.0, bpb: 2.0 },
-            HistoricalDataPoint { proxy_score: 1.0, bpb: 3.0 },
+            HistoricalDataPoint {
+                proxy_score: 3.0,
+                bpb: 1.0,
+            },
+            HistoricalDataPoint {
+                proxy_score: 2.0,
+                bpb: 2.0,
+            },
+            HistoricalDataPoint {
+                proxy_score: 1.0,
+                bpb: 3.0,
+            },
         ];
         let tau = spearman_correlation(&data).unwrap();
         assert!((tau + 1.0).abs() < 1e-6);
@@ -260,12 +273,25 @@ mod tests {
         // INV-14: |tau| must be >= 0.5 for proxy validity
         // Bad proxy: higher proxy_score correlates with HIGHER BPB (positive correlation = bad)
         let bad_data = vec![
-            HistoricalDataPoint { proxy_score: 0.9, bpb: 3.0 },
-            HistoricalDataPoint { proxy_score: 0.8, bpb: 2.0 },
-            HistoricalDataPoint { proxy_score: 0.7, bpb: 1.0 },
+            HistoricalDataPoint {
+                proxy_score: 0.9,
+                bpb: 3.0,
+            },
+            HistoricalDataPoint {
+                proxy_score: 0.8,
+                bpb: 2.0,
+            },
+            HistoricalDataPoint {
+                proxy_score: 0.7,
+                bpb: 1.0,
+            },
         ];
         let tau = spearman_correlation(&bad_data).unwrap();
-        assert!(tau >= 0.5, "tau={} should be >= 0.5 for positively correlated data", tau);
+        assert!(
+            tau >= 0.5,
+            "tau={} should be >= 0.5 for positively correlated data",
+            tau
+        );
     }
 
     #[test]

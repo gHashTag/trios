@@ -201,10 +201,13 @@ impl Ternary {
 /// assert!(ternary.contains(&Ternary::PosOne));
 /// ```
 pub fn quantize(weights: &[f32], scale: f32) -> Vec<Ternary> {
-    weights.iter().map(|&w| {
-        let scaled = w * scale;
-        Ternary::from_f32(scaled)
-    }).collect()
+    weights
+        .iter()
+        .map(|&w| {
+            let scaled = w * scale;
+            Ternary::from_f32(scaled)
+        })
+        .collect()
 }
 
 /// Dequantize ternary weights back to f32.
@@ -231,7 +234,10 @@ pub fn quantize(weights: &[f32], scale: f32) -> Vec<Ternary> {
 /// }
 /// ```
 pub fn dequantize(ternary_weights: &[Ternary], scale: f32) -> Vec<f32> {
-    ternary_weights.iter().map(|&t| t.to_f32() / scale).collect()
+    ternary_weights
+        .iter()
+        .map(|&t| t.to_f32() / scale)
+        .collect()
 }
 
 /// Compute optimal scaling factor for ternary quantization.
@@ -259,7 +265,9 @@ pub fn compute_scale(weights: &[f32]) -> f32 {
         return 1.0;
     }
 
-    let max_abs = weights.iter().fold(0.0_f32, |acc, &w| acc.abs().max(w.abs()));
+    let max_abs = weights
+        .iter()
+        .fold(0.0_f32, |acc, &w| acc.abs().max(w.abs()));
     if max_abs > 0.0 {
         1.0 / max_abs
     } else {
@@ -288,7 +296,10 @@ pub fn compute_scale(weights: &[f32]) -> f32 {
 /// assert_eq!(sparsity, 0.5); // 2 out of 4 are zero
 /// ```
 pub fn compute_sparsity(ternary_weights: &[Ternary]) -> f32 {
-    let zero_count = ternary_weights.iter().filter(|&&t| t == Ternary::Zero).count();
+    let zero_count = ternary_weights
+        .iter()
+        .filter(|&&t| t == Ternary::Zero)
+        .count();
     zero_count as f32 / ternary_weights.len() as f32
 }
 
@@ -373,7 +384,7 @@ pub mod ffn {
     /// ```
     pub fn ternary_size_bytes(num_params: usize) -> usize {
         // 1.58 bits/param = 0.2 bytes/param (approximately)
-        num_params / 5  // Integer division for conservative estimate
+        num_params / 5 // Integer division for conservative estimate
     }
 
     /// Calculate compression ratio vs f32.
@@ -444,7 +455,12 @@ mod tests {
 
     #[test]
     fn test_sparsity() {
-        let ternary = vec![Ternary::PosOne, Ternary::Zero, Ternary::NegOne, Ternary::Zero];
+        let ternary = vec![
+            Ternary::PosOne,
+            Ternary::Zero,
+            Ternary::NegOne,
+            Ternary::Zero,
+        ];
         let sparsity = compute_sparsity(&ternary);
         assert_eq!(sparsity, 0.5);
     }

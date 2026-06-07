@@ -29,12 +29,13 @@ pub struct RaceConfig {
 impl Default for RaceConfig {
     fn default() -> Self {
         Self {
-            neon_url: std::env::var("NEON_DATABASE_URL")
-                .unwrap_or_else(|_| "postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb".to_string()),
+            neon_url: std::env::var("NEON_DATABASE_URL").unwrap_or_else(|_| {
+                "postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb".to_string()
+            }),
             study_name: "igla-race".to_string(),
             reduction_factor: 3,
-            min_rungs: 3,    // 1000 steps
-            max_rungs: 27,   // 9000 steps (3^3)
+            min_rungs: 3,  // 1000 steps
+            max_rungs: 27, // 9000 steps (3^3)
             target_bpb: 1.50,
         }
     }

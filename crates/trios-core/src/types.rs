@@ -122,7 +122,7 @@ impl PrecisionFormat {
     pub const fn bit_width(&self) -> u32 {
         match self {
             Self::GF16 => 16,
-            Self::Ternary158 => 2,  // Effective 1.58 bits
+            Self::Ternary158 => 2, // Effective 1.58 bits
             Self::FP32 => 32,
         }
     }
@@ -391,7 +391,7 @@ impl HardwareCost {
             PrecisionFormat::GF16 => Self::gf16(),
             PrecisionFormat::Ternary158 => Self::ternary(),
             PrecisionFormat::FP32 => Self {
-                lut_per_param: 94,  // GF16 mul cost (estimate)
+                lut_per_param: 94, // GF16 mul cost (estimate)
                 dsp_per_param: 1,
                 ff_per_param: 47,
                 cells_per_param: 142,
@@ -795,7 +795,10 @@ mod tests {
         let layer = LayerSpec::new("embedding", LayerType::Embedding, 784, 144);
         assert_eq!(layer.sensitivity, Sensitivity::HIGH);
         assert_eq!(layer.param_count, 784 * 144);
-        assert_eq!(layer.memory_mb(PrecisionFormat::GF16), (784 * 144 * 2) as f64 / (1024.0 * 1024.0));
+        assert_eq!(
+            layer.memory_mb(PrecisionFormat::GF16),
+            (784 * 144 * 2) as f64 / (1024.0 * 1024.0)
+        );
     }
 
     #[test]

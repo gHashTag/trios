@@ -3,8 +3,8 @@
 //! Loads TOML configs from files and/or environment variables.
 //! Enforces INV-8: lr in phi-band [0.001, 0.01].
 
-use std::path::Path;
 use anyhow::Result;
+use std::path::Path;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -80,19 +80,25 @@ pub struct LedgerConfig {
     pub repo_url: Option<String>,
 }
 
-fn default_lr() -> f32 { 0.004 } // alpha_phi / phi^3 (INV-8)
-fn default_checkpoint_interval() -> usize { 1000 }
-fn default_eval_interval() -> usize { 500 }
+fn default_lr() -> f32 {
+    0.004
+} // alpha_phi / phi^3 (INV-8)
+fn default_checkpoint_interval() -> usize {
+    1000
+}
+fn default_eval_interval() -> usize {
+    500
+}
 
 impl Config {
     /// Load config from TOML file
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, LoadConfigError> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| LoadConfigError::ReadError(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| LoadConfigError::ReadError(e.to_string()))?;
 
-        let mut config: Config = toml::from_str(&content)
-            .map_err(|e| LoadConfigError::ParseError(e.to_string()))?;
+        let mut config: Config =
+            toml::from_str(&content).map_err(|e| LoadConfigError::ParseError(e.to_string()))?;
 
         // Validate INV-8: lr in phi-band
         if !(0.001..=0.01).contains(&config.training.lr) {
@@ -101,12 +107,14 @@ impl Config {
 
         // Override from env vars
         if let Ok(seed) = std::env::var("TRIOS_SEED") {
-            config.training.seed = seed.parse()
+            config.training.seed = seed
+                .parse()
                 .map_err(|_| LoadConfigError::InvalidEnvVar("TRIOS_SEED".into()))?;
         }
 
         if let Ok(steps) = std::env::var("TRIOS_STEPS") {
-            config.training.steps = steps.parse()
+            config.training.steps = steps
+                .parse()
                 .map_err(|_| LoadConfigError::InvalidEnvVar("TRIOS_STEPS".into()))?;
         }
 

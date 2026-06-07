@@ -53,7 +53,8 @@ pub fn sha256(data: &[u8]) -> Result<Sha256Hash, String> {
 pub fn double_sha256(data: &[u8]) -> Result<Sha256Hash, String> {
     let mut hash1: Sha256Hash = [0u8; 32];
     let mut hash2: Sha256Hash = [0u8; 32];
-    let rc1 = unsafe { ffi::crypto_sha256(data.as_ptr(), data.len(), &mut hash1 as *mut Sha256Hash) };
+    let rc1 =
+        unsafe { ffi::crypto_sha256(data.as_ptr(), data.len(), &mut hash1 as *mut Sha256Hash) };
     if rc1 != 0 {
         return Err(format!("first sha256 failed with code {}", rc1));
     }

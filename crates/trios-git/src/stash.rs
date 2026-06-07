@@ -7,7 +7,10 @@ pub fn stash_changes(repo_path: &Path) -> Result<()> {
 
     // Check if there's anything to stash
     let has_changes = {
-        let head = repo.head()?.target().ok_or_else(|| anyhow::anyhow!("no HEAD commit"))?;
+        let head = repo
+            .head()?
+            .target()
+            .ok_or_else(|| anyhow::anyhow!("no HEAD commit"))?;
         let commit = repo.find_commit(head)?;
         let tree = commit.tree()?;
         let index = repo.index()?;
@@ -28,8 +31,8 @@ pub fn stash_changes(repo_path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stage::stage_files;
     use crate::commit::create_commit;
+    use crate::stage::stage_files;
     use std::fs;
     use tempfile::TempDir;
 
@@ -55,6 +58,8 @@ mod tests {
         // After stash, working dir should be clean
         let repo = git2::Repository::open(dir.path()).unwrap();
         let statuses = repo.statuses(None).unwrap();
-        assert!(statuses.iter().all(|e| e.status().is_empty() || e.status() == git2::Status::IGNORED));
+        assert!(statuses
+            .iter()
+            .all(|e| e.status().is_empty() || e.status() == git2::Status::IGNORED));
     }
 }

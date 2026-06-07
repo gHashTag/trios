@@ -120,7 +120,9 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
     // the current working directory. CI / dev callers may have the trainer
     // checkout in an arbitrary location, so honour `TRIOS_TRAINER_CWD` and
     // fall back to `<bin>/../../..` (release-build layout) so `data/` resolves.
-    let cwd = std::env::var("TRIOS_TRAINER_CWD").ok().map(PathBuf::from)
+    let cwd = std::env::var("TRIOS_TRAINER_CWD")
+        .ok()
+        .map(PathBuf::from)
         .or_else(|| {
             // bin path: <repo>/target/release/cpu_train -> repo = bin..3
             bin.parent()
@@ -135,9 +137,10 @@ pub fn forward_real_bpb(seed: u64, fmt: TrainerFormat, steps: u32) -> std::io::R
     let output = cmd.output()?;
 
     if !output.status.success() {
-        return Err(std::io::Error::other(
-            format!("cpu_train exit={:?}", output.status.code()),
-        ));
+        return Err(std::io::Error::other(format!(
+            "cpu_train exit={:?}",
+            output.status.code()
+        )));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);

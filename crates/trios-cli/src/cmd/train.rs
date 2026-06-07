@@ -30,8 +30,10 @@ pub fn train_cpu(seeds: Vec<u64>, config: TrainConfig, parallel: bool) -> Result
     let binary = find_ngram_train()?;
 
     println!("=== tri train: CPU N-Gram ===");
-    println!("seeds={:?} steps={} hidden={} lr={} activation={} parallel={}",
-             seeds, config.steps, config.hidden, config.lr, config.activation, parallel);
+    println!(
+        "seeds={:?} steps={} hidden={} lr={} activation={} parallel={}",
+        seeds, config.steps, config.hidden, config.lr, config.activation, parallel
+    );
 
     if parallel && seeds.len() > 1 {
         run_parallel(&binary, &seeds, &config)
@@ -109,17 +111,29 @@ fn run_parallel(binary: &Path, seeds: &[u64], config: &TrainConfig) -> Result<Ve
     let mut results = Vec::new();
     for h in handles {
         let r = h.join().map_err(|_| anyhow::anyhow!("Thread panicked"))??;
-        println!("  seed={} bpb={:.4} time={:.0}s", r.seed, r.best_bpb, r.time_sec);
+        println!(
+            "  seed={} bpb={:.4} time={:.0}s",
+            r.seed, r.best_bpb, r.time_sec
+        );
         results.push(r);
     }
 
     let avg = results.iter().map(|r| r.best_bpb).sum::<f64>() / results.len() as f64;
     let std_dev = {
         let mean = avg;
-        let variance = results.iter().map(|r| (r.best_bpb - mean).powi(2)).sum::<f64>() / results.len() as f64;
+        let variance = results
+            .iter()
+            .map(|r| (r.best_bpb - mean).powi(2))
+            .sum::<f64>()
+            / results.len() as f64;
         variance.sqrt()
     };
-    println!("\n=== RESULT: BPB {:.3} ± {:.3} ({})", avg, std_dev, results.len());
+    println!(
+        "\n=== RESULT: BPB {:.3} ± {:.3} ({})",
+        avg,
+        std_dev,
+        results.len()
+    );
 
     Ok(results)
 }

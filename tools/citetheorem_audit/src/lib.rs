@@ -115,9 +115,7 @@ pub enum CiteAuditError {
 
     /// At least one chapter file has fewer than [`MIN_CITETHEOREM_PER_CHAPTER`]
     /// `\citetheorem{...}` calls.
-    #[error(
-        "citetheorem-audit: {n_below} chapter(s) below min={min}: {chapters:?}"
-    )]
+    #[error("citetheorem-audit: {n_below} chapter(s) below min={min}: {chapters:?}")]
     BelowMinCitations {
         /// Number of chapters short of the floor.
         n_below: usize,
@@ -244,8 +242,7 @@ pub fn audit_report(
         }
     }
 
-    let all_pass = unknown_tokens.is_empty()
-        && rows.iter().all(|r| r.passes_floor);
+    let all_pass = unknown_tokens.is_empty() && rows.iter().all(|r| r.passes_floor);
 
     Ok(AuditReport {
         rows,
@@ -465,7 +462,10 @@ mod tests {
         assert_eq!(report.rows.len(), 1);
         assert_eq!(report.rows[0].citations, 1);
         assert_eq!(report.rows[0].invs_cited, vec!["INV-13".to_string()]);
-        assert_eq!(report.min_citetheorem_per_chapter, MIN_CITETHEOREM_PER_CHAPTER);
+        assert_eq!(
+            report.min_citetheorem_per_chapter,
+            MIN_CITETHEOREM_PER_CHAPTER
+        );
     }
 
     #[test]
@@ -512,7 +512,11 @@ mod tests {
         assert_eq!(report.unknown_tokens.len(), 1);
         assert_eq!(report.unknown_tokens[0].token, "INV-99");
         // 02 has zero citations, fails the floor.
-        let r02 = report.rows.iter().find(|r| r.chapter.starts_with("02")).unwrap();
+        let r02 = report
+            .rows
+            .iter()
+            .find(|r| r.chapter.starts_with("02"))
+            .unwrap();
         assert!(!r02.passes_floor);
     }
 
@@ -524,11 +528,7 @@ mod tests {
         fs::create_dir(&chapters).unwrap();
         write_chapter(&chapters, "README.md", "\\citetheorem{INV-1}\n");
         fs::create_dir(chapters.join("backup")).unwrap();
-        write_chapter(
-            &chapters,
-            "00-monad.tex",
-            "\\citetheorem{INV-1}\n",
-        );
+        write_chapter(&chapters, "00-monad.tex", "\\citetheorem{INV-1}\n");
 
         let report = audit_strict(&chapters, &assertions).unwrap();
         assert_eq!(report.rows.len(), 1);
@@ -634,17 +634,23 @@ mod tests {
 
         let err = audit_strict(&chapters, &assertions).unwrap_err();
         match err {
-            CiteAuditError::UnknownInvCited { ref chapter, ref token } => {
+            CiteAuditError::UnknownInvCited {
+                ref chapter,
+                ref token,
+            } => {
                 assert_eq!(chapter, "15-kepler-solids.tex");
                 assert_eq!(token, "INV-999");
             }
             other => panic!("expected UnknownInvCited, got {other:?}"),
         }
-        assert_eq!(CiteAuditError::UnknownInvCited {
-            chapter: "x".into(),
-            token: "y".into(),
-        }
-        .exit_code(), 82);
+        assert_eq!(
+            CiteAuditError::UnknownInvCited {
+                chapter: "x".into(),
+                token: "y".into(),
+            }
+            .exit_code(),
+            82
+        );
     }
 
     #[test]
@@ -661,7 +667,11 @@ mod tests {
 
         let err = audit_strict(&chapters, &assertions).unwrap_err();
         match err {
-            CiteAuditError::BelowMinCitations { n_below, min, ref chapters } => {
+            CiteAuditError::BelowMinCitations {
+                n_below,
+                min,
+                ref chapters,
+            } => {
                 assert_eq!(n_below, 3);
                 assert_eq!(min, MIN_CITETHEOREM_PER_CHAPTER);
                 assert_eq!(
@@ -712,11 +722,7 @@ mod tests {
         let assertions = write_assertions(tmp.path());
         let chapters = tmp.path().join("chapters");
         fs::create_dir(&chapters).unwrap();
-        write_chapter(
-            &chapters,
-            "00-monad.tex",
-            "\\citetheorem{INV-1}\n",
-        );
+        write_chapter(&chapters, "00-monad.tex", "\\citetheorem{INV-1}\n");
 
         let report = audit_report(&chapters, &assertions).unwrap();
         let json = render_report_json(&report).unwrap();

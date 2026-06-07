@@ -34,20 +34,15 @@ pub async fn sse_handler(
     let post_url = format!("/sse/message?session={}", session_id);
 
     // First event: endpoint advertisement (MCP spec)
-    let endpoint_event = Event::default()
-        .event("endpoint")
-        .data(post_url.clone());
+    let endpoint_event = Event::default().event("endpoint").data(post_url.clone());
 
     // Convert broadcast channel to SSE stream
-    let event_stream = BroadcastStream::new(rx).filter_map(move |msg| {
-        match msg {
-            Ok(event) => {
-                let data = serde_json::to_string(&json!({"event": event}))
-                    .unwrap_or_default();
-                Some(Ok(Event::default().event("message").data(data)))
-            }
-            Err(_) => None,
+    let event_stream = BroadcastStream::new(rx).filter_map(move |msg| match msg {
+        Ok(event) => {
+            let data = serde_json::to_string(&json!({"event": event})).unwrap_or_default();
+            Some(Ok(Event::default().event("message").data(data)))
         }
+        Err(_) => None,
     });
 
     // Prepend endpoint event to the stream

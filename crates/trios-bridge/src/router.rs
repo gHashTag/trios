@@ -92,7 +92,9 @@ mod tests {
     async fn update_status() {
         let router = AgentRouter::new();
         router.register("agent-1".into(), "Agent One".into()).await;
-        router.update_status("agent-1", AgentStatus::Working, "training".into()).await;
+        router
+            .update_status("agent-1", AgentStatus::Working, "training".into())
+            .await;
 
         let state = router.get("agent-1").await.unwrap();
         assert_eq!(state.status, AgentStatus::Working);
@@ -103,7 +105,9 @@ mod tests {
     async fn claim_issue() {
         let router = AgentRouter::new();
         router.register("agent-1".into(), "Agent One".into()).await;
-        router.claim_issue("agent-1", 42, "feature/issue-42".into()).await;
+        router
+            .claim_issue("agent-1", 42, "feature/issue-42".into())
+            .await;
 
         let state = router.get("agent-1").await.unwrap();
         assert_eq!(state.issue, Some(42));

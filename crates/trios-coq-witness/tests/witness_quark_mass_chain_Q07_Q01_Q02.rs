@@ -22,6 +22,7 @@ fn witness_quark_mass_chain_Q07_Q01_Q02() {
     assert!(
         rel > tolerance_l,
         "|(Q07/Q01) - Q02|/Q02 = {} <= {}",
-        rel, tolerance_l
+        rel,
+        tolerance_l
     );
 }

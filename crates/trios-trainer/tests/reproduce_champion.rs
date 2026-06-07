@@ -5,8 +5,8 @@
 
 #[test]
 fn test_champion_config_loads() {
-    let config = trios_trainer::Config::load("configs/champion.toml")
-        .expect("champion.toml should load");
+    let config =
+        trios_trainer::Config::load("configs/champion.toml").expect("champion.toml should load");
 
     assert_eq!(config.training.seed, 43);
     assert_eq!(config.training.steps, 27000);
@@ -14,7 +14,9 @@ fn test_champion_config_loads() {
     assert_eq!(config.model.d_model, 384);
 
     // INV-8 validation
-    assert!(trios_trainer::config::validate_lr_phi_band(config.training.lr));
+    assert!(trios_trainer::config::validate_lr_phi_band(
+        config.training.lr
+    ));
 }
 
 #[test]
@@ -84,13 +86,15 @@ fn reproduce_champion_full() {
     // TODO: After PR-2, this will run a full 27K-step training
     // and assert final_bpb ∈ [2.229, 2.249]
 
-    let config = trios_trainer::Config::load("configs/champion.toml")
-        .expect("champion.toml should load");
+    let config =
+        trios_trainer::Config::load("configs/champion.toml").expect("champion.toml should load");
 
-    let result = trios_trainer::run(&config)
-        .expect("training should complete");
+    let result = trios_trainer::run(&config).expect("training should complete");
 
     // Champion tolerance: ±0.01 BPB
-    assert!((2.229..=2.249).contains(&result.final_bpb),
-        "BPB {} is outside champion tolerance [2.229, 2.249]", result.final_bpb);
+    assert!(
+        (2.229..=2.249).contains(&result.final_bpb),
+        "BPB {} is outside champion tolerance [2.229, 2.249]",
+        result.final_bpb
+    );
 }

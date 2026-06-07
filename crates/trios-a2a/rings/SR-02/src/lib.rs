@@ -57,8 +57,7 @@ impl A2ARegistry {
 
     /// Assign a task to an agent.
     pub fn assign_task(&mut self, title: &str, created_by: &str, assign_to: &str) -> Value {
-        let task = Task::new(title, AgentId::new(created_by))
-            .assign_to(AgentId::new(assign_to));
+        let task = Task::new(title, AgentId::new(created_by)).assign_to(AgentId::new(assign_to));
         let task_id = task.id.clone();
         self.tasks.insert(task_id.clone(), task);
         json!({"ok": true, "task_id": task_id})
@@ -67,7 +66,9 @@ impl A2ARegistry {
     /// Get task status.
     pub fn task_status(&self, task_id: &str) -> Value {
         match self.tasks.get(task_id) {
-            Some(task) => serde_json::to_value(task).unwrap_or(json!({"error": "serialize failed"})),
+            Some(task) => {
+                serde_json::to_value(task).unwrap_or(json!({"error": "serialize failed"}))
+            }
             None => json!({"error": format!("task {} not found", task_id)}),
         }
     }
@@ -182,13 +183,13 @@ mod tests {
         let mut reg = A2ARegistry::new();
         let result = reg.assign_task("Test task", "lead", "alpha");
         let task_id = result["task_id"].as_str().unwrap();
-        
+
         let status = reg.task_status(task_id);
         assert_eq!(status["state"], "assigned");
-        
+
         let update = reg.update_task(task_id, TaskState::Completed);
         assert_eq!(update["ok"], true);
-        
+
         let status = reg.task_status(task_id);
         assert_eq!(status["state"], "completed");
     }

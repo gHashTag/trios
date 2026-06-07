@@ -53,7 +53,10 @@ fn distinct_seeds_under_bpb(path: &Path, threshold: f64) -> Option<usize> {
             Ok(v) => v,
             Err(_) => continue,
         };
-        let bpb = v.get("bpb").and_then(|x| x.as_f64()).unwrap_or(f64::INFINITY);
+        let bpb = v
+            .get("bpb")
+            .and_then(|x| x.as_f64())
+            .unwrap_or(f64::INFINITY);
         let seed = v.get("seed").and_then(|x| x.as_i64());
         if let Some(s) = seed {
             if bpb < threshold {
@@ -72,7 +75,11 @@ fn gate_examiner_pack(repo_root: &Path) -> GateResult {
     GateResult {
         name: "examiner-pack",
         pass,
-        detail: if pass { "≥200 lines, ≥10 sections" } else { "BODY MISSING (LD lane open)" },
+        detail: if pass {
+            "≥200 lines, ≥10 sections"
+        } else {
+            "BODY MISSING (LD lane open)"
+        },
     }
 }
 
@@ -83,7 +90,11 @@ fn gate_qa(repo_root: &Path) -> GateResult {
     GateResult {
         name: "qa",
         pass,
-        detail: if pass { "≥30 Q&A pairs" } else { "fewer than 30 Q&A pairs" },
+        detail: if pass {
+            "≥30 Q&A pairs"
+        } else {
+            "fewer than 30 Q&A pairs"
+        },
     }
 }
 
@@ -96,7 +107,11 @@ fn gate_slides(repo_root: &Path) -> GateResult {
     GateResult {
         name: "slides",
         pass,
-        detail: if pass { "≥30 frames" } else { "fewer than 30 frames" },
+        detail: if pass {
+            "≥30 frames"
+        } else {
+            "fewer than 30 frames"
+        },
     }
 }
 
@@ -165,7 +180,9 @@ fn main() -> ExitCode {
         println!("\nGate-state: PASS — defense package + appendix F + seed ledger ready.");
         ExitCode::SUCCESS
     } else {
-        eprintln!("\nGate-state: FAIL — at least one Phase-C/Phase-A/Phase-B item below threshold.");
+        eprintln!(
+            "\nGate-state: FAIL — at least one Phase-C/Phase-A/Phase-B item below threshold."
+        );
         ExitCode::FAILURE
     }
 }

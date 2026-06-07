@@ -29,10 +29,7 @@ pub fn list_branches(repo_path: &Path) -> Result<Vec<BranchInfo>> {
     let mut branches = Vec::new();
     for branch in repo.branches(Some(BranchType::Local))? {
         let (branch, _) = branch?;
-        let name = branch
-            .name()?
-            .unwrap_or("<unnamed>")
-            .to_owned();
+        let name = branch.name()?.unwrap_or("<unnamed>").to_owned();
         let is_current = head_name.as_deref() == Some(&name);
         let upstream = branch
             .upstream()
@@ -51,10 +48,10 @@ pub fn list_branches(repo_path: &Path) -> Result<Vec<BranchInfo>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commit::create_commit;
+    use crate::stage::stage_files;
     use std::fs;
     use tempfile::TempDir;
-    use crate::stage::stage_files;
-    use crate::commit::create_commit;
 
     fn init_with_commit() -> TempDir {
         let dir = TempDir::new().unwrap();

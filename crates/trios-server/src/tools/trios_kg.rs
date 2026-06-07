@@ -64,12 +64,12 @@ pub async fn kg_create_edge(input: &Value) -> Result<Value> {
         .and_then(|v| v.as_str())
         .context("edge_type is required")?;
 
-    let weight = input
-        .get("weight")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1.0);
+    let weight = input.get("weight").and_then(|v| v.as_f64()).unwrap_or(1.0);
 
-    let id = format!("edge-{:x}", md5_compute(&format!("{}-{}-{}", source, target, edge_type)));
+    let id = format!(
+        "edge-{:x}",
+        md5_compute(&format!("{}-{}-{}", source, target, edge_type))
+    );
 
     Ok(json!({
         "id": id,
@@ -87,19 +87,18 @@ pub async fn kg_query(input: &Value) -> Result<Value> {
         .and_then(|v| v.as_str())
         .context("query is required")?;
 
-    let limit = input
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(10);
+    let limit = input.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
 
     // R0: Return mock results
     let entities: Vec<Value> = (0..limit.min(3))
-        .map(|i| json!({
-            "id": format!("entity-{:x}", md5_compute(&format!("query-{}", i))),
-            "entity_type": "concept",
-            "name": format!("Concept {}", i),
-            "properties": {},
-        }))
+        .map(|i| {
+            json!({
+                "id": format!("entity-{:x}", md5_compute(&format!("query-{}", i))),
+                "entity_type": "concept",
+                "name": format!("Concept {}", i),
+                "properties": {},
+            })
+        })
         .collect();
 
     Ok(json!({
@@ -116,19 +115,18 @@ pub async fn kg_traverse(input: &Value) -> Result<Value> {
         .and_then(|v| v.as_str())
         .context("source is required")?;
 
-    let max_depth = input
-        .get("max_depth")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1);
+    let max_depth = input.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(1);
 
     // R0: Return mock traversal
     let paths: Vec<Value> = (0..max_depth.min(3))
-        .map(|i| json!({
-            "source": source,
-            "target": format!("entity-{:x}", md5_compute(&format!("path-{}", i))),
-            "edge_type": "related_to",
-            "depth": i + 1,
-        }))
+        .map(|i| {
+            json!({
+                "source": source,
+                "target": format!("entity-{:x}", md5_compute(&format!("path-{}", i))),
+                "edge_type": "related_to",
+                "depth": i + 1,
+            })
+        })
         .collect();
 
     Ok(json!({

@@ -125,11 +125,22 @@ mod tests {
         let samples = [
             Payload::Claim { lane: "L13".into() },
             Payload::Heartbeat { lane: "L13".into() },
-            Payload::Done { lane: "L13".into(), sha: "abc".into() },
+            Payload::Done {
+                lane: "L13".into(),
+                sha: "abc".into(),
+            },
             Payload::Honey { line: "{}".into() },
-            Payload::State { delta_b64: "".into() },
-            Payload::Violation { rule: "R7".into(), detail: "".into() },
-            Payload::Victory { bpb: 1.49, seeds_distinct: 3 },
+            Payload::State {
+                delta_b64: "".into(),
+            },
+            Payload::Violation {
+                rule: "R7".into(),
+                detail: "".into(),
+            },
+            Payload::Victory {
+                bpb: 1.49,
+                seeds_distinct: 3,
+            },
         ];
         let channels: Vec<Channel> = samples.iter().map(channel_of_payload).collect();
         assert_eq!(channels, Channel::ALL.to_vec());

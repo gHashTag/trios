@@ -38,7 +38,13 @@ struct ExtractionResult {
 
 fn get_git_commit(repo_path: &Path) -> String {
     std::process::Command::new("git")
-        .args(["-C", repo_path.to_str().unwrap_or("."), "rev-parse", "--short", "HEAD"])
+        .args([
+            "-C",
+            repo_path.to_str().unwrap_or("."),
+            "rev-parse",
+            "--short",
+            "HEAD",
+        ])
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
@@ -52,11 +58,15 @@ fn detect_status(content: &str, theorem_name: &str) -> ProofStatus {
     let mut _depth = 0usize;
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.contains(theorem_name) && (trimmed.starts_with("Theorem") || trimmed.starts_with("Lemma")) {
+        if trimmed.contains(theorem_name)
+            && (trimmed.starts_with("Theorem") || trimmed.starts_with("Lemma"))
+        {
             in_theorem = true;
         }
         if in_theorem {
-            if trimmed.contains("Proof.") { _depth += 1; }
+            if trimmed.contains("Proof.") {
+                _depth += 1;
+            }
             if trimmed == "Admitted." {
                 return ProofStatus::Admitted;
             }
@@ -79,7 +89,11 @@ fn extract_definitions(content: &str, source_file: &str) -> Vec<ExtractedConstan
                 let raw_value = rest[assign_pos + 4..].trim();
                 let value = raw_value.trim_end_matches('.').to_string();
                 // Only extract numeric or phi-related definitions
-                let is_numeric = value.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false);
+                let is_numeric = value
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false);
                 let is_phi = value.contains("phi") || value.contains("φ") || value.contains("sqrt");
                 if is_numeric || is_phi {
                     results.push(ExtractedConstant {
@@ -97,7 +111,12 @@ fn extract_definitions(content: &str, source_file: &str) -> Vec<ExtractedConstan
             let rest = trimmed
                 .trim_start_matches("Theorem ")
                 .trim_start_matches("Lemma ");
-            let name = rest.split_whitespace().next().unwrap_or("").trim_end_matches(':').to_string();
+            let name = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(':')
+                .to_string();
             if !name.is_empty() {
                 let status = detect_status(content, &name);
                 results.push(ExtractedConstant {
@@ -115,14 +134,18 @@ fn extract_definitions(content: &str, source_file: &str) -> Vec<ExtractedConstan
 
 fn process_directory(dir: &Path) -> Vec<ExtractedConstant> {
     let mut all = Vec::new();
-    let Ok(entries) = fs::read_dir(dir) else { return all; };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return all;
+    };
     let mut paths: Vec<PathBuf> = entries
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("v"))
         .collect();
     paths.sort();
     for path in paths {
-        let Ok(content) = fs::read_to_string(&path) else { continue; };
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
         let source = path.to_string_lossy().to_string();
         all.extend(extract_definitions(&content, &source));
     }
@@ -131,21 +154,32 @@ fn process_directory(dir: &Path) -> Vec<ExtractedConstant> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let input_dir = args.iter()
+    let input_dir = args
+        .iter()
         .position(|a| a == "--input")
         .and_then(|i| args.get(i + 1))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("trinity-clara/proofs/igla"));
-    let output_file = args.iter()
+    let output_file = args
+        .iter()
         .position(|a| a == "--output")
         .and_then(|i| args.get(i + 1))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("assertions/igla_assertions.json"));
 
     let constants = process_directory(&input_dir);
-    let admitted_count = constants.iter().filter(|c| c.status == ProofStatus::Admitted).count();
-    let proven_count = constants.iter().filter(|c| c.status == ProofStatus::Proven).count();
-    let theorem_count = constants.iter().filter(|c| c.name.starts_with("theorem::")).count();
+    let admitted_count = constants
+        .iter()
+        .filter(|c| c.status == ProofStatus::Admitted)
+        .count();
+    let proven_count = constants
+        .iter()
+        .filter(|c| c.status == ProofStatus::Proven)
+        .count();
+    let theorem_count = constants
+        .iter()
+        .filter(|c| c.name.starts_with("theorem::"))
+        .count();
 
     let commit = get_git_commit(Path::new("."));
     let result = ExtractionResult {

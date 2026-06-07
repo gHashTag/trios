@@ -38,16 +38,16 @@
 //! tri bridge broadcast "STOP asking questions, just push"
 //! ```
 
-pub mod protocol;
-pub mod server;
-pub mod router;
 pub mod github;
+pub mod protocol;
 pub mod relay;
+pub mod router;
+pub mod server;
 
-pub use protocol::{
-    AgentId, AgentIdOrBroadcast, AgentState, AgentStatus, AgentEvent,
-    IssueStatus, BridgeMessage, DEFAULT_PORT, LOCAL_WS_URL,
-};
-pub use server::BridgeServer;
-pub use router::AgentRouter;
 pub use github::GitHubClient;
+pub use protocol::{
+    AgentEvent, AgentId, AgentIdOrBroadcast, AgentState, AgentStatus, BridgeMessage, IssueStatus,
+    DEFAULT_PORT, LOCAL_WS_URL,
+};
+pub use router::AgentRouter;
+pub use server::BridgeServer;

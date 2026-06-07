@@ -84,7 +84,9 @@ struct Hit {
 fn validate_kind(k: &str) -> Result<&str> {
     match k {
         "frontmatter" | "chapter" | "appendix" => Ok(k),
-        other => Err(anyhow!("--kind must be frontmatter|chapter|appendix, got `{other}`")),
+        other => Err(anyhow!(
+            "--kind must be frontmatter|chapter|appendix, got `{other}`"
+        )),
     }
 }
 
@@ -125,7 +127,10 @@ async fn main() -> Result<()> {
     });
 
     let row = db
-        .query_one("SELECT total_chunks::int8, embedded_chunks::int8 FROM ssot.rag_status", &[])
+        .query_one(
+            "SELECT total_chunks::int8, embedded_chunks::int8 FROM ssot.rag_status",
+            &[],
+        )
         .await
         .context("read ssot.rag_status (did you run migrate_rag?)")?;
     let total: i64 = row.get(0);
@@ -230,9 +235,19 @@ async fn main() -> Result<()> {
         println!(
             "# query: {}  mode: {}",
             cli.query,
-            if cli.dense { "dense (BGE-M3)" } else { "lexical (pg_trgm)" }
+            if cli.dense {
+                "dense (BGE-M3)"
+            } else {
+                "lexical (pg_trgm)"
+            }
         );
-        println!("# hits: {}/{}  (embedded {} of {})", hits.len(), cli.limit, embedded, total);
+        println!(
+            "# hits: {}/{}  (embedded {} of {})",
+            hits.len(),
+            cli.limit,
+            embedded,
+            total
+        );
         for (i, h) in hits.iter().enumerate() {
             println!(
                 "\n[{}] id={}  {}#{:03}  kind={}  score={:.4}\n     {}",

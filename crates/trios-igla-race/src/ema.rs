@@ -139,10 +139,7 @@ impl EmaTracker {
     /// Construct an EMA with an explicit decay.  Returns
     /// `Err(AlphaOutOfRange)` if `α ∉ (0, 1]`.
     pub fn with_alpha(alpha: f64) -> Result<Self, EmaError> {
-        if !alpha.is_finite()
-            || alpha <= ALPHA_MIN_EXCLUSIVE
-            || alpha > ALPHA_MAX_INCLUSIVE
-        {
+        if !alpha.is_finite() || alpha <= ALPHA_MIN_EXCLUSIVE || alpha > ALPHA_MAX_INCLUSIVE {
             return Err(EmaError::AlphaOutOfRange);
         }
         Ok(Self {
@@ -305,7 +302,7 @@ mod tests {
     #[test]
     fn falsify_alpha_above_one_rejected() {
         assert_eq!(
-            EmaTracker::with_alpha(1.0_f64.next_up()).unwrap_err(),
+            EmaTracker::with_alpha(1.0_f64 + f64::EPSILON).unwrap_err(),
             EmaError::AlphaOutOfRange
         );
         assert_eq!(

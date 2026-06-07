@@ -19,15 +19,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::net::TcpStream;
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::Message,
-    MaybeTlsStream, WebSocketStream,
-};
-use futures_util::{SinkExt, StreamExt};
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -118,10 +114,16 @@ async fn main() -> Result<()> {
     loop {
         match run_session(&cfg).await {
             Ok(()) => {
-                warn!("WS session ended cleanly; reconnecting in {:?}", cfg.reconnect_delay);
+                warn!(
+                    "WS session ended cleanly; reconnecting in {:?}",
+                    cfg.reconnect_delay
+                );
             }
             Err(e) => {
-                error!("WS session failed: {:#}; reconnecting in {:?}", e, cfg.reconnect_delay);
+                error!(
+                    "WS session failed: {:#}; reconnecting in {:?}",
+                    e, cfg.reconnect_delay
+                );
             }
         }
         tokio::time::sleep(cfg.reconnect_delay).await;

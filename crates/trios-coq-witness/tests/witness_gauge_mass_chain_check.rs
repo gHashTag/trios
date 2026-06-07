@@ -19,6 +19,7 @@ fn witness_gauge_mass_chain_check() {
     assert!(
         (H02 * 0.881 - H03).abs() / H03 > tolerance_v,
         "Gauge mass chain falsification failed: H02*0.881 = {}, H03 = {}",
-        H02 * 0.881, H03
+        H02 * 0.881,
+        H03
     );
 }

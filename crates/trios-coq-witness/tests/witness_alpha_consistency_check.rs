@@ -22,6 +22,7 @@ fn witness_alpha_consistency_check() {
     assert!(
         (alpha_from_g01 - alpha_phi).abs() / alpha_phi > tolerance_sg,
         "Alpha consistency falsification failed: from_G01 = {}, alpha_phi = {}",
-        alpha_from_g01, alpha_phi
+        alpha_from_g01,
+        alpha_phi
     );
 }

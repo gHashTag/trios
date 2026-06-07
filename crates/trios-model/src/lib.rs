@@ -204,7 +204,8 @@ impl IglaModel {
     /// assert!(size > 600 && size < 800); // 400 GF16 (800 bytes) + 200 Ternary (~40 bytes)
     /// ```
     pub fn size_bytes(&self) -> usize {
-        let gf16_bytes = (self.embedding.len() + self.attention_qkv.len() + self.ffn_down.len()) * 2;
+        let gf16_bytes =
+            (self.embedding.len() + self.attention_qkv.len() + self.ffn_down.len()) * 2;
         let ternary_bytes = (self.ffn_gate.len() + self.ffn_up.len()) / 5;
         gf16_bytes + ternary_bytes
     }

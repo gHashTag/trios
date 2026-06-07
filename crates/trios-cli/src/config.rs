@@ -24,14 +24,14 @@ impl Default for Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let path = PathBuf::from(".trinity/tri.toml");
-        
+
         if !path.exists() {
             return Ok(Config::default());
         }
 
         let contents = std::fs::read_to_string(&path)?;
         let mut config: Config = toml::from_str(&contents)?;
-        
+
         // Resolve relative paths
         if !config.db_path.is_absolute() {
             config.db_path = PathBuf::from(".trinity").join(&config.db_path);

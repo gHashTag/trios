@@ -42,8 +42,8 @@ pub fn get_diff(repo_path: &Path, file: Option<&str>) -> Result<DiffResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stage::stage_files;
     use crate::commit::create_commit;
+    use crate::stage::stage_files;
     use std::fs;
     use tempfile::TempDir;
 

@@ -279,7 +279,12 @@ impl BridgeMessage {
     }
 
     /// Create an AgentEvent message.
-    pub fn agent_event(agent_id: AgentId, event: AgentEvent, issue_number: u64, message: String) -> Self {
+    pub fn agent_event(
+        agent_id: AgentId,
+        event: AgentEvent,
+        issue_number: u64,
+        message: String,
+    ) -> Self {
         Self::AgentEvent(AgentEventMsg {
             agent_id,
             event,

@@ -44,9 +44,7 @@ impl FineWebBatch {
 
         // Stub: returns dummy token sequences
         // Each sequence has 128 tokens, all with token ID 42
-        let batch = (0..self.batch_size)
-            .map(|_| vec![42u32; 128])
-            .collect();
+        let batch = (0..self.batch_size).map(|_| vec![42u32; 128]).collect();
 
         self.offset += self.batch_size;
         Some(batch)

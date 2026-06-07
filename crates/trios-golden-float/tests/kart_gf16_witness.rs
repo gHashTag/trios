@@ -146,10 +146,7 @@ fn exhaust(n: usize) -> u64 {
 fn test_kart_gf16_empty() {
     // Empty vectors agree trivially for every threshold.
     for theta in 0..=8u32 {
-        assert_eq!(
-            vsa_matmul(theta, &[], &[]),
-            kart_compose(theta, &[], &[])
-        );
+        assert_eq!(vsa_matmul(theta, &[], &[]), kart_compose(theta, &[], &[]));
     }
 }
 

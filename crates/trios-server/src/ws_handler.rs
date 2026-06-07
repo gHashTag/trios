@@ -4,8 +4,8 @@ use axum::response::IntoResponse;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, RwLock};
 use tracing::{error, info};
 
@@ -17,11 +17,25 @@ use trios_a2a::A2ARouter;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum BusEvent {
-    TaskAssigned { task_id: String, agent_id: String },
-    TaskUpdated { task_id: String, status: String },
-    AgentConnected { agent_id: String },
-    AgentDisconnected { agent_id: String },
-    A2AMessage { from: String, to: Option<String>, content: Value },
+    TaskAssigned {
+        task_id: String,
+        agent_id: String,
+    },
+    TaskUpdated {
+        task_id: String,
+        status: String,
+    },
+    AgentConnected {
+        agent_id: String,
+    },
+    AgentDisconnected {
+        agent_id: String,
+    },
+    A2AMessage {
+        from: String,
+        to: Option<String>,
+        content: Value,
+    },
     /// Queen → Doctor: an order to perform an action.
     /// Mirrors `.trinity/queen/actions.json` action ids (e.g. "doctor scan", "doctor heal").
     /// Constitutional anchor: AGENTS.md AGENT T 6-phase cycle, phase ASSIGN.
@@ -98,10 +112,16 @@ impl AppState {
             .and_then(|v| v.parse().ok())
             .unwrap_or(120);
 
-        info!(".env loaded: zai_api={} keys={} timeout={}s",
-            if zai_api.is_empty() { "(empty)" } else { &zai_api },
+        info!(
+            ".env loaded: zai_api={} keys={} timeout={}s",
+            if zai_api.is_empty() {
+                "(empty)"
+            } else {
+                &zai_api
+            },
             zai_keys.len(),
-            timeout_secs);
+            timeout_secs
+        );
 
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(timeout_secs))
@@ -124,7 +144,9 @@ impl AppState {
     /// Pick next key via round-robin
     #[allow(dead_code)]
     pub fn next_zai_key(&self) -> Option<&str> {
-        if self.zai_keys.is_empty() { return None; }
+        if self.zai_keys.is_empty() {
+            return None;
+        }
         let idx = self.zai_key_idx.fetch_add(1, Ordering::Relaxed) % self.zai_keys.len();
         Some(&self.zai_keys[idx])
     }
@@ -146,7 +168,10 @@ pub struct WsResponse {
     pub result: Value,
 }
 
-pub async fn ws_handler(ws: WebSocketUpgrade, axum::extract::State(state): axum::extract::State<AppState>) -> impl IntoResponse {
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
@@ -226,21 +251,21 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         }),
         "notifications/initialized" => json!({}),
         "ping" => json!({"status": "ok"}),
-        "agents/list"         => mcp_endpoints::agents::list(state).await,
-        "agents/chat"         => mcp_endpoints::agents::chat(state, req.params).await,
-        "tasks/assign"        => mcp_endpoints::tasks::assign(state, req.params).await,
-        "tasks/status"        => mcp_endpoints::tasks::status(state, req.params).await,
+        "agents/list" => mcp_endpoints::agents::list(state).await,
+        "agents/chat" => mcp_endpoints::agents::chat(state, req.params).await,
+        "tasks/assign" => mcp_endpoints::tasks::assign(state, req.params).await,
+        "tasks/status" => mcp_endpoints::tasks::status(state, req.params).await,
         "tasks/update_status" => mcp_endpoints::tasks::update_status(state, req.params).await,
-        "experience/read"     => mcp_endpoints::experience::read(state, req.params).await,
-        "tools/list"          => tools_list(state).await,
-        "tools/call"          => tools_call(state, req.params).await,
-        "a2a/list_agents"     => mcp_endpoints::a2a::list_agents(state).await,
-        "a2a/register"        => mcp_endpoints::a2a::register(state, req.params).await,
-        "a2a/send"            => mcp_endpoints::a2a::send(state, req.params).await,
-        "a2a/broadcast"       => mcp_endpoints::a2a::broadcast(state, req.params).await,
-        "a2a/assign_task"     => mcp_endpoints::a2a::assign_task(state, req.params).await,
-        "a2a/task_status"     => mcp_endpoints::a2a::task_status(state, req.params).await,
-        "a2a/update_task"     => mcp_endpoints::a2a::update_task(state, req.params).await,
+        "experience/read" => mcp_endpoints::experience::read(state, req.params).await,
+        "tools/list" => tools_list(state).await,
+        "tools/call" => tools_call(state, req.params).await,
+        "a2a/list_agents" => mcp_endpoints::a2a::list_agents(state).await,
+        "a2a/register" => mcp_endpoints::a2a::register(state, req.params).await,
+        "a2a/send" => mcp_endpoints::a2a::send(state, req.params).await,
+        "a2a/broadcast" => mcp_endpoints::a2a::broadcast(state, req.params).await,
+        "a2a/assign_task" => mcp_endpoints::a2a::assign_task(state, req.params).await,
+        "a2a/task_status" => mcp_endpoints::a2a::task_status(state, req.params).await,
+        "a2a/update_task" => mcp_endpoints::a2a::update_task(state, req.params).await,
         // ─────────────────────────────────────────────────────────────────────
         // Queen ↔ Doctor autonomous loop (issue: bee/queen-doctor-autoloop)
         //   queen/order  : Queen publishes a QueenOrder onto the bus.
@@ -249,8 +274,8 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         //                  Params: { order_id, agent_id, status, summary, diagnosis }
         // Both methods are append-only broadcasts (constitutional L21).
         // ─────────────────────────────────────────────────────────────────────
-        "queen/order"         => queen_order_publish(state, req.params).await,
-        "doctor/report"       => doctor_report_publish(state, req.params).await,
+        "queen/order" => queen_order_publish(state, req.params).await,
+        "doctor/report" => doctor_report_publish(state, req.params).await,
         _ => json!({"error": format!("unknown method: {}", req.method)}),
     };
 
@@ -274,7 +299,11 @@ fn epoch_secs_now() -> i64 {
 /// Consumed by Doctor loop subscribers via `/ws` socket.
 pub async fn queen_order_publish(state: &AppState, params: Option<Value>) -> Value {
     let p = params.unwrap_or(json!({}));
-    let action = p.get("action").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let action = p
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     if action.is_empty() {
         return json!({"error": "missing field: action"});
     }
@@ -309,7 +338,11 @@ pub async fn queen_order_publish(state: &AppState, params: Option<Value>) -> Val
 /// Consumed by Queen loop subscribers via `/operator` socket.
 pub async fn doctor_report_publish(state: &AppState, params: Option<Value>) -> Value {
     let p = params.unwrap_or(json!({}));
-    let order_id = p.get("order_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let order_id = p
+        .get("order_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     if order_id.is_empty() {
         return json!({"error": "missing field: order_id"});
     }
@@ -318,8 +351,16 @@ pub async fn doctor_report_publish(state: &AppState, params: Option<Value>) -> V
         .and_then(|v| v.as_str())
         .unwrap_or("doctor")
         .to_string();
-    let status = p.get("status").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-    let summary = p.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let status = p
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let summary = p
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let diagnosis = p.get("diagnosis").cloned().unwrap_or(json!({}));
     let ts = epoch_secs_now();
 
@@ -344,7 +385,10 @@ pub async fn doctor_report_publish(state: &AppState, params: Option<Value>) -> V
 
 async fn tools_call(state: &AppState, params: Option<Value>) -> Value {
     let params_val = params.unwrap_or(json!({}));
-    let tool_name = params_val.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let tool_name = params_val
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let arguments = params_val.get("arguments").cloned().unwrap_or(json!({}));
 
     let a2a_result = match tool_name {
@@ -442,12 +486,12 @@ mod tests {
     async fn test_broadcast_event() {
         let state = AppState::new();
         let mut rx = state.event_tx.subscribe();
-        let event = BusEvent::AgentConnected { agent_id: "test-agent".to_string() };
+        let event = BusEvent::AgentConnected {
+            agent_id: "test-agent".to_string(),
+        };
         state.broadcast_event(event.clone());
-        let received = tokio::time::timeout(
-            tokio::time::Duration::from_millis(100),
-            rx.recv()
-        ).await;
+        let received =
+            tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv()).await;
         assert!(received.is_ok());
     }
 
@@ -514,16 +558,18 @@ mod tests {
         let order_id = result["order_id"].as_str().unwrap().to_string();
         assert!(!order_id.is_empty());
 
-        let received = tokio::time::timeout(
-            tokio::time::Duration::from_millis(100),
-            rx.recv(),
-        )
-        .await
-        .expect("queen order broadcast should arrive within 100ms")
-        .expect("broadcast channel should not be closed");
+        let received = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv())
+            .await
+            .expect("queen order broadcast should arrive within 100ms")
+            .expect("broadcast channel should not be closed");
 
         match received {
-            BusEvent::QueenOrder { order_id: oid, action, target_agent, .. } => {
+            BusEvent::QueenOrder {
+                order_id: oid,
+                action,
+                target_agent,
+                ..
+            } => {
                 assert_eq!(oid, order_id);
                 assert_eq!(action, "doctor scan");
                 assert_eq!(target_agent, "doctor");
@@ -536,7 +582,11 @@ mod tests {
     async fn test_queen_order_publish_rejects_missing_action() {
         let state = AppState::new();
         let result = queen_order_publish(&state, Some(json!({}))).await;
-        assert!(result.get("error").is_some(), "expected error field, got {:?}", result);
+        assert!(
+            result.get("error").is_some(),
+            "expected error field, got {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -556,16 +606,19 @@ mod tests {
         assert_eq!(result["order_id"], "test-order-123");
         assert_eq!(result["status"], "green");
 
-        let received = tokio::time::timeout(
-            tokio::time::Duration::from_millis(100),
-            rx.recv(),
-        )
-        .await
-        .expect("doctor report broadcast should arrive within 100ms")
-        .expect("broadcast channel should not be closed");
+        let received = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv())
+            .await
+            .expect("doctor report broadcast should arrive within 100ms")
+            .expect("broadcast channel should not be closed");
 
         match received {
-            BusEvent::DoctorReport { order_id, agent_id, status, summary, .. } => {
+            BusEvent::DoctorReport {
+                order_id,
+                agent_id,
+                status,
+                summary,
+                ..
+            } => {
                 assert_eq!(order_id, "test-order-123");
                 assert_eq!(agent_id, "doctor");
                 assert_eq!(status, "green");
@@ -579,7 +632,11 @@ mod tests {
     async fn test_doctor_report_publish_rejects_missing_order_id() {
         let state = AppState::new();
         let result = doctor_report_publish(&state, Some(json!({"status": "green"}))).await;
-        assert!(result.get("error").is_some(), "expected error field, got {:?}", result);
+        assert!(
+            result.get("error").is_some(),
+            "expected error field, got {:?}",
+            result
+        );
     }
 
     #[tokio::test]

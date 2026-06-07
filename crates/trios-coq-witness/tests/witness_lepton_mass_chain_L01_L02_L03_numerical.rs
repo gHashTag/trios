@@ -20,6 +20,7 @@ fn witness_lepton_mass_chain_L01_L02_L03_numerical() {
     assert!(
         rel < tolerance_l,
         "|206.8*16.8 - 3477|/3477 = {} >= {}",
-        rel, tolerance_l
+        rel,
+        tolerance_l
     );
 }

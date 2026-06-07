@@ -1,25 +1,25 @@
-mod commit;
-mod stage;
-mod status;
-mod branch;
-mod log;
-mod diff;
-mod stash;
 mod absorb_simple;
 mod absorb_smart;
+mod branch;
+mod commit;
+mod diff;
+mod log;
+mod stage;
+mod stash;
+mod status;
 
-pub use commit::*;
-pub use stage::*;
-pub use status::*;
 pub use branch::*;
-pub use log::*;
+pub use commit::*;
 pub use diff::*;
+pub use log::*;
+pub use stage::*;
 pub use stash::*;
+pub use status::*;
 
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use std::path::Path;
-use trios_core::{GitOrchestrator, FileChange, CommitResult, BranchInfo, LogEntry, DiffResult};
+use trios_core::{BranchInfo, CommitResult, DiffResult, FileChange, GitOrchestrator, LogEntry};
 
 #[derive(Debug, Clone, Default)]
 pub struct Git2Orchestrator;
@@ -37,7 +37,8 @@ impl GitOrchestrator for Git2Orchestrator {
         tokio::task::spawn_blocking(move || {
             let refs: Vec<&Path> = owned.iter().map(|p| p.as_path()).collect();
             stage::stage_files(&path, &refs)
-        }).await?
+        })
+        .await?
     }
 
     async fn unstage(&self, repo_path: &Path, paths: &[&Path]) -> Result<()> {
@@ -46,7 +47,8 @@ impl GitOrchestrator for Git2Orchestrator {
         tokio::task::spawn_blocking(move || {
             let refs: Vec<&Path> = owned.iter().map(|p| p.as_path()).collect();
             stage::unstage_files(&path, &refs)
-        }).await?
+        })
+        .await?
     }
 
     async fn commit(&self, repo_path: &Path, message: &str) -> Result<CommitResult> {

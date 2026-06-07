@@ -35,7 +35,7 @@ pub struct MupConfig {
 impl Default for MupConfig {
     fn default() -> Self {
         Self {
-            ref_width: 256,  // P1 champion width
+            ref_width: 256, // P1 champion width
             target_width: 256,
             embedding_mult: 1.0,
             output_mult: 1.0,
@@ -75,7 +75,7 @@ impl MupConfig {
             ParamGroup::Output => self.output_mult,
             ParamGroup::Attention => self.attn_mult,
             ParamGroup::FFN => self.ffn_mult,
-            ParamGroup::LayerNorm => 1.0,  // No scaling for layer norm
+            ParamGroup::LayerNorm => 1.0, // No scaling for layer norm
         }
     }
 
@@ -121,7 +121,7 @@ pub fn scale_dimensions(base_dims: &ModelDims, mup: &MupConfig) -> ModelDims {
 
     ModelDims {
         d_model: (base_dims.d_model as f64 * width_ratio) as usize,
-        n_heads: base_dims.n_heads,  // Heads don't scale
+        n_heads: base_dims.n_heads, // Heads don't scale
         d_ffn: (base_dims.d_ffn as f64 * width_ratio) as usize,
     }
 }
@@ -166,12 +166,7 @@ impl ModelDims {
 /// muP-compliant weight initialization
 ///
 /// Scales initial weights to account for width differences.
-pub fn mup_weight_scale(
-    fan_in: usize,
-    fan_out: usize,
-    group: ParamGroup,
-    mup: &MupConfig,
-) -> f64 {
+pub fn mup_weight_scale(fan_in: usize, fan_out: usize, group: ParamGroup, mup: &MupConfig) -> f64 {
     let base_scale = (2.0 / (fan_in + fan_out) as f64).sqrt();
 
     // Apply muP scaling based on parameter group
@@ -194,11 +189,11 @@ mod tests {
 
     #[test]
     fn test_mup_config_for_target() {
-        let cfg = MupConfig::for_target(512);  // 2x width
+        let cfg = MupConfig::for_target(512); // 2x width
         assert_eq!(cfg.ref_width, 256);
         assert_eq!(cfg.target_width, 512);
-        assert!((cfg.embedding_mult - 0.5).abs() < 1e-6);  // 1/2
-        assert!((cfg.attn_mult - 0.7071).abs() < 1e-4);  // 1/sqrt(2)
+        assert!((cfg.embedding_mult - 0.5).abs() < 1e-6); // 1/2
+        assert!((cfg.attn_mult - 0.7071).abs() < 1e-4); // 1/sqrt(2)
     }
 
     #[test]
@@ -208,7 +203,7 @@ mod tests {
 
         let invalid = MupConfig {
             ref_width: 256,
-            target_width: 128,  // Smaller than ref
+            target_width: 128, // Smaller than ref
             ..Default::default()
         };
         assert!(invalid.validate().is_err());
@@ -232,7 +227,7 @@ mod tests {
         let scaled = scale_dimensions(&base, &mup);
 
         assert_eq!(scaled.d_model, 512);
-        assert_eq!(scaled.n_heads, 4);  // Heads don't scale
+        assert_eq!(scaled.n_heads, 4); // Heads don't scale
         assert_eq!(scaled.d_ffn, 2048);
     }
 
@@ -240,8 +235,8 @@ mod tests {
     fn test_qk_scaling_factor() {
         let scale_64 = qk_scaling_factor(64);
         let scale_128 = qk_scaling_factor(128);
-        assert!((scale_64 - 0.125).abs() < 1e-6);  // 1/8
-        assert!((scale_128 - 0.08838).abs() < 1e-4);  // 1/sqrt(128)
+        assert!((scale_64 - 0.125).abs() < 1e-6); // 1/8
+        assert!((scale_128 - 0.08838).abs() < 1e-4); // 1/sqrt(128)
     }
 
     #[test]

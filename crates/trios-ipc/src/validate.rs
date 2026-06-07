@@ -45,9 +45,9 @@ fn validate_route(from: &RingId, to: &RingId) -> Result<(), IpcError> {
     let allowed = matches!(
         (from, to),
         (RingId::UrApiClient, RingId::ExtBackground)
-        | (RingId::ExtBackground, RingId::UrApiClient)
-        | (RingId::ExtBackground, RingId::ExtDom)
-        | (RingId::ExtBackground, RingId::SvBrowser)
+            | (RingId::ExtBackground, RingId::UrApiClient)
+            | (RingId::ExtBackground, RingId::ExtDom)
+            | (RingId::ExtBackground, RingId::SvBrowser)
     );
     if !allowed {
         return Err(IpcError::UnauthorizedRoute {

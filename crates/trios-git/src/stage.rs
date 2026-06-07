@@ -61,9 +61,9 @@ mod tests {
         stage_files(dir.path(), &[&file]).unwrap();
         let repo = git2::Repository::open(dir.path()).unwrap();
         let statuses = repo.statuses(None).unwrap();
-        let staged = statuses.iter().any(|e| {
-            e.status().contains(git2::Status::INDEX_NEW)
-        });
+        let staged = statuses
+            .iter()
+            .any(|e| e.status().contains(git2::Status::INDEX_NEW));
         assert!(staged);
     }
 }
