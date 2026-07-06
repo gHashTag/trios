@@ -5,6 +5,7 @@ mod rainbow_routes;
 mod security;
 mod sse_handler;
 mod tools;
+mod uart;
 mod ws_handler;
 
 use axum::extract::State;
@@ -44,7 +45,10 @@ async fn main() -> anyhow::Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
+    // UART bridge — only mounted if TRIOS_UART_TOKEN is set (fail-closed).
+    uart::log_startup_state();
+
+    let mut app = Router::new()
         // WebSocket (agents, internal tools)
         .route("/ws", get(ws_handler::ws_handler))
         .route("/operator", get(operator::operator_ws_handler))
@@ -58,8 +62,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health))
         .route("/", get(health))
         // Rainbow Bridge (L13 / INV-8) — see crates/trios-rainbow-bridge.
-        .merge(rainbow_routes::rainbow_routes())
-        .layer(
+        .merge(rainbow_routes::rainbow_routes());
+
+    if let Some(uart_router) = uart::router() {
+        app = app.nest("/api/uart", uart_router);
+    }
+
+    let app = app.layer(
             ServiceBuilder::new()
                 .layer(cors)
                 .layer(axum::middleware::from_fn(security::auth_middleware))
