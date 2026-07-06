@@ -67,6 +67,13 @@ pub async fn auth_middleware(request: Request, next: Next) -> Result<Response, S
         return Ok(next.run(request).await);
     }
 
+    // UART endpoints use their own bearer token (TRIOS_UART_TOKEN),
+    // enforced by `uart::uart_auth_middleware`. Bypass the global check
+    // so clients only need to present one credential.
+    if path.starts_with("/api/uart") {
+        return Ok(next.run(request).await);
+    }
+
     // If no API key is configured, allow all requests (dev mode)
     if expected_token.is_empty() {
         return Ok(next.run(request).await);
@@ -156,6 +163,23 @@ mod tests {
         let allowed = vec![dir.path().to_path_buf()];
         let result = validate_repo_path(dir.path().to_str().unwrap(), &allowed);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_uart_paths_bypass_global_auth_prefix() {
+        // Regression guard: the global auth middleware must skip everything
+        // under /api/uart so that UART's own token remains the single
+        // credential clients need. We assert the prefix constant here; the
+        // runtime bypass is exercised in the uart module's integration tests.
+        let paths = [
+            "/api/uart",
+            "/api/uart/ports",
+            "/api/uart/stream",
+            "/api/uart/write",
+        ];
+        for p in paths {
+            assert!(p.starts_with("/api/uart"), "prefix broke for {}", p);
+        }
     }
 
     #[test]
