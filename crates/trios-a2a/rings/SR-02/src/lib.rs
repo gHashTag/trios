@@ -9,28 +9,69 @@ use std::sync::{Arc, Mutex};
 use trios_a2a_sr00::{AgentCard, AgentId};
 use trios_a2a_sr01::{A2AMessage, Task, TaskState};
 
+/// Max agents a single registry will hold (P3 — registration guard).
+pub const MAX_AGENTS: usize = 1024;
+/// Max buffered messages before oldest are evicted (P3 — message-log TTL/cap).
+pub const MAX_MESSAGES: usize = 10_000;
+
 /// A2A registry — holds agents and tasks.
 #[derive(Debug, Clone)]
 pub struct A2ARegistry {
     pub agents: HashMap<String, AgentCard>,
     pub tasks: HashMap<String, Task>,
     pub messages: Vec<A2AMessage>,
+    max_agents: usize,
+    max_messages: usize,
 }
 
 impl A2ARegistry {
     pub fn new() -> Self {
+        Self::with_limits(MAX_AGENTS, MAX_MESSAGES)
+    }
+
+    /// Construct with explicit bounds (useful for tests / tuning).
+    pub fn with_limits(max_agents: usize, max_messages: usize) -> Self {
         Self {
             agents: HashMap::new(),
             tasks: HashMap::new(),
             messages: Vec::new(),
+            max_agents,
+            max_messages,
         }
     }
 
     /// Register an agent.
+    ///
+    /// P3: re-registering an existing id is an idempotent update (not a new
+    /// slot); registering a *new* id past `max_agents` is rejected so a
+    /// misbehaving peer can't exhaust the registry.
     pub fn register_agent(&mut self, card: AgentCard) -> Value {
         let id = card.id.to_string();
+        let is_new = !self.agents.contains_key(&id);
+        if is_new && self.agents.len() >= self.max_agents {
+            return json!({
+                "ok": false,
+                "error": format!("agent registry full (max {})", self.max_agents),
+                "code": "registry_full"
+            });
+        }
+        let updated = !is_new;
         self.agents.insert(id.clone(), card);
-        json!({"ok": true, "agent_id": id})
+        json!({"ok": true, "agent_id": id, "updated": updated})
+    }
+
+    /// True when the agent id is currently registered.
+    pub fn has_agent(&self, id: &str) -> bool {
+        self.agents.contains_key(id)
+    }
+
+    /// Push a message onto the bounded log, evicting the oldest past the cap.
+    fn push_message(&mut self, msg: A2AMessage) {
+        self.messages.push(msg);
+        if self.messages.len() > self.max_messages {
+            let overflow = self.messages.len() - self.max_messages;
+            self.messages.drain(0..overflow);
+        }
     }
 
     /// List all registered agents.
@@ -40,10 +81,20 @@ impl A2ARegistry {
     }
 
     /// Send a direct message from one agent to another.
+    ///
+    /// P2: a message to an unregistered recipient is rejected instead of
+    /// silently queuing forever. The caller gets an actionable error.
     pub fn send_message(&mut self, from: &str, to: &str, payload: Value) -> Value {
+        if !self.has_agent(to) {
+            return json!({
+                "ok": false,
+                "error": format!("recipient '{}' is not a registered agent", to),
+                "code": "unknown_recipient"
+            });
+        }
         let msg = A2AMessage::direct(AgentId::new(from), AgentId::new(to), payload);
         let result = serde_json::to_value(&msg).unwrap_or(json!({}));
-        self.messages.push(msg);
+        self.push_message(msg);
         json!({"ok": true, "message_id": result["id"]})
     }
 
@@ -51,12 +102,22 @@ impl A2ARegistry {
     pub fn broadcast(&mut self, from: &str, payload: Value) -> Value {
         let msg = A2AMessage::broadcast(AgentId::new(from), payload);
         let result = serde_json::to_value(&msg).unwrap_or(json!({}));
-        self.messages.push(msg);
+        self.push_message(msg);
         json!({"ok": true, "message_id": result["id"], "recipients": self.agents.len()})
     }
 
     /// Assign a task to an agent.
+    ///
+    /// P2: assigning to an unregistered agent is rejected so tasks don't
+    /// strand against a non-existent assignee.
     pub fn assign_task(&mut self, title: &str, created_by: &str, assign_to: &str) -> Value {
+        if !self.has_agent(assign_to) {
+            return json!({
+                "ok": false,
+                "error": format!("assignee '{}' is not a registered agent", assign_to),
+                "code": "unknown_assignee"
+            });
+        }
         let task = Task::new(title, AgentId::new(created_by))
             .assign_to(AgentId::new(assign_to));
         let task_id = task.id.clone();
@@ -172,6 +233,7 @@ mod tests {
     #[test]
     fn test_assign_task() {
         let mut reg = A2ARegistry::new();
+        reg.register_agent(AgentCard::new("alpha", "Alpha"));
         let result = reg.assign_task("Fix bug", "lead", "alpha");
         assert_eq!(result["ok"], true);
         assert_eq!(reg.tasks.len(), 1);
@@ -180,6 +242,7 @@ mod tests {
     #[test]
     fn test_task_lifecycle() {
         let mut reg = A2ARegistry::new();
+        reg.register_agent(AgentCard::new("alpha", "Alpha"));
         let result = reg.assign_task("Test task", "lead", "alpha");
         let task_id = result["task_id"].as_str().unwrap();
         
@@ -198,5 +261,63 @@ mod tests {
         let tools = mcp_tool_definitions();
         assert_eq!(tools.len(), 4);
         assert_eq!(tools[0]["name"], "a2a_list_agents");
+    }
+
+    // ---- P2: reject sends/assigns to unregistered agents ----
+
+    #[test]
+    fn send_to_unknown_recipient_is_rejected() {
+        let mut reg = A2ARegistry::new();
+        reg.register_agent(AgentCard::new("alpha", "Alpha"));
+        let result = reg.send_message("alpha", "ghost", json!({"text": "hi"}));
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["code"], "unknown_recipient");
+        // nothing queued
+        assert_eq!(reg.messages.len(), 0);
+    }
+
+    #[test]
+    fn assign_to_unknown_agent_is_rejected() {
+        let mut reg = A2ARegistry::new();
+        let result = reg.assign_task("Fix", "lead", "ghost");
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["code"], "unknown_assignee");
+        assert_eq!(reg.tasks.len(), 0);
+    }
+
+    // ---- P3: registration guard + bounded message log ----
+
+    #[test]
+    fn reregister_is_idempotent_update_not_new_slot() {
+        let mut reg = A2ARegistry::with_limits(1, 100);
+        let r1 = reg.register_agent(AgentCard::new("a", "A"));
+        assert_eq!(r1["updated"], false);
+        // same id again: allowed even at capacity, marked as update
+        let r2 = reg.register_agent(AgentCard::new("a", "A2"));
+        assert_eq!(r2["ok"], true);
+        assert_eq!(r2["updated"], true);
+        assert_eq!(reg.agents.len(), 1);
+    }
+
+    #[test]
+    fn registry_full_rejects_new_agents() {
+        let mut reg = A2ARegistry::with_limits(1, 100);
+        reg.register_agent(AgentCard::new("a", "A"));
+        let result = reg.register_agent(AgentCard::new("b", "B"));
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["code"], "registry_full");
+        assert_eq!(reg.agents.len(), 1);
+    }
+
+    #[test]
+    fn message_log_is_bounded() {
+        let mut reg = A2ARegistry::with_limits(10, 3);
+        reg.register_agent(AgentCard::new("a", "A"));
+        reg.register_agent(AgentCard::new("b", "B"));
+        for i in 0..5 {
+            reg.send_message("a", "b", json!({"n": i}));
+        }
+        // capped at 3, oldest evicted
+        assert_eq!(reg.messages.len(), 3);
     }
 }

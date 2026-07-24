@@ -94,6 +94,11 @@ mod tests {
     #[test]
     fn test_router_assign_and_status() {
         let router = A2ARouter::new();
+        // P2: assignee must be a registered agent.
+        {
+            let mut reg = router.registry.lock().unwrap();
+            reg.register_agent(AgentCard::new("alpha", "Alpha"));
+        }
         let result = router.call("a2a_assign_task", json!({
             "title": "Test task",
             "created_by": "lead",

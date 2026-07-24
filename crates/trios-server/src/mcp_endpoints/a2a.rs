@@ -58,9 +58,29 @@ pub async fn broadcast(state: &AppState, params: Option<Value>) -> Value {
     state.a2a.read().await.call("a2a_broadcast", params.unwrap_or(json!({})))
 }
 
-/// a2a/assign_task — assign task to agent via A2A protocol
+/// a2a/assign_task — assign task to agent via A2A protocol.
+///
+/// Maps the client wire params (`agent_id`, `description`, optional
+/// `created_by`) onto the registry schema (`assign_to`, `title`,
+/// `created_by`). Falls back to the registry-native keys when present so both
+/// shapes work. The registry rejects an empty/unknown assignee (P2).
 pub async fn assign_task(state: &AppState, params: Option<Value>) -> Value {
-    state.a2a.read().await.call("a2a_assign_task", params.unwrap_or(json!({})))
+    let p = params.unwrap_or(json!({}));
+    let assign_to = p
+        .get("assign_to")
+        .or_else(|| p.get("agent_id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let title = p
+        .get("title")
+        .or_else(|| p.get("description"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let created_by = p.get("created_by").and_then(|v| v.as_str()).unwrap_or("system");
+    state.a2a.read().await.call(
+        "a2a_assign_task",
+        json!({ "title": title, "created_by": created_by, "assign_to": assign_to }),
+    )
 }
 
 /// a2a/task_status — get task status
