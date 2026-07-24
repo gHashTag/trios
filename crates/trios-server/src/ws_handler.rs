@@ -54,6 +54,9 @@ pub struct AppState {
     pub event_tx: broadcast::Sender<BusEvent>,
     /// A2A router for agent-to-agent communication
     pub a2a: Arc<RwLock<A2ARouter>>,
+    /// Host-runtime browser command queue (server queues, host CDP agent
+    /// polls & reports back over A2A) — TS-retirement item 4.
+    pub browser: Arc<crate::mcp_endpoints::browser::BrowserState>,
     /// z.ai API endpoint (Anthropic-compatible)
     pub zai_api: String,
     /// z.ai API keys (rotated round-robin)
@@ -114,6 +117,7 @@ impl AppState {
             tasks: Arc::new(Mutex::new(Vec::new())),
             event_tx: tx,
             a2a: Arc::new(RwLock::new(A2ARouter::new())),
+            browser: Arc::new(crate::mcp_endpoints::browser::BrowserState::new()),
             zai_api,
             zai_keys,
             http_client,
@@ -241,6 +245,19 @@ pub async fn handle_message(text: &str, state: &AppState) -> WsResponse {
         "a2a/assign_task"     => mcp_endpoints::a2a::assign_task(state, req.params).await,
         "a2a/task_status"     => mcp_endpoints::a2a::task_status(state, req.params).await,
         "a2a/update_task"     => mcp_endpoints::a2a::update_task(state, req.params).await,
+        // Host-runtime browser adapter (TS-retirement item 4):
+        //   browser/enqueue: server queues a browser command for a host agent.
+        //   browser/poll   : host CDP agent pulls its pending commands.
+        //   browser/result : host CDP agent reports a command result back.
+        "browser/enqueue"     => mcp_endpoints::browser::enqueue_command(state, req.params.unwrap_or(json!({}))).await,
+        "browser/poll"        => {
+            let agent_id = req.params.as_ref()
+                .and_then(|p| p.get("agent_id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            mcp_endpoints::browser::browser_commands(state, agent_id).await
+        }
+        "browser/result"      => mcp_endpoints::browser::browser_result(state, req.params.unwrap_or(json!({}))).await,
         // ─────────────────────────────────────────────────────────────────────
         // Queen ↔ Doctor autonomous loop (issue: bee/queen-doctor-autoloop)
         //   queen/order  : Queen publishes a QueenOrder onto the bus.

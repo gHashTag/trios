@@ -34,7 +34,15 @@ async fn main() -> anyhow::Result<()> {
     info!("Operator token: {}", operator_token);
 
     let state = AppState::new();
+    // Port resolution (TS-retirement item 3 — client switchover without a
+    // manual reconfig). The single Rust entry point honours, in order:
+    //   1. TRIOS_PORT      — explicit override for the consolidated server
+    //   2. TRIOS_MCP_PORT  — the port existing Swift/mcp-bridge clients already
+    //                        inject via Info.plist (9105 in prod), so pointing
+    //                        them at trios-server needs no client code change
+    //   3. 9005            — consolidated default
     let port: u16 = std::env::var("TRIOS_PORT")
+        .or_else(|_| std::env::var("TRIOS_MCP_PORT"))
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(9005);
