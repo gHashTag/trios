@@ -1,6 +1,20 @@
-//! trios-browser — Browser control — CDP DOM/input/content.
+//! trios-browser — browser control contracts.
 //!
-//! Re-export facade only (L-ARCH-001). Scaffold generated in Wave 0 of the
-//! Rust backend consolidation. Rings are added as TS logic is ported.
+//! Re-export facade only (L-ARCH-001). Ported from the TS backend
+//! `apps/server/src/browser/*` during Wave 2. The live CDP driver stays next
+//! to the Chrome process; these rings are the data + action contract that
+//! trios-server proxies over A2A.
+//!
+//! Rings:
+//! - BW-00 `core`  — PageInfo, WindowInfo, WindowType/State (data + serde)
+//! - BW-01 `proto` — BrowserCommand / BrowserResponse envelope
 
 pub use trios_browser_bw00 as core;
+pub use trios_browser_bw01 as proto;
+
+pub use trios_browser_bw00::{
+    PageInfo, SetWindowVisibilityResult, WindowBounds, WindowInfo, WindowState, WindowType,
+};
+pub use trios_browser_bw01::{
+    BrowserCommand, BrowserResponse, ClickPoint, ScreenshotResult,
+};

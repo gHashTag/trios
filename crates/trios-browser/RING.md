@@ -1,16 +1,24 @@
-# RING — trios-browser (🥉 Silver Crate)
+# trios-browser — Ring Isolation
 
-| Field | Value |
-|-------|-------|
-| Metal | 🥉 Silver |
-| Role  | Browser control — CDP DOM/input/content |
-| State | Scaffold (Wave 0) |
+Browser control contracts. Ported from the TS backend
+`apps/server/src/browser/*` (Wave 2). The live CDP driver stays next to the
+Chrome process; these rings are the data + action contract that trios-server
+proxies over A2A.
 
-## Ring Structure (L-ARCH-001)
 ```
-crates/trios-browser/
-├── src/lib.rs      ← re-export facade
+trios-browser/
+├── src/lib.rs          ← re-export facade only (L-ARCH-001)
 └── rings/
-    └── BW-00/   ← core types (scaffold)
+    ├── BW-00/          ← data types: PageInfo, WindowInfo, WindowType/State
+    └── BW-01/          ← action protocol: BrowserCommand / BrowserResponse
 ```
-More rings are added as TS logic is ported (see RUST_CONSOLIDATION_PLAN.md).
+
+Metal: 🥉 Silver (core/domain).
+
+Dep flow:
+```
+  BW-01 → BW-00
+  facade → BW-00, BW-01  (re-export only)
+```
+
+Tests: BW-00 ×3, BW-01 ×4 = 7.

@@ -120,3 +120,16 @@ crates/<domain>/
 - **P1 (схемы A2A) закрыт:** `trios-a2a/SR-01` приведён к единому wire-контракту с Swift/Hono (`sender`/`recipient`/`type`, camelCase-значения, вариант `addToolCall`) через `#[serde(rename)]`; добавлен broadcast-sentinel. +5 wire-parity тестов (SR-01: 9 тестов).
 - **P0 (Origin-guard) закрыт:** в `trios-server/security.rs` добавлен middleware `origin_guard` (allowlist через `TRIOS_TRUSTED_ORIGINS`, дефолт — localhost/127.0.0.1/app-схемы), смонтирован на ВСЕ роуты. Live smoke: no-Origin→200, localhost→200, foreign→403, health→200. trios-server: 35 тестов.
 - **Персистентность реестра:** новое кольцо `trios-a2a/SR-04` (`A2AStore` trait + `SqliteA2AStore`), хранит карточки агентов и задачи как канонический JSON в таблицах `a2a_agents`/`a2a_tasks`. Изоляция колец соблюдена (SR-04 → SR-01, SR-00; не импортирует SR-02). 2 теста.
+
+### Волна 2 — выполнена
+- **trios-agent-harness** — перенос агентного слоя из TS `lib/agents/*`:
+  - AH-00 (core): `AgentDefinition`, `AgentAdapter{Claude,Codex,Openclaw,Hermes}`, `PermissionMode`, `AgentStatus`/`AgentState`, `HistoryEntry`/`HistoryToolCall`, `AgentStreamEvent` (tagged по `type`). Чистые данные + serde, camelCase-паритет с Swift/Hono. 3 теста.
+  - AH-01 (catalog): `AdapterDescriptor`, `ModelControl`, `CatalogOption`, `catalog()`/`descriptor_for()` — дефолты адаптеров и опции моделей/reasoning-effort. 3 теста.
+  - AH-02 (queue): `MessageQueue` — ограниченная per-agent FIFO-очередь (`append`/`pop_oldest`/`push_front`/`remove`/`list`/`snapshot_all`/`agents_with_pending`), `QueueFullError`. Логика без I/O (mutex вместо файлового write-lock). 4 теста.
+  - AH-03 (turns): `RingBuffer` (кольцевой лог кадров с удержанием терминального кадра) + `TurnRegistry` (register/append/complete/fail/cancel/get/slice/list/sweep), `TurnStatus`, `TurnFrame`, `ActiveTurnInfo`. Асинхронный streaming/abort-слой остаётся в runtime-кольце. 4 теста.
+  - Итого 14 тестов зелёные. Изоляция колец соблюдена (AH-01→AH-00, AH-03→AH-00, AH-02 self-contained).
+- **trios-browser** — контракты управления браузером из TS `browser/*`:
+  - BW-00 (core): `PageInfo`, `WindowInfo`, `WindowType`, `WindowState`, `WindowBounds`, `SetWindowVisibilityResult`. camelCase-паритет с CDP-драйвером. 3 теста.
+  - BW-01 (proto): `BrowserCommand` (goto/goBack/goForward/reload/closePage/snapshot/content/screenshot/evaluate/click/listPages/getActivePage) + `BrowserResponse`, `target_page()`-роутинг. Транспорт-агностичный envelope: trios-server проксирует команды CDP-драйверу по A2A, исполнение остаётся рядом с живым браузером. 4 теста.
+  - Итого 7 тестов зелёные. BW-01→BW-00.
+- **Проектное решение:** тяжёлый CDP-драйвер `Browser` (1683 LOC, Playwright/CDP-биндинги) НЕ переносится в Rust — он живёт рядом с процессом Chrome; в Rust перенесён контракт (данные + протокол действий), по которому идёт проксирование.
