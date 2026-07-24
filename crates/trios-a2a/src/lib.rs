@@ -6,5 +6,8 @@ pub use trios_a2a_sr00::*;
 pub use trios_a2a_sr01::*;
 pub use trios_a2a_sr02::*;
 
+// SR-04 — durable persistence (A2AStore trait + SqliteA2AStore).
+pub use trios_a2a_sr04::{A2AStore, SqliteA2AStore};
+
 // Re-export A2ARouter from BR-OUTPUT (not a workspace dep, use extern crate)
 pub use trios_a2a_br_output::A2ARouter;

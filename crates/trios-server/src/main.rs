@@ -62,6 +62,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
+                .layer(axum::middleware::from_fn(security::origin_guard))
                 .layer(axum::middleware::from_fn(security::auth_middleware))
                 .layer(axum::middleware::from_fn(security::timeout_middleware)),
         )

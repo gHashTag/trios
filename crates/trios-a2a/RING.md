@@ -32,6 +32,7 @@ crates/trios-a2a/
     ├── SR-00/          ← AgentId, AgentCard, Capability, AgentStatus
     ├── SR-01/          ← A2AMessage, Task, TaskState, TaskPriority
     ├── SR-02/          ← A2ARegistry, SharedRegistry, MCP tool defs
+    ├── SR-04/          ← durable persistence (A2AStore, SqliteA2AStore) [Wave 1]
     └── BR-OUTPUT/      ← A2ARouter (assembles all rings)
 ```
 
@@ -41,6 +42,7 @@ crates/trios-a2a/
 BR-OUTPUT
     ↓
   SR-02 → SR-01 → SR-00
+  SR-04 → SR-01, SR-00   (persistence; does NOT import SR-02)
 ```
 
 No ring imports a sibling at the same level.

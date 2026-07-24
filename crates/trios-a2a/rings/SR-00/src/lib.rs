@@ -17,6 +17,18 @@ impl AgentId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Sentinel recipient used when a broadcast message has no explicit
+    /// `recipient` on the wire (the Swift client sends `recipient: null`).
+    /// Used as the serde `default` for `A2AMessage.to`.
+    pub fn broadcast_sentinel() -> Self {
+        Self("broadcast".to_string())
+    }
+
+    /// True if this id is the broadcast sentinel.
+    pub fn is_broadcast(&self) -> bool {
+        self.0 == "broadcast"
+    }
 }
 
 impl std::fmt::Display for AgentId {

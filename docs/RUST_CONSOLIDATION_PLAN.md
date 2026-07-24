@@ -107,3 +107,16 @@ crates/<domain>/
 
 ## 7. Следующий шаг
 Готов начать с **Волны 0** — сгенерировать скелет `trios-store` (ST-00/01/02) и заготовки Cargo.toml/RING.md для новых доменов, встроить их в корневой workspace `Cargo.toml`, чтобы `cargo build` проходил на пустых кольцах. Скажи «поехали с Волны 0» — и я закоммичу скаффолд в ветку `feat/rust-backend-consolidation`.
+
+---
+
+## Журнал выполнения
+
+### Волна 0 — выполнена (коммит 7367ac5)
+- `trios-store` (ST-00/01/02/BR-OUTPUT) — единая SQLite-персистентность, схема 1:1 с drizzle. 6 тестов зелёные, проверена совместимость с внешним читателем БД.
+- Заготовки доменов: trios-agent-harness, trios-openclaw, trios-browser, trios-klavis, trios-acl.
+
+### Волна 1 — выполнена
+- **P1 (схемы A2A) закрыт:** `trios-a2a/SR-01` приведён к единому wire-контракту с Swift/Hono (`sender`/`recipient`/`type`, camelCase-значения, вариант `addToolCall`) через `#[serde(rename)]`; добавлен broadcast-sentinel. +5 wire-parity тестов (SR-01: 9 тестов).
+- **P0 (Origin-guard) закрыт:** в `trios-server/security.rs` добавлен middleware `origin_guard` (allowlist через `TRIOS_TRUSTED_ORIGINS`, дефолт — localhost/127.0.0.1/app-схемы), смонтирован на ВСЕ роуты. Live smoke: no-Origin→200, localhost→200, foreign→403, health→200. trios-server: 35 тестов.
+- **Персистентность реестра:** новое кольцо `trios-a2a/SR-04` (`A2AStore` trait + `SqliteA2AStore`), хранит карточки агентов и задачи как канонический JSON в таблицах `a2a_agents`/`a2a_tasks`. Изоляция колец соблюдена (SR-04 → SR-01, SR-00; не импортирует SR-02). 2 теста.
