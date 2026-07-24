@@ -54,6 +54,9 @@ async fn main() -> anyhow::Result<()> {
         // HTTP REST
         .route("/api/chat", post(api_chat))
         .route("/api/status", get(api_status))
+        // Consolidated domain surface (Waves 2–4): agent adapter catalog +
+        // Hermes providers, served directly from the ported Rust crates.
+        .route("/api/adapters", get(api_adapters))
         // Health
         .route("/health", get(health))
         .route("/", get(health))
@@ -83,6 +86,27 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health() -> &'static str {
     "ok"
+}
+
+/// Adapter catalog + Hermes provider mappings, sourced from the consolidated
+/// `trios-agent-harness` and `trios-openclaw` crates. Proves the single Rust
+/// entry point reaches the ported domain logic (replaces the TS
+/// `/api/agents/adapters` surface).
+async fn api_adapters() -> Json<Value> {
+    let adapters = trios_agent_harness::adapter_catalog();
+    let hermes: Vec<Value> = trios_openclaw::SUPPORTED_PROVIDER_TYPES
+        .iter()
+        .filter_map(|p| {
+            trios_openclaw::get_mapping(p).map(|m| {
+                json!({ "providerType": p, "mapping": m })
+            })
+        })
+        .collect();
+    Json(json!({
+        "adapters": adapters,
+        "hermesProviders": hermes,
+        "gatewayContainerPort": trios_openclaw::OPENCLAW_GATEWAY_CONTAINER_PORT,
+    }))
 }
 
 async fn api_chat(

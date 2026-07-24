@@ -140,3 +140,13 @@ crates/<domain>/
   - OC-01 (hermes): `HermesProviderMapping` + `get_mapping()`/`is_supported()` — маппинг провайдеров (anthropic/openai/openrouter/openai-compatible → hermes provider + env-var + base_url). openai и openai-compatible → `custom` (у Hermes v2026.4.x нет ключа `openai`). 5 тестов.
   - Итого 8 тестов зелёные. Оба кольца — листовые (без cross-импортов).
 - **Проектное решение:** тяжёлое VM/контейнерное исполнение (lima-cli 270, container-cli 347, managed-container 681, openclaw-service 1770 LOC) НЕ переносится в Rust — оно управляет host-процессами и остаётся в host-runtime рядом с машиной. В Rust перенесена чистая логика (сборка команды + маппинг), которая чаще всего тихо ломалась и теперь полностью покрыта юнит-тестами.
+
+### Волна 4 — выполнена
+- **trios-server = единая точка входа.** В `trios-server` подключены все консолидированные доменные крейты: `trios-agent-harness`, `trios-browser`, `trios-openclaw`, `trios-store` (в дополнение к a2a/http/chat/mcp/core).
+- **Консолидированный surface:** добавлен роут `GET /api/adapters` — отдаёт каталог адаптеров (из `trios-agent-harness::adapter_catalog`) + Hermes-провайдеры и порт шлюза (из `trios-openclaw`), прямо из перенесённых Rust-крейтов.
+- **Live-проверка:** сервер на порту 9008 вернул `adapters: 4 | hermes: 4 | port: 18789`, camelCase-контракт, Origin-guard пропустил localhost.
+- **Документ вывода TS:** `docs/TS_RETIREMENT.md` — таблица «что уже в Rust», что осознанно остаётся host-runtime (CDP-драйвер, VM/контейнеры, Swift-клиент — общаются по A2A), и checklist отключения Hono-сервера (пункты 3–6 требуют координации деплоя клиентов).
+- Диск sandbox переполнялся при линковке — почищены target-директории (root + вложенные workspace), сборка прошла.
+
+## Итог консолидации
+Бэкенд trios сведён к единому языку — **Rust**, организован по кольцам (rings-архитектура) как `trios-a2a`. Чистая доменная логика и контракты перенесены и покрыты тестами; тяжёлые host-исполнители (браузерный CDP, VM/контейнеры) остаются рядом с ресурсами и вызываются по A2A. Единый серверный процесс — `trios-server`.
