@@ -133,3 +133,10 @@ crates/<domain>/
   - BW-01 (proto): `BrowserCommand` (goto/goBack/goForward/reload/closePage/snapshot/content/screenshot/evaluate/click/listPages/getActivePage) + `BrowserResponse`, `target_page()`-роутинг. Транспорт-агностичный envelope: trios-server проксирует команды CDP-драйверу по A2A, исполнение остаётся рядом с живым браузером. 4 теста.
   - Итого 7 тестов зелёные. BW-01→BW-00.
 - **Проектное решение:** тяжёлый CDP-драйвер `Browser` (1683 LOC, Playwright/CDP-биндинги) НЕ переносится в Rust — он живёт рядом с процессом Chrome; в Rust перенесён контракт (данные + протокол действий), по которому идёт проксирование.
+
+### Волна 3 — выполнена
+- **trios-openclaw** — контракты OpenClaw-шлюза из TS `lib/agents/openclaw/*` и `lib/agents/hermes/*`:
+  - OC-00 (gateway): `GatewayConfig` (accessor-снимок), `resolve_acp_command()` — детерминированная сборка argv (`env LIMA_HOME=… limactl shell … nerdctl exec … openclaw acp --url ws://127.0.0.1:18789 [--session …]`), `bridge_session_key()` (нормализация `agent:*` / санитайз), константа `OPENCLAW_GATEWAY_CONTAINER_PORT=18789`. 3 теста.
+  - OC-01 (hermes): `HermesProviderMapping` + `get_mapping()`/`is_supported()` — маппинг провайдеров (anthropic/openai/openrouter/openai-compatible → hermes provider + env-var + base_url). openai и openai-compatible → `custom` (у Hermes v2026.4.x нет ключа `openai`). 5 тестов.
+  - Итого 8 тестов зелёные. Оба кольца — листовые (без cross-импортов).
+- **Проектное решение:** тяжёлое VM/контейнерное исполнение (lima-cli 270, container-cli 347, managed-container 681, openclaw-service 1770 LOC) НЕ переносится в Rust — оно управляет host-процессами и остаётся в host-runtime рядом с машиной. В Rust перенесена чистая логика (сборка команды + маппинг), которая чаще всего тихо ломалась и теперь полностью покрыта юнит-тестами.
