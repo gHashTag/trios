@@ -3,6 +3,7 @@ mod mcp_endpoints;
 mod operator;
 mod rainbow_routes;
 mod rest_a2a;
+mod rest_browseros;
 mod security;
 mod sse_handler;
 mod tools;
@@ -34,7 +35,9 @@ async fn main() -> anyhow::Result<()> {
     let operator_token = operator::init_operator_token();
     info!("Operator token: {}", operator_token);
 
-    let state = AppState::new();
+    // Open the durable A2A store when TRIOS_A2A_DB is set, hydrating the
+    // registry from it; otherwise memory-only (TS parity).
+    let state = AppState::new_with_persistence().await;
     // Heartbeat watchdog: prune agents that stopped sending /a2a/heartbeat.
     rest_a2a::spawn_prune_loop(state.clone());
     // Port resolution (TS-retirement item 3 — client switchover without a
@@ -76,6 +79,9 @@ async fn main() -> anyhow::Result<()> {
         // A2A REST + SSE — wire-compatible with the Swift A2ARegistryClient
         // (TS-retirement item 5: the last Hono surface moved to Rust).
         .merge(rest_a2a::router())
+        // BrowserOS local-state surface (Wave 6 / TS retirement): memory,
+        // soul, skills, ACL rules, credits proxy, provider probe, monitoring.
+        .merge(rest_browseros::router())
         .layer(
             ServiceBuilder::new()
                 .layer(cors)

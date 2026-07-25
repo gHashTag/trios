@@ -3,18 +3,20 @@
 //! The in-memory `A2ARegistry` (SR-02) loses all agent cards and tasks on
 //! restart. SR-04 adds an optional durable backend behind a small trait so
 //! `trios-server` can survive restarts and share registry state across
-//! processes. It reuses the same SQLite engine as `trios-store` (WAL), but
-//! owns its own tables (`a2a_agents`, `a2a_tasks`) so the A2A contract stays
-//! decoupled from the adapter-definition schema.
+//! processes. Storage is SQLite (WAL) accessed through SeaORM — the same ORM
+//! already used by trios-chat (BR-IO-CHAT-05) — with tables owned by this
+//! ring (`a2a_agents`, `a2a_tasks`, `a2a_wire_cards`, `a2a_pending`) so the
+//! A2A contract stays decoupled from the adapter-definition schema.
 //!
 //! Ring isolation: SR-04 depends only on SR-00 (AgentCard) and SR-01 (Task).
 //! It does NOT import SR-02 — the registry composes a store, not vice-versa.
 
 use anyhow::Result;
 use async_trait::async_trait;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Row, SqlitePool};
-use std::str::FromStr;
+use sea_orm::sea_query::OnConflict;
+use sea_orm::{
+    ActiveValue::Set, ConnectOptions, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
+};
 use trios_a2a_sr00::AgentCard;
 use trios_a2a_sr01::Task;
 
@@ -29,55 +31,154 @@ pub trait A2AStore: Send + Sync {
 
     async fn save_task(&self, task: &Task) -> Result<()>;
     async fn load_tasks(&self) -> Result<Vec<Task>>;
+
+    // --- REST/wire surface (Волна 5+): client-shaped cards & offline queues ---
+
+    /// Persist the verbatim client (wire) card for an agent.
+    async fn save_wire_card(&self, id: &str, card: &serde_json::Value) -> Result<()>;
+    /// Load all wire cards as `(agent_id, card)` pairs.
+    async fn load_wire_cards(&self) -> Result<Vec<(String, serde_json::Value)>>;
+
+    /// Persist the full pending-queue snapshot for a recipient
+    /// (empty queue deletes the row).
+    async fn save_pending(&self, recipient: &str, queue: &[serde_json::Value]) -> Result<()>;
+    /// Load all pending queues as `(recipient, messages)` pairs.
+    async fn load_pending(&self) -> Result<Vec<(String, Vec<serde_json::Value>)>>;
 }
 
-/// SQLite-backed [`A2AStore`] (shares the trios-store SQLite engine).
+// --- SeaORM entities (one module per table, TEXT-JSON payload columns) ---
+
+mod agent_row {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "a2a_agents")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub card_json: String,
+        pub updated_at: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod task_row {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "a2a_tasks")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub task_json: String,
+        pub updated_at: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod wire_card_row {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "a2a_wire_cards")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub card_json: String,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod pending_row {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "a2a_pending")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub recipient: String,
+        pub queue_json: String,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+/// SQLite-backed [`A2AStore`] (SeaORM over the shared SQLite engine).
 #[derive(Clone)]
 pub struct SqliteA2AStore {
-    pool: SqlitePool,
+    db: DatabaseConnection,
 }
 
 impl SqliteA2AStore {
     /// Open (creating if missing) the SQLite file and ensure the A2A tables.
     pub async fn open(path: &str) -> Result<Self> {
-        let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))?
-            .create_if_missing(true)
-            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-            .foreign_keys(true);
-        let pool = SqlitePoolOptions::new().max_connections(5).connect_with(opts).await?;
-        let s = Self { pool };
+        // `mode=rwc` — read/write/create, parity with sqlx create_if_missing.
+        let mut opts = ConnectOptions::new(format!("sqlite://{path}?mode=rwc"));
+        opts.max_connections(5).sqlx_logging(false);
+        let db = Database::connect(opts).await?;
+        db.execute_unprepared("PRAGMA journal_mode=WAL;").await?;
+        db.execute_unprepared("PRAGMA foreign_keys=ON;").await?;
+        let s = Self { db };
         s.migrate().await?;
         Ok(s)
     }
 
-    /// In-memory store for tests.
+    /// In-memory store for tests (single connection — one shared memory DB).
     pub async fn open_memory() -> Result<Self> {
-        let opts = SqliteConnectOptions::from_str("sqlite::memory:")?;
-        let pool = SqlitePoolOptions::new().max_connections(1).connect_with(opts).await?;
-        let s = Self { pool };
+        let mut opts = ConnectOptions::new("sqlite::memory:");
+        opts.max_connections(1).sqlx_logging(false);
+        let db = Database::connect(opts).await?;
+        let s = Self { db };
         s.migrate().await?;
         Ok(s)
     }
 
     async fn migrate(&self) -> Result<()> {
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS a2a_agents (
-                id TEXT PRIMARY KEY NOT NULL,
-                card_json TEXT NOT NULL,
-                updated_at INTEGER NOT NULL DEFAULT 0
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS a2a_tasks (
-                id TEXT PRIMARY KEY NOT NULL,
-                task_json TEXT NOT NULL,
-                updated_at INTEGER NOT NULL DEFAULT 0
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
+        self.db
+            .execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS a2a_agents (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    card_json TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL DEFAULT 0
+                )",
+            )
+            .await?;
+        self.db
+            .execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS a2a_tasks (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    task_json TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL DEFAULT 0
+                )",
+            )
+            .await?;
+        self.db
+            .execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS a2a_wire_cards (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    card_json TEXT NOT NULL
+                )",
+            )
+            .await?;
+        self.db
+            .execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS a2a_pending (
+                    recipient TEXT PRIMARY KEY NOT NULL,
+                    queue_json TEXT NOT NULL
+                )",
+            )
+            .await?;
         Ok(())
     }
 }
@@ -85,59 +186,114 @@ impl SqliteA2AStore {
 #[async_trait]
 impl A2AStore for SqliteA2AStore {
     async fn save_agent(&self, card: &AgentCard) -> Result<()> {
-        let json = serde_json::to_string(card)?;
-        sqlx::query(
-            "INSERT INTO a2a_agents (id, card_json) VALUES (?, ?)
-             ON CONFLICT(id) DO UPDATE SET card_json = excluded.card_json",
-        )
-        .bind(card.id.as_str())
-        .bind(json)
-        .execute(&self.pool)
-        .await?;
+        let row = agent_row::ActiveModel {
+            id: Set(card.id.as_str().to_string()),
+            card_json: Set(serde_json::to_string(card)?),
+            updated_at: Set(0),
+        };
+        agent_row::Entity::insert(row)
+            .on_conflict(
+                OnConflict::column(agent_row::Column::Id)
+                    .update_column(agent_row::Column::CardJson)
+                    .to_owned(),
+            )
+            .exec(&self.db)
+            .await?;
         Ok(())
     }
 
     async fn load_agents(&self) -> Result<Vec<AgentCard>> {
-        let rows = sqlx::query("SELECT card_json FROM a2a_agents")
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = agent_row::Entity::find().all(&self.db).await?;
         let mut out = Vec::with_capacity(rows.len());
         for r in rows {
-            let j: String = r.get("card_json");
-            out.push(serde_json::from_str(&j)?);
+            out.push(serde_json::from_str(&r.card_json)?);
         }
         Ok(out)
     }
 
     async fn remove_agent(&self, id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM a2a_agents WHERE id = ?")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        agent_row::Entity::delete_by_id(id).exec(&self.db).await?;
+        wire_card_row::Entity::delete_by_id(id).exec(&self.db).await?;
+        pending_row::Entity::delete_by_id(id).exec(&self.db).await?;
         Ok(())
     }
 
     async fn save_task(&self, task: &Task) -> Result<()> {
-        let json = serde_json::to_string(task)?;
-        sqlx::query(
-            "INSERT INTO a2a_tasks (id, task_json) VALUES (?, ?)
-             ON CONFLICT(id) DO UPDATE SET task_json = excluded.task_json",
-        )
-        .bind(&task.id)
-        .bind(json)
-        .execute(&self.pool)
-        .await?;
+        let row = task_row::ActiveModel {
+            id: Set(task.id.clone()),
+            task_json: Set(serde_json::to_string(task)?),
+            updated_at: Set(0),
+        };
+        task_row::Entity::insert(row)
+            .on_conflict(
+                OnConflict::column(task_row::Column::Id)
+                    .update_column(task_row::Column::TaskJson)
+                    .to_owned(),
+            )
+            .exec(&self.db)
+            .await?;
         Ok(())
     }
 
     async fn load_tasks(&self) -> Result<Vec<Task>> {
-        let rows = sqlx::query("SELECT task_json FROM a2a_tasks")
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = task_row::Entity::find().all(&self.db).await?;
         let mut out = Vec::with_capacity(rows.len());
         for r in rows {
-            let j: String = r.get("task_json");
-            out.push(serde_json::from_str(&j)?);
+            out.push(serde_json::from_str(&r.task_json)?);
+        }
+        Ok(out)
+    }
+
+    async fn save_wire_card(&self, id: &str, card: &serde_json::Value) -> Result<()> {
+        let row = wire_card_row::ActiveModel {
+            id: Set(id.to_string()),
+            card_json: Set(card.to_string()),
+        };
+        wire_card_row::Entity::insert(row)
+            .on_conflict(
+                OnConflict::column(wire_card_row::Column::Id)
+                    .update_column(wire_card_row::Column::CardJson)
+                    .to_owned(),
+            )
+            .exec(&self.db)
+            .await?;
+        Ok(())
+    }
+
+    async fn load_wire_cards(&self) -> Result<Vec<(String, serde_json::Value)>> {
+        let rows = wire_card_row::Entity::find().all(&self.db).await?;
+        let mut out = Vec::with_capacity(rows.len());
+        for r in rows {
+            out.push((r.id, serde_json::from_str(&r.card_json)?));
+        }
+        Ok(out)
+    }
+
+    async fn save_pending(&self, recipient: &str, queue: &[serde_json::Value]) -> Result<()> {
+        if queue.is_empty() {
+            pending_row::Entity::delete_by_id(recipient).exec(&self.db).await?;
+            return Ok(());
+        }
+        let row = pending_row::ActiveModel {
+            recipient: Set(recipient.to_string()),
+            queue_json: Set(serde_json::to_string(queue)?),
+        };
+        pending_row::Entity::insert(row)
+            .on_conflict(
+                OnConflict::column(pending_row::Column::Recipient)
+                    .update_column(pending_row::Column::QueueJson)
+                    .to_owned(),
+            )
+            .exec(&self.db)
+            .await?;
+        Ok(())
+    }
+
+    async fn load_pending(&self) -> Result<Vec<(String, Vec<serde_json::Value>)>> {
+        let rows = pending_row::Entity::find().all(&self.db).await?;
+        let mut out = Vec::with_capacity(rows.len());
+        for r in rows {
+            out.push((r.recipient, serde_json::from_str(&r.queue_json)?));
         }
         Ok(out)
     }
@@ -177,5 +333,47 @@ mod tests {
         let loaded = store.load_tasks().await.unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].title, "Build");
+    }
+
+    #[tokio::test]
+    async fn wire_cards_and_pending_persist() {
+        use serde_json::json;
+        let store = SqliteA2AStore::open_memory().await.unwrap();
+        store
+            .save_wire_card("a", &json!({"id": "a", "name": "A", "version": "1.0"}))
+            .await
+            .unwrap();
+        store
+            .save_pending("a", &[json!({"n": 1}), json!({"n": 2})])
+            .await
+            .unwrap();
+
+        let cards = store.load_wire_cards().await.unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].1["version"], "1.0");
+        let pending = store.load_pending().await.unwrap();
+        assert_eq!(pending[0].1.len(), 2);
+
+        // wire-card upsert (same id) does not duplicate
+        store
+            .save_wire_card("a", &json!({"id": "a", "name": "A", "version": "2.0"}))
+            .await
+            .unwrap();
+        let cards = store.load_wire_cards().await.unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].1["version"], "2.0");
+
+        // empty snapshot deletes the row
+        store.save_pending("a", &[]).await.unwrap();
+        assert!(store.load_pending().await.unwrap().is_empty());
+
+        // remove_agent clears wire card + pending too
+        store
+            .save_pending("a", &[json!({"n": 3})])
+            .await
+            .unwrap();
+        store.remove_agent("a").await.unwrap();
+        assert!(store.load_wire_cards().await.unwrap().is_empty());
+        assert!(store.load_pending().await.unwrap().is_empty());
     }
 }

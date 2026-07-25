@@ -290,6 +290,68 @@ impl A2ARegistry {
         self.tasks.insert(id.clone(), task);
         json!({"ok": true, "task_id": id})
     }
+
+    /// Snapshot (clone) of one recipient's pending queue — persistence hook.
+    pub fn pending_snapshot(&self, recipient: &str) -> Vec<Value> {
+        self.pending.get(recipient).cloned().unwrap_or_default()
+    }
+
+    /// All wire cards as `(agent_id, card)` pairs — persistence/matrix hook.
+    pub fn all_wire_cards(&self) -> Vec<(String, Value)> {
+        self.wire_cards.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    /// One agent's verbatim wire card, if registered — persistence hook.
+    pub fn wire_card_of(&self, id: &str) -> Option<Value> {
+        self.wire_cards.get(id).cloned()
+    }
+
+    /// All tasks (clones) — persistence/matrix hook.
+    pub fn all_tasks(&self) -> Vec<Task> {
+        self.tasks.values().cloned().collect()
+    }
+
+    /// Last heartbeat (unix ms) of an agent, if known.
+    pub fn heartbeat_of(&self, id: &str) -> Option<u64> {
+        self.heartbeats.get(id).copied()
+    }
+
+    /// Pending-queue length per agent (matrix/dashboard hook).
+    pub fn pending_len(&self, id: &str) -> usize {
+        self.pending.get(id).map_or(0, Vec::len)
+    }
+
+    /// Rebuild in-memory state from a durable store snapshot (SR-04).
+    ///
+    /// Wire cards re-register with `now_ms` as the heartbeat: restored agents
+    /// get one full TTL of grace to reconnect before the watchdog prunes
+    /// them. Tasks and pending queues are restored verbatim. Tasks are
+    /// inserted directly (not via `upsert_task`) so tasks whose assignee has
+    /// not re-registered yet survive the restart.
+    pub fn hydrate(
+        &mut self,
+        wire_cards: Vec<(String, Value)>,
+        tasks: Vec<Task>,
+        pending: Vec<(String, Vec<Value>)>,
+        now_ms: u64,
+    ) {
+        for (_, card) in wire_cards {
+            let _ = self.register_wire(card, now_ms);
+        }
+        for task in tasks {
+            self.tasks.insert(task.id.clone(), task);
+        }
+        for (recipient, queue) in pending {
+            if self.agents.contains_key(&recipient) && !queue.is_empty() {
+                let mut q = queue;
+                if q.len() > MAX_PENDING_PER_AGENT {
+                    let overflow = q.len() - MAX_PENDING_PER_AGENT;
+                    q.drain(0..overflow);
+                }
+                self.pending.insert(recipient, q);
+            }
+        }
+    }
 }
 
 /// Thread-safe wrapper for A2A registry.
@@ -563,5 +625,30 @@ mod tests {
 
         let bad = Task::new("strand", AgentId::new("system")).assign_to(AgentId::new("ghost"));
         assert_eq!(reg.upsert_task(bad)["code"], "unknown_assignee");
+    }
+
+    #[test]
+    fn hydrate_restores_state_with_heartbeat_grace() {
+        let mut reg = A2ARegistry::new();
+        let cards = vec![("w".to_string(), wire_card("w"))];
+        let task = Task::new("restored", AgentId::new("system")).assign_to(AgentId::new("gone"));
+        let task_id = task.id.clone();
+        let pending = vec![
+            ("w".to_string(), vec![json!({"n": 1})]),
+            ("ghost".to_string(), vec![json!({"n": 2})]), // unknown agent — dropped
+        ];
+        reg.hydrate(cards, vec![task], pending, 1_000);
+
+        assert!(reg.has_agent("w"));
+        assert_eq!(reg.heartbeat_of("w"), Some(1_000));
+        // task restored even though assignee "gone" is not registered
+        assert!(reg.get_task(&task_id).is_some());
+        assert_eq!(reg.pending_len("w"), 1);
+        assert_eq!(reg.pending_len("ghost"), 0);
+        // live within TTL grace after restore
+        assert_eq!(reg.live_wire_cards(1_000 + HEARTBEAT_TTL_MS - 1, HEARTBEAT_TTL_MS).len(), 1);
+        // snapshot helper mirrors the queue
+        assert_eq!(reg.pending_snapshot("w").len(), 1);
+        assert_eq!(reg.all_wire_cards().len(), 1);
     }
 }

@@ -11,7 +11,7 @@ use tracing::{error, info};
 
 use crate::mcp::McpService;
 use crate::mcp_endpoints;
-use trios_a2a::A2ARouter;
+use trios_a2a::{A2ARouter, A2AStore};
 
 /// Event types broadcasted to all connected clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +67,9 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     /// Round-robin counter for key rotation
     pub zai_key_idx: Arc<AtomicUsize>,
+    /// Optional durable A2A store (SR-04). `None` = memory-only mode (TS
+    /// parity). Enabled by setting `TRIOS_A2A_DB` to a SQLite path.
+    pub store: Option<Arc<dyn A2AStore>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,7 +128,41 @@ impl AppState {
             zai_keys,
             http_client,
             zai_key_idx: Arc::new(AtomicUsize::new(0)),
+            store: None,
         }
+    }
+
+    /// Build the state and, if `TRIOS_A2A_DB` is set, open the durable SR-04
+    /// store and hydrate the in-memory registry from it (agents, tasks and
+    /// offline queues survive a restart). Persistence failures are logged and
+    /// degrade gracefully to memory-only mode.
+    pub async fn new_with_persistence() -> Self {
+        let mut s = Self::new();
+        let Ok(path) = std::env::var("TRIOS_A2A_DB") else { return s };
+        if path.is_empty() {
+            return s;
+        }
+        match trios_a2a::SqliteA2AStore::open(&path).await {
+            Ok(store) => {
+                let wire = store.load_wire_cards().await.unwrap_or_default();
+                let tasks = store.load_tasks().await.unwrap_or_default();
+                let pending = store.load_pending().await.unwrap_or_default();
+                let (n_agents, n_tasks, n_pending) = (wire.len(), tasks.len(), pending.len());
+                {
+                    let router = s.a2a.read().await;
+                    let shared = router.registry();
+                    let mut reg = shared.lock().unwrap();
+                    reg.hydrate(wire, tasks, pending, crate::rest_a2a::now_ms());
+                }
+                s.store = Some(Arc::new(store));
+                info!(
+                    "A2A persistence enabled at {path} (restored {n_agents} agents, \
+                     {n_tasks} tasks, {n_pending} pending queues)"
+                );
+            }
+            Err(e) => error!("A2A persistence disabled (open {path} failed): {e}"),
+        }
+        s
     }
 
     /// Pick next key via round-robin
