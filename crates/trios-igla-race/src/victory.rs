@@ -75,14 +75,17 @@ pub struct TtestReport {
 }
 
 /// Pre-registered baseline BPB for Welch's t-test.
-/// This is the null hypothesis mean μ₀ = BPB_VICTORY_TARGET − 0.05 = 1.45
-/// (ΔBPB ≥ 0.05 effect size; see "winning mean ≤ 1.45" below).
-pub const TTEST_BASELINE_MU0: f64 = BPB_VICTORY_TARGET - 0.05;
+/// This is the pre-registered null-hypothesis mean μ₀ = 1.55
+/// (= BPB_VICTORY_TARGET + TTEST_EFFECT_SIZE_MIN: beating the baseline by
+/// the minimum effect size lands exactly on the 1.5 victory target).
+/// Literal on purpose — the ledger_check canary pins it to 1.55 within
+/// f64::EPSILON, which a float sum does not guarantee.
+pub const TTEST_BASELINE_MU0: f64 = 1.55;
 
 /// Pre-registered significance level α = 0.01 (one-tailed).
 pub const TTEST_ALPHA: f64 = 0.01;
 
-/// Minimum effect size: ΔBPB ≥ 0.05 (i.e. winning mean ≤ 1.45).
+/// Minimum effect size: ΔBPB ≥ 0.05 (i.e. winning mean ≤ μ₀ − 0.05 = 1.50).
 pub const TTEST_EFFECT_SIZE_MIN: f64 = 0.05;
 
 /// Welch's two-sample t-test for IGLA victory gate.
@@ -127,8 +130,8 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
     // Compute sample mean
     let sample_mean: f64 = bpbs.iter().sum::<f64>() / n as f64;
 
-    // Use BPB_VICTORY_TARGET from hive_automaton as baseline (L-R14 anchor)
-    // TTEST_BASELINE_MU0 = BPB_VICTORY_TARGET - 0.05 (ΔBPB ≥ 0.05 effect size)
+    // Baseline is the pre-registered TTEST_BASELINE_MU0 = 1.55
+    // (= BPB_VICTORY_TARGET + TTEST_EFFECT_SIZE_MIN, L-R14 anchor).
 
     // Compute sample standard deviation (Bessel's correction)
     let variance: f64 = if n > 1 {
@@ -609,12 +612,12 @@ mod tests {
     #[test]
     fn ttest_rejects_when_p_value_above_alpha() {
         // Pre-registered analysis: Welch's t-test, alpha = 0.01
-        // Three identical seeds slightly ABOVE baseline mu0 = 1.45 —
+        // Three identical seeds slightly ABOVE baseline mu0 = 1.55 —
         // zero variance ⇒ degenerate t-test ⇒ gate refuses (p = 1.0).
         let r = vec![
-            SeedResult { seed: 42, bpb: 1.49, step: 5000, sha: "a".into() },
-            SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },
-            SeedResult { seed: 44, bpb: 1.49, step: 5000, sha: "c".into() },
+            SeedResult { seed: 42, bpb: 1.59, step: 5000, sha: "a".into() },
+            SeedResult { seed: 43, bpb: 1.59, step: 5000, sha: "b".into() },
+            SeedResult { seed: 44, bpb: 1.59, step: 5000, sha: "c".into() },
         ];
         match stat_strength(&r) {
             Err(VictoryError::TtestFailed {
