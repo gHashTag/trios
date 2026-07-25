@@ -265,3 +265,26 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
   execute_unprepared в транзакции; BR-OUTPUT — файловый smoke-тест.
   Тесты вложенного workspace store добавлены в ci.yml (раньше не гонялись
   нигде). 7/7 зелёные.
+
+## Волна 13 (луп 9)
+
+- **A. agent-сьют (browseros): zod-дедуп.** Корень 14 Function-компиляций
+  схем — вторая инстанция zod (4.3.5) у @modelcontextprotocol/sdk по
+  scoped-записи bun.lock; jitless конфигурировал не ту копию. Постоянный
+  `z.config({ jitless: true })` в lib/mcp/client.ts + удаление
+  scoped-записи (SDK на hoisted 4.3.6). Сьют 80/0.
+- **B. Мёртвая TS-персистентность удалена (2585 строк).** lib/db
+  (drizzle: клиент, схема, миграции), db-agent-store + AgentStore,
+  серверный OAuth-стек (token-store/manager, callback-server, providers)
+  и их тесты; deps drizzle-orm/drizzle-kit, скрипт db:generate,
+  протухший bun.lockb. Роль слоя выполняет trios-store (SeaORM/SQLite).
+  Массовое удаление остального agent-core по-прежнему отложено: это
+  легаси-бейзлайн eval и живой сьют CI-матрицы.
+- **C. Release-конвейер trios-server.** ci.yml: после release-сборки —
+  smoke бинаря (:9207, /health==ok, /agent/tools ⊇ {echo, browser_goto},
+  /metrics ⊇ trios_agents_registered) и артефакт
+  trios-server-linux-x86_64 (retention 14 дней). Подтверждено в CI:
+  smoke success, артефакт 6.25 МБ.
+- **CI: browseros dev @ ac69508 — первый полностью зелёный прогон всей
+  матрицы test.yml (12/12, включая легаси agent). trios main @ 9610b73 —
+  дашборд зелёный.**
