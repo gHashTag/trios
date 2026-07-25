@@ -75,8 +75,9 @@ pub struct TtestReport {
 }
 
 /// Pre-registered baseline BPB for Welch's t-test.
-/// This is the null hypothesis mean μ₀.
-pub const TTEST_BASELINE_MU0: f64 = 1.55;
+/// This is the null hypothesis mean μ₀ = BPB_VICTORY_TARGET − 0.05 = 1.45
+/// (ΔBPB ≥ 0.05 effect size; see "winning mean ≤ 1.45" below).
+pub const TTEST_BASELINE_MU0: f64 = BPB_VICTORY_TARGET - 0.05;
 
 /// Pre-registered significance level α = 0.01 (one-tailed).
 pub const TTEST_ALPHA: f64 = 0.01;
@@ -148,14 +149,20 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
         0.0
     };
 
-    let t_statistic = (sample_mean - BPB_VICTORY_TARGET) / std_error;
-
     // Degrees of freedom for one-sample t-test
     let df = (n - 1) as f64;
 
-    // One-tailed p-value using approximation for t-distribution
-    // For df=2, we use the exact t-distribution CDF
-    let p_value = t_cdf_lower_tail(t_statistic, df);
+    // One-tailed p-value using approximation for t-distribution.
+    // Degenerate case: zero variance carries no distributional evidence —
+    // the t-statistic is undefined (division by zero), so the gate must
+    // refuse (p = 1.0) instead of silently passing on ±∞.
+    let (t_statistic, p_value) = if std_error > 0.0 {
+        let t = (sample_mean - TTEST_BASELINE_MU0) / std_error;
+        // For df=2, we use the exact t-distribution CDF
+        (t, t_cdf_lower_tail(t, df))
+    } else {
+        ((sample_mean - TTEST_BASELINE_MU0).signum(), 1.0)
+    };
 
     // Test passes if p < α AND t < 0 (mean below baseline)
     let passed = p_value < TTEST_ALPHA && t_statistic < 0.0;
@@ -174,7 +181,7 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
         p_value,
         sample_mean,
         sample_std,
-        baseline_mu0: BPB_VICTORY_TARGET,
+        baseline_mu0: TTEST_BASELINE_MU0,
         alpha: TTEST_ALPHA,
         passed,
     })
@@ -602,7 +609,8 @@ mod tests {
     #[test]
     fn ttest_rejects_when_p_value_above_alpha() {
         // Pre-registered analysis: Welch's t-test, alpha = 0.01
-        // Three seeds ALL near baseline mu0 = 1.55 — p > 0.01, gate refuses.
+        // Three identical seeds slightly ABOVE baseline mu0 = 1.45 —
+        // zero variance ⇒ degenerate t-test ⇒ gate refuses (p = 1.0).
         let r = vec![
             SeedResult { seed: 42, bpb: 1.49, step: 5000, sha: "a".into() },
             SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },

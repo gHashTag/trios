@@ -144,17 +144,19 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
         0.0
     };
 
-    let t_statistic = (sample_mean - TTEST_BASELINE_MU0) / std_error;
-
     // Degrees of freedom for one-sample t-test
     let df = (n - 1) as f64;
 
-    // One-tailed p-value using approximation for t-distribution
-    // For df=2, we use the exact form: 0.5 + t / (2 * sqrt(2 + t²))
-    let p_value = if t_statistic >= 0.0 {
-        0.5 - t_statistic.abs() / (2.0 * (2.0 + t_statistic * t_statistic).sqrt())
+    // One-tailed p-value using the exact df=2 lower-tail CDF:
+    // F(t) = 0.5 + t / (2 * sqrt(2 + t²)).
+    // Degenerate case: zero variance carries no distributional evidence —
+    // the t-statistic is undefined (division by zero), so the gate must
+    // refuse (p = 1.0) instead of silently passing on ±∞.
+    let (t_statistic, p_value) = if std_error > 0.0 {
+        let t = (sample_mean - TTEST_BASELINE_MU0) / std_error;
+        (t, t_cdf_lower_tail(t, df))
     } else {
-        0.5 + t_statistic.abs() / (2.0 * (2.0 + t_statistic.abs() * t_statistic).sqrt())
+        ((sample_mean - TTEST_BASELINE_MU0).signum(), 1.0)
     };
 
     // Test passes if p < α AND t < 0 (mean below baseline)
@@ -183,15 +185,11 @@ pub fn stat_strength(results: &[SeedResult]) -> Result<TtestReport, VictoryError
 /// Approximate lower-tail CDF of t-distribution P(T ≤ t) for given df.
 ///
 /// For df=2 (our n=3 case), this is the exact closed form.
-#[allow(dead_code)]
 fn t_cdf_lower_tail(t: f64, _df: f64) -> f64 {
-    // Exact formula for df=2: 0.5 + t / (2 * sqrt(2 + t²))
+    // Exact formula for df=2: F(t) = 0.5 + t / (2 * sqrt(2 + t²)).
+    // Lower tail ⇒ small p for very negative t, p → 1 for large positive t.
     let denom = 2.0 * (2.0 + t * t).sqrt();
-    if t >= 0.0 {
-        0.5 - t.abs() / denom
-    } else {
-        0.5 + t.abs() / denom
-    }
+    0.5 + t / denom
 }
 
 // ----------------------------------------------------------------------
@@ -682,7 +680,8 @@ mod tests {
     #[test]
     fn ttest_rejects_when_p_above_alpha() {
         // Pre-registered analysis: Welch's t-test, TTEST_ALPHA = 0.01
-        // Three seeds ALL near baseline mu0 = 1.55 — p > 0.01, gate refuses.
+        // Three identical seeds slightly ABOVE baseline mu0 = 1.45 —
+        // zero variance ⇒ degenerate t-test ⇒ gate refuses (p = 1.0).
         let r = vec![
             SeedResult { seed: 42, bpb: 1.49, step: 5000, sha: "a".into() },
             SeedResult { seed: 43, bpb: 1.49, step: 5000, sha: "b".into() },
@@ -706,7 +705,7 @@ mod tests {
     /// Falsification 8: Welch t-test passes when clearly below baseline.
     #[test]
     fn ttest_passes_when_distribution_clearly_below_baseline() {
-        // Three seeds with mean = 1.40, significantly below baseline 1.55
+        // Three seeds with mean = 1.40, significantly below baseline 1.45
         let r = vec![
             SeedResult { seed: 42, bpb: 1.40, step: 5000, sha: "a".into() },
             SeedResult { seed: 43, bpb: 1.39, step: 5000, sha: "b".into() },
