@@ -208,3 +208,38 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
   (apps/trios-macos/xtask): build / chat-sse-e2e / mesh-chat-e2e / e2e-flow.
   Laws Guard и основной CI (cargo test) были красными с волны 5 — теперь
   проходят закон L1.
+
+## Волна 11 (луп 7): зелёный CI, наблюдаемость, финал eval-харнесса
+
+- **A. Легаси-тесты igla-race (221/221 + бинари):** исправлены 5 тестов,
+  красных с волны 5: off-by-one в drive-циклах hive-автомата (полный цикл
+  Boot→…→Done = 7 переходов); знак-инвертированный нижнехвостовой CDF
+  t-распределения (df=2): F(t) = 0.5 + t/(2·√(2+t²)) (старый код ещё и
+  давал NaN при t<0); защита нулевой дисперсии (p=1.0 — гейт отказывает,
+  а не делит на ноль). Пре-регистрированный baseline μ₀ = 1.55
+  (= BPB_VICTORY_TARGET + TTEST_EFFECT_SIZE_MIN) восстановлен литералом и
+  теперь реально используется stat_strength (исходный баг — константа была
+  объявлена, но не применялась). Канарейка ledger_check 14/14.
+- **A. I5-доки:** 57 файлов для 47 легаси-колец (README для 42 колец с
+  RING.md; честные README/TASK/AGENTS для trios-store ST-00..02/BR-OUTPUT
+  и SR-02-скаффолда пайплайна). arch-guard впервые зелёный на main.
+- **B. Наблюдаемость SR-03:** счётчики жизненного цикла очереди
+  (enqueued/polled/results/rejected), бэкпрешер MAX_PENDING_COMMANDS=256
+  (try_enqueue → QueueFull, дубликат идемпотентен), QueueStats;
+  `GET /metrics` — Prometheus text 0.0.4 без новых зависимостей
+  (9 метрик: глубина/executing/capacity, 4 counters, агенты, задачи).
+  При сатурации enqueue отвечает `{error, queue_full:true, depth, capacity}`.
+- **C. Финал eval-харнесса (browseros, dev):** тонкий типизированный клиент
+  `@browseros/agent-core/lib/clients/trios-server` (POST /agent/run,
+  GET /agent/tools; fetch, ноль зависимостей) + новый executor-бэкенд
+  `rust-server` в apps/eval — eval-прогоны идут через боевой Rust-цикл
+  вместо локального TS tool-loop (max_steps→timeout, ошибки транспорта→
+  blocked, toolsUsed из транскрипта). TS tool-loop остаётся только как
+  легаси-бейзлайн eval. README agent-core зафиксировал роль пакета.
+- **Статус CI (main):** CI ✅, Laws Guard ✅, arch-guard ✅, No-JS ✅,
+  Path A ✅, Leaderboard ✅, macOS binaries ✅. Легаси-красным остаётся
+  rainbow-bridge (assertions/hive_state.json — пустой файл с волны сквоша;
+  падает с мая) — кандидат на следующую волну. В browseros/dev два
+  до-волновых красных сьюта: agent-core-tools (tests/__helpers__/server.ts
+  удалён вместе с TS-сервером в волну 7 — сьюту нужен спавн Rust-сервера)
+  и agent (fetchMcpTools: 14 компиляций схем вместо 0).
