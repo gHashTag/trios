@@ -288,3 +288,20 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
 - **CI: browseros dev @ ac69508 — первый полностью зелёный прогон всей
   матрицы test.yml (12/12, включая легаси agent). trios main @ 9610b73 —
   дашборд зелёный.**
+
+## Волна 14 — деплой-цепочка и полный браузерный e2e
+
+- `/version` (git sha из CI), `deploy/docker/Dockerfile.server` (образ из
+  готового релизного бинарника, non-root, healthcheck),
+  `deploy/systemd/trios-server.service` (hardened), docker-смок в CI,
+  Linux-раздел в DEPLOY.md.
+- Новый бинарь `trios-e2e-llm` (скриптованный фейк-LLM, L1) и CI-шаг:
+  headless Chrome + trios-server + trios-host-cdp + `/agent/run` —
+  впервые весь производственный контур (agent-loop → SR-03 → WS → CDP →
+  DOM) проверяется в CI на каждый пуш.
+- browseros: apps/agent typecheck 42 ошибки → 0, сьют `agent-typecheck`
+  в матрице test.yml.
+- Коммиты: trios `a3d3181`, browseros/dev `4708f51`.
+- Итог CI: фикс базы образа (glibc 2.39 → ubuntu:24.04, `6309897`);
+  run 30167869032 — весь дашборд зелёный, e2e подтверждён транскриптом
+  (реальный DOM через SR-03, E2E_OK). browseros: 13/13 c agent-typecheck.
