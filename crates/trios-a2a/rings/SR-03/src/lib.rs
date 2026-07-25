@@ -144,7 +144,56 @@ pub struct BrowserCommandQueue {
     results: Vec<BrowserResult>,
     /// Track seen command IDs to prevent duplicate execution
     seen_ids: std::collections::HashSet<String>,
+    /// Monotonic counters for observability (`/metrics`).
+    enqueued_total: u64,
+    polled_total: u64,
+    results_total: u64,
+    rejected_total: u64,
 }
+
+/// Backpressure cap: maximum number of commands in `Pending` state.
+/// `try_enqueue` refuses new commands once the cap is reached so a stuck
+/// or absent browser agent cannot grow the queue without bound.
+pub const MAX_PENDING_COMMANDS: usize = 256;
+
+/// Point-in-time queue observability snapshot (`/metrics`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct QueueStats {
+    /// Commands waiting to be polled (`Pending`).
+    pub depth: usize,
+    /// Commands handed to a browser agent, result not reported yet.
+    pub executing: usize,
+    /// Total commands accepted since start.
+    pub enqueued_total: u64,
+    /// Total commands handed out by `poll` since start.
+    pub polled_total: u64,
+    /// Total results recorded since start.
+    pub results_total: u64,
+    /// Total enqueues refused by the backpressure cap.
+    pub rejected_total: u64,
+}
+
+/// Error returned by [`BrowserCommandQueue::try_enqueue`] when the
+/// backpressure cap is reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueFull {
+    /// Current number of `Pending` commands (== the cap).
+    pub depth: usize,
+    /// The configured cap ([`MAX_PENDING_COMMANDS`]).
+    pub capacity: usize,
+}
+
+impl std::fmt::Display for QueueFull {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "browser command queue is full ({}/{} pending)",
+            self.depth, self.capacity
+        )
+    }
+}
+
+impl std::error::Error for QueueFull {}
 
 impl BrowserCommandQueue {
     pub fn new() -> Self {
@@ -152,13 +201,39 @@ impl BrowserCommandQueue {
     }
 
     /// Enqueue a new command. Returns command id.
+    ///
+    /// Unbounded legacy path — prefer [`Self::try_enqueue`], which applies
+    /// the [`MAX_PENDING_COMMANDS`] backpressure cap.
     pub fn enqueue(&mut self, cmd: BrowserCommand) -> String {
         let id = cmd.id.clone();
         if !self.seen_ids.contains(&id) {
             self.seen_ids.insert(id.clone());
             self.pending.push_back(cmd);
+            self.enqueued_total += 1;
         }
         id
+    }
+
+    /// Enqueue with backpressure: refuses the command when the number of
+    /// `Pending` commands has reached [`MAX_PENDING_COMMANDS`].
+    /// Duplicate ids are acknowledged (idempotent) without re-queueing.
+    pub fn try_enqueue(&mut self, cmd: BrowserCommand) -> Result<String, QueueFull> {
+        let id = cmd.id.clone();
+        if self.seen_ids.contains(&id) {
+            return Ok(id); // idempotent duplicate — already queued once
+        }
+        let depth = self.pending_count();
+        if depth >= MAX_PENDING_COMMANDS {
+            self.rejected_total += 1;
+            return Err(QueueFull {
+                depth,
+                capacity: MAX_PENDING_COMMANDS,
+            });
+        }
+        self.seen_ids.insert(id.clone());
+        self.pending.push_back(cmd);
+        self.enqueued_total += 1;
+        Ok(id)
     }
 
     /// Poll pending commands for a specific agent (called by extension).
@@ -171,6 +246,7 @@ impl BrowserCommandQueue {
                 out.push(cmd.clone());
             }
         }
+        self.polled_total += out.len() as u64;
         out
     }
 
@@ -187,6 +263,7 @@ impl BrowserCommandQueue {
             }
         }
         self.results.push(result);
+        self.results_total += 1;
     }
 
     /// Get result for a specific command (for AI agent waiting on response).
@@ -199,6 +276,26 @@ impl BrowserCommandQueue {
             .iter()
             .filter(|c| c.status == BrowserCommandStatus::Pending)
             .count()
+    }
+
+    /// Commands currently marked `Executing` (polled, result pending).
+    pub fn executing_count(&self) -> usize {
+        self.pending
+            .iter()
+            .filter(|c| c.status == BrowserCommandStatus::Executing)
+            .count()
+    }
+
+    /// Observability snapshot for `/metrics`.
+    pub fn stats(&self) -> QueueStats {
+        QueueStats {
+            depth: self.pending_count(),
+            executing: self.executing_count(),
+            enqueued_total: self.enqueued_total,
+            polled_total: self.polled_total,
+            results_total: self.results_total,
+            rejected_total: self.rejected_total,
+        }
     }
 }
 
@@ -429,5 +526,58 @@ mod tests {
         assert!(names.contains(&"browser_navigate"));
         assert!(names.contains(&"browser_eval"));
         assert!(names.contains(&"browser_screenshot"));
+    }
+
+    #[test]
+    fn test_try_enqueue_rejects_at_capacity() {
+        let mut q = BrowserCommandQueue::new();
+        for _ in 0..MAX_PENDING_COMMANDS {
+            let cmd = BrowserCommand::new("agent-x", BrowserCommandType::GetUrl, json!({}));
+            q.try_enqueue(cmd).expect("below cap must be accepted");
+        }
+        assert_eq!(q.pending_count(), MAX_PENDING_COMMANDS);
+
+        let overflow = BrowserCommand::new("agent-x", BrowserCommandType::GetUrl, json!({}));
+        let err = q.try_enqueue(overflow).expect_err("cap reached must reject");
+        assert_eq!(err.capacity, MAX_PENDING_COMMANDS);
+        assert_eq!(err.depth, MAX_PENDING_COMMANDS);
+        assert_eq!(q.stats().rejected_total, 1);
+        // Queue did not grow past the cap.
+        assert_eq!(q.pending_count(), MAX_PENDING_COMMANDS);
+    }
+
+    #[test]
+    fn test_try_enqueue_duplicate_is_idempotent() {
+        let mut q = BrowserCommandQueue::new();
+        let cmd = BrowserCommand::new("agent-x", BrowserCommandType::GetUrl, json!({}));
+        let dup = cmd.clone();
+        let id = q.try_enqueue(cmd).unwrap();
+        let id2 = q.try_enqueue(dup).unwrap();
+        assert_eq!(id, id2);
+        assert_eq!(q.pending_count(), 1);
+        assert_eq!(q.stats().enqueued_total, 1);
+    }
+
+    #[test]
+    fn test_stats_counters_track_lifecycle() {
+        let mut q = BrowserCommandQueue::new();
+        let cmd = BrowserCommand::new("agent-x", BrowserCommandType::GetTitle, json!({}));
+        let id = q.try_enqueue(cmd).unwrap();
+        assert_eq!(q.stats().depth, 1);
+        assert_eq!(q.stats().executing, 0);
+
+        let polled = q.poll("agent-x");
+        assert_eq!(polled.len(), 1);
+        let s = q.stats();
+        assert_eq!(s.depth, 0);
+        assert_eq!(s.executing, 1);
+        assert_eq!(s.polled_total, 1);
+
+        q.record_result(BrowserResult::ok(&id, json!({"title": "t"})));
+        let s = q.stats();
+        assert_eq!(s.executing, 0);
+        assert_eq!(s.results_total, 1);
+        assert_eq!(s.enqueued_total, 1);
+        assert_eq!(s.rejected_total, 0);
     }
 }

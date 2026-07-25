@@ -8,7 +8,10 @@ pub use trios_a2a_sr02::*;
 
 // SR-03 — host-runtime browser command queue (server queues, host agent polls
 // & reports back over A2A). Ported browser-adapter transport.
-pub use trios_a2a_sr03::{BrowserCommand, BrowserCommandQueue, BrowserCommandType, BrowserResult};
+pub use trios_a2a_sr03::{
+    BrowserCommand, BrowserCommandQueue, BrowserCommandType, BrowserResult, QueueFull, QueueStats,
+    MAX_PENDING_COMMANDS,
+};
 
 // SR-04 — durable persistence (A2AStore trait + SqliteA2AStore).
 pub use trios_a2a_sr04::{A2AStore, SqliteA2AStore};

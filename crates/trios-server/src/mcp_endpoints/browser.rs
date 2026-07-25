@@ -70,11 +70,21 @@ pub async fn enqueue_command(state: &AppState, params: Value) -> Value {
         None => return json!({"error": format!("unknown browser tool: {}", tool_name)}),
     };
 
-    let command_id = cmd.id.clone();
     let mut queue = state.browser.queue.lock().await;
-    queue.enqueue(cmd);
+    match queue.try_enqueue(cmd) {
+        Ok(command_id) => json!({"queued": true, "command_id": command_id}),
+        Err(full) => json!({
+            "error": full.to_string(),
+            "queue_full": true,
+            "depth": full.depth,
+            "capacity": full.capacity,
+        }),
+    }
+}
 
-    json!({"queued": true, "command_id": command_id})
+/// Observability snapshot of the browser command queue (for `/metrics`).
+pub async fn queue_stats(state: &AppState) -> trios_a2a::QueueStats {
+    state.browser.queue.lock().await.stats()
 }
 
 #[cfg(test)]

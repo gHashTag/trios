@@ -1,5 +1,6 @@
 mod mcp;
 mod mcp_endpoints;
+mod metrics;
 mod operator;
 mod rainbow_routes;
 mod rest_a2a;
@@ -86,6 +87,9 @@ async fn main() -> anyhow::Result<()> {
         // Agent tool-loop (Wave 8): /agent/run, /agent/run/stream, /agent/tools
         // — the Rust port of the retired TS agent core.
         .merge(rest_agent::router())
+        // Observability (Wave 11): Prometheus text exposition for the SR-03
+        // browser command queue + server gauges.
+        .merge(metrics::router())
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
