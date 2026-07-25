@@ -191,3 +191,15 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
 - Тесты: 12 (мок-CDP WS-сервер с шумовыми событиями, фейковый исполнитель,
   фейковый trios-server); сквозной e2e: /agent/run → tool-loop → очередь →
   бинарник trios-host-cdp → мок-Chrome → ответ модели.
+
+## Волна 10 (луп 6): боевой деплой (macOS)
+
+- Деплой-тулинг на Rust (закон L1): xtask-бинарник `trios-deploy`
+  (render / install / uninstall / status / smoke) + launchd-шаблоны
+  `deploy/launchd/*.plist.tmpl` (server на 9105, host-cdp → CDP 9102,
+  KeepAlive, логи в ~/Library/Logs/trios/).
+- CI `trios-macos-binaries.yml` (macos-15): release-сборка trios-server +
+  trios-host-cdp + trios-deploy, smoke против живого сервера, plutil-линт
+  плистов, публикация деплой-бандла (tar.gz + sha256, 30 дней).
+- docs/DEPLOY.md: установка из бандла и из исходников, предусловия
+  (BrowserOS CDP 9102, LLM env), проверка и откат.

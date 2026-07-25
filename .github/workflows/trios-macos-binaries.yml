@@ -1,0 +1,80 @@
+name: Trios macOS binaries
+
+# Волна 10: боевой деплой. Собирает release-бинарники trios-server и
+# trios-host-cdp на Apple-раннере, гоняет smoke (trios-deploy smoke) против
+# живого сервера и публикует деплой-бандл: бинарники + отрендеренные
+# launchd-плисты + деплой-тул. Установка на Mac: распаковать бандл и
+# `./trios-deploy install` (см. docs/DEPLOY.md).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - crates/**
+      - deploy/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/trios-macos-binaries.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trios-macos-binaries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, smoke, bundle (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binaries
+        run: |
+          cargo build --release -p trios-server -p trios-host-cdp -p trios-server-xtask
+
+      - name: Smoke against a live server
+        run: |
+          TRIOS_PORT=9106 ./target/release/trios-server &
+          SERVER_PID=$!
+          for i in $(seq 1 60); do
+            curl -s -m1 http://127.0.0.1:9106/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          ./target/release/trios-deploy smoke --port 9106
+          kill $SERVER_PID
+
+      - name: "Render launchd plists (defaults: port 9105, CDP 9102)"
+        run: |
+          ./target/release/trios-deploy render \
+            --repo "$HOME/trios" \
+            --bin-dir "$HOME/trios/bin" \
+            --out deploy-bundle/launchd
+          plutil -lint deploy-bundle/launchd/*.plist
+
+      - name: Assemble deploy bundle
+        run: |
+          mkdir -p deploy-bundle/bin
+          cp target/release/trios-server target/release/trios-host-cdp \
+             target/release/trios-deploy deploy-bundle/bin/
+          cp docs/DEPLOY.md deploy-bundle/
+          tar -czf trios-macos-deploy.tar.gz -C deploy-bundle .
+          shasum -a 256 trios-macos-deploy.tar.gz | tee trios-macos-deploy.sha256
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: trios-macos-deploy
+          path: |
+            trios-macos-deploy.tar.gz
+            trios-macos-deploy.sha256
+          retention-days: 30

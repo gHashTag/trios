@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- trios-host-cdp production unit (rendered by `trios-deploy render`).
+     Polls the trios-server SR-03 queue and drives BrowserOS over CDP. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.trios.host-cdp</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__BIN_DIR__/trios-host-cdp</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TRIOS_SERVER_WS</key>
+        <string>ws://127.0.0.1:__PORT__/ws</string>
+        <key>TRIOS_CDP_HTTP</key>
+        <string>__CDP_HTTP__</string>
+        <key>TRIOS_BROWSER_AGENT_ID</key>
+        <string>host-cdp</string>
+        <key>TRIOS_POLL_INTERVAL_MS</key>
+        <string>1000</string>
+        <key>RUST_LOG</key>
+        <string>info</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/trios/host-cdp.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/trios/host-cdp.err.log</string>
+</dict>
+</plist>
