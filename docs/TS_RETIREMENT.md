@@ -177,3 +177,17 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
 - Тесты: 18 в кольцах (вкл. интеграцию HttpLlmClient с мок-эндпоинтом),
   6 в rest_agent (вкл. полный мост через SR-03-очередь с фейковым
   хост-агентом); live-проверка `/agent/run` и SSE против mock-LLM.
+
+## Волна 9 (луп 5): хост-CDP-агент на Rust
+
+- Новый крейт `crates/trios-host-cdp` (кольца HC-00..02) — бинарник,
+  который поллит SR-03-очередь trios-server по WS (`browser/poll` →
+  `browser/result`) и исполняет команды в Chrome через сырой CDP
+  (`/json/list` discovery, id-коррелированный клиент, без тяжёлых стеков).
+- Все 12 хост-инструментов SR-03 реализованы: navigate/get_url/get_title/
+  get_dom/query_selector/click/type/scroll/eval/screenshot/open_tab/close_tab
+  (DOM-действия через Runtime.evaluate c JSON-экранированием селекторов).
+- `trios-a2a`: ре-экспорт `BrowserCommandType`.
+- Тесты: 12 (мок-CDP WS-сервер с шумовыми событиями, фейковый исполнитель,
+  фейковый trios-server); сквозной e2e: /agent/run → tool-loop → очередь →
+  бинарник trios-host-cdp → мок-Chrome → ответ модели.
