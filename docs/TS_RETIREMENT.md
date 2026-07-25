@@ -10,6 +10,7 @@
 |---|---|---|---|
 | Персистентность | `trios-store` | `db/schema.ts` (drizzle SQLite) | ✅ перенесено (Волна 0) |
 | A2A-протокол | `trios-a2a` | `api/routes/a2a.ts` + Swift | ✅ паритет схем + persistence (Волна 1) |
+| A2A REST+SSE для Swift | `trios-server/rest_a2a.rs` + SR-02 | `api/routes/a2a.ts`, `a2a-registry-service.ts` | ✅ wire-паритет (Волна 5): register/unregister/heartbeat/agents/message/task/stream, liveness-TTL 120s, очереди офлайн-сообщений, watchdog |
 | Безопасность | `trios-server/security.rs` | — | ✅ Origin-guard (Волна 1) |
 | Агентный слой | `trios-agent-harness` | `lib/agents/*` | ✅ типы/каталог/очередь/turn-registry (Волна 2) |
 | Браузер | `trios-browser` | `browser/*` | ✅ контракты + протокол действий (Волна 2) |
@@ -94,9 +95,37 @@
 | P3 | Нет лимита регистраций / TTL очереди | ✅ Закрыт (SR-02: MAX_AGENTS + bounded message log) |
 | P4 | Хардкод macOS-пути в `ecosystem.config.js` | ✅ Закрыт (env-параметризация) |
 
-Вся кодовая часть консолидации закрыта. Остались два чисто
-операционных/продуктовых шага, которые невозможно закрыть кодом:
-1. **Деплой (п.3):** пересобрать `.app` и запустить `trios-server` на
-   9105 вместо Hono — конфиги клиента уже указывают туда.
+## Волна 5 — REST `/a2a/*` в Rust + перенос приложений (2026-07-25)
+
+Закрыт главный пробел консолидации: Swift-клиент говорит REST
+`/a2a/*` + SSE, а у `trios-server` таких роутов не было (только
+JSON-RPC/WS) — переключение портов дало бы 404.
+
+- `rings/SR-02`: liveness (heartbeat + TTL 120s, prune), wire-карточки
+  клиента (хранятся вербатим), bounded-очереди недоставленного,
+  `upsert_task`/`get_task` — чистая логика, время инжектируется
+  (18 тестов).
+- `trios-server/src/rest_a2a.rs`: 9 роутов (`register`, `unregister`,
+  `heartbeat`, `agents`, `matrix`, `message`, `task/assign`, `task/update`,
+  `stream` SSE) + `A2aHub` (live-подписчики, drop-guard отписка) +
+  вотчдог-прунер раз в минуту (15 тестов, всего в крейте 56).
+- **Исправлены два латентных бага TS-сервера** (не воспроизведены):
+  1. `GET /a2a/agents` в TS заворачивал ответ в `{"agents": [...]}`, а
+     Swift декодирует голый `[AgentCard]` — теперь голый массив.
+  2. payload системных сообщений в TS шёл как plain-JSON-строка, а
+     Swift `Data` ждёт base64 — теперь объектные payload кодируются
+     в base64(JSON).
+- **Перенос приложений в монорепо trios («всё в одном месте»):**
+  Swift-клиент → `apps/trios-macos/`, MCP-мост → `apps/trios-mcp-bridge/`
+  (см. MIGRATED.md в каждом). Копии в browseros помечены баннерами
+  «ПЕРЕНЕСЕНО» и будут удалены после переключения macOS CI.
+
+Вся кодовая часть консолидации закрыта. Остались чисто
+операционные/продуктовые шаги, которые невозможно закрыть кодом:
+1. **Деплой (п.3):** пересобрать `.app` (`build.sh`) и запустить
+   `trios-server` на 9105 вместо Hono — теперь включая REST `/a2a/*`,
+   который раньше был единственным недостающим куском.
 2. **Порт host-runtime фичей (п.5):** после этого удалить 51 роут
    Hono-сервера — отдельная крупная задача, вне scope этой консолидации.
+3. **Переключение macOS CI** на `apps/trios-macos/` в репо trios и
+   удаление копий в browseros.

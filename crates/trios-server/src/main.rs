@@ -2,6 +2,7 @@ mod mcp;
 mod mcp_endpoints;
 mod operator;
 mod rainbow_routes;
+mod rest_a2a;
 mod security;
 mod sse_handler;
 mod tools;
@@ -34,6 +35,8 @@ async fn main() -> anyhow::Result<()> {
     info!("Operator token: {}", operator_token);
 
     let state = AppState::new();
+    // Heartbeat watchdog: prune agents that stopped sending /a2a/heartbeat.
+    rest_a2a::spawn_prune_loop(state.clone());
     // Port resolution (TS-retirement item 3 — client switchover without a
     // manual reconfig). The single Rust entry point honours, in order:
     //   1. TRIOS_PORT      — explicit override for the consolidated server
@@ -70,6 +73,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/", get(health))
         // Rainbow Bridge (L13 / INV-8) — see crates/trios-rainbow-bridge.
         .merge(rainbow_routes::rainbow_routes())
+        // A2A REST + SSE — wire-compatible with the Swift A2ARegistryClient
+        // (TS-retirement item 5: the last Hono surface moved to Rust).
+        .merge(rest_a2a::router())
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
@@ -84,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
     info!("  WS:  ws://0.0.0.0:{}/ws", port);
     info!("  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)", port);
     info!("  REST: http://0.0.0.0:{}/api/chat", port);
+    info!("  A2A: http://0.0.0.0:{}/a2a/*  (Swift registry client)", port);
     info!("  MCP tools: {} registered", tools::count());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

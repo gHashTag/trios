@@ -54,6 +54,8 @@ pub struct AppState {
     pub event_tx: broadcast::Sender<BusEvent>,
     /// A2A router for agent-to-agent communication
     pub a2a: Arc<RwLock<A2ARouter>>,
+    /// Live SSE subscribers for the `/a2a/*` REST surface (Swift clients).
+    pub a2a_hub: Arc<crate::rest_a2a::A2aHub>,
     /// Host-runtime browser command queue (server queues, host CDP agent
     /// polls & reports back over A2A) — TS-retirement item 4.
     pub browser: Arc<crate::mcp_endpoints::browser::BrowserState>,
@@ -117,6 +119,7 @@ impl AppState {
             tasks: Arc::new(Mutex::new(Vec::new())),
             event_tx: tx,
             a2a: Arc::new(RwLock::new(A2ARouter::new())),
+            a2a_hub: Arc::new(crate::rest_a2a::A2aHub::default()),
             browser: Arc::new(crate::mcp_endpoints::browser::BrowserState::new()),
             zai_api,
             zai_keys,

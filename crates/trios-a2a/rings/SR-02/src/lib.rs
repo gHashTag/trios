@@ -6,13 +6,18 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use trios_a2a_sr00::{AgentCard, AgentId};
+use trios_a2a_sr00::{AgentCard, AgentId, AgentStatus};
 use trios_a2a_sr01::{A2AMessage, Task, TaskState};
 
 /// Max agents a single registry will hold (P3 — registration guard).
 pub const MAX_AGENTS: usize = 1024;
 /// Max buffered messages before oldest are evicted (P3 — message-log TTL/cap).
 pub const MAX_MESSAGES: usize = 10_000;
+/// Liveness TTL — an agent with no heartbeat for this long is stale
+/// (parity with the retired TS `A2aRegistryService` 120s threshold).
+pub const HEARTBEAT_TTL_MS: u64 = 120_000;
+/// Max queued wire messages per offline recipient before oldest are evicted.
+pub const MAX_PENDING_PER_AGENT: usize = 1_000;
 
 /// A2A registry — holds agents and tasks.
 #[derive(Debug, Clone)]
@@ -22,6 +27,14 @@ pub struct A2ARegistry {
     pub messages: Vec<A2AMessage>,
     max_agents: usize,
     max_messages: usize,
+    /// Last heartbeat per agent, unix millis (REST liveness — TS parity).
+    heartbeats: HashMap<String, u64>,
+    /// Client-shaped agent cards, stored verbatim for wire-faithful
+    /// `GET /a2a/agents` responses (Swift decodes its own card format).
+    wire_cards: HashMap<String, Value>,
+    /// Per-recipient queues of undelivered wire messages, drained when the
+    /// agent (re)connects its SSE stream.
+    pending: HashMap<String, Vec<Value>>,
 }
 
 impl A2ARegistry {
@@ -37,6 +50,9 @@ impl A2ARegistry {
             messages: Vec::new(),
             max_agents,
             max_messages,
+            heartbeats: HashMap::new(),
+            wire_cards: HashMap::new(),
+            pending: HashMap::new(),
         }
     }
 
@@ -143,6 +159,136 @@ impl A2ARegistry {
             }
             None => json!({"error": format!("task {} not found", task_id)}),
         }
+    }
+
+    // ------------------------------------------------------------------
+    // REST/wire parity layer — logic ported from the retired TS
+    // `A2aRegistryService` (browseros apps/server), TS-retirement item 5.
+    // Time is injected (`now_ms`) so every rule stays purely testable.
+    // ------------------------------------------------------------------
+
+    /// Register an agent from a client-shaped (wire) card.
+    ///
+    /// Stores the card verbatim for wire-faithful listing, mirrors it into
+    /// the typed agent map, and stamps a heartbeat. Same guards as
+    /// `register_agent` (P3 capacity, idempotent re-register).
+    pub fn register_wire(&mut self, card: Value, now_ms: u64) -> Value {
+        let id = card.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let name = card.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+        if id.is_empty() || name.is_empty() {
+            return json!({"ok": false, "error": "missing agent id or name", "code": "invalid_card"});
+        }
+        let is_new = !self.agents.contains_key(&id);
+        if is_new && self.agents.len() >= self.max_agents {
+            return json!({
+                "ok": false,
+                "error": format!("agent registry full (max {})", self.max_agents),
+                "code": "registry_full"
+            });
+        }
+        let typed = AgentCard {
+            id: AgentId::new(&id),
+            name,
+            capabilities: Vec::new(),
+            status: AgentStatus::Idle,
+            description: card
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        };
+        self.agents.insert(id.clone(), typed);
+        self.wire_cards.insert(id.clone(), card);
+        self.heartbeats.insert(id.clone(), now_ms);
+        json!({"ok": true, "agent_id": id, "updated": !is_new})
+    }
+
+    /// Remove an agent and all its liveness/queue state.
+    pub fn unregister_agent(&mut self, id: &str) -> bool {
+        let existed = self.agents.remove(id).is_some();
+        self.wire_cards.remove(id);
+        self.heartbeats.remove(id);
+        self.pending.remove(id);
+        existed
+    }
+
+    /// Record a heartbeat. Returns false for unknown agents (TS parity).
+    pub fn heartbeat(&mut self, id: &str, now_ms: u64) -> bool {
+        if self.agents.contains_key(id) {
+            self.heartbeats.insert(id.to_string(), now_ms);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Wire cards of agents with a fresh heartbeat (TS `listAgents` parity).
+    pub fn live_wire_cards(&self, now_ms: u64, ttl_ms: u64) -> Vec<Value> {
+        self.wire_cards
+            .iter()
+            .filter(|(id, _)| {
+                let last = self.heartbeats.get(*id).copied().unwrap_or(0);
+                now_ms.saturating_sub(last) < ttl_ms
+            })
+            .map(|(_, card)| card.clone())
+            .collect()
+    }
+
+    /// Drop agents whose heartbeat is older than `ttl_ms`; returns their ids
+    /// (TS heartbeat-watchdog parity).
+    pub fn prune_stale(&mut self, now_ms: u64, ttl_ms: u64) -> Vec<String> {
+        let stale: Vec<String> = self
+            .heartbeats
+            .iter()
+            .filter(|(_, last)| now_ms.saturating_sub(**last) >= ttl_ms)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in &stale {
+            self.unregister_agent(id);
+        }
+        stale
+    }
+
+    /// Queue a wire message for an offline-but-registered recipient.
+    /// Bounded per agent (oldest evicted). False for unknown recipients (P2).
+    pub fn queue_pending(&mut self, recipient: &str, wire_msg: Value) -> bool {
+        if !self.agents.contains_key(recipient) {
+            return false;
+        }
+        let queue = self.pending.entry(recipient.to_string()).or_default();
+        queue.push(wire_msg);
+        if queue.len() > MAX_PENDING_PER_AGENT {
+            let overflow = queue.len() - MAX_PENDING_PER_AGENT;
+            queue.drain(0..overflow);
+        }
+        true
+    }
+
+    /// Take all queued wire messages for an agent (SSE reconnect flush).
+    pub fn drain_pending(&mut self, agent_id: &str) -> Vec<Value> {
+        self.pending.remove(agent_id).unwrap_or_default()
+    }
+
+    /// Read a task by id.
+    pub fn get_task(&self, task_id: &str) -> Option<&Task> {
+        self.tasks.get(task_id)
+    }
+
+    /// Insert a fully-formed task (client-supplied id preserved). Rejects an
+    /// unregistered assignee (P2 parity with `assign_task`).
+    pub fn upsert_task(&mut self, task: Task) -> Value {
+        if let Some(assignee) = &task.assigned_to {
+            if !self.has_agent(assignee.as_str()) {
+                return json!({
+                    "ok": false,
+                    "error": format!("assignee '{}' is not a registered agent", assignee.as_str()),
+                    "code": "unknown_assignee"
+                });
+            }
+        }
+        let id = task.id.clone();
+        self.tasks.insert(id.clone(), task);
+        json!({"ok": true, "task_id": id})
     }
 }
 
@@ -319,5 +465,103 @@ mod tests {
         }
         // capped at 3, oldest evicted
         assert_eq!(reg.messages.len(), 3);
+    }
+
+    // --- REST/wire parity layer (TS A2aRegistryService port) ---
+
+    fn wire_card(id: &str) -> Value {
+        json!({
+            "id": id,
+            "name": format!("Agent {id}"),
+            "description": "test agent",
+            "capabilities": ["chat", "browserControl"],
+            "version": "1.0.0"
+        })
+    }
+
+    #[test]
+    fn register_wire_stores_card_and_heartbeat() {
+        let mut reg = A2ARegistry::new();
+        let res = reg.register_wire(wire_card("swift-1"), 1_000);
+        assert_eq!(res["ok"], true);
+        assert!(reg.has_agent("swift-1"));
+        let live = reg.live_wire_cards(2_000, HEARTBEAT_TTL_MS);
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0]["capabilities"][1], "browserControl");
+    }
+
+    #[test]
+    fn register_wire_rejects_missing_id_or_name() {
+        let mut reg = A2ARegistry::new();
+        assert_eq!(reg.register_wire(json!({"name": "x"}), 0)["code"], "invalid_card");
+        assert_eq!(reg.register_wire(json!({"id": "x"}), 0)["code"], "invalid_card");
+    }
+
+    #[test]
+    fn heartbeat_only_for_registered() {
+        let mut reg = A2ARegistry::new();
+        assert!(!reg.heartbeat("ghost", 0));
+        reg.register_wire(wire_card("a"), 0);
+        assert!(reg.heartbeat("a", 50));
+    }
+
+    #[test]
+    fn stale_agents_hidden_and_pruned() {
+        let mut reg = A2ARegistry::new();
+        reg.register_wire(wire_card("old"), 0);
+        reg.register_wire(wire_card("fresh"), 200_000);
+        // old: 300_000 - 0 >= 120_000 → stale
+        assert_eq!(reg.live_wire_cards(300_000, HEARTBEAT_TTL_MS).len(), 1);
+        let pruned = reg.prune_stale(300_000, HEARTBEAT_TTL_MS);
+        assert_eq!(pruned, vec!["old".to_string()]);
+        assert!(!reg.has_agent("old"));
+        assert!(reg.has_agent("fresh"));
+    }
+
+    #[test]
+    fn unregister_clears_all_state() {
+        let mut reg = A2ARegistry::new();
+        reg.register_wire(wire_card("a"), 0);
+        assert!(reg.queue_pending("a", json!({"m": 1})));
+        assert!(reg.unregister_agent("a"));
+        assert!(!reg.unregister_agent("a"));
+        assert!(reg.drain_pending("a").is_empty());
+        assert!(reg.live_wire_cards(0, HEARTBEAT_TTL_MS).is_empty());
+    }
+
+    #[test]
+    fn pending_queue_is_bounded_and_drains_fifo() {
+        let mut reg = A2ARegistry::new();
+        reg.register_wire(wire_card("a"), 0);
+        for i in 0..(MAX_PENDING_PER_AGENT + 5) {
+            reg.queue_pending("a", json!({"n": i}));
+        }
+        let drained = reg.drain_pending("a");
+        assert_eq!(drained.len(), MAX_PENDING_PER_AGENT);
+        // oldest evicted → first kept element is n=5
+        assert_eq!(drained[0]["n"], 5);
+        // second drain is empty
+        assert!(reg.drain_pending("a").is_empty());
+    }
+
+    #[test]
+    fn queue_pending_rejects_unknown_recipient() {
+        let mut reg = A2ARegistry::new();
+        assert!(!reg.queue_pending("ghost", json!({})));
+    }
+
+    #[test]
+    fn upsert_task_preserves_id_and_guards_assignee() {
+        let mut reg = A2ARegistry::new();
+        reg.register_wire(wire_card("worker"), 0);
+        let task = Task::new("wired", AgentId::new("system")).assign_to(AgentId::new("worker"));
+        let id = task.id.clone();
+        let res = reg.upsert_task(task);
+        assert_eq!(res["ok"], true);
+        assert_eq!(res["task_id"], id.as_str());
+        assert!(reg.get_task(&id).is_some());
+
+        let bad = Task::new("strand", AgentId::new("system")).assign_to(AgentId::new("ghost"));
+        assert_eq!(reg.upsert_task(bad)["code"], "unknown_assignee");
     }
 }
