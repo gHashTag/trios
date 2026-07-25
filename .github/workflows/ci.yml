@@ -82,3 +82,33 @@ jobs:
 
       - name: cargo build release
         run: cargo build --release -p trios-server
+
+      - name: Smoke test release binary
+        run: |
+          TRIOS_PORT=9207 ./target/release/trios-server &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9207/health > /dev/null; then break; fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "release binary exited prematurely"; exit 1
+            fi
+            sleep 1
+          done
+          health=$(curl -sf http://127.0.0.1:9207/health)
+          test "$health" = "ok" || { echo "bad /health: $health"; exit 1; }
+          tools=$(curl -sf http://127.0.0.1:9207/agent/tools)
+          echo "$tools" | grep -q '"echo"' || { echo "no echo tool: $tools"; exit 1; }
+          echo "$tools" | grep -q '"browser_goto"' || { echo "no browser tools: $tools"; exit 1; }
+          curl -sf http://127.0.0.1:9207/metrics | grep -q 'trios_agents_registered' \
+            || { echo "missing /metrics gauge"; exit 1; }
+          kill "$SERVER_PID"
+          wait "$SERVER_PID" 2>/dev/null || true
+          echo "release smoke OK"
+
+      - name: Upload trios-server release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: trios-server-linux-x86_64
+          path: target/release/trios-server
+          retention-days: 14
+          if-no-files-found: error
