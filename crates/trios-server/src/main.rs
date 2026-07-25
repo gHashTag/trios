@@ -3,6 +3,7 @@ mod mcp_endpoints;
 mod operator;
 mod rainbow_routes;
 mod rest_a2a;
+mod rest_agent;
 mod rest_browseros;
 mod security;
 mod sse_handler;
@@ -82,6 +83,9 @@ async fn main() -> anyhow::Result<()> {
         // BrowserOS local-state surface (Wave 6 / TS retirement): memory,
         // soul, skills, ACL rules, credits proxy, provider probe, monitoring.
         .merge(rest_browseros::router())
+        // Agent tool-loop (Wave 8): /agent/run, /agent/run/stream, /agent/tools
+        // — the Rust port of the retired TS agent core.
+        .merge(rest_agent::router())
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
@@ -97,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
     info!("  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)", port);
     info!("  REST: http://0.0.0.0:{}/api/chat", port);
     info!("  A2A: http://0.0.0.0:{}/a2a/*  (Swift registry client)", port);
+    info!("  Agent loop: http://0.0.0.0:{}/agent/run", port);
     info!("  MCP tools: {} registered", tools::count());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

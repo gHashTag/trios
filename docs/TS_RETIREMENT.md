@@ -154,3 +154,26 @@ JSON-RPC/WS) — переключение портов дало бы 404.
 
 Итог: в browseros не осталось TS-бэкенда. Единственный бэкенд —
 Rust `trios-server` (этот репозиторий, `crates/trios-server`).
+
+## Волна 8 (луп 4): агентный tool-loop перенесён в Rust
+
+- Новый золотой крейт `crates/trios-agent-loop` (Ring Isolation):
+  - **AL-00** — OpenAI-совместимый chat-контракт + HTTP-клиент
+    (`LlmClient`/`HttpLlmClient`, парсинг tool_calls, конфиг из env
+    `TRIOS_LLM_{BASE_URL,API_KEY,MODEL}`; дефолт — ollama).
+  - **AL-01** — `Tool`-трейт, `ToolRegistry`, встроенные инструменты и
+    6 браузерных (goto, content, screenshot, click, evaluate, list_pages)
+    поверх BW-01 `BrowserCommand` через `BrowserBridge`-трейт.
+  - **AL-02** — `AgentLoop`: system+user → чередование LLM-ходов и
+    исполнения инструментов; стоп-условия (финальный ответ / max_steps,
+    TS-паритет `MAX_TURNS=100`), события шагов, транскрипт, усечение
+    длинных результатов, учёт токенов.
+- REST-поверхность в trios-server (`rest_agent.rs`): `GET /agent/tools`,
+  `POST /agent/run`, `POST /agent/run/stream` (SSE: assistant_text /
+  tool_call / tool_result / done).
+- Браузерные инструменты замкнуты на существующую SR-03 host-runtime
+  очередь: сервер кладёт команду, хост-CDP-агент поллит и репортит
+  (`QueueBrowserBridge`, таймаут < TTL команды 30s).
+- Тесты: 18 в кольцах (вкл. интеграцию HttpLlmClient с мок-эндпоинтом),
+  6 в rest_agent (вкл. полный мост через SR-03-очередь с фейковым
+  хост-агентом); live-проверка `/agent/run` и SSE против mock-LLM.
