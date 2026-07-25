@@ -129,3 +129,28 @@ JSON-RPC/WS) — переключение портов дало бы 404.
    Hono-сервера — отдельная крупная задача, вне scope этой консолидации.
 3. **Переключение macOS CI** на `apps/trios-macos/` в репо trios и
    удаление копий в browseros.
+
+## Волна 7 (луп 3): TS-сервер физически удалён из browseros
+
+- `apps/server` → `packages/agent-core` (`@browseros/agent-core`):
+  оставлено только host-bound агентное ядро — tool-loop, CDP-драйвер
+  браузера, MCP-инструменты, клиенты (`src/{agent,browser,tools,lib,
+  skills,monitoring}`). Klavis strata-proxy/cache переехали из
+  `api/services` в `lib/clients/klavis`.
+- Удалена вся HTTP-поверхность TS: `src/api/` (51 роут Hono), `src/
+  {index,main,rpc,config,types}.ts`, тесты API, серверная сборка
+  (`scripts/build/server*`, `build:server*`, `release-server.yml`).
+- `apps/eval` переключён на `@browseros/agent-core` (10 файлов);
+  `apps/agent` больше не зависит от `@browseros/server` (RPC-тип
+  локальный: контракт теперь обслуживает Rust `trios-server`).
+- Dev-тулинг (Go `tools/dev`, `tools/dogfood`, `process-compose.yaml`,
+  `scripts/dev/start.ts`) запускает `cargo run -p trios-server` из
+  `$TRIOS_REPO` вместо `bun src/index.ts`.
+- CI: `test.yml` — 7 матричных сьютов agent-core (agent, skills, tools,
+  browser, integration, lib, root; server-api удалён), `eval-weekly.yml`
+  — новые пути, `release-server.yml` удалён.
+- Проверки: typecheck agent-core/eval чистые; тесты agent-core
+  262+31+279+34+1 зелёные, eval 93/93, build-скрипты 6/6, biome чист.
+
+Итог: в browseros не осталось TS-бэкенда. Единственный бэкенд —
+Rust `trios-server` (этот репозиторий, `crates/trios-server`).
