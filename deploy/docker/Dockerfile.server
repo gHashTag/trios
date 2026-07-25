@@ -13,7 +13,10 @@
 # (TRIOS_BUILD_SHA -> GET /version), so the image needs no extra labels
 # to be traceable — but we add OCI labels for registry hygiene.
 
-FROM debian:bookworm-slim
+# ubuntu:24.04 matches the CI builder (ubuntu-latest, glibc 2.39) — the
+# release binary links against glibc symbols that debian bookworm (2.36)
+# does not ship.
+FROM ubuntu:24.04
 
 ARG TRIOS_GIT_SHA=unknown
 LABEL org.opencontainers.image.title="trios-server" \
