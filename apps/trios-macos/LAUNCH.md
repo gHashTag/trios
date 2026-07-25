@@ -43,7 +43,7 @@ open ~/Applications/trios.app
 |------|---------|
 | `~/Applications/trios.app` | **The app** (launch this!) |
 | `./trios_app` | Raw binary (for developers) |
-| `./build.sh` | Build script |
+| `cargo run -p trios-app-xtask --bin trios-app -- build` | Build (Rust-порт build.sh, закон L1) |
 | `./main.swift` | Entry point |
 | `./rings/SR-02/ChatViewModel.swift` | Chat logic |
 | `./BR-OUTPUT/` | UI components |
@@ -52,7 +52,7 @@ open ~/Applications/trios.app
 
 ```bash
 cd /Users/playra/BrowserOS-full/trios
-./build.sh
+cargo run -p trios-app-xtask --bin trios-app -- build
 ```
 
 Then copy to Applications:

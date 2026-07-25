@@ -203,3 +203,8 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
   плистов, публикация деплой-бандла (tar.gz + sha256, 30 дней).
 - docs/DEPLOY.md: установка из бандла и из исходников, предусловия
   (BrowserOS CDP 9102, LLM env), проверка и откат.
+- Дочистка L1 (та же волна): 4 shell-скрипта, приехавшие с миграцией
+  Swift-приложения (волна 5), портированы в Rust-бинарник `trios-app`
+  (apps/trios-macos/xtask): build / chat-sse-e2e / mesh-chat-e2e / e2e-flow.
+  Laws Guard и основной CI (cargo test) были красными с волны 5 — теперь
+  проходят закон L1.
