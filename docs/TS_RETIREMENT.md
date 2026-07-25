@@ -243,3 +243,25 @@ Rust `trios-server` (этот репозиторий, `crates/trios-server`).
   до-волновых красных сьюта: agent-core-tools (tests/__helpers__/server.ts
   удалён вместе с TS-сервером в волну 7 — сьюту нужен спавн Rust-сервера)
   и agent (fetchMcpTools: 14 компиляций схем вместо 0).
+
+## Волна 12 — rainbow-bridge, tools-сьют на Rust-сервере, SeaORM
+
+- **A. rainbow-bridge:** реконструирован `assertions/hive_state.json`
+  (пустой с сквоша 8984fa0) — состояние миссии IGLA RACE v2 (L1–L12) и
+  `pre_registration.INV-8` с реальным blake3-пином
+  `docs/infrastructure/preregistration_rainbow.md`. Воркфлоу зелёный
+  впервые с мая 2026; на main зелёны все воркфлоу.
+- **B. tools-сьют agent-core (browseros/dev):** сьют, красный с волны 7
+  (импорт удалённого TS server.ts), поднят на боевом Rust `trios-server`:
+  хелпер спавна (TRIOS_SERVER_BIN/PATH, /health, graceful shutdown,
+  опционален — без бинаря browser-only), гейтед HTTP-тест
+  (/health, /agent/tools, /metrics), CI-джоба собирает trios-server из
+  checkout trios с кешем. Добиты: self-kill раннера в killProcessOnPort
+  (теперь lsof -sTCP:LISTEN + фильтр pid) и graceful-skip hidden-window
+  тестов на headless (Ozone ≠ x11). Мёртвый withMcpServer удалён.
+- **C. trios-store: sqlx → SeaORM.** ST-01 — SeaORM-энтити и Store поверх
+  DatabaseConnection (API без изменений, upsert через OnConflict, PRAGMA
+  идентичны: WAL, foreign_keys=ON); ST-02 — тот же SCHEMA_DDL через
+  execute_unprepared в транзакции; BR-OUTPUT — файловый smoke-тест.
+  Тесты вложенного workspace store добавлены в ci.yml (раньше не гонялись
+  нигде). 7/7 зелёные.
