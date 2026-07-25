@@ -1,0 +1,41 @@
+# Runtime image for trios-server built from the CI release artifact
+# (`trios-server-linux-x86_64`, produced by .github/workflows/ci.yml).
+#
+# Build context must contain the release binary, e.g.:
+#   gh run download <RUN_ID> -n trios-server-linux-x86_64 -D /tmp/trios-bin
+#   docker build -f deploy/docker/Dockerfile.server -t trios-server:<sha> /tmp/trios-bin
+# or straight from a local release build (copy the binary into a clean
+# context first — target/release holds gigabytes of build junk):
+#   mkdir -p /tmp/trios-docker-ctx && cp target/release/trios-server /tmp/trios-docker-ctx/
+#   docker build -f deploy/docker/Dockerfile.server -t trios-server:dev /tmp/trios-docker-ctx
+#
+# Version identity: the binary itself is stamped at compile time
+# (TRIOS_BUILD_SHA -> GET /version), so the image needs no extra labels
+# to be traceable — but we add OCI labels for registry hygiene.
+
+FROM debian:bookworm-slim
+
+ARG TRIOS_GIT_SHA=unknown
+LABEL org.opencontainers.image.title="trios-server" \
+      org.opencontainers.image.source="https://github.com/gHashTag/trios" \
+      org.opencontainers.image.revision="${TRIOS_GIT_SHA}"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --home-dir /var/lib/trios trios
+
+COPY trios-server /usr/local/bin/trios-server
+RUN chmod +x /usr/local/bin/trios-server
+
+USER trios
+WORKDIR /var/lib/trios
+
+# I8: prod MCP/HTTP port is 9105.
+ENV TRIOS_PORT=9105
+EXPOSE 9105
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
+    CMD curl -sf http://127.0.0.1:9105/health || exit 1
+
+ENTRYPOINT ["/usr/local/bin/trios-server"]

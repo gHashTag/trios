@@ -73,8 +73,9 @@ async fn main() -> anyhow::Result<()> {
         // Consolidated domain surface (Waves 2–4): agent adapter catalog +
         // Hermes providers, served directly from the ported Rust crates.
         .route("/api/adapters", get(api_adapters))
-        // Health
+        // Health + build identity (deploy chain: CI stamps TRIOS_BUILD_SHA)
         .route("/health", get(health))
+        .route("/version", get(version))
         .route("/", get(health))
         // Rainbow Bridge (L13 / INV-8) — see crates/trios-rainbow-bridge.
         .merge(rainbow_routes::rainbow_routes())
@@ -100,7 +101,12 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("trios-server listening on 0.0.0.0:{}", port);
+    info!(
+        "trios-server {} ({}) listening on 0.0.0.0:{}",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("TRIOS_BUILD_SHA").unwrap_or("dev"),
+        port
+    );
     info!("  WS:  ws://0.0.0.0:{}/ws", port);
     info!("  SSE: http://0.0.0.0:{}/sse  (Claude Desktop / Cursor)", port);
     info!("  REST: http://0.0.0.0:{}/api/chat", port);
@@ -116,6 +122,16 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health() -> &'static str {
     "ok"
+}
+
+/// Build identity for the deploy chain. `TRIOS_BUILD_SHA` is stamped at
+/// compile time by CI (release build step); local builds report "dev".
+async fn version() -> Json<Value> {
+    Json(json!({
+        "name": "trios-server",
+        "version": env!("CARGO_PKG_VERSION"),
+        "git_sha": option_env!("TRIOS_BUILD_SHA").unwrap_or("dev"),
+    }))
 }
 
 /// Adapter catalog + Hermes provider mappings, sourced from the consolidated

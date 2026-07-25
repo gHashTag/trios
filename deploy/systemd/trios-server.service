@@ -1,0 +1,42 @@
+# systemd unit for trios-server (Linux deploy chain).
+#
+# Install:
+#   sudo useradd --system --create-home --home-dir /var/lib/trios trios
+#   sudo install -m 0755 trios-server /usr/local/bin/trios-server
+#   sudo install -m 0644 deploy/systemd/trios-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now trios-server
+# Check:
+#   curl -s http://127.0.0.1:9105/health   # -> ok
+#   curl -s http://127.0.0.1:9105/version  # -> {"name":...,"git_sha":...}
+#
+# The binary comes from the CI artifact `trios-server-linux-x86_64`
+# (see docs/DEPLOY.md, section "Linux").
+
+[Unit]
+Description=trios-server (consolidated Rust A2A/MCP backend)
+Documentation=https://github.com/gHashTag/trios
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trios
+Group=trios
+ExecStart=/usr/local/bin/trios-server
+# I8: prod MCP/HTTP port. TRIOS_A2A_DB enables the durable SeaORM store.
+Environment=TRIOS_PORT=9105
+Environment=TRIOS_A2A_DB=/var/lib/trios/data.db
+WorkingDirectory=/var/lib/trios
+StateDirectory=trios
+Restart=on-failure
+RestartSec=2
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/trios
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -58,3 +58,41 @@ launchctl print gui/$(id -u)/com.trios.server | grep state
 ```
 
 Откат: `./bin/trios-deploy uninstall`.
+
+## Linux (CI-артефакт → systemd или Docker)
+
+CI (`ci.yml`, job Test) на каждом пуше собирает release-бинарь со
+штампом коммита (`TRIOS_BUILD_SHA` → `GET /version`), гоняет smoke
+(бинарь и Docker-контейнер) и публикует артефакт
+**`trios-server-linux-x86_64`** (retention 14 дней).
+
+### Забрать артефакт
+
+```
+gh run download --repo gHashTag/trios -n trios-server-linux-x86_64 -D /tmp/trios-bin
+chmod +x /tmp/trios-bin/trios-server
+/tmp/trios-bin/trios-server &   # TRIOS_PORT=9105 по умолчанию не задан → 9005
+curl -s http://127.0.0.1:9005/version   # {"name":"trios-server","version":...,"git_sha":...}
+```
+
+### systemd
+
+Юнит: `deploy/systemd/trios-server.service` (порт 9105, `TRIOS_A2A_DB`
+в `/var/lib/trios/data.db`, hardening: ProtectSystem=strict и т.д.).
+Инструкция по установке — в шапке самого юнита.
+
+### Docker
+
+Образ собирается из готового бинаря (без компиляции в контейнере):
+`deploy/docker/Dockerfile.server` — debian slim, непривилегированный
+пользователь `trios`, порт 9105, HEALTHCHECK по `/health`, OCI-label
+с ревизией. Пример сборки — в шапке Dockerfile; проверка:
+
+```
+docker run -d -p 9105:9105 trios-server:<sha>
+curl -s http://127.0.0.1:9105/version
+```
+
+Версионирование: источник истины — сам бинарь (`/version` отдаёт
+`CARGO_PKG_VERSION` + git-sha, вшитые при сборке в CI), поэтому любой
+артефакт/образ трассируется до коммита без внешних меток.

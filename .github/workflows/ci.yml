@@ -82,6 +82,8 @@ jobs:
 
       - name: cargo build release
         run: cargo build --release -p trios-server
+        env:
+          TRIOS_BUILD_SHA: ${{ github.sha }}
 
       - name: Smoke test release binary
         run: |
@@ -101,6 +103,9 @@ jobs:
           echo "$tools" | grep -q '"browser_goto"' || { echo "no browser tools: $tools"; exit 1; }
           curl -sf http://127.0.0.1:9207/metrics | grep -q 'trios_agents_registered' \
             || { echo "missing /metrics gauge"; exit 1; }
+          version=$(curl -sf http://127.0.0.1:9207/version)
+          echo "$version" | grep -q "\"git_sha\":\"${GITHUB_SHA}\"" \
+            || { echo "bad /version: $version"; exit 1; }
           kill "$SERVER_PID"
           wait "$SERVER_PID" 2>/dev/null || true
           echo "release smoke OK"
@@ -112,3 +117,77 @@ jobs:
           path: target/release/trios-server
           retention-days: 14
           if-no-files-found: error
+
+      - name: Docker image from release binary + container smoke
+        run: |
+          # clean context: target/release holds gigabytes of build junk
+          mkdir -p /tmp/trios-docker-ctx
+          cp target/release/trios-server /tmp/trios-docker-ctx/
+          docker build \
+            -f deploy/docker/Dockerfile.server \
+            --build-arg TRIOS_GIT_SHA="${GITHUB_SHA}" \
+            -t trios-server:"${GITHUB_SHA}" \
+            /tmp/trios-docker-ctx
+          CID=$(docker run -d -p 9105:9105 trios-server:"${GITHUB_SHA}")
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9105/health > /dev/null; then break; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "$CID")" != "true" ]; then
+              docker logs "$CID"; echo "container exited prematurely"; exit 1
+            fi
+            sleep 1
+          done
+          health=$(curl -sf http://127.0.0.1:9105/health)
+          test "$health" = "ok" || { docker logs "$CID"; echo "bad /health: $health"; exit 1; }
+          curl -sf http://127.0.0.1:9105/version | grep -q "\"git_sha\":\"${GITHUB_SHA}\"" \
+            || { echo "bad container /version"; exit 1; }
+          docker rm -f "$CID"
+          echo "docker smoke OK"
+
+      - name: E2E — /agent/run with real browser tools (headless Chrome)
+        run: |
+          cargo build --release -p trios-host-cdp
+          google-chrome --headless=new --remote-debugging-port=9222 --no-sandbox \
+            --disable-gpu --user-data-dir=/tmp/chrome-e2e about:blank \
+            > /tmp/e2e-chrome.log 2>&1 &
+          TRIOS_PORT=9207 ./target/release/trios-server > /tmp/e2e-server.log 2>&1 &
+          ./target/release/trios-e2e-llm > /tmp/e2e-llm.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:9207/health > /dev/null && break; sleep 1
+          done
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:9222/json/version > /dev/null && break; sleep 1
+          done
+          TRIOS_SERVER_WS=ws://127.0.0.1:9207/ws \
+            TRIOS_CDP_HTTP=http://127.0.0.1:9222 \
+            TRIOS_POLL_INTERVAL_MS=200 \
+            ./target/release/trios-host-cdp > /tmp/e2e-hostcdp.log 2>&1 &
+          sleep 3
+          resp=$(curl -sf -X POST http://127.0.0.1:9207/agent/run \
+            -H 'Content-Type: application/json' \
+            -d '{"prompt":"e2e browser roundtrip",
+                 "provider":{"base_url":"http://127.0.0.1:9301/v1","model":"fake"},
+                 "browser_agent_id":"host-cdp",
+                 "include_transcript":true,
+                 "max_steps":6}') || {
+            echo '--- server ---'; cat /tmp/e2e-server.log
+            echo '--- host-cdp ---'; cat /tmp/e2e-hostcdp.log
+            echo '--- llm ---'; cat /tmp/e2e-llm.log
+            exit 1
+          }
+          echo "$resp" | head -c 1500; echo
+          echo "$resp" | grep -q '"finalText":"E2E_OK"' || {
+            echo 'finalText mismatch'
+            echo '--- host-cdp ---'; cat /tmp/e2e-hostcdp.log
+            echo '--- server ---'; tail -50 /tmp/e2e-server.log
+            exit 1
+          }
+          # the DOM of the /health page must have come back through the
+          # SR-03 bridge (browser_content -> browser_get_dom -> outerHTML);
+          # a dead browser would still yield E2E_OK via bridge-timeout errors,
+          # so require real HTML in the transcript.
+          echo "$resp" | grep -q '<html' || {
+            echo 'no DOM in transcript'
+            echo '--- host-cdp ---'; cat /tmp/e2e-hostcdp.log
+            exit 1
+          }
+          echo "browser e2e OK"
