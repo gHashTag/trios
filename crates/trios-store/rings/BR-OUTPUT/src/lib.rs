@@ -27,4 +27,22 @@ mod tests {
         trios_store_st02::migrate(&store).await.unwrap();
         assert!(store.list_agents().await.unwrap().is_empty());
     }
+
+    #[tokio::test]
+    async fn facade_creates_file_db() {
+        let dir = std::env::temp_dir().join(format!("trios-store-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("smoke.db");
+        let path_str = path.to_str().unwrap();
+
+        let store = open_and_migrate(path_str).await.unwrap();
+        assert!(store.list_agents().await.unwrap().is_empty());
+        assert!(path.exists(), "db file must be created on open");
+
+        // re-open the same file: migration is idempotent
+        let store2 = open_and_migrate(path_str).await.unwrap();
+        assert!(store2.list_agents().await.unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

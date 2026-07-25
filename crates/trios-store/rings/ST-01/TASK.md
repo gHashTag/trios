@@ -4,7 +4,7 @@
 
         ## Completed
 
-        - [x] `Store` over sqlx SqlitePool (WAL, foreign_keys=ON)
+        - [x] `Store` over SeaORM DatabaseConnection (SQLite: WAL, foreign_keys=ON)
 - [x] Typed CRUD for all three ST-00 tables
 - [x] In-memory mode for tests
 

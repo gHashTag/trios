@@ -3,8 +3,11 @@
 //! Idempotent `CREATE TABLE IF NOT EXISTS` + indexes matching
 //! `browseros-agent/apps/server/src/lib/db/schema/*`. Safe to run against
 //! an existing TS-created database (all `IF NOT EXISTS`).
+//! Statements are applied through SeaORM (`execute_unprepared`) inside a
+//! single transaction.
 
 use anyhow::Result;
+use sea_orm::{ConnectionTrait, TransactionTrait};
 use trios_store_st01::Store;
 
 /// The full DDL, applied in one batch.
@@ -59,14 +62,13 @@ CREATE INDEX IF NOT EXISTS produced_files_session_idx ON produced_files (session
 
 /// Apply the schema to a store. Idempotent.
 pub async fn migrate(store: &Store) -> Result<()> {
-    let mut stmts = SCHEMA_DDL.split(';');
-    let mut tx = store.pool().begin().await?;
-    for raw in &mut stmts {
+    let tx = store.conn().begin().await?;
+    for raw in SCHEMA_DDL.split(';') {
         let sql = raw.trim();
         if sql.is_empty() {
             continue;
         }
-        sqlx::query(sql).execute(&mut *tx).await?;
+        tx.execute_unprepared(sql).await?;
     }
     tx.commit().await?;
     Ok(())

@@ -10,7 +10,7 @@
 
 ## What this ring does
 
-Wraps a sqlx `SqlitePool`; typed CRUD for `agent_definitions`, `oauth_tokens`, `produced_files`. Coexists with the TS backend on the same `.db` file.
+Wraps a SeaORM `DatabaseConnection` (SQLite); typed CRUD for `agent_definitions`, `oauth_tokens`, `produced_files`. Coexists with the TS backend on the same `.db` file.
 
 ## Rules for agents
 

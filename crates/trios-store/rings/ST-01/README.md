@@ -10,13 +10,13 @@
 
         ## Purpose
 
-        SQLite repository (sqlx) over ST-00 rows. Opens the SAME `.db` file the TS backend uses (WAL, foreign_keys=ON) so Rust and TS can coexist during migration. All queries are typed against the ST-00 row structs.
+        SQLite repository (SeaORM) over ST-00 rows. Opens the SAME `.db` file the TS backend uses (WAL, foreign_keys=ON) so Rust and TS can coexist during migration. All queries are typed against the ST-00 row structs.
 
         ## API Surface (pub)
 
         | Item | Role |
         |------|------|
-        | `Store` | sqlx SqlitePool wrapper |
+        | `Store` | SeaORM DatabaseConnection wrapper |
 | `Store::open / open_memory` | open file / in-memory DB |
 | `upsert_agent / get_agent / list_agents / delete_agent` | agent_definitions CRUD |
 | `upsert_token / get_token` | oauth_tokens CRUD |

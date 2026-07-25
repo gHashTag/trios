@@ -23,7 +23,7 @@ crates/trios-store/
 ├── src/lib.rs          ← re-export facade (NOT business logic)
 └── rings/
     ├── ST-00/          ← row types + enums (Adapter, DetectedBy) — pure data
-    ├── ST-01/          ← sqlx SQLite repository (Store)
+    ├── ST-01/          ← SeaORM SQLite repository (Store)
     ├── ST-02/          ← DDL migrations (mirror drizzle)
     └── BR-OUTPUT/      ← open_and_migrate (assembles all rings)
 ```

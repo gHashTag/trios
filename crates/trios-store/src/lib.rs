@@ -11,7 +11,7 @@
 //!
 //! Ring structure:
 //!   ST-00 — schema types (rows, enums) — pure data
-//!   ST-01 — sqlx SQLite repository
+//!   ST-01 — SeaORM SQLite repository
 //!   ST-02 — DDL migrations (mirror drizzle)
 //!   BR-OUTPUT — open_and_migrate assembly
 
