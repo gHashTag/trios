@@ -108,7 +108,7 @@ curl -s http://127.0.0.1:9105/version
 ```
 # 1) при необходимости поднять [workspace.package] version в Cargo.toml
 # 2) тег обязан совпадать с Cargo-версией (release.yml это проверяет)
-git tag v0.1.0 && git push origin v0.1.0
+git tag v6.0.0 && git push origin v6.0.0
 ```
 
 `release.yml` собирает бинарь со штампом коммита, смокает `/health` и

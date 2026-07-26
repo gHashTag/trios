@@ -107,7 +107,7 @@ fn build_registry(state: &AppState, body: &AgentRunBody) -> ToolRegistry {
     registry
 }
 
-fn browser_bridge_timeout() -> Duration {
+pub(crate) fn browser_bridge_timeout() -> Duration {
     // SR-03 commands expire after 30s; stay under that.
     let secs = std::env::var("TRIOS_BROWSER_BRIDGE_TIMEOUT_SECS")
         .ok()
@@ -120,10 +120,10 @@ fn browser_bridge_timeout() -> Duration {
 // SR-03 queue bridge (server enqueues, host CDP agent polls + reports)
 // ---------------------------------------------------------------------------
 
-struct QueueBrowserBridge {
-    state: AppState,
-    agent_id: String,
-    timeout: Duration,
+pub(crate) struct QueueBrowserBridge {
+    pub(crate) state: AppState,
+    pub(crate) agent_id: String,
+    pub(crate) timeout: Duration,
 }
 
 /// Map a BW-01 command to the SR-03 tool name + params the host agent speaks.

@@ -583,7 +583,7 @@ async fn get_credits() -> ApiResult {
 // openrouter, ollama, lmstudio, zai, custom baseUrl) accepts.
 // ---------------------------------------------------------------------------
 
-fn provider_base_url(body: &Value) -> Option<String> {
+pub(crate) fn provider_base_url(body: &Value) -> Option<String> {
     if let Some(u) = body
         .get("baseUrl")
         .or_else(|| body.get("base_url"))

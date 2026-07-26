@@ -6,13 +6,35 @@ use trios_a2a::{BrowserCommand, BrowserCommandQueue, BrowserResult};
 
 pub struct BrowserState {
     pub queue: Mutex<BrowserCommandQueue>,
+    /// Last time each host agent polled the queue — lets `/chat` auto-wire
+    /// browser tools to whichever agent is actually connected (Wave 16).
+    pollers: Mutex<std::collections::HashMap<String, std::time::Instant>>,
 }
 
 impl BrowserState {
     pub fn new() -> Self {
         Self {
             queue: Mutex::new(BrowserCommandQueue::new()),
+            pollers: Mutex::new(std::collections::HashMap::new()),
         }
+    }
+
+    /// The most recently polling agent within `window`, if any.
+    pub async fn active_agent(&self, window: std::time::Duration) -> Option<String> {
+        let now = std::time::Instant::now();
+        let pollers = self.pollers.lock().await;
+        pollers
+            .iter()
+            .filter(|(_, at)| now.duration_since(**at) <= window)
+            .max_by_key(|(_, at)| **at)
+            .map(|(id, _)| id.clone())
+    }
+
+    async fn record_poll(&self, agent_id: &str) {
+        let mut pollers = self.pollers.lock().await;
+        pollers.insert(agent_id.to_string(), std::time::Instant::now());
+        // Keep the map tiny — drop entries stale for over an hour.
+        pollers.retain(|_, at| at.elapsed() < std::time::Duration::from_secs(3600));
     }
 }
 
@@ -27,6 +49,9 @@ pub struct ReportBody {
 }
 
 pub async fn browser_commands(state: &AppState, agent_id: &str) -> Value {
+    if !agent_id.is_empty() {
+        state.browser.record_poll(agent_id).await;
+    }
     let mut queue = state.browser.queue.lock().await;
     let commands = queue.poll(agent_id);
     json!({"commands": commands})

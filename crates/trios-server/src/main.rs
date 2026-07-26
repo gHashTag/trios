@@ -6,6 +6,7 @@ mod rainbow_routes;
 mod rest_a2a;
 mod rest_agent;
 mod rest_browseros;
+mod rest_chat;
 mod security;
 mod sse_handler;
 mod tools;
@@ -88,6 +89,10 @@ async fn main() -> anyhow::Result<()> {
         // Agent tool-loop (Wave 8): /agent/run, /agent/run/stream, /agent/tools
         // — the Rust port of the retired TS agent core.
         .merge(rest_agent::router())
+        // Sidepanel chat (Wave 16): POST /chat — AI SDK UI message stream,
+        // the route the BrowserOS panel actually talks to. Re-implemented in
+        // Rust after it silently died with the TS server.
+        .merge(rest_chat::router())
         // Observability (Wave 11): Prometheus text exposition for the SR-03
         // browser command queue + server gauges.
         .merge(metrics::router())
