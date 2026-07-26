@@ -100,3 +100,20 @@ curl -s http://127.0.0.1:9105/version
 Версионирование: источник истины — сам бинарь (`/version` отдаёт
 `CARGO_PKG_VERSION` + git-sha, вшитые при сборке в CI), поэтому любой
 артефакт/образ трассируется до коммита без внешних меток.
+
+## Релизы (тег → GitHub Release)
+
+Публичный релиз делается тегом, без ручной сборки:
+
+```
+# 1) при необходимости поднять [workspace.package] version в Cargo.toml
+# 2) тег обязан совпадать с Cargo-версией (release.yml это проверяет)
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`release.yml` собирает бинарь со штампом коммита, смокает `/health` и
+`/version` (sha и версия обязаны совпасть с тегом), пакует
+`trios-server-linux-x86_64` + systemd-unit + Dockerfile.server в tar.gz,
+считает SHA256SUMS и публикует GitHub Release с changelog от предыдущего
+тега. Проверка скачанного бинарника: `GET /version` → `git_sha` равен
+коммиту тега.

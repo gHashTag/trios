@@ -1,0 +1,114 @@
+name: Release
+
+# Wave 15: a version tag (v*) turns the CI-proven build into a public
+# GitHub Release: stamped binary + deploy files + checksums + changelog.
+# The tag must match the workspace Cargo version — one source of truth.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — changelog needs the previous tag
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Tag must match the workspace Cargo version
+        run: |
+          CARGO_V=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          if [ "${GITHUB_REF_NAME#v}" != "$CARGO_V" ]; then
+            echo "tag ${GITHUB_REF_NAME} != workspace version ${CARGO_V}"
+            echo "bump [workspace.package] version in Cargo.toml first"
+            exit 1
+          fi
+          echo "version OK: ${CARGO_V}"
+
+      - name: Build release binary (stamped with the tagged commit)
+        run: cargo build --release -p trios-server
+        env:
+          TRIOS_BUILD_SHA: ${{ github.sha }}
+
+      - name: Smoke — /health and /version must carry tag + sha
+        run: |
+          TRIOS_PORT=9207 ./target/release/trios-server > /tmp/smoke.log 2>&1 &
+          SRV=$!
+          for i in $(seq 1 30); do
+            if ! kill -0 "$SRV" 2>/dev/null; then
+              echo "release binary exited prematurely"; cat /tmp/smoke.log; exit 1
+            fi
+            curl -sf http://127.0.0.1:9207/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9207/health | grep -q ok
+          V=$(curl -sf http://127.0.0.1:9207/version)
+          echo "$V"
+          echo "$V" | grep -q "\"git_sha\":\"${GITHUB_SHA}\"" \
+            || { echo "bad git_sha in /version"; exit 1; }
+          echo "$V" | grep -q "\"version\":\"${GITHUB_REF_NAME#v}\"" \
+            || { echo "bad version in /version"; exit 1; }
+          kill "$SRV"
+          echo "smoke OK"
+
+      - name: Package binary + deploy files + checksums
+        run: |
+          mkdir -p /tmp/pkg
+          cp target/release/trios-server /tmp/pkg/trios-server-linux-x86_64
+          cp deploy/systemd/trios-server.service /tmp/pkg/
+          cp deploy/docker/Dockerfile.server /tmp/pkg/
+          cd /tmp/pkg
+          tar czf "trios-server-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" \
+            trios-server-linux-x86_64 trios-server.service Dockerfile.server
+          sha256sum trios-server-linux-x86_64 \
+            "trios-server-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Changelog since the previous tag
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "Собрано в CI из \`${GITHUB_SHA}\`; бинарь отвечает этим же sha на \`GET /version\`."
+            echo
+            echo "- linux x86_64, glibc >= 2.39 (Ubuntu 24.04+, Debian trixie+)"
+            echo "- для более старых хостов — Dockerfile.server из архива (база ubuntu:24.04)"
+            echo "- systemd-unit и инструкции: docs/DEPLOY.md, раздел Linux"
+            echo
+            if [ -n "$PREV" ]; then
+              echo "### Изменения с ${PREV}"
+              echo
+              git log --format='- %h %s' "${PREV}..${GITHUB_REF_NAME}"
+            else
+              echo "### Изменения (первый релиз — последние 30 коммитов)"
+              echo
+              git log --format='- %h %s' -30 "${GITHUB_REF_NAME}"
+            fi
+          } > /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "/tmp/pkg/trios-server-linux-x86_64#trios-server (linux x86_64, glibc 2.39+)" \
+            "/tmp/pkg/trios-server-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" \
+            "/tmp/pkg/SHA256SUMS" \
+            --title "trios-server ${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md
+          echo "release ${GITHUB_REF_NAME} published"
