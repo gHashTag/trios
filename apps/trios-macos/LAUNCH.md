@@ -7,7 +7,7 @@
 | **Name** | trios.app |
 | **Location** | `~/Applications/trios.app` |
 | **Binary** | `~/Applications/trios.app/Contents/MacOS/trios` |
-| **Project** | `/Users/playra/BrowserOS-full/trios/` |
+| **Project** | `/Users/playra/BrowserOS/trios/` |
 
 ## 🎯 How to Launch
 
@@ -51,7 +51,7 @@ open ~/Applications/trios.app
 ## 🔧 Rebuild After Changes
 
 ```bash
-cd /Users/playra/BrowserOS-full/trios
+cd /Users/playra/BrowserOS/trios
 cargo run -p trios-app-xtask --bin trios-app -- build
 ```
 

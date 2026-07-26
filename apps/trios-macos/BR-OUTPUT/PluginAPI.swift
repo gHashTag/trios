@@ -391,7 +391,7 @@ struct GitHubPluginSettingsView: View {
             
             TextField("Default Repository", text: $defaultRepo)
             
-            Text("Example: gHashTag/BrowserOS-full")
+            Text("Example: gHashTag/BrowserOS")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
