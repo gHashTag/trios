@@ -1,6 +1,6 @@
 import Foundation
 #if canImport(TriOSKit)
-import TriOSKit
+@testable import TriOSKit
 #endif
 import XCTest
 

@@ -90,9 +90,24 @@ enum ProjectPaths {
     /// the Keychain - see DevSecretStore for why.
     static var isDevVariant: Bool { buildVariant == "dev" }
 
-    /// Build variant from Info.plist (prod or staging)
+    /// Build variant from Info.plist (prod or staging).
+    ///
+    /// The plist wins where there is one, so nothing in the environment can
+    /// move a shipped app off its own data directory. The environment is
+    /// consulted only when there is no bundle to ask - a test binary, or any
+    /// headless run.
+    ///
+    /// Without this, `swift test` reports "prod", takes the Keychain path, and
+    /// `SecItemCopyMatching` blocks on a password dialog that no one is there
+    /// to answer. Locally that reads as a hung suite; in CI it burns the job
+    /// timeout and reports nothing at all.
     static var buildVariant: String {
-        Bundle.main.infoDictionary?["TRIOS_VARIANT"] as? String ?? "prod"
+        if let bundled = Bundle.main.infoDictionary?["TRIOS_VARIANT"] as? String,
+           !bundled.isEmpty {
+            return bundled
+        }
+        let environment = ProcessInfo.processInfo.environment["TRIOS_VARIANT"] ?? ""
+        return environment.isEmpty ? "prod" : environment
     }
 
     static var canaryMcpPort: String {

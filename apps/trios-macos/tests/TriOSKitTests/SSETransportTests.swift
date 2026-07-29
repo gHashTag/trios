@@ -1,60 +1,6 @@
 import XCTest
 @testable import TriOSKit
 
-/// URLProtocol subclass that intercepts requests and returns a canned response.
-final class MockURLProtocol: URLProtocol {
-    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
-    static var chunkHandler: ((URLRequest) throws -> (HTTPURLResponse, [Data]))?
-
-    override class func canInit(with request: URLRequest) -> Bool {
-        return true
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        return request
-    }
-
-    override func startLoading() {
-        if let chunkHandler = MockURLProtocol.chunkHandler {
-            do {
-                let (response, chunks) = try chunkHandler(request)
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-                for chunk in chunks {
-                    client?.urlProtocol(self, didLoad: chunk)
-                }
-                client?.urlProtocolDidFinishLoading(self)
-            } catch {
-                client?.urlProtocol(self, didFailWithError: error)
-            }
-            return
-        }
-        guard let handler = MockURLProtocol.requestHandler else {
-            fatalError("MockURLProtocol.requestHandler is not set")
-        }
-        do {
-            let (response, data) = try handler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
-        }
-    }
-
-    override func stopLoading() {}
-}
-
-extension URLSessionConfiguration {
-    static func mockProtocolConfiguration() -> URLSessionConfiguration {
-        let config = URLSessionConfiguration.default
-        config.protocolClasses = [MockURLProtocol.self]
-        config.timeoutIntervalForRequest = 120
-        config.timeoutIntervalForResource = 600
-        config.httpShouldSetCookies = false
-        return config
-    }
-}
-
 /// Test-only local-auth provider that returns a fixed token synchronously.
 actor MockLocalAuthProvider: LocalAuthProviding {
     let token: String?

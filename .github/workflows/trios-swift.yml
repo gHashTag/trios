@@ -54,6 +54,12 @@ jobs:
           echo "--- active developer dir ---"
           xcode-select -p
 
+      # MemoryStore encrypts the agent database with SQLCipher. The runner image
+      # has sqlite3 but not sqlcipher, and sqlite3 has no `sqlite3_key`, so
+      # without this every file importing CSQLCipher fails to compile.
+      - name: Install SQLCipher
+        run: brew install sqlcipher
+
       - name: Cache SwiftPM build
         uses: actions/cache@v4
         with:
@@ -104,8 +110,14 @@ jobs:
         working-directory: apps/trios-macos
         run: swift build -c debug
 
+      # TRIOS_VARIANT=dev routes secrets through DevSecretStore (files) instead
+      # of the Keychain. Without it the suite does not fail - it hangs, because
+      # SecItemCopyMatching puts up a password dialog that no one on a runner
+      # can answer, and the job dies on its timeout having reported nothing.
       - name: SwiftPM test (TriOSKitTests)
         working-directory: apps/trios-macos
+        env:
+          TRIOS_VARIANT: dev
         run: swift test -c debug
 
       - name: Note — full app build is out of scope for CI
