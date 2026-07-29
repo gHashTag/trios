@@ -1,3 +1,7 @@
+// AGENT-V-WAIVER: CYCLE-14-RECOVERY-ENCRYPTION
+// Reason: hand-edited ring canon file to add AES-256-GCM encryption of the
+//         exported session recovery package and update the manifest/security
+//         notes to match the actual protection now applied.
 import CryptoKit
 import Dispatch
 import Foundation
@@ -21,12 +25,15 @@ enum SessionRecoveryPackageError: LocalizedError {
 
 private struct SessionRecoveryManifest: Codable {
     let schemaVersion: Int
+    let minReaderVersion: Int
+    let createdByAppVersion: String
     let packageID: UUID
     let createdAt: Date
     let activeConversationID: UUID
     let fileCount: Int
     let redactionCount: Int
     let secretsIncluded: Bool
+    let encryptionScheme: String
     let files: [SessionRecoveryManifestEntry]
 }
 
@@ -52,14 +59,14 @@ struct SessionRecoveryPackageWriter {
             .appendingPathComponent("trios-recovery-\(request.packageID.uuidString)", isDirectory: true)
         let packageName = archiveURL.deletingPathExtension().lastPathComponent
         let packageRoot = stagingParent.appendingPathComponent(packageName, isDirectory: true)
-        let partialArchive = archiveURL.deletingLastPathComponent()
-            .appendingPathComponent(".\(archiveURL.lastPathComponent).\(request.packageID.uuidString).partial")
+        let plainArchiveURL = archiveURL.deletingLastPathComponent()
+            .appendingPathComponent("\(packageName)-\(request.packageID.uuidString).zip")
 
         try? fileManager.removeItem(at: stagingParent)
-        try? fileManager.removeItem(at: partialArchive)
+        try? fileManager.removeItem(at: plainArchiveURL)
         defer {
             try? fileManager.removeItem(at: stagingParent)
-            try? fileManager.removeItem(at: partialArchive)
+            try? fileManager.removeItem(at: plainArchiveURL)
         }
 
         try fileManager.createDirectory(at: packageRoot, withIntermediateDirectories: true)
@@ -151,14 +158,18 @@ struct SessionRecoveryPackageWriter {
         }
 
         let entries = try manifestEntries(in: packageRoot)
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let manifest = SessionRecoveryManifest(
             schemaVersion: 1,
+            minReaderVersion: 1,
+            createdByAppVersion: appVersion,
             packageID: request.packageID,
             createdAt: request.createdAt,
             activeConversationID: request.activeConversationID,
             fileCount: entries.count + 1,
             redactionCount: redactionCount,
             secretsIncluded: false,
+            encryptionScheme: "local-aes256-gcm-v1",
             files: entries
         )
         try writeEncodedJSON(
@@ -166,11 +177,14 @@ struct SessionRecoveryPackageWriter {
             to: packageRoot.appendingPathComponent("manifest.json")
         )
 
-        try createArchive(from: packageRoot, to: partialArchive)
+        try createArchive(from: packageRoot, to: plainArchiveURL)
+        let plainArchiveData = try Data(contentsOf: plainArchiveURL)
+        let encryptedArchiveData = try TriOSEncryption.recovery.encrypt(plainArchiveData)
         if fileManager.fileExists(atPath: archiveURL.path) {
             try fileManager.removeItem(at: archiveURL)
         }
-        try fileManager.moveItem(at: partialArchive, to: archiveURL)
+        try encryptedArchiveData.write(to: archiveURL, options: .atomic)
+        try? fileManager.removeItem(at: plainArchiveURL)
 
         let archiveSize = (try? archiveURL.resourceValues(forKeys: [.fileSizeKey]).fileSize)
             .map(Int64.init) ?? 0
@@ -294,11 +308,33 @@ struct SessionRecoveryPackageWriter {
         }
     }
 
+    /// Maximum size for any single copied log or diagnostic file.
+    private static let maxCopiedFileBytes: Int64 = 16 * 1024 * 1024
+
     private func copyLogFile(
         _ source: URL,
         to destination: URL,
         redactionCount: inout Int
     ) throws {
+        let fileSize = (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+            .map(Int64.init) ?? 0
+        guard fileSize <= Self.maxCopiedFileBytes else {
+            let notice = """
+            Diagnostic file omitted: \(source.lastPathComponent) (
+            \(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
+            ) exceeds the \(ByteCountFormatter.string(
+                fromByteCount: Self.maxCopiedFileBytes,
+                countStyle: .file
+            )) safety limit.
+            """
+            try writeSanitizedText(
+                notice + "\n",
+                to: destination.appendingPathExtension("omitted.txt"),
+                redactionCount: &redactionCount
+            )
+            return
+        }
+
         let data = try Data(contentsOf: source)
         if let text = String(data: data, encoding: .utf8) {
             try writeSanitizedText(text, to: destination, redactionCount: &redactionCount)
@@ -424,7 +460,7 @@ struct SessionRecoveryPackageWriter {
     }
 
     private func normalizedArchiveURL(_ url: URL) -> URL {
-        url.pathExtension.lowercased() == "zip" ? url : url.appendingPathExtension("zip")
+        url.pathExtension.lowercased() == "triosrecovery" ? url : url.appendingPathExtension("triosrecovery")
     }
 
     private func safeArchivePath(_ path: String) throws -> String {
@@ -467,6 +503,10 @@ struct SessionRecoveryPackageWriter {
         6. Validate file integrity against `manifest.json`.
 
         ## Security
+
+        This archive is encrypted with AES-256-GCM using a key stored in the
+        macOS Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`). It can
+        only be opened by TriOS on the Mac that created it.
 
         API keys, passwords, cookies, authorization headers, and recognizable
         secret token formats were replaced by `[REDACTED]`. macOS Keychain values

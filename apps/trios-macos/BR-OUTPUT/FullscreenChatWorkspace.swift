@@ -25,12 +25,37 @@ struct AdaptiveChatWorkspace: View {
             )
 
             if metrics.mode == .compact {
-                ChatPanelView(
-                    viewModel: viewModel,
-                    scrollToBottomRequest: scrollToBottomRequest,
-                    workspaceMode: .compact,
-                    intelligenceEngine: intelligenceEngine
-                )
+                // The narrow panel is where the user actually lives. Without
+                // this the supervisor was only visible in fullscreen, so a bee
+                // could finish, wait, and be forgotten without a single pixel
+                // saying so.
+                VStack(spacing: 0) {
+                    QueenCompactSupervisorBar(
+                        registry: QueenDelegationRegistry.shared,
+                        conversationId: viewModel.conversationId,
+                        liveConversationIds: viewModel.workerRunner?.runningConversationIds ?? [],
+                        onOpenTask: { viewModel.selectConversation($0) },
+                        onOpenQueen: {
+                            viewModel.selectConversation(ChatConversation.trinityQueenId)
+                        },
+                        onAccept: { task in
+                            Task { await viewModel.runQueenCommand("/accept \(task.issue.slug)") }
+                        },
+                        onCancel: { task in
+                            Task {
+                                await viewModel.runQueenCommand(
+                                    "/cancel \(task.issue.slug) stopped from the panel"
+                                )
+                            }
+                        }
+                    )
+                    ChatPanelView(
+                        viewModel: viewModel,
+                        scrollToBottomRequest: scrollToBottomRequest,
+                        workspaceMode: .compact,
+                        intelligenceEngine: intelligenceEngine
+                    )
+                }
             } else {
                 ExpandedChatWorkspace(
                     viewModel: viewModel,
@@ -52,7 +77,6 @@ struct AdaptiveChatWorkspace: View {
         )
     }
 }
-
 private struct ExpandedChatWorkspace: View {
     @ObservedObject var viewModel: ChatViewModel
     @Binding var sidebarCollapsed: Bool
@@ -61,7 +85,6 @@ private struct ExpandedChatWorkspace: View {
     let todoMetrics: TodoPanelMetrics
     let scrollToBottomRequest: Int
     @ObservedObject var intelligenceEngine: QueenIntelligenceEngine
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let glassProfile = ChatGlassStyle.shared
 
     var body: some View {
@@ -77,6 +100,59 @@ private struct ExpandedChatWorkspace: View {
             VStack(spacing: 0) {
                 conversationHeader
                 Divider().overlay(Color.grokBorder.opacity(0.6))
+
+                // The supervisor strip belongs to the Queen's chat only. In a
+                // worker's chat it would be noise about other people's work.
+                if viewModel.conversationId == ChatConversation.trinityQueenId {
+                    QueenDashboardView(
+                        registry: QueenDelegationRegistry.shared,
+                        liveConversationIds: viewModel.workerRunner?.runningConversationIds ?? [],
+                        onOpenTask: { viewModel.selectConversation($0) },
+                        onReview: { task in
+                            Task { await viewModel.runQueenCommand("/accept \(task.issue.slug)") }
+                        },
+                        onCancel: { task in
+                            Task {
+                                await viewModel.runQueenCommand(
+                                    "/cancel \(task.issue.slug) stopped from the swarm view"
+                                )
+                            }
+                        }
+                    )
+                } else if let task = QueenDelegationRegistry.shared.task(
+                    forConversation: viewModel.conversationId
+                ) {
+                    // A worker chat says nothing about the work without this.
+                    QueenTaskBanner(
+                        task: task,
+                        isLive: viewModel.workerRunner?.isRunning(
+                            conversationId: viewModel.conversationId
+                        ) ?? false,
+                        usage: viewModel.workerRunner?.usage(
+                            forConversation: viewModel.conversationId
+                        ),
+                        onAccept: {
+                            Task { await viewModel.runQueenCommand("/accept \(task.issue.slug)") }
+                        },
+                        onReject: {
+                            Task {
+                                await viewModel.runQueenCommand(
+                                    "/review \(task.issue.slug) reject needs another pass"
+                                )
+                            }
+                        },
+                        onCancel: {
+                            Task {
+                                await viewModel.runQueenCommand(
+                                    "/cancel \(task.issue.slug) stopped from its chat"
+                                )
+                            }
+                        },
+                        onOpenQueen: {
+                            viewModel.selectConversation(ChatConversation.trinityQueenId)
+                        }
+                    )
+                }
 
                 HStack(spacing: 0) {
                     Spacer(minLength: 24)
@@ -106,15 +182,6 @@ private struct ExpandedChatWorkspace: View {
         }
     }
 
-    // The inspector is only reachable in expanded mode; guard the binding so a
-    // stale override cannot present it when the policy disallows the panel.
-    private var todoInspectorBinding: Binding<Bool> {
-        Binding(
-            get: { todoMetrics.isAvailable && todoPresented },
-            set: { todoPresented = $0 }
-        )
-    }
-
     private var conversationHeader: some View {
         HStack(spacing: 12) {
             Button(action: { sidebarCollapsed.toggle() }) {
@@ -133,39 +200,17 @@ private struct ExpandedChatWorkspace: View {
 
             Spacer()
 
-            todoToggleButton
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
     }
 
-    @ViewBuilder
-    private var todoToggleButton: some View {
-        if todoMetrics.isAvailable {
-            Button(action: toggleTodoPanel) {
-                Image(systemName: todoPresented ? "checklist.checked" : "checklist")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(todoPresented ? .grokText : .grokMuted)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .help(todoPresented ? "Hide tasks" : "Show tasks")
-            .accessibilityLabel("Toggle task list")
-            .accessibilityValue(todoPresented ? "shown" : "hidden")
-            .keyboardShortcut("t", modifiers: [.command, .shift])
-        }
+    private var todoInspectorBinding: Binding<Bool> {
+        Binding(
+            get: { todoMetrics.isAvailable && todoPresented },
+            set: { todoPresented = $0 }
+        )
     }
-
-    private func toggleTodoPanel() {
-        if reduceMotion {
-            todoPresented.toggle()
-        } else {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                todoPresented.toggle()
-            }
-        }
-    }
-
     private var currentTitle: String {
         if let conversation = viewModel.conversations.first(where: {
             $0.id == viewModel.conversationId
@@ -181,18 +226,31 @@ private struct ExpandedChatWorkspace: View {
 
 private struct TaskHistorySidebar: View {
     @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject private var registry = QueenDelegationRegistry.shared
     @State private var searchText = ""
     @State private var hoveredConversationId: UUID?
+    @State private var editingConversationId: UUID?
+    @State private var draftTitle = ""
+    @State private var archiveExpanded = false
+    @FocusState private var focusedConversationId: UUID?
     private let glassProfile = ChatGlassStyle.shared
 
     var body: some View {
         VStack(spacing: 0) {
             sidebarHeader
+
+            // The Queen sits above the task list, in her own frame. She is not a
+            // task among tasks: she is the one delegating them.
+            queenCard
+
             searchField
 
             Divider()
                 .overlay(Color.grokBorder.opacity(0.55))
                 .padding(.top, 10)
+
+            swarmSection
+            archiveSection
 
             historyContent
 
@@ -205,17 +263,191 @@ private struct TaskHistorySidebar: View {
         }
     }
 
-    private var sidebarHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 9) {
-                Image(systemName: "triangle.fill")
-                    .font(.system(size: 14))
-                    .rotationEffect(.degrees(180))
-                    .foregroundColor(.grokText)
-
-                Spacer()
+    /// The Queen's dedicated entry, styled to her station.
+    @ViewBuilder
+    private var queenCard: some View {
+        let queen = viewModel.conversations.first { $0.id == ChatConversation.trinityQueenId }
+        if let queen {
+            let isActive = viewModel.conversationId == queen.id
+            Button {
+                Task { await viewModel.switchConversation(id: queen.id) }
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 15))
+                        .foregroundColor(.yellow)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(queen.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.grokText)
+                            .lineLimit(1)
+                        Text(queenSubtitle)
+                            .font(.system(size: 10))
+                            .foregroundColor(.grokMuted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    if !registry.reviewQueue.isEmpty {
+                        Text("\(registry.reviewQueue.count)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.orange.opacity(0.22)))
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.yellow.opacity(isActive ? 0.16 : 0.07))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.yellow.opacity(0.32), lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .accessibilityLabel("Trinity Queen")
+            .accessibilityValue(queenSubtitle)
+        }
+    }
 
+    private var queenSubtitle: String {
+        let running = registry.running.count
+        let waiting = registry.reviewQueue.count
+        if running == 0 && waiting == 0 { return "No work delegated" }
+        var parts: [String] = []
+        if running > 0 { parts.append("\(running) working") }
+        if waiting > 0 { parts.append("\(waiting) awaiting review") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Delegated work: one chat per GitHub issue, each on its own virtual branch.
+    @ViewBuilder
+    private var swarmSection: some View {
+        // Open work only. Settled tasks move to the archive below, so the list
+        // the user scans is the list they can still act on.
+        let tasks = registry.open.sorted { $0.updatedAt > $1.updatedAt }
+        if !tasks.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 9))
+                    Text("Swarm")
+                    Spacer()
+                    Text("\(registry.running.count)/\(QueenDelegationPolicy.maximumConcurrentWorkers)")
+                        .font(.system(size: 9, design: .monospaced))
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.grokMuted)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+
+                ForEach(tasks) { task in
+                    taskRow(task, dimmed: false)
+                }
+
+                Divider().overlay(Color.grokBorder.opacity(0.55)).padding(.top, 6)
+            }
+        }
+    }
+
+    /// Settled work, collapsed by default.
+    ///
+    /// Accepted tasks used to sit in the swarm list forever, so after a day of
+    /// delegating the section answering "what needs me" was mostly things that
+    /// did not.
+    @ViewBuilder
+    private var archiveSection: some View {
+        let settled = registry.archived
+        if !settled.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Button {
+                    archiveExpanded.toggle()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: archiveExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 8, weight: .semibold))
+                        Image(systemName: "archivebox")
+                            .font(.system(size: 9))
+                        Text("Archive")
+                        Spacer()
+                        Text("\(settled.count)")
+                            .font(.system(size: 9, design: .monospaced))
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.grokMuted)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if archiveExpanded {
+                    ForEach(settled.prefix(20)) { task in
+                        taskRow(task, dimmed: true)
+                    }
+                    if settled.count > 20 {
+                        Text("+\(settled.count - 20) older")
+                            .font(.system(size: 9))
+                            .foregroundColor(.grokDim)
+                            .padding(.horizontal, 12)
+                    }
+                }
+
+                Divider().overlay(Color.grokBorder.opacity(0.55)).padding(.top, 6)
+            }
+        }
+    }
+
+    private func taskRow(_ task: DelegatedTask, dimmed: Bool) -> some View {
+        let isLive = viewModel.workerRunner?.isRunning(
+            conversationId: task.conversationId
+        ) ?? false
+        return Button {
+            Task { await viewModel.switchConversation(id: task.conversationId) }
+        } label: {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(task.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.grokText)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        QueenTaskStatusPill(state: task.state, isLive: isLive, compact: true)
+                    }
+                    HStack(spacing: 5) {
+                        Text(task.issue.slug)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.grokDim)
+                        if let branch = task.virtualBranch {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.system(size: 8))
+                                .foregroundColor(.grokDim)
+                            Text(branch)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.grokDim)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .opacity(dimmed ? 0.55 : 1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(task.worker) on \(task.issue.slug) - \(QueenTaskStyle.label(for: task.state, isLive: isLive))")
+    }
+
+    private var sidebarHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
             Button(action: { viewModel.newConversation() }) {
                 HStack(spacing: 9) {
                     Image(systemName: "square.and.pencil")
@@ -323,13 +555,35 @@ private struct TaskHistorySidebar: View {
     private func conversationRow(_ conversation: ChatConversation) -> some View {
         let isSelected = conversation.id == viewModel.conversationId
         let isHovered = conversation.id == hoveredConversationId
+        let isEditing = conversation.id == editingConversationId
 
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(conversation.title)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(.grokText)
-                    .lineLimit(1)
+                if isEditing {
+                    TextField("Task title", text: $draftTitle)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.grokText)
+                        .focused($focusedConversationId, equals: conversation.id)
+                        .onSubmit {
+                            saveTitle(for: conversation)
+                        }
+                        .onExitCommand {
+                            cancelTitleEditing()
+                        }
+                } else {
+                    Text(conversation.title)
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(.grokText)
+                        .lineLimit(1)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(
+                            TapGesture(count: 2)
+                                .onEnded {
+                                    startTitleEditing(conversation)
+                                }
+                        )
+                }
 
                 Text(conversation.updatedAt, style: .relative)
                     .font(.system(size: 9))
@@ -338,14 +592,44 @@ private struct TaskHistorySidebar: View {
 
             Spacer(minLength: 4)
 
-            if isHovered {
+            if isEditing {
+                Button(action: { saveTitle(for: conversation) }) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.grokText)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Save title")
+                .accessibilityLabel("Save title")
+
+                Button(action: cancelTitleEditing) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.grokMuted)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Cancel editing")
+                .accessibilityLabel("Cancel editing")
+            } else if isHovered {
+                Button(action: { startTitleEditing(conversation) }) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 10))
+                        .foregroundColor(.grokMuted)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Rename task")
+                .accessibilityLabel("Rename task")
+
                 Button(action: {
                     Task { await viewModel.deleteConversation(id: conversation.id) }
                 }) {
                     Image(systemName: "trash")
                         .font(.system(size: 10))
                         .foregroundColor(.grokMuted)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.plain)
                 .help("Delete task")
@@ -361,16 +645,47 @@ private struct TaskHistorySidebar: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .onTapGesture {
+            guard editingConversationId != conversation.id else { return }
             Task { await viewModel.switchConversation(id: conversation.id) }
         }
         .onHover { hovered in
             hoveredConversationId = hovered ? conversation.id : nil
         }
+        .accessibilityAction(named: Text("Rename task")) {
+            startTitleEditing(conversation)
+        }
         .contextMenu {
+            Button("Rename") {
+                startTitleEditing(conversation)
+            }
             Button("Delete", role: .destructive) {
                 Task { await viewModel.deleteConversation(id: conversation.id) }
             }
         }
+    }
+
+    private func startTitleEditing(_ conversation: ChatConversation) {
+        draftTitle = conversation.title
+        editingConversationId = conversation.id
+        DispatchQueue.main.async {
+            focusedConversationId = conversation.id
+        }
+    }
+
+    private func saveTitle(for conversation: ChatConversation) {
+        let title = draftTitle
+        editingConversationId = nil
+        focusedConversationId = nil
+        draftTitle = ""
+        Task {
+            await viewModel.renameConversation(conversation.id, to: title)
+        }
+    }
+
+    private func cancelTitleEditing() {
+        editingConversationId = nil
+        focusedConversationId = nil
+        draftTitle = ""
     }
 
     private var connectionFooter: some View {
@@ -429,10 +744,6 @@ private struct TaskHistorySection: Identifiable {
     var id: String { title }
 }
 
-// MARK: - Live TODO Panel
-
-/// Trailing checklist panel. Tasks are projected from the conversation's real
-/// planner state (`TodoListProjection`) — never from static fixtures.
 private struct TodoInspectorPanel: View {
     @ObservedObject var viewModel: ChatViewModel
     private let glassProfile = ChatGlassStyle.shared

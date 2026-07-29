@@ -19,7 +19,14 @@
 ### Method 2: From Dock
 - If trios is in Dock, **click the icon**
 
-### Method 3: From Terminal
+### Method 3: From Terminal (one command)
+```bash
+cd /Users/playra/BrowserOS/trios
+./trios
+```
+This starts the backend services via PM2 and opens `trios.app`.
+
+### Method 4: From Terminal (legacy)
 ```bash
 open ~/Applications/trios.app
 ```
@@ -43,7 +50,7 @@ open ~/Applications/trios.app
 |------|---------|
 | `~/Applications/trios.app` | **The app** (launch this!) |
 | `./trios_app` | Raw binary (for developers) |
-| `cargo run -p trios-app-xtask --bin trios-app -- build` | Build (Rust-порт build.sh, закон L1) |
+| `./build.sh` | Build script |
 | `./main.swift` | Entry point |
 | `./rings/SR-02/ChatViewModel.swift` | Chat logic |
 | `./BR-OUTPUT/` | UI components |
@@ -52,10 +59,10 @@ open ~/Applications/trios.app
 
 ```bash
 cd /Users/playra/BrowserOS/trios
-cargo run -p trios-app-xtask --bin trios-app -- build
+./build.sh
 ```
 
-Then copy to Applications:
+Then copy to Applications (or use `./trios --build` which does this automatically):
 ```bash
 cp ./trios_app ~/Applications/trios.app/Contents/MacOS/trios
 ```
@@ -87,6 +94,18 @@ cp ./trios_app ~/Applications/trios.app/Contents/MacOS/trios
 
 **"Status bar icon missing"**
 → Check if another instance is running: `pgrep -x trios`
+
+---
+
+### One-command options
+
+| Command | Action |
+|---------|--------|
+| `./trios` | Start backend + open trios.app |
+| `./trios --build` | Rebuild Swift app, then start |
+| `./trios --stop` | Stop app + backend services |
+| `./trios --status` | Show running status + health |
+| `./trios --logs` | Tail PM2 logs |
 
 ---
 

@@ -10,10 +10,13 @@ import SwiftUI
 /// ChatSidebarView — Sidebar with edit name and pin functionality
 struct ChatSidebarView: View {
     @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject private var registry = QueenDelegationRegistry.shared
     @State private var editingConversationId: UUID?
     @State private var editedName: String = ""
     @State private var searchText: String = ""
-    
+    @State private var selectedConversationId: UUID? = nil
+    @FocusState private var isEditingName: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             headerBar
@@ -74,13 +77,39 @@ struct ChatSidebarView: View {
     }
     
     private var listContent: some View {
-        List(selection: $viewModel.selectedConversationId) {
+        List {
+            // The Queen sits above everything, in her own section. She is not a
+            // conversation among conversations: she is the one delegating them,
+            // and burying her in "Pinned" understates that.
+            queenSection
+
+            // Delegated work: one chat per GitHub issue, each on its own
+            // virtual branch.
+            if !delegatedTasks.isEmpty {
+                Section {
+                    ForEach(delegatedTasks) { task in
+                        delegatedTaskRow(task)
+                    }
+                } header: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "point.3.connected.trianglepath.dotted")
+                            .font(.system(size: 9))
+                        Text("Swarm")
+                        Spacer()
+                        Text("\(registry.running.count)/\(QueenDelegationPolicy.maximumConcurrentWorkers)")
+                            .font(.system(size: 9, design: .monospaced))
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.grokMuted)
+                    .textCase(nil)
+                }
+            }
+
             // Pinned conversations
             if !pinnedConversations.isEmpty {
                 Section {
                     ForEach(pinnedConversations) { conversation in
                         conversationRow(conversation)
-                            .tag(conversation.id)
                     }
                 } header: {
                     Text("Pinned")
@@ -92,9 +121,8 @@ struct ChatSidebarView: View {
             
             // Regular conversations
             Section {
-                ForEach(filteredConversations.filter { !$0.isPinned }) { conversation in
+                ForEach(filteredConversations.filter { !$0.isPinned && $0.id != ChatConversation.trinityQueenId && registry.task(forConversation: $0.id) == nil }) { conversation in
                     conversationRow(conversation)
-                        .tag(conversation.id)
                 }
             }
         }
@@ -102,33 +130,159 @@ struct ChatSidebarView: View {
         .background(Color.clear)
     }
     
-    private var pinnedConversations: [Conversation] {
-        viewModel.conversations.filter { $0.isPinned }
+    /// The Queen's own row, styled to her station: full-width, crowned, and
+    /// carrying the swarm's live counters so she is useful at a glance.
+    @ViewBuilder
+    private var queenSection: some View {
+        if let queen = viewModel.conversations.first(where: { $0.id == ChatConversation.trinityQueenId }) {
+            Section {
+                Button {
+                    Task { await viewModel.switchConversation(id: queen.id) }
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.yellow)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(queen.title)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.grokText)
+                                .lineLimit(1)
+                            Text(queenSubtitle)
+                                .font(.system(size: 10))
+                                .foregroundColor(.grokMuted)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        if !registry.reviewQueue.isEmpty {
+                            // Work waiting on her decision, not just running.
+                            Text("\(registry.reviewQueue.count)")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color.orange.opacity(0.22)))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.yellow.opacity(viewModel.conversationId == queen.id ? 0.14 : 0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.yellow.opacity(0.30), lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                .accessibilityLabel("Trinity Queen")
+                .accessibilityValue(queenSubtitle)
+            }
+        }
+    }
+
+    private var queenSubtitle: String {
+        let running = registry.running.count
+        let waiting = registry.reviewQueue.count
+        if running == 0 && waiting == 0 { return "No work delegated" }
+        var parts: [String] = []
+        if running > 0 { parts.append("\(running) working") }
+        if waiting > 0 { parts.append("\(waiting) awaiting review") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// One delegated task: its issue, its worker, its virtual branch.
+    private func delegatedTaskRow(_ task: DelegatedTask) -> some View {
+        Button {
+            Task { await viewModel.switchConversation(id: task.conversationId) }
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(color(for: task.state))
+                    .frame(width: 7, height: 7)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(task.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.grokText)
+                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        Text(task.issue.slug)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.grokDim)
+                        if let branch = task.virtualBranch {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.system(size: 8))
+                                .foregroundColor(.grokDim)
+                            Text(branch)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.grokDim)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 4)
+                Text(task.state.rawValue)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(color(for: task.state))
+            }
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(task.worker) on \(task.issue.slug)")
+    }
+
+    private func color(for state: DelegatedTaskState) -> Color {
+        switch state {
+        case .running: return .green
+        case .awaitingReview: return .orange
+        case .failed, .rejected: return .red
+        case .accepted: return .blue
+        case .queued: return .grokMuted
+        case .cancelled: return .grokDim
+        }
+    }
+
+    private var delegatedTasks: [DelegatedTask] {
+        registry.active.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private var pinnedConversations: [ChatConversation] {
+        viewModel.conversations
+            .filter { $0.isPinned && $0.id != ChatConversation.trinityQueenId }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
     
-    private var filteredConversations: [Conversation] {
+    private var filteredConversations: [ChatConversation] {
         if searchText.isEmpty {
             return viewModel.conversations
         }
         return viewModel.conversations.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
+            $0.title.localizedCaseInsensitiveContains(searchText)
         }
     }
     
-    private func conversationRow(_ conversation: Conversation) -> some View {
-        let messages = viewModel.getMessages(for: conversation.id)
+    private func conversationRow(_ conversation: ChatConversation) -> some View {
+        let messages = viewModel.sidebarMessages(for: conversation.id)
         let last = messages.last
-        
+
         return HStack(spacing: 10) {
-            // Pin indicator
-            if conversation.isPinned {
+            // Pin indicator (or crown for reserved Trinity Queen)
+            if conversation.isReserved {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(.orange)
+            } else if conversation.isPinned {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 8))
                     .foregroundColor(.orange)
             }
-            
+
             avatar(for: conversation)
-            
+
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     if editingConversationId == conversation.id {
@@ -136,12 +290,12 @@ struct ChatSidebarView: View {
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(.grokText)
-                            .focused()
+                            .focused($isEditingName)
                             .onSubmit {
                                 saveEditedName(for: conversation)
                             }
                     } else {
-                        Text(conversation.name)
+                        Text(conversation.title)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(.grokText)
                     }
@@ -149,7 +303,7 @@ struct ChatSidebarView: View {
                     Spacer()
                     
                     if let last = last {
-                        Text(last.formattedTime)
+                        Text(last.timestamp.formatted(date: .omitted, time: .shortened))
                             .font(.system(size: 9))
                             .foregroundColor(.grokDim)
                     }
@@ -181,42 +335,55 @@ struct ChatSidebarView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(rowBackground(isSelected: viewModel.selectedConversationId == conversation.id))
+        .background(rowBackground(isSelected: viewModel.conversationId == conversation.id))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            Task {
+                await viewModel.switchConversation(id: conversation.id)
+            }
+        }
         .contextMenu {
             contextMenuItems(for: conversation)
         }
     }
     
     @ViewBuilder
-    private func contextMenuItems(for conversation: Conversation) -> some View {
+    private func contextMenuItems(for conversation: ChatConversation) -> some View {
         Button(action: { startEditing(conversation) }) {
             Label("Rename", systemImage: "pencil")
         }
-        
-        Button(action: { togglePin(conversation) }) {
-            Label(conversation.isPinned ? "Unpin" : "Pin", systemImage: conversation.isPinned ? "pin.slash" : "pin")
-        }
-        
-        Divider()
-        
-        Button(role: .destructive) {
-            viewModel.deleteConversation(conversation.id)
-        } label: {
-            Label("Delete", systemImage: "trash")
+
+        if !conversation.isReserved {
+            Button(action: { togglePin(conversation) }) {
+                Label(conversation.isPinned ? "Unpin" : "Pin", systemImage: conversation.isPinned ? "pin.slash" : "pin")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                viewModel.deleteConversation(conversation.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
     
-    private func startEditing(_ conversation: Conversation) {
+    private func startEditing(_ conversation: ChatConversation) {
         editingConversationId = conversation.id
-        editedName = conversation.name
+        editedName = conversation.title
+        isEditingName = true
     }
-    
-    private func saveEditedName(for conversation: Conversation) {
-        viewModel.renameConversation(conversation.id, to: editedName.trimmingCharacters(in: .whitespacesAndNewlines))
+
+    private func saveEditedName(for conversation: ChatConversation) {
+        let title = editedName
         editingConversationId = nil
+        isEditingName = false
+        Task {
+            await viewModel.renameConversation(conversation.id, to: title)
+        }
     }
     
-    private func togglePin(_ conversation: Conversation) {
+    private func togglePin(_ conversation: ChatConversation) {
         viewModel.togglePin(conversation.id)
     }
     
@@ -235,14 +402,18 @@ struct ChatSidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func avatar(for conversation: Conversation) -> some View {
+    private func avatar(for conversation: ChatConversation) -> some View {
         ZStack {
             Circle()
-                .fill(Color.grokElevated.opacity(0.5))
+                .fill(
+                    conversation.isReserved
+                        ? Color.orange.opacity(0.2)
+                        : Color.grokElevated.opacity(0.5)
+                )
                 .frame(width: 36, height: 36)
             Image(systemName: conversation.icon)
                 .font(.system(size: 14))
-                .foregroundColor(.grokAccent)
+                .foregroundColor(conversation.isReserved ? .orange : .grokAccent)
         }
     }
     
@@ -264,7 +435,7 @@ struct ChatSidebarView: View {
 // MARK: - Menu Button (Shows on Hover)
 
 struct MenuButton: View {
-    let conversation: Conversation
+    let conversation: ChatConversation
     let isEditing: Bool
     let onRename: () -> Void
     
@@ -290,56 +461,19 @@ struct MenuButton: View {
     }
 }
 
-// MARK: - Conversation Model
-
-struct Conversation: Identifiable, Hashable {
-    let id: UUID
-    var name: String
-    var icon: String
-    var isPinned: Bool
-    var unreadCount: Int
-    let createdAt: Date
-    var lastMessageAt: Date
-}
-
 // MARK: - ChatViewModel Extension
 
+// ChatSidebarView keeps its own local view state; it must not extend
+// ChatViewModel with methods that duplicate or conflict with the canonical
+// conversation-management API in rings/SR-02/ChatViewModel.swift.
 extension ChatViewModel {
-    func createNewConversation() {
-        let conversation = Conversation(
-            id: UUID(),
-            name: "New Chat",
-            icon: "message.fill",
-            isPinned: false,
-            unreadCount: 0,
-            createdAt: Date(),
-            lastMessageAt: Date()
-        )
-        conversations.append(conversation)
-        selectedConversationId = conversation.id
-    }
-    
-    func renameConversation(_ id: UUID, to newName: String) {
-        if let index = conversations.firstIndex(where: { $0.id == id }) {
-            conversations[index].name = newName.isEmpty ? "Untitled" : newName
-        }
-    }
-    
-    func togglePin(_ id: UUID) {
-        if let index = conversations.firstIndex(where: { $0.id == id }) {
-            conversations[index].isPinned.toggle()
-        }
-    }
-    
-    func deleteConversation(_ id: UUID) {
-        conversations.removeAll { $0.id == id }
-        if selectedConversationId == id {
-            selectedConversationId = nil
-        }
-    }
-    
-    func getMessages(for conversationId: UUID) -> [ChatMessage] {
-        // Return messages for this conversation
+    func sidebarMessages(for conversationId: UUID) -> [ChatMessage] {
+        // Sidebar-specific message preview; return empty until wired to persister.
         return []
+    }
+
+    /// Human-readable role label for the Trinity Queen reserved conversation.
+    var reservedQueenLabel: String {
+        "Trinity Queen"
     }
 }

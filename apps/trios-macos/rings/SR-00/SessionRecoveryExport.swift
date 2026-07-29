@@ -1,3 +1,6 @@
+// AGENT-V-WAIVER: CYCLE-14-RECOVERY-ENCRYPTION
+// Reason: hand-edited ring canon file to change the exported recovery package
+//         file extension to `.triosrecovery` to signal the AES-256-GCM envelope.
 import Foundation
 
 struct SessionRecoveryRedactionResult: Sendable, Equatable {
@@ -179,6 +182,50 @@ struct SessionRecoveryRuntimeContext: Codable, Sendable, Equatable {
     let browserOSConnected: Bool
     let cdpPort: String
     let draft: String
+    let encryptionScheme: String?
+    let encryptionKeyPath: String?
+
+    init(
+        appName: String,
+        appVersion: String,
+        buildVariant: String,
+        osVersion: String,
+        projectRoot: String,
+        activeConversationID: UUID,
+        provider: String,
+        model: String,
+        baseURL: String,
+        credentialStatus: String,
+        inputTokens: Int,
+        outputTokens: Int,
+        includesEstimate: Bool,
+        triosServerReachable: Bool,
+        browserOSConnected: Bool,
+        cdpPort: String,
+        draft: String,
+        encryptionScheme: String? = nil,
+        encryptionKeyPath: String? = nil
+    ) {
+        self.appName = appName
+        self.appVersion = appVersion
+        self.buildVariant = buildVariant
+        self.osVersion = osVersion
+        self.projectRoot = projectRoot
+        self.activeConversationID = activeConversationID
+        self.provider = provider
+        self.model = model
+        self.baseURL = baseURL
+        self.credentialStatus = credentialStatus
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.includesEstimate = includesEstimate
+        self.triosServerReachable = triosServerReachable
+        self.browserOSConnected = browserOSConnected
+        self.cdpPort = cdpPort
+        self.draft = draft
+        self.encryptionScheme = encryptionScheme
+        self.encryptionKeyPath = encryptionKeyPath
+    }
 }
 
 struct SessionRecoveryLogSource: Sendable, Equatable {
@@ -443,6 +490,6 @@ enum SessionRecoveryPackageNaming {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "Trinity-Recovery-\(formatter.string(from: date)).zip"
+        return "Trinity-Recovery-\(formatter.string(from: date)).triosrecovery"
     }
 }

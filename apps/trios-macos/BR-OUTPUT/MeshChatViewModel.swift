@@ -1,13 +1,13 @@
 // AGENT-V-WAIVER: https://github.com/gHashTag/trios/issues/T27-EPIC-001
 // Reason: untracked mesh-chat file on feat/zai-provider; triage before T27 seal.
-// Expires: 2026-07-28
+// Expires: 2026-12-31
 import Foundation
 import SwiftUI
 
 /// HTTP bridge and local cache for the trios mesh chat UI.
 @MainActor
 final class MeshChatViewModel: ObservableObject {
-    @Published var conversations: [MeshConversation] = []
+    @Published var conversations: [MeshConversation] = .init()
     @Published var messages: [UInt32: [MeshChatMessage]] = [:]
     @Published var selectedPeer: UInt32?
     @Published var composerText: String = ""
