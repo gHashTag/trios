@@ -11,21 +11,16 @@ import Foundation
 @MainActor
 class ExtensionStoreAPI: ObservableObject {
     
-    @Published var extensions: [ExtensionInfo] = .init()
-    @Published var installedExtensions: Set<String> = .init()
+    @Published var extensions: [ExtensionInfo] = []
+    @Published var installedExtensions: Set<String> = []
     @Published var isLoading: Bool = false
     @Published var error: String?
     
-    private let apiBaseUrl: URL
+    private let apiBaseUrl: String
     private let apiKey: String
-
-    init?(apiBaseUrl: String = "https://extensions.trios.ai", apiKey: String = "") {
-        guard let url = URL(string: apiBaseUrl),
-              url.scheme?.lowercased() == "https",
-              let host = url.host, !host.isEmpty else {
-            return nil
-        }
-        self.apiBaseUrl = url
+    
+    init(apiBaseUrl: String = "https://extensions.trios.ai", apiKey: String = "") {
+        self.apiBaseUrl = apiBaseUrl
         self.apiKey = apiKey
         loadInstalledExtensions()
     }
@@ -36,13 +31,11 @@ class ExtensionStoreAPI: ObservableObject {
     func browseExtensions(category: String? = nil, search: String? = nil) async {
         isLoading = true
         error = nil
-
+        
         do {
-            guard var components = URLComponents(url: apiBaseUrl, resolvingAgainstBaseURL: true) else {
-                throw ExtensionStoreError.invalidInput
-            }
-            components.path = "/api/v1/extensions"
-
+            var url = URL(string: "\(apiBaseUrl)/api/v1/extensions")!
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: true)!
+            
             var queryItems: [URLQueryItem] = []
             if let category = category {
                 queryItems.append(URLQueryItem(name: "category", value: category))
@@ -50,84 +43,73 @@ class ExtensionStoreAPI: ObservableObject {
             if let search = search {
                 queryItems.append(URLQueryItem(name: "q", value: search))
             }
+            
             components.queryItems = queryItems
-
-            guard let url = components.url else {
-                throw ExtensionStoreError.invalidInput
-            }
-
+            url = components.url!
+            
             var request = URLRequest(url: url)
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-
+            
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw ExtensionStoreError.networkError
             }
-
+            
             let decoded = try JSONDecoder().decode(ExtensionListResponse.self, from: data)
             extensions = decoded.extensions
-
+            
             AnalyticsService.shared.track("extensions_browsed", properties: [
                 "count": extensions.count,
                 "category": category ?? "all"
             ])
-
+            
         } catch {
             self.error = error.localizedDescription
             AnalyticsService.shared.trackError(error, context: "ExtensionStoreAPI.browseExtensions")
         }
-
+        
         isLoading = false
     }
     
     /// Get extension details
     func getExtensionDetails(id: String) async -> ExtensionInfo? {
-        guard validateExtensionId(id), let url = endpointURL(path: "/extensions/\(id)") else {
-            AnalyticsService.shared.trackError(ExtensionStoreError.invalidInput, context: "ExtensionStoreAPI.getExtensionDetails")
-            return nil
-        }
-
+        guard let url = URL(string: "\(apiBaseUrl)/api/v1/extensions/\(id)") else { return nil }
+        
         do {
             var request = URLRequest(url: url)
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                return nil
-            }
+            
+            let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(ExtensionInfo.self, from: data)
-
+            
         } catch {
             AnalyticsService.shared.trackError(error, context: "ExtensionStoreAPI.getExtensionDetails")
             return nil
         }
     }
-
+    
     /// Install extension
     func installExtension(id: String) async -> Bool {
-        guard validateExtensionId(id), let url = endpointURL(path: "/extensions/\(id)/install") else {
-            AnalyticsService.shared.trackError(ExtensionStoreError.invalidInput, context: "ExtensionStoreAPI.installExtension")
-            return false
-        }
-
+        guard let url = URL(string: "\(apiBaseUrl)/api/v1/extensions/\(id)/install") else { return false }
+        
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
+            
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 return false
             }
-
+            
             installedExtensions.insert(id)
             saveInstalledExtensions()
-
+            
             AnalyticsService.shared.track("extension_installed", properties: ["extension_id": id])
-
+            
             return true
-
+            
         } catch {
             AnalyticsService.shared.trackError(error, context: "ExtensionStoreAPI.installExtension")
             return false
@@ -147,22 +129,7 @@ class ExtensionStoreAPI: ObservableObject {
     }
     
     // MARK: - Private Methods
-
-    /// Validates an extension id: only alphanumerics, hyphen, and underscore;
-    /// length between 1 and 64 characters.
-    private func validateExtensionId(_ id: String) -> Bool {
-        id.count >= 1
-            && id.count <= 64
-            && id.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil
-    }
-
-    /// Builds an HTTPS URL under the configured API base.
-    private func endpointURL(path: String) -> URL? {
-        var components = URLComponents(url: apiBaseUrl, resolvingAgainstBaseURL: true)
-        components?.path = "/api/v1\(path)"
-        return components?.url
-    }
-
+    
     private func loadInstalledExtensions() {
         if let data = UserDefaults.standard.data(forKey: "trios_installed_extensions"),
            let ids = try? JSONDecoder().decode(Set<String>.self, from: data) {
@@ -206,10 +173,29 @@ enum ExtensionStoreError: Error {
     case networkError
     case decodingError
     case notFound
-    case invalidInput
 }
 
-// MARK: - Loaded Extension
+// MARK: - Extension Manager
+
+@MainActor
+class ExtensionManager: ObservableObject {
+    
+    @Published var extensions: [LoadedExtension] = []
+    
+    private let storeAPI: ExtensionStoreAPI
+    private let pluginAPI: PluginAPI
+    
+    init(storeAPI: ExtensionStoreAPI = ExtensionStoreAPI(),
+         pluginAPI: PluginAPI = PluginAPI()) {
+        self.storeAPI = storeAPI
+        self.pluginAPI = pluginAPI
+    }
+    
+    func loadExtensions() async {
+        // Load installed extensions
+        // Initialize plugin system
+    }
+}
 
 struct LoadedExtension {
     let id: String

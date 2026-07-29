@@ -137,7 +137,6 @@ struct QueenQuickActionsSheet: View {
         case "MCP": viewModel.restartMCP()
         case "Agent": viewModel.restartAgentServer()
         case "Cron": viewModel.runCron()
-        case "Local Auth": viewModel.refreshLocalAuth()
         default: break
         }
     }

@@ -4,36 +4,34 @@ import Foundation
 // MARK: - TRIOS Plugin Protocol
 
 /// Core protocol that all TRIOS plugins must conform to
-public protocol TRIOSPlugin {
+@objc public protocol TRIOSPlugin {
     /// Unique plugin identifier (reverse DNS notation)
     static var pluginID: String { get }
-
+    
     /// Human-readable plugin name
     static var pluginName: String { get }
-
+    
     /// Plugin version (SemVer)
     static var version: String { get }
-
+    
     /// Plugin description
     static var description: String { get }
-
+    
     /// Author information
     static var author: String { get }
-
+    
     /// Minimum TRIOS version required
     static var minimumTRIOSVersion: String { get }
-
-    init()
-
+    
     /// Called when plugin is loaded
     func onLoad(context: PluginContext)
-
+    
     /// Called when plugin is unloaded
     func onUnload()
-
+    
     /// Called when user invokes a plugin command
     func execute(command: String, parameters: [String: Any], completion: @escaping (Result<Any, PluginError>) -> Void)
-
+    
     /// Optional: Custom UI view for plugin settings
     func settingsView() -> AnyView?
 }
@@ -79,8 +77,8 @@ public class PluginContext {
 public class PluginRegistry {
     public static let shared = PluginRegistry()
     
-    fileprivate var plugins: [String: TRIOSPlugin] = [:]
-    fileprivate var pluginConfigs: [String: PluginConfig] = [:]
+    private var plugins: [String: TRIOSPlugin] = [:]
+    private var pluginConfigs: [String: PluginConfig] = [:]
     
     public struct PluginConfig {
         let enabled: Bool
@@ -273,7 +271,7 @@ class PluginPreferences {
 
 // MARK: - Example Plugin: GitHub Integration
 
-final class GitHubPlugin: TRIOSPlugin {
+@objc class GitHubPlugin: NSObject, TRIOSPlugin {
     static var pluginID: String = "com.trios.plugins.github"
     static var pluginName: String = "GitHub Integration"
     static var version: String = "1.0.0"
@@ -335,7 +333,7 @@ final class GitHubPlugin: TRIOSPlugin {
 
 // MARK: - Example Plugin: Slack Integration
 
-final class SlackPlugin: TRIOSPlugin {
+@objc class SlackPlugin: NSObject, TRIOSPlugin {
     static var pluginID: String = "com.trios.plugins.slack"
     static var pluginName: String = "Slack Integration"
     static var version: String = "1.0.0"
