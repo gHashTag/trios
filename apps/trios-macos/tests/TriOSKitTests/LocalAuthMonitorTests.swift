@@ -7,10 +7,12 @@ final class LocalAuthMonitorTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        clearAuditLog()
         monitor = LocalAuthMonitor()
     }
 
     override func tearDown() {
+        clearAuditLog()
         monitor = nil
         super.tearDown()
     }
@@ -78,11 +80,7 @@ final class LocalAuthMonitorTests: XCTestCase {
         XCTAssertEqual(meta.lastFailureReason, "refresh_family_revoked")
         XCTAssertNotNil(meta.lastFailureAt)
 
-        let auditURL = URL(fileURLWithPath: "\(ProjectPaths.trinity)/state/local-auth-audit.jsonl")
-        defer {
-            try? FileManager.default.removeItem(at: auditURL)
-        }
-        let content = try String(contentsOf: auditURL, encoding: .utf8)
+        let content = try await auditContents(containing: "family.revoked")
         XCTAssertTrue(content.contains("family.revoked"))
     }
 
@@ -108,14 +106,52 @@ final class LocalAuthMonitorTests: XCTestCase {
         let monitor = LocalAuthMonitor()
         await monitor.recordFetchSuccess()
 
-        let auditURL = URL(fileURLWithPath: "\(ProjectPaths.trinity)/state/local-auth-audit.jsonl")
-        defer {
-            try? FileManager.default.removeItem(at: auditURL)
-        }
-
-        let content = try String(contentsOf: auditURL, encoding: .utf8)
+        let content = try await auditContents(containing: "fetch.success")
         XCTAssertFalse(content.isEmpty)
         XCTAssertFalse(content.contains("secret-token"))
         XCTAssertTrue(content.contains("fetch.success"))
+    }
+
+    // MARK: - Audit log helpers
+
+    private var auditURL: URL {
+        URL(fileURLWithPath: "\(ProjectPaths.trinity)/state/local-auth-audit.jsonl")
+    }
+
+    /// Removes the audit log so a test cannot read another test's writes.
+    ///
+    /// Clearing only afterwards is not enough: the first run on a clean checkout
+    /// behaves differently from every run after it, and a stale file lets an
+    /// assertion pass on somebody else's line.
+    private func clearAuditLog() {
+        try? FileManager.default.removeItem(at: auditURL)
+    }
+
+    /// Waits for `marker` to appear in the audit log, then returns the contents.
+    ///
+    /// `recordFetchSuccess` and friends hand the write to a detached `Task` so
+    /// the auth path is never blocked by disk IO, which means they return before
+    /// the entry exists. Reading straight after the call is a race: it passed
+    /// locally only because an earlier test had already created the file, and
+    /// failed on a clean checkout where nothing had.
+    ///
+    /// Polling for the effect rather than sleeping a fixed interval keeps the
+    /// test fast when the write is prompt and still correct when it is not.
+    private func auditContents(
+        containing marker: String,
+        timeout: TimeInterval = 2.0,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws -> String {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let content = try? String(contentsOf: auditURL, encoding: .utf8),
+               content.contains(marker) {
+                return content
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Audit log never contained '\(marker)' within \(timeout)s", file: file, line: line)
+        return ""
     }
 }
