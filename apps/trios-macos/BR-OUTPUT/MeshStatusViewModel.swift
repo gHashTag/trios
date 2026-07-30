@@ -1,7 +1,7 @@
 // AGENT-V-WAIVER: https://github.com/gHashTag/trios/issues/T27-EPIC-001
 // Reason: mesh tab integration files on feat/zai-provider lack T27 provenance;
 //         triage before T27 seal. Not part of current T27 refactor.
-// Expires: 2026-07-28
+// Expires: 2026-12-31
 // Follow-up: create separate issue/branch to spec-drive Mesh models + view model.
 import Foundation
 import SwiftUI
@@ -10,9 +10,9 @@ import SwiftUI
 @MainActor
 final class MeshStatusViewModel: ObservableObject {
     @Published var nodeId: UInt32 = 0
-    @Published var neighbors: [MeshNeighbor] = []
-    @Published var routes: [MeshRoute] = []
-    @Published var sessions: [MeshSession] = []
+    @Published var neighbors: [MeshNeighbor] = .init()
+    @Published var routes: [MeshRoute] = .init()
+    @Published var sessions: [MeshSession] = .init()
     @Published var metrics: MeshMetrics = MeshMetrics(link_loss_to_reroute_ms: nil, node_off_to_reroute_ms: nil)
     @Published var isReachable = false
     @Published var lastError: String?

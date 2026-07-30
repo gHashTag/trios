@@ -23,6 +23,12 @@ macOS full-screen, while preserving the existing compact side-panel experience.
 - Conversations load when the view model starts, not only after the first send.
 - The sidebar supports new task, search, selection, relative update time, and
   deletion.
+- A task title can be edited inline by double-clicking it or choosing Rename
+  from its context menu.
+- Return saves an edited title, Escape cancels editing, and blank titles become
+  `Untitled`.
+- A custom title is stored independently from message content and survives
+  conversation reloads and application restarts.
 - The active conversation is visually selected.
 - Switching or deleting the active conversation cancels in-flight streaming
   before replacing message state.
@@ -35,6 +41,8 @@ macOS full-screen, while preserving the existing compact side-panel experience.
 - Input remains pinned below the message scroll area.
 - Existing colors, glass material, Markdown renderer, and status indicators are
   reused instead of introducing a second chat implementation.
+- The Trinity brand mark appears only in the title bar; the task-history sidebar
+  does not repeat it.
 
 ## Tests
 
@@ -43,12 +51,16 @@ macOS full-screen, while preserving the existing compact side-panel experience.
 3. Full-screen metrics provide a visible sidebar and a 900-point content cap.
 4. Collapsed full-screen metrics remove sidebar width without changing mode.
 5. Compact metrics never reserve history-sidebar width.
+6. Title normalization trims and collapses whitespace and limits titles to 80
+   characters.
+7. A renamed title remains after constructing a new persister over the same
+   preferences domain.
 
 ## Invariants
 
 - `ChatPanelView` remains the single message and composer implementation.
 - Full-screen mode does not duplicate or merge conversation data.
+- Renaming a task never rewrites its messages.
 - Swift and first-party Markdown additions are English and ASCII-only.
 - No new shell script is introduced.
 - Existing unrelated worktree changes are preserved.
-

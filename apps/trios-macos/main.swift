@@ -1,3 +1,6 @@
+// AGENT-V-WAIVER: https://github.com/browseros-ai/BrowserOS/issues/2023
+// Reason: Queen direct-chat hardening — eliminate force-unwraps in panel cycling
+// and accessibility frame reads to avoid runtime crashes.
 import Cocoa
 import Foundation
 import SwiftUI
@@ -127,7 +130,8 @@ class TriosScreenManager {
 
     func cycleToNextMode() {
         let all = TriosPanelMode.allCases
-        let nextIndex = (all.firstIndex(of: panelMode)! + 1) % all.count
+        guard let currentIndex = all.firstIndex(of: panelMode) else { return }
+        let nextIndex = (currentIndex + 1) % all.count
         panelMode = all[nextIndex]
     }
 }
@@ -172,6 +176,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ApplicationMenuInstaller.install(delegate: self)
 
         setupStatusItem()
+        // Rotate JSONL audit streams before anything starts writing to them.
+        LogRotationPolicy.rotateAuditLogs()
+        // Re-run audit rotation periodically in the background while the app runs.
+        AuditRotationScheduler.shared.start()
         // CRITICAL: setupSidePanel MUST run synchronously before any UI interaction.
         // Previously it was in Task { @MainActor in } which meant panel was nil
         // when the user clicked the status bar icon before the task completed.
@@ -190,19 +198,177 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let cg = compositionRoot.makeCladeGuard()
             cladeGuard = cg
             cg.startMonitoring()
-            await chatViewModel?.registerA2A()
+            // Queen background service owns A2A registration, heartbeat and the
+            // self-improvement audit loop. It survives chat switches and panel close.
+            await QueenBackgroundService.shared.start()
+            await runDelegationSelfTestIfRequested()
         }
+    }
+
+    /// Drives one real `/delegate` through the Queen and reports what the worker
+    /// did, with no window and no clicking.
+    ///
+    /// Delegation only ever runs from the chat UI, which made "the bee never
+    /// started" impossible to prove without a human at the keyboard. Set
+    /// `TRIOS_E2E_DELEGATE="owner/repo#N|worker|title"` to exercise the same
+    /// code path the UI calls and read the verdict out of the log.
+    @MainActor
+    private func runDelegationSelfTestIfRequested() async {
+        let environment = ProcessInfo.processInfo.environment
+        guard let spec = environment["TRIOS_E2E_DELEGATE"], !spec.isEmpty else { return }
+        guard let vm = chatViewModel else {
+            TriosLogBus.shared.error(.queen, "queen.selftest.failed", "No chat view model", [:])
+            return
+        }
+
+        let fields = spec.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard fields.count == 3 || fields.count == 4 else {
+            TriosLogBus.shared.error(
+                .queen,
+                "queen.selftest.failed",
+                "TRIOS_E2E_DELEGATE must be 'owner/repo#N|worker|title[|paths]'",
+                ["spec": spec]
+            )
+            return
+        }
+        let issueText = fields[0]
+        let worker = fields[1]
+        let title = fields[2]
+        // A fourth field is the worker's file boundary. Without one the brief
+        // tells it to ask before editing, so a write task produces no writes.
+        let pathsFlag = fields.count == 4 && !fields[3].isEmpty ? " --paths \(fields[3])" : ""
+
+        TriosLogBus.shared.info(.queen, "queen.selftest.start", "Delegation self-test starting", ["spec": spec])
+        await vm.runQueenCommand("/delegate \(issueText) \(worker)\(pathsFlag) \(title)")
+
+        guard let issue = IssueReference.parse(issueText),
+              let task = QueenDelegationRegistry.shared.task(forIssue: issue) else {
+            TriosLogBus.shared.error(
+                .queen,
+                "queen.selftest.failed",
+                "Delegation did not register a task",
+                ["issue": issueText]
+            )
+            return
+        }
+
+        // Wait for the bee, bounded. A self-test that hangs is a self-test that
+        // gets ignored. Agent turns that edit a repository routinely run for
+        // many minutes, so the ceiling is generous and overridable.
+        let seconds = Double(environment["TRIOS_E2E_DELEGATE_TIMEOUT"] ?? "") ?? 900
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline,
+              vm.workerRunner?.isRunning(conversationId: task.conversationId) == true {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+
+        let transcript = vm.workerRunner?.transcripts[task.conversationId] ?? []
+        let answered = transcript.contains { $0.role == .assistant && !$0.content.isEmpty }
+        let stillRunning = vm.workerRunner?.isRunning(conversationId: task.conversationId) == true
+        let tools = transcript.reduce(0) { $0 + $1.toolCalls.count }
+        let state = QueenDelegationRegistry.shared.task(forConversation: task.conversationId)?.state
+        // "No answer yet" and "no answer ever" are different verdicts; reporting
+        // a running worker as a failure is how a slow bee gets called a broken one.
+        let verdict: String
+        if answered {
+            verdict = "Worker answered"
+        } else if stillRunning {
+            verdict = "Worker still running at the \(Int(seconds))s deadline"
+        } else {
+            verdict = "Worker finished without producing assistant text"
+        }
+        let report = answered ? TriosLogBus.shared.info : TriosLogBus.shared.error
+        report(
+            .queen,
+            answered ? "queen.selftest.passed" : "queen.selftest.failed",
+            verdict,
+            [
+                "issue": issue.slug,
+                "worker": worker,
+                "messages": String(transcript.count),
+                "tools": String(tools),
+                "state": state?.rawValue ?? "unknown"
+            ]
+        )
+
+        // A second turn on the same conversation, when asked for. The orphan
+        // regression only shows itself on the *next* send: the first turn
+        // leaves a tool call unanswered, and the send after it is the one that
+        // used to throw before leaving the app. Testing one turn proves nothing
+        // about the bug.
+        if environment["TRIOS_E2E_SECOND_TURN"] == "1" {
+            TriosLogBus.shared.info(
+                .queen,
+                "queen.selftest.second_turn",
+                "Sending a second turn on the same conversation",
+                ["issue": issue.slug]
+            )
+            vm.workerRunner?.start(
+                task: task,
+                brief: "Continue. This is the turn that fails if the previous "
+                    + "one left a tool call unanswered."
+            )
+            let secondDeadline = Date().addingTimeInterval(120)
+            while Date() < secondDeadline,
+                  vm.workerRunner?.isRunning(conversationId: task.conversationId) == true {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            let after = vm.workerRunner?.transcripts[task.conversationId] ?? []
+            let answered = after.contains { $0.role == .assistant && !$0.content.isEmpty }
+            let report = answered ? TriosLogBus.shared.info : TriosLogBus.shared.error
+            report(
+                .queen,
+                answered ? "queen.selftest.second_turn_passed" : "queen.selftest.second_turn_failed",
+                answered
+                    ? "The conversation survived a turn that left an orphan"
+                    : "The second turn produced nothing - the orphan poisoned the conversation",
+                ["issue": issue.slug]
+            )
+        }
+
+        // Prove the wake path while work is still outstanding. Running it after
+        // acceptance only ever exercised the silent branch.
+        await QueenReviewScheduler.shared.reviewNow()
+
+        // Optionally close the loop, so the review commands are exercised by the
+        // same probe rather than only by hand.
+        guard let verb = environment["TRIOS_E2E_DELEGATE_REVIEW"], !verb.isEmpty else { return }
+        await vm.runQueenCommand("/swarm")
+        let command = verb == "reject"
+            ? "/review \(issue.slug) reject probe rejection"
+            : "/accept \(issue.slug) probe acceptance"
+        await vm.runQueenCommand(command)
+        let reviewed = QueenDelegationRegistry.shared.tasks
+            .first { $0.conversationId == task.conversationId }?
+            .state
+        TriosLogBus.shared.info(
+            .queen,
+            "queen.selftest.reviewed",
+            "Review command applied",
+            ["issue": issue.slug, "command": verb, "state": reviewed?.rawValue ?? "unknown"]
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         sessionGuard?.stopMonitoring()
         cladeGuard?.stopMonitoring()
-        serverManager.terminateAll()
+        AuditRotationScheduler.shared.stop()
+        Task {
+            await QueenBackgroundService.shared.stop()
+            await MainActor.run {
+                serverManager.terminateAll()
+            }
+        }
     }
 
     @objc func exportSessionRecoveryPackage(_ sender: Any?) {
         NSLog("Export session recovery package requested")
         NotificationCenter.default.post(name: .exportSessionRecoveryPackage, object: nil)
+    }
+
+    @objc func importSessionRecoveryPackage(_ sender: Any?) {
+        NSLog("Import session recovery package requested")
+        NotificationCenter.default.post(name: .importSessionRecoveryPackage, object: nil)
     }
 
     private func setupStatusItem() {
@@ -299,26 +465,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func getWindowFrame(_ window: AXUIElement) -> CGRect? {
         var positionValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue) == .success else {
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue) == .success,
+              let positionAXValue = castAXValue(positionValue) else {
             return nil
         }
-        guard CFGetTypeID(positionValue) == AXValueGetTypeID() else { return nil }
         var position = CGPoint.zero
-        // CFGetTypeID check above guarantees AXValue type. `as!` is the required
-        // idiomatic form for CoreFoundation types here — `as?` is rejected by
-        // the compiler ("conditional downcast ... will always succeed").
-        guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &position) else { return nil }
+        guard AXValueGetValue(positionAXValue, .cgPoint, &position) else { return nil }
 
         var sizeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success else {
+        guard AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let sizeAXValue = castAXValue(sizeValue) else {
             return nil
         }
-        guard CFGetTypeID(sizeValue) == AXValueGetTypeID() else { return nil }
         var size = CGSize.zero
-        // CFGetTypeID-checked; `as!` required for CoreFoundation cast (see above).
-        guard AXValueGetValue(sizeValue as! AXValue, .cgSize, &size) else { return nil }
+        guard AXValueGetValue(sizeAXValue, .cgSize, &size) else { return nil }
 
         return CGRect(origin: position, size: size)
+    }
+
+    /// Centralizes the CoreFoundation AXValue cast so the type-ID check and the
+    /// cast live in one place. The guard above guarantees the value is an AXValue;
+    /// `as!` is the idiomatic form for this CoreFoundation cast.
+    private func castAXValue(_ value: CFTypeRef?) -> AXValue? {
+        guard let value = value, CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        // The type-ID check guarantees the value is an AXValue. `unsafeBitCast`
+        // is used instead of `as!` because the compiler treats the forced CF
+        // cast as unconditionally succeeding and emits an error for `as?`.
+        return unsafeBitCast(value, to: AXValue.self)
     }
 
     func setWindowFrame(_ window: AXUIElement, frame: CGRect) {
@@ -510,7 +683,7 @@ Your filesystem tools will be available!
     @objc func quit() {
         RecursionGuard.shared.cleanup()
         Task {
-            await chatViewModel?.unregisterA2A()
+            await QueenBackgroundService.shared.stop()
             await MainActor.run {
                 serverManager.terminateAll()
                 NSApplication.shared.terminate(nil)
@@ -588,15 +761,42 @@ struct CompositionRoot {
     @MainActor
     func makeChatViewModel() -> ChatViewModel {
         NSLog("CompositionRoot: creating ChatViewModel...")
-        let transport = SSETransport()
-        NSLog("CompositionRoot: SSETransport created")
         let healthCheck = HealthCheckTransport()
         let parser = UIMessageStreamParser()
         let persister = ConversationPersister()
         let stateMachine = ConversationStateMachine()
         let modelStore = ModelConfigurationStore.shared
+        let memoryStore: any AgentMemoryStoreProtocol
+        do {
+            memoryStore = try MemoryStore()
+        } catch {
+            NSLog(
+                "CompositionRoot: durable memory unavailable, using volatile fallback: %@",
+                error.localizedDescription
+            )
+            memoryStore = VolatileMemoryStore()
+        }
+        let fingerprintKey = MemoryFingerprintKeyProvider.loadOrCreate()
+        if fingerprintKey == nil {
+            NSLog(
+                "CompositionRoot: Keychain recall key unavailable; long-term memory disabled"
+            )
+        }
+        let memoryService = AgentMemoryService(
+            store: memoryStore,
+            fingerprintKey: fingerprintKey
+        )
+        let todoPlanner = TODOPlanner(
+            store: memoryStore,
+            preferences: .standard
+        )
 
         let serverURL = URL(string: ProjectPaths.mcpBaseURL) ?? URL(fileURLWithPath: "/dev/null")
+        let localAuthProvider = LocalAuthProvider(baseURL: serverURL)
+        LocalAuthUIManager.shared.configure(provider: localAuthProvider)
+        let transport = SSETransport(localAuthProvider: localAuthProvider)
+        NSLog("CompositionRoot: SSETransport created")
+
         let agentCard = AgentCard(
             id: AgentId("trios-agent"),
             name: "TRIOS AGENT",
@@ -605,8 +805,43 @@ struct CompositionRoot {
             version: "1.0.0",
             endpoint: URL(string: "\(ProjectPaths.mcpBaseURL)/a2a")
         )
-        let a2aClient = A2ARegistryClient(serverURL: serverURL, agentCard: agentCard)
+        let a2aClient = A2ARegistryClient(
+            serverURL: serverURL,
+            agentCard: agentCard,
+            localAuthProvider: localAuthProvider
+        )
         NSLog("CompositionRoot: A2ARegistryClient created")
+
+        QueenBackgroundService.shared.configure(
+            memoryService: memoryService,
+            persister: persister,
+            a2aClient: a2aClient
+        )
+
+        // Each worker gets its own transport. Sharing the chat's transport would
+        // mean a conversation switch (which cancels it) also killed every bee.
+        let workerRunner = QueenWorkerRunner(
+            persister: persister,
+            modelStore: modelStore,
+            makeTransport: {
+                // A cassette replaces the provider entirely when one is named,
+                // so a swarm run is deterministic: same bytes, same order, every
+                // time. Without it a one-in-three failure costs a session to
+                // characterise, because each attempt is a different conversation
+                // with a different model on a different day.
+                if let cassette = ProcessInfo.processInfo.environment["TRIOS_REPLAY_CASSETTE"],
+                   !cassette.isEmpty {
+                    return ReplayTransport(path: cassette)
+                }
+                return SSETransport(
+                    localAuthProvider: localAuthProvider,
+                    // An hour. Nobody is watching a bee tick, and being cut off
+                    // mid-task wastes every tool call it already made.
+                    resourceTimeout: 3600
+                )
+            }
+        )
+        NSLog("CompositionRoot: QueenWorkerRunner created")
 
         let vm = ChatViewModel(
             transport: transport,
@@ -615,7 +850,10 @@ struct CompositionRoot {
             persister: persister,
             stateMachine: stateMachine,
             a2aClient: a2aClient,
-            modelStore: modelStore
+            modelStore: modelStore,
+            memoryService: memoryService,
+            todoPlanner: todoPlanner,
+            workerRunner: workerRunner
         )
         NSLog("CompositionRoot: ChatViewModel created")
         return vm
