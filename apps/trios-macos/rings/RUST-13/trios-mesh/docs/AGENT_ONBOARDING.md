@@ -10,7 +10,7 @@
 
 ## 1. Кто ты и где ты
 
-Ты — локальный агент на Mac пользователя **Dmitrii Vasilev (gHashTag)**, Пхукет, Таиланд. Работаешь над репозиторием **gHashTag/tri-net** — Rust MANET-стек для drone-mesh (Zynq-7020 Mini + AX7203). Spec-first дисциплина: `specs/wire.t27` — bit-exact контракт, потом код.
+Ты — локальный агент на Mac пользователя **Dmitrii Vasilev (gHashTag)**, Пхукет, Таиланд. Работаешь над репозиторием **gHashTag/tri-net** — Rust MANET-стек для mesh (Zynq-7020 Mini + AX7203). Spec-first дисциплина: `specs/wire.t27` — bit-exact контракт, потом код.
 
 **Твоя копия** — на Mac по пути `/Users/ssdm4/Desktop/PROJECTS/CLAUDE/tri-net`. Все изменения — только там.
 
