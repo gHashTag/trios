@@ -72,6 +72,20 @@ make pdf
 # → out/main.pdf  (~969 pages, 182 figures, ~24 MB after gs /ebook compression)
 ```
 
+### Renderer rules (image placement, keep-together, image-train ban)
+
+The canonical rules for image placement, hero-panel anchoring, and
+typography are defined in:
+
+- **[../pdf-rendering.md](../pdf-rendering.md)** — `TRIOS_PHD_CANONICAL_PIPELINE`,
+  `TRIOS_PHD_RENDERER_FIRST`, `TRIOS_PHD_STYLE_LOCK`,
+  `TRIOS_PHD_NO_IMAGE_TRAIN`.
+
+Headline: hero panels are anchored to the nearest substantive heading
+via `\Needspace*{0.58\textheight}` (soft keep-together). Hard
+`\clearpage` before sections is forbidden — it produced short
+title-only pages and was rejected by QA.
+
 ---
 
 ## 📜 Audit trail

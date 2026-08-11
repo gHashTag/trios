@@ -30,6 +30,13 @@
 
 % Float placement helpers (R1/L1)
 \usepackage{float}
+% TRIOS_PHD_NO_IMAGE_TRAIN — soft keep-together for a section heading and the
+% hero/context block that follows. We reserve ~0.58\textheight before every
+% \section, so a heading is never orphaned at the bottom of a page above a
+% hero image. This is the canonical mechanism: a SOFT vertical reservation,
+% NOT a hard \clearpage. A hard \clearpage before every section created
+% short title-only pages and was rejected by QA.
+\usepackage{needspace}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{epigraph}
@@ -292,6 +299,39 @@
 \providecommand{\lr}{\mathrm{lr}}
 % Define `invariant` environment as a styled tcolorbox
 \newtheorem{invariant}{Invariant}
+
+% =====================================================================
+% TRIOS_PHD_NO_IMAGE_TRAIN — semantic image anchoring.
+%
+% Rule: a hero panel must travel with the nearest substantive heading
+% and its body text, not float into an image train and not strand a
+% heading alone above a figure. We achieve this with a SOFT keep-
+% together reservation in front of every \section and \chapter, sized
+% so the heading plus a hero figure (~0.58 \textheight) cannot be split
+% across a page boundary.
+%
+% IMPORTANT: this is a SOFT reservation, not \clearpage. A hard
+% \clearpage before every section produces short title-only pages and
+% was rejected by manual QA. Do not replace this with \clearpage.
+%
+% Implementation: wrap \section and \chapter so the original command is
+% preceded by \Needspace*{0.58\textheight}. \Needspace* (starred form)
+% triggers a page break only when the remaining vertical space is
+% insufficient AND we are not already at the top of a page — so it
+% never inserts a gratuitous break.
+% =====================================================================
+\makeatletter
+\let\trios@orig@section\section
+\renewcommand{\section}{%
+  \Needspace*{0.58\textheight}%
+  \trios@orig@section
+}
+\let\trios@orig@chapter\chapter
+\renewcommand{\chapter}{%
+  \Needspace*{0.58\textheight}%
+  \trios@orig@chapter
+}
+\makeatother
 
 \begin{document}
 
