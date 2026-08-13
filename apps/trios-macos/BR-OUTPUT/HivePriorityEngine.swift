@@ -236,6 +236,7 @@ enum HiveTaskFactory {
         - \(pushRule)
         - Stage named paths only. Never `git add -A` - this working copy is shared.
         - If you cannot improve this honestly, change nothing and say so. A result you did not measure is not a zero, and "no change needed" is a valid, valuable answer.
+        - Do NOT optimise the signal that selected this task. The Queen picked it from a measurement, and a measurement stops meaning anything the moment work is aimed at the number instead of the thing. Trivial tests that raise coverage, TODO markers deleted without resolving what they described, files split to lower a size score - all of these move the metric and improve nothing. Fix the underlying weakness or report that there is none.
 
         FINISH BY REPORTING
         One paragraph: what you changed, the before and after numbers, what you deliberately did not do, and anything the Queen should re-prioritise as a result.

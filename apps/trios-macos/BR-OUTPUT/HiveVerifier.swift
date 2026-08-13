@@ -45,6 +45,26 @@ enum HiveVerdict: Equatable {
     }
 }
 
+/// Whether the evidence behind a recorded verdict still applies.
+enum HiveEvidenceState: Equatable {
+    case current
+    case stale(measuredAt: String)
+    /// A verdict exists but no commit was recorded with it.
+    case unrecorded
+    case unknown(String)
+
+    var isCurrent: Bool { self == .current }
+
+    var label: String {
+        switch self {
+        case .current: return "CURRENT"
+        case .stale: return "STALE"
+        case .unrecorded: return "NO COMMIT RECORDED"
+        case .unknown: return "UNKNOWN"
+        }
+    }
+}
+
 struct HiveVerifier {
 
     /// The app directory (`.../apps/trios-macos`), not the repository root.
@@ -240,6 +260,43 @@ struct HiveVerifier {
             return line.trimmingCharacters(in: .whitespaces)
         }
         return nil
+    }
+
+    // MARK: - Evidence currency
+
+    /// The commit a verdict was measured against.
+    ///
+    /// A lifecycle state like `review` is a claim unless the evidence behind it
+    /// is *current*. A verdict recorded on Monday says nothing about a tree
+    /// that moved on Tuesday, and without the commit there is no way to tell
+    /// the two apart - the same stale-reading failure already fixed for the
+    /// issues snapshot, left live in the verification record.
+    func head(at root: String) -> String? {
+        let result = HiveProcess.run(
+            executable: "/usr/bin/git",
+            arguments: ["-C", root, "rev-parse", "HEAD"],
+            timeout: 20
+        )
+        guard result.exitCode == 0 else { return nil }
+        let head = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return head.isEmpty ? nil : head
+    }
+
+    /// Whether a recorded verdict still describes the current tree.
+    ///
+    /// Four outcomes, not two: the commit may match, differ, or be unknown on
+    /// either side. Unknown is never reported as current.
+    static func evidenceState(
+        verifiedAt: String?,
+        currentHead: String?
+    ) -> HiveEvidenceState {
+        guard let verifiedAt, !verifiedAt.isEmpty else {
+            return .unrecorded
+        }
+        guard let currentHead, !currentHead.isEmpty else {
+            return .unknown("could not read the current commit")
+        }
+        return verifiedAt == currentHead ? .current : .stale(measuredAt: verifiedAt)
     }
 
     static func tail(_ text: String, lines: Int = 25) -> String {

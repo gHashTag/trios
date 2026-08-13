@@ -319,6 +319,7 @@ struct HiveTabView: View {
                                 Text(verificationLabel(task))
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                                     .foregroundColor(verificationColour(task))
+                                evidenceBadge(task)
                             }
                             if let verification = task.verification {
                                 Text(verification)
@@ -356,6 +357,23 @@ struct HiveTabView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Whether the evidence behind the verdict still describes the tree.
+    /// A pass measured against a commit the tree has since moved past is not a
+    /// pass now, and must not read like one.
+    @ViewBuilder
+    private func evidenceBadge(_ task: HiveTask) -> some View {
+        let state = hive.evidenceState(for: task)
+        if !state.isCurrent {
+            Text(state.label)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(.orange)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Color.grokElevated)
+                .triosBubble(radius: 6)
         }
     }
 

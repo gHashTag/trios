@@ -55,6 +55,9 @@ final class HiveRuntime: ObservableObject {
     private let scanner: HiveRepoScanner
     private let verifier: HiveVerifier
     private var spendByDay: [String: Double] = [:]
+    /// Refreshed once per cycle rather than per row, so a review list of
+    /// twenty tasks does not run twenty `git rev-parse` calls.
+    private var currentHead: String?
     private var rateLimiter = HiveRateLimiter()
     private var runners: [String: HiveBeeRunner] = [:]
     private var timer: Timer?
@@ -89,6 +92,15 @@ final class HiveRuntime: ObservableObject {
     var reviewCount: Int { tasks.filter { $0.state == .review }.count }
     var doneCount: Int { tasks.filter { $0.state == .done }.count }
     var toxicCount: Int { tasks.filter { $0.state == .toxic }.count }
+
+    /// Whether a task's recorded verdict still describes the current tree.
+    func evidenceState(for task: HiveTask) -> HiveEvidenceState {
+        guard task.verification != nil else { return .unrecorded }
+        return HiveVerifier.evidenceState(
+            verifiedAt: task.verifiedAtCommit,
+            currentHead: currentHead
+        )
+    }
 
     var invariantViolations: [HiveInvariantViolation] {
         HiveInvariants.check(policy: policy, tasks: tasks, spentToday: spentToday)
@@ -215,6 +227,10 @@ final class HiveRuntime: ObservableObject {
         defer { cycleInFlight = false }
 
         harvest()
+        let verifier = self.verifier
+        currentHead = await Task.detached(priority: .utility) {
+            verifier.head(at: verifier.projectRoot)
+        }.value
         await rescan()
         materialiseTasks()
         if auth == nil || policy.enabled { await preflight() }
@@ -368,6 +384,10 @@ final class HiveRuntime: ObservableObject {
             if let verdict {
                 tasks[index].verification = "\(verdict.label): \(String(verdict.detail.prefix(1500)))"
                 tasks[index].verified = verdict.isPass ? true : (verdict.isFail ? false : nil)
+                // Stamp the commit the verdict was measured against, so a
+                // review opened days later can tell whether the evidence still
+                // describes the tree.
+                tasks[index].verifiedAtCommit = verifier.head(at: verifier.projectRoot)
                 record("verify_\(verdict.isPass ? "passed" : (verdict.isFail ? "failed" : "unavailable"))",
                        "\(taskID): \(String(verdict.detail.prefix(200)))")
             }

@@ -234,6 +234,9 @@ struct HiveTask: Codable, Identifiable, Equatable {
     /// `true` only when a check ran and passed, `false` when it ran and failed,
     /// `nil` when no check exists - which is not the same as either.
     var verified: Bool?
+    /// The commit the verdict was measured against. Without it, a verdict
+    /// recorded days ago is indistinguishable from one recorded just now.
+    var verifiedAtCommit: String?
 
     init(
         id: String,
@@ -288,6 +291,7 @@ struct HiveTask: Codable, Identifiable, Equatable {
         durationMs = try c.decodeIfPresent(Int.self, forKey: .durationMs)
         verification = try c.decodeIfPresent(String.self, forKey: .verification)
         verified = try c.decodeIfPresent(Bool.self, forKey: .verified)
+        verifiedAtCommit = try c.decodeIfPresent(String.self, forKey: .verifiedAtCommit)
     }
 
     var isTerminal: Bool { state == .done || state == .toxic }
