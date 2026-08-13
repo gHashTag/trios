@@ -48,12 +48,16 @@ final class HiveRuntime: ObservableObject {
     @Published private(set) var nextCycleAt: Date?
     @Published private(set) var spentToday: Double = 0
     @Published private(set) var consecutiveFailures = 0
+    /// The other Hive's state, re-read once per cycle. `nil` until the first
+    /// cycle has run, which is not the same as "no sibling".
+    @Published private(set) var sibling: HiveSiblingReport?
 
     // MARK: - Internals
 
     private let store: HiveStore
     private let scanner: HiveRepoScanner
     private let verifier: HiveVerifier
+    private let siblingProbe: HiveSiblingProbe
     private var spendByDay: [String: Double] = [:]
     /// Refreshed once per cycle rather than per row, so a review list of
     /// twenty tasks does not run twenty `git rev-parse` calls.
@@ -66,11 +70,13 @@ final class HiveRuntime: ObservableObject {
     init(
         store: HiveStore = HiveStore(),
         scanner: HiveRepoScanner = HiveRepoScanner(),
-        verifier: HiveVerifier = HiveVerifier()
+        verifier: HiveVerifier = HiveVerifier(),
+        siblingProbe: HiveSiblingProbe = HiveSiblingProbe()
     ) {
         self.store = store
         self.scanner = scanner
         self.verifier = verifier
+        self.siblingProbe = siblingProbe
         let state = store.load()
         self.policy = state.policy
         self.tasks = state.tasks
@@ -101,6 +107,21 @@ final class HiveRuntime: ObservableObject {
             currentHead: currentHead
         )
     }
+
+    /// What both copies together may spend in one local day. Equal to this
+    /// copy's ceiling until the sibling is found armed, at which point the
+    /// number the operator entered in this window stops being the total.
+    var combinedExposureUSD: Double {
+        sibling?.combinedExposure(ownCeiling: policy.dailyBudgetUSD) ?? policy.dailyBudgetUSD
+    }
+
+    /// True only while a second armed loop is known to exist. An unreadable
+    /// sibling is not counted here - see `siblingExposureIsBounded`.
+    var siblingIsArmed: Bool { sibling?.state.isArmed ?? false }
+
+    /// False when the sibling could not be read, so `combinedExposureUSD` is a
+    /// lower bound rather than a ceiling.
+    var siblingExposureIsBounded: Bool { sibling?.exposureIsBounded ?? true }
 
     var invariantViolations: [HiveInvariantViolation] {
         HiveInvariants.check(policy: policy, tasks: tasks, spentToday: spentToday)
@@ -209,6 +230,29 @@ final class HiveRuntime: ObservableObject {
         isScanning = false
     }
 
+    /// Re-reads the other Hive's state file, once per cycle.
+    ///
+    /// Nothing here can gate a dispatch: the sibling enforces its own ceiling
+    /// in its own process, and a check from this side would be advisory at
+    /// best and a false assurance at worst. What it does is put the real total
+    /// in front of the operator, and write one audit line when the answer
+    /// changes - only when it changes, or an armed sibling would fill the log
+    /// with the same sentence every cycle.
+    func refreshSibling() async {
+        let probe = siblingProbe
+        let report = await Task.detached(priority: .utility) { probe.probe() }.value
+        let previous = sibling?.state
+        sibling = report
+        guard previous != report.state else { return }
+        record(
+            "sibling_hive",
+            "\(report.state.label): " + report.summary(
+                ownCeiling: policy.dailyBudgetUSD,
+                ownArmed: policy.enabled
+            )
+        )
+    }
+
     func preflight() async {
         guard let executable = HiveProcess.resolve("claude", overrideEnvKey: "CLAUDE_EXECUTABLE") else {
             auth = .unknown("claude CLI not found on this machine")
@@ -232,6 +276,7 @@ final class HiveRuntime: ObservableObject {
             verifier.head(at: verifier.projectRoot)
         }.value
         await rescan()
+        await refreshSibling()
         materialiseTasks()
         if auth == nil || policy.enabled { await preflight() }
 

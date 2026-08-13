@@ -18,6 +18,7 @@ struct HiveTabView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 statusBanner
+                siblingBanner
                 controls
                 stats
                 if showPolicy { policyPanel }
@@ -90,6 +91,38 @@ struct HiveTabView: View {
         }
     }
 
+    /// The second Hive on this machine, and what it does to the number in the
+    /// policy panel.
+    ///
+    /// The daily ceiling reads like a total and is only this copy's share, so
+    /// an armed sibling is shown whether or not this copy is armed. An
+    /// unreadable sibling is shown too: not knowing is a state the operator has
+    /// to see, and it is the one case where the combined figure is a floor
+    /// rather than a ceiling. A sibling that is absent or disarmed adds
+    /// nothing to the exposure and so gets no banner - the policy panel still
+    /// carries its line.
+    @ViewBuilder
+    private var siblingBanner: some View {
+        if let report = hive.sibling {
+            switch report.state {
+            case .armed:
+                banner(
+                    icon: "exclamationmark.triangle.fill",
+                    tint: .orange,
+                    text: report.summary(ownCeiling: hive.policy.dailyBudgetUSD, ownArmed: hive.policy.enabled)
+                )
+            case .unreadable:
+                banner(
+                    icon: "questionmark.circle",
+                    tint: .yellow,
+                    text: report.summary(ownCeiling: hive.policy.dailyBudgetUSD, ownArmed: hive.policy.enabled)
+                )
+            case .absent, .disarmed:
+                EmptyView()
+            }
+        }
+    }
+
     private func banner(icon: String, tint: Color, text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
@@ -156,6 +189,12 @@ struct HiveTabView: View {
             stat("Toxic", "\(hive.toxicCount)")
             stat("Today", String(format: "$%.2f", hive.spentToday))
             stat("Fails", "\(hive.consecutiveFailures)/\(hive.policy.maxConsecutiveFailures)")
+            // Only when a second loop is actually armed. A tile that always
+            // read the same as the daily ceiling would teach the operator to
+            // stop looking at it.
+            if hive.siblingIsArmed {
+                stat("Both hives", String(format: "$%.2f", hive.combinedExposureUSD))
+            }
         }
     }
 
@@ -193,6 +232,20 @@ struct HiveTabView: View {
             }
             stepper("Daily ceiling ($)", Int(hive.policy.dailyBudgetUSD), 1...1000) {
                 var p = hive.policy; p.dailyBudgetUSD = Double($0); hive.updatePolicy(p)
+            }
+            // The ceiling above governs this copy alone. Whatever the sibling
+            // probe last saw belongs directly under it, in all four of its
+            // states, so the operator reads the two numbers together.
+            if let report = hive.sibling {
+                Text(report.summary(ownCeiling: hive.policy.dailyBudgetUSD, ownArmed: hive.policy.enabled))
+                    .font(.system(size: 10))
+                    .foregroundColor(hive.siblingIsArmed || !hive.siblingExposureIsBounded ? .orange : .grokDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("The sibling Hive has not been probed yet; that is not the same as there being none.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.grokDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             stepper("Fails in a row -> pause", hive.policy.maxConsecutiveFailures, 1...20) {
                 var p = hive.policy; p.maxConsecutiveFailures = $0; hive.updatePolicy(p)

@@ -58,6 +58,7 @@ let package = Package(
                 "BR-OUTPUT/HiveInvariants.swift",
                 "BR-OUTPUT/HiveDispatch.swift",
                 "BR-OUTPUT/HiveBeeRunner.swift",
+                "BR-OUTPUT/HiveSiblingProbe.swift",
                 "BR-OUTPUT/HiveRuntime.swift",
             ],
             linkerSettings: [
