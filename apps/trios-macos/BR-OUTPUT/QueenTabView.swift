@@ -70,6 +70,9 @@ struct QueenTabView: View {
             hostedRoute(for: .settings) {
                 SettingsTabView()
             },
+            hostedRoute(for: .hive) {
+                HiveTabView()
+            },
         ]
     }
 

@@ -4,7 +4,10 @@ import Foundation
 struct Trinity999TabMapTests {
     static func main() {
         expect(Trinity999TabMap.petalCount == 27, "999 menu must retain 27 petals")
-        expect(Trinity999TabMap.routes.count == 7, "Seven Trios workspaces must be hosted")
+        expect(
+            Trinity999TabMap.routes.count == Trios999Destination.allCases.count,
+            "Every destination must have exactly one route"
+        )
         expect(Trinity999TabMap.isValid, "Hosted routes and shortcuts must be unique")
 
         expectRoute(.chat, petal: 0, realm: .razum, shortcut: 1)
@@ -14,9 +17,10 @@ struct Trinity999TabMapTests {
         expectRoute(.terminal, petal: 13, realm: .materiya, shortcut: 5)
         expectRoute(.mesh, petal: 16, realm: .materiya, shortcut: 8)
         expectRoute(.settings, petal: 17, realm: .materiya, shortcut: 9)
+        expectRoute(.hive, petal: 15, realm: .materiya, shortcut: 7)
 
         expect(
-            Trinity999TabMap.route(forPetal: 15) == nil,
+            Trinity999TabMap.route(forPetal: 12) == nil,
             "Unassigned petals must retain their canonical Queen routes"
         )
 

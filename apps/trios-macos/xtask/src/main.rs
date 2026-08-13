@@ -89,7 +89,7 @@ fn is_git_tracked(repo: &Path, relative: &str) -> bool {
 // build (бывший build.sh)
 // ---------------------------------------------------------------------------
 
-const BR_OUTPUT_ALLOWLIST: [&str; 15] = [
+const BR_OUTPUT_ALLOWLIST: [&str; 16] = [
     "BR-OUTPUT/FullscreenChatWorkspace.swift",
     "BR-OUTPUT/HotkeyBar.swift",
     "BR-OUTPUT/SmoothStreamingEnhancements.swift",
@@ -105,6 +105,9 @@ const BR_OUTPUT_ALLOWLIST: [&str; 15] = [
     "BR-OUTPUT/SlackIntegration.swift",
     "BR-OUTPUT/EmailIntegration.swift",
     "BR-OUTPUT/CalendarIntegration.swift",
+    // Hive workspace view. Its engine (HiveRuntime and below) is carried by
+    // the tracked-sources sweep; only this view needs listing.
+    "BR-OUTPUT/HiveTabView.swift",
 ];
 
 const INFO_PLIST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>

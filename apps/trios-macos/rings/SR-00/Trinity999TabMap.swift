@@ -9,6 +9,7 @@ enum Trios999Destination: String, CaseIterable, Sendable {
     case terminal
     case mesh
     case settings
+    case hive
 }
 
 enum Trinity999Realm: String, Sendable {
@@ -111,6 +112,18 @@ enum Trinity999TabMap {
             title: "Settings",
             systemImage: "gear",
             keyboardShortcut: 9
+        ),
+        // Petal 15 and shortcut 7 were the only gaps left in materiya, which
+        // is where a workspace that builds the system itself belongs.
+        Trios999Route(
+            destination: .hive,
+            petalIndex: 15,
+            realm: .materiya,
+            worldName: "HIVE",
+            formula: "phi^2 = phi + 1",
+            title: "Hive",
+            systemImage: "circle.hexagongrid.fill",
+            keyboardShortcut: 7
         ),
     ]
 
