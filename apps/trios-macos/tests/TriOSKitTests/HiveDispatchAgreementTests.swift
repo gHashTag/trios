@@ -98,3 +98,44 @@ final class HiveDispatchAgreementTests: XCTestCase {
         XCTAssertEqual(made.dispatchKey, target.priorImputedScore)
     }
 }
+
+/// Readings must come from the root the scanner was built for.
+final class HiveScannerRootTests: XCTestCase {
+
+    func testTheIssuesSnapshotIsReadFromTheScannersOwnRoot() throws {
+        // This read used the process-wide ProjectPaths while every other
+        // reading used self.projectRoot, so a scanner built for an explicit
+        // root looked in the wrong place - and reported "no snapshot on disk",
+        // which is indistinguishable from an honestly absent one.
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("hive-root-\(UUID().uuidString)")
+        try fm.createDirectory(at: root.appendingPathComponent(".trinity"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        try #"[{"number":1,"title":"rings/SR-00 leaks","body":"see rings/SR-00"}]"#
+            .write(
+                to: root.appendingPathComponent(".trinity/issues_snapshot.json"),
+                atomically: true, encoding: .utf8
+            )
+
+        let scanner = HiveRepoScanner(projectRoot: root.path, gitRoot: root.path)
+        switch scanner.readIssueCounts() {
+        case .success(let counts):
+            XCTAssertEqual(counts["rings/SR-00"], 2)
+        case .failure(let why):
+            XCTFail("the snapshot beside the scanner's own root was not read: \(why)")
+        }
+    }
+
+    func testAnAbsentSnapshotIsStillReportedAsAbsent() {
+        // The fix must not turn a genuine absence into something else.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hive-none-\(UUID().uuidString)")
+        switch HiveRepoScanner(projectRoot: root.path, gitRoot: root.path).readIssueCounts() {
+        case .success:
+            XCTFail("there is no snapshot there")
+        case .failure(let why):
+            XCTAssertTrue(why.contains("no .trinity/issues_snapshot.json"))
+        }
+    }
+}

@@ -440,7 +440,17 @@ struct HiveRepoScanner {
     /// ported from, that file was 116 days old and was being scored as a
     /// current reading, which is the exact failure this instrument prevents.
     func readIssueCounts(now: Date = Date()) -> Reading<[String: Int]> {
-        let path = "\(ProjectPaths.releaseTrinity)/issues_snapshot.json"
+        // `self.projectRoot`, not the global ProjectPaths.
+        //
+        // Every other reading in this scanner is relative to the root it was
+        // constructed with; this one reached for the process-wide path instead.
+        // A scanner built for an explicit root therefore read a snapshot from
+        // somewhere else, or from nowhere - and the failure surfaces as
+        // "no .trinity/issues_snapshot.json on disk", which reads as an honest
+        // unmeasured signal rather than as a broken probe. The sibling copy in
+        // the Queen package always used its own root, so the two had drifted
+        // apart here without anything noticing.
+        let path = "\(projectRoot)/.trinity/issues_snapshot.json"
         let fm = FileManager.default
         guard let data = fm.contents(atPath: path) else {
             return .failure("no .trinity/issues_snapshot.json on disk")
