@@ -144,7 +144,10 @@ final class HiveBeeRunner: @unchecked Sendable {
         errPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
-            errorBox.value.append(data)
+            // Appends under the box's lock. The termination handler reads the
+            // same box from another queue, and this used to be an unsynchronised
+            // read-modify-write of a Data value from two threads.
+            errorBox.append(data)
         }
 
         process.terminationHandler = { finished in

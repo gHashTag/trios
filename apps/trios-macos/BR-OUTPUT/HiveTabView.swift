@@ -478,18 +478,108 @@ struct HiveTabView: View {
             if hive.targets.isEmpty {
                 emptyRow("Nothing scanned yet.")
             } else {
-                ForEach(Array(hive.eligibleTargets.prefix(12).enumerated()), id: \.element.id) { index, target in
-                    targetRow(index: index, target: target)
+                // The order makes an assumption that cannot be read off the
+                // numbers beside it - three are on display and only one sorts -
+                // so the screen says which, in words, above the list.
+                Text(HiveQueue.orderingSentence)
+                    .font(.system(size: 8))
+                    .foregroundColor(.grokDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(hive.eligibleRows.prefix(12)) { row in
+                    targetRow(row)
+                }
+                if !hive.instrumentFaults.isEmpty {
+                    instrumentFaultList
                 }
             }
         }
     }
 
-    private func targetRow(index: Int, target: HiveTarget) -> some View {
+    /// Targets the scan could not read well enough to rank.
+    ///
+    /// Deliberately without a position and without a score. Printing either
+    /// beside a module the scanner barely read states a comparison the scan
+    /// never made - it ranks how well the instrument worked and presents the
+    /// result as a ranking of code.
+    private var instrumentFaultList: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("NOT RANKED - INSTRUMENT FAULT")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(.orange)
+            Text("Under \(Int(HiveInvariants.minimumDispatchConfidence * 100))% of the signal "
+                + "weight was read on these, so they have no place in the queue. The remedy is "
+                + "the probe, not a bee.")
+                .font(.system(size: 8))
+                .foregroundColor(.grokDim)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(hive.instrumentFaults) { target in
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 8) {
+                        Text(target.module)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.grokMuted)
+                        Spacer()
+                        Text("\(Int(target.confidence * 100))% read")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.orange)
+                    }
+                    Text(target.unreadProbeDetail)
+                        .font(.system(size: 8))
+                        .foregroundColor(.grokDim)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.grokSurface)
+        .triosBubble(radius: 10)
+    }
+
+    /// The pair above this row is not settled by the evidence.
+    ///
+    /// Three different sentences, because "no break-even" has two different
+    /// causes and telling a reader that everything here was read when it was
+    /// not would be the same class of untruth this whole wave is about.
+    private func unsettledBadge(_ breakEven: HiveBreakEven?, _ target: HiveTarget) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("NOT SETTLED BY THE EVIDENCE")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(.orange)
+            Text(Self.unsettledExplanation(breakEven, target))
+                .font(.system(size: 8))
+                .foregroundColor(.grokDim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    static func unsettledExplanation(_ breakEven: HiveBreakEven?, _ target: HiveTarget) -> String {
+        if let breakEven {
+            return "the unread signals here would only have to read \(breakEven.summary) "
+                + "for this row to overtake the one above"
+        }
+        if target.unmeasuredShare > 0 {
+            return "nothing the unread signals here could read would lift this row past the one "
+                + "above; the doubt belongs to that row, whose own unread signals could still "
+                + "put it below this one"
+        }
+        return "everything here was read - the doubt belongs to the row above, whose unread "
+            + "signals could still put it below this one"
+    }
+
+    private func targetRow(_ row: HiveRankedTarget) -> some View {
+        let target = row.target
         let isExpanded = expandedTarget == target.id
         return VStack(alignment: .leading, spacing: 6) {
+            // When the evidence does not separate this row from the one above,
+            // the screen says so. Picking one of two indistinguishable targets
+            // and presenting it as a rank is the defect, not the fix.
+            if case .notSettled(let breakEven) = row.separation {
+                unsettledBadge(breakEven, target)
+            }
+
             HStack(spacing: 8) {
-                Text("\(index + 1)")
+                Text("\(row.position)")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.grokDim)
                     .frame(width: 16, alignment: .trailing)
@@ -507,9 +597,14 @@ struct HiveTabView: View {
                     .font(.system(size: 8, weight: .medium))
                     .foregroundColor(.grokDim)
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(String(format: "%.2f", target.score))
+                    // The key the queue is ordered on.
+                    Text(String(format: "%.2f", target.priorImputedScore))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(.grokText)
+                    // What the evidence leaves open, either side of it.
+                    Text(String(format: "%.2f-%.2f", target.lowerBound, target.upperBound))
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.grokDim)
                     // Confidence sits beside the score, never folded into it:
                     // a half-measured module must not read as a confident one.
                     Text("conf \(Int(target.confidence * 100))%")
@@ -530,6 +625,14 @@ struct HiveTabView: View {
                 ForEach(target.signals) { signal in
                     signalRow(signal)
                 }
+                // All three numbers, each under the name that says what it
+                // assumes. Only the first one sorts.
+                HStack(spacing: 10) {
+                    keyReadout("queue key", target.priorImputedScore)
+                    keyReadout("measured only", target.score)
+                    keyReadout("zero-imputed", target.zeroImputedScore)
+                    Spacer()
+                }
                 HStack {
                     Text(target.path)
                         .font(.system(size: 9, design: .monospaced))
@@ -548,6 +651,17 @@ struct HiveTabView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.grokSurface)
         .triosBubble(radius: 10)
+    }
+
+    private func keyReadout(_ label: String, _ value: Double) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.system(size: 8))
+                .foregroundColor(.grokDim)
+            Text(String(format: "%.3f", value))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.grokText)
+        }
     }
 
     @ViewBuilder

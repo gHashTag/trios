@@ -341,18 +341,56 @@ struct HiveRepoScanner {
             ],
             timeout: 30
         )
+        // Paths in the log are repo-relative; module keys are app-relative.
+        let appPrefix = URL(fileURLWithPath: projectRoot).lastPathComponent
+        return Self.churnReading(
+            from: result,
+            prefixes: realmRoots.map(\.relative),
+            pathPrefix: "apps/\(appPrefix)/",
+            flatRoots: Set(realmRoots.filter { !$0.subdirectoriesAreModules }.map(\.relative))
+        )
+    }
+
+    /// Decides whether a `git log` run is a reading at all, then parses it.
+    ///
+    /// Split from the call so the rule can be tested without a repository -
+    /// the rule being the whole point of the file, and the one that was
+    /// silently violated from underneath.
+    static func churnReading(
+        from result: HiveProcess.Result,
+        prefixes: [String],
+        pathPrefix: String = "",
+        flatRoots: Set<String> = []
+    ) -> Reading<[String: Int]> {
         guard result.exitCode == 0 else {
             let detail = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
             return .failure(detail.isEmpty ? "git log exited \(result.exitCode)" : detail)
         }
-        // Paths in the log are repo-relative; module keys are app-relative.
-        let appPrefix = URL(fileURLWithPath: projectRoot).lastPathComponent
+        // The exit code is not enough to call this a reading.
+        //
+        // A log that was only partly read parses into a table that is missing
+        // modules, and a missing module is written out as `churn30d = 0` - a
+        // measured zero, with its 0.18 of the weight still in the denominator
+        // and the confidence reported as if the probe had worked. That is the
+        // absent-read-as-zero failure this whole file exists to prevent,
+        // entered from underneath: git exits 0, and the truncation happens in
+        // the reader. So a bounded read is a failed reading, with the reason
+        // carried forward like any other.
+        if result.timedOut {
+            return .failure("git log did not finish within its timeout - churn unread, not zero")
+        }
+        if result.outputTruncated {
+            return .failure(
+                "git log exited 0 but its output was not read to the end - a partial log would "
+                    + "report churn 0 for every module it did not reach"
+            )
+        }
         return .success(
-            Self.parseChurn(
+            parseChurn(
                 result.standardOutput,
-                prefixes: realmRoots.map(\.relative),
-                pathPrefix: "apps/\(appPrefix)/",
-                flatRoots: Set(realmRoots.filter { !$0.subdirectoriesAreModules }.map(\.relative))
+                prefixes: prefixes,
+                pathPrefix: pathPrefix,
+                flatRoots: flatRoots
             )
         )
     }
