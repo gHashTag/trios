@@ -45,6 +45,16 @@ let package = Package(
                 "BR-OUTPUT/ChatLogic.swift",
                 "BR-OUTPUT/CladeGuard.swift",
                 "BR-OUTPUT/HotkeyAnalytics.swift",
+                // Hive - the self-improvement loop's measurable half. These
+                // six carry no SwiftUI and no app singletons, so CI can
+                // compile and test them; the orchestrator and its screen stay
+                // in the xtask allowlist with the rest of the Queen surface.
+                "BR-OUTPUT/HiveModels.swift",
+                "BR-OUTPUT/HivePriorityEngine.swift",
+                "BR-OUTPUT/HiveRepoScanner.swift",
+                "BR-OUTPUT/HiveProcess.swift",
+                "BR-OUTPUT/HiveVerifier.swift",
+                "BR-OUTPUT/HiveStore.swift",
             ],
             linkerSettings: [
                 .linkedLibrary("sqlcipher"),
