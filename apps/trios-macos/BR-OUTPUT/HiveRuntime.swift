@@ -123,11 +123,29 @@ final class HiveRuntime: ObservableObject {
     /// lower bound rather than a ceiling.
     var siblingExposureIsBounded: Bool { sibling?.exposureIsBounded ?? true }
 
+    /// What the sibling has already committed today and this copy therefore
+    /// charges against its own ceiling. Zero until the sibling has been probed:
+    /// an unprobed sibling is not a debit, it is an unknown.
+    var siblingCommittedUSD: Double { sibling?.committedSpendUSD ?? 0 }
+
+    /// What is left of this copy's daily ceiling once both its own spend and
+    /// the sibling's committed spend are taken off it. This, not
+    /// `dailyBudgetUSD - spentToday`, is what the next dispatch is measured
+    /// against.
+    var sharedHeadroomUSD: Double {
+        max(0, policy.dailyBudgetUSD - spentToday - siblingCommittedUSD)
+    }
+
     var invariantViolations: [HiveInvariantViolation] {
         HiveInvariants.check(policy: policy, tasks: tasks, spentToday: spentToday)
     }
 
-    private var context: HiveDispatchContext {
+    /// Everything the pure decision needs, assembled from the impure world.
+    ///
+    /// Internal rather than private: the wiring is where a proof about
+    /// `HiveDispatch` stops being a proof about the loop, so a test is allowed
+    /// to look at exactly what this copy hands the decision.
+    var dispatchContext: HiveDispatchContext {
         HiveDispatchContext(
             policy: policy,
             tasks: tasks,
@@ -135,7 +153,8 @@ final class HiveRuntime: ObservableObject {
             spentToday: spentToday,
             spawnsInLastHour: rateLimiter.spawnsInLastHour(),
             consecutiveFailures: consecutiveFailures,
-            auth: auth
+            auth: auth,
+            siblingCommittedUSD: siblingCommittedUSD
         )
     }
 
@@ -230,14 +249,18 @@ final class HiveRuntime: ObservableObject {
         isScanning = false
     }
 
-    /// Re-reads the other Hive's state file, once per cycle.
+    /// Re-reads the other Hive's state file, once per cycle and before the
+    /// dispatch decision that consumes it.
     ///
-    /// Nothing here can gate a dispatch: the sibling enforces its own ceiling
-    /// in its own process, and a check from this side would be advisory at
-    /// best and a false assurance at worst. What it does is put the real total
-    /// in front of the operator, and write one audit line when the answer
-    /// changes - only when it changes, or an armed sibling would fill the log
-    /// with the same sentence every cycle.
+    /// The reading is not a veto: no state of the sibling switches this loop
+    /// off. What it can do is spend this copy's ceiling - the sibling's
+    /// committed dollars are charged here, so the two loops share one daily
+    /// ceiling rather than getting one each. Everything that could not be
+    /// established charges nothing, which keeps a file whose process died from
+    /// blocking a loop that is running.
+    ///
+    /// One audit line when the answer changes - only when it changes, or an
+    /// armed sibling would fill the log with the same sentence every cycle.
     func refreshSibling() async {
         let probe = siblingProbe
         let report = await Task.detached(priority: .utility) { probe.probe() }.value
@@ -280,7 +303,7 @@ final class HiveRuntime: ObservableObject {
         materialiseTasks()
         if auth == nil || policy.enabled { await preflight() }
 
-        let decision = HiveDispatch.decide(context)
+        let decision = HiveDispatch.decide(dispatchContext)
         status = decision
 
         switch decision {

@@ -45,6 +45,17 @@ struct HiveDispatchContext: Equatable {
     /// Whether the CLI preflight passed. Three states, so "not yet probed" is
     /// not silently treated as "signed in".
     var auth: HiveAuthState?
+    /// Dollars the other Hive on this machine has already committed today,
+    /// charged against this copy's ceiling so the pair shares one ceiling
+    /// instead of getting one each.
+    ///
+    /// Supplied by the orchestrator from `HiveSiblingReport.committedSpendUSD`,
+    /// already reduced to zero unless the sibling is armed, its ledger was
+    /// read, and its state file proves the process writing it is still alive.
+    /// It arrives here as a plain number precisely so this decision stays pure:
+    /// staleness is a question about a clock, and the answer is measured where
+    /// the clock is, not here.
+    var siblingCommittedUSD: Double = 0
 }
 
 enum HiveDispatch {
@@ -90,6 +101,28 @@ enum HiveDispatch {
                 String(
                     format: "daily ceiling reached - $%.2f of $%.2f spent today",
                     context.spentToday, policy.dailyBudgetUSD
+                )
+            )
+        }
+
+        // The same ceiling again, this time counting the other Hive's spend.
+        //
+        // Kept as its own guard rather than folded into the one above so the
+        // two refusals never blur: one says this copy spent its day, the other
+        // says the pair did. And deliberately not folded into
+        // `HiveInvariants`, whose daily-ceiling rule is about this copy's own
+        // bookkeeping - a sibling's spend pushing the pair over is normal
+        // operation, not evidence that this copy's state machine has drifted.
+        let sibling = max(0, context.siblingCommittedUSD)
+        guard context.spentToday + sibling < policy.dailyBudgetUSD else {
+            return .blocked(
+                String(
+                    format: "shared daily ceiling reached - $%.2f spent here plus $%.2f already committed "
+                        + "by the armed sibling Hive is $%.2f against this copy's $%.2f. The ceiling is "
+                        + "shared so that arming both loops cannot spend it twice; disarm the sibling or "
+                        + "raise this copy's ceiling to continue.",
+                    context.spentToday, sibling,
+                    context.spentToday + sibling, policy.dailyBudgetUSD
                 )
             )
         }

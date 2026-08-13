@@ -10,9 +10,34 @@ import Foundation
 // and is really a per-copy share.
 //
 // This probe reads the other copy's state file and reports what it found.
-// It never blocks a dispatch. A budget that two programs enforce separately
-// cannot be enforced from here anyway; what can be fixed is that the operator
-// is told the real number before arming the second one.
+//
+// What it does with that reading is the middle of three options, and the two
+// it is not are worth naming. A hard block on "the sibling is armed" would
+// make the ceiling meaningful and would also hand a second, independent
+// program a veto over this one: a state file left behind by a process that
+// died still says `enabled: true`, and this copy would sit blocked forever on
+// a corpse's promise. Warning only - what this file did until now - keeps the
+// two loops independent and leaves the stated ceiling a per-copy share, which
+// is to say not a ceiling.
+//
+// The middle path, implemented here: charge the sibling's already-committed
+// spend for today against THIS copy's ceiling. The pair then shares one
+// ceiling instead of getting one each, no state file can veto a dispatch on
+// its own (an idle sibling has committed nothing and so costs nothing), and
+// the arithmetic is a subtraction rather than a gate.
+//
+// The honest limit on that claim: only this copy is changed. It stops
+// contributing once the pair's observed total reaches the number in this
+// window; the sibling keeps enforcing its own. So the pair's combined spend is
+// bounded by the LARGER of the two ceilings plus what is in flight, not by
+// their sum - "shared rather than doubled", which is what was asked for, and
+// not "jointly enforced", which one process cannot deliver for two.
+//
+// A debit is only honoured while the sibling's file proves its writer is still
+// running (see `HiveSiblingFreshness`). A reservation is a claim about a bee
+// that is running right now; once the process holding it is provably gone, the
+// claim describes money that may never be spent, and honouring it forever
+// would be the deadlock the hard block was rejected for.
 // ===========================================================================
 
 /// What is known about the sibling Hive.
@@ -57,6 +82,61 @@ enum HiveSiblingState: Equatable {
     }
 }
 
+/// Whether the sibling's state file proves that the process writing it is
+/// still running.
+///
+/// An armed Hive rewrites its file every cycle, in flight bees or not, so
+/// silence past a few cycles is the ordinary evidence that its process is
+/// gone. This is deliberately a separate axis from `HiveSiblingState`: the
+/// state is what the document says, and freshness is whether anyone is still
+/// saying it. Folding the two together would have produced a fifth state whose
+/// meaning changed with the clock.
+///
+/// It governs exactly one thing - whether the sibling's committed spend is
+/// charged against this copy's ceiling. It deliberately does not change
+/// `combinedExposure`: an over-stated exposure costs the operator nothing, and
+/// an over-honoured debit costs the loop its ability to run at all.
+enum HiveSiblingFreshness: Equatable {
+    /// Written within the liveness horizon. The only state that proves life.
+    case fresh(age: TimeInterval, horizon: TimeInterval)
+    /// Older than the horizon. The writer is presumed gone.
+    case stale(age: TimeInterval, horizon: TimeInterval)
+    /// No usable timestamp: none recorded, none parseable, or one far enough
+    /// in the future that the two clocks cannot be reconciled. Not proof of
+    /// life, and not proof of death either - just no proof.
+    case unestablished(String)
+
+    /// True only for `fresh`. Every other case, including the two that merely
+    /// failed to establish an answer, counts as no proof - which is the cheap
+    /// direction: it costs a warning, never a stuck loop.
+    var provesLife: Bool {
+        if case .fresh = self { return true }
+        return false
+    }
+
+    var age: TimeInterval? {
+        switch self {
+        case .fresh(let age, _), .stale(let age, _): return age
+        case .unestablished: return nil
+        }
+    }
+
+    var horizon: TimeInterval? {
+        switch self {
+        case .fresh(_, let horizon), .stale(_, let horizon): return horizon
+        case .unestablished: return nil
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .fresh: return "FRESH"
+        case .stale: return "STALE"
+        case .unestablished: return "UNDATED"
+        }
+    }
+}
+
 /// One reading of the sibling's state file, with the path it was read from so
 /// the operator can check the probe's own assumption about where to look.
 struct HiveSiblingReport: Equatable {
@@ -64,12 +144,49 @@ struct HiveSiblingReport: Equatable {
     /// formed at all, which is itself reported as `unreadable`.
     let path: String?
     let state: HiveSiblingState
+    /// Whether the file proves its writer is alive.
+    let freshness: HiveSiblingFreshness
+    /// The sibling ledger's entry for today, read whenever the document could
+    /// be parsed at all. `nil` is unknown, never zero.
+    let recordedSpendToday: Double?
     let checkedAt: Date
 
-    init(path: String?, state: HiveSiblingState, checkedAt: Date = Date()) {
+    init(
+        path: String?,
+        state: HiveSiblingState,
+        freshness: HiveSiblingFreshness = .unestablished("the state file carried no usable timestamp"),
+        recordedSpendToday: Double? = nil,
+        checkedAt: Date = Date()
+    ) {
         self.path = path
         self.state = state
+        self.freshness = freshness
+        self.recordedSpendToday = recordedSpendToday
         self.checkedAt = checkedAt
+    }
+
+    /// Dollars the sibling has already committed today that this copy charges
+    /// against its own daily ceiling.
+    ///
+    /// Three conditions, all required, and each of them is a refusal to guess:
+    /// the sibling must say it is armed (a disarmed loop is not racing anyone
+    /// to the ceiling), its ledger must have been read (an unknown spend is
+    /// not a zero and is not a ceiling either, so it buys nothing), and its
+    /// file must prove its writer is alive (money reserved by a dead process
+    /// is money that may never be spent).
+    ///
+    /// Zero is therefore the answer in every case where something could not be
+    /// established, which is the failure direction that costs a doubled ceiling
+    /// rather than a loop that can never dispatch again.
+    var committedSpendUSD: Double {
+        guard state.isArmed, freshness.provesLife, let spent = recordedSpendToday else { return 0 }
+        return max(0, spent)
+    }
+
+    /// What is left of `ownCeiling` once this copy's own spend and the
+    /// sibling's committed spend are both taken off it. Never below zero.
+    func sharedHeadroom(ownCeiling: Double, ownSpentToday: Double) -> Double {
+        max(0, ownCeiling - ownSpentToday - committedSpendUSD)
     }
 
     /// The total both copies may spend in one local day: this copy's ceiling
@@ -107,10 +224,50 @@ struct HiveSiblingReport: Equatable {
             return head
                 + " This copy: $\(money(ownCeiling))/day. Sibling at \(location): $\(money(ceiling))/day, \(spendText)."
                 + " Combined exposure $\(money(combinedExposure(ownCeiling: ownCeiling)))/day."
+                + " " + sharedCeilingNote(ownCeiling: ownCeiling)
         case .unreadable(let why):
             return "The sibling Hive state at \(location) could not be read: \(why). "
                 + "Its ceiling is unknown, so combined exposure is at least $\(money(ownCeiling))/day and may be higher."
         }
+    }
+
+    /// One sentence saying what this copy charges itself on the sibling's
+    /// behalf, and - when it charges nothing - which of the three conditions
+    /// was not met. Kept beside the arithmetic so the wording cannot drift
+    /// away from the number, and so a "$0.00 charged" can never be printed
+    /// without the reason it is zero.
+    func sharedCeilingNote(ownCeiling: Double) -> String {
+        guard state.isArmed else {
+            switch state {
+            case .unreadable:
+                return "Nothing is charged against this copy's ceiling: the sibling could not be read, "
+                    + "so the two ceilings are not shared and this copy's may be spent in full on top of it."
+            default:
+                return "Nothing is charged against this copy's ceiling: the sibling is \(state.label.lowercased()) "
+                    + "and is not dispatching."
+            }
+        }
+        guard freshness.provesLife else {
+            let why: String
+            switch freshness {
+            case .stale(let age, let horizon):
+                why = "its file last changed \(Self.duration(age)) ago, past the \(Self.duration(horizon)) liveness horizon"
+            case .unestablished(let reason):
+                why = reason
+            case .fresh:
+                why = ""
+            }
+            return "The sibling says it is armed but does not prove it is running (\(why)), "
+                + "so nothing is charged against this copy's ceiling - a state file cannot block this loop "
+                + "on its own. Treat the combined figure as a warning, not a bound."
+        }
+        guard let spent = recordedSpendToday else {
+            return "The sibling is armed and running but records no ledger, so there is no committed spend "
+                + "to charge - the ceiling below is this copy's alone."
+        }
+        return "$\(money(max(0, spent))) of it is charged against this copy's $\(money(ownCeiling)) ceiling "
+            + "(the sibling's committed spend today), leaving $\(money(max(0, ownCeiling - max(0, spent)))) "
+            + "before this copy stops dispatching."
     }
 
     private func combinedExposureIfArmed(ownCeiling: Double, ceiling: Double?) -> Double {
@@ -119,6 +276,18 @@ struct HiveSiblingReport: Equatable {
 
     private func money(_ value: Double) -> String {
         String(format: "%.2f", value)
+    }
+
+    /// Whole minutes and hours, ASCII only. `TimeInterval` prints as seconds
+    /// with a fraction, which is unreadable in a sentence about a clock.
+    static func duration(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        guard total >= 60 else { return "\(max(0, total))s" }
+        let minutes = total / 60
+        guard minutes >= 60 else { return "\(minutes)m" }
+        let hours = minutes / 60
+        let rest = minutes % 60
+        return rest == 0 ? "\(hours)h" : "\(hours)h \(rest)m"
     }
 }
 
@@ -200,7 +369,26 @@ struct HiveSiblingProbe {
             )
         }
 
-        return HiveSiblingReport(path: path, state: Self.interpret(data, now: now), checkedAt: now)
+        // The file's own modification date is the fallback proof of life, used
+        // only when the document does not carry a usable timestamp of its own.
+        let modifiedAt = (try? URL(fileURLWithPath: path)
+            .resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+
+        let reading = Self.read(data, now: now, modifiedAt: modifiedAt)
+        return HiveSiblingReport(
+            path: path,
+            state: reading.state,
+            freshness: reading.freshness,
+            recordedSpendToday: reading.recordedSpendToday,
+            checkedAt: now
+        )
+    }
+
+    /// Everything one reading of the document yields.
+    struct Reading: Equatable {
+        let state: HiveSiblingState
+        let freshness: HiveSiblingFreshness
+        let recordedSpendToday: Double?
     }
 
     /// Reads the sibling's document by key rather than by decoding it into
@@ -211,27 +399,153 @@ struct HiveSiblingProbe {
     /// an empty object would decode into a disarmed hive with a $25 ceiling and
     /// report a confident answer about a file that said nothing. Here a missing
     /// key is a missing key.
-    static func interpret(_ data: Data, now: Date = Date()) -> HiveSiblingState {
+    static func read(_ data: Data, now: Date = Date(), modifiedAt: Date? = nil) -> Reading {
         guard let parsed = try? JSONSerialization.jsonObject(with: data),
               let root = parsed as? [String: Any] else {
-            return .unreadable("the file is not a JSON object")
+            return Reading(
+                state: .unreadable("the file is not a JSON object"),
+                freshness: .unestablished("the file is not a JSON object, so it carries no timestamp"),
+                recordedSpendToday: nil
+            )
         }
+
+        let freshness = self.freshness(in: root, now: now, modifiedAt: modifiedAt)
+        let spent = spentToday(in: root, now: now)
+
+        func reading(_ state: HiveSiblingState) -> Reading {
+            Reading(state: state, freshness: freshness, recordedSpendToday: spent)
+        }
+
         guard let policy = root["policy"] as? [String: Any] else {
-            return .unreadable("the document has no policy block")
+            return reading(.unreadable("the document has no policy block"))
         }
         guard let enabled = policy["enabled"] as? Bool else {
             // Without this flag armed and disarmed cannot be told apart, and
             // guessing "disarmed" is guessing in the expensive direction.
-            return .unreadable("the policy records no enabled flag")
+            return reading(.unreadable("the policy records no enabled flag"))
         }
 
         let ceiling = (policy["dailyBudgetUSD"] as? NSNumber)?.doubleValue
 
-        guard enabled else { return .disarmed(dailyBudgetUSD: ceiling) }
+        guard enabled else { return reading(.disarmed(dailyBudgetUSD: ceiling)) }
         guard let ceiling else {
-            return .unreadable("the sibling is armed but records no dailyBudgetUSD")
+            return reading(.unreadable("the sibling is armed but records no dailyBudgetUSD"))
         }
-        return .armed(dailyBudgetUSD: ceiling, spentToday: spentToday(in: root, now: now))
+        return reading(.armed(dailyBudgetUSD: ceiling, spentToday: spent))
+    }
+
+    /// The state alone, for callers that only classify the document.
+    static func interpret(_ data: Data, now: Date = Date()) -> HiveSiblingState {
+        read(data, now: now).state
+    }
+
+    // MARK: - Liveness
+
+    /// Missed cycles before the writer is presumed gone.
+    ///
+    /// Three, the ordinary heartbeat convention: one missed write is a slow
+    /// cycle, two is a long scan, three in a row is a process that is not
+    /// coming back. An armed Hive persists at the end of every cycle whether
+    /// or not a bee is in flight, so its cycle interval is its heartbeat.
+    static let missedCyclesBeforePresumedDead: Double = 3
+
+    /// Used when the sibling's document does not record its cycle interval.
+    /// The same default the policy itself carries.
+    static let defaultCycleIntervalSeconds: TimeInterval = 900
+
+    /// Floor and ceiling on the horizon, both there to stop a number the
+    /// sibling chose from making this copy's behaviour absurd.
+    ///
+    /// The floor stops a sibling configured with a 30-second cycle from being
+    /// declared dead during one slow scan. The ceiling stops a sibling with a
+    /// 24-hour cycle from holding a debit for three days: past six hours the
+    /// evidence of life is too thin to charge money against, and the day
+    /// rollover would clear the ledger entry anyway.
+    static let minimumStalenessHorizon: TimeInterval = 1800
+    static let maximumStalenessHorizon: TimeInterval = 6 * 3600
+
+    static func stalenessHorizon(cycleIntervalSeconds: Double?) -> TimeInterval {
+        let cycle = cycleIntervalSeconds.flatMap { $0 > 0 ? $0 : nil } ?? defaultCycleIntervalSeconds
+        return min(
+            max(missedCyclesBeforePresumedDead * cycle, minimumStalenessHorizon),
+            maximumStalenessHorizon
+        )
+    }
+
+    /// When the document says it was last written, and whether that is recent
+    /// enough to prove the writer is still there.
+    ///
+    /// The document's own `updatedAt` is preferred over the file's
+    /// modification date: it is the writer's own statement, written on every
+    /// persist, and it survives a copy that resets mtime. The mtime is the
+    /// fallback, not the primary, because a plain `cp` of an old state file
+    /// would otherwise make a corpse look alive.
+    static func freshness(
+        in root: [String: Any],
+        now: Date,
+        modifiedAt: Date?
+    ) -> HiveSiblingFreshness {
+        let horizon = stalenessHorizon(
+            cycleIntervalSeconds: ((root["policy"] as? [String: Any])?["cycleIntervalSeconds"] as? NSNumber)?
+                .doubleValue
+        )
+
+        let parsed = parseUpdatedAt(root["updatedAt"])
+        let stamp: Date
+        if let declared = parsed.date {
+            stamp = declared
+        } else if let modifiedAt {
+            stamp = modifiedAt
+        } else {
+            return .unestablished(parsed.why)
+        }
+
+        let age = now.timeIntervalSince(stamp)
+        if age > horizon {
+            return .stale(age: age, horizon: horizon)
+        }
+        if age < -horizon {
+            // Dated well into the future. Two clocks that disagree by more
+            // than the horizon cannot be used to measure it.
+            return .unestablished(
+                "its timestamp is \(duration(-age)) in the future, so the two clocks cannot be compared"
+            )
+        }
+        return .fresh(age: max(0, age), horizon: horizon)
+    }
+
+    /// Both copies write `updatedAt` as an ISO 8601 string. A number is
+    /// refused rather than guessed at: `JSONEncoder` counts from 2001 by
+    /// default and from 1970 on request, and reading the wrong one would
+    /// misdate the file by thirty-one years in whichever direction happened to
+    /// be wrong.
+    private static func parseUpdatedAt(_ value: Any?) -> (date: Date?, why: String) {
+        guard let value else {
+            return (nil, "the document records no updatedAt")
+        }
+        guard let text = value as? String else {
+            return (nil, "the document records updatedAt as a number, whose epoch cannot be determined")
+        }
+        if let date = fractionalISO8601.date(from: text) ?? plainISO8601.date(from: text) {
+            return (date, "")
+        }
+        return (nil, "the document's updatedAt is not an ISO 8601 timestamp")
+    }
+
+    private static let fractionalISO8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let plainISO8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static func duration(_ seconds: TimeInterval) -> String {
+        HiveSiblingReport.duration(seconds)
     }
 
     /// Today's spend from the sibling's ledger.

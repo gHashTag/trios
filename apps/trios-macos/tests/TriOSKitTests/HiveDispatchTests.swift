@@ -32,7 +32,8 @@ final class HiveDispatchTests: XCTestCase {
         spentToday: Double = 0,
         spawnsInLastHour: Int = 0,
         consecutiveFailures: Int = 0,
-        auth: HiveAuthState? = .loggedIn(method: "oauth")
+        auth: HiveAuthState? = .loggedIn(method: "oauth"),
+        siblingCommittedUSD: Double = 0
     ) -> HiveDispatchContext {
         var p = policy ?? HivePolicy.default
         if policy == nil { p.enabled = true }
@@ -43,7 +44,8 @@ final class HiveDispatchTests: XCTestCase {
             spentToday: spentToday,
             spawnsInLastHour: spawnsInLastHour,
             consecutiveFailures: consecutiveFailures,
-            auth: auth
+            auth: auth,
+            siblingCommittedUSD: siblingCommittedUSD
         )
     }
 
@@ -118,6 +120,98 @@ final class HiveDispatchTests: XCTestCase {
             return XCTFail("the ceiling must block")
         }
         XCTAssertTrue(why.contains("daily ceiling"))
+    }
+
+    // MARK: - The ceiling the two Hives share
+    //
+    // Two copies of this loop run on this machine with a daily ceiling each,
+    // so the number in either window is a share and not a total. What is
+    // charged here is the sibling's already-committed spend, and only when its
+    // state file proved its writer alive - the probe reduces everything it
+    // could not establish to zero before the number reaches this decision.
+
+    func testTheSiblingsCommittedSpendIsChargedAgainstThisCopysCeiling() {
+        var policy = HivePolicy.default
+        policy.enabled = true
+        policy.dailyBudgetUSD = 25
+        guard case .blocked(let why) = HiveDispatch.decide(
+            context(policy: policy, tasks: [task()], spentToday: 10, siblingCommittedUSD: 15)
+        ) else {
+            return XCTFail("the shared ceiling must block once the pair reaches it")
+        }
+        XCTAssertTrue(why.contains("shared daily ceiling reached"), why)
+        // Both numbers, so the operator can see which copy spent what.
+        XCTAssertTrue(why.contains("$10.00"), why)
+        XCTAssertTrue(why.contains("$15.00"), why)
+        XCTAssertTrue(why.contains("$25.00"), why)
+    }
+
+    func testTheSharedCeilingBlocksEvenWhenThisCopyHasSpentNothing() {
+        var policy = HivePolicy.default
+        policy.enabled = true
+        policy.dailyBudgetUSD = 25
+        guard case .blocked(let why) = HiveDispatch.decide(
+            context(policy: policy, tasks: [task()], spentToday: 0, siblingCommittedUSD: 40)
+        ) else {
+            return XCTFail("a sibling past the whole ceiling must block this copy")
+        }
+        XCTAssertTrue(why.contains("shared daily ceiling reached"), why)
+    }
+
+    func testASiblingThatHasCommittedNothingChangesNothing() {
+        var policy = HivePolicy.default
+        policy.enabled = true
+        policy.dailyBudgetUSD = 25
+        // Absent, disarmed, unreadable or presumed dead all arrive as zero,
+        // and zero must leave the loop exactly as it was.
+        XCTAssertTrue(
+            HiveDispatch.decide(
+                context(policy: policy, tasks: [task()], spentToday: 24, siblingCommittedUSD: 0)
+            ).isDispatch
+        )
+    }
+
+    func testTheSharedCeilingIsAdjacentToTheCeilingRatherThanOnIt() {
+        var policy = HivePolicy.default
+        policy.enabled = true
+        policy.dailyBudgetUSD = 25
+        // Strictly below the ceiling still dispatches; the guard is `<`, the
+        // same comparison this copy's own ceiling uses.
+        XCTAssertTrue(
+            HiveDispatch.decide(
+                context(policy: policy, tasks: [task()], spentToday: 10, siblingCommittedUSD: 14.99)
+            ).isDispatch
+        )
+    }
+
+    func testTheSharedCeilingIsNotReportedAsDriftedBookkeeping() {
+        // The daily-ceiling *invariant* is about this copy's own ledger. A
+        // sibling pushing the pair over is normal operation, and must not be
+        // dressed up as evidence that this copy's state machine has drifted.
+        var policy = HivePolicy.default
+        policy.enabled = true
+        policy.dailyBudgetUSD = 25
+        guard case .blocked(let why) = HiveDispatch.decide(
+            context(policy: policy, tasks: [task()], spentToday: 5, siblingCommittedUSD: 30)
+        ) else {
+            return XCTFail("the shared ceiling must block")
+        }
+        XCTAssertFalse(why.contains("standing invariant"), why)
+        XCTAssertTrue(
+            HiveInvariants.check(policy: policy, tasks: [task()], spentToday: 5).isEmpty
+        )
+    }
+
+    func testANegativeSiblingChargeCannotBuyBackThisCopysOwnCeiling() {
+        var policy = HivePolicy.default
+        policy.enabled = true
+        policy.dailyBudgetUSD = 25
+        guard case .blocked(let why) = HiveDispatch.decide(
+            context(policy: policy, tasks: [task()], spentToday: 25, siblingCommittedUSD: -100)
+        ) else {
+            return XCTFail("this copy's own ceiling must still block")
+        }
+        XCTAssertTrue(why.contains("daily ceiling reached"), why)
     }
 
     func testAViolatedStandingInvariantBlocksBeforeAnythingElse() {

@@ -43,12 +43,22 @@ final class HiveSiblingTests: XCTestCase {
     /// A document in the shape the other copy actually writes: the same
     /// `HiveState` encoder, so the probe is tested against the real format
     /// rather than against a hand-written approximation of it.
-    private func writeSiblingState(enabled: Bool, ceiling: Double, spentToday: Double) throws {
+    private func writeSiblingState(
+        enabled: Bool,
+        ceiling: Double,
+        spentToday: Double,
+        updatedAt: Date = Date(),
+        spentOn: Date = Date()
+    ) throws {
         var policy = HivePolicy.default
         policy.enabled = enabled
         policy.dailyBudgetUSD = ceiling
         var state = HiveState(policy: policy)
-        state.record(spend: spentToday)
+        state.record(spend: spentToday, on: spentOn)
+        // The writer stamps this on every persist; a test that wants a corpse
+        // writes an old one rather than waiting three cycles for a real loop
+        // to fall silent.
+        state.updatedAt = updatedAt
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -314,9 +324,350 @@ final class HiveSiblingTests: XCTestCase {
             siblingProbe: probe()
         )
         await runtime.refreshSibling()
-        // Surfaced, never a gate: the dispatch decision has no input from here.
+        // Surfaced, and it charges nothing: a file that could not be read
+        // cannot say how much anyone has spent, so it takes nothing off this
+        // copy's ceiling and the loop keeps running.
         XCTAssertFalse(runtime.siblingExposureIsBounded)
         XCTAssertFalse(runtime.siblingIsArmed)
         XCTAssertEqual(runtime.combinedExposureUSD, runtime.policy.dailyBudgetUSD)
+        XCTAssertEqual(runtime.siblingCommittedUSD, 0)
+        XCTAssertEqual(runtime.dispatchContext.siblingCommittedUSD, 0)
+    }
+
+    // MARK: - The liveness horizon
+    //
+    // The debit below is only honoured while the sibling's file proves the
+    // process writing it is alive. An armed Hive rewrites its state at the end
+    // of every cycle, so its own cycle interval is its heartbeat and silence
+    // past a few of them is the evidence that it is gone.
+
+    func testTheHorizonIsThreeOfTheSiblingsOwnCycles() {
+        // The default 15-minute cycle: three missed writes is 45 minutes.
+        XCTAssertEqual(HiveSiblingProbe.stalenessHorizon(cycleIntervalSeconds: 900), 2700)
+    }
+
+    func testTheHorizonHasAFloorSoOneSlowScanCannotDeclareALiveSiblingDead() {
+        // Three 30-second cycles is 90 seconds, which one `git log` sweep can
+        // exceed. The floor is what stops that from freeing the ceiling.
+        XCTAssertEqual(
+            HiveSiblingProbe.stalenessHorizon(cycleIntervalSeconds: 30),
+            HiveSiblingProbe.minimumStalenessHorizon
+        )
+    }
+
+    func testTheHorizonHasACeilingSoASlowSiblingCannotHoldADebitForDays() {
+        XCTAssertEqual(
+            HiveSiblingProbe.stalenessHorizon(cycleIntervalSeconds: 24 * 3600),
+            HiveSiblingProbe.maximumStalenessHorizon
+        )
+    }
+
+    func testASiblingThatRecordsNoCycleIntervalGetsTheDefaultHorizon() {
+        XCTAssertEqual(
+            HiveSiblingProbe.stalenessHorizon(cycleIntervalSeconds: nil),
+            HiveSiblingProbe.stalenessHorizon(
+                cycleIntervalSeconds: HiveSiblingProbe.defaultCycleIntervalSeconds
+            )
+        )
+        // A zero or negative interval is not a heartbeat either.
+        XCTAssertEqual(
+            HiveSiblingProbe.stalenessHorizon(cycleIntervalSeconds: 0),
+            HiveSiblingProbe.stalenessHorizon(cycleIntervalSeconds: nil)
+        )
+    }
+
+    // MARK: - Proof of life
+
+    func testAFileWrittenThisMinuteProvesItsWriterIsAlive() throws {
+        try writeSiblingState(enabled: true, ceiling: 40, spentToday: 6)
+        let report = probe().probe()
+        XCTAssertTrue(report.freshness.provesLife)
+        XCTAssertEqual(report.freshness.label, "FRESH")
+    }
+
+    func testAFileOlderThanTheHorizonIsStaleAndStillReportsArmed() throws {
+        try writeSiblingState(
+            enabled: true, ceiling: 40, spentToday: 6,
+            updatedAt: Date(timeIntervalSinceNow: -4 * 3600)
+        )
+        let report = probe().probe()
+        // The document still says armed - what changed is whether anyone is
+        // still saying it. Four states, and freshness is a separate axis.
+        XCTAssertEqual(report.state, .armed(dailyBudgetUSD: 40, spentToday: 6))
+        XCTAssertEqual(report.freshness.label, "STALE")
+        XCTAssertFalse(report.freshness.provesLife)
+    }
+
+    func testADocumentWithNoTimestampFallsBackToTheFilesModificationDate() throws {
+        try write(#"{"policy":{"enabled":true,"dailyBudgetUSD":30}}"#)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -5 * 3600)],
+            ofItemAtPath: stateURL.path
+        )
+        XCTAssertEqual(probe().probe().freshness.label, "STALE")
+
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date()],
+            ofItemAtPath: stateURL.path
+        )
+        XCTAssertEqual(probe().probe().freshness.label, "FRESH")
+    }
+
+    func testWithNeitherATimestampNorAModificationDateLifeIsUnestablished() {
+        let reading = HiveSiblingProbe.read(
+            Data(#"{"policy":{"enabled":true,"dailyBudgetUSD":30}}"#.utf8),
+            modifiedAt: nil
+        )
+        XCTAssertEqual(reading.freshness.label, "UNDATED")
+        XCTAssertFalse(reading.freshness.provesLife)
+    }
+
+    func testANumericTimestampIsRefusedRatherThanGuessedAt() {
+        // JSONEncoder counts from 2001 by default and from 1970 on request.
+        // Picking one would misdate the file by thirty-one years.
+        let reading = HiveSiblingProbe.read(
+            Data(#"{"updatedAt":1000000,"policy":{"enabled":true,"dailyBudgetUSD":30}}"#.utf8),
+            modifiedAt: nil
+        )
+        XCTAssertEqual(reading.freshness.label, "UNDATED")
+    }
+
+    func testATimestampFarInTheFutureIsNotProofOfLife() {
+        let reading = HiveSiblingProbe.read(
+            Data(#"{"updatedAt":"2099-01-01T00:00:00Z","policy":{"enabled":true,"dailyBudgetUSD":30}}"#.utf8),
+            modifiedAt: nil
+        )
+        // Two clocks that disagree by more than the horizon cannot be used to
+        // measure it, and "cannot be measured" never charges money.
+        XCTAssertEqual(reading.freshness.label, "UNDATED")
+    }
+
+    func testAFractionalSecondsTimestampIsRead() {
+        let now = Date()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let reading = HiveSiblingProbe.read(
+            Data(#"{"updatedAt":"\#(formatter.string(from: now))","policy":{"enabled":true,"dailyBudgetUSD":30}}"#.utf8),
+            now: now,
+            modifiedAt: nil
+        )
+        XCTAssertTrue(reading.freshness.provesLife)
+    }
+
+    // MARK: - The charge: one shared ceiling rather than two
+
+    func testAnArmedLiveSiblingChargesItsCommittedSpendNotItsCeiling() throws {
+        try writeSiblingState(enabled: true, ceiling: 40, spentToday: 7.5)
+        let report = probe().probe()
+        // Its ceiling is $40 and it has committed $7.50. Charging the ceiling
+        // would be the hard block by another name; charging the committed
+        // spend is what makes the two ceilings one.
+        XCTAssertEqual(report.committedSpendUSD, 7.5)
+        XCTAssertEqual(report.sharedHeadroom(ownCeiling: 25, ownSpentToday: 10), 7.5)
+    }
+
+    func testAnArmedSiblingWhoseProcessIsGoneChargesNothing() throws {
+        // The requirement in one test: a state file left behind by a dead
+        // process must not block this loop for ever. Its ledger is dominated
+        // by reservations for bees that are not running.
+        try writeSiblingState(
+            enabled: true, ceiling: 40, spentToday: 40,
+            updatedAt: Date(timeIntervalSinceNow: -4 * 3600)
+        )
+        let report = probe().probe()
+        XCTAssertEqual(report.committedSpendUSD, 0)
+        XCTAssertEqual(report.sharedHeadroom(ownCeiling: 25, ownSpentToday: 0), 25)
+        XCTAssertTrue(
+            report.sharedCeilingNote(ownCeiling: 25).contains("does not prove it is running"),
+            report.sharedCeilingNote(ownCeiling: 25)
+        )
+        XCTAssertTrue(report.sharedCeilingNote(ownCeiling: 25).contains("4h"))
+    }
+
+    func testAnUnreadableSiblingChargesNothingAndSaysTheCeilingIsNotShared() throws {
+        try write("{ this is not json")
+        let report = probe().probe()
+        XCTAssertEqual(report.committedSpendUSD, 0)
+        XCTAssertTrue(
+            report.sharedCeilingNote(ownCeiling: 25).contains("could not be read"),
+            report.sharedCeilingNote(ownCeiling: 25)
+        )
+    }
+
+    func testADisarmedSiblingChargesNothingEvenWithSpendRecordedToday() throws {
+        // A disarmed loop is not racing anyone to the ceiling. Its earlier
+        // spend today is real and is deliberately not charged: this copy
+        // cannot tell settled spend from an abandoned reservation in a ledger
+        // nobody is maintaining, and the shared ceiling is a bound on joint
+        // dispatch, not a retrospective audit.
+        try writeSiblingState(enabled: false, ceiling: 40, spentToday: 9)
+        let report = probe().probe()
+        XCTAssertEqual(report.recordedSpendToday, 9)
+        XCTAssertEqual(report.committedSpendUSD, 0)
+    }
+
+    func testAnAbsentSiblingChargesNothing() {
+        let report = probe().probe()
+        XCTAssertEqual(report.state, .absent)
+        XCTAssertEqual(report.committedSpendUSD, 0)
+        XCTAssertNil(report.recordedSpendToday)
+    }
+
+    func testAnArmedSiblingWithNoLedgerChargesNothingRatherThanAnInventedNumber() {
+        let reading = HiveSiblingProbe.read(
+            Data(#"{"policy":{"enabled":true,"dailyBudgetUSD":30}}"#.utf8),
+            modifiedAt: Date()
+        )
+        let report = HiveSiblingReport(
+            path: "/p",
+            state: reading.state,
+            freshness: reading.freshness,
+            recordedSpendToday: reading.recordedSpendToday
+        )
+        XCTAssertTrue(report.freshness.provesLife)
+        XCTAssertNil(report.recordedSpendToday)
+        XCTAssertEqual(report.committedSpendUSD, 0)
+        XCTAssertTrue(
+            report.sharedCeilingNote(ownCeiling: 25).contains("records no ledger"),
+            report.sharedCeilingNote(ownCeiling: 25)
+        )
+    }
+
+    func testASiblingLedgerEntryFromYesterdayIsNotChargedToday() throws {
+        try writeSiblingState(
+            enabled: true, ceiling: 40, spentToday: 20,
+            spentOn: Date(timeIntervalSinceNow: -86_400)
+        )
+        let report = probe().probe()
+        // The ceiling is a daily one and the ledger is keyed by local day, so
+        // yesterday's spend leaves today's headroom whole.
+        XCTAssertEqual(report.recordedSpendToday, 0)
+        XCTAssertEqual(report.committedSpendUSD, 0)
+    }
+
+    func testTheChargeCannotBeNegative() {
+        let report = HiveSiblingReport(
+            path: "/p",
+            state: .armed(dailyBudgetUSD: 40, spentToday: -5),
+            freshness: .fresh(age: 1, horizon: 2700),
+            recordedSpendToday: -5
+        )
+        XCTAssertEqual(report.committedSpendUSD, 0)
+    }
+
+    func testTheArmedSummaryCarriesTheChargeSoTheOperatorSeesTheSharedCeiling() throws {
+        try writeSiblingState(enabled: true, ceiling: 40, spentToday: 7.5)
+        let text = probe().probe().summary(ownCeiling: 25, ownArmed: true)
+        XCTAssertTrue(text.contains("$7.50 of it is charged"), text)
+        XCTAssertTrue(text.contains("leaving $17.50"), text)
+    }
+
+    func testDurationsAreWrittenInHoursAndMinutes() {
+        XCTAssertEqual(HiveSiblingReport.duration(45), "45s")
+        XCTAssertEqual(HiveSiblingReport.duration(2700), "45m")
+        XCTAssertEqual(HiveSiblingReport.duration(7200), "2h")
+        XCTAssertEqual(HiveSiblingReport.duration(4 * 3600 + 12 * 60), "4h 12m")
+    }
+
+    // MARK: - Runtime wiring
+    //
+    // A proof about `HiveDispatch` stops being a proof about the loop at the
+    // line that fills its context, so these look at exactly what this copy
+    // hands the decision.
+
+    @MainActor
+    func testTheRuntimeChargesAnArmedLiveSiblingAgainstItsOwnCeiling() async throws {
+        try writeSiblingState(enabled: true, ceiling: 40, spentToday: 12)
+        let runtime = HiveRuntime(
+            store: HiveStore(stateRoot: root.appendingPathComponent("own").path),
+            siblingProbe: probe()
+        )
+        await runtime.refreshSibling()
+
+        XCTAssertEqual(runtime.siblingCommittedUSD, 12)
+        XCTAssertEqual(runtime.dispatchContext.siblingCommittedUSD, 12)
+        XCTAssertEqual(runtime.sharedHeadroomUSD, runtime.policy.dailyBudgetUSD - 12)
+    }
+
+    @MainActor
+    func testTheRuntimeChargesNothingForASiblingWhoseProcessIsGone() async throws {
+        try writeSiblingState(
+            enabled: true, ceiling: 40, spentToday: 40,
+            updatedAt: Date(timeIntervalSinceNow: -4 * 3600)
+        )
+        let runtime = HiveRuntime(
+            store: HiveStore(stateRoot: root.appendingPathComponent("own").path),
+            siblingProbe: probe()
+        )
+        await runtime.refreshSibling()
+
+        XCTAssertTrue(runtime.siblingIsArmed)
+        XCTAssertEqual(runtime.siblingCommittedUSD, 0)
+        XCTAssertEqual(runtime.sharedHeadroomUSD, runtime.policy.dailyBudgetUSD)
+    }
+
+    @MainActor
+    func testASiblingPastTheSharedCeilingBlocksThisCopysNextDispatch() async throws {
+        // The sibling has committed more than this copy's whole ceiling, so
+        // the pair is over it before this copy has spent a cent.
+        try writeSiblingState(enabled: true, ceiling: 100, spentToday: 30)
+        let runtime = HiveRuntime(
+            store: HiveStore(stateRoot: root.appendingPathComponent("own").path),
+            siblingProbe: probe()
+        )
+        await runtime.refreshSibling()
+
+        var context = runtime.dispatchContext
+        context.policy.enabled = true
+        context.policy.dailyBudgetUSD = 25
+        context.auth = .loggedIn(method: "oauth")
+        context.tasks = [
+            {
+                var t = HiveTask(
+                    id: "t", title: "t", module: "rings/SR-00", path: "rings/SR-00",
+                    realm: "Swift", signalKind: "testGap", reason: "r",
+                    score: 1, confidence: 1, prompt: "p"
+                )
+                t.state = .pending
+                return t
+            }(),
+        ]
+
+        let decision = HiveDispatch.decide(context)
+        XCTAssertFalse(decision.isDispatch)
+        XCTAssertTrue(decision.reason.contains("shared daily ceiling reached"), decision.reason)
+    }
+
+    @MainActor
+    func testTheSameCopyDispatchesOnceTheSiblingIsPresumedGone() async throws {
+        // Identical to the test above except for the age of the file. The
+        // dead process must not hold this loop shut.
+        try writeSiblingState(
+            enabled: true, ceiling: 100, spentToday: 30,
+            updatedAt: Date(timeIntervalSinceNow: -4 * 3600)
+        )
+        let runtime = HiveRuntime(
+            store: HiveStore(stateRoot: root.appendingPathComponent("own").path),
+            siblingProbe: probe()
+        )
+        await runtime.refreshSibling()
+
+        var context = runtime.dispatchContext
+        context.policy.enabled = true
+        context.policy.dailyBudgetUSD = 25
+        context.auth = .loggedIn(method: "oauth")
+        context.tasks = [
+            {
+                var t = HiveTask(
+                    id: "t", title: "t", module: "rings/SR-00", path: "rings/SR-00",
+                    realm: "Swift", signalKind: "testGap", reason: "r",
+                    score: 1, confidence: 1, prompt: "p"
+                )
+                t.state = .pending
+                return t
+            }(),
+        ]
+
+        XCTAssertTrue(HiveDispatch.decide(context).isDispatch)
     }
 }
