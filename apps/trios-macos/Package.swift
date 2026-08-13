@@ -55,6 +55,7 @@ let package = Package(
                 "BR-OUTPUT/HiveProcess.swift",
                 "BR-OUTPUT/HiveVerifier.swift",
                 "BR-OUTPUT/HiveStore.swift",
+                "BR-OUTPUT/HiveInvariants.swift",
             ],
             linkerSettings: [
                 .linkedLibrary("sqlcipher"),

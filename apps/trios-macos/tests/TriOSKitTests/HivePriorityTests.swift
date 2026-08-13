@@ -149,10 +149,14 @@ final class HivePriorityTests: XCTestCase {
     }
 
     func testPromptListsUnmeasuredSignalsAsUnknownNotZero() throws {
+        // Enough measured weight to clear the dispatch confidence floor, with
+        // two signals deliberately left unread so the prompt has to name them.
         var f = HiveModuleFacts(module: "rings/SR-00", path: "rings/SR-00", realm: .swiftRing)
         f.lines = 1000
         f.todos = 30
-        f.unmeasuredReasons[.churn] = "git history unavailable"
+        f.testBlocks = 0
+        f.churn30d = 4
+        f.unmeasuredReasons[.declaredIncomplete] = "no status declared"
         f.unmeasuredReasons[.openIssues] = "issues snapshot absent"
 
         let target = try XCTUnwrap(HivePriorityEngine.rank([f]).first)
@@ -160,7 +164,7 @@ final class HivePriorityTests: XCTestCase {
 
         XCTAssertTrue(task.prompt.contains("NOT MEASURED"))
         XCTAssertTrue(task.prompt.contains("treat these as unknown, not as zero"))
-        XCTAssertTrue(task.prompt.contains("git history unavailable"))
+        XCTAssertTrue(task.prompt.contains("issues snapshot absent"))
     }
 
     func testMakeTaskReturnsNilWhenNoSignalDrivesTheScore() throws {

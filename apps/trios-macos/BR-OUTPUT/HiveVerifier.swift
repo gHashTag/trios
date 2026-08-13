@@ -47,12 +47,28 @@ enum HiveVerdict: Equatable {
 
 struct HiveVerifier {
 
+    /// The app directory (`.../apps/trios-macos`), not the repository root.
     let projectRoot: String
+    /// Where the app sits inside the repository, e.g. `apps/trios-macos`.
+    ///
+    /// A worktree is registered at the *repository* root, so resolving one and
+    /// running the checks there looks for `Package.swift` beside `crates/` and
+    /// finds nothing. Every worktree bee would come back UNVERIFIED - the gate
+    /// built to stop false passes would quietly never fire.
+    let appRelativePath: String
     /// Wall-clock ceiling for the whole check.
     var timeout: TimeInterval = 900
 
-    init(projectRoot: String = ProjectPaths.root) {
+    init(projectRoot: String = ProjectPaths.root, appRelativePath: String? = nil) {
         self.projectRoot = projectRoot
+        if let appRelativePath {
+            self.appRelativePath = appRelativePath
+        } else {
+            let url = URL(fileURLWithPath: projectRoot)
+            let app = url.lastPathComponent
+            let parent = url.deletingLastPathComponent().lastPathComponent
+            self.appRelativePath = parent.isEmpty ? app : "\(parent)/\(app)"
+        }
     }
 
     // MARK: - Entry point
@@ -164,6 +180,9 @@ struct HiveVerifier {
 
     // MARK: - Worktree resolution
 
+    /// The directory the checks should run in: the app tree inside whichever
+    /// checkout the bee worked in.
+    ///
     /// Returns nil when the task named a worktree that cannot be found - never
     /// the main checkout as a consolation prize.
     func workingRoot(for task: HiveTask) -> String? {
@@ -174,7 +193,12 @@ struct HiveVerifier {
             timeout: 30
         )
         guard result.exitCode == 0 else { return nil }
-        return Self.worktreePath(named: branch, in: result.standardOutput)
+        guard let repoRoot = Self.worktreePath(named: branch, in: result.standardOutput) else {
+            return nil
+        }
+        // git reports the repository root; the checks live one app down.
+        let appRoot = "\(repoRoot)/\(appRelativePath)"
+        return FileManager.default.fileExists(atPath: appRoot) ? appRoot : repoRoot
     }
 
     /// Parses `git worktree list --porcelain`, matching either the branch ref

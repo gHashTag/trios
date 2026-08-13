@@ -160,8 +160,23 @@ enum HiveTaskFactory {
         return "hive-\(slug)-\(kind.rawValue)"
     }
 
+    /// Why a target produced no task. `nil` means it did.
+    static func rejection(for target: HiveTarget) -> String? {
+        guard target.dominantKind != nil else {
+            return "no signal drove the score"
+        }
+        guard target.confidence >= HiveInvariants.minimumDispatchConfidence else {
+            return String(
+                format: "confidence %.0f%% is below the %.0f%% floor - too little of this module was measured to justify a bee",
+                target.confidence * 100,
+                HiveInvariants.minimumDispatchConfidence * 100
+            )
+        }
+        return nil
+    }
+
     static func makeTask(from target: HiveTarget, policy: HivePolicy) -> HiveTask? {
-        guard let kind = target.dominantKind else { return nil }
+        guard rejection(for: target) == nil, let kind = target.dominantKind else { return nil }
         return HiveTask(
             id: taskID(module: target.module, kind: kind),
             title: "\(target.module): \(kind.label.lowercased())",

@@ -79,7 +79,6 @@ struct HiveRepoScanner {
         let fm = FileManager.default
         let churn = readChurn()
         let issues = readIssueCounts()
-        let modulePrefixes = realmRoots.map(\.relative)
 
         var results: [HiveModuleFacts] = []
 
@@ -152,7 +151,6 @@ struct HiveRepoScanner {
                     "this app declares no per-module status"
 
                 results.append(facts)
-                _ = modulePrefixes
             }
         }
 
@@ -419,17 +417,36 @@ struct HiveRepoScanner {
         guard let text = String(data: data, encoding: .utf8) else {
             return .failure("issues_snapshot.json is not utf-8")
         }
-        return .success(Self.parseIssueMentions(text, prefixes: realmRoots.map(\.relative)))
+        return .success(
+            Self.parseIssueMentions(
+                text,
+                prefixes: realmRoots.map(\.relative),
+                flatRoots: Set(realmRoots.filter { !$0.subdirectoriesAreModules }.map(\.relative))
+            )
+        )
     }
 
-    /// Counts how often each module path is named in the snapshot text.
+    /// Counts how often each module is named in the snapshot text.
     /// Deliberately crude: it is a weak signal and is labelled as one.
-    static func parseIssueMentions(_ text: String, prefixes: [String]) -> [String: Int] {
+    ///
+    /// A flat root is one module, so `BR-OUTPUT/Foo.swift` counts against
+    /// `BR-OUTPUT` - not against a `BR-OUTPUT/Foo` key that matches no module
+    /// and therefore silently scores zero everywhere.
+    static func parseIssueMentions(
+        _ text: String,
+        prefixes: [String],
+        flatRoots: Set<String> = []
+    ) -> [String: Int] {
         var counts: [String: Int] = [:]
         for prefix in prefixes {
             var search = text[...]
             while let range = search.range(of: "\(prefix)/") {
                 let rest = search[range.upperBound...]
+                if flatRoots.contains(prefix) {
+                    counts[prefix, default: 0] += 1
+                    search = rest
+                    continue
+                }
                 let segment = rest.prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
                 if !segment.isEmpty {
                     counts["\(prefix)/\(segment)", default: 0] += 1
