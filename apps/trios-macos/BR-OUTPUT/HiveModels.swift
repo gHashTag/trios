@@ -410,6 +410,39 @@ struct HiveEvent: Codable, Identifiable, Equatable {
     }
 }
 
+// MARK: - Reservations
+
+/// What a bee was charged at dispatch, and everything needed to settle that
+/// charge after the process that made it is gone.
+///
+/// Held in the state file rather than only in memory. A reservation that lives
+/// in a variable is cancelled by the very event it exists to survive: three
+/// rebuild-or-crash restarts in a morning, two bees in flight each time, and
+/// the ledger keeps six full per-bee budgets against about two dollars of real
+/// work - with nothing on screen saying the money was never spent.
+struct HiveReservation: Codable, Equatable {
+    var taskID: String
+    var sessionID: String
+    /// The local-day key the charge landed on, so a settlement taken after
+    /// midnight cannot credit the wrong day.
+    var day: String
+    var amount: Double
+    /// The bee's process id, so a reservation found at load can be told apart
+    /// from one whose bee is still running. Never signalled - see
+    /// `HiveProcessLiveness`.
+    var pid: Int32?
+    var startedAt: Date
+
+    init(taskID: String, sessionID: String, day: String, amount: Double, pid: Int32?, startedAt: Date = Date()) {
+        self.taskID = taskID
+        self.sessionID = sessionID
+        self.day = day
+        self.amount = amount
+        self.pid = pid
+        self.startedAt = startedAt
+    }
+}
+
 /// Persisted hive state. One file, atomically written.
 struct HiveState: Codable, Equatable {
     var policy: HivePolicy
@@ -418,12 +451,34 @@ struct HiveState: Codable, Equatable {
     /// Dollars spent per local day, keyed `yyyy-MM-dd`. Survives restarts so a
     /// crash-loop cannot reset the day's ceiling by restarting the app.
     var spendByDay: [String: Double]
+    /// When each bee was spawned, so the hourly rate bound survives a restart.
+    ///
+    /// The window used to be in memory only, on the argument that a restart is
+    /// a human-initiated event that should not inherit an old window's debt.
+    /// That argument fails the moment anything relaunches the app on its own:
+    /// a watchdog that restores the process within 60s turns the rate limit
+    /// into a limit per launch, and the limiter's own bound - "at most
+    /// maxBeesPerHour spawns in any rolling hour" - stops being true of the
+    /// machine. Pruned to the last hour on load, so a window recorded three
+    /// days ago cannot be replayed as this hour's spend.
+    var spawnWindow: [Date]
+    /// Live reservations, keyed by task id. Written before the bee is launched
+    /// so a crash between the charge and the launch cannot lose the charge.
+    var reservations: [String: HiveReservation]
 
-    init(policy: HivePolicy = .default, tasks: [HiveTask] = [], spendByDay: [String: Double] = [:]) {
+    init(
+        policy: HivePolicy = .default,
+        tasks: [HiveTask] = [],
+        spendByDay: [String: Double] = [:],
+        spawnWindow: [Date] = [],
+        reservations: [String: HiveReservation] = [:]
+    ) {
         self.policy = policy
         self.tasks = tasks
         self.updatedAt = Date()
         self.spendByDay = spendByDay
+        self.spawnWindow = spawnWindow
+        self.reservations = reservations
     }
 
     init(from decoder: Decoder) throws {
@@ -432,6 +487,23 @@ struct HiveState: Codable, Equatable {
         tasks = try c.decodeIfPresent([HiveTask].self, forKey: .tasks) ?? []
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         spendByDay = try c.decodeIfPresent([String: Double].self, forKey: .spendByDay) ?? [:]
+        // Optional, so a state file written before the window was persisted
+        // keeps loading instead of throwing and resetting every setting.
+        spawnWindow = try c.decodeIfPresent([Date].self, forKey: .spawnWindow) ?? []
+        reservations = try c.decodeIfPresent([String: HiveReservation].self, forKey: .reservations) ?? [:]
+    }
+
+    /// The rolling window, cut to the last hour.
+    ///
+    /// Applied on load. Without it a persisted window is worse than none: a
+    /// file written days ago would hand the limiter six spawns that never
+    /// happened this hour, and the loop would refuse to work for an hour after
+    /// every launch.
+    static func prunedSpawnWindow(_ window: [Date], now: Date = Date()) -> [Date] {
+        let cutoff = now.addingTimeInterval(-3600)
+        // Dates in the future are dropped too: a clock that moved backwards
+        // would otherwise leave entries that never expire.
+        return window.filter { $0 >= cutoff && $0 <= now }.sorted()
     }
 
     /// Local-day key. Local, not UTC: the ceiling is a human's daily budget.
@@ -452,5 +524,18 @@ struct HiveState: Codable, Equatable {
         // Keep a fortnight of history; the rest is noise in a state file.
         let cutoff = Self.dayKey(date.addingTimeInterval(-14 * 86_400))
         spendByDay = spendByDay.filter { $0.key >= cutoff }
+    }
+
+    /// Returns part of a reservation to the day it was charged against.
+    ///
+    /// The ledger charges the full per-bee budget the moment a bee is sent out,
+    /// because a bee that hangs, is killed on the wall clock, or dies without a
+    /// result line still costs real money at the provider and reports nothing.
+    /// Waiting for a `total_cost_usd` line to debit anything means an execution
+    /// where every bee times out spends without limit while the ceiling reads
+    /// zero. Reconciliation runs one way only: down, and never below zero.
+    mutating func refund(_ amount: Double, forDay key: String) {
+        guard amount > 0, let current = spendByDay[key] else { return }
+        spendByDay[key] = max(0, current - amount)
     }
 }

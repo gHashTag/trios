@@ -53,13 +53,25 @@ struct HiveTabView: View {
                     .foregroundColor(.grokMuted)
             }
             Spacer()
-            Text(hive.policy.enabled ? "ARMED" : "IDLE")
+            // Reads the clock, not the wish. `policy.enabled` is persisted and
+            // survives a restart; the timer does not, so a badge derived from
+            // the policy showed ARMED over a loop with a queue, no bees and no
+            // clock, for as long as the operator left it.
+            Text(hive.loopStatus.label)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(hive.policy.enabled ? .green : .grokDim)
+                .foregroundColor(badgeColour)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(Color.grokElevated)
                 .triosBubble(radius: 9)
+        }
+    }
+
+    private var badgeColour: Color {
+        switch hive.loopStatus {
+        case .ticking: return .green
+        case .resumeRequired: return .orange
+        case .idle: return .grokDim
         }
     }
 
@@ -68,9 +80,12 @@ struct HiveTabView: View {
         if let scanned = hive.lastScanAt {
             parts.append("ranked \(hive.targets.count) modules \(elapsed(since: scanned)) ago")
         }
-        if let next = hive.nextCycleAt, hive.policy.enabled {
+        // The countdown is shown only when a clock exists. Derived from the
+        // policy flag it kept counting down over a loop that had no timer.
+        if let next = hive.nextCycleAt, hive.loopStatus.isTicking {
             parts.append("next cycle in \(elapsed(until: next))")
         }
+        if let advice = hive.loopStatus.advice { parts.append(advice) }
         return parts.isEmpty ? "not scanned yet" : parts.joined(separator: " - ")
     }
 
@@ -144,11 +159,18 @@ struct HiveTabView: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
-            if hive.policy.enabled {
+            // Run 24/7 is offered whenever no cycle is scheduled, including the
+            // armed-but-not-ticking state a restart leaves behind. Keying this
+            // off the policy flag hid the only button that could restore the
+            // loop precisely when it was the only button that would work.
+            if hive.loopStatus.isTicking {
                 pill("Pause", "pause.fill") { hive.disarm() }
                 pill("Stop bees", "stop.fill") { hive.stopAllBees() }
             } else {
                 pill("Run 24/7", "play.fill") { hive.arm() }
+                if hive.policy.enabled {
+                    pill("Disarm", "pause.fill") { hive.disarm() }
+                }
             }
             pill("Cycle now", "arrow.clockwise") { hive.runCycleNow() }
             pill("Rescan", "ruler") { Task { await hive.rescan() } }

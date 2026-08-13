@@ -48,6 +48,10 @@ final class HiveRuntime: ObservableObject {
     @Published private(set) var nextCycleAt: Date?
     @Published private(set) var spentToday: Double = 0
     @Published private(set) var consecutiveFailures = 0
+    /// Whether a cycle is actually scheduled, and whether the operator has to
+    /// do something about it. Derived from the timer, never from the persisted
+    /// policy flag - see `HiveLoopStatus`.
+    @Published private(set) var loopStatus: HiveLoopStatus = .idle
     /// The other Hive's state, re-read once per cycle. `nil` until the first
     /// cycle has run, which is not the same as "no sibling".
     @Published private(set) var sibling: HiveSiblingReport?
@@ -64,8 +68,12 @@ final class HiveRuntime: ObservableObject {
     private var currentHead: String?
     private var rateLimiter = HiveRateLimiter()
     private var runners: [String: HiveBeeRunner] = [:]
+    /// What each live bee was charged at dispatch, and the day it was charged
+    /// to. Persisted, so a restart cannot lose the charge or the way back out
+    /// of it.
+    private var reservations: [String: HiveReservation] = [:]
     private var timer: Timer?
-    private var cycleInFlight = false
+    private var cycleLatch = HiveCycleLatch()
 
     init(
         store: HiveStore = HiveStore(),
@@ -83,6 +91,103 @@ final class HiveRuntime: ObservableObject {
         self.spendByDay = state.spendByDay
         self.spentToday = state.spent()
         self.events = store.recentEvents(limit: 60)
+        // The hourly window is restored, not reset. `store.load()` has already
+        // cut it to the last hour, so what is inherited is this hour's real
+        // spawns and nothing older.
+        self.rateLimiter = HiveRateLimiter(spawnTimes: state.spawnWindow)
+        self.reservations = state.reservations
+        repairOrphanedReservations()
+        syncLoopStatus()
+        announceLoopStateOnLoad()
+    }
+
+    // MARK: - Load-time repair
+
+    /// Settles every reservation left behind by the process that made it.
+    ///
+    /// No bee survives a restart, so on arrival each of these describes a bee
+    /// the runtime can no longer ask. Rather than guess, it reads the bee's own
+    /// transcript: a cost line is charged exactly, an empty transcript is
+    /// refunded whole, and real output with no cost line keeps its reservation
+    /// because what it spent is unknown. A bee whose pid is still alive is an
+    /// orphan that outlived the app - it keeps its reservation, because it may
+    /// be spending money right now, and it is named in the audit log rather
+    /// than silently signalled.
+    private func repairOrphanedReservations() {
+        guard !reservations.isEmpty else { return }
+        var state = HiveState(policy: policy, tasks: tasks, spendByDay: spendByDay)
+        for (taskID, reservation) in reservations {
+            if let pid = reservation.pid, HiveProcessLiveness.isAlive(pid) {
+                record(
+                    "bee_orphaned",
+                    "\(taskID): pid \(pid) from session \(reservation.sessionID) is still running after a "
+                        + "restart. Its $\(String(format: "%.2f", reservation.amount)) reservation stands, "
+                        + "and its worktree is never reused."
+                )
+                continue
+            }
+            let transcript = store.transcriptsDirectory
+                .appendingPathComponent("\(reservation.sessionID).jsonl")
+            switch HiveDispatch.repair(HiveTranscript.summarise(at: transcript)) {
+            case .charge(let cost):
+                if cost < reservation.amount {
+                    state.refund(reservation.amount - cost, forDay: reservation.day)
+                } else if cost > reservation.amount {
+                    state.record(spend: cost - reservation.amount, on: reservation.startedAt)
+                }
+                record(
+                    "reservation_settled",
+                    String(
+                        format: "%@: interrupted bee reported $%.2f against a $%.2f reservation",
+                        taskID, cost, reservation.amount
+                    )
+                )
+            case .refundInFull:
+                state.refund(reservation.amount, forDay: reservation.day)
+                record(
+                    "reservation_refunded",
+                    String(
+                        format: "%@: $%.2f returned - session %@ wrote nothing, so it never spent anything",
+                        taskID, reservation.amount, reservation.sessionID
+                    )
+                )
+            case .keep:
+                record(
+                    "reservation_kept",
+                    String(
+                        format: "%@: $%.2f stands - session %@ produced output and never reported a cost, "
+                            + "and an absent cost is not a zero",
+                        taskID, reservation.amount, reservation.sessionID
+                    )
+                )
+            }
+            reservations[taskID] = nil
+        }
+        spendByDay = state.spendByDay
+        spentToday = state.spent()
+        persist()
+    }
+
+    /// Says out loud, once, that a loop the file calls armed is not running.
+    ///
+    /// Launch does not resume the cycle: the timer is created when an operator
+    /// arms the loop, and nothing recreates it on load. That is a deliberate
+    /// choice, but it used to be an invisible one - the badge read ARMED off
+    /// the policy flag, so a queue with work in it could sit untouched for days
+    /// looking exactly like a healthy loop.
+    private func announceLoopStateOnLoad() {
+        guard policy.enabled else { return }
+        status = .idle("armed in the state file, not ticking - press Run 24/7 to start the clock")
+        record(
+            "hive_resume_required",
+            "loaded with enabled=true and no cycle scheduled: \(tasks.filter(\.isSchedulable).count) "
+                + "schedulable task(s) are waiting and nothing will dispatch until the loop is re-armed"
+        )
+    }
+
+    /// Recomputes the published loop status from the two things that decide it.
+    private func syncLoopStatus() {
+        loopStatus = HiveLoopStatus.of(enabled: policy.enabled, ticking: timer != nil)
     }
 
     // MARK: - Derived
@@ -94,6 +199,10 @@ final class HiveRuntime: ObservableObject {
     var eligibleTargets: [HiveTarget] {
         targets.filter { policy.skippedModules[$0.module] == nil }
     }
+
+    /// Bees started in the last rolling hour, counted across restarts because
+    /// the window is persisted.
+    var spawnsThisHour: Int { rateLimiter.spawnsInLastHour() }
 
     var reviewCount: Int { tasks.filter { $0.state == .review }.count }
     var doneCount: Int { tasks.filter { $0.state == .done }.count }
@@ -168,6 +277,10 @@ final class HiveRuntime: ObservableObject {
         consecutiveFailures = 0
         apply(updated)
         record("hive_armed", "interval \(policy.cycleIntervalSeconds)s, max \(policy.maxConcurrentBees) bees")
+        // The clock starts here rather than at the end of the first cycle, so
+        // arming is visible immediately and does not depend on that cycle
+        // reaching its tail.
+        scheduleTimer()
         Task { await runCycle(trigger: "arm") }
     }
 
@@ -178,6 +291,7 @@ final class HiveRuntime: ObservableObject {
         timer?.invalidate()
         timer = nil
         nextCycleAt = nil
+        syncLoopStatus()
         status = .idle("the loop is not armed")
         record("hive_disarmed", "paused by operator; running bees were left to finish")
     }
@@ -192,7 +306,10 @@ final class HiveRuntime: ObservableObject {
 
     func updatePolicy(_ new: HivePolicy) {
         apply(new)
-        if policy.enabled { scheduleTimer() }
+        // Unconditionally, because the clock repeats now: a policy that turns
+        // the loop off must take the timer with it, or a disarmed loop keeps
+        // waking every interval to rescan the whole repository and return.
+        scheduleTimer()
     }
 
     func skip(module: String, why: String) {
@@ -289,9 +406,35 @@ final class HiveRuntime: ObservableObject {
     // MARK: - The cycle
 
     func runCycle(trigger: String) async {
-        guard !cycleInFlight else { return }
-        cycleInFlight = true
-        defer { cycleInFlight = false }
+        // The latch has a deadline. Without one it is a lock nothing can
+        // release once the cycle holding it wedges on a subprocess that ignores
+        // SIGTERM: `Cycle now` returns silently, Pause-then-Run re-arms a timer
+        // that returns at the same guard, and only killing the app recovers.
+        let admission = cycleLatch.enter(
+            deadline: HiveCycleLatch.wedgeDeadline(cycleIntervalSeconds: policy.cycleIntervalSeconds)
+        )
+        switch admission {
+        case .busy:
+            return
+        case .forced(_, let heldFor):
+            record(
+                "cycle_wedged",
+                "a cycle held the loop for \(Int(heldFor))s without finishing; it was forced open so the "
+                    + "loop could carry on. Its subprocess may still be running."
+            )
+        case .admitted:
+            break
+        }
+        guard let token = admission.token else { return }
+        // Every exit path leaves the latch and re-arms the clock. The loop's
+        // ability to run again must not depend on this particular cycle
+        // reaching its own last line.
+        defer {
+            cycleLatch.leave(token: token)
+            if policy.enabled && timer == nil { scheduleTimer() }
+            nextCycleAt = timer?.fireDate
+            syncLoopStatus()
+        }
 
         harvest()
         let verifier = self.verifier
@@ -316,7 +459,9 @@ final class HiveRuntime: ObservableObject {
         }
 
         persist()
-        scheduleTimer()
+        // The clock is not re-armed here. It repeats on its own, and the defer
+        // above restores it on every exit path - including the ones that never
+        // reach this line.
     }
 
     /// Turns the top-ranked targets into tasks. A target the factory refuses -
@@ -347,12 +492,33 @@ final class HiveRuntime: ObservableObject {
 
     // MARK: - Dispatch
 
+    /// Task ids with a bee still alive. The admission gate's first input.
+    private var liveTaskIDs: Set<String> {
+        Set(bees.filter { !$0.status.isTerminal }.map(\.taskID))
+    }
+
     private func dispatch(_ task: HiveTask) {
+        // One admission gate, whoever asked. Two `claude -p` sessions on one
+        // task would edit the same worktree, render two rows with the same
+        // identity, and leave a reservation no completion will ever settle.
+        if let refusal = HiveDispatch.admissionRefusal(
+            taskID: task.id,
+            liveTaskIDs: liveTaskIDs,
+            reservedTaskIDs: Set(reservations.keys)
+        ) {
+            record("spawn_refused", "\(task.id): \(refusal)")
+            status = .idle(refusal)
+            return
+        }
         guard let executable = HiveProcess.resolve("claude", overrideEnvKey: "CLAUDE_EXECUTABLE"),
               let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
 
         let sessionID = UUID().uuidString
-        let worktree = policy.useWorktree ? "hive-\(task.id)" : nil
+        // The session is part of the directory name, so two attempts on one
+        // task can never collide on a worktree - not even across process
+        // lifetimes, where a bee that outlived the app is still writing to the
+        // directory a fresh bee would otherwise be dispatched into.
+        let worktree = policy.useWorktree ? "hive-\(task.id)-\(sessionID.prefix(8).lowercased())" : nil
 
         tasks[index].state = .running
         tasks[index].attempts += 1
@@ -378,6 +544,14 @@ final class HiveRuntime: ObservableObject {
         let runner = HiveBeeRunner(configuration: configuration)
         runners[task.id] = runner
         rateLimiter.record()
+
+        // Charge the full per-bee budget now, and reconcile downward when the
+        // bee reports what it actually cost. Debiting only what a bee reports
+        // means a bee that hangs, is killed on the wall clock, or dies without
+        // a result line costs the ledger nothing while costing real money at
+        // the provider: two such bees an hour spend ten times the daily ceiling
+        // while the dashboard reads zero. Absent is not zero here either.
+        reserve(policy.maxBudgetUSDPerBee, for: task.id, sessionID: sessionID)
 
         bees.insert(
             HiveLiveBee(
@@ -410,6 +584,86 @@ final class HiveRuntime: ObservableObject {
                 Task { @MainActor in await self?.complete(taskID: task.id, outcome: outcome) }
             }
         )
+
+        // The pid is written beside the reservation, so a reservation found in
+        // the state file after a restart can be told apart from one whose bee
+        // is still running and still spending.
+        if let pid = runner.processIdentifier {
+            reservations[task.id]?.pid = pid
+            persist()
+        }
+    }
+
+    // MARK: - Spend
+
+    /// Charges the full per-bee budget the moment a bee goes out.
+    private func reserve(_ amount: Double, for taskID: String, sessionID: String) {
+        guard amount > 0 else { return }
+        let day = HiveState.dayKey()
+        var state = HiveState(policy: policy, tasks: tasks, spendByDay: spendByDay)
+        state.record(spend: amount)
+        spendByDay = state.spendByDay
+        spentToday = state.spent()
+        reservations[taskID] = HiveReservation(
+            taskID: taskID,
+            sessionID: sessionID,
+            day: day,
+            amount: amount,
+            pid: nil
+        )
+    }
+
+    /// Settles a reservation against what the bee actually cost.
+    ///
+    /// `costUSD == nil` does not mean free. It means the bee hung, was killed
+    /// on the wall clock, was cancelled by an operator, or died before printing
+    /// a result line - and the provider bills for all of those. But it is also
+    /// not one absence: the bee's transcript is on disk, so the three cases can
+    /// be told apart instead of being collapsed into "keep the whole
+    /// reservation". Six bees stopped after three seconds would otherwise
+    /// charge $30 against a $25 ceiling and block every dispatch until
+    /// midnight, with nothing in the log saying the money was never spent.
+    private func reconcile(taskID: String, reported: Double?, sessionID: String?) {
+        guard let reservation = reservations.removeValue(forKey: taskID) else {
+            guard let reported, reported > 0 else { return }
+            var state = HiveState(policy: policy, tasks: tasks, spendByDay: spendByDay)
+            state.record(spend: reported)
+            spendByDay = state.spendByDay
+            spentToday = state.spent()
+            return
+        }
+
+        var settled = reported
+        if settled == nil {
+            let transcript = store.transcriptsDirectory
+                .appendingPathComponent("\(sessionID ?? reservation.sessionID).jsonl")
+            switch HiveDispatch.repair(HiveTranscript.summarise(at: transcript)) {
+            case .charge(let cost):
+                settled = cost
+            case .refundInFull:
+                settled = 0
+                record(
+                    "reservation_refunded",
+                    String(
+                        format: "%@: $%.2f returned - the bee wrote nothing, so it never spent anything",
+                        taskID, reservation.amount
+                    )
+                )
+            case .keep:
+                // Real output, no cost line. Unknown is not zero.
+                return
+            }
+        }
+        guard let settled else { return }
+
+        var state = HiveState(policy: policy, tasks: tasks, spendByDay: spendByDay)
+        if settled < reservation.amount {
+            state.refund(reservation.amount - settled, forDay: reservation.day)
+        } else if settled > reservation.amount {
+            state.record(spend: settled - reservation.amount)
+        }
+        spendByDay = state.spendByDay
+        spentToday = state.spent()
     }
 
     private func absorb(_ event: HiveBeeEvent, for taskID: String) {
@@ -423,6 +677,7 @@ final class HiveRuntime: ObservableObject {
 
     private func complete(taskID: String, outcome: HiveBeeOutcome) async {
         runners[taskID] = nil
+        reconcile(taskID: taskID, reported: outcome.costUSD, sessionID: outcome.sessionID)
         if let beeIndex = bees.firstIndex(where: { $0.taskID == taskID }) {
             bees[beeIndex].status = outcome.status
             if !outcome.summary.isEmpty {
@@ -436,12 +691,10 @@ final class HiveRuntime: ObservableObject {
         tasks[index].durationMs = outcome.durationMs
         tasks[index].updatedAt = Date()
 
-        if let cost = outcome.costUSD, cost > 0 {
-            var state = HiveState(policy: policy, tasks: tasks, spendByDay: spendByDay)
-            state.record(spend: cost)
-            spendByDay = state.spendByDay
-            spentToday = state.spent()
-        }
+        // The cost is not recorded here. It was charged in full at dispatch and
+        // reconciled downward above: charging only on completion let a bee
+        // killed by the wall-clock guard, which prints no result line, cost the
+        // ledger nothing while costing real money at the provider.
 
         var verdict: HiveVerdict?
         if outcome.status == .succeeded && policy.verifyBeforeReview {
@@ -496,24 +749,52 @@ final class HiveRuntime: ObservableObject {
 
     private func apply(_ new: HivePolicy) {
         policy = new.sanitized()
+        syncLoopStatus()
         persist()
     }
 
+    /// Arms the clock.
+    ///
+    /// Repeating, not one-shot. A one-shot timer made the next cycle depend on
+    /// this cycle reaching its own tail, so any early return killed the loop
+    /// permanently: one `claude auth status` that exceeded its 20s timeout
+    /// because the machine was busy returned `.unknown`, the cycle returned
+    /// before re-arming, and the Hive sat at ARMED and "next cycle 0s" for ever
+    /// while the load that caused it subsided a minute later. Overlapping ticks
+    /// are dropped by the cycle latch, which is the right place for that
+    /// decision.
     private func scheduleTimer() {
         timer?.invalidate()
-        guard policy.enabled else { return }
+        timer = nil
+        guard policy.enabled else {
+            nextCycleAt = nil
+            syncLoopStatus()
+            return
+        }
         let interval = TimeInterval(policy.cycleIntervalSeconds)
-        nextCycleAt = Date().addingTimeInterval(interval)
-        let timer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.runCycle(trigger: "timer") }
         }
         // .common keeps the loop ticking while a menu or sheet is open.
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+        // Read off the timer rather than recomputed, so the countdown on
+        // screen is the moment the clock will actually fire.
+        nextCycleAt = timer.fireDate
+        syncLoopStatus()
     }
 
     private func persist() {
-        var state = HiveState(policy: policy, tasks: tasks, spendByDay: spendByDay)
+        var state = HiveState(
+            policy: policy,
+            tasks: tasks,
+            spendByDay: spendByDay,
+            // The rate window and the live reservations travel with the ledger.
+            // Both used to live only in this object, so both were erased by the
+            // one event they exist to survive.
+            spawnWindow: rateLimiter.spawnTimes,
+            reservations: reservations
+        )
         state.updatedAt = Date()
         store.save(state)
     }
