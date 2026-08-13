@@ -443,6 +443,17 @@ struct HiveTask: Codable, Identifiable, Equatable {
     /// The commit the verdict was measured against. Without it, a verdict
     /// recorded days ago is indistinguishable from one recorded just now.
     var verifiedAtCommit: String?
+    /// The key the ranked queue was ordered on when this task was made.
+    ///
+    /// Carried on the task because the DISPATCHER, not the screen, decides
+    /// which bee goes out - and it used to sort on `score`, the self-imputing
+    /// key the ordering work had just replaced. The displayed queue and the
+    /// dispatched task then disagreed on about a quarter of scans. Whatever
+    /// orders the list must be the same number that picks the work.
+    ///
+    /// Optional only for state files written before this existed; those are
+    /// refreshed on the first cycle after launch.
+    var dispatchKey: Double?
 
     init(
         id: String,
@@ -498,6 +509,7 @@ struct HiveTask: Codable, Identifiable, Equatable {
         verification = try c.decodeIfPresent(String.self, forKey: .verification)
         verified = try c.decodeIfPresent(Bool.self, forKey: .verified)
         verifiedAtCommit = try c.decodeIfPresent(String.self, forKey: .verifiedAtCommit)
+        dispatchKey = try c.decodeIfPresent(Double.self, forKey: .dispatchKey)
     }
 
     var isTerminal: Bool { state == .done || state == .toxic }

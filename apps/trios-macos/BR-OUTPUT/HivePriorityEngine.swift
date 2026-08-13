@@ -398,7 +398,7 @@ enum HiveTaskFactory {
 
     static func makeTask(from target: HiveTarget, policy: HivePolicy) -> HiveTask? {
         guard rejection(for: target) == nil, let kind = target.dominantKind else { return nil }
-        return HiveTask(
+        var task = HiveTask(
             id: taskID(module: target.module, kind: kind),
             title: "\(target.module): \(kind.label.lowercased())",
             module: target.module,
@@ -410,6 +410,10 @@ enum HiveTaskFactory {
             confidence: target.confidence,
             prompt: prompt(for: target, kind: kind, policy: policy)
         )
+        // The number the queue was ordered on travels with the task, so the
+        // dispatcher cannot pick by a different one than the screen showed.
+        task.dispatchKey = target.priorImputedScore
+        return task
     }
 
     /// The bee's brief. Repo law is NOT restated here: the bee runs inside the
