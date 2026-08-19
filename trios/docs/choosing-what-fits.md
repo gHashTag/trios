@@ -1,6 +1,6 @@
 # Choosing What Fits — Why the Queue Hands Out Work by the Shoulder
 
-Issue: gHashTag/trios#1164 · Parent: #1090
+Issue: gHashTag/trios#1164 · Parent: #1090 · Rule: #1163
 
 ## What this document is
 
