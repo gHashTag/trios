@@ -10,8 +10,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo "🏥 TRIOS Health Check"
-echo "===================="
+echo "🏥 TRIOS Config Health Check"
+echo "============================"
+echo "Scope: the config tree at $TRIOS_ROOT."
+echo "NOT checked here: the Swift app, the build, the server, the git tree."
 echo ""
 
 ERRORS=0
@@ -92,9 +94,9 @@ fi
 echo ""
 echo "===================="
 if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
-    echo -e "${GREEN}✅ All checks passed!${NC}"
+    echo -e "${GREEN}✅ Config intact${NC} (says nothing about the app or the build)"
 elif [ $ERRORS -eq 0 ]; then
-    echo -e "${YELLOW}⚠️  $WARNINGS warning(s), but system is functional${NC}"
+    echo -e "${YELLOW}⚠️  $WARNINGS warning(s); config usable${NC} (says nothing about the app or the build)"
 else
     echo -e "${RED}❌ $ERRORS error(s) found!${NC}"
     echo "   Please fix the issues above."
@@ -103,5 +105,9 @@ fi
 echo ""
 echo "Config root: $TRIOS_ROOT"
 echo "Run 'cd $TRIOS_ROOT && ./scripts/setup.sh' to repair issues."
+echo ""
+echo "The trios PROJECT is a different tree: /Users/playra/BrowserOS/trios (8.2G)."
+echo "This script has never read it. Its health is reported by 'make doctor',"
+echo "which the system crontab runs at :11 and :41 into doctor_reports/cron.log."
 
 exit $ERRORS
