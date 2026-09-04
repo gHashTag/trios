@@ -54,6 +54,25 @@ const DIR = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.TRIOS_ROOT || '/Users/playra/BrowserOS'
 const REPO = process.env.TRIOS_ISSUE_REPO || 'gHashTag/trios'
 const SVC = process.env.QUEEN_SERVICE || 'trios-agent-server'
+
+/**
+ * The railway invocation, with the project named EXPLICITLY.
+ *
+ * `railway ssh --service X` resolves the project from whatever directory it is
+ * run in, by walking up until it finds a linked one. That works from a shell a
+ * person is sitting in and does not work from a launchd timer: measured
+ * 2026-09-04, every railway-calling step of the chain failed with
+ * `Must provide project when setting service or environment`, while the
+ * read-only steps passed - so the timer reported a mostly-healthy chain that
+ * had pushed nothing, closed nothing and released nothing for hours, and the
+ * swarm sat idle between the runs I happened to trigger by hand.
+ *
+ * Naming the project removes the dependency on where the process happens to be
+ * standing. The id is public - it is in every build URL this repository has
+ * ever printed - and carries no credential.
+ */
+export const RAILWAY = `railway ssh --project 564d9ebd-7aa8-44fe-93ec-e0b03c87158d --environment production`
+
 const CORE = path.join(ROOT, 'trios/agent-server/queen-core/Sources/QueenCore')
 const BIN = path.join(DIR, 'state', 'criteria-probe')
 const isMain = process.argv[1] && process.argv[1].endsWith('/stale-escalations.mjs')
@@ -64,9 +83,31 @@ const sh = (c, opts = {}) =>
   execSync(c, { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], ...opts }).trim()
 const tryShell = (c, opts) => { try { return sh(c, opts) } catch { return null } }
 
-/** Strip railway's own chatter, which is not output of the command we ran. */
-const clean = (s) =>
-  s.split('\n').filter((l) => !/Using SSH|railway\.json|Migrate|Existing/.test(l)).join('\n').trim()
+/**
+ * Strip railway's own chatter, which is not output of the command we ran.
+ *
+ * ANCHORED, and never applied to a line that looks like data. The first version
+ * dropped any line CONTAINING `Migrate`, `Existing`, `Using SSH` or
+ * `railway.json` - so a single-line JSON answer carrying a review note that
+ * mentioned migration was deleted in full, and the caller reported "unparseable
+ * answer" about a query that had worked perfectly. A noise filter that can eat
+ * evidence is worse than no filter: it turns a working system into an
+ * unexplainable one.
+ *
+ * Two rules now. A line that begins with `[` or `{` is an answer and is never
+ * dropped; anything else must match the chatter from its START to count as
+ * chatter.
+ */
+export const clean = (s) =>
+  s
+    .split('\n')
+    .filter((l) => {
+      const t = l.trim()
+      if (t.startsWith('[') || t.startsWith('{')) return true
+      return !/^(Using SSH|warning: Config as Code|\s*→ Migrate|\s*Existing files keep working|.*railway\.json \/ railway\.toml)/.test(l)
+    })
+    .join('\n')
+    .trim()
 
 /**
  * Run a node snippet inside the deployed service.
@@ -78,7 +119,7 @@ const clean = (s) =>
  */
 export function remote(js) {
   const script = `cd /app && node -e ${shq(js)}`
-  const out = tryShell(`railway ssh --service ${SVC} -- sh -c ${shq(script)}`, {
+  const out = tryShell(`${RAILWAY} --service ${SVC} -- sh -c ${shq(script)}`, {
     cwd: path.join(ROOT, 'trios'),
   })
   return out === null ? null : clean(out)
@@ -324,6 +365,12 @@ if (isMain) {
     'criteria, but the parser that produced that reading was fixed the same day ' +
     '(edbc05e11) and the shipping parser reads the criteria today'
   const { released } = release(stale.map((r) => r.issue), note)
+  // The ledger line is not decoration. `coverage.mjs` proves an act path by
+  // finding evidence it ran, and a tool that acts without recording it reads as
+  // NEVER ACTED - which is exactly how the reaper stayed unproven until the
+  // night the volume filled.
+  const L = await import(path.join(DIR, 'loop.mjs'))
+  L.append({ kind: 'stale-escalations', released, considered: rows.length, issues: stale.map((r) => r.issue) })
   console.log(`\nreleased ${released} of ${stale.length} back to the pool`)
   process.exit(released === stale.length ? 0 : 1)
 }

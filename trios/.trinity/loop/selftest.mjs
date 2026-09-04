@@ -33,21 +33,64 @@ const TR = await import(path.join(DIR, 'trend.mjs'))
 const CLK = await import(path.join(DIR, 'clocks.mjs'))
 const FLD = await import(path.join(DIR, 'fields.mjs'))
 const SE = await import(path.join(DIR, 'stale-escalations.mjs'))
+const D = await import(path.join(DIR, 'disjoint.mjs'))
+const AB = await import(path.join(DIR, 'ab.mjs'))
+const A = await import(path.join(DIR, 'author.mjs'))
 
 let pass = 0
 const failures = []
 
-function check(name, fn) {
-  try {
-    fn()
-    pass++
-    console.log(`  ok    ${name}`)
-  } catch (e) {
-    failures.push(`${name}: ${e.message}`)
-    console.log(`  FAIL  ${name}`)
-    console.log(`          ${String(e.message).slice(0, 140)}`)
-  }
+// AN ASYNC CHECK WAS NEVER AWAITED, SO IT COULD NOT FAIL.
+//
+// This called `fn()` inside a try/catch. For an ordinary function that is
+// correct. For an `async` one it starts the work, returns a promise, and the
+// catch sees nothing - so the case printed `ok`, the summary said `0 failed`,
+// and the rejection arrived afterwards as an unhandled error that crashed the
+// process AFTER the tally had already been believed.
+//
+// Found 2026-09-05, holding eight checks written the same day: every one of
+// them had been reported passing without ever being run to completion. A gate
+// that cannot fail is not a gate, and this file's whole job is to be one.
+const pending = []
+const settled = (name, e) => {
+  if (!e) { pass++; console.log(`  ok    ${name}`); return }
+  failures.push(`${name}: ${e.message}`)
+  console.log(`  FAIL  ${name}`)
+  console.log(`          ${String(e.message).slice(0, 140)}`)
 }
+function check(name, fn) {
+  let out
+  try {
+    out = fn()
+  } catch (e) {
+    settled(name, e)
+    return
+  }
+  if (out && typeof out.then === 'function') {
+    pending.push(out.then(() => settled(name), (e) => settled(name, e)))
+    return
+  }
+  settled(name)
+}
+
+/**
+ * A source file with its comments removed.
+ *
+ * THREE TIMES IN ONE NIGHT a check of mine matched its own documentation: it
+ * counted "evidence:" inside a printing block, it found "--delete-branch" in a
+ * comment that said NOT to use it, and it found "also true" in a comment
+ * quoting the behaviour that had just been removed. Each time the code was
+ * right and the test was reading prose.
+ *
+ * A scan that asks "does this file contain X" must ask it of the CODE. Every
+ * such check goes through here now, so the class is closed rather than fixed
+ * three times.
+ */
+const codeOf = (file) =>
+  fs.readFileSync(path.join(DIR, file), 'utf8')
+    .split('\n')
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join('\n')
 
 const eq = (got, want, what) => {
   if (got !== want) throw new Error(`${what}: got ${JSON.stringify(got)}, wanted ${JSON.stringify(want)}`)
@@ -56,6 +99,17 @@ const eq = (got, want, what) => {
 const ROOT = process.env.TRIOS_ROOT || '/Users/playra/BrowserOS'
 const fsRequireJudge = () => JP
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-selftest-'))
+
+// GENERATED PER RUN, and it has to be.
+//
+// The fixture used a fixed name, and once this file was committed that name
+// existed in the tree - five times - so brief-gate did exactly its job and
+// refused the draft for promising an identifier that is already there. The
+// fixture falsified its own premise by being saved.
+//
+// A fixture asserting "this appears nowhere" must mint a name that cannot have
+// been written down before it ran.
+const ABSENT_ID = `absentFn${process.pid}${Date.now().toString(36)}`
 
 // ---------------------------------------------------------------------- shq
 // The bug it exists to stop: execSync passes through the local /bin/sh, so a
@@ -109,7 +163,7 @@ $ wc -l x
 
 ## Success Criteria
 
-- The tool exports a function named \`aFunctionThatIsNowhere\`; that identifier appears nowhere in the tree today.
+- The tool exports a function named \`${ABSENT_ID}\`; that identifier appears nowhere in the tree today.
 
 ## Boundary
 
@@ -265,8 +319,8 @@ check('diffing from the fork point shows additions only, the tip shows phantom d
 console.log('\ncounting criteria - must demand an independent command')
 
 const countBrief = (tail) => GOOD.replace(
-  '- The tool exports a function named `aFunctionThatIsNowhere`; that identifier appears nowhere in the tree today.',
-  `- The row count equals the number of declarations; the bee quotes both numbers and the command that produced the second${tail}\n- The tool exports a function named \`aFunctionThatIsNowhere\`; that identifier appears nowhere in the tree today.`,
+  `- The tool exports a function named \`${ABSENT_ID}\`; that identifier appears nowhere in the tree today.`,
+  `- The row count equals the number of declarations; the bee quotes both numbers and the command that produced the second${tail}\n- The tool exports a function named \`${ABSENT_ID}\`; that identifier appears nowhere in the tree today.`,
 )
 
 check('a count criterion with no independence clause is flagged', () => {
@@ -324,8 +378,8 @@ check('a snapshot with no skip summary contributes no point, rather than a zero'
 console.log('\nbrief-gate - a criterion naming a command must demand its raw output')
 
 const cmdBrief = (tail) => GOOD.replace(
-  '- The tool exports a function named `aFunctionThatIsNowhere`; that identifier appears nowhere in the tree today.',
-  `- Running \`node trios/tools/x.mjs\` reports 3 findings${tail}\n- The tool exports a function named \`aFunctionThatIsNowhere\`; that identifier appears nowhere in the tree today.`,
+  `- The tool exports a function named \`${ABSENT_ID}\`; that identifier appears nowhere in the tree today.`,
+  `- Running \`node trios/tools/x.mjs\` reports 3 findings${tail}\n- The tool exports a function named \`${ABSENT_ID}\`; that identifier appears nowhere in the tree today.`,
 )
 
 check('a command criterion with no output demand is flagged', () => {
@@ -544,6 +598,1034 @@ check('an expired lock is not a holder, and acquire agrees with lockHolder', () 
   }
 })
 
+
+// ---------------------------------------------------------------------------
+// disjoint: filing N tasks does not give you N workers.
+//
+// Four issues were filed on 2026-09-04 and two named the same file, so the
+// scheduler refused one with `fileConflict` and the fourth worker slot stayed
+// empty while the backlog looked healthy. These pin the comparison AND the
+// selection, because the comparison is the part that has been wrong before:
+// path ownership compared as raw strings is a recorded defect of this project.
+
+check('a directory conflicts with everything beneath it, both ways', () => {
+  if (!D.collides('rings/SR-00', 'rings/SR-00/Queen.swift')) throw new Error('a directory must conflict with its own file')
+  if (!D.collides('rings/SR-00/Queen.swift', 'rings/SR-00')) throw new Error('and in the other direction')
+})
+
+check('a string prefix that is not a directory does NOT conflict', () => {
+  // The recorded defect: `rings/SR-0` is a string prefix of `rings/SR-00/X` and
+  // is not a directory containing it.
+  if (D.collides('rings/SR-0', 'rings/SR-00/Queen.swift')) throw new Error('compared as strings, not as path components')
+})
+
+check('two different files in one directory do not conflict', () => {
+  if (D.collides('a/b/one.ts', 'a/b/two.ts')) throw new Error('siblings are not a conflict')
+})
+
+check('the same file conflicts with itself however it is written', () => {
+  if (!D.collides('./a/b.ts', 'a/b.ts')) throw new Error('a leading ./ is not a different file')
+  if (!D.collides('`a/b.ts`', 'a/b.ts')) throw new Error('markdown backticks are not part of the path')
+  if (!D.collides('a/b/', 'a/b/c.ts')) throw new Error('a trailing slash is not a different directory')
+})
+
+check('an empty path conflicts with nothing, rather than with everything', () => {
+  if (D.collides('', 'a/b.ts')) throw new Error('an empty path must not swallow the tree')
+})
+
+check('the batch drops the second candidate that names one file', () => {
+  const c = [
+    { id: 'A', paths: ['x/queen-tick.ts', 'x/a.test.ts'] },
+    { id: 'B', paths: ['x/queen-tick.ts', 'x/b.test.ts'] },
+    { id: 'C', paths: ['y/other.ts'] },
+  ]
+  const { taken, setAside } = D.disjointBatch(c, [], 10)
+  eq(taken.length, 2, 'two of the three can run side by side')
+  eq(setAside.length, 1, 'one set aside')
+  if (!/already spoken for/.test(setAside[0].why)) throw new Error('the reason must name the collision')
+  // The exact case measured: this is #1420 and #1421.
+  const ids = taken.map((t) => t.id).sort().join('')
+  if (ids !== 'AC' && ids !== 'BC') throw new Error(`took ${ids}, which is not a disjoint pair`)
+})
+
+check('a candidate colliding with what the swarm already holds is not filed', () => {
+  const { taken, setAside } = D.disjointBatch(
+    [{ id: 'A', paths: ['rings/SR-02/ChatViewModel.swift'] }],
+    ['rings/SR-02'],
+    10,
+  )
+  eq(taken.length, 0, 'held by a live dispatch')
+  if (!/spoken for/.test(setAside[0].why)) throw new Error('must say why')
+})
+
+check('a candidate with no boundary is set aside, not silently taken', () => {
+  const { taken, setAside } = D.disjointBatch([{ id: 'A', paths: [] }], [], 10)
+  eq(taken.length, 0, 'nothing can be reserved for it')
+  if (!/no boundary/.test(setAside[0].why)) throw new Error('must say why')
+})
+
+check('the room limit is honoured and the overflow says so', () => {
+  const c = [{ id: 'A', paths: ['a.ts'] }, { id: 'B', paths: ['b.ts'] }, { id: 'C', paths: ['c.ts'] }]
+  const { taken, setAside } = D.disjointBatch(c, [], 2)
+  eq(taken.length, 2, 'two filed')
+  eq(setAside.length, 1, 'one over the room')
+  if (!/over the room/.test(setAside[0].why)) throw new Error('must distinguish room from collision')
+})
+
+check('nothing is dropped without a reason', () => {
+  const c = [{ id: 'A', paths: ['a.ts'] }, { id: 'B', paths: ['a.ts'] }, { id: 'C', paths: [] }]
+  const { taken, setAside } = D.disjointBatch(c, [], 10)
+  eq(taken.length + setAside.length, 3, 'every candidate is accounted for')
+  if (setAside.some((s) => !s.why)) throw new Error('a selector that drops work silently is indistinguishable from a broken one')
+})
+
+
+// ---------------------------------------------------------------------------
+// brief-gate: a tree-level check is mechanical too, and the negatives still bite.
+
+const CLEANUP = `# A cleanup task that defines nothing new
+
+## User Scenarios & Testing
+
+### User Story 1 - The file obeys the law (P1)
+
+**Given** the file, **When** the check runs, **Then** it reports zero.
+
+**Acceptance Scenarios**:
+1. **Given** the file, **When** the grep runs, **Then** its output is 0.
+
+## Requirements
+
+- **FR-001**: Every offending character MUST be replaced.
+
+## Success Criteria
+
+- \`LC_ALL=C grep -cP '[^\\x00-\\x7F]' trios/tools/selftest-fixture.mjs\` prints 0, and the raw output is quoted. The command MUST NOT name or enumerate the specific items it counts.
+
+## Boundary
+
+\`trios/tools/selftest-fixture.mjs\`
+`
+
+check('a cleanup with a tree-level check and no new identifier is accepted', () => {
+  // It defines nothing, so the identifier rule can never be satisfied. Refusing
+  // it refused three real L3 cleanups on 2026-09-04 - a false refusal of the
+  // exact class this gate keeps committing.
+  const r = G.gate(draft('cleanup.md', CLEANUP))
+  if (r.problems.some((p) => /mechanically checkable/.test(p))) {
+    throw new Error(`refused a tree-level check: ${r.problems.join('; ')}`)
+  }
+})
+
+check('the command must name a path the Boundary actually reserves', () => {
+  // Replace ONLY the path inside the command, leaving the Boundary alone, so the
+  // draft claims a check over a file it never reserved.
+  const lines = CLEANUP.split('\n')
+  const i = lines.findIndex((l) => l.startsWith('- `LC_ALL'))
+  if (i < 0) throw new Error('the fixture no longer carries the command this case is about')
+  const bad = lines
+    .map((l, k) => (k === i ? l.replace('trios/tools/selftest-fixture.mjs', 'some/other/file.ts') : l))
+    .join('\n')
+  const r = G.gate(draft('cleanup-elsewhere.md', bad))
+  if (!r.problems.some((p) => /mechanically checkable/.test(p))) {
+    throw new Error('accepted a command pointing outside the boundary - the worker could satisfy it without touching its own files')
+  }
+})
+
+check('the command must state an exact expected output', () => {
+  const bad = CLEANUP.replace('prints 0,', 'is clean,')
+  const r = G.gate(draft('cleanup-vague.md', bad))
+  if (!r.problems.some((p) => /mechanically checkable/.test(p))) {
+    throw new Error('accepted a command with no expected output - "clean" is the bee\'s word again')
+  }
+})
+
+check('prose alone is still refused', () => {
+  const bad = CLEANUP.replace(/- `LC_ALL[^\n]*\n/, '- The file looks tidy afterwards.\n')
+  const r = G.gate(draft('cleanup-prose.md', bad))
+  if (!r.problems.some((p) => /mechanically checkable/.test(p))) {
+    throw new Error('accepted a criterion nobody can audit')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// author: the limit belongs on the QUEUE, not on the backlog.
+//
+// Measured 2026-09-04: five authored issues open, the author refusing to file
+// with "at the WIP limit" - and FOUR of the five already dispatched and sitting
+// in sendBack or wait. The real queue was ONE, and the swarm ran at 14% of
+// capacity while its reviewer answered in 0.8 seconds.
+//
+// Kanban limits work in progress and never the backlog. Dependabot's
+// open-pull-requests-limit protects a HUMAN reviewer's capacity. Neither says
+// to cap the number of things waiting to be started.
+
+check('an issue with a dispatch is in progress, not queue', () => {
+  const src = fs.readFileSync(path.join(DIR, 'author.mjs'), 'utf8')
+  if (!/unstartedAuthored/.test(src)) throw new Error('the count must be of unstarted issues')
+  if (/const open = openAuthored\(\)/.test(src)) throw new Error('still counting the backlog column')
+  if (!/queen_dispatch where issue in/.test(src)) throw new Error('nothing asks which issues were ever dispatched')
+})
+
+check('a failed measurement still refuses to file', () => {
+  // The oldest rule here: a count that could not be taken must never read as
+  // zero, because zero LIFTS the limit rather than holding it.
+  const src = fs.readFileSync(path.join(DIR, 'author.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('function unstartedAuthored'), src.indexOf('// BOTH SIGNALS'))
+  const returns = [...fn.matchAll(/return\s+([^\n]+)/g)].map((m) => m[1].trim())
+  if (!returns.some((r) => r.startsWith('null'))) {
+    throw new Error('an unreadable count must return null, which refuses, not 0, which permits')
+  }
+  if (!/=== null.*refusing|refusing.*=== null/s.test(src)) {
+    throw new Error('nothing refuses on a null count')
+  }
+})
+
+check('the stall guard reports the same numbers it reads', () => {
+  // It once printed "${open} authored issue(s) open" while `open` had quietly
+  // become the queue depth - a report that disagrees with its own measure is
+  // how a number gets believed for the wrong reason.
+  const src = fs.readFileSync(path.join(DIR, 'author.mjs'), 'utf8')
+  const msg = src.slice(src.indexOf('STALLED:'), src.indexOf('STALLED:') + 400)
+  if (!/q\.open/.test(msg) || !/q\.queue/.test(msg)) {
+    throw new Error('the refusal must name both the open count and the queue depth')
+  }
+})
+
+
+check('an unreadable queue is UNKNOWN, never empty', () => {
+  // The whole point of the measure is to tell the author how much room it has.
+  // A network fault reported as 0 would tell it there is room for everything.
+  const src = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function depth'), src.indexOf('export function latency'))
+  if (!/return null/.test(fn)) throw new Error('depth() must return null when it cannot tell')
+  if (/return \{ open: 0, inProgress: 0, queue: 0[^}]*\}\s*\n\s*\}/.test(fn.replace(/if \(!open\.length\)[^\n]*\n/, ''))) {
+    throw new Error('an unreachable service must not fall through to a zero queue')
+  }
+  if (!/is unknown, which is not the same as empty/.test(src)) {
+    throw new Error('the refusal must say what it does not know')
+  }
+})
+
+check('the latency report states both stages, so neither can be assumed', () => {
+  // I assumed review latency bounded throughput and wrote it into the skill for
+  // a whole iteration. It was p50 0.8 s. An assumption about which stage is slow
+  // costs one query to check.
+  const src = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8')
+  if (!/reviewed_at-finished_at/.test(src)) throw new Error('the review stage is not measured')
+  if (!/finished_at-dispatched_at/.test(src)) throw new Error('the worker stage is not measured')
+  if (!/Little/.test(src)) throw new Error('a depth without the rate it must sustain is a number nobody can act on')
+})
+
+
+check('a criterion demanding a green repository typecheck is refused', () => {
+  // I wrote exactly this into the template for every L3 cleanup. The repository
+  // typecheck has 42 pre-existing errors on a clean checkout, so around a dozen
+  // issues carried a criterion no honest work could satisfy - and a worker did
+  // the right thing, stashed its change, proved the failures were identical
+  // without it, and reported the criterion unmet. Excellent work, marked down by
+  // my sentence. Second time: #1377 SC-2 demanded output without the word `skip`
+  // from a suite named queen-skip-reason-parity.
+  const bad = CLEANUP.replace(
+    /- `LC_ALL[^\n]*\n/,
+    '- `bun run typecheck` passes from `trios/agent-server`, and its raw stdout is quoted.\n- `LC_ALL=C grep -cP \'[^\\x00-\\x7F]\' trios/tools/selftest-fixture.mjs` prints 0, and the raw output is quoted. The command MUST NOT name or enumerate the specific items it counts.\n',
+  )
+  const r = G.gate(draft('green-tree.md', bad))
+  if (!r.problems.some((p) => /green/.test(p))) {
+    throw new Error(`accepted a demand that the whole tree be green: ${r.problems.join('; ')}`)
+  }
+})
+
+check('the SCOPED form of the same demand is accepted', () => {
+  const ok = CLEANUP.replace(
+    /- `LC_ALL[^\n]*\n/,
+    '- `bun run typecheck 2>&1 | grep -c trios/tools/selftest-fixture.mjs` prints 0, and the raw output is quoted. The command MUST NOT name or enumerate the specific items it counts.\n',
+  )
+  const r = G.gate(draft('green-scoped.md', ok))
+  if (r.problems.some((p) => /green/.test(p))) {
+    throw new Error(`refused a demand scoped to its own boundary: ${r.problems.join('; ')}`)
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// reap-local: the laptop fills too, and the tool that frees it must never hang.
+
+check('a shell call in the local reaper is bounded', () => {
+  // Without a timeout it ran past 500 s twice and had to be killed, and there
+  // was no way to tell which of 33 worktrees was hanging. A step that can hang
+  // for ever hangs the whole chain, and this one runs first of eleven.
+  const src = fs.readFileSync(path.join(DIR, 'reap-local.mjs'), 'utf8')
+  if (!/timeout/.test(src.slice(src.indexOf('const sh ='), src.indexOf('const sh =') + 700))) {
+    throw new Error('every shell call must be bounded')
+  }
+})
+
+check('the cheap question is asked before the expensive one', () => {
+  // "Is this commit an ancestor" is two ref lookups; `git status` walks the
+  // working tree, and on a 2.4 GB checkout that is seconds. An unmerged tree is
+  // kept whatever its state, so its dirtiness is never worth asking.
+  const src = fs.readFileSync(path.join(DIR, 'reap-local.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function survey'), src.indexOf('if (isMain)'))
+  const ancestor = fn.indexOf('is-ancestor')
+  const status = fn.indexOf('git status --porcelain')
+  if (ancestor < 0 || status < 0) throw new Error('both questions must be asked')
+  if (ancestor > status) throw new Error('the expensive question is being asked first')
+})
+
+check('it never passes --force to git worktree remove', () => {
+  // The standing rule of this project. --force is what turns "this has
+  // something in it" into silence.
+  const src = fs.readFileSync(path.join(DIR, 'reap-local.mjs'), 'utf8')
+  if (/worktree remove[^\n]*--force/.test(src)) {
+    throw new Error('--force must never appear on a worktree removal')
+  }
+  if (!/left alone rather than forced/.test(src)) {
+    throw new Error('a refusal must say it chose not to force')
+  }
+})
+
+check('a dirty tree is kept whatever the disk says', () => {
+  const src = fs.readFileSync(path.join(DIR, 'reap-local.mjs'), 'utf8')
+  if (!/state = 'dirty'/.test(src)) throw new Error('dirtiness must be a state of its own')
+  const reap = src.slice(src.indexOf('const reapable ='))
+  if (/state === 'dirty'/.test(reap.slice(0, reap.indexOf('for (const r of reapable)')))) {
+    throw new Error('a dirty tree must never enter the reapable set')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// verdicts: a rate over a window that has not finished is not a rate.
+//
+// I reported "only 17% of dispatches are accepted, 50% get no verdict at all"
+// and built a whole argument on it, including what to work on next. The window
+// was still in flight: most of those rows simply had no verdict YET, and
+// `wait` and `(none)` were transient states rather than outcomes. Judged three
+// hours later the same window read 80% accepted; the following three hours read
+// 96%. The swarm was healthy and I called it broken.
+
+check('the verdict rate counts only work that has finished', () => {
+  const src = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function verdicts'), src.indexOf('if (isMain)'))
+  if (!/finished_at is not null/.test(fn)) {
+    throw new Error('an unfinished dispatch has no verdict yet and must not count against the rate')
+  }
+})
+
+check('it reports how many it excluded, so the denominator is visible', () => {
+  const src = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8')
+  if (!/finished_at is null/.test(src)) throw new Error('nothing counts the in-flight rows')
+  if (!/still RUNNING and are excluded/.test(src)) {
+    throw new Error('a reader cannot judge a rate without being told what was left out')
+  }
+  if (!/has no rate yet/.test(src)) {
+    throw new Error('the tool must say plainly that an unfinished window has no rate')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// author: a detector must refuse the files the repository GENERATES.
+//
+// Widening the L3 detector past the server tree brought `packages/cdp-protocol`
+// into range: 114 files carrying non-ASCII in comments, every one opening with
+// "AUTO-GENERATED from CDP protocol. DO NOT EDIT." Filing against them would
+// have been 114 tasks a correct worker must refuse, and L0 is explicit that a
+// diff changing a generated file is itself a defect.
+
+check('a file under a generated/ path is refused', () => {
+  if (!A.isGenerated('trios/agent-server/packages/cdp-protocol/src/generated/create-api.ts', 'x')) {
+    throw new Error('the path convention must be enough on its own')
+  }
+  if (!A.isGenerated('a/dist/x.ts', 'x')) throw new Error('dist is generated')
+  if (!A.isGenerated('a/node_modules/x.ts', 'x')) throw new Error('node_modules is not ours')
+})
+
+check('a file whose HEADER says it is generated is refused wherever it lives', () => {
+  const head = '// -- AUTO-GENERATED from CDP protocol. DO NOT EDIT. --\n\nexport const x = 1\n'
+  if (!A.isGenerated('trios/agent-server/apps/agent/anywhere.ts', head)) {
+    throw new Error('the marker must be enough on its own - a generator may write anywhere')
+  }
+  if (!A.isGenerated('a/b.ts', '/* @generated */\nexport const y = 2\n')) {
+    throw new Error('@generated is the other common marker')
+  }
+})
+
+check('the marker is only believed near the TOP of the file', () => {
+  // A file that MENTIONS generated code in a comment two hundred lines down is
+  // not itself generated, and refusing it would quietly shrink the corpus in a
+  // way nobody would notice.
+  const late = 'export const a = 1\n'.repeat(40) + '// this is AUTO-GENERATED elsewhere\n'
+  if (A.isGenerated('a/b.ts', late)) {
+    throw new Error('a mention far down the file is not a generator marker')
+  }
+})
+
+check('an ordinary hand-written file is NOT refused', () => {
+  if (A.isGenerated('trios/agent-server/apps/agent/real.ts', '// A comment.\nexport const z = 3\n')) {
+    throw new Error('refusing hand-written files would empty the corpus silently')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// why / feed / push-work: the diagnosis, the fast refill, and the batch that
+// used to take itself down.
+
+check('the diagnosis stops at the FIRST cause that explains what is seen', () => {
+  // A diagnosis that lists six possibilities has not diagnosed anything. Asked
+  // four times in one night why the swarm was idle, the answer was different
+  // every time and none was guessable from "RUNNING 0".
+  const src = fs.readFileSync(path.join(DIR, 'why.mjs'), 'utf8')
+  if (!/if \(!all\) break/.test(src)) throw new Error('it must stop at the first hit unless asked for all')
+  if (!/remedy/.test(src)) throw new Error('a cause without a command to run is half an answer')
+})
+
+check('every cause carries evidence and a remedy', () => {
+  // Counted INSIDE the checks, not across the file: the printing block says
+  // "evidence:" too, so a whole-file count reported 13 against 12 and blamed
+  // the code for the test's own sloppiness.
+  const src = fs.readFileSync(path.join(DIR, 'why.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function checks'), src.indexOf('if (isMain)'))
+  const causes = [...fn.matchAll(/cause:/g)].length
+  const evidence = [...fn.matchAll(/evidence:/g)].length
+  const remedies = [...fn.matchAll(/remedy:/g)].length
+  if (causes !== evidence || causes !== remedies) {
+    throw new Error(`${causes} causes, ${evidence} evidence, ${remedies} remedies - each must have both`)
+  }
+})
+
+check('an unknown cause is reported as unknown, not as health', () => {
+  const src = fs.readFileSync(path.join(DIR, 'why.mjs'), 'utf8')
+  if (!/No known cause fires/.test(src)) throw new Error('silence must not read as "nothing is wrong"')
+  if (!/process\.exit\(2\)/.test(src)) throw new Error('an undiagnosed idle swarm must not exit 0')
+})
+
+check('the feed stands down when the chain holds the lock', () => {
+  // Two writers pushing and closing at once is the thing the lock exists to
+  // prevent, and the chain does this same work a minute later.
+  const src = fs.readFileSync(path.join(DIR, 'feed.mjs'), 'utf8')
+  if (!/standing down/.test(src)) throw new Error('it must stand down rather than race')
+  if (!/process\.exit\(0\)/.test(src.slice(src.indexOf('standing down')))) {
+    throw new Error('standing down is not an error')
+  }
+})
+
+check('a step killed by the timeout is not called a failure', () => {
+  // Calling it one sent me hunting a bug in close-done that did not exist. A
+  // half-run step is worse than an unrun one, but it is not a fault in the step.
+  const src = fs.readFileSync(path.join(DIR, 'feed.mjs'), 'utf8')
+  if (!/timed out/.test(src)) throw new Error('a timeout needs its own state')
+  if (!/e\.killed \|\| e\.signal === 'SIGTERM'/.test(src)) {
+    throw new Error('nothing distinguishes a kill from a non-zero exit')
+  }
+})
+
+check('one rejected ref does not take the whole push down', () => {
+  // `git push` exits non-zero when ANY ref is rejected, and this pushes a batch.
+  // A single non-fast-forward made execSync throw, the script died before
+  // reporting, and NONE of the other branches reached the remote - the defect
+  // this tool exists to fix, committed by the tool.
+  const src = fs.readFileSync(path.join(DIR, 'push-work.mjs'), 'utf8')
+  if (!/function push\(/.test(src)) throw new Error('the push needs a tolerant caller of its own')
+  if (!/catch \(e\)[\s\S]{0,200}e\.stdout/.test(src)) {
+    throw new Error('a rejected ref must yield its OUTPUT, which the reporting already knows how to read')
+  }
+  if (/worktree remove[^\n]*--force|push[^\n]*--force/.test(src)) {
+    throw new Error('and it must still never force')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// mix and quota: load is not value, and a monoculture hides in every count.
+//
+// Measured 2026-09-04: 4 of 4 workers running, 100% acceptance, and ALL FORTY of
+// the last authored issues were the same thing - replacing box-drawing
+// characters in comments. Every metric agreed the swarm was healthy.
+//
+// The cause was not an exhausted corpus. The `untested` template had been
+// failing brief-gate the whole time - a count criterion with no independence
+// clause, and commands with no demand for raw stdout - so the only detector that
+// could file was the cheapest one. Fifth time one of my gates has refused honest
+// work, and the first time it silently shaped what the swarm did for a day.
+
+check('the untested brief passes the gate it must pass', () => {
+  const src = fs.readFileSync(path.join(DIR, 'author.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('function untestedBrief'))
+  const body = fn.slice(0, fn.indexOf('\n}\n'))
+  if (!/MUST NOT name or enumerate/.test(body)) {
+    throw new Error('a count criterion needs its independence clause, or the gate refuses the brief')
+  }
+  if (!/raw stdout|raw output|raw and unedited/.test(body)) {
+    throw new Error('a criterion naming a command must demand its raw output')
+  }
+})
+
+check('no detector may take more than half a round', () => {
+  const src = fs.readFileSync(path.join(DIR, 'author.mjs'), 'utf8')
+  if (!/const QUOTA = Math\.max\(1, Math\.ceil\(room \/ 2\)\)/.test(src)) {
+    throw new Error('a corpus of 111 must not be able to fill every slot by being larger than one of 25')
+  }
+  if (!/one detector may not take them all/.test(src)) {
+    throw new Error('a candidate dropped for the quota must say so, like every other exclusion')
+  }
+})
+
+check('the mix counts KINDS, not tasks', () => {
+  const src = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function mix'), src.indexOf('if (isMain)'))
+  if (!/KINDS/.test(fn)) throw new Error('counting tasks is what hid the monoculture')
+  if (!/other/.test(fn)) throw new Error('an unrecognised title must land somewhere visible, not be dropped')
+})
+
+check('a monoculture is an ERROR, not a note', () => {
+  const src = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8')
+  if (!/process\.exit\(3\)/.test(src)) {
+    throw new Error('four fifths of the backlog being one cheap thing must not exit 0')
+  }
+  if (!/load is not value/.test(src)) throw new Error('it must say what the number means')
+})
+
+
+// ---------------------------------------------------------------------------
+// land: work that was finished, accepted, closed - and never entered the branch.
+//
+// 174 queen branches on the remote, FIVE contained in the base, and all 169
+// others carrying a real diff. The Queen accepted the work and close-done closed
+// the issues on the strength of a branch EXISTING. A closed issue whose code is
+// not in the branch is a false statement about the repository, and the loop had
+// been making 169 of them.
+
+check('merged is asked by comparing TREES, not ancestry or a three-dot diff', () => {
+  // Two wrong answers came first. `merge-base --is-ancestor` is right for a real
+  // merge and permanently wrong after a SQUASH, because a squash writes a new
+  // commit and the source is never an ancestor - so this tool landed the same
+  // five branches four times, opening twenty pull requests and merging fifteen
+  // commits that changed zero files. And `git diff BASE...branch` is three-dot:
+  // it measures from the divergence point, so it shows the branch's changes
+  // whether or not they are already in the base.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function isLanded'), src.indexOf('export function mergesCleanly'))
+  if (!/merge-tree --write-tree/.test(fn)) throw new Error('the exact question is whether merging would change the base at all')
+  if (!/\^\{tree\}/.test(fn)) throw new Error('it must compare the resulting tree with the base tree')
+  if (/diff --shortstat[^\n]*\.\.\./.test(fn)) throw new Error('a three-dot diff cannot answer this')
+})
+
+check('a count that does not move after a successful act STOPS the tool', () => {
+  // The tell I missed four times: "landed 5 of 5" then "146 still waiting", on
+  // three consecutive runs. Confident output is not evidence that the world
+  // changed.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  if (!/REFUSING to continue/.test(src)) throw new Error('it must refuse, not warn')
+  if (!/process\.exit\(4\)/.test(src)) throw new Error('a stalled count must not exit 0')
+  if (!/Fix the measure, not the batch/.test(src)) throw new Error('it must say which of the two is wrong')
+})
+
+check('it re-measures against a FRESH view of the remote', () => {
+  // The stall guard caught this on its first run: it compared the new world
+  // against a local ref that had not been told about the merges.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  const tail = src.slice(src.indexOf('DID THE NUMBER ACTUALLY MOVE'))
+  if (!/git fetch/.test(tail)) throw new Error('re-measuring against a stale ref proves nothing')
+})
+
+check('a conflict is an ANSWER and names its paths', () => {
+  // git merge-tree exits non-zero on conflict, and reading that as a failure
+  // made every real conflict report "could not be computed" - the third time
+  // this round an outcome was treated as an exception.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  const fn = src.slice(src.indexOf('export function mergesCleanly'), src.indexOf('export function survey'))
+  if (!/catch \(e\)/.test(fn)) throw new Error('a non-zero exit here is the answer, not a fault')
+  if (!/e\.stdout/.test(fn)) throw new Error('the conflicting paths are on stdout')
+  if (!/conflicting path/.test(fn)) throw new Error('it must name them')
+})
+
+check('it never lands UNACCEPTED work, and never forces or deletes', () => {
+  // This case first read "never lands an OPEN issue" and failed the moment that
+  // rule was found wrong - it was pinning the deadlock. A test that pins a rule
+  // has to be RE-AIMED when the rule turns out to be mistaken, deliberately and
+  // in the same change, or it becomes an argument for keeping the bug.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  if (!/neither accepted by the Queen nor closed/.test(src)) {
+    throw new Error('work with no accepting verdict and no closed issue is unfinished, whatever its branch looks like')
+  }
+  // EXECUTABLE lines only. The first version matched the COMMENT that says
+  // "No --delete-branch", which is the second time tonight one of my checks
+  // read prose as code - the same shape as counting "evidence:" in a printing
+  // block and blaming the code for the imbalance.
+  const code = codeOf('land.mjs')
+  if (/--force/.test(code)) throw new Error('never force')
+  if (/--delete-branch/.test(code)) throw new Error('the branch is the evidence that the work happened')
+})
+
+
+// ---------------------------------------------------------------------------
+// close-done and land: the pipeline, and the deadlock I built between them.
+
+check('close-done demands LANDED, not merely pushed', () => {
+  // The root of the largest gap in the run. Closing on "the branch exists on
+  // the remote" is what manufactured 169 closed issues whose code was outside
+  // the base.
+  const src = fs.readFileSync(path.join(DIR, 'close-done.mjs'), 'utf8')
+  if (!/merge-tree --write-tree/.test(src)) {
+    throw new Error('it must ask whether merging would change the base at all')
+  }
+  if (!/NOT in/.test(src)) throw new Error('the refusal must say the work is not in the base')
+  if (!/false statement/.test(src)) throw new Error('and why that matters')
+})
+
+check('land follows the Queen VERDICT, not the issue state', () => {
+  // TWO CORRECT-LOOKING RULES THAT TOGETHER SAID NEVER.
+  //
+  // land took only a CLOSED issue. close-done was changed in the same hour to
+  // close only LANDED work. So an issue the Queen had accepted but which was
+  // still open could not move in either direction: land refused it for being
+  // open, close refused it for not having landed. The deadlock lasted one run
+  // and would have looked exactly like a healthy quiet pipeline.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  if (!/review_state = 'accept'/.test(src)) {
+    throw new Error('"closed" was only ever a proxy for "the Queen accepted this" - ask the thing itself')
+  }
+  if (!/closed\.has\(issue\) && !accepted\.has\(issue\)/.test(src)) {
+    throw new Error('either accepted OR closed must be enough, or the deadlock returns')
+  }
+})
+
+check('the chain runs push -> land -> close, in that order', () => {
+  // Each is the precondition of the next. Skipping the push disables the close;
+  // skipping the land now disables it too.
+  for (const f of ['heal.mjs', 'feed.mjs']) {
+    const src = fs.readFileSync(path.join(DIR, f), 'utf8')
+    const push = src.indexOf("name: 'push-work'")
+    const land = src.indexOf("name: 'land'")
+    const close = src.indexOf("name: 'close-done'")
+    if (push < 0 || land < 0 || close < 0) throw new Error(`${f} is missing one of the three steps`)
+    if (!(push < land && land < close)) throw new Error(`${f} has them out of order: push ${push}, land ${land}, close ${close}`)
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// land and why: one bad item must not block a batch, and a finding is not ok.
+
+check('the batch is FILLED with clean candidates, not sliced off the top', () => {
+  // `slice(0, BATCH)` took the newest five whatever their state, and the
+  // conflicting branches sit at the HEAD of a newest-first list - so a batch of
+  // five landed ONE while 35 clean branches waited behind 10 stuck ones. Fourth
+  // instance this round of work that CAN proceed being held hostage by work
+  // that cannot.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  if (/const batch = landable\.slice\(0, BATCH\)/.test(src)) {
+    throw new Error('taking the first N holds the clean ones hostage to the stuck ones')
+  }
+  if (!/if \(batch\.length >= BATCH\) break/.test(src)) throw new Error('it must fill to the batch size')
+  if (!/BATCH \* 4/.test(src)) throw new Error('and the scan must be bounded, or a wall of conflicts becomes a full survey every run')
+})
+
+check('when only conflicts remain, it says the pipeline stops here', () => {
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  if (!/ALL \$\{landable\.length\} remaining branch\(es\) conflict/.test(src)) {
+    throw new Error('a batch of zero must explain itself')
+  }
+  if (!/never resolved by guessing/.test(src)) throw new Error('a conflict is for a person')
+})
+
+check('a check that FIRED is never printed as ok', () => {
+  // Under --all this printed "ok  the landing pipeline is moving (also true)"
+  // for a check that had just detected a stalled pipeline. The word ok is the
+  // first thing an eye lands on.
+  const code = codeOf('why.mjs')
+  if (/also true/.test(code)) throw new Error('a finding must not be dressed as a pass')
+  if (!/ALSO/.test(code)) throw new Error('a later cause is still a cause and needs its own marker')
+})
+
+check('the all-clear names what is coming, not just what is fine', () => {
+  // A stuck landing pipeline does not make a busy swarm idle today; it makes it
+  // idle in an hour, once every accepted issue holds a boundary nothing will
+  // release.
+  const src = fs.readFileSync(path.join(DIR, 'why.mjs'), 'utf8')
+  if (!/nothing is wrong RIGHT NOW/.test(src)) throw new Error('an all-clear must be scoped to now')
+  if (!/AHEAD:/.test(src)) throw new Error('a leading indicator belongs inside the all-clear')
+})
+
+
+// ---------------------------------------------------------------------------
+// untested, widened: the valuable detector must be as large as the cheap one.
+
+check('the untested detector scans more than one directory', () => {
+  // A detector confined to one directory runs dry, and then the CHEAPEST
+  // detector is the only one filing. Measured 2026-09-05: apps/agent has 457 ts
+  // files and 18 tests against apps/server's 447 and 161 - the same size and a
+  // ninth of the tests. Pointing the detector only at apps/server was not a
+  // judgement about where tests matter; it was where I happened to start.
+  const code = codeOf('author.mjs')
+  if (!/AUTHOR_UNTESTED_ROOTS/.test(code)) throw new Error('the roots must be a list, and configurable')
+  if (!/apps\/agent/.test(code)) throw new Error('the largest untested area must be in range')
+})
+
+check('it refuses a module with too many exports to test honestly', () => {
+  // Widening produced "prompt-input.tsx exports 40 symbols and no test names any
+  // of them". A brief demanding all forty be exercised or excused is one no
+  // honest work can satisfy - the same defect as the typecheck criterion, this
+  // time arriving from the SIZE of the task rather than from its wording.
+  const code = codeOf('author.mjs')
+  if (!/UNTESTED_MAX_EXPORTS/.test(code)) throw new Error('a task has to be finishable')
+  if (!/exports\.length > UNTESTED_MAX_EXPORTS/.test(code)) throw new Error('the cap must actually filter')
+})
+
+check('the test goes where THAT app keeps its tests', () => {
+  // Sending an apps/agent test to apps/server/tests would put it in a suite that
+  // does not run it and a directory its imports cannot reach.
+  const code = codeOf('author.mjs')
+  if (!/startsWith\('trios\/agent-server\/apps\/server\/'\)/.test(code)) {
+    throw new Error('the path must branch on where the subject lives')
+  }
+})
+
+check('a generated file is refused by BOTH detectors', () => {
+  const code = codeOf('author.mjs')
+  const fn = code.slice(code.indexOf('export function untestedModules'))
+  const body = fn.slice(0, fn.indexOf('\n}\n'))
+  if (!/isGenerated/.test(body)) {
+    throw new Error('a test written against generated output tests the generator, and L0 forbids editing it')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// every detector reports its DENOMINATOR.
+//
+// All three were found narrowed, one per round, and each time the tell was
+// missing for the same reason: the number they produced was never zero. The L3
+// corpus was one directory of five; the untested corpus was one app of five; and
+// the length detector read only the TOP LEVEL of its own six directories - 107
+// of 234 files - for want of a `-r`.
+//
+// A count of findings cannot show that. A count of findings against the number
+// of files LOOKED AT can, and costs one number per detector.
+
+check('the length detector recurses', () => {
+  const code = codeOf('author.mjs')
+  const fn = code.slice(code.indexOf('export function overlongFiles'))
+  const body = fn.slice(0, fn.indexOf('\n}\n'))
+  if (!/ls-tree -r --name-only/.test(body)) {
+    throw new Error('without -r only the top level of each directory is read - 127 of 234 files were invisible for want of one flag')
+  }
+})
+
+check('every detector reports how many files it LOOKED AT', () => {
+  const code = codeOf('author.mjs')
+  for (const fnName of ['overlongFiles', 'untestedModules', 'asciiOffenders']) {
+    const fn = code.slice(code.indexOf(`export function ${fnName}`))
+    const body = fn.slice(0, fn.indexOf('\n}\n'))
+    if (!/\.examined = /.test(body)) throw new Error(`${fnName} does not report its denominator`)
+  }
+  if (!/seen/.test(code)) throw new Error('the signals line must print it')
+})
+
+check('the denominator counts the READ, not the keep', () => {
+  // Counting kept files gave "ascii=71/71 seen" - a denominator that can never
+  // differ from its numerator, and therefore says nothing at all. That is the
+  // exact failure the denominator was added to prevent, committed inside the
+  // fix for it.
+  const code = codeOf('author.mjs')
+  const fn = code.slice(code.indexOf('export function asciiOffenders'))
+  const body = fn.slice(0, fn.indexOf('\n}\n'))
+  const atRead = body.indexOf('examinedAscii++')
+  const atKeep = body.indexOf('out.push({')
+  if (atRead < 0 || atKeep < 0) throw new Error('cannot locate the counter and the keep')
+  if (atRead > atKeep) throw new Error('the counter must increment before the filters, or numerator equals denominator')
+})
+
+
+// ---------------------------------------------------------------------------
+// ab: two windows, one number, and whether the difference is bigger than noise.
+//
+// I compared percentages by eye all night and was wrong twice in ways that
+// changed what I recommended: the 17% that was a window still in flight, and the
+// verdict-first brief that looked like a regression at 94% -> 86% and is three
+// incomplete reports where 1.3 were expected.
+
+check('Wilson stays inside 0 and 1 where the normal approximation does not', () => {
+  const edge = AB.wilson(22, 22)
+  if (edge.high > 1 || edge.low < 0) throw new Error('an interval outside [0,1] is not an interval')
+  if (edge.low >= 1) throw new Error('a perfect sample still has uncertainty at n=22')
+  const none = AB.wilson(0, 5)
+  if (none.low < 0 || none.high > 1) throw new Error('zero hits must not produce a negative bound')
+  if (none.high <= 0) throw new Error('zero of five does not prove the rate is zero')
+})
+
+check('an empty sample is total ignorance, not zero', () => {
+  const e = AB.wilson(0, 0)
+  if (e.low !== 0 || e.high !== 1) throw new Error('n=0 must span the whole range - no observations is not evidence of a low rate')
+})
+
+check('overlapping intervals are NEVER reported as better or worse', () => {
+  // 94% of 177 against 86% of 22 - the real numbers. Eyeballed it is a
+  // regression; measured it is nothing.
+  const r = AB.compare(166, 177, 19, 22, 'before', 'after')
+  if (!r.overlap) throw new Error('these intervals do overlap; the test fixture is wrong')
+  if (/higher|LOWER/.test(r.verdict)) throw new Error('an overlap must not be dressed as a direction')
+  if (!/no detectable difference/.test(r.verdict)) throw new Error('it must say so plainly')
+})
+
+check('a real difference IS reported, with its direction', () => {
+  const r = AB.compare(10, 100, 90, 100, 'before', 'after')
+  if (r.overlap) throw new Error('10% against 90% at n=100 is not noise')
+  if (!/higher/.test(r.verdict)) throw new Error('a real difference must name its direction')
+})
+
+check('"not significant" comes with the sample size that would settle it', () => {
+  // Without it, "no detectable difference" reads as "no effect", and those are
+  // different claims.
+  const r = AB.compare(166, 177, 19, 22)
+  if (!Number.isFinite(r.needed) || r.needed < 2) throw new Error('it must say how many observations would be needed')
+  const out = AB.render(r)
+  if (!/observations in EACH window/.test(out)) throw new Error('and print it')
+})
+
+check('identical rates need no sample size, and say so', () => {
+  const r = AB.compare(50, 100, 25, 50)
+  if (Number.isFinite(r.needed)) throw new Error('no sample separates identical rates')
+  if (!/no sample size would separate them/.test(AB.render(r))) throw new Error('it must say that rather than print Infinity')
+})
+
+
+// ---------------------------------------------------------------------------
+// the circular failure: the reaper reaches through the thing it repairs.
+
+check('the chain names a CRITICAL step failure separately', () => {
+  // The summary read "reap=FAILED lease=FAILED push-work=FAILED ..." while the
+  // container volume was 100% full and every bee was dying at git worktree add.
+  // Nothing about that line shouted. An audit that could not run costs a round;
+  // a reaper that could not run costs the fleet.
+  const code = codeOf('heal.mjs')
+  if (!/const CRITICAL = new Set/.test(code)) throw new Error('the steps that free the swarm must be distinguishable')
+  if (!/URGENT:/.test(code)) throw new Error('a critical failure must not print like an audit failure')
+  for (const step of ['reap', 'push-work', 'land', 'close-done', 'author']) {
+    if (!new RegExp(`'${step}'`).test(code.slice(code.indexOf('const CRITICAL')))) {
+      throw new Error(`${step} frees the swarm and must be in the critical set`)
+    }
+  }
+})
+
+check('the diagnosis checks the CONTAINER volume, not only this laptop', () => {
+  // The laptop was at 69% and reported healthy while the fleet was down on a
+  // volume at 100%.
+  const code = codeOf('why.mjs')
+  if (!/workspace/.test(code)) throw new Error('nothing looks at the container volume')
+  if (!/not running or in a unexpected state/.test(code)) {
+    throw new Error('a refused connection is what a full volume looks like from outside, and must be read as such')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// the audit floor, and the fourth route to "already landed".
+
+check('the verdict audit takes its set from the DATA, not a constant', () => {
+  // `select(.number >= 1347)` appeared once, with no comment, in a file where
+  // every other decision carries a paragraph. It excluded 63 of the 189 pushed
+  // branches - a third of the swarm's output - and 15 of those yield a promised
+  // identifier this tool's own extractor accepts.
+  const code = codeOf('verdict-audit.mjs')
+  if (/select\(\.number>=\d+\)/.test(code)) throw new Error('an unexplained numeric floor decides what is audited')
+  if (!/git branch -r --list/.test(code)) throw new Error('the set must be every issue with a pushed branch')
+  if (/--limit 200/.test(code)) throw new Error('a cap two percent above the live number is a silent truncation waiting')
+})
+
+check('landed knows the fourth route: patch-id equivalence', () => {
+  // The tree test catches a branch whose merge changes nothing. It does NOT
+  // catch one that was cherry-picked and has since drifted - the base moved on,
+  // so merging it back still changes the tree and it looks like debt for ever.
+  // 46 of 67 "unmerged" branches were in this state.
+  const code = codeOf('land.mjs')
+  const fn = code.slice(code.indexOf('export function isLanded'), code.indexOf('export function mergesCleanly'))
+  if (!/git cherry/.test(fn)) throw new Error('patch-id equivalence is the only way to see a drifted cherry-pick')
+  if (!/startsWith\('\+'\)/.test(fn)) throw new Error('git cherry marks unaccounted commits with +; that is the test')
+})
+
+check('an unreadable cherry answer is not evidence of landing', () => {
+  const code = codeOf('land.mjs')
+  const fn = code.slice(code.indexOf('export function isLanded'), code.indexOf('export function mergesCleanly'))
+  if (!/cherry === null\) return false/.test(fn)) throw new Error('unreadable is not landed')
+  if (!/cherry\.trim\(\) !== ''/.test(fn)) throw new Error('an EMPTY answer must not read as "no unaccounted commits"')
+})
+
+check('a section is read from its heading, not from the first mention of it', async () => {
+  // #1090 is a brief ABOUT brief shape, so its acceptance scenario contains the
+  // sentence "Given an issue body with a `## Boundary` but no
+  // `## Success Criteria`". body.split(heading)[1] returns the text BETWEEN the
+  // first and second occurrence - 931 characters of User Scenarios - and the
+  // real criterion two sections below was never read. The audit said NO
+  // MECHANICAL CLAIM and meant it.
+  const { sectionOf, promisedIdentifiers } = await import('./verdict-audit.mjs')
+  const body = [
+    '## User Scenarios',
+    '1. **Given** a body with a `## Boundary` but no `## Success Criteria`,',
+    '   **Then** it is refused.',
+    '',
+    '## Success Criteria',
+    '',
+    '- `briefShape` appears nowhere in the tree today.',
+    '',
+    '## Boundary',
+    '- src/x.ts',
+  ].join('\n')
+  const sec = sectionOf(body, 'Success Criteria')
+  if (!sec.includes('briefShape')) throw new Error('the real section was skipped for a prose mention of its name')
+  if (sec.includes('refused')) throw new Error('the section ran past its own heading into another')
+  const ids = promisedIdentifiers(body)
+  if (!ids.includes('briefShape')) throw new Error('the promise this tool exists to find was invisible')
+})
+
+check('a section ends at the next heading', async () => {
+  const { sectionOf } = await import('./verdict-audit.mjs')
+  const body = '## Success Criteria\n- a\n\n## Boundary\n- src/x.ts\n'
+  const sec = sectionOf(body, 'Success Criteria')
+  if (sec.includes('src/x.ts')) throw new Error('the boundary bled into the criteria')
+})
+
+check('criteria that are commands are collected as commands', async () => {
+  const { promisedCommands } = await import('./verdict-audit.mjs')
+  const body = [
+    '## Success Criteria',
+    "- `test -f docs/a.md` exits `0`.",
+    "- `grep -c 'Dockerfile' docs/a.md` prints at least `1`.",
+    '- `docs/b.md` exists and contains at least 30 non-empty lines.',
+    '- `bun test apps/server/tests/api/x.test.ts` exits 0.',
+  ].join('\n')
+  const cs = promisedCommands(body)
+  const kinds = cs.map((c) => c.kind).sort().join(',')
+  if (kinds !== 'exists,grep,lines') throw new Error(`expected exists,grep,lines - got ${kinds}`)
+  const grep = cs.find((c) => c.kind === 'grep')
+  if (grep.pattern !== 'Dockerfile' || grep.atLeast !== 1) throw new Error('the pattern and the threshold must both survive')
+  if (cs.some((c) => /bun test/.test(c.path))) throw new Error('bun test needs a checkout and must count as unchecked, never as passed')
+})
+
+check('a command criterion is RUN, and a count below the threshold fails', async () => {
+  const { runCommandCriterion } = await import('./verdict-audit.mjs')
+  const read = () => 'no match here\nnor here\n'
+  const r = runCommandCriterion('b', { kind: 'grep', pattern: 'Dockerfile', path: 'docs/a.md', atLeast: 1 }, read)
+  if (r.ok) throw new Error('zero matches cannot satisfy "at least 1"')
+  if (!/= 0/.test(r.why)) throw new Error('the refusal must carry the number it counted')
+})
+
+check('the generous reading of a pattern wins, because an under-count is a false accusation', async () => {
+  const { runCommandCriterion } = await import('./verdict-audit.mjs')
+  // The criterion writes a POSIX basic regex. Read as a literal substring it
+  // matches nothing here; read as a regex it matches twice. Taking the smaller
+  // would convict a bee that did the work.
+  const read = () => 'alpha\nbeta\n'
+  const r = runCommandCriterion('b', { kind: 'grep', pattern: 'a.pha|b.ta', path: 'x', atLeast: 2 }, read)
+  if (!r.ok) throw new Error('the regex reading found 2; the audit must not prefer the literal 0')
+})
+
+check('a file the branch does not have fails with the path named', async () => {
+  const { runCommandCriterion } = await import('./verdict-audit.mjs')
+  const r = runCommandCriterion('b', { kind: 'exists', path: 'docs/gone.md' }, () => null)
+  if (r.ok) throw new Error('an absent file cannot satisfy an existence criterion')
+  if (!r.why.includes('docs/gone.md')) throw new Error('name the path or nobody can act on it')
+})
+
+check('every plausible root is tried before a path is called absent', async () => {
+  const { readFromBranch } = await import('./verdict-audit.mjs')
+  // A brief may write docs/x.md for a file that lives at trios/docs/x.md.
+  // Accusing on the auditor's guess about the root is the exact class of false
+  // accusation this file already carries three scars from.
+  const run = (cmd) => (cmd.includes('trios/docs/x.md') ? 'content' : null)
+  if (readFromBranch('b', 'docs/x.md', run) !== 'content') throw new Error('the trios/ prefix must be tried')
+  if (readFromBranch('b', 'docs/nope.md', run) !== null) throw new Error('absent under every root is absent')
+})
+
+check('an empty file is present, not missing', async () => {
+  const { runCommandCriterion } = await import('./verdict-audit.mjs')
+  const r = runCommandCriterion('b', { kind: 'exists', path: 'docs/empty.md' }, () => '')
+  if (!r.ok) throw new Error('an empty string is a file with no bytes, not an absent file')
+})
+
+check('an exact count is checked exactly, and the pipe form is refused', async () => {
+  const { promisedCommands, runCommandCriterion } = await import('./verdict-audit.mjs')
+  // The L3 cleanup brief is the one this swarm files most often, and its
+  // criterion is `LC_ALL=C grep -cP '...' <file>` prints 0. Verified against
+  // #1485 on 2026-09-05: 3 non-ASCII lines at the fork point, 0 on the branch,
+  // so the check has teeth rather than passing by construction.
+  const body = [
+    '## Success Criteria',
+    "- `LC_ALL=C grep -cP 'x' src/a.ts` prints 0, and the raw output is quoted.",
+    '- `bun run typecheck 2>&1 | grep -c src/a.ts` prints 0.',
+  ].join('\n')
+  const cs = promisedCommands(body)
+  if (cs.length !== 1) throw new Error(`a grep with no FILE argument cannot be reproduced read-only - got ${cs.length}`)
+  if (cs[0].exactly !== 0) throw new Error('"prints 0" is an exact threshold, not "at least 0"')
+  if (cs[0].path !== 'src/a.ts') throw new Error('the environment prefix and the flag bundle must not swallow the path')
+  if (!runCommandCriterion('b', cs[0], () => 'clean\n').ok) throw new Error('no match must satisfy "exactly 0"')
+  if (runCommandCriterion('b', cs[0], () => 'has x here\n').ok) throw new Error('a match must fail "exactly 0"')
+})
+
+check('an exact count takes the faithful reading, not the convenient one', async () => {
+  const { runCommandCriterion } = await import('./verdict-audit.mjs')
+  // For "at least N" the generous count protects an innocent bee. For "exactly
+  // 0" generosity runs the other way and waves a real violation through, which
+  // is the failure this whole file exists to avoid.
+  const c = { kind: 'grep', pattern: 'a.c', path: 'x', exactly: 0 }
+  const r = runCommandCriterion('b', c, () => 'abc\n')
+  if (r.ok) throw new Error('the regex matches; an exact-zero criterion must not fall back to the literal reading that does not')
+  if (!/as a regex/.test(r.why)) throw new Error('say which reading was used, or the number cannot be argued with')
+})
+
+check('the words around the number are part of the criterion', async () => {
+  const { promisedCommands, runCommandCriterion } = await import('./verdict-audit.mjs')
+  // #1326: "prints `2` or more". Read as "exactly 2" it convicted a bee whose
+  // file had 3 - which is what the criterion asked for.
+  const body = [
+    '## Success Criteria',
+    "- `grep -c 'x' docs/a.md` prints `2` or more.",
+    "- `grep -c 'y' docs/a.md` prints `2`.",
+    "- `grep -c 'z' docs/a.md` prints `2` or fewer.",
+  ].join('\n')
+  const [more, exact, fewer] = promisedCommands(body)
+  if (more.atLeast !== 2 || more.exactly !== undefined) throw new Error('"or more" is a lower bound, not an equality')
+  if (exact.exactly !== 2) throw new Error('a bare number is an equality')
+  if (fewer.atMost !== 2) throw new Error('"or fewer" is an upper bound')
+  const three = () => 'x\nx\nx\n'
+  if (!runCommandCriterion('b', more, three).ok) throw new Error('3 satisfies "2 or more"')
+  if (runCommandCriterion('b', { ...exact, pattern: 'x' }, three).ok) throw new Error('3 does not satisfy "exactly 2"')
+  if (runCommandCriterion('b', { ...fewer, pattern: 'x' }, three).ok) throw new Error('3 does not satisfy "2 or fewer"')
+})
+
+check('a BRE pattern is read as BRE, and an unreadable one is not a conviction', async () => {
+  const { breToJs, runCommandCriterion, dialectOf } = await import('./verdict-audit.mjs')
+  // #1324: `grep -c '^  it(' <file>`. In BRE the paren is an ordinary
+  // character; handed to new RegExp it throws, and falling back to a literal
+  // search counted 0 and accused a bee whose test file was full of them.
+  if (dialectOf('-c') !== 'bre' || dialectOf('-cP') !== 'pcre' || dialectOf('-cE') !== 'ere') {
+    throw new Error('the flag bundle says which language the pattern is in')
+  }
+  if (breToJs('^  it(') !== '^  it\\(') throw new Error('a bare paren is literal in BRE')
+  if (breToJs('a\\|b') !== 'a|b') throw new Error('a BACKSLASHED pipe is the alternation in BRE')
+  const c = { kind: 'grep', dialect: 'bre', pattern: '^  it(', path: 'x', atLeast: 1 }
+  if (!runCommandCriterion('b', c, () => '  it(\'works\', () => {})\n').ok) throw new Error('the bee wrote exactly what was asked for')
+  const bad = { kind: 'grep', dialect: 'pcre', pattern: '(?<', path: 'x', atLeast: 1 }
+  const r = runCommandCriterion('b', bad, () => 'anything\n')
+  if (r.ok !== null) throw new Error('a pattern this cannot read is unchecked, never failed')
+})
+
+check('the harness can fail an async check', async () => {
+  // Guarding the fix above: before it, this file reported 0 failures while an
+  // async case was rejecting into the void.
+  let caught = false
+  const inner = []
+  const fake = (n, f) => { const o = f(); if (o && o.then) inner.push(o.then(() => {}, () => { caught = true })) }
+  fake('x', async () => { throw new Error('boom') })
+  await Promise.all(inner)
+  if (!caught) throw new Error('an async rejection must be observable by the harness')
+})
+
+await Promise.all(pending)
 console.log(`\n${pass} passed, ${failures.length} failed`)
 fs.rmSync(tmp, { recursive: true, force: true })
 if (failures.length) {
