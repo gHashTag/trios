@@ -53,6 +53,7 @@ import {
 import { createQueenLeaseRoute } from './routes/queen-lease'
 import { createQueenPublicActivityRoute } from './routes/queen-public-activity'
 import { createQueenPublicHardwareRoute } from './routes/queen-public-hardware'
+import { createQueenPublicModulesRoute } from './routes/queen-public-modules'
 import { createQueenPublicResearchRoute } from './routes/queen-public-research'
 import { createQueenPublicStatusRoute } from './routes/queen-public-status'
 import { createQueenRegistryRoute } from './routes/queen-registry'
@@ -331,6 +332,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/queen/public-activity', publicReadCorsMiddleware())
     .use('/queen/public-hardware', publicReadCorsMiddleware())
     .use('/queen/public-research', publicReadCorsMiddleware())
+    .use('/queen/public-modules', publicReadCorsMiddleware())
     .use('/*', trustedCorsMiddleware())
     .route('/health', createHealthRoute({ browser, stateBackend: a2aService }))
     .route('/queen/status', createQueenPublicStatusRoute())
@@ -338,6 +340,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/public-activity', createQueenPublicActivityRoute())
     .route('/queen/public-hardware', createQueenPublicHardwareRoute())
     .route('/queen/public-research', createQueenPublicResearchRoute())
+    .route('/queen/public-modules', createQueenPublicModulesRoute())
     .route('/queen/registry', queenRegistryRoutes)
     // The shell only. It holds no state and no token; every byte of data it
     // shows comes from /queen/lease, which stays guarded. See the route header
