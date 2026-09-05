@@ -1812,6 +1812,1408 @@ just a colon. This is a hazard of the hand-check, which is the thing you reach f
 precisely when you distrust the tool - so it is the worst possible place to have
 a silent one.
 
+## A criterion that was already true proves nothing: FAIL_TO_PASS
+
+SWE-bench builds every instance around a test that FAILS before the patch and
+PASSES after, and **excludes any instance without that transition**. The reason
+is blunt and worth memorising: pass-to-pass alone is satisfiable by an EMPTY
+PATCH.
+
+`verdict-audit` had only the pass-to-pass half for its whole life. It ran each
+criterion against the branch, saw a pass, and printed SUPPORTED - with no idea
+whether the criterion had been true all along. One had been checked by hand
+(#1485: 3 non-ASCII lines at the fork point, 0 on the branch). The other 153 were
+unknown, and "unknown" was printing as "supported".
+
+Run every criterion twice. The TRANSITION is the verdict:
+
+| before | after | verdict | meaning |
+|---|---|---|---|
+| fail | pass | PROVEN | the branch caused it |
+| pass | pass | VACUOUS | true before the bee arrived |
+| pass | fail | REGRESSION | the branch broke what it satisfied |
+| fail | fail | UNSUPPORTED | claimed and not delivered |
+
+VACUOUS is not an accusation. It is the audit saying it cannot tell, which is a
+different and more useful thing than a false pass.
+
+## A baseline is not a target, and reading it as one convicts the worker
+
+These briefs are written test-first, so many RECORD the red state as evidence the
+defect is real:
+
+    `grep -c '[^ -~]' <file>` prints 13 today.
+    The pre-edit run stays red, and that red result is the finding, not a failure.
+
+Read as a target, #1390's 13 became a requirement. The bee removed one non-ASCII
+line, the file printed 12, and the audit reported a REGRESSION - convicting a bee
+for doing exactly the work.
+
+A criterion carrying a before-marker (`today`, `currently`, `pre-edit`,
+`before writing`, `as it stands`, `stays red`) is checked **at the fork point**
+and never counted against the branch. If it fails there, that is the BRIEF's
+premise being wrong, which is a note about the author, not a verdict on the
+worker.
+
+## Stop guessing at definition syntax; measure absence instead
+
+A checker that scanned added lines for a declaration SHAPE produced three false
+accusations in one round, was fixed with a wider pattern, and produced three more
+in the next:
+
+    #1389  connectionFailed             a Swift enum CASE
+    #1380  pressCombo, dispatchDrag     methods on an object literal
+    #1374  isTerminalProviderError      in a new file, reached by import
+
+All six identifiers were really there, in 6 to 17 added lines each. Swift,
+TypeScript, markdown and shell each spell "define" differently and the list has
+no end - so a wider pattern is not the fix, it is the next round's bug.
+
+The criterion says the identifier "appears nowhere in the tree today". **Absence
+is checkable without knowing any language.** Present on the branch and absent at
+the fork point is the whole promise, measured with `git grep -w`. Keep the
+declaration pattern only to STRENGTHEN a note - "1 in a declaration" is better
+evidence than a bare mention - and let it convict nobody.
+
+## A cache must key on the rules, not only on the work
+
+`verdict-audit` at 0.92 s per branch over 207 branches is 217 seconds, against a
+per-step cap of 300 in the heal chain. It fits today; it will not at four
+hundred, and the way it will stop fitting is the way steps here always do -
+killed mid-way, reported as "timed out part-way", half an answer that looks
+whole. So it caches on the branch tip and the fork point, and a warm pass is 10
+seconds.
+
+Then the absence vocabulary widened, a fresh pass found 6 unsupported claims
+where there had been 2, and **the very next cached pass served the old 2 back** -
+verdicts a different program had reached. The key now carries a digest of the
+auditor's own source, so any edit to the rules invalidates every verdict reached
+under the old ones. Invalidation that depends on someone remembering is
+invalidation that will be forgotten.
+
+The trade is stated where it lives: keying on the body would defeat the cache,
+because reading the body IS the expensive call. A brief edited while its branch
+stands still is served stale, and `--fresh` is the way through.
+
+## A vocabulary of one phrase is a rule about the phrase
+
+The absence check knew `appears nowhere`. Briefs also write "Verified absent
+today" and "(new identifier, absent today)" - the same promise in a different
+hand, and both audited as "states nothing checkable" while stating it plainly.
+
+Two more things about reading a brief:
+
+- **A criterion is a sentence, and sentences wrap.** #1396 and #1394 open with a
+  bolded label and put the identifier on the next physical line. A line-based
+  reader loses the entire promise. Join continuations before matching.
+- **Widening a vocabulary widens what it wrongly catches.** The moment the
+  absence phrases grew, `export` came out as a promised identifier - the
+  `node_modules` accusation returning by a different door. A keyword stop-list
+  goes in at the same time as the widening, not after the first false positive.
+
+## Compare a ratio against its own variability, never against a threshold
+
+The obvious regression detector - "this run is lower than the last, shout" - is
+wrong twice over, and both failures are documented outside this project.
+
+**A control chart of an in-control process shows nothing amiss while a
+regression fit of the same points appears to trend.** Reading trend lines as
+regressions is a known source of phantom findings in flaky-test dashboards. A
+ratio wandering inside its own noise band is not a regression, and a tool that
+says it is gets muted within a week.
+
+**The denominator moves for reasons that are not quality.** Audit coverage rises
+when briefs happen to be written in a shape the auditor can read and falls when a
+batch of hand-written epics lands. Neither is the swarm doing better or worse.
+
+So ask what canary analysis asks: is the RECENT window different from the
+BASELINE this same process established? That controls for drift a static limit
+cannot. Answer with Wilson intervals, and refuse to say "worse" while they
+overlap.
+
+And use TWO TIERS, from the multi-window burn-rate pattern:
+
+    ACT NOW   the intervals are separated and recent is lower
+    WATCH     recent is lower but the intervals overlap - not yet distinguishable
+    (silence) recent is equal or better
+
+Collapsing those into one alert is how the one alert stops being read. A drop
+inside the noise is not nothing - it is the thing to look at twice next round -
+but it is not a finding and must not be printed as one.
+
+## One deadline for two jobs starves the cheap job
+
+`heal` had a single eight-minute budget over twelve steps. reap, push-work, land,
+close-done and author consumed all of it, and verdict-audit, proven and
+judge-packet were SKIPPED - not because they are slow (a warm audit is ten
+seconds) but because nothing was left. The chain then printed `heal complete`
+with a third of its steps never run.
+
+That is the house defect wearing a schedule: a confident answer about work that
+did not happen.
+
+The file had drawn the line in prose for weeks - "everything above this line
+frees the swarm; everything below only reports". Make it data. Give each phase
+its own budget, starting when that phase starts. A slow reap must not be able to
+silence the audit that would have found what the reap was for.
+
+## In a directory of single-purpose tools, the plausible name is taken
+
+I wrote a new tool called `coverage.mjs`. There already was one - the guard that
+asks which of the loop's own tools have never run their ACT path, the one that
+caught `reap` shipping a remote script that had never executed. I wrote straight
+over it.
+
+`fp-check` crashed within the minute on `COV.coverage is not a function`, and git
+had the original. Nothing was lost, and only because a guard imported the file by
+name and ran every round.
+
+Two habits follow. Check `git log -- <path>` before creating a file whose name
+you find obvious. And keep the guards importing each other by name: the
+dependency is what turned a silent deletion into a crash.
+
+## Editing a live CLI in place is not atomic
+
+A launchd timer ran `tri` while a script was rewriting it, and bash reported a
+syntax error on a line that was, and is, correct. It had read a truncated file -
+`open(path, 'w')` truncates first and writes second, and anything reading in that
+window sees half a program.
+
+Write a temp file in the same directory, copy the mode, and `os.replace` it.
+The rename is atomic; the truncate-then-write is not. This matters for any file a
+timer, cron or watchdog may execute - which in this project is `tri` and every
+tool the chain invokes.
+
+## A carry makes the original branch permanent debt, and no byte-comparison sees it
+
+`isLanded` had four routes - ancestry, an identical merged tree, a patch-id
+match, a hand-applied change. All four compare CONTENT, and all four are blind to
+the thing this loop does constantly: when a bee's branch goes stale I re-cut its
+change against the current base and squash-merge THAT. The carry is a new commit
+with a new tree and a new patch-id, so nothing content-shaped connects it back.
+
+The bee's original branch then becomes permanent debt: re-offered every round,
+conflicting every round, holding its boundary fenced for ever. Four of the nine
+branches that had jammed the pipeline were in exactly this state.
+
+**Read the message.** L1 here is "no code merged without `Closes #N`", which makes
+the commit message a load-bearing record rather than a courtesy:
+
+    Closes #1362                                       an explicit closure
+    feat(queen): explain idle paid slots (#1310) (#330)  a squash subject
+    Carries the #1421 work it belongs with               a carry saying so
+
+Two traps in the matching, both hit within a minute of each other:
+
+- **Tighten it and you break the case it was written for.** Requiring `(#N)` at
+  the end of the line - to reject "unlike (#1421), this does X" - rejected
+  `(#1310) (#330)`, which is the real shape: the issue, then the pull request
+  that merged it. A trailing CHAIN of references is a subject.
+- **Do the matching in JavaScript, not in git's regex.** The dialect belongs
+  somewhere it is known; ask git the loose question and check the boundary
+  yourself.
+
+## A rule transcribed twice is two rules that agree until someone edits one
+
+`close-done.mjs` carried its own copy of the landing test - the tree comparison
+and nothing else - while `land.mjs` grew four more routes it never learned. So
+`land` recognised four finished branches and `close-done` went on refusing to
+close their issues.
+
+That is L2 of this repository, inside the file that decides whether an issue may
+be closed. It asks `land.mjs` now. When you improve a rule, grep for its second
+copy before you finish.
+
+## A conflict does not say which side is behind
+
+`land` reported nine conflicts and one remedy: rebase, or close as superseded.
+Taking that advice on #1302 would have destroyed landed work.
+
+Replaying that 205-line branch onto today's base would have deleted
+`WorkerCapacityBreakdown` (#1308's carried work), deleted the tree-load-failure
+handling the base gained since, and REINTRODUCED a non-ASCII ellipsis into a path
+redaction the base already does in ASCII - breaking L3 in the same stroke.
+
+That branch was not waiting for a rebase. It was superseded in part, and what
+survived belonged on today's base as new work. So measure it:
+
+```bash
+git rev-list --count "$FORK..origin/$BASE" -- $CONFLICTING_PATHS
+git diff --shortstat "$FORK..origin/$BASE" -- $CONFLICTING_PATHS
+```
+
+A base that has moved far on the conflicting files means a rebase would replay
+OLD code over new. It is a measurement, not a verdict - the person still decides,
+now with the number that decides it.
+
+Two smaller things from the same report: `git merge-tree --name-only` interleaves
+PROSE with paths (`Auto-merging X`, `CONFLICT (add/add): ...`), and counting them
+doubled every conflict width printed; and truncating the reason to 96 characters
+had been cutting off exactly the half that says what to do.
+
+## Splitting a rate by category needs a correction, or the dashboard dies
+
+`tri proven` said 186 of 190 judged verdicts prove something. True, and it hides
+where the four live. Split by the detector that filed the brief, every
+machine-authored kind proves at 100% and all four unproven verdicts are in
+hand-written work.
+
+But a split is several tests at once. **Four groups at 95% each carry a 19%
+chance that one comes back significant with nothing wrong anywhere.** Tested at
+the single-comparison threshold, a category dashboard raises a false alarm about
+every fifth look, gets muted, and then misses the real one.
+
+Bonferroni - divide the family error rate by the number of comparisons - is the
+conservative choice and the right one here: a false alarm costs the tool's
+credibility, a missed small effect costs one round's attention. For four groups
+that is z=2.498 rather than 1.96.
+
+Two more things a split must get right:
+
+- **Compare each group with the REST, not with the overall.** A group inside its
+  own baseline drags that baseline toward itself, shrinking every difference and
+  hiding the outlier the split was made to find.
+- **Print the mix.** Simpson's paradox is real: the overall rate can move
+  opposite to every group if the proportions change underneath it.
+
+## A deletion is not work, and du is not free space
+
+Two lessons from a reaper that could not act while the disk it guards sat at 98%.
+
+**A worktree whose entire dirty set is deletions holds nothing.** `reap-local`
+spares any tree with uncommitted changes, because a dirty tree is somebody's
+unfinished thought. Two workflow worktrees were spared on 1983 and 1984 changes
+each, every one a DELETION of a file their own HEAD still contained. An addition
+or a modification is a thought; a deletion is the shape of one already saved.
+
+**And `git worktree remove` still refuses a dirty tree.** `--force` is not the
+answer and is not used on a worktree in this project. `git checkout -- .` is: it
+restores exactly what git already holds, and then the removal is ordinary.
+
+```bash
+git -C "$TREE" status --porcelain | grep -vcE '^([ D])D |^D[ D] '   # 0 = safe
+git -C "$TREE" checkout -- .
+git worktree remove "$TREE"                                        # no --force
+```
+
+**`du -sh` on a worktree is an upper bound, not free space.** The reaper reported
+three candidates as "holding 6938 MB"; removing them returned about 600. A git
+worktree shares its object store with the main checkout, so most of what du
+counts is on disk once. A tool that overstates what it recovers is one nobody
+believes about the disk being full either.
+
+## A stale branch is a specification of intent, not a patch
+
+Five branches jammed the landing pipeline for four rounds while I deferred the
+one question a person has to answer: rebase, or re-do the work?
+
+**Rebasing is the wrong default when the base has moved.** Replaying #1302 would
+have deleted #1308's landed code and reintroduced a non-ASCII ellipsis into a
+redaction the base already performs in ASCII, breaking L3 in the same stroke.
+
+**And a clean rebase would not have shown it.** A SEMANTIC CONFLICT carries no
+markers: git resolves the text correctly while the combined code is logically
+broken - upstream renames a function your commit still calls, the changes sit on
+different lines, nothing conflicts, everything is wrong. "It applied cleanly" is
+not evidence.
+
+So use the old diff as a statement of what was WANTED. Concretely: **the names
+the branch introduces that the repository still does not have.**
+
+    queen-1302   8 of 200 candidates absent   quotaAuthority, provider_quota, ...
+    queen-1303   4 of 243                     started_running, plantedSecret, ...
+    queen-1387  19 of 273                     specQualityHeadingParity, ...
+
+881 added lines across three branches reduce to 31 missing names, because most of
+what they carried had landed by another route. Each name becomes a criterion that
+is fail-to-pass BY CONSTRUCTION - it was measured absent from the base a moment
+earlier, so it cannot be satisfied by an empty patch.
+
+Do not parse for declarations. Six false accusations in this project came from a
+checker guessing at declaration syntax across Swift, TypeScript and markdown.
+Take every identifier-shaped token as a candidate and let the BASE TREE decide
+which are new; absence needs no knowledge of any language. Drop hex blobs - a
+fake sha in a fixture offered `fedcba9876` as a capability the repository lacks.
+
+## Three measures, two of them blind, and the one that answers
+
+The name measure shipped and immediately gave wrong advice. On #1484 it said
+"nothing here is a missing capability - close it as superseded". #1484 is an
+OPEN L3 cleanup whose defect is still in the tree.
+
+| measure | why it was blind on #1484 |
+|---|---|
+| names the branch adds that the base lacks | its ten names had reached the base by another route |
+| lines the branch removes that the base still has | the base REWROTE the file, so nothing matched textually |
+| **the issue's own criterion, run against the base** | **answered: 5 non-ASCII lines where 0 is required** |
+
+**Ask the issue its own question.** The brief already says what done means, in a
+command. Run it against the base rather than the branch. A criterion that fails
+there is the strongest available statement that the work remains, and it needs no
+similarity heuristic at all. It is the same extractor that checks a bee's claim,
+asked of a different ref - one rule, two questions.
+
+Exclude criteria marked as BASELINES: a baseline describes the fork point, and
+asking it of the base inverts its meaning.
+
+And delete the conclusion. "Close it as superseded" was a verdict drawn from one
+measure. Say what was measured and what was not: *no missing vocabulary is not
+the same as nothing left to do; a cleanup, a rename or a behaviour fix adds no
+name at all.* The tool measures; the person concludes.
+
+## Ask the record, not the run: a step failing 71% of the time reported itself fine
+
+Every chain run reports its own steps and moves on. Nobody had ever read the
+ledger backwards. Asked for the first time, over 23 hours:
+
+    reap        45 of 63 runs failed   71%
+    lease       43 of 63               68%
+    push-work   46 of 70               66%
+    close-done  32 of 70               46%
+
+Those are exactly the four steps that FREE the swarm. They had been failing about
+two thirds of the time for as long as the record goes back.
+
+It was invisible because **a single failure looks like bad luck and only the
+record shows it is the system.** Each run said "push-work=FAILED" once, in a
+terminal, at three in the morning, and the next run started clean.
+
+```bash
+tri failures            # every step, worst first, over the whole ledger
+tri failures --since 1  # the last day
+tri failures push-work  # the evidence for one step
+```
+
+Corollary that cost a round: **"it worked when I tried again" is not a
+diagnosis.** Two rounds before this, the chain printed `push-work=FAILED`, I
+re-ran it by hand, it worked, and I wrote it off as transient without changing
+anything. Three accepted pieces of work - 9 to 15 minutes of a bee each, reviewed
+and ACCEPTED - then sat invisible on the far side of a dropped connection for a
+whole round. A retry that only exists in your fingers is not a retry.
+
+## One channel, one retry, and never retry an answer
+
+The four steps above all reach the container through `railway ssh`, and each
+carried its own six-line copy of the call. Copying one fix into four files is L2
+all over again - a rule transcribed four times is four rules that agree until
+somebody edits one - so the call lives once, in `channel.mjs`.
+
+**Retry a CHANNEL failure. Never retry an ANSWER.**
+
+    retry     Operation timed out, os error 60, Connection reset, SendRequest,
+              ETIMEDOUT, 502, broken pipe - the transport could not deliver the
+              question, so nothing was learned about it
+    do not    `! [rejected] ... (non-fast-forward)`, `error: failed to push some
+              refs` - the command answered, and a partly-rejected push is a
+              normal outcome the caller already knows how to describe
+
+Retrying an answer is as wrong as crashing on a dropped connection, and both
+directions belong in the tests.
+
+And mark the failure. A caller must be able to tell **"I looked and found
+nothing" from "I never looked"** - the same silence, completely different facts.
+A step that could not reach the container has not found nothing to push; it has
+not looked, and the words it prints have to differ because the chain reads them.
+
+## A failure whose reason is only printed is a failure nobody can diagnose
+
+The ledger recorded `status: FAILED` for 46 push-work runs and an EMPTY summary
+for every one of them, because the summary field is filled only when a
+recognised pattern matches and no pattern matches a failure. The console had the
+reason. The record did not, and those 46 can never now be diagnosed.
+
+Keep the last few lines of any step that fails. Printing is for whoever is
+watching; the record is for whoever asks later, and at three in the morning
+nobody is watching.
+
+## Numbers are measured, prose is written
+
+Every instrument here measures something and refuses to guess. The dashboard did
+not: it took whatever numbers its caller handed it, and its caller was me, at
+three in the morning, typing from memory.
+
+Iteration #46 says "dispatches finished 258". The last measurement had said 255.
+Nothing was wrong with the swarm - the number was invented, in the one artifact
+whose whole job is to say what is true, and it went out in a report.
+
+So the dashboard asks the same tools everything else asks (`tri facts`). Two
+rules follow, and they are the whole discipline:
+
+- **A fact that cannot be taken is `null` and renders as `-`,** with a line
+  naming which ones. Never filled in from memory. A missing measurement that
+  silently became 0 would be worse than the typed number.
+- **The delta comes from the last recorded reading,** not from what you remember
+  the last one being. Then the change column is a measurement too.
+
+The prose stays hand-written: what was done, what went wrong, what to do next are
+judgements. Only the numbers are mechanical.
+
+**And a non-zero exit is often the answer.** The first version printed `-` for
+two facts it had already measured, because `failures.mjs` exits 2 when a step is
+failing badly - that is the tool working - and `reap-local` exits 1 to mean
+"would act". `execSync` throws on both. Only a signal or a timeout means the
+measurement was not taken. Reading a deliberate exit code as a failure is the
+same defect as inventing a number, only quieter.
+
+## Excluding a hypothesis is a result
+
+The four channel steps had been failing 46 to 71% of the time and I had a story
+about why. Testing it excluded three explanations rather than confirming one:
+
+    per-call flakiness   10 of 10 single attempts succeeded, median 4.0 s
+    a few long outages   failures fall in 19 of 23 hours, not in a window
+    container restarts   the process had been up 3.9 hours; failures span it
+
+What survives is narrower and better founded: a chain run is all-ok or
+all-failed, which is the shape of "the channel was unreachable for that whole
+run", and 94% of the failures are in `heal` rather than `feed` - the same tools,
+the same channel, a different caller.
+
+That is not a conclusion and must not be written as one. The evidence field will
+carry the reason the next time it fails, and one clean run after the fix is one
+data point, not a trend. Say "three hypotheses excluded, one measurement
+pending" and stop there; a story that fits the data is not the same as the data.
+
+## du is an upper bound, twice over
+
+Freed two dead workflow worktrees and 2.2 GB of bun modules. `du` promised 4.8 GB
+and the disk moved 0.8.
+
+A git worktree shares its object store with the main checkout, and **bun
+hardlinks packages from a shared install cache** - so `du -sh` counts bytes that
+exist once and will not be returned. Third time this project has met the same
+arithmetic. Report the du figure as the ceiling it is, and read the real answer
+from `df` before and after.
+
+## One outage is one fact, not one failure per step
+
+Across 62 chain runs: when `reap` - the first remote step - SUCCEEDED, the three
+steps after it failed 0%, 7% and 0% of the time. When `reap` FAILED, they failed
+96%, 96% and 66%.
+
+They do not cause each other. They share a condition that holds for the whole
+run - the container is not attachable - and `reap` is simply the first to find
+out.
+
+Two costs, and I had been paying both while quoting the numbers as findings:
+
+- **The chain kept knocking.** After the first step found the door shut, three
+  more knocked, each with its own retries and backoff, and the run spent minutes
+  learning the same thing four times. A process-wide breaker holds the run's
+  verdict; the rest inherit it. Per-process, because the next run must try again.
+- **The record was inflated fourfold.** "reap 71%, lease 68%, push-work 66%" is
+  ONE outage counted once per step. The honest quantity is that the channel was
+  down in 47 of 62 runs. Same problem, a quarter of the drama.
+
+A shut door is not a broken step. Record it as its own status, or the next reader
+goes looking at four tools that are all working.
+
+## Build the classifier from the record, not from the one failure you watched
+
+I saw `Operation timed out (os error 60)` once, by hand, and wrote a retry
+classifier from it - while holding a ledger with 174 recorded failures I had not
+read. When the evidence field started capturing reasons an hour later:
+
+    "Your application is not running or in a unexpected state"      x2
+    "Expected welcome message, received: ServerMessage { error }"   x2
+    "failed to load system trust settings: I/O error"               x1
+
+**None matched.** The retry I had shipped, against the failure rate this project
+had been chasing for two rounds, never fired for a real failure in this system.
+
+And they are three different problems, so one retry policy cannot be right:
+
+| kind | what it means | response |
+|---|---|---|
+| `app-down` | railway will not attach; the service is not in a state it accepts | retry with a LONGER wait |
+| `local` | the CLI on THIS machine could not read the system trust store | do not retry; nothing about the container is wrong |
+| `transport` | the connection dropped | retry soon |
+| `unknown` | unrecognised | print verbatim, never retry on a guess |
+
+**`/health` answered `ok` at the same moment railway said the application was not
+running.** Two views of one service, disagreeing. A green health check is not
+evidence the channel will connect, and neither one is "the truth" - they are
+answers to different questions.
+
+Pin the classifier's cases to the strings the record actually holds, verbatim, so
+whoever widens it next has to widen it against evidence rather than against a
+memory of one bad afternoon.
+
+## Two statements about a service, taken a minute apart, are two anecdotes
+
+The chain recorded three steps failing with "Your application is not running or
+in a unexpected state" from `railway ssh`. Asked a minute later, `GET /health`
+answered `{"status":"ok"}`.
+
+I wrote that up as a finding. It was not one. **A minute apart proves nothing** -
+by then the world has moved, and the whole discipline here is the difference
+between an anecdote and a measurement. Sample both at the same moment or you have
+not observed a disagreement at all.
+
+And when you do sample them together, count **four states, not two**:
+
+    both up                    agreement
+    both down                  agreement - one story, not two
+    HTTP ok, ssh REFUSED       a green health check is not evidence the channel
+                               will connect. This project read it as one.
+    ssh attached, HTTP down    the opposite failure, a different investigation
+
+Neither view is the truth. HTTP asks whether the app can serve a request; the ssh
+gateway asks whether the platform will attach a shell to the deployment, which
+also depends on the deployment's state and on what the gateway believes about it.
+Picking one and calling it health is the mistake available here.
+
+**Measuring must not change what it measures.** The instrument asks even when the
+run's breaker has already decided the channel is down - that is its job - and
+then restores the verdict it found. A probe that resets state behind it produces
+a system that behaves differently while observed.
+
+## An unpaid claim is reported as unpaid
+
+I said the breaker would turn one outage into one `channel-down` instead of four
+FAILED, and recommended reading the rates next round as the test. Next round
+came: no chain run had happened since it merged, the column read zero, and the
+rates were unchanged.
+
+That is neither evidence for the claim nor against it. Writing it up as though
+the unchanged numbers meant something - either way - would have been the same
+defect as inventing a number, with more words around it.
+
+Say "not yet testable, and here is why", pay the claim when the data arrives, and
+spend the round on something the data can answer now. A loop that always has a
+result at the end of the hour will eventually manufacture one.
+
+## Read the comment before improving the thing it defends
+
+The swarm sat at zero bees and `why` named a chain run holding the loop lock. My
+first instinct: a lock held by a dead process should be reclaimable, add a pid
+liveness check.
+
+`loop.mjs` explains at length why pid liveness was **deliberately rejected**. An
+iteration is a Claude turn made of many short-lived processes, so the pid that
+took the lock has always exited by the time anyone looks, and a liveness check
+would hand the lock straight to a concurrent cron fire. The pid also turned out
+to be alive - the chain was working normally.
+
+Two things follow, and the second is the useful one:
+
+- **A design with a written reason is not a defect waiting to be found.** The
+  comment cost a minute to read and saved a protection that exists to stop two
+  writers.
+- **But the reason may be right about less than the whole.** The lock has two
+  kinds of holder, and it was only ever written for one: `heal` and `feed` are
+  single processes that take it, work and exit in one pid. For those a missing
+  pid does mean the run is gone.
+
+So apply the exception where it is sound and guard it three ways: the holder must
+DECLARE itself single-process, there is a grace period so a run that just started
+is never stolen from, and the default stays the old behaviour so nothing that has
+not opted in can be affected. **A wrongly-held lock costs a wait; a wrongly-taken
+one costs two writers.**
+
+## A protection scoped wider than what it protects starves something else
+
+The loop lock covered a whole chain run. The first half changes shared state -
+reaping worktrees, releasing fences, pushing branches, closing issues - and must
+not run twice at once. The second half only reads. One lock covered both, so a
+run held it up to thirteen minutes, and `feed` - which fires every 300 seconds to
+refill the queue - stood down every time. The swarm sat at zero for eleven
+minutes while the chain was in `fp-check`, a read-only step.
+
+Release at the boundary the file already draws. Guard it: release only a lock
+THIS process took, or a chain running inside an iteration will release the
+iteration's.
+
+**This was the third round running with the same shape.** `close-done` re-deriving
+a rule that lived in `land`; pid liveness rejected for turn-held locks but sound
+for single-process ones; a lock scoped to a whole run when only half of it
+mutates anything. In each case the protection was right and applied to more than
+it should. When something correct is costing you, ask what it is actually
+protecting before you weaken it - the answer is usually a narrower scope, not a
+weaker rule.
+
+## The paired probe paid its claim
+
+Last round's disagreement - `/health` ok while `railway ssh` refused - was
+recorded as an anecdote, because the two were sampled a minute apart. With them
+sampled together: 7 pairs, 6 both-up, and one at 02:01:13 where HTTP returned 200
+with `{"status":"ok"}` and the gateway refused in the same moment, kind
+`app-down`.
+
+Existence confirmed, rate unknown. n=1 of 7 is not a frequency and must not be
+written as one - but the phenomenon is no longer a story, and a green health
+check is now demonstrably not evidence that the channel will connect.
+
+## A refusal that is right can still be the thing starving you
+
+The swarm sat at zero. The container volume was 95% full and every dispatch died
+at `git worktree add: unable to write file`. The reaper tried twenty worktrees
+and removed ONE - nineteen refused, because `git worktree remove` will not take a
+tree with modified or untracked files, and `--force` is not used on a worktree
+here.
+
+**Every refusal was correct, and the situation was still wrong.** The question is
+never "should I force it" - it is *what is the refusal protecting, and can that
+thing be moved somewhere safe?*
+
+    52 uncommitted path(s) across 20 tree(s)
+
+Nine were TEST FILES a bee had written and never committed. Real work, the only
+copy of itself, and invisible to everything: the branch does not have it, the
+issue does not mention it, `push-work` cannot publish what was never committed,
+and the tree holding it was one `--force` away from being deleted to make room
+for the next bee.
+
+Commit it onto the branch it belongs to. Then the tree is ordinary, the reaper
+takes it, and the work reaches GitHub like anything else.
+
+    rescued  19 of 20 trees, 52 paths
+    pushed   14 branches
+    reaped   18 of 26 worktrees, 28.6 G, volume 95% -> 32%
+    swarm    0 bees -> 4
+
+## A pre-commit hook gates delivery, not preservation
+
+Every one of the first twenty rescue commits failed. The reason was `lefthook`
+running `biome-check`.
+
+A hook exists to stop unfinished work being DELIVERED. This was unfinished work
+being saved from destruction - abandoned, not reviewed, and about to be deleted
+either way. Holding it to a formatter's standard means choosing deletion over an
+imperfect commit.
+
+So `--no-verify`, with the reason written where the flag is, and the gate still
+standing everywhere downstream: nothing rescued can land without passing the same
+checks as any other branch. **Ask what a gate is for before deciding it applies.**
+
+## "Nobody is running" and "I could not ask" are the same empty array
+
+The rescue refuses to write into a tree whose bee is still working. Its first
+version read the board, got `[]`, and refused - because a board that says nobody
+is running and a board that could not be read both produce an empty list.
+
+An empty running-set means every tree is abandoned and ALL may be committed. An
+unreadable board means nothing is known and NONE may be. Opposite conclusions
+from identical data.
+
+This project has met the same shape before - a config file of zero-length keys
+that looked configured - and it will meet it again. Any time a read can fail, the
+failure needs its own value, and the refusal has to name which of the two it hit.
+
+## A fix scoped to the symptom leaves the rest of the mechanism armed
+
+`push-work` runs `git push` inside the container as root, and root leaves what it
+writes owned by root. The first outage showed 112 root-owned REFLOGS killing
+every bee at `git fetch` with Permission denied, so the fix chowned `logs` and
+`refs` back.
+
+A push also writes OBJECTS, and creates the fan-out directories that hold them.
+Measured a week later:
+
+    131 root-owned entries under .git
+     53 of them DIRECTORIES in objects/
+        objects/be   mode 755  root:root
+        objects      mode 775  bee:bee
+
+A bee runs as uid 999 and cannot create a file in a directory it does not own.
+Fifty-three doors were shut, silently, waiting for the next fetch. The fix had
+been incomplete since the day it was written, in the part nobody looked at
+because it had not broken yet.
+
+Give back the whole `.git`. Proven on a live push: root-owned files went from 272
+to 0.
+
+**Fix the mechanism, not the symptom you happened to observe.** "Root wrote here"
+is the mechanism; "reflogs were unwritable" was one of its outputs.
+
+## Ask the question that can come back "no"
+
+`rescue` found 52 stranded paths and I said the test was whether it happens
+again: a second occurrence would mean the bees systematically fail to commit, and
+the fix would belong upstream of the tool I had just built.
+
+It came back `total=0`.
+
+So the stranding was a CONSEQUENCE of the volume outage, not a habit: the volume
+fills, bees die part-way through `git worktree add`, their partial work is left
+uncommitted, the trees holding it cannot be reclaimed, and the volume fills
+further. A cycle, broken at two points.
+
+The value was in the question being answerable the wrong way. A test whose only
+possible outcome is "my tool is still needed" is not a test.
+
+And the one path it did find was a **submodule**, whose `M` means the checked-out
+commit differs from the one the superproject records. Committing that moves the
+repository's dependency - a real change, made blind, by a tool for preserving
+files somebody wrote. Read the exclusion from `.gitmodules`: a hard-coded path is
+a second copy of a fact the repository already states.
+
+## A watermark is what you use when the lifetime is unknown
+
+The volume went from 95% to 32%, and an hour later it was at 87%. Two rounds of
+fixes had addressed real defects and none of them addressed this one.
+
+Seventeen worktrees. **Two** belonged to a bee that was still running. Fifteen
+were left by dispatches that had FINISHED, eleven with their branch already on
+the remote - about 27 GB of pure redundancy waiting for a threshold to notice it.
+
+A worktree is created for a dispatch and stops being needed the moment that
+dispatch's work is published. That lifetime is known exactly. CI deletes a
+workspace when the job ends; a Kubernetes job's pod goes when the job completes;
+neither waits for disk pressure to remember. **Reaching for a watermark when the
+lifetime is known is the design error**, and every round spent tuning the
+watermark was a round spent on the wrong question.
+
+Remove on completion, and require all three:
+
+    the dispatch has FINISHED     a running bee's tree is its workspace
+    the branch is ON THE REMOTE   the work has somewhere else to exist
+    `git worktree remove` agrees  no --force, so anything uncommitted survives
+
+The second is load-bearing: this removes a CHECKOUT, never a commit, and refuses
+to remove a checkout whose commits nobody else has.
+
+Keep the watermark reaper as the backstop it should always have been - for what
+this cannot take, and for the case where something upstream breaks and pressure
+is the only signal left. First run: 87% -> 28%.
+
+Two habits that came with it. **Return every exclusion with its reason** - a tool
+that quietly skips things reads as a tool that found nothing to do. And **refuse
+entirely when the board cannot be read**: "nobody is running" and "I could not
+ask" are the same empty list, and here they lead to opposite acts.
+
+## No collection strategy wins against a duplication rate
+
+Three rounds went into the volume - watermarks, a collector inside the container,
+a rescue for stranded work, then removal on completion instead of on pressure.
+Every one fixed a real defect, and the volume still climbed at 39 points an hour
+with the reapers working correctly.
+
+**When a resource keeps filling despite correct collection, stop improving the
+collector and measure the production rate.** A collector can only ever be as good
+as the gap between creation and removal; if creation is 10 GB a generation on a
+46 GB volume, the argument is over before it starts.
+
+The production here is `bun install` writing a private copy of the dependency
+tree into every worktree - about 2.4 GB each, four bees at a time.
+
+## Test the mechanism by intervention before shipping the fix
+
+I had an explanation for that duplication and it was wrong.
+
+The bee's cache lives on `overlay` and the worktrees on the volume - different
+devices - and a hardlink cannot cross a filesystem boundary. It is a true fact,
+it explains the observation, and I wrote the fix, the test and the commit
+message on it.
+
+Then I tested it instead of shipping it. The cache was moved onto the volume with
+a symlink - no deploy, reversible in one command - and three installs were run
+into three directories on that same volume:
+
+    A: links=1 ino=655375
+    B: links=1 ino=655389
+    C: links=1 ino=655404   (with --backend=hardlink)
+    cache entry: links=4 ino=988244
+
+Different inodes, one link each. The cache hardlinks INTERNALLY, so the
+filesystem supports links perfectly well - `bun install` simply copies out of it
+into every node_modules, whatever device either is on. **The device boundary was
+never the cause.**
+
+The fix would have cost 2.5 GB of a 46 GB volume and returned nothing. It was
+reverted and the pull request closed.
+
+The habit that saved it is cheap and general: **when a fix can be simulated
+without deploying it, simulate it first.** A symlink, an environment variable, a
+scratch directory - anything that produces the predicted effect if the theory is
+right. A true fact that explains the observation is not the same as the cause,
+and the only thing that tells them apart is making the change and watching for
+the effect.
+
+## The store holds what is shared; the workspace links stay home
+
+Eight of eleven worktrees carried their own `node_modules` at 2.5 GB - about 19
+GB of identical packages on a 46 GB volume. Every lockfile hashed the same, so
+the dependency set is genuinely one set and sharing is sound rather than
+convenient.
+
+**The obvious version breaks on the first test.** Move `node_modules` somewhere
+shared, point at it, and:
+
+    error: Cannot find module '@browseros/shared/constants/limits'
+
+A bun (or npm, or yarn) workspace links its OWN packages by relative path inside
+`node_modules`. Shared away, those links resolve against the store instead of the
+worktree and find nothing. This is precisely the wall pnpm's virtual store was
+designed for, and it is cheaper to recognise than to rediscover.
+
+The arrangement that works:
+
+    store/<lockhash>/.../node_modules   the external packages, once
+    worktree/.../node_modules/          a REAL directory of links into the store
+    worktree/.../node_modules/@scope/*  linked back to THIS worktree's packages
+
+Key the store by the lockfile hash, so a worktree whose dependencies differ gets
+its own store rather than the wrong packages.
+
+Measured: 2536M -> 159M and 2561M -> 159M with tests passing through the farm,
+then six more trees and 14.3 GB returned in one pass.
+
+**Refuse three things.** A tree whose bee is running - rebuilding node_modules
+under a live install kills the dispatch for a reason nobody can reconstruct. A
+bare checkout with no private install, which has nothing to share and must not be
+emptied. And everything, when the board cannot be read.
+
+**And the shape of the whole series:** three measurements went into this volume.
+A watermark, then removal on completion, then this. The first two were correct
+and could not win, because they addressed collection while the problem was
+production. When a resource keeps filling despite correct collection, the next
+measurement is of the creation rate - not a better collector.
+
+## Three negative results, and one of them was my own bug
+
+The claim was that one shared package store would collapse the volume growth. An
+hour later: 52% used, +133.6 points per hour. Sharing after the fact is a mop -
+every dispatch still runs `bun install` and writes 2.5 GB.
+
+So three ways to close the tap were tried, each in a scratch worktree, each
+before a line of it entered the system:
+
+| attempt | result |
+|---|---|
+| put the package cache on the same volume | three installs, `links=1`, three different inodes - bun copies out of its cache whatever device either is on |
+| build the link farm BEFORE the install | 159M with the farm, then `bun install` wipes it and writes 2562M |
+| `--backend=symlink`, and a repo `bunfig.toml` | 41M on a single-package project, **2561M on this workspace** - and the bunfig was ignored entirely |
+
+**The second one was wrong, and it was my bug that made it look right.**
+
+`for e in "$src"/*` does not match dotfiles in POSIX sh. The store root has
+sixteen entries; that glob linked fourteen. The two it missed were `.bin` and
+`.bun` - bun's entire isolated store, 2242 entries and 2.37 GB. bun could not
+see the tree as satisfied, so it rebuilt everything, and I recorded "a pre-built
+farm cannot survive bun install" as a measured refutation.
+
+With the dotfiles linked, on a live farmed worktree:
+
+    Checked 2250 installs across 2424 packages (no changes) [948.00ms]
+    after install: 159M
+
+**A negative result is only as good as the instrument that produced it.** The
+discipline of testing before shipping is right and it saved two genuinely wrong
+changes - but a refutation deserves the same scepticism as a confirmation, and
+the tell here was available: the farm had 14 entries and the store had 16, a
+number I printed in the file's own header and never compared.
+
+
+## A command name silently shadowed a scheduled job for its whole life
+
+`ai.t27.trios-feed` runs `tri feed --act` every 300 seconds. The loop's feed step
+never once ran from it.
+
+    92 command label(s), 1 SHADOWED:
+      feed: first wins at line 37, unreachable at [390]
+
+A shell `case` takes the FIRST match, and `feed)` appeared twice in `tri` - a
+content feed at line 37 and the loop's own at line 390. The timer had been
+calling the content feed for its entire life. That is why the timer log filled
+with post titles, why the ledger held no `feed` entry, and why there were zero
+`feed-skipped` records: it never reached the lock check because it never reached
+the loop.
+
+Nothing in the system could see it. Not the shell, which is happy. Not the timer,
+which reported exit 0. Not the log, which filled with plausible output from the
+wrong program.
+
+**Scan for it mechanically.** The selftest now parses every `case` label in `tri`
+and fails on any an earlier one shadows - and fails too if it parses fewer than
+50 labels, so a scanner that stops seeing the file cannot pass as a clean result.
+
+This is the second time in a week a scheduled job reported success while doing
+something other than its job. Both were invisible for the same reason: **the
+thing that runs and the thing that checks were the same thing.**
+
+## Attempts bound how many times to ask; only a deadline bounds how long
+
+The first two real runs of the newly-reachable feed both recorded
+`share-modules: timed out`. Arithmetic, not luck: the app-down backoff waits 15
+seconds then 30, multiplied by four - 180 seconds of sleeping across three
+attempts - inside a caller that fires every 300 and caps a step at 300.
+
+A retry policy expressed only in attempts has no idea what it is costing. Give
+the channel a total budget and let it stop before a wait that would pass it. That
+is not giving up; it is refusing to spend the caller's whole allowance on
+waiting, so the caller reports what happened instead of being killed mid-sleep
+with nothing to say.
+
+Hand the budget DOWN from the caller that owns the clock - the feed passes 80% of
+its own kill timer - and leave the step room to report after the channel gives
+up.
+
+## The gateway everything depends on works 39% of the time
+
+The paired probe, 18 samples taken with both views at one moment:
+
+    both up                  7   39%
+    HTTP ok, ssh REFUSED    11   61%   app-down
+    both down                0
+    ssh up, HTTP down        0
+
+Every operation that frees the swarm - reap, lease, push-work, close-done,
+rescue, share-modules - reaches the container through that one gateway. It
+refuses about three times in five while the service answers HTTP perfectly.
+
+This is the explanation for the 46-71% step failure rates quoted for three
+rounds, and it is now a measured rate rather than an anecdote. It also explains
+why manual runs "work": a person retries until the window opens, and a timer does
+not.
+
+**When one dependency is shared by every critical path, measure its availability
+before tuning anything that sits on top of it.**
+
+## Check which binary you are running before believing anything about the service
+
+For three rounds this loop quoted step-failure rates of 46-71%, built a retry
+policy, a circuit breaker and a total budget on top of them, and measured a
+"gateway availability" of 39%.
+
+    /bin/zsh -lc 'command -v railway'   /usr/local/bin/railway   4.5.4 (Jun 2025)
+    an interactive shell                nvm's railway            5.49.2
+
+Both launchd plists run `/bin/zsh -lc`, and the login profile puts
+/usr/local/bin ahead of the nvm bin. The decisive check took one command:
+
+    LC_ALL=C grep -ac "Expected welcome message" <each binary>
+    -> 1 in 4.5.4, 0 in 5.49.2
+
+That string wraps EVERY app-down refusal in the record. Every launchd sample was
+refused by a client that cannot attach; every successful attach in the entire
+history came from a hand run with the newer binary.
+
+It was not the container, not Railway, not the network, and not something to
+tune. It was a PATH, and it was invisible because **the hand test and the
+scheduled run were different programs** - the oldest trap there is, and the one
+this loop walked into while carefully measuring everything downstream of it.
+
+Two habits from it:
+
+- **When a scheduled job behaves differently from your hand test, compare the
+  programs before comparing the environments.** `command -v` under the job's own
+  launcher, and the version, and if the failure has a distinctive string, grep
+  the binaries for it.
+- **Name the binary in the code**, next to wherever the project id and service
+  name already live. A bare command name is a dependency on somebody's profile.
+
+## Before measuring a change, measure when the change took effect
+
+I named the railway binary, then tested whether it helped by splitting the
+paired record at 07:30 UTC. The result looked like a refutation: 35% before, 33%
+after.
+
+`channel.mjs` was modified at **08:13 UTC**. Both "after" failures were at 08:08
+and 08:14 - one before the edit existed, one from a run already in flight. The
+window was chosen from memory of roughly when I had been working, not from the
+file's mtime.
+
+Split at the real boundary:
+
+    before 08:14 (old binary)   7 of 22 attached   32%
+    after  08:14 (named path)   4 of 4            100%
+
+and the first fully clean feed run in the loop's history followed immediately -
+push-work, land, close-done, share-modules, author, all ok.
+
+**The cutoff is a measurement too.** `stat -f %Sm` on the file, or the commit
+timestamp, or the deploy time - never "around when I did it". This project has
+made the same error before, in the other direction: an acceptance rate of 17%
+measured over a window still in flight, which read 80% once judged.
+
+The tell is cheap: if a before/after split shows almost no change, check the
+boundary before believing it. A fix that does nothing and a fix measured on the
+wrong window look identical.
+
+## Pin a capability, not a path
+
+Naming the railway binary fixed the loop and introduced a slower defect:
+`$HOME/.nvm/versions/node/v22.22.0/bin/railway` hardcodes a node version nobody
+will remember to update. An adversarial reader found it within the hour.
+
+Search the candidates and take the first that reports the version you need:
+
+```bash
+"$c" --version   # major >= 5 wins; 4.5.4 is rejected for BEING 4.5.4
+```
+
+**Reject by the property that matters.** The old client's problem was never its
+location - it was that it cannot attach, and its version says so. A path is a
+proxy for that, and proxies rot.
+
+And when nothing qualifies, say so loudly and fall back. A loop that silently
+picks a client which cannot attach is what cost this project three rounds of
+measuring the wrong thing.
+
+## Fixing the thing makes the steps slower, and the budgets were tuned on failure
+
+`share-modules` was put on the 300-second timer when the channel refused three
+times in five - the step did nothing, quickly. With a working client it does real
+work, and its first two working runs both recorded `share-modules: timed out`.
+
+Nothing regressed. A step that had been failing fast started succeeding slowly,
+and every deadline in the chain had been calibrated against the fast failure.
+
+**When a shared dependency starts working, re-examine every timeout that was set
+while it did not.** The previous round's own design note predicted this in as
+many words - "expect the first working runs to hit a deadline for an entirely new
+reason" - which is worth more than the fix it accompanied.
+
+## A crash is the end of a process nobody was watching
+
+The service returned 502 and `railway status` said `Crashed`. The deployment log
+had been saying why since forty minutes earlier:
+
+    Filesystem tool execution failed  tool="filesystem_bash"
+    error="EAGAIN: resource temporarily unavailable"
+
+EAGAIN on `posix_spawn` means the container could not FORK. A fresh container
+sits at 65 of 1000 process slots with zero zombies, so the exhaustion
+accumulates: unreaped children fill the pid table, the app stops being able to
+run a command, and then it dies.
+
+Nothing about that is sudden. It was a rising number for forty minutes and
+nobody had an instrument pointed at it.
+
+```bash
+cat /sys/fs/cgroup/pids.current /sys/fs/cgroup/pids.max
+ps -eo stat | grep -c '^Z'
+```
+
+The paired probe already attaches every chain run, so it asks these two questions
+while it is there and the dashboard carries the percentage. **When you find a
+resource that a crash consumed, add its meter before you add its fix** - the
+meter works without a deploy and tells you whether the fix worked.
+
+## Fixing the instrument reveals the vocabulary you never had
+
+Every failure this loop had ever recorded was wrapped in "Expected welcome
+message" - a string that exists only in the client that could not attach. With a
+working client, the container's real failures arrived at once:
+
+    Connection to ssh.railway.com closed by remote host
+
+classified `unknown`, therefore never retried.
+
+That is not a new bug. It is the shape of a classifier built entirely from the
+output of a broken instrument: it knew one string perfectly and the real world
+not at all. **After repairing an instrument, expect its whole vocabulary to be
+new, and re-derive the classifier from the first days of real output rather than
+from the years of artefact.**
+
+## PID 1 in a container must be an init, or the orphans stay forever
+
+The service crashed because it could not fork. Measured from `/proc` on the
+running deployment:
+
+    pid 1 is: bun
+    50 processes, 37 zombies
+    zombies whose parent is PID 1: 37   with another parent: 0
+    git (21), esbuild (16)
+
+The bash tool spawns `sh -c <command>` and does `await proc.exited`, so its
+direct child is reaped correctly. The GRANDCHILDREN are the problem: when the
+shell exits, `git` and `esbuild` are orphaned and reparented to PID 1 - and PID 1
+here was `bun`, an application, which never calls `wait()` for children it did
+not start. They stay zombies for the life of the container, the pid table fills,
+`posix_spawn` returns EAGAIN, and the service dies.
+
+    ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+
+`tini` reaps orphans and forwards signals. It is what `docker run --init`
+installs. Verify by asking, not by assuming: `cat /proc/1/comm` should name the
+init, not your application.
+
+**It held.** Measured a day later, with the swarm working:
+
+    PID1 tini
+    PIDS 161/1000
+    PROCS 15 ZOMBIES 0
+
+That is 310 finished dispatches through the new PID 1 with no accumulation,
+against 37 zombies of 50 processes before it - and the chain's last eight runs
+show push-work, land, close-done and author all at 0%. A fresh container starts
+near zero anyway, so the reading that matters is this one: zombies at zero while
+161 process slots are in use.
+
+**Awaiting your own child is not enough.** Any tool that runs a shell command
+inherits that shell's children when it exits, and in a container that inheritance
+lands on PID 1.
+
+## A check whose tool is absent reports health
+
+The meter built to watch for that crash counted zombies with
+`ps -eo stat | grep -c '^Z'`. The image has no `ps`. The pipeline produced
+nothing, the count was 0, and it read as "no zombies" for a full round while
+there were 37.
+
+This is the fourth instance of one shape in a week:
+
+    df /              a sealed macOS snapshot at 55% while the real volume was 97%
+    tri feed          a shell case taking an earlier match, so a timer ran another program
+    railway           a client that could not attach, wrapping every failure in one string
+    ps -eo stat       absent, so its absence read as zero
+
+Every one answered confidently about the wrong thing, and none of them errored.
+**Before trusting a count of zero, prove the instrument can produce a non-zero.**
+Read `/proc` rather than `ps`; check `command -v` for anything you shell out to;
+and report the denominator beside the count, because 37 of 50 and 37 of 5000 are
+different facts and a bare 0 hides which one you are not seeing.
+
+## Two overlapping outages make each look like it was not the cause
+
+Naming the railway client should have collapsed the step failure rates. Split at
+the fix:
+
+    reap 73% -> 70%   lease 60% -> 70%   push-work 57% -> 67%   author 4% -> 44%
+
+which reads as "the fix did nothing, and made one thing worse". Twelve of 147
+recorded failures even named the old client.
+
+**The window after the fix contained a three-hour service crash.** Split into the
+three periods that actually happened:
+
+    window          reap     lease   push-work  close-done   author
+    old client     61/83     50/83     57/100      41/100      4/96
+    crash window     6/6       6/6      22/22       16/22     16/22
+    after restore    1/2       1/2       1/7         0/7       0/7
+
+Both fixes worked. Neither could be seen while the other's window was mixed in -
+and a total outage dominates every rate it touches, so the crash buried the
+client fix completely.
+
+This is sharper than "split at when the fix landed": something else may have
+started between then and now. **Before reading a before/after, list every event
+in the window, not just the one you are testing.**
+
+## A rate on a dashboard must have a window, and the window needs a reason
+
+A lifetime rate over a record containing two resolved outages describes neither
+the past nor the present. The dashboard read `worst step: reap 74%` from exactly
+that.
+
+It reads the last eight chain runs now - about an hour. The size was chosen by
+measurement, not by which number flattered: push-work reads
+
+    0/5    2/8    6/12    14/20
+
+and that gradient IS the crash receding. Eight is short enough to describe now
+and long enough that a fresh incident still shows, which is the only reason to
+put a rate on a dashboard at all. Changing nothing but the question moved the
+number from 74% to 50%.
+
+Say the window in the label - `worst step, last 8 runs` - so nobody has to guess
+which question they are reading the answer to.
+
+## The fifth blind instrument accused forty-two workers of silence
+
+`judge-packet.mjs` assembles what a judge reads about a bee's work. It kept its
+own `railway` with no path, so under the timers it got the client that cannot
+attach, and `catch { return null }` turned the refusal into a verdict:
+
+    ## The bee said nothing that was recorded, so every quoted-run criterion is
+    ## UNVERIFIABLE by absence
+
+Isolated by PATH alone, container healthy, same minute:
+
+    transcriptOf(1351)                            79568 characters
+    the same call under PATH=/usr/local/bin:...   null
+
+**All 42 packets ever written carry that line. All 42 of those bees had a
+transcript** - 4,476,899 characters between them, from 7,933 to 292,942 each.
+Forty-two accusations of silence, produced by a tool that had never once
+succeeded in asking.
+
+A query that returned no rows and a channel that could not be reached were the
+same `null` and opposite facts. Whenever a fetch can fail, its failure needs its
+own value, and the rendering must say *the transcript could not be fetched* -
+never something about the subject.
+
+**And the guard for exactly this defect could not see it.** The check "the loop
+names the railway binary it runs" iterated `['channel.mjs',
+'stale-escalations.mjs']`. It scans the whole directory now, and found a sixth
+file on its first widened run. A guard scoped to a list cannot see the file
+somebody adds next; scope it to the directory and exclude only itself.
+
+Four unused copies of the same constant were deleted from other files. **An
+unused copy of a defect is how the next paste resurrects it** - which is exactly
+how this one got there.
+
+## A step the chain killed itself is not a step that succeeded
+
+`feed.mjs` classifies its own timeout kill. `heal.mjs` never had that arm -
+`git log -S ETIMEDOUT -- heal.mjs` is empty - so a step SIGTERMed at heal's own
+`timeout:` produced no output, matched no pattern, and fell through to `ok`.
+
+    heal.timer.log    62 lines reading `(no output)`, every one recorded ok
+    feed.timer.log    0
+
+Twenty-five of `land`'s thirty-six `ok` records describe a step that produced not
+one byte.
+
+**When two components do the same job, diff their vocabularies.** One had a
+branch the other never grew, and the missing branch was in the part that decides
+what the record says - so the record has been quietly wrong for as long as it has
+existed.
+
+The same round found the announcement line printing `${f.summary}` for FINDING
+records, where `summary` is set only on SKIPPED ones. Every finding it ever
+announced printed `undefined`: the one word the operator was meant to read.
+
+## Fixing the tool is half the work; the wrong output is still on disk
+
+The 42 judge packets were rewritten. Before: 42 of 42 said the bee had said
+nothing. After: 42 of 42 carry the transcript, none accuse.
+
+A repaired instrument does not repair what it has already written. Anything a
+broken tool produced is still sitting where somebody will read it as fact - and a
+judge opening one of those files would have convicted a worker who had spoken.
+**After fixing an instrument, list what it wrote while broken and reissue it.**
+
+## A transport failure will be recorded as a fact about the thing transported
+
+The first rewrite only fixed 33. Nine came back `COULD NOT BE FETCHED
+(unreadable)` - honest, and still wrong.
+
+#1373's transcript is 183,025 characters and the packet prints only its tail, so
+the tool was fetching about ten times what it uses. Narrowing the query to
+`right(s, N)` was not enough. Measured on that issue:
+
+    raw text, 5 KB tail       ok
+    raw text, 17 KB and up    unreadable
+    base64, 60 KB tail        len=183025, tail=60000
+
+The channel's output cleaning is line-based and a transcript is full of newlines.
+**Encode the payload before it meets a line-based cleaner.**
+
+That failure would have been read as a transcript problem. It was a transport
+one - the fourth time this week a defect in how something was CARRIED was about
+to be recorded as a fact about the thing carried:
+
+    ps absent           -> "no zombies"
+    old railway client  -> "the application is not running"
+    line-based cleaner  -> "the transcript is unreadable"
+    catch { null }      -> "the bee said nothing"
+
+And keep the true length separate from the excerpt. A tail with no length reads
+as the whole thing, and the sentence a packet prints about its omitted middle
+depends on knowing the difference - so ask the database for `length(s)` and do
+not infer it from what arrived.
+
+## The tap is closed: farm at creation, not after the write
+
+Every dispatch used to run `bun install` and write about 2.5 GB of its own
+node_modules. The loop reclaimed it afterwards - which bounded the damage and
+never stopped it. Six worktrees were carrying 15.4 GB of the same packages.
+
+**Proven by intervention before a line of the fix existed**, on a scratch
+worktree in the live container:
+
+    bare checkout                              159 MB
+    with the farm built, before any install    159 MB
+    after `bun install --frozen-lockfile`      159 MB
+      "Checked 2250 installs across 2424 packages (no changes) [580.00ms]"
+    its test suite through the farm            8 tests, 0 fail
+
+`prepareWorktree` builds the farm when the worktree is cut. Every dispatch since
+records it:
+
+    cut from feat/queen-supervisor; linked 7 node_modules into the store for 34c6c111d6bc
+
+Three guards make it safe to leave running: it does nothing unless a store
+already exists for that exact lockfile hash, so a worktree whose dependencies
+differ installs normally and the first tree of a new lockfile donates its
+install; it never fails a dispatch, because a bee that installs its own copy is
+slower and correct; and the workspace's own packages are linked back to the
+worktree rather than to the store.
+
+**The loop's `share-modules` stays as the backstop** - for trees cut before the
+change, and for any store that appears after a tree was created. A tap and a mop
+are not alternatives.
+
+**And this was recorded in these notes as REFUTED four rounds ago** - "a
+pre-built farm cannot survive bun install", 159M becoming 2562M. That was a bug
+in my own farm builder, not a fact about bun: a POSIX glob that does not match
+dotfiles left out `.bun`, 2242 entries and 2.37 GB. A refutation deserves the
+same scepticism as a confirmation, and this one cost four rounds of treating the
+problem as unfixable.
+
+## One case of fifteen is how a gap hides behind a good aggregate
+
+The tap held: the volume settled at 19% and its rate fell from over a hundred
+points an hour to 5.5, fourteen of fifteen worktrees farmed. It looked finished.
+
+The fifteenth carried 2,562 MB, with a lockfile hash matching an existing store,
+cut AFTER the change went live. Its dispatch said why:
+
+    #1627  reused an existing worktree (clean)
+
+`prepareWorktree` returns from the reuse path before it reaches the farm, which
+had been added after `git worktree add`. **A different code path, invisible in
+every number I was watching.**
+
+The aggregate is what makes this dangerous. 14/15 and a collapsed rate are
+exactly what success looks like, and the remaining case was not noise - it was a
+whole branch of the function nobody had covered. **When a fix leaves one case
+behind, ask which PATH that case took rather than treating it as residue.**
+
+## A silent fallback is how a gap survives being found
+
+`farmNodeModules` returned an empty string when it threw, on the reasoning that
+an optimisation which throws is worse than one that does not run. That reasoning
+is right, and it also meant "the farm could not be built" and "no farm was
+needed" produced identical output.
+
+It says which now, in the same detail line the board and the operator already
+read. **An optimisation may decline to run; it may not decline to say so** - the
+whole cost of silence is that the next person measuring cannot tell the two
+apart, and the number they compute will be confident and wrong.
+
+## The extractor has a ceiling, and it has been reached
+
+Five rounds of widening the criterion extractor took audit coverage from 36% to
+89%. The obvious next move is a sixth form. The measurement says no.
+
+Of 12 unauditable briefs sampled: ONE carried a tree-search criterion and it was
+a BASELINE rather than a target. **ELEVEN state no command at all.** They are
+prose - hand-written epics whose success criteria are sentences, not runs.
+
+Widening the parser cannot reach them. They need a judge, or a rewrite with
+criteria. The selftest now fails if someone adds a sixth form, with that
+measurement as the reason, because the tempting move and the useful move have
+diverged and only a number says so.
+
+**Know when a line of attack is exhausted.** Five rounds of gain then a flat
+one is not a reason to try harder at the same thing; it is the signal to measure
+whether the remaining cases are even the same KIND of case. Here they are not.
+
+## Two guards every text-extracted criterion needs
+
+The tree-wide search form - `grep -rn 'X' <dir>` prints nothing - is real and
+worth reading. Its first version produced a false accusation immediately.
+
+    the pattern it extracted from #1397:  gh
+
+The match had walked past the backtick that closed one command and taken the
+assertion belonging to a later sentence. `gh` appears in most files in this
+repository, and the bee would have been convicted of every one of them.
+
+- **Bound the distance** between a command and its assertion. Forty characters.
+  Unbounded, a regex crosses sentences and pairs the wrong things.
+- **Refuse an implausibly short pattern.** A brief asserting that a three-letter
+  string is absent from a whole tree is not making a claim any tree could
+  satisfy, so reading one is always a misparse rather than a strict criterion.
+
+And verify on the whole corpus before shipping: this change was checked against
+all 365 accepted verdicts and added zero accusations. The five that exist were
+each confirmed by hand.
+
 ## The rule that comes out of all of them
 
 Do not add fuel to a stopped swarm until `tri swarm` and `tri fence` say fuel is
@@ -1831,3 +3233,128 @@ them.
 See also: `queen-briefing` (how to write an issue a bee can pass),
 `trios-live-forensics` (read the running system before changing code),
 `unmeasured-cause` (the defect class all four of these belong to).
+
+## One rule written three times, compared zero times
+
+The boundary rule - which paths an issue reserves for its bee - is implemented
+three times in this system:
+
+| where | knows `## Boundary` | knows `## Границы` |
+|---|---|---|
+| `agent-server/.../queen-tick.ts:576` (the one enforced) | yes | yes |
+| `.trinity/loop/brief-gate.mjs:43` (a declared port of it) | yes | yes |
+| `.trinity/loop/verdict-audit.mjs` (which judges against it) | yes | **no** |
+
+`CLAUDE.md` states the rule outright, in the sentence explaining why both
+headings exist. Two implementations obeyed it. The third read English alone, and
+nobody had ever put the three side by side.
+
+**What that cost.** An unread boundary is an empty boundary, so every file the
+bee touched fell outside it. Seven briefs carried the note "N file(s) outside the
+declared boundary" and every one of them was innocent by construction - the
+server had given each a boundary and each bee was honouring it.
+
+The corpus settles it: of **380 pushed briefs, 373 head their boundary in
+English, 7 in Russian, and NOT ONE has no boundary at all.** So an empty parse is
+always the parser failing, never the brief being silent - and the seven Russian
+ones were exactly the seven accused. Stray reports fell from 8 to 2 and both
+survivors were checked by hand.
+
+**The guard is cheap and nobody had written it.** Read all three sources, find
+the line that tests the heading, assert every one names the same two strings. A
+source that cannot be read is an unknown parser, never an agreeing one. Any rule
+with more than one implementation deserves this; it costs one calibration case.
+
+## Absent, unreadable, empty: three answers, not one
+
+This is the third round in which the same defect wore a different hat:
+
+- the judge packet accused 42 bees of silence when the transcript query had
+  failed - `no-rows` and `unreachable` returned the same empty string;
+- `boundaryPathsOf` returned `[]` for "no section" and for "a section this
+  cannot read", and the caller convicted on both;
+- `~/.trios/config.json` looks configured while holding zero-length keys.
+
+The server's own comment had already named the seam and declined to fix it:
+it left the `found` flag out because *"no caller in either language branches on
+the difference."* A caller does now. When a parser can fail, its result type has
+to be able to say so, and the caller must check nothing rather than accuse
+everything.
+
+## A checker whose truth expires
+
+`reap-local` decided a worktree was reapable by asking `merge-tree
+--write-tree`: **would merging this branch change the base as it stands now?**
+
+That is a correct question with a decaying answer. The moment anyone edits the
+same files again - every round, in this loop - a branch that landed by squash
+answers "unmerged" for ever. Measured: 31 local worktrees, one called reapable,
+and eight of the other thirty were this loop's own trees whose work had landed as
+#119, #121, #123, #125, #127, #313, #314 and #320. They held **1.67 GB on a
+volume sitting at 125 MB free**, while the loop that had filled it was reporting
+the disk as an anomaly with no owner, three rounds running.
+
+**Ask a question about the thing, not about the world around it.** Is every
+commit of this branch in the base under its own subject? That does not decay.
+GitHub's squash appends ` (#N)` and nothing else may differ; one unlanded commit
+keeps the tree. The first version of the rule demanded whole-line equality and
+duly called `feat/detector-denominators` unmerged - it would have kept the very
+tree that proved it was needed.
+
+Two more defects fell out of the same file:
+
+- **Merged is half the question.** Both squash paths returned REAPABLE before
+  dirtiness was ever asked, so the summary said "3 merged and CLEAN" about trees
+  whose cleanliness nobody had measured.
+- **Never advertise what the underlying command will refuse.** A deletions-only
+  tree was called removable on the argument that deleting a file HEAD still has
+  destroys nothing. True, and beside the point: `git worktree remove` refuses any
+  modified tree and the only way past is `--force`, which this loop does not use.
+  The tool counted 278 MB it could not return and removed none of it.
+
+## A created stray is not an edited stray
+
+Auditing the eight most-cited agent benchmarks in 2026, Berkeley's
+`trustworthy-env` found that the SWE-bench harness resets the files named in the
+upstream test patch but never the arbitrary files an agent **creates** - and a
+ten-line `conftest.py` nobody scoped "resolves" all 500 instances of SWE-bench
+Verified. The unscoped new file breaks a harness; the unscoped edit is usually
+untidy.
+
+Both surviving strays in this corpus are creations, and they are opposite cases:
+
+- `queen-1133` created **24 object files** in the repository. Real pollution -
+  and it exposed that `/*.o` in `.gitignore` is anchored to a root the build
+  left: the build runs in `trios/`, one directory below the anchor, so the rule
+  had matched nothing the compiler writes for as long as that has been true, and
+  `git check-ignore` agreed the files were never ignored.
+- `queen-1318` created a `bun.lock` beside the `package.json` it was told to
+  edit. That is the boundary-adjacent artifact PORTICO measured: holding scope
+  compliance at 1.00 with zero violations dropped task success to 0.21, and a
+  controlled-grant mechanism brought it back to 0.87 with compliance intact.
+  A stray checker with no grant path is a checker that will be turned off.
+
+`tri boundary <N>` prints all of it for one issue: the heading, what the server
+reserved out of the brief, what it narrowed away, and each stray marked CREATED
+or edited.
+
+## An instrument a full disk turns into a liar
+
+`two-views.mjs` exists to say which view of the service is telling the truth. Its
+HTTP side wrote the response body to `/tmp` with `curl -o` and read it back. On a
+full volume curl exits 23 on that write, the call throws, and the sample enters
+the record as `reachable: false` - **this laptop's disk, recorded as the service
+being down, in the one instrument built to distinguish exactly that.**
+
+It parses one stream now and touches no filesystem. Any probe that needs a
+resource in order to report on a different resource will eventually report the
+wrong one.
+
+## And the guard written against its own explanation
+
+The case forbidding `-o /tmp` in `httpView` failed on the shipped, correct code -
+because the comment inside `httpView` quotes the command it forbids. That is the
+third time an assertion in this suite has been written against prose. `codeOf()`
+strips comment lines for exactly this reason; use it, and pair it with a check
+that the slice is non-empty, so a rename turns the guard off loudly instead of
+quietly.
