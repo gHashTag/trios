@@ -125,7 +125,22 @@ for pair in ${list}; do
     src="$S/$rel"
     rm -rf "$W/$rel"
     mkdir -p "$W/$rel"
-    for e in "$src"/*; do ln -s "$e" "$W/$rel/$(basename "$e")" 2>/dev/null || true; done
+    # DOTFILES TOO, AND THIS IS THE WHOLE FIX.
+    #
+    # POSIX sh does not match a leading dot with a star. The store root holds 16
+    # entries and this glob linked 14: .bun - bun's ENTIRE isolated store,
+    # 2242 entries and 2.37 GB - and .bin were silently left out. bun then
+    # cannot see the tree as satisfied and reinstalls everything.
+    #
+    # Measured A/B on one scratch worktree, one store, one bun, one command:
+    #   farm WITH dotfiles     bun install --frozen-lockfile -> "no changes"
+    #                          [168ms], tree stays 27M
+    #   farm WITHOUT dotfiles  same command -> "4460 packages installed"
+    #                          [6.10s], tree 27M -> 2254M
+    #
+    # So "a pre-built farm cannot survive bun install" was refuted by this bug,
+    # not by bun. The tap CAN be closed.
+    for e in "$src"/* "$src"/.[!.]*; do [ -e "$e" ] || continue; ln -s "$e" "$W/$rel/$(basename "$e")" 2>/dev/null || true; done
     # A bun workspace links its OWN packages by relative path inside
     # node_modules. Shared away they resolve against the store and find
     # nothing, so they are linked back to this worktree's sources.
