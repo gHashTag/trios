@@ -4499,3 +4499,64 @@ heal complete: two-views=ok reap-local=ok rescue=ok reap=ok lease=ok push-work=o
 heal complete: two-views=ok reap-local=ok rescue=ok reap=ok lease=ok push-work=skipped reap-finished=skipped share-modules=skipped land=skipped close-done=skipped stale-escalations=skipped author=skipped clocks=ok fields=ok fp-check=ok verdict-audit=skipped proven=skipped judge-packet=skipped
 another run holds the loop lock (feed, 1 min) - standing down
 another run holds the loop lock (feed, 3 min) - standing down
+another run holds the loop lock (feed, 4 min) - standing down
+
+--- two-views  (both views of the service, at the same moment)
+    the two views of the service DISAGREE - a green health check is not evidence the channel will connect
+
+--- reap-local  (free the disk this loop runs on)
+    could not list the worktrees
+
+--- rescue  (save work a bee never committed, before anything reclaims it)
+      no railway client of version 5 or later was found - falling back to the bare name, which may be one that cannot attach
+
+--- reap  (free the volume before anything else)
+    timed out - what it did before the cut still stands: (nothing recorded)
+
+--- lease  (release idle path fences)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- push-work  (make finished work visible)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- reap-finished  (a worktree stops being needed when its work is published)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- share-modules  (one installed dependency tree, linked into every worktree)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- land  (put accepted work into the branch it was accepted for)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- close-done  (clear accepted issues from the pool)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- stale-escalations  (retire escalations whose stated cause no longer reproduces)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+--- author  (refill the backlog from a measured deficit)
+    SKIPPED - past the 8 minute swarm-freeing deadline
+
+  lock released: everything from here only reads, and the refill needs it
+
+--- clocks  (no decision keyed on a field something rewrites)
+    9 clocks, 9 on fields nothing rewrites
+
+--- fields  (no decision reading a field its query never selects)
+    2 query regions, 2 selecting every field they read
+
+--- fp-check  (no checker accuses anything known good)
+    timed out - what it did before the cut still stands: (nothing recorded)
+
+--- verdict-audit  (check what the swarm claims against what it pushed)
+    SKIPPED - past the 5 minute reporting deadline
+
+--- proven  (is the recent work still proving anything)
+    SKIPPED - past the 5 minute reporting deadline
+
+--- judge-packet  (queue the unauditable for judgement)
+    SKIPPED - past the 5 minute reporting deadline
+
+heal complete: two-views=FINDING reap-local=ok rescue=ok reap=timed out lease=skipped push-work=skipped reap-finished=skipped share-modules=skipped land=skipped close-done=skipped stale-escalations=skipped author=skipped clocks=ok fields=ok fp-check=timed out verdict-audit=skipped proven=skipped judge-packet=skipped
+
+  FINDING  two-views: the two views of the service DISAGREE - a green health check is not evidence the channel will connect
