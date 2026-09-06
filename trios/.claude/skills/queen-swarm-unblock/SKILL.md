@@ -4606,3 +4606,56 @@ The `--force` added nothing but the ability to destroy something.
 Cleanup code is where rules get broken, because attention is on the thing being
 cleaned up rather than on the command doing it. Recorded here rather than fixed
 silently, as the force-push violation was.
+
+## Writing the check is the easy half
+
+`make queen-core-sync` compares the eleven policy files that exist twice — the
+ring the app compiles, and the copy the Docker build compiles for Linux — **byte
+for byte**. Its comment states the stakes perfectly: *"a policy that differs
+between them is two arbiters of the same rule."*
+
+It appeared in **no workflow**. And one of the thirteen had already drifted:
+`QueenLocalisation.swift` gained a string-aware literal view in the ring on
+2026-09-05; the copy that ships to Linux was last touched 2026-08-29. Not a
+comment — the copy is missing `var inString` and the whole escape-and-quote
+branch, so on Linux the literal view is still the version that blanked 6,726
+lines when a `/*` appeared inside a quoted branch glob.
+
+The gate was written, was correct, and had never once been asked.
+
+**A check nobody runs is a comment with a shell prompt.** After writing one, the
+next question is not "is it right?" but "what invokes it when I am not here?"
+
+### Rank the report or nobody reads it
+
+Sixty-eight make targets, eleven invoked by a workflow. A report listing all
+fifty-seven unwired ones would be ignored by the second week, *correctly* —
+`make` builds an app, `run` launches it, `relaunch` needs a window server.
+
+So `tri unwired` asks two questions instead of one: does the name promise to
+refuse something, and **could a runner execute it at all?** Nine rows instead of
+fifty-seven. **A finding buried in a list of legitimate exceptions is a finding
+nobody acts on.**
+
+### Read your own report against the two entries you already know
+
+`check` and `verify` came out in the portable group, and that is wrong — both
+build the app. The cause: they have **no recipe at all**, only a list of
+prerequisites, so a scan of recipe lines found no `swiftc` to object to.
+Following prerequisites moved them, and took the count from eleven to nine.
+
+I found it by picking two names out of my own output and asking whether the
+answer matched what I already knew. **Spot-check the output against your own
+prior knowledge before believing the rows you do not know.**
+
+### The negative results were worth the queries
+
+Two audits this round found nothing, and both were worth running:
+
+- **Skips across every suite** — one, a Lima VM smoke test, honestly gated.
+- **Test groups with no CI entry** — none. `run-test-group.test.ts` already
+  cross-checks the workflow matrix *in both directions*, and has a "did we parse
+  any suites at all" sentinel. Better than what I would have written.
+
+**Where a guard already exists, say so and move on.** The value of an audit that
+finds nothing is knowing which direction not to look next time.
