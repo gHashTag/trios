@@ -4075,3 +4075,78 @@ If a transcript **does** carry a block while the review counted zero, the fault
 is the parser and this tool's own thesis is wrong for that row. It is reported
 separately and loudly. A detector with no branch that can contradict it is an
 argument, not an instrument.
+
+## Counting rows in a table keyed by the thing you are counting
+
+I set out to prove `sendBack` was a dead end and got a beautiful confirmation:
+**391 dispatches across 391 issues, every issue with exactly one dispatch, no
+issue ever re-dispatched.** Three separate numbers, all agreeing.
+
+All three were the same number. `queen_dispatch` is written with
+`ON CONFLICT (issue) DO UPDATE`, so it holds one row per issue **by schema**. A
+re-dispatch overwrites the row; it never inserts one. "Every issue has exactly
+one dispatch row" is a restatement of the primary key, and it cannot come out
+any other way — not on this board, not on an empty one, not on a board where
+every issue had been retried a hundred times.
+
+The archive told the truth: **605 attempts across 170 issues**, 113 attempted
+more than once, one attempted thirteen times. Work is re-dispatched constantly.
+
+**Before believing a count, ask what would have to be true for it to come out
+differently.** If nothing could, it is not a measurement. A uniqueness
+constraint answers every question about uniqueness with `yes`, and it will
+sound like evidence every time.
+
+### The unmeasured cost of a correct fix
+
+The reviewer decides whether an attempt spends the retry ceiling:
+
+```js
+const countsAgainstTheIssue = !(failed.length === 0 && unjudged.length > 0)
+```
+
+An attempt whose unmet criteria are **all unjudged** is not charged. That is
+right, and the reasoning is documented (#1420 FR-003): the bee went *silent*,
+not *wrong*, and charging silence was escalating work to a person that had
+never been assessed — the oldest after 91 hours.
+
+But a rule that forgives silence **once** forgives it **every** time, and
+nobody measured that side. **80 of 159** send-back issues have been attempted
+three or more times and charged nothing; #1558 thirteen times over twenty-six
+hours. A counter that never moves never reaches a ceiling, so the loop has no
+end — the failure mode the fix removed, reintroduced at the other extreme.
+
+**When a fix makes something free, ask what happens to the actor who does it
+every time.** The forgiving case and the pathological case are the same code
+path; only the frequency differs, and frequency is exactly what nobody checks.
+
+### `0` is a finding only after you have asked whether it is a `0`
+
+`send_backs = 0` on 153 rows looked like a broken counter. I nearly filed it as
+one. Two things had to be ruled out first, and both were checkable in one query:
+
+- **Is it NULL wearing a coalesce?** Every query I had written said
+  `coalesce(send_backs, 0)`, so a nullable column would print `0` for absent.
+  `information_schema` said `NOT NULL DEFAULT 0` — real zeros. Refuted.
+- **Is the running code the code I am reading?** The local file and the
+  deployed file differed: production had `AND $5::boolean` that my checkout did
+  not. **The deployed tree was ahead of my checkout, not behind it.** Reading
+  the local source would have produced a confident, wrong bug report.
+
+### A LEFT JOIN that finds no partner is an answer, not a silence
+
+The first draft called 51 issues *"no readable history"* because the join
+returned NULL. But the query **succeeded** — NULL there is positive evidence of
+a first attempt. This is the mirror image of the mistake this directory usually
+makes (accusing 42 bees whose silence was a failing query), and it is still a
+mistake: `unknown` must mean *the query failed*, never *it succeeded and said
+zero*. Handle whole-query failure once, at the top; everything below it is data.
+
+### My own clock audit caught me
+
+The first draft measured age from `reviewed_at`. `clocks.mjs` refused it and
+was right: the review sweep **rewrites that field**, so an issue looping for a
+day reads as "1h old" the moment it is re-reviewed. I had printed exactly that.
+Age now comes from the archive's `dispatched_at`, written once per attempt and
+never updated. **The instruments built in earlier rounds are the only thing
+that caught this round's error** — which is the argument for building them.
