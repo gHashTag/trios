@@ -4254,3 +4254,68 @@ So the board holds two distinct stuck groups:
   `tri unverdicted`.
 - **`sendBack` (153)** - a complete block the matcher could not read. Owned by
   the numbering fix and `tri rejudge`.
+
+## Build the gate, and point it at yourself first
+
+This round set out to write the gate that would have caught last round's defect:
+two implementations of one rule, disagreeing, behind a comment asserting they
+could not. **Its first run corrected the round that motivated it.**
+
+I had written in the fix PR that `missingVerdictSlots` was *"the right answer
+the repository already had and did not know it."* The gate's answer:
+
+```
+358 rows compared, 11 agree, 347 DIFFER
+A missed something B found on 196 rows; B missed something A found on 151.
+```
+
+**Both directions populated.** 156 of 358 verdict blocks carry no numbering at
+all, and slot matching finds nothing covered on *every one of those 156* — so
+wiring the "right answer" would have marked every criterion in **44% of the
+board** unanswered. The defect I had just fixed, with a wider blast radius.
+
+Neither implementation was the rule. Text matching was blind to the number;
+slot matching is blind to its absence. The fix that works is strip-*then*-text,
+and it survives only because the gate ran before anyone acted on my sentence.
+
+### A bare divergence count invites picking a winner
+
+"347 differ" is the number that would have made me swap implementations. The
+number that stops you is **196 versus 151** — populated in both directions. So
+the tool reports direction, and says explicitly that neither side is the rule
+when both are populated.
+
+**When comparing two implementations, never report only how often they differ.
+Report which one is missing what, in both directions.** One-way divergence
+means one is behind; two-way means neither is the specification.
+
+### The DO NOT SIMPLIFY note
+
+The two functions *resemble* each other, and that resemblance is exactly what
+makes the wrong move attractive to the next reader. A fix whose correctness
+depends on not being "cleaned up" needs the reason written at the call site, in
+the imperative, with the measurement attached — not in a commit message nobody
+will read at the moment they are deleting the line.
+
+### The instrument already existed, one level up
+
+`t27-parity.mjs` has been differentially testing the generated ring against its
+hand-written twin for weeks — 460 cases, across languages, and never once wrong
+about a divergence. The new gate is that same instrument pointed at two
+functions **in one file**.
+
+**Before building a new kind of check, look for the one you already trust and
+ask what it would take to aim it somewhere else.** Cross-language parity was
+the hard version; same-file parity is the easy version, and it is where drift
+is cheapest to create and hardest to see.
+
+### Agreement is not correctness, and say so in the output
+
+Two implementations can be wrong together, and no differential test can see it.
+Both `tri agree` and `tri rejudge` therefore print their own limit rather than
+letting a clean line be read as health. `rejudge` proved why: it reported 0 of
+159 disagreements while all 159 were wrong, because it compares the record with
+the code running in production and a deployed defect reproduces perfectly.
+
+**A gate that goes quiet in the exact case it cannot see must say which case
+that is, in the report, every time.**
