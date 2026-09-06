@@ -4150,3 +4150,107 @@ day reads as "1h old" the moment it is re-reviewed. I had printed exactly that.
 Age now comes from the archive's `dispatched_at`, written once per attempt and
 never updated. **The instruments built in earlier rounds are the only thing
 that caught this round's error** — which is the argument for building them.
+
+## The Queen's own numbering made her unable to read the answers
+
+The largest stuck group on the board was not stuck for any of the reasons the
+last four rounds proposed. **153 dispatches** sat in `sendBack` having spent no
+retry budget. Every one carried a complete, parseable `## VERDICT` block. **Not
+one had a single criterion that was tested and failed.** They had been returned
+for criteria they had already answered, some for more than a day.
+
+The brief hands the bee numbered slots and asks for `- 1. <criterion>: met`, so
+the parsed criterion begins `"1. "`. The promised text carries no number.
+`unjudgedCriteria` documents matching by containment **in either direction** —
+and one of those two directions could not fire even once, because the line
+always held a prefix the promise did not. Only `line.includes(want)` survived,
+and that demands the bee reproduce the criterion *whole*. Shorten it by one
+trailing sentence and the criterion reads as never answered.
+
+Stripping the prefix clears **148 of 153**.
+
+### A documented guarantee the data quietly withdrew
+
+The comment above the function is not wrong about what it wants. It states the
+two-direction rule and explains exactly why both are needed. The *data* then
+made one direction unreachable, and nothing re-read the guarantee against the
+input production had started sending. **A comment describing an invariant is a
+claim about the inputs as much as about the code**, and it expires when the
+inputs change.
+
+### The repository already had the right answer
+
+`missingVerdictSlots` strips the number and matches by slot. Run over the same
+153 it reports **every one complete**. Its own comment claims it and the review
+"read the SAME block ... so a line this counts as answered is exactly a line the
+review counts as judged." That was false. Two implementations of one rule, in
+one file, disagreeing — with a comment asserting they could not.
+
+This is the fourth appearance of the same shape ([[the boundary rule has three
+copies]], `can_start_another` in five, five SR-00 rules retyped in TypeScript).
+The lesson is now sharper: **when a comment says two functions agree, that is a
+test that has not been written.** Write it or delete the claim.
+
+### Why the suite missed it, which is the reusable part
+
+The test file already had a case for *each* direction of the match, including
+the truncated-quote case that exercises the direction the number killed. Every
+one used an **unnumbered** criterion — and production had not sent an unnumbered
+one since the brief began numbering slots.
+
+A numbered line that quotes its criterion in full still matches on the broken
+code. So the failure needs **two** properties at once: numbered *and* shortened.
+The numbered cases were never written, and the shortening cases were never
+numbered.
+
+**When a template changes the shape of an input, every test using the old shape
+silently stops testing production.** The cases still pass, the coverage number
+does not move, and nothing announces that the suite is now describing a message
+format nobody sends. Ask of any fixture: *would production produce this today?*
+
+### Five of my six new tests did not test the bug
+
+The first suite I wrote passed 5-of-6 against the **unfixed** source. Only the
+shortening case discriminated. A test that passes before the fix is a guard, not
+a proof, and shipping six cases while believing all six caught the defect would
+have left the next person with a false sense of what is pinned. Run every new
+case against the old code first, and **label the ones that pass on both sides as
+guards** — they are worth keeping, for a different reason.
+
+### Two hypotheses killed before the right one
+
+- **`MAX_TURNS`.** `stopWhen: [stepCountIs(100)]`, avg input 1.72 M tokens, max
+  6.06 M, transcripts ending mid-sentence — everything fit. Refuted by counting
+  turns: the looping conversations average **43** tool calls against the
+  accepted ones' **49**. They stop early and of their own accord.
+- **A race with the review.** Also refuted: text stopped arriving on average 68
+  seconds *before* the review, and in **zero** conversations did any text arrive
+  after it.
+
+Both were plausible, both had supporting numbers, and both were wrong. The
+measurement that settled each took one query.
+
+### Two adjacent groups, opposite causes, and the temptation to carry a finding across
+
+An earlier round measured the **`wait`** rows and found five of five with no
+`## VERDICT` block anywhere: the workers stopped before concluding. **That
+holds** - re-measured today it is **15 of 15**.
+
+The trap was assuming it explained the neighbours. `sendBack` and `wait` sit
+side by side on the same board, both non-terminal, both described as "the review
+could not judge it". In `sendBack`, **149 of 153 DID write a block**. Same
+board, same brief, same workers, **opposite cause**.
+
+I nearly wrote the correction the wrong way round - claiming the earlier round
+had been refuted by a bigger sample, when it was right about its own population
+and I had simply changed populations without saying so. **Before a new
+measurement corrects an old one, check they are counting the same rows.** A
+finding is attached to the set it was taken from, and moving it to an adjacent
+set is a new claim needing new evidence, not a bigger sample of the old one.
+
+So the board holds two distinct stuck groups:
+
+- **`wait` (15)** - no block at all. The worker really did stop early. Owned by
+  `tri unverdicted`.
+- **`sendBack` (153)** - a complete block the matcher could not read. Owned by
+  the numbering fix and `tri rejudge`.
