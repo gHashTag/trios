@@ -4516,3 +4516,68 @@ is loud rather than merely survivable.
   and `rememberIssues` all vanished from the published text and I only found it
   by reading the comment back. **Write prose to a file and pass `--body-file`**,
   and read back anything published before believing it landed.
+
+## Seven tests skipped in CI for a year, and the file's header said so
+
+`queen-round.test.ts` guards its behaviour cases with `it.if(present)`, where
+`present` means "the policy binary exists". Nothing in the workflow built it.
+**Seven cases skipped on every run, green.**
+
+This is the file written *because* nothing in the repository called `runRound` —
+the one whose header records a critic deleting the lease guard, the stand-down
+warning and the heartbeat sweep one at a time and watching 364 tests stay green.
+In CI it proved nothing from the day it merged.
+
+Its header even states the limit honestly: *"a quiet skip is how a gate comes to
+report success it never earned… The first test always runs, so the path cannot
+drift unnoticed."* But that first test asserts the **path string** — true whether
+or not anything is at the end of it. **A sentinel that cannot fail for the
+reason you are worried about is decoration.**
+
+### Grep your CI logs for `(skip)`
+
+It is one command and it found seven. Coverage percentages and green ticks do
+not distinguish "ran and passed" from "did not run".
+
+### A gate that changes the thing it measures is measuring itself
+
+Making the binary available took four attempts, and the *tempting* one was
+wrong:
+
+| attempt | what happened |
+|---|---|
+| build in the Swift image | built fine; every test then failed `exit 127: libswiftCore.so` |
+| `--static-swift-stdlib` | ran — and links `libFoundationEssentials.a`, a **different Foundation** |
+| assert the binary exits 0 | broke the step: it answers a JSON question, so `{}` exits non-zero *by design* |
+| dynamic build + runtime lifted from the image | production linkage; real failures surfaced |
+
+Static linking made the red go away by replacing the standard library under the
+program. **When a fix makes a failure disappear, ask whether it removed the
+failure or the measurement.**
+
+And my own check was too strict before it was too loose: demanding a clean exit
+tested the *question*, not the linkage. **Assert the narrowest thing that means
+what you mean** — here, only exit 127 means "cannot start".
+
+### A fixture that builds a shape production never emits tests a program that does not exist
+
+Four cases passed on macOS and failed on Linux. Widening one assertion from
+`expect(answer.allowed).toBe(false)` to `expect(answer).toMatchObject(...)` made
+the binary say why — `"Expected date string to be ISO8601-formatted."` — because
+the fixture wrote `new Date().toISOString()`, which always carries milliseconds,
+and Swift's `.iso8601` refuses a fractional second.
+
+**The product had fixed this months ago.** `isoSeconds` strips the fraction, and
+its comment records the identical error. The fixture had been reproducing a
+solved bug, and nothing noticed because it never ran.
+
+I checked production before raising an alarm: the board carries
+`2026-08-21T21:32:54Z`, no fraction. **The deployed Queen was never affected.**
+The instinct to shout "live defect!" was wrong, and one query settled it.
+
+### Widen the assertion before theorising about the answer
+
+`toBe(false)` reports `Received: undefined` — the least useful half of the fact
+when the program answers from a platform you cannot reproduce locally.
+`toMatchObject` prints the whole object, and the whole object contained the
+entire diagnosis.
