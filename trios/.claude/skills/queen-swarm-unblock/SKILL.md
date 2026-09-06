@@ -4319,3 +4319,135 @@ the code running in production and a deployed defect reproduces perfectly.
 
 **A gate that goes quiet in the exact case it cannot see must say which case
 that is, in the report, every time.**
+
+## A gate that only works on the case it was written for is not a gate
+
+`tri agree` was born from one pair in one shape: two functions in one
+TypeScript file, in one process. The obvious next move was to add more pairs of
+that shape. The useful one was to add the **hardest** shape available and see
+whether the design survived it: one rule, **three languages, three processes** —
+JavaScript in the loop, TypeScript in the deployed server, Swift in the SR-00
+ring.
+
+It survived, and the design changed in three places under the pressure, which
+is the point of doing it:
+
+- **A `local` pair kind**, because not every implementation lives where the
+  first one did. Hard-wiring "run it in the container" would have made the tool
+  a synonym for its first use.
+- **One build per script, shared by every pair reading it.** Building the ring
+  twice to answer two questions about the same rows could return two different
+  answers for one run — the exact confusion the tool exists to remove.
+- **Two pairs rather than one three-way comparison.** "A and B and C agree"
+  hides *which two* parted company, and that is the only part anybody can act
+  on.
+
+### Agreement, reported plainly, is a real result
+
+All three return identical path lists on **all 521** issue bodies with a
+boundary section, and on 18 adversarial shapes besides. The honest report says
+*regression guard, not a find* — and keeps the pair, because this is the rule
+that once had two copies knowing `## Границы` and one not, and **seven bees were
+accused of straying** outside a boundary they had honoured.
+
+A gate whose value depends on finding something will be deleted the first
+quiet week. A gate that states plainly "these agree today, and here is what
+that does and does not prove" earns its place in the chain.
+
+### "We could not look" is not "we looked and it was clean"
+
+With `swiftc` unavailable the run reports 521 rows unreadable, **names the side
+that would not build**, claims nothing, and exits **3 — not 0**. A pair that
+compared zero rows stopped counting as a pair that ran.
+
+**Put that distinction in the exit code, not only in the prose.** The chain
+reads exit codes; a human reads prose; and the case where they disagree is
+exactly the case where nobody is reading.
+
+### Extract the implementation, never reimplement it
+
+The TypeScript side is brace-matched out of the shipping ref's own text and
+imported. Reimplementing it inside the comparison tool would have made that
+tool **the fifth copy** of the rule — inside the file whose entire purpose is to
+complain about there being four.
+
+### A justification outlives the fact that justified it
+
+The fourth boundary copy explains itself: *"duplicated here because that copy is
+module-private."* It is `export function` now. The duplication survives on a
+reason that has expired, and nothing re-reads a justification once it is
+written. **When you find a duplicate, check whether its stated reason is still
+true before preserving it** — half of them are already free to delete.
+
+### My own false success, again
+
+`swiftc ... 2>&1 | head -5; ls -la /tmp/bswift && echo "swift probe built"` —
+the compile **errored**, and the line printed **"swift probe built"**, because
+`ls` found a stale file and `&&` only ever tested `ls`. That is the shape this
+entire directory exists to hunt, produced by me, in a shell one-liner, while
+building a tool about false agreement. Test the thing you care about
+(`[ -x path ]` after removing it), not something adjacent to it.
+
+## The bees stopped because the round died, and nothing measured either
+
+The operator's golden rule: **the bees work, and start again the moment they
+finish.** Asked why they were idle, I found the swarm had been idle **49% of the
+last twelve hours** — and that no instrument in this directory had ever measured
+it.
+
+### An instant is not a rate
+
+`bees running (of 4)` had been on the dashboard for weeks. It is **one sample
+per iteration** of a quantity that is **bimodal** — 49% of minutes at zero, 37%
+at four. It read 4 as often as 0, and could never have shown this.
+
+**A rate needs a window; an instant needs none, which is exactly why the instant
+is the one that gets measured.** When a metric can be taken without choosing a
+time range, suspect that convenience is why it exists.
+
+### The cause named itself in a comment, years before it bit
+
+Every GitHub read in the round went out **unauthenticated**. The anonymous limit
+is 60 requests an hour — and the file *said so*:
+
+> *"a second round trip per candidate against an anonymous rate limit that is 60
+> an hour"*
+
+The author knew the number and **designed around the limit instead of lifting
+it**. `GH_TOKEN` was in the service environment the whole time; `/rate_limit`
+answered **15000 of 15000 remaining**. That measurement is what turns "we are
+being throttled" into "we are throttled at the anonymous tier while holding a
+key to the other one".
+
+`openIssues` **throws** on a bad status, so one 403 takes the whole round —
+no review, no choice, no dispatch. **135 of 136 recent round failures were that
+403.** The dispatch loop was never the problem: when a round survived, it filled
+all four slots in five seconds.
+
+**When you find a comment stating a limit, check whether the code is living
+inside it by necessity or by neglect.**
+
+### Two wrong diagnoses, both killed by reading before writing
+
+- **"The round starts one bee."** The public status still says so, and I quoted
+  it. The dispatch loop was fixed long ago and now fills capacity — the
+  *comment* was stale. I nearly shipped a fix for a solved problem.
+- **"The review pass is too slow."** I had the patch half-designed when I
+  measured the pass: **15 rows**, ~15 ms each. Not the bottleneck at all.
+
+Both were plausible, both had supporting evidence, and both would have been
+wasted work. The log's own `{"error":"GitHub returned 403"}` settled it in one
+query. **Read the failure text before theorising about the failure.**
+
+### What I could not do, and did not fake
+
+`POST /queen/lease/tick` would have woken the swarm immediately — and it is
+**guarded by a token I do not have.** I did not try to work around it. The fix
+ships as a PR and waits for the operator, and the report says so plainly rather
+than implying the problem is solved.
+
+### The calibration case caught me again
+
+A twenty-minute window sampled with `t <= to` holds **twenty-one** one-minute
+buckets, so a half-idle window measured 52%. My own new test caught it before
+it shipped. Write the case with the number you can compute by hand.
