@@ -4659,3 +4659,52 @@ Two audits this round found nothing, and both were worth running:
 
 **Where a guard already exists, say so and move on.** The value of an audit that
 finds nothing is knowing which direction not to look next time.
+
+## The list shrank 11 → 9 → 6 → 3, and every step was a false accusation withdrawn
+
+`tri unwired` reports gates nothing runs. Its first answer was **eleven**. The
+true answer was **three**, and each correction came from the tool seeing one
+more layer:
+
+| layer it learned to follow | what it had wrongly accused |
+|---|---|
+| prerequisites | `check`, `verify` — no recipe at all, only a list of other targets |
+| `$(MAKE) x` inside a recipe | `check-bypass` — one line, `$(MAKE) check` |
+| a shell script | `drift-guard` — `bash run_chat_sse_e2e.sh`, compiler inside |
+
+**A static scan sees the layer it was written for and confidently mis-reports
+everything one level deeper.** Each round of this felt like the last one.
+
+### Where the third answer came from
+
+I stopped adding layers and added a class instead: `opaque` — *this runs a
+script and I cannot see inside it.* That is not a weaker answer than `portable`;
+it is the accurate one, and it is what stops the next reader trusting a guess.
+
+**When a heuristic keeps being wrong in the same direction, the fix is often a
+new answer rather than a deeper scan.**
+
+### Both errors were caught by the target describing itself
+
+`check-bypass` prints `"never for CI"` in its own recipe. `drift-guard`'s
+comment says *"slow, explicit, never accidental."* The tool disagreed with each
+target's own account of itself, and the target was right both times.
+
+**Read what the thing under audit says about itself before believing your
+measurement of it.**
+
+### Measure the gate before wiring it
+
+Five gates looked portable. Four were run against the shipping ref first — all
+passed in seconds, and they are wired. The fifth ran for four minutes without
+finishing and is **deliberately left unwired**, with the reason written where the
+next person will look.
+
+**Wiring a gate that hangs is worse than leaving it unwired**, and "the audit
+said portable" is not a substitute for running it once.
+
+### Separate steps, not one `make a b c d`
+
+Make stops at the first failure. One step running four gates reports one broken
+gate and hides the state of the three behind it — and *which* gate failed is the
+whole content of the answer.
