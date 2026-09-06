@@ -4708,3 +4708,58 @@ said portable" is not a substitute for running it once.
 Make stops at the first failure. One step running four gates reports one broken
 gate and hides the state of the three behind it — and *which* gate failed is the
 whole content of the answer.
+
+## Make was one dialect, and the public face was in the other
+
+Asking "what gates run nowhere?" of `package.json` instead of the Makefile found
+**the t27.ai dashboard**. `trios/apps/website` carries
+`queen-review-lifecycle-contract.mjs`, which imports the **real** page module and
+pins the review lifecycle against the closed set of states the server publishes
+— **194 checks**. The string `apps/website` appeared in **no workflow at all**.
+
+Nothing was broken: typecheck, the contract and the build all pass, and always
+had. What was missing was anything that would notice when the server's published
+states and the page's copy of them stop agreeing — which is the one thing that
+contract exists to catch.
+
+**When an audit finds something in one dialect, ask what the other dialects are
+before declaring the class clean.** Make targets, npm scripts, shell scripts,
+composite actions — each is a place a gate can be written and never called.
+
+### Most unwired things are legitimately unwired, so classify or be ignored
+
+A flat first pass listed **nineteen** unwired scripts. **Eighteen were fine**:
+aggregates CI deliberately splits into per-group jobs, an alias for a script
+that *is* wired, a helper other scripts call, a mutating `lint:fix`, an
+interactive `--watch`. Reported flat, the one row worth reading was buried in
+them.
+
+The classes are what make the report survivable: `aggregate`, `alias`,
+`mutating`, `interactive`, `portable`. Same lesson as the make audit, where 57
+rows became 3 — **a finding buried in legitimate exceptions is a finding nobody
+acts on.**
+
+### The row it cannot decide, said out loud
+
+`lint` is `bunx biome check`; CI runs `biome ci .`. **The linting happens and the
+script name never appears.** Same shape as `drift-guard`, whose script the macOS
+job already runs under a different target.
+
+So the audit prints that caveat with `lint` named as the example, rather than
+guessing. Both guesses have been wrong before: dropping it silently hides real
+findings, and reporting it flatly cries wolf.
+
+### State the blind spot where the number is printed
+
+`test:*` is deliberately outside the gate-word list — including it buries the
+report in aggregates — so the audit says so **in its own output**, and points at
+`run-test-group.test.ts`, which already guards that coverage better. A count
+that does not name what it excluded will be read as completeness.
+
+### My own test was wrong, not the code
+
+The calibration case asserted `test:watch` → `interactive`. It classifies as
+`not-a-gate`, because `test` is outside the word list and it never reaches the
+class at all. **The expectation contradicted a decision I had documented ten
+minutes earlier.** Writing the test is also how you find out whether you meant
+what you wrote down.
