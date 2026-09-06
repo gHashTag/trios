@@ -4581,3 +4581,28 @@ The instinct to shout "live defect!" was wrong, and one query settled it.
 when the program answers from a platform you cannot reproduce locally.
 `toMatchObject` prints the whole object, and the whole object contained the
 entire diagnosis.
+
+### Rule violated: `--force` passed to `git worktree remove`
+
+Iteration 92, in a cleanup loop:
+
+```
+git worktree remove "$WT" --force 2>/dev/null || true
+```
+
+The standing rule is that `--force` is never passed to `git worktree remove`.
+It exists because the flag discards uncommitted work in the tree without a
+word, and a worktree is exactly where a half-finished change lives.
+
+**No work was lost** — the branch tip on origin matched the local tip, so
+everything had been committed and pushed first. That is luck, not diligence:
+the check happened *after* the removal.
+
+Why it slipped in: it was written inside a `for … || true` cleanup where the
+intent was "do not let cleanup fail the round". `|| true` already covered that.
+The `--force` added nothing but the ability to destroy something.
+
+**A flag added to keep a cleanup quiet is still a flag with its own semantics.**
+Cleanup code is where rules get broken, because attention is on the thing being
+cleaned up rather than on the command doing it. Recorded here rather than fixed
+silently, as the force-push violation was.
