@@ -4763,3 +4763,53 @@ The calibration case asserted `test:watch` → `interactive`. It classifies as
 class at all. **The expectation contradicted a decision I had documented ten
 minutes earlier.** Writing the test is also how you find out whether you meant
 what you wrote down.
+
+## When the system declares the thing you are inferring, read the declaration
+
+Four rounds of guessing which make targets are gates, by looking for `check`,
+`guard`, `drift` in their names. Then I read the one line that says it outright:
+
+```
+check: check-selftest keychain-doors type-floor t27-rings t27-lowering chain
+       make-dollars recipe-backticks empty-sources sources-drift ... 24 of them
+```
+
+**The repository declares its own gate suite. CI ran 8 of the 24.**
+
+And the word list had been badly wrong: of thirteen unwired gates it declares,
+**eleven were classified `not-a-gate`** — because they are named after their
+**subject**, not their function. Nothing in `type-floor`, `vendor-step`,
+`variant-fence` or `t27-rings` says "gate". `t27-rings` runs a 460-case parity
+between the generated ring and the policy binary *and* a Verilog simulation, and
+my audit called it not a gate.
+
+**A heuristic that infers intent is a substitute for a declaration you have not
+looked for yet.** Look for the declaration first; keep the heuristic for what
+falls outside it.
+
+### The best gate in the suite is the one I refused to wire
+
+`t27-rings` generates Verilog from `rings/T27-00/queen_core.t27`, compiles it
+with `iverilog`, simulates under `vvp`, and checks the answers against the Swift
+table. It passes. It is the most impressive thing in the repository.
+
+It is **not wired**, and that is the right call: `t27c` is built from a
+**separate repository** this checkout does not contain, and the target is
+written to **skip rather than fail** when the toolchain is absent. Wiring it
+would produce a green job that runs nothing — the exact defect three rounds of
+work were spent removing.
+
+**Before wiring a gate, ask what it does when its dependency is missing.** A
+gate that skips is worse than no gate, because it reports success.
+
+### Four "failures" that were the worktree dropping files
+
+`type-floor`, `recipe-backticks`, `skill-frontmatter` and `t27-rings` all
+reported `No rule to make target`. The Makefile defines all four. The worktree
+had **lost `trios/Makefile`** mid-session — the file flicker this repo has
+recorded before.
+
+I nearly reported four broken gates. What stopped it was the contradiction being
+too sharp to ignore: the target is defined in a file I had just read. **When a
+tool reports something impossible, suspect the environment before the code**,
+and re-run in a fresh checkout rather than reasoning about the impossible result.
