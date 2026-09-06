@@ -60,32 +60,54 @@ All 9 citation keys used in Paper 1 resolve against `references.bib`
 entries compiles with **0 BibTeX warnings** and renders every entry with its
 DOI.
 
-## The compendium does not build — and did not before this change
+## The compendium now builds — it never did before
 
-`tectonic main.tex` fails at `frontmatter/fm-02-attribution.tex:67`:
+`tectonic main.tex` now produces a **139-page PDF** with the bibliography
+typeset at the end. Before this work it did not compile at all.
 
-```
-- \textbf{Pellis fine-structure formula (golden-angle)}: ... + (3$\varphi$$)^{-5}
-```
+The source is ASCII-flattened mathematics from a PDF/markdown conversion, and
+it carried five distinct classes of fatal error. `mathcheck.pl` reports the
+first two; all are fixed by `mathfix.pl` plus a few hand edits:
 
-The `$$` opens display math mid-line. That file was never touched by this work.
+| Class | Count | Example |
+|---|---|---|
+| line ends mid-math, span runs on and dies at the paragraph break | 23 | `...also uses $\varphi` |
+| `^` / `_` in text mode | 103 | `R^+`, `F^*(theta)` |
+| double-escaped underscore — `\\` is a line break, `_` then bare | 2 | `\texttt{uio\\_out}` |
+| markdown `#` table header turned into `\section{}` inside `tabular` | 2 | `\section{\& Item \& Required Answer \\}` |
+| stray closing brace from a mangled superscript | 1 | `{0,1}D}` was `{0,1}^D` |
 
-A second, independent failure sits at `chapters/p1-03-symbolic-grammar.tex:51`:
-`R^+` uses `^` in text mode. Also outside the edited region.
+`mathfix.pl` closes the open spans and escapes the stray `^`/`_`. It does **not**
+reconstruct the intended mathematics: the goal was a document that builds, not
+one that is typeset correctly.
 
-Both are pre-existing. Together with the 436 unfilled `\_\_C0\_\_`-style
-placeholders across 17 files, they mean **this document has never been compiled
-successfully**. The bibliography is correct and verified in isolation; it cannot
-be verified in situ until the math errors are fixed.
+**That distinction matters.** The conversion damage is still there and still
+visible in the output — `$\in$fty` where `infty` was meant (the letters "in"
+became the set-membership symbol), `muT(x)`, `lambda^*L`, `alpha-1`. Rendering
+the flattened notation properly is a separate and much larger job.
+
+### One correction made during this work
+
+The first version of `mathfix.pl` recognised only `$...$` as math and so
+escaped the `^` inside `\ensuremath{{}^{2}}` in `main.tex`, breaking all
+thirteen Unicode superscript definitions (⁻ ⁺ ⁰ ¹ … ⁿ). They would have
+rendered as a literal caret. Reverted; `main.tex` now differs from the
+bibliography commit by nothing. The `equation` and `align` environments were
+checked and were never touched.
 
 ## Remaining work
 
-1. **Fix the LaTeX math errors** so the compendium compiles at all. Unknown
-   count — two found in the first two build attempts, so expect more.
-2. **20 files in Papers 2 and 3** still carry the three-preprint boilerplate.
-   `references.bib` already covers the shared sources; the same two scripts
+1. **Repair the flattened mathematics.** The document compiles but much of its
+   notation is wrong in the output. This is the large remaining task.
+2. **Unicode characters silently dropped.** The build warns on `…`, `⟂`, `≲`,
+   `ℚ` — absent from the `ec-lmr10` font and missing from the
+   `\newunicodechar` table in `main.tex`. They vanish from the PDF without an
+   error.
+3. **20 files in Papers 2 and 3** still carry the three-preprint boilerplate.
+   `references.bib` already covers the shared sources; the same scripts
    generalise.
-3. **436 placeholders** (`\_\_C0\_\_`, `\_\_M0\_\_`, …) across 17 files,
-   including the CRediT table in `frontmatter/fm-02-attribution.tex`.
-4. Decide **Catalog42 vs Catalog15** — the compendium says Catalog42
+4. **436 placeholders** (`\_\_C0\_\_`, `\_\_M0\_\_`, …) across 17 files,
+   including the CRediT table in `frontmatter/fm-02-attribution.tex`. They now
+   print literally into the PDF.
+5. Decide **Catalog42 vs Catalog15** — the compendium says Catalog42
    throughout; the short paper says Catalog15.
