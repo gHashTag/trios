@@ -2860,6 +2860,92 @@ check('the exposure probe never prints a body', () => {
   if (/%\{http_code\}/.test(src) === false) throw new Error('the probe is not reading the status code')
 })
 
+// I CALLED FOUR DETERMINISTIC FAILURES "THE FLAKY BROWSER-TOOL FAMILY" FOR
+// THREE ROUNDS, IN WRITING, WITHOUT MEASURING IT ONCE.
+//
+// Measured over twelve runs: `navigation tools` and `window tools` fail 12/12.
+// They are not weather; they are broken, and calling them flake is how a real
+// failure gets a permanent excuse. The genuinely intermittent ones appeared
+// once each in twelve.
+// A GREEN RUN IS NOT AN UNREADABLE RUN, AND BOTH MY CI TOOLS SAID IT WAS.
+//
+// `gh run view --log-failed` prints NOTHING when every job passed, so an empty
+// string meant both "the whole suite is green" and "the fetch failed". The very
+// first green run either tool ever saw was reported as "NOTHING was compared" -
+// about the run that proved a four-round hunt was over.
+//
+// That is the empty-versus-absent defect this loop has found in a boundary
+// parser, a judge packet and a config file, committed here by the instruments
+// written to catch it. The run's own job list settles it: completed with no
+// failed job is an EMPTY failure set, which is a fact.
+check('a run with no failures is compared, not called unreadable', async () => {
+  const C = await import('./ci-diff.mjs')
+  const green = C.runLog('123', (cmd) => (cmd.includes('--log-failed') ? '' : '0'))
+  if (green !== '') throw new Error(`a green run returned ${JSON.stringify(green)} instead of an empty failure set`)
+  const r = C.compareRuns('(fail) a > one', green)
+  if (r.unknown) throw new Error('a green candidate was reported as unreadable')
+  if (r.fixed.join() !== 'a > one') throw new Error(`the fix was not counted: ${JSON.stringify(r.fixed)}`)
+})
+
+check('a run whose job list cannot be read is still unreadable', async () => {
+  const C = await import('./ci-diff.mjs')
+  // The distinction only means something if the OTHER branch still exists.
+  const broken = C.runLog('123', () => '')
+  if (broken !== null) throw new Error('an unfetchable run was treated as green')
+  if (!C.compareRuns('x', broken).unknown) throw new Error('an unreadable run was compared anyway')
+})
+
+check('the frequency tool tells a green run from an unfetchable one too', async () => {
+  const F = await import('./flaky.mjs')
+  const green = F.failuresOf('1', { run: (cmd) => (cmd.includes('--log-failed') ? '' : '0') })
+  if (!Array.isArray(green) || green.length) throw new Error(`green run gave ${JSON.stringify(green)}`)
+  const broken = F.failuresOf('2', { run: () => '' })
+  if (broken !== null) throw new Error('an unfetchable run was treated as green')
+  // AND THE CONSEQUENCE, which is why this matters: dropping green runs from
+  // the denominator inflates every surviving failure toward "deterministic"
+  // exactly when it has stopped being one.
+  const t = F.tally([
+    { id: '1', sha: 'a', failures: ['x'] },
+    { id: '2', sha: 'b', failures: [] },
+  ])
+  if (t.rows[0].kind !== 'unstable') throw new Error(`1 of 2 was called ${t.rows[0].kind}`)
+})
+
+check('a failure seen in every readable run is deterministic, not weather', async () => {
+  const F = await import('./flaky.mjs')
+  const t = F.tally([
+    { id: '1', sha: 'a', failures: ['always', 'sometimes'] },
+    { id: '2', sha: 'b', failures: ['always'] },
+    { id: '3', sha: 'c', failures: ['always'] },
+  ])
+  const by = Object.fromEntries(t.rows.map((r) => [r.name, r]))
+  if (by.always.kind !== 'deterministic') throw new Error(`3/3 was called ${by.always.kind}`)
+  if (by.sometimes.kind !== 'unstable') throw new Error(`1/3 was called ${by.sometimes.kind}`)
+  if (by.always.commits !== 3) throw new Error('the commit count is what makes a window interpretable')
+})
+
+check('an unreadable run is excluded from the denominator, never counted as a pass', async () => {
+  const F = await import('./flaky.mjs')
+  // THE DEFECT THIS PREVENTS: counting a run whose log could not be fetched as
+  // "it passed there" manufactures intermittency out of network trouble, and a
+  // real failure then reads as flake.
+  const t = F.tally([
+    { id: '1', sha: 'a', failures: ['always'] },
+    { id: '2', sha: 'b', failures: null },
+    { id: '3', sha: 'c', failures: ['always'] },
+  ])
+  if (t.readable !== 2 || t.unreadable !== 1) throw new Error(`readable=${t.readable} unreadable=${t.unreadable}`)
+  if (t.rows[0].kind !== 'deterministic') throw new Error('an unreadable run turned a deterministic failure into an unstable one')
+  if (!F.render(t).includes('could not be read')) throw new Error('the report hides that a run was skipped')
+})
+
+check('no readable run at all is reported as nothing measured', async () => {
+  const F = await import('./flaky.mjs')
+  const t = F.tally([{ id: '1', sha: 'a', failures: null }])
+  if (t.readable !== 0) throw new Error('an unreadable run was counted')
+  if (!F.render(t).includes('NOTHING was measured')) throw new Error('an empty measurement was reported as a clean result')
+})
+
 check('a CI comparison names the new failures and never counts them', async () => {
   const C = await import('./ci-diff.mjs')
   const base = '(fail) a > one [1.20ms]\n(fail) b > two [3ms]\n'
