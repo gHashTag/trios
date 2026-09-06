@@ -4451,3 +4451,68 @@ than implying the problem is solved.
 A twenty-minute window sampled with `t <= to` holds **twenty-one** one-minute
 buckets, so a half-idle window measured 52%. My own new test caught it before
 it shipped. Write the case with the number you can compute by hand.
+
+## A rule that expired teaches more than a rule that was wrong
+
+I wrote that the author had "designed around the limit instead of lifting it".
+The doc comment was more honest than my framing:
+
+> *"Anonymous on purpose: the repository is public, this is a read, and a token
+> here would be a credential in a container for no gain. GitHub's anonymous rate
+> limit is 60/hour against a loop that ticks at most **a few times an hour**."*
+
+Every clause was **true when written**. The loop ticks twelve times an hour now.
+Nothing re-read the sentence when the cadence changed, because a comment that
+was correct does not ask to be re-read.
+
+So the sentence is **kept in place and quoted** rather than deleted, above the
+line that fixes it. Deleting it would leave the next reader with a fix and no
+account of why it was ever otherwise.
+
+**When you find a stated constraint, ask which of its clauses is a measurement
+and which is an assumption about the caller.** The assumption is what expires,
+and it expires silently.
+
+### Measure the rate, do not compute it from the code
+
+I derived "two requests per round, twenty-four an hour" by reading the paging
+loop, and it looked comfortably inside the sixty. Measured from inside the
+container across one round:
+
+```
+t0  remaining 23/60      t1  remaining 14/60   (7 min later)
+    -> 9 requests in 7 minutes -> about 77/hour
+```
+
+**Three times my reading, and over the limit.** The code showed the calls I
+found; it could not show the ones I did not think to look for. And the 41.7
+minute maximum idle gap I had measured the round before turned out to be the
+rate-limit **reset window**, which no amount of code-reading would have told me.
+
+### Bookkeeping must not be able to stop the primary work
+
+Three separate failures idled the whole swarm: a 403 in `openIssues`, and
+exceptions in the review and the reaper. All the same shape — *housekeeping
+throwing takes the round with it, and the round is what starts bees.*
+
+The test for this class: **what does a later round recover, and what is gone for
+good?** A review re-reads its rows next round by construction. A reap re-finds
+its stalled dispatch. But the dispatch that did not happen is idle minutes
+already spent — the one thing no later round can give back. So the housekeeping
+degrades and logs; the dispatch proceeds.
+
+Not blanket `try/catch`: each is logged at warn with its reason, and `tri idle`
+reads those lines back out of the service log, so a review failing *every* round
+is loud rather than merely survivable.
+
+### Two defects of my own, in one round
+
+- **My patch split a function from its doc comment.** Inserting a helper
+  immediately above `openIssues` left that function's careful paragraph about
+  pagination documenting a headers helper instead. Inserting *near* a symbol is
+  not inserting *before* it — check what the anchor already owns.
+- **The shell ate my pull-request comment.** Backticked identifiers inside a
+  double-quoted `--body` became command substitutions: `GH_TOKEN`, `openIssues`
+  and `rememberIssues` all vanished from the published text and I only found it
+  by reading the comment back. **Write prose to a file and pass `--body-file`**,
+  and read back anything published before believing it landed.

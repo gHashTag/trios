@@ -1,36 +1,35 @@
 ╭─ TRIOS CONTINUOUS LOOP   cron */15   job 23d6fe89 ───────────────────────╮
-│ iteration  #90    started 2026-09-06T06:01:27Z                           │
-│ subject    the bees stopped because the round died on an anonymous GitHu…│
+│ iteration  #91    started 2026-09-06T06:55:31Z                           │
+│ subject    bookkeeping must not be able to stop the primary work         │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ SWARM   value, and how it moved since the last iteration                 │
-│   bees running (of 4)                4             =                     │
-│   dispatches finished                387           =                     │
+│   bees running (of 4)                1          -3                       │
+│   dispatches finished                390        +3                       │
 │   candidates skipped                 198           =                     │
 │     fenced by parked paths           -                                   │
 │     claimed by parked dispatch       0             =                     │
 │     done but never closed            -                                   │
-│   hours 12: no bee working, percent  50          new                     │
+│   hours 12: no bee working, percent  46         -4                       │
 │   send-backs looping with no ceiling 79            =                     │
 │   rows where one rule answers two ways 347           =                   │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ WORK THIS ITERATION                                                      │
-│   ● ROOT CAUSE: GitHub read anonymously, 60 req/h      PR #476           │
-│   ● one 403 kills a whole round: 135 of 136 failures   from the log      │
-│   ● tri idle: idleness over a window + why rounds died PR #475           │
-│   ● tri agree x3: one rule, three languages            521 agree         │
-│   ● merge + deploy - the bees stay idle until then     operator's act    │
+│   ● measured the burn: 77 req/h against a limit of 60  not 24, as read   │
+│   ● a 403 after page 1 truncates, it does not kill     PR #476           │
+│   ● review and reap can no longer idle the swarm       deadlock-proof    │
+│   ● 3 new CI tests, all green in server-api            14 jobs pass      │
+│   ● merge + deploy - still the only thing that helps   operator's act    │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ ANOMALIES   found by this iteration, against its own work                │
-│   ! the swarm was idle 49% of 12h and NO instrument here measured it     │
-│   ! 'bees running (of 4)' is an instant of a bimodal quantity - it read …│
-│   ! I nearly fixed 'the round starts one bee' - that comment is stale, t…│
-│   ! I nearly fixed 'the review is slow' - it is 15 rows at 15ms          │
-│   ! my own new test caught a fencepost: a 20-min window sampled 21 bucke…│
-│   ! one round failed on 'deadlock detected' - unexplained, nothing else …│
-│   ! POST /queen/lease/tick would wake the swarm but is token-guarded; no…│
+│   ! I computed 24 req/h from the code; measuring gave 77 - three times o…│
+│   ! the 41.7-min idle gap IS the rate-limit reset window, not a coincide…│
+│   ! 'anonymous on purpose' was TRUE when written - the cadence changed u…│
+│   ! my patch split openIssues from its own doc comment                   │
+│   ! the shell ate backticked identifiers in my PR comment; caught by rea…│
+│   ! the catch itself has no unit test - a full round needs a live databa…│
 ├──────────────────────────────────────────────────────────────────────────┤
 │ THREE WAYS TO CONTINUE                                                   │
-│   1. deploy #476 - 60/h becomes 15000/h and the rounds stop dying        │
-│   2. chase the 'deadlock detected' round failure - one occurrence, no ex…│
-│   3. make a failing round loud: 135 failures surfaced nowhere but a log …│
+│   1. deploy #476: three fatal paths closed, 60/h becomes 15000/h         │
+│   2. a live-Postgres round test in server-pglive - the catch is untested │
+│   3. make a failing round loud in /queen/status, not only in the log     │
 ╰──────────────────────────────────────────────────────────────────────────╯

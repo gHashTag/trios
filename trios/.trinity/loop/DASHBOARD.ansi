@@ -1,36 +1,35 @@
 ╭─ [1mTRIOS CONTINUOUS LOOP[0m[2m   cron */15   job 23d6fe89[0m ───────────────────────╮
-│ [2miteration[0m  [1m#90[0m    [2mstarted[0m 2026-09-06T06:01:27Z                           │
-│ [2msubject[0m    the bees stopped because the round died on an anonymous GitHu…[0m│
+│ [2miteration[0m  [1m#91[0m    [2mstarted[0m 2026-09-06T06:55:31Z                           │
+│ [2msubject[0m    bookkeeping must not be able to stop the primary work         │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ [1mSWARM[0m[2m   value, and how it moved since the last iteration[0m                 │
-│   [2mbees running (of 4)[0m                [1m4[0m          [2m   =[0m                     │
-│   [2mdispatches finished[0m                [1m387[0m        [2m   =[0m                     │
+│   [2mbees running (of 4)[0m                [1m1[0m          [31m-3  [0m                     │
+│   [2mdispatches finished[0m                [1m390[0m        [32m+3  [0m                     │
 │   [2mcandidates skipped[0m                 [1m198[0m        [2m   =[0m                     │
 │   [2m  fenced by parked paths[0m           [1m-[0m          [2m    [0m                     │
 │   [2m  claimed by parked dispatch[0m       [1m0[0m          [2m   =[0m                     │
 │   [2m  done but never closed[0m            [1m-[0m          [2m    [0m                     │
-│   [2mhours 12: no bee working, percent[0m  [1m50[0m         [2m new[0m                     │
+│   [2mhours 12: no bee working, percent[0m  [1m46[0m         [32m-4  [0m                     │
 │   [2msend-backs looping with no ceiling[0m [1m79[0m         [2m   =[0m                     │
 │   [2mrows where one rule answers two ways[0m [1m347[0m        [2m   =[0m                   │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ [1mWORK THIS ITERATION[0m                                                      │
-│   [32m●[0m ROOT CAUSE: GitHub read anonymously, 60 req/h      [2mPR #476[0m           │
-│   [32m●[0m one 403 kills a whole round: 135 of 136 failures   [2mfrom the log[0m      │
-│   [32m●[0m tri idle: idleness over a window + why rounds died [2mPR #475[0m           │
-│   [32m●[0m tri agree x3: one rule, three languages            [2m521 agree[0m         │
-│   [31m●[0m merge + deploy - the bees stay idle until then     [2moperator's act[0m    │
+│   [32m●[0m measured the burn: 77 req/h against a limit of 60  [2mnot 24, as read[0m   │
+│   [32m●[0m a 403 after page 1 truncates, it does not kill     [2mPR #476[0m           │
+│   [32m●[0m review and reap can no longer idle the swarm       [2mdeadlock-proof[0m    │
+│   [32m●[0m 3 new CI tests, all green in server-api            [2m14 jobs pass[0m      │
+│   [31m●[0m merge + deploy - still the only thing that helps   [2moperator's act[0m    │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ [1m[31mANOMALIES[0m[0m[2m   found by this iteration, against its own work[0m                │
-│   [31m![0m the swarm was idle 49% of 12h and NO instrument here measured it     │
-│   [31m![0m 'bees running (of 4)' is an instant of a bimodal quantity - it read …[0m│
-│   [31m![0m I nearly fixed 'the round starts one bee' - that comment is stale, t…[0m│
-│   [31m![0m I nearly fixed 'the review is slow' - it is 15 rows at 15ms          │
-│   [31m![0m my own new test caught a fencepost: a 20-min window sampled 21 bucke…[0m│
-│   [31m![0m one round failed on 'deadlock detected' - unexplained, nothing else …[0m│
-│   [31m![0m POST /queen/lease/tick would wake the swarm but is token-guarded; no…[0m│
+│   [31m![0m I computed 24 req/h from the code; measuring gave 77 - three times o…[0m│
+│   [31m![0m the 41.7-min idle gap IS the rate-limit reset window, not a coincide…[0m│
+│   [31m![0m 'anonymous on purpose' was TRUE when written - the cadence changed u…[0m│
+│   [31m![0m my patch split openIssues from its own doc comment                   │
+│   [31m![0m the shell ate backticked identifiers in my PR comment; caught by rea…[0m│
+│   [31m![0m the catch itself has no unit test - a full round needs a live databa…[0m│
 ├──────────────────────────────────────────────────────────────────────────┤
 │ [1mTHREE WAYS TO CONTINUE[0m                                                   │
-│   [36m1.[0m deploy #476 - 60/h becomes 15000/h and the rounds stop dying        │
-│   [36m2.[0m chase the 'deadlock detected' round failure - one occurrence, no ex…[0m│
-│   [36m3.[0m make a failing round loud: 135 failures surfaced nowhere but a log …[0m│
+│   [36m1.[0m deploy #476: three fatal paths closed, 60/h becomes 15000/h         │
+│   [36m2.[0m a live-Postgres round test in server-pglive - the catch is untested │
+│   [36m3.[0m make a failing round loud in /queen/status, not only in the log     │
 ╰──────────────────────────────────────────────────────────────────────────╯
