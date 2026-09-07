@@ -212,7 +212,7 @@ async function startServer() {
       console.log('⚠️  Running in development mode - detailed errors enabled')
     }
     
-    return server
+    return Bun.serve(server)
   } catch (error: any) {
     console.error('\n❌ FATAL: Failed to start TRIOS Backend')
     console.error('Error:', error.message)
