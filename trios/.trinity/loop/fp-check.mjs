@@ -54,18 +54,39 @@ const COV = await import(path.join(DIR, 'coverage.mjs'))
 const TR = await import(path.join(DIR, 'trend.mjs'))
 
 /**
+ * The closed briefs on the board, newest first.
+ *
+ * ASK FOR THE STATE YOU WANT. This read `--state all --limit 120` and filtered
+ * the result for CLOSED, which is a page of the newest 120 issues - and once
+ * the board grew past #1554 on 2026-09-05 every one of those 120 was OPEN. The
+ * filter matched nothing for eight days while 149 closed briefs sat behind the
+ * window. A page is not the set; the same mistake has now been made twice in
+ * this tree with two different lists.
+ */
+export function closedBriefNumbers(floor = 1347, scan = 400) {
+  return (tryShell(
+    `gh issue list --repo ${REPO} --state closed --limit ${scan} --json number -q '.[] | select(.number>=${floor}) | .number'`,
+  ) || '').split('\n').filter(Boolean)
+}
+
+/**
  * Briefs that are known good BY THE WORLD: a worker was dispatched on them and
  * the Queen accepted the result. Whatever else may be wrong with such a brief,
  * it was demonstrably workable, so a gate refusing it is refusing reality.
+ *
+ * Candidates are taken until `limit` USABLE ones are found, not from the first
+ * `limit` candidates. A closed brief with no branch is not evidence, and if the
+ * newest twelve all lacked one the old code returned an empty corpus while
+ * hundreds of usable briefs waited one line further down.
  */
 function acceptedBriefs(limit) {
-  const numbers = (tryShell(
-    `gh issue list --repo ${REPO} --state all --limit 120 --json number,state -q '[.[] | select(.number>=1347 and .state=="CLOSED")] | .[].number'`,
-  ) || '').split('\n').filter(Boolean).slice(0, limit)
-
+  const numbers = closedBriefNumbers()
   const out = []
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-corpus-'))
+  let looked = 0
   for (const n of numbers) {
+    if (out.length >= limit || looked >= limit * 4) break
+    looked++
     const body = tryShell(`gh issue view ${n} --repo ${REPO} --json body -q .body`)
     if (!body || !/\n## Boundary/.test(body)) continue
     // Only briefs whose work actually landed on a branch: a closed issue with
@@ -75,12 +96,38 @@ function acceptedBriefs(limit) {
     fs.writeFileSync(f, body)
     out.push({ n, file: f })
   }
-  return { cases: out, tmp }
+  return { cases: out, tmp, candidates: numbers.length, looked }
+}
+
+/**
+ * AN EMPTY CORPUS IS NOT A CLEAN CORPUS.
+ *
+ * With no cases the brief-gate loop pushes no rows, its heading never prints,
+ * and the total reads "7 clean, 0 accused" - a report of silence that is
+ * indistinguishable from a report of health. brief-gate owns two of the six
+ * false positives named at the top of this file and it was checked against
+ * nothing from 2026-09-05 to 2026-09-13 without one line of output saying so.
+ *
+ * Separate from run() so it can be proved without a network round trip.
+ */
+export function corpusRow(cases, candidates, looked) {
+  if (cases.length) return null
+  return {
+    checker: 'brief-gate',
+    subject: 'the accepted-brief corpus',
+    ok: false,
+    why: candidates
+      ? `NOTHING WAS CHECKED: ${candidates} closed brief(s) offered, ${looked} opened, none had both a Boundary and a branch`
+      : 'NOTHING WAS CHECKED: the board returned no closed briefs at all - wrong repo, no gh auth, or the window missed them',
+  }
 }
 
 export function run(limit = 12) {
   const results = []
-  const { cases, tmp } = acceptedBriefs(limit)
+  const { cases, tmp, candidates, looked } = acceptedBriefs(limit)
+
+  const empty = corpusRow(cases, candidates, looked)
+  if (empty) results.push(empty)
 
   for (const c of cases) {
     const r = G.gate(c.file)

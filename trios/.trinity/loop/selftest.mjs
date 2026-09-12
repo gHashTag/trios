@@ -588,6 +588,31 @@ check('a subquery alias is NOT reported missing - it broke this parser twice', (
   if (bad.length) throw new Error(`accused a query of omitting ${bad[0].missing.join(', ')}, which the subquery provides`)
 })
 
+check('a false-positive check that checked nothing says so', async () => {
+  const FP = await import(path.join(DIR, 'fp-check.mjs'))
+
+  // THE STATE YOU WANT IS THE STATE YOU ASK FOR. This read `--state all
+  // --limit 120` and filtered the page for CLOSED. Once the board grew past
+  // #1554 on 2026-09-05 all 120 newest issues were OPEN, so the filter matched
+  // nothing while 149 closed briefs sat one page behind the window. The corpus
+  // was empty for eight days and the report printed no brief-gate section at
+  // all - not an accusation, not a heading, nothing.
+  const src = codeOf('fp-check.mjs')
+  if (/--state all[^\n]*CLOSED/.test(src)) throw new Error('a page of every issue filtered for closed is a page, not the set - ask the board for closed')
+  if (!/--state closed/.test(src)) throw new Error('the corpus must ask the board for the state it wants')
+
+  const row = FP.corpusRow([], 149, 12)
+  if (!row) throw new Error('nought cases out of 149 candidates is the loudest thing this file can find, and it returned nothing')
+  if (row.ok) throw new Error('a corpus of nothing is not a clean corpus')
+  if (!/149/.test(row.why)) throw new Error(`the row must carry how many were on offer, so the reader can tell an empty board from a bad filter: ${row.why}`)
+
+  const noBoard = FP.corpusRow([], 0, 0)
+  if (!noBoard || noBoard.ok) throw new Error('a board that returned nothing at all is not health either')
+  if (noBoard.why === row.why) throw new Error('"the board is empty" and "the board is full and the filter is wrong" are different faults and must read differently')
+
+  if (FP.corpusRow([{ n: 1 }], 149, 1)) throw new Error('one real case is a corpus; this row must not fire alongside it')
+})
+
 // ------------------------------------------ importing must never do work
 // brief-gate read process.argv unconditionally and I judged it import-safe
 // because it does nothing when argv is empty. An importer with its OWN
@@ -1300,6 +1325,73 @@ check('a skip bucket is read through one accessor, in both of its shapes', () =>
   if (S.skipCount(objects, 'fileConflict') !== null) throw new Error('a bucket the payload does not carry is unmeasured, not empty')
   if (S.skipCount(null, 'anything') !== null) throw new Error('no summary at all is no reading')
   if (S.skipCount({ x: { issues: [] } }, 'x') !== null) throw new Error('an object without a count is not a count')
+})
+
+check('no file reads a skip bucket around the accessor', () => {
+  // THE GATE ABOVE PROVES THE ACCESSOR IS RIGHT. It proves nothing about who
+  // uses it, and that is where the defect actually lived: sense.mjs learned the
+  // new `{count, issues, more}` shape, why.mjs was fixed to read through it -
+  // and trend.mjs, a reader nobody listed, kept `(r.skips || {}).claimed` and
+  // then dropped every sample on `typeof v === 'number'`. Three skip series
+  // reported "too few points" across 96 measured snapshots. A rule enforced at
+  // two of four readers is not a rule.
+  const BUCKETS = 'claimed|completed|fileConflict|missingBoundary'
+  // Strings and template literals are stripped as well as comments. The first
+  // draft of this gate accused anomaly.mjs for an evidence line that merely
+  // PRINTS `skipSummary.missingBoundary=`, and dash2.mjs for `q.skips && q.x`
+  // where `q` is already the normalised reading. A gate that reads prose is the
+  // exact class this loop exists to catch, and it nearly shipped inside the
+  // gate written to catch it.
+  const strip = (s) => s
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^\s*\/\/.*$/gm, ' ')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+  // The bucket must sit DIRECTLY on a `skips`/`skipSummary` expression - only
+  // brackets, braces and `||` may stand between. `q.skips && q.missingBoundary`
+  // is two separate reads of a normalised row and is none of this rule's
+  // business.
+  const bare = new RegExp(`\\b(skips|skipSummary)[\\s)}\\]|{]*\\.(${BUCKETS})\\b`)
+
+  if (!bare.test('get: (r) => (r.skips || {}).claimed')) throw new Error('this rule cannot see the defect as it was actually written in trend.mjs')
+  if (!bare.test('const n = skipSummary.missingBoundary')) throw new Error('nor the plainest form of it')
+  if (bare.test("skipCount(r.skips, 'claimed')")) throw new Error('the accessor call must not be accused of being a bare read')
+  if (bare.test('q.skips && q.missingBoundary')) throw new Error('two reads of a normalised row are not a bare bucket read')
+
+  const accused = fs.readdirSync(DIR)
+    .filter((f) => f.endsWith('.mjs'))
+    .filter((f) => bare.test(strip(fs.readFileSync(path.join(DIR, f), 'utf8'))))
+  if (accused.length) {
+    throw new Error(`${accused.join(', ')} read a skip bucket without the accessor - that is how the shape drifted under trend.mjs`)
+  }
+})
+
+check('a skip series with no samples says so instead of asking for patience', async () => {
+  const at = (h) => new Date(Date.parse('2026-09-12T12:00:00Z') + h * 3600000).toISOString()
+  const rows = [
+    { kind: 'snapshot', at: at(0), running: 1, skips: { claimed: { count: 10, issues: [] } } },
+    { kind: 'snapshot', at: at(1), running: 2, skips: { claimed: { count: 14, issues: [] } } },
+  ]
+  const f = path.join(tmp, 'trend-ledger.jsonl')
+  fs.writeFileSync(f, rows.map((r) => JSON.stringify(r)).join('\n') + '\n')
+  const T = await import(path.join(DIR, 'trend.mjs'))
+  const got = T.trend(999999, f)
+
+  const claimed = got.find((r) => r.key === 'claimed')
+  if (claimed.state !== 'measured') throw new Error(`the object shape must slope: ${claimed.state} (${claimed.n} points)`)
+  if (claimed.last !== 14) throw new Error(`read ${claimed.last}, wanted the count inside the object`)
+
+  // ZERO IS NOT "A FEW". `fileConflict` is in no snapshot here, and the phrase
+  // for that must not be the one used for a young series - "too few points"
+  // reads as "give it time" and hid a broken accessor for a day.
+  const absent = got.find((r) => r.key === 'fileConflict')
+  if (absent.n !== 0) throw new Error('the fixture was supposed to carry no fileConflict at all')
+  if (absent.state === 'too few points') throw new Error('a series nothing has ever written is not a series that needs more time')
+  if (!/NEVER MEASURED/.test(absent.state)) throw new Error(`wanted a state that names the absence, got ${absent.state}`)
+
+  // And the largest number on the board has a slope at all.
+  if (!got.some((r) => r.key === 'missingBoundary')) throw new Error('448 refused briefs is the biggest fact here and it had no series')
 })
 
 check('the idle causes fire on the payload the service actually serves', () => {
