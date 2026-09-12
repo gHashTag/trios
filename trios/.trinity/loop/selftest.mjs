@@ -1471,6 +1471,81 @@ check('one rejected ref does not take the whole push down', () => {
   }
 })
 
+// THE STEP WAS LOOKING AT ONE OF THE CONTAINER'S TWO REPOSITORIES.
+//
+// `/workspace/BrowserOS` was hardcoded in this tool from its first line, and it
+// reported `not pushed: 0` truthfully about that directory for nine days.
+// Measured 2026-09-13 in the same container: /workspace/t27 holds 45 branches
+// carrying 52 commits across 84 files, and NOT ONE of them is on any remote.
+// Its base branch is `master`, which is also why a copy-pasted survey would
+// have found nothing there even if it had been pointed at it.
+const PW = await import(path.join(DIR, 'push-work.mjs'))
+
+check('every checkout the survey covers declares where it is and what it may do', () => {
+  if (PW.CHECKOUTS.length < 2) throw new Error(`${PW.CHECKOUTS.length} checkout(s) declared - the container has two repositories`)
+  for (const c of PW.CHECKOUTS) {
+    if (!c.dir || !c.base) throw new Error(`a checkout without a dir or a base: ${JSON.stringify(c)}`)
+    // `push` is asserted as a BOOLEAN, not for truthiness. An entry that forgot
+    // the field would be undefined - falsy, so nothing would be pushed and
+    // nothing would say why. Permission is declared or the entry is wrong.
+    if (typeof c.push !== 'boolean') throw new Error(`${c.dir} does not declare whether this tool may push there`)
+  }
+})
+
+check('the survey the container is asked to run is a script the container can parse', () => {
+  // The first draft joined its fragments with `; `, which produced
+  // `... else; base=$(...)`. sh takes a command list after `else`, not an empty
+  // one, and said so on the first live run: `Syntax error: ";" unexpected`.
+  // A round trip to Railway is not the cheapest place to learn that.
+  for (const c of PW.CHECKOUTS) {
+    const f = path.join(os.tmpdir(), `survey-${c.dir.replace(/\W/g, '_')}.sh`)
+    fs.writeFileSync(f, PW.surveyScript(c))
+    try {
+      execSync(`sh -n ${L.shq(f)}`, { stdio: 'pipe' })
+    } catch (e) {
+      throw new Error(`the survey for ${c.dir} is not valid sh: ${String(e.stderr || e.message).trim()}`)
+    } finally {
+      fs.rmSync(f, { force: true })
+    }
+    if (!PW.surveyScript(c).includes(` rev-parse ${c.base} `)) {
+      throw new Error(`the survey for ${c.dir} does not measure against its declared base ${c.base}`)
+    }
+  }
+})
+
+check('a checkout that could not be measured is not a checkout with nothing to push', () => {
+  // Real container output, 2026-09-13.
+  const t27 = 'CHECKOUT /workspace/t27\nMISSING queen-3582 2\nMISSING queen-3583 1\nONREMOTE queen-9999'
+  const r = PW.readSurvey(t27)
+  if (r.missing.length !== 2 || r.onRemote !== 1) throw new Error(`read ${r.missing.length} missing / ${r.onRemote} on remote, want 2 / 1`)
+  if (r.unreadable) throw new Error('a survey that answered is not unreadable')
+  // And the two ways it can fail to answer. Both used to be indistinguishable
+  // from "no unpushed work": an empty base makes `$base..$b` span all history,
+  // and a missing directory makes every line fail quietly.
+  for (const bad of ['CHECKOUT /workspace/t27\nNOBASE /workspace/t27 main', 'CHECKOUT /workspace/nope\nNOCHECKOUT /workspace/nope']) {
+    const u = PW.readSurvey(bad)
+    if (!u.unreadable) throw new Error(`this is not a measurement and must not read as one: ${bad.split('\n')[1]}`)
+    if (u.missing.length) throw new Error('an unmeasured checkout cannot also report branches')
+  }
+})
+
+check('work this tool may not push is reported rather than left out of the count', () => {
+  const src = fs.readFileSync(path.join(DIR, 'push-work.mjs'), 'utf8')
+  // `REFUSED ` is what feed.mjs keeps when it condenses this step. Withheld work
+  // that does not carry it is dropped from the timer log, which is the exact
+  // invisibility being reported.
+  if (!/REFUSED - \$\{c\.missing\.length\} branch\(es\) in \$\{c\.dir\}/.test(src)) {
+    throw new Error('withheld work must reach the log through the one prefix the condenser keeps')
+  }
+  const kept = F.passThrough('REFUSED - 45 branch(es) in /workspace/t27 hold work that is on no remote, and this tool is not authorised to push there.')
+  if (kept.length !== 1) throw new Error('and the condenser must actually keep it')
+  // The pair the chain reads counts only what this tool is allowed to push.
+  // Counting the withheld branches there would make the step empty-handed on
+  // every run for ever, and no `--push` could clear it.
+  if (!/not pushed: \$\{missing\.length\}/.test(src)) throw new Error('the chain reads `not pushed: N` and it must still be printed')
+  if (!/const missing = pushable\.flatMap/.test(src)) throw new Error('`not pushed` must count the pushable checkouts, not every checkout')
+})
+
 
 // ---------------------------------------------------------------------------
 // mix and quota: load is not value, and a monoculture hides in every count.
@@ -2876,10 +2951,18 @@ check('the whole .git is given back, not two subdirectories', () => {
   if (/chown -R \$\{owner\} \S*\.git\/logs/.test(code)) {
     throw new Error('chowning logs and refs leaves the object store root-owned')
   }
-  if (!/chown -R \$\{owner\} \/workspace\/BrowserOS\/\.git /.test(code)) {
+  if (!/chown -R \$\{owner\} \$\{c\.dir\}\/\.git /.test(code)) {
     throw new Error('the whole .git must be given back after a root push')
   }
   if (!/root-owned files left/.test(code)) throw new Error('and it must report what it could not give back')
+  // AND FOR EVERY CHECKOUT THAT WAS PUSHED INTO, not for the one directory that
+  // used to be hardcoded here. This gate itself pinned `/workspace/BrowserOS`
+  // in a regex for nine days - a text-reading gate holding the very constant
+  // that hid the second repository. The outage is caused by the push, so the
+  // repair follows the push wherever it went.
+  if (!/for \(const c of pushable\) \{\n\s*if \(!c\.missing\.length\) continue/.test(code)) {
+    throw new Error('the give-back must run per pushed checkout, not for one hardcoded path')
+  }
 })
 
 // A MERGED TEST THAT EXPIRES IS A DISK THAT FILLS.

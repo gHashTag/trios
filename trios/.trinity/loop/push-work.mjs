@@ -116,10 +116,41 @@ function push(script, timeout = 280000) {
   }
 }
 
+// THERE ARE TWO REPOSITORIES IN THAT CONTAINER, AND THIS TOOL SAW ONE.
+//
+// `/workspace/BrowserOS` was hardcoded here from the first line of the file.
+// Measured 2026-09-13, inside the same container:
+//
+//   /workspace/BrowserOS  228 branches carry work, 0 missing from the remote
+//   /workspace/t27         45 branches carry work, 45 missing - every one
+//                          52 commits, 84 changed files, none on any remote
+//
+// The t27 branches are queen-3507..3542 and queen-3576..3591 - including the
+// ten issues filed as the swarm's real food. They have never left the volume
+// they were written on. The step reported `not pushed: 0` the whole time and
+// it was telling the truth about the only place it was looking.
+//
+// Two reasons it could not have found them by accident: the base branch there
+// is `master`, not `feat/queen-supervisor`, and `rev-parse` of a branch that
+// does not exist makes the whole survey line fail rather than say so.
+//
+// PUSHING IS AN OUTWARD-FACING ACT. Making 45 branches appear on a public
+// remote is not maintenance, and it is not mine to decide. So `push` is a
+// declared field: the survey covers every checkout, the push covers only the
+// ones it is authorised for, and work that is stuck is now VISIBLE rather than
+// absent from the report.
+export const CHECKOUTS = [
+  { dir: '/workspace/BrowserOS', base: 'feat/queen-supervisor', push: true },
+  // Awaiting the owner's word. Until then this line is a measurement, not a
+  // plan: it makes 45 branches of finished work countable from outside the
+  // container instead of invisible.
+  { dir: '/workspace/t27', base: 'master', push: false },
+]
+
 // Every git call into the container needs `-c safe.directory=*`: the repo is
 // owned by another uid, and without it `git branch --list` returns an EMPTY
 // list rather than an error - a count of zero would look like "nothing to do".
-const G = 'git -c safe.directory=* -C /workspace/BrowserOS'
+export const gitAt = (dir) => `git -c safe.directory=* -C ${dir}`
 
 // ONE LINE, DELIBERATELY. `JSON.stringify` turns a real newline into a literal
 // backslash-n, and inside the double quotes of `sh -c "..."` that is two
@@ -127,15 +158,54 @@ const G = 'git -c safe.directory=* -C /workspace/BrowserOS'
 // remote shell as a single line and dies with "Syntax error: then unexpected".
 // Separate with semicolons instead. The same bug was sitting unexercised in
 // reap.mjs, whose multi-line branch had never been run.
-const SURVEY = [
+// And NOT `.join('; ')` over a list of fragments either. That was the first
+// draft and it produced `... else; base=$(...)`, which is a syntax error in sh:
+// `else` takes a command list, not an empty one. The shell said so - `Syntax
+// error: ";" unexpected` - on the first run. Branches are written out, not
+// assembled from parts that look independent and are not.
+export function surveyScript({ dir, base }) {
+  const G = gitAt(dir)
+  const tag = dir.replace(/[^A-Za-z0-9]/g, '_')
+  const heads = `/workspace/.remote-heads.${tag}`
   // No `git fetch`: it takes minutes on this repository inside the container,
   // and `ls-remote` already answers the only question here - which heads exist
   // on the remote right now.
-  `base=$(${G} rev-parse feat/queen-supervisor)`,
-  `${G} ls-remote --heads origin 2>/dev/null | sed 's|.*refs/heads/||' | grep '^queen-' | sort > /workspace/.remote-heads`,
-  `for b in $(${G} branch --list 'queen-*' | sed 's/^[* +]*//'); do n=$(${G} rev-list --count $base..$b 2>/dev/null || echo 0); if [ "$n" -gt 0 ]; then if grep -qx "$b" /workspace/.remote-heads; then echo "ONREMOTE $b"; else echo "MISSING $b $n"; fi; fi; done`,
-  `rm -f /workspace/.remote-heads`,
-].join('; ')
+  const measure =
+    `${G} ls-remote --heads origin 2>/dev/null | sed 's|.*refs/heads/||' | grep '^queen-' | sort > ${heads}; ` +
+    `for b in $(${G} branch --list 'queen-*' | sed 's/^[* +]*//'); do ` +
+    `n=$(${G} rev-list --count $base..$b 2>/dev/null || echo 0); ` +
+    `if [ "$n" -gt 0 ]; then if grep -qx "$b" ${heads}; then echo "ONREMOTE $b"; else echo "MISSING $b $n"; fi; fi; ` +
+    `done; rm -f ${heads}`
+  // A MISSING BASE IS AN ANSWER TOO. `rev-parse master` on a checkout that
+  // calls it `main` prints an error and leaves `base` empty, and `$base..$b`
+  // with an empty base is a rev-list over all of history - every branch would
+  // look like it carried work. Saying so is the only safe reading.
+  return (
+    `echo "CHECKOUT ${dir}"; ` +
+    `if ! ${G} rev-parse --git-dir >/dev/null 2>&1; then echo "NOCHECKOUT ${dir}"; ` +
+    `else base=$(${G} rev-parse ${base} 2>/dev/null); ` +
+    `if [ -z "$base" ]; then echo "NOBASE ${dir} ${base}"; ` +
+    `else ${measure}; fi; fi`
+  )
+}
+
+/**
+ * Split one checkout's survey output into the three things it can say.
+ *
+ * Exported so the suite can prove the reader against real container output
+ * without a network hop. The parsing is the part that was wrong for nine days:
+ * the survey itself was correct about the one directory it was given.
+ */
+export function readSurvey(out) {
+  const lines = String(out).split('\n').map((l) => l.trim())
+  return {
+    missing: lines.filter((l) => l.startsWith('MISSING ')).map((l) => l.split(/\s+/)[1]),
+    onRemote: lines.filter((l) => l.startsWith('ONREMOTE ')).length,
+    // null, not zero: a checkout whose base could not be resolved was not
+    // measured, and an unmeasured checkout has no count of unpushed work.
+    unreadable: lines.find((l) => l.startsWith('NOBASE ') || l.startsWith('NOCHECKOUT ')) || null,
+  }
+}
 
 if (!isMain) { /* imported for calibration or reuse: do nothing */ } else {
 // A CHANNEL FAILURE MUST NOT LOOK LIKE "NOTHING TO PUSH".
@@ -156,23 +226,57 @@ process.on('uncaughtException', (e) => {
   process.exit(1)
 })
 
-const survey = remote(SURVEY)
+// Every checkout is surveyed. Only the authorised ones are pushed.
+const seen = CHECKOUTS.map((c) => ({ ...c, ...readSurvey(remote(surveyScript(c))) }))
 
-const missing = survey.split('\n').filter((l) => l.startsWith('MISSING ')).map((l) => l.split(/\s+/)[1])
-const onRemote = survey.split('\n').filter((l) => l.startsWith('ONREMOTE ')).length
+for (const c of seen) {
+  if (c.unreadable) {
+    console.log(`${c.dir}: NOT MEASURED - ${c.unreadable}`)
+    continue
+  }
+  const held = c.push ? '' : '   (this tool is not authorised to push here)'
+  console.log(`${c.dir}: branches with work ${c.missing.length + c.onRemote}   on the remote ${c.onRemote}   unpushed ${c.missing.length}${held}`)
+}
 
-console.log(`branches with work: ${missing.length + onRemote}   already on the remote: ${onRemote}   not pushed: ${missing.length}`)
-missing.forEach((b) => console.log(`  -> ${b}`))
+// THE PAIR THE CHAIN READS, AND WHY IT COUNTS ONLY WHAT CAN BE PUSHED.
+//
+// feed.mjs calls this step empty-handed when `not pushed: N` is above zero and
+// `pushed 0` follows. Counting the withheld checkout here would make that true
+// on every run for ever, and no `--push` could clear it - a warning that is
+// always on, which is not a warning. The withheld work is reported on its own
+// line above and as its own REFUSED below.
+const pushable = seen.filter((c) => c.push && !c.unreadable)
+const missing = pushable.flatMap((c) => c.missing.map((b) => ({ branch: b, checkout: c })))
+
+console.log(`\nnot pushed: ${missing.length}`)
+missing.forEach((m) => console.log(`  -> ${m.branch}   ${m.checkout.dir}`))
+
+// `REFUSED ` is the word feed.mjs keeps when it condenses this step into the
+// timer log. Without it the sentence below is dropped and 45 branches of
+// finished work are invisible from outside the container - which is the exact
+// failure being reported.
+const withheld = seen.filter((c) => !c.push && !c.unreadable && c.missing.length)
+for (const c of withheld) {
+  console.log(`\nREFUSED - ${c.missing.length} branch(es) in ${c.dir} hold work that is on no remote, and this tool is not authorised to push there.`)
+  console.log(`  They exist only on the container volume. Authorise by setting push:true for that entry in CHECKOUTS.`)
+  L.append({ kind: 'push-work-withheld', dir: c.dir, branches: c.missing.length })
+}
 
 if (!missing.length) process.exit(0)
 if (!process.argv.includes('--push')) { console.log('\nreport only. re-run with --push to act.'); process.exit(0) }
 
-L.append({ kind: 'push-work', note: `pushing ${missing.length} branches`, branches: missing })
+L.append({ kind: 'push-work', note: `pushing ${missing.length} branches`, branches: missing.map((m) => m.branch) })
 
 let pushed = 0
 const rejected = []
-for (let i = 0; i < missing.length; i += BATCH) {
-  const batch = missing.slice(i, i + BATCH)
+// ONE CHECKOUT PER PUSH. `git -C` takes one directory, so a batch that
+// straddles two repositories would send half its branches into the wrong
+// remote. Grouping first is what keeps the batching honest once there is more
+// than one checkout to group.
+for (const c of pushable) {
+ for (let i = 0; i < c.missing.length; i += BATCH) {
+  const batch = c.missing.slice(i, i + BATCH)
+  const G = gitAt(c.dir)
   // `--no-verify`, deliberately, and this is the reason.
   //
   // The branches being pushed were created days ago from older bases and carry
@@ -196,6 +300,7 @@ for (let i = 0; i < missing.length; i += BATCH) {
   for (const line of out.split('\n')) {
     if (/rejected|error:/.test(line)) rejected.push(line.trim().slice(0, 100))
   }
+ }
 }
 // GIVE THE REPOSITORY BACK.
 //
@@ -213,9 +318,13 @@ for (let i = 0; i < missing.length; i += BATCH) {
 // the fleet down.
 //
 // The owner is read from `.git` itself rather than assumed to be `bee`, so this
-// keeps working if the image ever changes user.
-const owner = remote(`stat -c '%u:%g' /workspace/BrowserOS/.git 2>/dev/null || echo ''`)
-if (owner && owner !== '0:0') {
+// keeps working if the image ever changes user. It is done for EVERY checkout
+// this run pushed into, not for the one that used to be hardcoded here: the
+// outage below is caused by the push, so it follows the push.
+for (const c of pushable) {
+  if (!c.missing.length) continue
+  const owner = remote(`stat -c '%u:%g' ${c.dir}/.git 2>/dev/null || echo ''`)
+  if (!owner || owner === '0:0') continue
   // THE WHOLE .git, NOT TWO SUBDIRECTORIES.
   //
   // This chowned `logs` and `refs` because those were what the first outage
@@ -228,9 +337,9 @@ if (owner && owner !== '0:0') {
   // A bee cannot create a file in a directory it does not own, so every one of
   // those was a hole the next fetch or commit could fall into - the same outage,
   // waiting, in the part of the fix nobody had looked at.
-  remote(`chown -R ${owner} /workspace/BrowserOS/.git 2>&1 | head -2`)
-  const left = remote(`find /workspace/BrowserOS/.git -user root 2>/dev/null | wc -l`)
-  console.log(`gave the refs back to ${owner}; root-owned files left: ${String(left).trim()}`)
+  remote(`chown -R ${owner} ${c.dir}/.git 2>&1 | head -2`)
+  const left = remote(`find ${c.dir}/.git -user root 2>/dev/null | wc -l`)
+  console.log(`gave ${c.dir} back to ${owner}; root-owned files left: ${String(left).trim()}`)
 }
 
 console.log(`\npushed ${pushed}`)
