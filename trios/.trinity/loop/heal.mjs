@@ -23,11 +23,19 @@
 // them. `--dry` runs every step in its report mode.
 
 import { execSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
 const L = await import(path.join(DIR, 'loop.mjs'))
+// ONE RULE, NOT A SECOND COPY OF IT. feed.mjs already carries how a chain reads
+// a step's output, it is import-safe (everything it does lives behind its
+// isMain guard), and the two chains condense the SAME steps - so the rule for
+// what survives condensation, and for when a step came back empty-handed, is
+// imported rather than transcribed. A rule written twice is two rules that
+// agree until someone edits one; that argument is L0 and it applies here.
+const F = await import(path.join(DIR, 'feed.mjs'))
 
 // IMPORT-SAFE. This module ran its production query and called process.exit at
 // import time, so importing it hit the live database and killed the importer -
@@ -40,6 +48,19 @@ const isMain = process.argv[1] && process.argv[1].endsWith('/heal.mjs')
 // argv only when this file IS the program, so importing it cannot make it
 // think it was asked for a dry run - the class loop.mjs was caught in.
 const DRY = isMain && process.argv.includes('--dry')
+
+// EVERY RUN IS DATED, AT ITS FIRST LINE.
+//
+// Measured 2026-09-12: heal.timer.log held 24794 lines across 305 runs and not
+// one clock - `grep -cE '[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}:[0-9]{2}:[0-9]{2}'`
+// answered 0. A truncation found at log line 5710 could therefore be placed
+// only as "somewhere in the earlier 23% of the file", not before or after any
+// dated change to the thing that wrote it.
+//
+// Printed BEFORE the lock is asked for, so a run that stands down is dated too:
+// those are the runs whose absence needs explaining. It is the opening bracket
+// of the `heal complete:` line that already closes every run.
+console.log(`${new Date().toISOString()} heal start${DRY ? ' (dry)' : ''}`)
 
 // TAKE THE LOCK, unless this is a dry run.
 //
@@ -133,7 +154,12 @@ const STEPS = [
   // out-pace. One store, a farm of links per worktree, and the workspace
   // packages linked back home. First run returned 14.3 GB.
   { name: 'share-modules', file: 'share-modules.mjs', act: '--share', dryArgs: '', why: 'one installed dependency tree, linked into every worktree' },
-  { name: 'land', file: 'land.mjs', act: '--land', dryArgs: '', why: 'put accepted work into the branch it was accepted for' },
+  // `resumable`: it lands a BOUNDED number per run, newest first, and its own
+  // header states that merges happen in the object database - "a run that is
+  // interrupted leaves the repository exactly as it found it". Both claims were
+  // read before this flag was set, because capping a step that can be killed
+  // mid-mutation would trade a starved tail for a corrupt index.
+  { name: 'land', file: 'land.mjs', act: '--land', dryArgs: '', resumable: true, why: 'put accepted work into the branch it was accepted for' },
   { name: 'close-done', file: 'close-done.mjs', act: '--close', why: 'clear accepted issues from the pool' },
   // An escalation raised by a defect that has SINCE BEEN FIXED is never
   // re-examined by anything else. Three tasks sat 91 hours on the reason "no
@@ -166,6 +192,26 @@ const STEPS = [
   // ---- the line the file has always drawn in prose, now drawn in data. ----
   // Everything above frees the swarm. Everything below only reports, and the
   // two must not compete for the same budget.
+  //
+  // THE LOOP'S OWN INSTRUMENTS, CHECKED BY A TIMER AND NOT BY A HUMAN.
+  //
+  // `selftest.mjs` holds 271 cases, every one planting a known defect and
+  // asserting the tool notices - the harness built precisely because "a tool of
+  // mine reported success without doing its job" runs through most of this
+  // directory's lessons. Measured 2026-09-12: it ran on NO timer, in NO CI job
+  // and under NO make target. The only way it ever fired was a human typing
+  // `tri loop-selftest`. A guard that fires when somebody remembers is not a
+  // guard - which is the same argument that made these repairs a chain.
+  //
+  // FIRST IN THE REPORTING PHASE, and that position is the whole of the
+  // scheduling argument. It needs no network and no container, it takes about
+  // two seconds, and the lock has been released one line above it - so it
+  // cannot starve the steps that reach the remote, and being first means the
+  // slow audits behind it cannot push it past the reporting deadline. It takes
+  // no argument: the tool has one mode and it is read-only.
+  // `pinFirst` exempts it from the hunger rotation below: this position is
+  // argued for, not incidental, and the rotation must not take it away.
+  { name: 'loop-selftest', file: 'selftest.mjs', reportsOnly: true, pinFirst: true, act: '', dryArgs: '', why: 'the loop\'s own checkers, shown failing before they are believed' },
   { name: 'clocks', file: 'clocks.mjs', act: '', dryArgs: '', reportsOnly: true, why: 'no decision keyed on a field something rewrites' },
   { name: 'fields', file: 'fields.mjs', reportsOnly: true, act: '', dryArgs: '', why: 'no decision reading a field its query never selects' },
   // The checkers checking themselves, against material the WORLD calls good.
@@ -254,6 +300,11 @@ const SUMMARY = [
   [/CLAIM UNSUPPORTED: (\d+)/, (m) => `${m[1]} CLAIM(S) UNSUPPORTED - a person should look`],
   [/SUPPORTED: (\d+)/, (m) => `${m[1]} claims supported by the diff, none unsupported`],
   [/packets written (\d+)\s+skipped (\d+)/, (m) => `${m[1]} packet(s) queued for judgement, ${m[2]} skipped`],
+  // The selftest's own tally, read as a number rather than as an exit code: it
+  // exits 1 when a case fails, and that is the tool working.
+  [/^(\d+) passed, (\d+) failed$/m, (m) => (Number(m[2])
+    ? `${m[2]} of ${Number(m[1]) + Number(m[2])} loop selftest case(s) FAILING`
+    : `all ${m[1]} loop selftest cases pass`)],
   [/STALLED: /, () => 'REFUSED to file - nobody is draining the backlog'],
   [/filed (\d+)/, (m) => `filed ${m[1]}`],
   [/at the WIP limit|already has an issue/, () => 'at the WIP limit, nothing filed'],
@@ -287,8 +338,81 @@ const REPORT_DEADLINE_MS = Number(process.env.HEAL_REPORT_DEADLINE_MS ?? 5 * 60 
 let reportPhaseStartedAt = null
 const startedAt = Date.now()
 
+// TWO BUDGETS SPLIT ONE STARVATION INTO TWO. The fix above is real and it did
+// not work, and the way it failed is the point: a deadline in FIXED ORDER does
+// not ration a phase, it truncates it. Whatever sits at the end of a phase is
+// not slow - it is last, and last is a permanent condition.
+//
+// Measured 2026-09-12 over the 230 heal runs in the ledger since 2026-09-06,
+// counting how many times each step actually RAN (ok or FAILED, not skipped and
+// not timed out):
+//
+//   land               1 of 230   (timed out 142, skipped 87)
+//   close-done         1 of 230
+//   stale-escalations  1 of 230
+//   author             1 of 230
+//   brief-gate         2 of 230
+//   exposure           2 of 230   forked-files 2, t27-parity 2
+//   verdict-audit      1 of 230
+//   proven             1 of 230
+//   judge-packet       0 of 230
+//
+// Ten steps at or below 1%, and every one of those 230 runs still printed
+// `heal complete`. `verdict-audit` is the instrument that checks what the swarm
+// CLAIMS against what it PUSHED; it ran once in a week. During that week the
+// swarm reported 439 of 439 dispatches finished and put nothing on the remote
+// after 2026-09-05T17:30Z. The audit that exists to catch exactly that was
+// starved by position, and the summary line said the chain was complete.
+//
+// SO THE REPORTING PHASE IS ORDERED BY HUNGER, NOT BY THE ARRAY. Least recently
+// reached goes first. A step skipped this run is first in line next run, so the
+// tail rotates instead of starving and every step gets its turn across a few
+// rounds. This is only sound because the reporting steps READ - the file says so
+// four times and the lock is released before the first of them - so their order
+// carries no meaning to preserve. The freeing phase is NOT rotated: push -> land
+// -> close is a precondition chain and reordering it would close issues whose
+// code never landed, which is the 169-issue defect `land.mjs` was written for.
+// The least time in which a step could plausibly finish. Below this a step is
+// not started at all, because starting it would only kill it and spend the
+// budget doing so. Also the unit of the reserve a `resumable` step leaves for
+// the steps behind it.
+const MIN_START_MS = Number(process.env.HEAL_MIN_START_MS ?? 60000)
+
+const REACH_FILE = path.join(DIR, 'state', 'step-reach.json')
+let reachedAt = {}
+try { reachedAt = JSON.parse(fs.readFileSync(REACH_FILE, 'utf8')) } catch { reachedAt = {} }
+
+function orderedSteps() {
+  const freeing = STEPS.filter((s) => !s.reportsOnly)
+  const reporting = STEPS.filter((s) => s.reportsOnly)
+  // `loop-selftest` documents its own position and the argument is sound: it
+  // needs no network, takes about two seconds, and being first means the slow
+  // audits cannot push it past the deadline. A pinned step is exempt.
+  const pinned = reporting.filter((s) => s.pinFirst)
+  const rotating = reporting.filter((s) => !s.pinFirst)
+  // Never reached at all sorts before reached-long-ago, which sorts before
+  // reached-just-now. Ties keep their declared order, which `sort` preserves.
+  rotating.sort((a, b) => (reachedAt[a.name] ?? 0) - (reachedAt[b.name] ?? 0))
+  return [...freeing, ...pinned, ...rotating]
+}
+
+const ORDER = orderedSteps()
+
+/**
+ * How many steps in the same phase still come after this one.
+ *
+ * Used to reserve their minimum start time so a single long step cannot spend
+ * the phase. See the `resumable` cap below for why that is not a theoretical
+ * worry.
+ */
+function stepsBehind(i) {
+  const phase = !!ORDER[i].reportsOnly
+  return ORDER.slice(i + 1).filter((x) => !!x.reportsOnly === phase).length
+}
+
 const results = []
-for (const s of STEPS) {
+for (let i = 0; i < ORDER.length; i++) {
+  const s = ORDER[i]
   if (s.reportsOnly && reportPhaseStartedAt === null) {
     reportPhaseStartedAt = Date.now()
     // THE AUDITS DO NOT NEED THE LOCK, AND HOLDING IT STARVES THE REFILL.
@@ -322,15 +446,92 @@ for (const s of STEPS) {
     results.push({ step: s.name, status: 'skipped', summary: `past the ${which} deadline` })
     continue
   }
+  // A STEP STARTED WITH THIRTY SECONDS LEFT IS NOT BEING RUN, IT IS BEING KILLED.
+  //
+  // `Math.max(30000, ...)` raised a nearly-spent budget back up to half a minute
+  // and started the step anyway. `land.mjs` takes 45 seconds in report mode -
+  // measured 2026-09-12, twice, on this machine - so whenever the chain reached
+  // it with under 45 seconds left it was launched, killed at the floor, and
+  // recorded `timed out`. It read as a slow step. It is not a slow step. It was
+  // never given enough time to finish, 142 times out of 230.
+  //
+  // And the kill was not free: the thirty seconds came out of the same budget,
+  // so `close-done` and `author` behind it inherited a deadline that was already
+  // past. One step that cannot finish took the two steps after it down with it -
+  // which is how `author`, the step that REFILLS THE BACKLOG, ran once in 230
+  // runs while the swarm reported "nothing to choose".
+  //
+  // So: below the floor the step is not started. It is skipped, and it is
+  // skipped under its own name - `no budget left to finish` is a different
+  // sentence from `timed out`, and the difference is the whole diagnosis.
+  if (left < MIN_START_MS) {
+    process.stdout.write(`\n--- ${s.name}  (${s.why})\n    SKIPPED - ${Math.round(left / 1000)}s left, under the ${Math.round(MIN_START_MS / 1000)}s a step needs to finish\n`)
+    results.push({ step: s.name, status: 'skipped', summary: 'no budget left to finish' })
+    continue
+  }
   const args = DRY ? (s.dryArgs || '') : s.act
   process.stdout.write(`\n--- ${s.name}  (${s.why})\n`)
   let out = ''
   let status = 'ok'
+  // HOW LONG EACH STEP TOOK, RECORDED. Nothing measured this. The chain has an
+  // eight-minute budget it has been exhausting for a week and no instrument in
+  // this directory could say where the eight minutes went - so every proposal to
+  // reorder it, including the ones I nearly wrote, was a guess. Reordering a
+  // chain whose costs are unmeasured is the thing this project keeps calling a
+  // defect when other people do it.
+  const stepStartedAt = Date.now()
+
+  // NO STEP MAY SPEND THE WHOLE PHASE WHILE THE STEPS BEHIND IT ARE THE POINT.
+  //
+  // Measured on the live 17:01:33Z run, the first with a real budget: `land`
+  // started 3m30s in and was still running 4m30s later when the eight-minute
+  // freeing deadline cut it. It reported `timed out`, and `close-done`,
+  // `stale-escalations` and `author` behind it were skipped - again. So the
+  // hunger rotation fixed the reporting phase and left this untouched: one step
+  // at the head of the line consuming everything is not a queueing problem, it
+  // is a queueing problem ONLY for the steps behind it, and `author` is the step
+  // that refills the backlog.
+  //
+  // My earlier figure was wrong and worth naming: I measured `land` at 45s and
+  // wrote a floor around that number. 45s was REPORT mode. In act mode it merges
+  // branches and takes minutes. A measurement taken in the wrong mode is the
+  // same defect as a measurement taken against the wrong root.
+  //
+  // `resumable` marks a step that makes partial progress and continues next run.
+  // `land.mjs` says so in its own header - it lands a bounded number per run,
+  // newest first - and this chain already prints "what it did before the cut
+  // still stands". For such a step, being cut is not a loss, and the reserve
+  // below buys the steps behind it their minimum start. For every other step the
+  // budget is unchanged: cutting a step that CANNOT resume would just throw its
+  // work away, which is worse than starving the tail.
+  let cap = Math.min(300000, left)
+  let want = 0
+  if (s.resumable) {
+    want = stepsBehind(i) * MIN_START_MS
+    cap = Math.min(cap, Math.max(MIN_START_MS, left - want))
+  }
+  // REPORT WHAT WAS HELD, NOT WHAT WAS WANTED. The first version of this line
+  // printed `want`. On the 200s dry run it announced "holding 180s for the 3
+  // steps behind it" and then those three steps were skipped with "17s left" -
+  // because `Math.max(MIN_START_MS, ...)` floors the cap, so when the budget is
+  // too small to seat everyone the reserve is silently given back. The floor is
+  // right: a step that cannot even start is worth less than one that runs 60s
+  // and resumes. The MESSAGE was wrong, and wrong in this repository's signature
+  // way - a number computed one way and reported another. `held` is subtraction
+  // of two numbers on this line, so it cannot disagree with what happens next.
+  const held = left - cap
+  if (want && cap < left) {
+    const behind = stepsBehind(i)
+    const short = held < want ? `, ${Math.round((want - held) / 1000)}s short of the ${Math.round(want / 1000)}s they need` : ''
+    process.stdout.write(`    capped at ${Math.round(cap / 1000)}s, leaving ${Math.round(held / 1000)}s for the ${behind} step(s) behind it${short} (it resumes next run)\n`)
+  }
+
   try {
     out = execSync(`node ${path.join(DIR, s.file)} ${args}`, {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-      // Never longer than what remains of the chain's own deadline.
-      timeout: Math.max(30000, Math.min(300000, left)),
+      // Never longer than what remains of the chain's own deadline, and never so
+      // long that the steps behind it cannot start.
+      timeout: cap,
     })
   } catch (e) {
     // A step that exits non-zero is not automatically a failure: reap exits 1
@@ -361,21 +562,41 @@ for (const s of STEPS) {
     // A step cut off part-way is not a step that succeeded and not a step that
     // broke. What it did before the cut still stands, and saying so is the
     // difference between a chain that reports work and one that reports minutes.
+    // A FAILING SELFTEST CASE IS A FINDING, NOT A BROKEN STEP - and it must not
+    // be `ok` either. The tool exits 1 when one of its cases fails, and that is
+    // the tool doing its job; the operator needs the sentence, not the code.
+    // Anchored on the tally line the harness prints last, so it cannot be
+    // matched by a step that happens to use the words "passed" and "failed".
     status = (e.killed || e.signal === 'SIGTERM' || e.code === 'ETIMEDOUT') ? 'timed out'
       : /THEY DISAGREE/.test(out) ? 'FINDING'
         : /the channel was already found down in this run/.test(out) ? 'channel-down'
           : /ACT NOW:/.test(out) ? 'FINDING'
-            : /Error:|Traceback|not a function|ENOENT/.test(out) ? 'FAILED' : 'ok'
+            : /^\d+ passed, [1-9]\d* failed$/m.test(out) ? 'FINDING'
+              : /Error:|Traceback|not a function|ENOENT/.test(out) ? 'FAILED' : 'ok'
   }
   let line = null
   for (const [re, fmt] of SUMMARY) {
     const m = out.match(re)
     if (m) { line = fmt(m); break }
   }
+  // A STEP THAT RAN AND DELIVERED NONE OF WHAT IT LINED UP IS NEITHER ok NOR
+  // FAILED. Asked only of a step that did not already fail, time out or raise a
+  // finding: each of those says something stronger and must not be overwritten.
+  const barren = status === 'ok' ? F.emptyHanded(out) : null
+  if (barren) status = 'empty-handed'
+  const verbatim = F.passThrough(out)
   console.log(`    ${status === 'FAILED' ? 'FAILED'
     : status === 'timed out' ? `timed out - what it did before the cut still stands: ${line || '(nothing recorded)'}`
-      : line || out.trim().split('\n').pop() || '(no output)'}`)
+      : status === 'empty-handed' ? `EMPTY-HANDED - ${barren}; it reported: ${line || '(nothing recorded)'}`
+        : line || out.trim().split('\n').pop() || '(no output)'}`)
   if (status === 'FAILED') console.log(out.trim().split('\n').slice(-4).map((l) => '      ' + l).join('\n'))
+  // THE REFUSAL AND ITS REASON, IN THE STEP'S OWN WORDS.
+  //
+  // Condensing these away is what made `grep -c "REFUSED by the gate"` answer 0
+  // on both timer logs while the gate refused five briefs on every acting run.
+  // One line per step is right for a count; it is wrong for a sentence nothing
+  // else will ever say.
+  for (const l of verbatim) console.log(`      ${l.trim()}`)
   // THE EVIDENCE IS KEPT, NOT ONLY PRINTED.
   //
   // `line` is set only when a SUMMARY pattern matches, and no pattern matches a
@@ -386,18 +607,58 @@ for (const s of STEPS) {
   // a bee's work out of the container, ran 66 times and 47 were not ok. Every
   // one of the 46 FAILED entries carries an empty summary, so what went wrong on
   // any of them cannot now be known. The console had it. The record did not.
+  // REACHED, and the word is chosen. A step that TIMED OUT was started and
+  // killed; it got its turn and spent it. `land` timing out 142 times is not the
+  // same defect as `judge-packet` never being started at all, and the rotation
+  // must not treat them alike - a step that eats five minutes every round would
+  // otherwise be marked hungry and promoted to the front for ever.
+  reachedAt[s.name] = Date.now()
   results.push({
     step: s.name,
     status,
+    ms: Date.now() - stepStartedAt,
     line: line || null,
-    evidence: (status === 'FAILED' || status === 'FINDING' || status === 'channel-down' || status === 'timed out')
+    emptyHanded: barren || undefined,
+    // Kept, not only printed, for exactly the reason `evidence` is.
+    verbatim: verbatim.length ? verbatim.map((l) => l.trim()) : undefined,
+    evidence: (status === 'FAILED' || status === 'FINDING' || status === 'channel-down'
+      || status === 'timed out' || status === 'empty-handed')
       ? out.trim().split('\n').slice(-6).join(' | ').slice(0, 400)
       : undefined,
   })
 }
 
+try {
+  fs.mkdirSync(path.dirname(REACH_FILE), { recursive: true })
+  fs.writeFileSync(REACH_FILE, JSON.stringify(reachedAt, null, 1))
+} catch (e) {
+  // A rotation cursor that cannot be written costs the next run its ordering and
+  // nothing else. It must never cost this run its summary.
+  console.log(`  (could not record step reach: ${e.message})`)
+}
+
 console.log(`\n${DRY ? 'DRY RUN - ' : ''}heal complete: ` +
   results.map((r) => `${r.step}=${r.status}`).join(' '))
+
+// "COMPLETE" IS A CLAIM, AND FOR 230 RUNS IT WAS FALSE.
+//
+// The line above has always named every skipped step, and naming is not
+// announcing: `judge-packet=skipped` is one token among twenty-seven and it was
+// read by nobody for a week. The word `complete` sat at the front of all of them
+// while a third of the chain had not run. That is this directory's oldest defect
+// - a confident summary of work that did not happen - printed by the instrument
+// that exists to catch it.
+//
+// So the count gets a sentence of its own, and the steps that did not get their
+// turn are named in it.
+const neverRan = results.filter((r) => r.status === 'skipped')
+if (neverRan.length) {
+  console.log('')
+  console.log(`  NOT REACHED: ${neverRan.length} of ${results.length} steps never started - ` +
+    neverRan.map((r) => r.step).join(', '))
+  console.log('  They are first in line next run; the reporting phase is ordered by hunger.')
+  console.log('  tri reach   - how often each step has actually run, over the whole ledger')
+}
 
 // A FAILURE OF THE STEP THAT UNBLOCKS EVERYTHING IS NOT A FAILURE LIKE THE
 // OTHERS.
@@ -427,6 +688,25 @@ if (findings.length) {
   // printed `undefined` for every finding it has ever announced - the one word
   // the operator was meant to read.
   for (const f of findings) console.log(`  FINDING  ${f.step}: ${f.line || f.evidence || '(no detail recorded)'}`)
+}
+// AND SO IS A STEP THAT CAME BACK WITH NOTHING.
+//
+// Named after the token list, not only inside it. `author=ok` under `filed 0`
+// was readable for 305 runs and read by nobody, because a word in a line of
+// forty `step=status` tokens is not an announcement. A step that produced none
+// of what it lined up gets a sentence, and the refusals it swallowed get to
+// speak for themselves underneath it.
+const barrenSteps = results.filter((r) => r.status === 'empty-handed')
+if (barrenSteps.length) {
+  console.log('')
+  for (const b of barrenSteps) {
+    console.log(`  EMPTY-HANDED  ${b.step}: ${b.emptyHanded}`)
+    for (const l of b.verbatim || []) console.log(`      ${l}`)
+  }
+  const criticalBarren = barrenSteps.filter((r) => CRITICAL.has(r.step))
+  if (criticalBarren.length) {
+    console.log(`  ${criticalBarren.map((r) => r.step).join(', ')} FREE the swarm, and this round they freed nothing.`)
+  }
 }
 const failed = results.filter((r) => r.status === 'FAILED')
 const criticalFailures = failed.filter((r) => CRITICAL.has(r.step))

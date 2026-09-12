@@ -24,6 +24,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { maskLiterals } from './mask.mjs'
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
 const L = await import(path.join(DIR, 'loop.mjs'))
@@ -587,23 +588,149 @@ check('a subquery alias is NOT reported missing - it broke this parser twice', (
 // a production query on import.
 console.log('\nimport safety - a module must do nothing merely by being imported')
 
-check('every loop tool carries an isMain guard', () => {
-  const missing = []
-  for (const f of fs.readdirSync(DIR).filter((n) => n.endsWith('.mjs') && n !== 'loop.mjs' && n !== 'selftest.mjs')) {
-    const src = fs.readFileSync(path.join(DIR, f), 'utf8')
-    if (!/\bisMain\b/.test(src)) missing.push(f)
+/**
+ * Which loop files are imported by another loop file.
+ *
+ * The obligation this section enforces is not uniform and pretending it is has
+ * cost two gates already. A module that somebody imports MUST do nothing on
+ * import; a leaf script that is only ever `node x.mjs` may read its own command
+ * line at the top, which is what a script is. Deriving the distinction from the
+ * import graph makes it self-maintaining: the day a leaf gains an importer it
+ * also gains the obligation, with no list for anyone to forget to update.
+ * `dash-cc.mjs` importing `anomaly.mjs` on 2026-09-12 is exactly that case.
+ */
+/**
+ * The local `.mjs` specifiers a file actually imports.
+ *
+ * THE KEYWORD IS FOUND IN THE MASK; THE NAME IS SLICED FROM THE ORIGINAL.
+ *
+ * The first version of this ran its regex over the raw source, and the first
+ * thing it found was the words `import('./cycle.mjs')` inside a PROSE COMMENT
+ * eight lines below - a sentence explaining the hazard, read as the hazard. It
+ * then reported cycle.mjs as imported by selftest.mjs and accused it of lacking
+ * a guard it does not owe. Ninth instance tonight of an instrument reading
+ * prose as evidence, and the first one I authored inside the comment about the
+ * eighth.
+ */
+function specifiersIn(src) {
+  const mask = maskLiterals(src)
+  const out = []
+  // In the mask a specifier is its own quotes around exactly as many spaces as
+  // it had characters, so the offsets still line up with the original.
+  // `from\s*`, not `from` - the first spelling of this matched no specifier at
+  // all, and an empty import graph makes every graph-scoped gate below pass
+  // quietly. The fixtures were the only thing between that and a green tree.
+  for (const m of mask.matchAll(/\b(?:from\s*|import\s*\(\s*)(['"])( *)\1/g)) {
+    const start = m.index + m[0].indexOf(m[1]) + 1
+    out.push(src.slice(start, start + m[2].length))
   }
-  if (missing.length) throw new Error(`no isMain guard in: ${missing.join(', ')}`)
+  return out
+}
+
+function importedAmong(sources) {
+  // WHAT THIS CANNOT SEE: a computed specifier. `snapshot.mjs` imports
+  // path.join(DIR, the dash file), and no amount of regex makes that a literal.
+  // dash.mjs lands in this set only because `selftest.mjs` also imports it the
+  // plain way. So the set is a LOWER BOUND on what is imported - every name in
+  // it is genuinely imported, and a name absent from it may be imported anyway.
+  // The gates below are therefore allowed to accuse, and not to acquit.
+  const imported = new Set()
+  for (const [f, src] of Object.entries(sources)) {
+    for (const spec of specifiersIn(src)) {
+      const m = /^\.\/([\w.-]+\.mjs)$/.exec(spec)
+      if (m && m[1] !== f) imported.add(m[1])
+    }
+  }
+  return imported
+}
+
+function readLoopSources(dir) {
+  const out = {}
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.mjs'))) {
+    out[f] = fs.readFileSync(path.join(dir, f), 'utf8')
+  }
+  return out
+}
+
+function importedByAnother(dir) {
+  return importedAmong(readLoopSources(dir))
+}
+
+function hasMainGuard(f, src) {
+  if (/\bisMain\b/.test(src)) return true
+  return new RegExp("process\\.argv\\[1\\][\\s\\S]{0,80}endsWith\\(\\s*['\"]/" + f.replace('.', '\\.')).test(src)
+}
+
+function unguardedImports(sources) {
+  const imported = importedAmong(sources)
+  return Object.keys(sources).filter((f) => imported.has(f) && !hasMainGuard(f, sources[f]))
+}
+
+// A MAIN GUARD, NOT THE WORD `isMain`.
+//
+// This check used to be `if (!/\bisMain\b/.test(src))`, and it duly reported
+// "no isMain guard in: anomaly.mjs, backlog.mjs, board.mjs, cycle-doctor.mjs,
+// cycle.mjs, dash2.mjs, sense.mjs" - seven files, every one of which guarded its
+// main block correctly, in the older inline spelling
+// `if (process.argv[1] && process.argv[1].endsWith('/x.mjs'))`. A test for an
+// identifier is not a test for a behaviour, and this repository has now caught
+// that same substitution in a SQL scanner, a boundary rule, a claim guard and
+// here. Both spellings are accepted; what is checked is that a guard exists.
+// AND: A GUARD IS OWED BY WHAT SOMEBODY IMPORTS, NOT BY EVERY FILE.
+//
+// The first graph-scoped run of this check narrowed seven accused files to two:
+// `cycle.mjs` and `cycle-doctor.mjs`, which run their work at module scope
+// because they are drivers - scripts, not modules. Nobody imports them, so
+// neither is a defect, and a gate that reports two non-defects every hour is
+// how a loop teaches its reader to skim past it. The obligation is real for the
+// 33 files somebody does import: `import('./cycle.mjs')` would today run an
+// entire cycle, take the lock and call `process.exit` before the importer's
+// next line. That is the hazard; the guard is what forecloses it.
+check('every imported module guards its main block', () => {
+  const gaps = unguardedImports(readLoopSources(DIR))
+  if (gaps.length) throw new Error(`imported but unguarded: ${gaps.join(', ')}`)
 })
 
-check('no tool reads process.argv at module scope, outside an isMain block', () => {
+// A GATE NEVER SEEN FAILING IS NOT KNOWN TO WORK. All 33 imported modules
+// already carry a guard, so the check above passes on the real tree and would
+// pass just as quietly if `unguardedImports` returned `[]` for every input.
+// These fixtures are the only evidence it can still accuse.
+check('the main-guard gate catches an unguarded module that someone imports', () => {
+  const caught = unguardedImports({
+    'driver.mjs': "import { f } from './leaf.mjs'\nf()\n",
+    'leaf.mjs': "export function f() {}\nfs.writeFileSync('x', 'y')\n",
+  })
+  if (caught.join() !== 'leaf.mjs') throw new Error(`expected leaf.mjs, got [${caught.join(', ')}]`)
+
+  // ...and does not accuse a leaf nobody imports, nor a guarded one that is.
+  const quiet = unguardedImports({
+    'alone.mjs': "console.log('I am a script')\n",
+    'driver.mjs': "import { f } from './guarded.mjs'\nf()\n",
+    'guarded.mjs': "export function f() {}\nconst isMain = process.argv[1].endsWith('/guarded.mjs')\nif (isMain) f()\n",
+  })
+  if (quiet.length) throw new Error(`expected no accusation, got [${quiet.join(', ')}]`)
+
+  // The older inline spelling is a guard too - that substitution is what made
+  // the first version of this check accuse seven innocent files.
+  const inline = unguardedImports({
+    'driver.mjs': "import { f } from './old.mjs'\nf()\n",
+    'old.mjs': "export function f() {}\nif (process.argv[1] && process.argv[1].endsWith('/old.mjs')) f()\n",
+  })
+  if (inline.length) throw new Error(`inline guard not recognised: [${inline.join(', ')}]`)
+})
+
+check('no IMPORTED module reads process.argv at module scope', () => {
   // The first version of this check tested whether the LINE mentioned isMain,
   // and duly accused six files that read argv correctly INSIDE an
   // `if (isMain) {` block. Seventh false accusation of the night, caught by the
   // very check written for that class - which is the point of writing it.
   // Depth tracking is the only honest reading, exactly as it was for SQL.
+  const imported = importedByAnother(DIR)
   const offenders = []
   for (const f of fs.readdirSync(DIR).filter((n) => n.endsWith('.mjs') && n !== 'selftest.mjs')) {
+    // A leaf script may read its own command line at the top. Only a module
+    // somebody imports is reading someone else's.
+    if (!imported.has(f)) continue
     const src = fs.readFileSync(path.join(DIR, f), 'utf8')
     let depth = 0
     let guardDepth = null
@@ -2663,6 +2790,222 @@ check('the sharing step lives where its budget fits', () => {
   }
 })
 
+// --------------------------------------------- reading tri's grammar, not its shape
+// THE GUARD BELOW READ A SHAPE AND WENT BLIND ON A QUARTER OF THE CLI.
+//
+// It matched one line-anchored regex:
+//
+//     /^\s{0,4}([a-z0-9][a-z0-9|_-]*)\)\s*(#.*)?$/
+//
+// The `$` means it only ever saw an arm whose body began on the NEXT line. A
+// large minority of tri's commands are written on one line -
+//
+//     game-ship)    shift; exec bash -lc "..." ;;
+//
+// - and every one of them was invisible. Measured 2026-09-12: 108 labels seen of
+// 147 real ones, EVERY `game-*` arm among the missing, and a deliberately
+// injected second `game-ship)` still reported as "0 duplicate(s)". The sentinel
+// that was supposed to catch exactly this said `seen.size < 50` against 108, so
+// it could never have fired: it was not protection, it was decoration.
+//
+// This is the defect class this repository keeps hitting (a regex that reads a
+// shape rather than the grammar), so the replacement parses the grammar. A case
+// label is whatever follows `case ... in` or a `;;`, up to the first `)` that is
+// outside quotes and brackets. Heredoc bodies are not code and nested `case`
+// blocks are not tri commands, so both are excluded by construction - not by a
+// filter that a later arm could slip past.
+const SH_HEREDOC = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*$/
+const SH_CASE_OPEN = /^case\s+.*\s+in$/
+const SH_CASE_CLOSE = /^esac\b/
+// `*)` is the fallthrough and `""` is the no-argument arm; neither is a command
+// anybody can type, so neither is documented and neither is counted.
+const TRI_CATCH_ALL = new Set(['*', '""', "''", ''])
+
+/** every heredoc in a shell script: its body, and which line indexes it covers. */
+function shellHeredocs(lines) {
+  const covered = new Set()
+  const bodies = new Map()
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(SH_HEREDOC)
+    if (!m) continue
+    const body = []
+    let j = i + 1
+    for (; j < lines.length && lines[j].trim() !== m[2]; j++) { covered.add(j); body.push({ line: j + 1, text: lines[j] }) }
+    covered.add(j)
+    if (!bodies.has(m[2])) bodies.set(m[2], body)
+    i = j
+  }
+  return { covered, bodies }
+}
+
+/**
+ * The label of a case arm: everything up to the first `)` that is not inside
+ * quotes or a bracket class. Returns null when the line is not an arm at all -
+ * an `(` reached first means a subshell or a function definition.
+ */
+function shellCaseLabel(s) {
+  let quote = null
+  let bracket = 0
+  const start = s[0] === '(' ? 1 : 0
+  for (let k = start; k < s.length; k++) {
+    const c = s[k]
+    if (quote) { if (c === quote) quote = null; continue }
+    if (c === '"' || c === "'") { quote = c; continue }
+    if (c === '[') { bracket++; continue }
+    if (c === ']') { bracket--; continue }
+    if (c === '(') return null
+    if (c === ')' && bracket <= 0) return { label: s.slice(start, k).trim(), rest: s.slice(k + 1).trim() }
+  }
+  return null
+}
+
+/** Every arm of tri's top-level dispatcher, one-line arms included. */
+function triArms(src) {
+  const lines = src.split('\n')
+  const { covered, bodies } = shellHeredocs(lines)
+  const arms = []
+  let depth = 0
+  let expect = false
+  for (let i = 0; i < lines.length; i++) {
+    if (covered.has(i)) continue
+    const s = lines[i].trim()
+    if (!s || s.startsWith('#')) continue
+    if (SH_CASE_OPEN.test(s)) { depth++; expect = depth === 1; continue }
+    if (SH_CASE_CLOSE.test(s)) { depth--; expect = depth === 1 && s.endsWith(';;'); continue }
+    if (depth !== 1) continue
+    if (!expect) { if (s.endsWith(';;')) expect = true; continue }
+    const r = shellCaseLabel(s)
+    if (!r) { expect = s.endsWith(';;'); continue }
+    const patterns = r.label.split('|').map((p) => p.trim())
+    arms.push({ line: i + 1, label: r.label, patterns })
+    expect = r.rest.endsWith(';;')
+  }
+  // first arm wins: that is what the shell does, and it is what shadowing means
+  const patterns = new Map()
+  for (const a of arms) for (const p of a.patterns) if (!patterns.has(p)) patterns.set(p, a)
+  return { arms, patterns, usage: bodies.get('USAGE') || [] }
+}
+
+/**
+ * Which commands `tri help` documents.
+ *
+ * NARROW ON PURPOSE. A token counts as documented only where it is written as a
+ * command - immediately after the word `tri` - or as a slash alternate in the
+ * HEAD of an entry (`tri iter / iter-dash / iter-log [N]`), the part before the
+ * em dash that separates a command from its Russian description. Reading the
+ * description too would count `qa/queen-NAME-contract.mjs` and `f.json` as
+ * commands, and the reverse assertion below would then be meaningless.
+ */
+function triDocumented(usage) {
+  // U+2014, built from its code point: L3 keeps this file's source ASCII.
+  const EM_DASH = String.fromCharCode(0x2014)
+  const doc = new Map()
+  const put = (t, u) => { if (!doc.has(t)) doc.set(t, u.line) }
+  for (const u of usage) {
+    for (const m of u.text.matchAll(/\btri\s+([a-z][a-z0-9-]*)/g)) put(m[1], u)
+    if (!/^\s*tri(\s|$)/.test(u.text)) continue
+    const parts = u.text.split(EM_DASH)[0].split('/')
+    for (let i = 1; i < parts.length; i++) {
+      const t = (parts[i].trim().split(/\s/)[0] || '').trim()
+      if (/^[a-z][a-z0-9-]*$/.test(t)) put(t, u)
+    }
+  }
+  return doc
+}
+
+/**
+ * A SECOND, DELIBERATELY DIFFERENT INSTRUMENT - and the only floor here.
+ *
+ * The old sentinel was `seen.size < 50`, a number somebody guessed; against 108
+ * seen labels it could never fire, so the guard had no protection at all. A
+ * floor has to be MEASURED. This crude scan knows nothing about quoting,
+ * nesting or heredocs - it just takes any line that opens with a word and a
+ * `)` - and that is the point: the grammar scan must never see fewer commands
+ * than the crude one, and every label the crude one finds must be among them.
+ * Narrow the grammar scan back to a line anchor and it drops below its own
+ * floor the same day.
+ */
+function crudeTriLabels(src) {
+  const crude = new Set()
+  for (const l of src.split('\n')) {
+    const m = l.match(/^\s{0,6}([a-z0-9][a-z0-9|_-]*)\)/)
+    if (m) for (const p of m[1].split('|')) crude.add(p)
+  }
+  return crude
+}
+
+const triSource = () => fs.readFileSync(path.join(process.env.HOME || '', '.local/bin/tri'), 'utf8')
+
+check('the tri scanner reads one-line case arms, not just line-anchored ones', () => {
+  // PINNED FIXTURES. Each one is a shape the old regex could not see; if the
+  // scanner is ever narrowed back to a line anchor, these fail before the real
+  // file does, and they say why.
+  const OLD = /^\s{0,4}([a-z0-9][a-z0-9|_-]*)\)\s*(#.*)?$/
+  const blindTo = (src) => {
+    const seen = new Set()
+    for (const l of src.split('\n')) { const m = l.match(OLD); if (m) for (const p of m[1].split('|')) seen.add(p) }
+    return seen
+  }
+
+  // A: a duplicate hidden in one-line arms - exactly how `game-ship` was hidden.
+  const oneLine = [
+    'case "$1" in',
+    '  alpha)   echo one ;;',
+    '  beta)',
+    '    echo two',
+    '    ;;',
+    '  alpha)   echo dead ;;',
+    'esac',
+  ].join('\n')
+  const a = triArms(oneLine)
+  if (![...a.patterns.keys()].includes('alpha')) throw new Error('a one-line arm is a command like any other')
+  if (a.arms.length !== 3) throw new Error(`three arms are written here - scanner found ${a.arms.length}`)
+  if (a.arms.filter((x) => x.patterns.includes('alpha')).length !== 2) {
+    throw new Error('the second alpha is unreachable and the scanner must still see it')
+  }
+  // and the fixture has teeth: the regex this replaced sees only `beta` here.
+  if (blindTo(oneLine).has('alpha')) throw new Error('this fixture no longer discriminates - pick one the old shape misses')
+
+  // B: a nested case is not a tri command. Without this the scanner would report
+  // a phantom collision the moment an arm dispatches on something of its own.
+  const nested = [
+    'case "$1" in',
+    '  alpha)',
+    '    case "$x" in',
+    '      alpha) echo inner ;;',
+    '    esac',
+    '    ;;',
+    '  beta) echo two ;;',
+    'esac',
+  ].join('\n')
+  const b = triArms(nested)
+  if ([...b.patterns.keys()].join(',') !== 'alpha,beta') {
+    throw new Error(`an inner case belongs to its arm - got ${[...b.patterns.keys()].join(',')}`)
+  }
+  if (b.arms.length !== 2) throw new Error(`two commands here - got ${b.arms.length}`)
+
+  // C: a heredoc body is prose, not code. `tri help` itself prints lines that
+  // would otherwise parse as arms.
+  const doc = [
+    'case "$1" in',
+    '  alpha)',
+    "    cat <<'USAGE'",
+    '  beta) this is help text, not a command',
+    'USAGE',
+    '    ;;',
+    'esac',
+  ].join('\n')
+  const c = triArms(doc)
+  if ([...c.patterns.keys()].join(',') !== 'alpha') throw new Error(`help text is not a command - got ${[...c.patterns.keys()].join(',')}`)
+  if (c.usage.length !== 1 || !/beta\) this is help/.test(c.usage[0].text)) throw new Error('the USAGE body must be readable as text')
+
+  // D: quotes and brackets hold. `""|ssh)` is tri's real first arm.
+  const quoted = triArms(['case "$1" in', '  ""|ssh) echo a ;;', '  x[0-9]) echo b ;;', 'esac'].join('\n'))
+  if ([...quoted.patterns.keys()].join(',') !== '"",ssh,x[0-9]') {
+    throw new Error(`a ) inside quotes or brackets does not end a label - got ${[...quoted.patterns.keys()].join(',')}`)
+  }
+})
+
 check('no tri command is shadowed by an earlier one', () => {
   // A shell `case` takes the FIRST match. `feed)` appeared twice in tri: a
   // Vibee content feed at line 37 and the loop's own feed at line 390. The
@@ -2671,19 +3014,78 @@ check('no tri command is shadowed by an earlier one', () => {
   // and the loop step never once ran from its timer.
   //
   // 92 labels, one collision, and nothing in the system could see it.
-  const src = fs.readFileSync(path.join(process.env.HOME || '', '.local/bin/tri'), 'utf8')
+  const src = triSource()
+  const { arms, patterns } = triArms(src)
   const seen = new Map()
   const dup = []
-  src.split('\n').forEach((line, i) => {
-    const m = line.match(/^\s{0,4}([a-z0-9][a-z0-9|_-]*)\)\s*(#.*)?$/)
-    if (!m) return
-    for (const label of m[1].split('|')) {
-      if (seen.has(label)) dup.push(`${label} (first at ${seen.get(label)}, unreachable at ${i + 1})`)
-      else seen.set(label, i + 1)
+  for (const a of arms) {
+    for (const p of a.patterns) {
+      if (seen.has(p)) dup.push(`${p} (first at ${seen.get(p)}, unreachable at ${a.line})`)
+      else seen.set(p, a.line)
     }
-  })
+  }
   if (dup.length) throw new Error(`shadowed command(s): ${dup.join('; ')}`)
-  if (seen.size < 50) throw new Error(`only ${seen.size} labels parsed - the scanner has stopped seeing the file`)
+
+  // THE FLOOR IS MEASURED, NOT TYPED - see crudeTriLabels above.
+  const crude = crudeTriLabels(src)
+  const real = [...patterns.keys()].filter((p) => !TRI_CATCH_ALL.has(p))
+  if (real.length < crude.size) {
+    throw new Error(`the grammar scan sees ${real.length} commands where a crude shape scan sees ${crude.size} - it has stopped reading the file`)
+  }
+  // and name two one-line arms outright, so the failure says what was lost
+  for (const must of ['game-ship', 'tg-who']) {
+    if (!patterns.has(must)) throw new Error(`${must} is written as a one-line arm and the scanner must see it`)
+  }
+})
+
+check('tri help documents every command, and every documented command exists', () => {
+  // WHY BOTH DIRECTIONS. 23 of 146 commands appeared nowhere in `tri help` -
+  // including all 13 `game-*` arms and `vibee-feed`, the arm that inherited the
+  // behaviour `tri feed` used to have. Undocumented is how a command becomes
+  // unfindable; documented-but-absent is how help starts lying. Neither count
+  // can drift once both are asserted.
+  //
+  // ALIASES. `anomalies|anom)` is ONE arm, so `tri anomalies` and `tri anom` are
+  // one command and one help entry may cover both. The rule is grammatical, not
+  // editorial: a pattern is documented if it is named in help, OR if any other
+  // pattern of the SAME case arm is - which is exactly what makes `help|-h|--help`
+  // a single entry. Two separate arms are two commands and need two entries.
+  const src = triSource()
+  const { patterns, usage } = triArms(src)
+  if (!usage.length) throw new Error("the USAGE heredoc is where `tri help` is written - it was not found")
+  const doc = triDocumented(usage)
+
+  const undocumented = []
+  for (const [p, arm] of patterns) {
+    if (TRI_CATCH_ALL.has(p)) continue
+    if (arm.patterns.some((q) => doc.has(q))) continue
+    undocumented.push(`tri ${p} (arm at line ${arm.line})`)
+  }
+  if (undocumented.length) {
+    throw new Error(`${undocumented.length} command(s) in no help entry: ${undocumented.join(', ')}`)
+  }
+
+  const dead = []
+  for (const [t, line] of doc) if (!patterns.has(t)) dead.push(`tri ${t} (help line ${line})`)
+  if (dead.length) throw new Error(`help documents ${dead.length} command(s) that have no arm: ${dead.join(', ')}`)
+
+  // PIN: the left side of this comparison must include one-line arms. If the
+  // scanner narrows back to a line anchor, `game-ship` and every sibling like it
+  // drop off it - and then BOTH assertions above go quiet about them while
+  // `tri help` is free to rot again. So demand that every label even a crude
+  // shape scan can find was actually compared. The floor is measured, never typed.
+  const uncompared = [...crudeTriLabels(src)].filter((p) => !patterns.has(p))
+  if (uncompared.length) {
+    throw new Error(`${uncompared.length} command(s) never reached this check: ${uncompared.slice(0, 8).join(', ')}`)
+  }
+
+  // and the same assertion on a fixture, so it is shown failing before it is
+  // trusted: a one-line arm nobody documented must be reported.
+  const gap = triArms(['case "$1" in', "  alpha) cat <<'USAGE'", '  tri alpha - the only entry', 'USAGE', '  ;;', '  beta) echo two ;;', 'esac'].join('\n'))
+  const gapDoc = triDocumented(gap.usage)
+  const missed = [...gap.patterns.keys()].filter((p) => !TRI_CATCH_ALL.has(p) && !gap.patterns.get(p).patterns.some((q) => gapDoc.has(q)))
+  if (missed.join(',') !== 'beta') throw new Error(`an undocumented one-line arm must be named - got ${missed.join(',') || 'nothing'}`)
+  if (!gapDoc.has('alpha')) throw new Error('a documented command must be recognised from its help line')
 })
 
 check('a retry stops before it overruns its caller budget', async () => {

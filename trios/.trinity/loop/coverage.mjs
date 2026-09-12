@@ -82,6 +82,8 @@ const ACTS = {
   'salvage.mjs': { kinds: [], note: 'a reader: it measures what a stale branch would still add and writes a brief; it applies nothing and never rebases' },
   'proven.mjs': { kinds: [], note: 'a comparison: recent verdicts against the baseline this process established; it records a reading and changes nothing' },
   'selftest.mjs': { kinds: [], note: 'the calibration harness - proven by running, not by acting' },
+  'dash-cc.mjs': { kinds: [], note: 'renders one reading as a page and derives nothing from it; every number on the page carries the command that measured it' },
+  'mask.mjs': { kinds: [], note: 'one pure function - blanks comment and string interiors so a detector reads code and not prose; it touches nothing' },
 }
 
 export function coverage() {

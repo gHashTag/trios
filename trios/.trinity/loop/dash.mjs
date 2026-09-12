@@ -69,6 +69,68 @@ const sh = (cmd, timeout = 120000) => {
   }
 }
 
+/**
+ * THE FRESHNESS RULE. A read costs nothing, however old the record is.
+ *
+ * Four rows below are READ from a record another instrument writes, and reading
+ * one is free whether it was written a minute ago or a week ago.
+ * `proven-history.jsonl` held two lines written on 2026-09-05, and on 2026-09-12
+ * the dashboard printed their numbers with `+0` beside them. The `+0` was not a
+ * bug: the anchor held the same frozen numbers, so the delta was honestly zero.
+ * That is the trap - a writer that has STOPPED is indistinguishable from a
+ * metric that is STABLE, and the two look identical for as long as nobody puts
+ * the age on the screen.
+ *
+ * ONE HOUR, MEASURED RATHER THAN CHOSEN. The same heal chain writes both
+ * records. Over the 297 samples in the two-views record its real spacing is a
+ * 23.5-minute median with a 42.6-minute ninth decile, because the chain skips a
+ * fire whenever the lock is held and its own pass takes seven to ten minutes. A
+ * fifteen-minute threshold would be red on a healthy loop, and a threshold that
+ * cries on healthy machinery is read as decoration within a week. An hour is the
+ * first one that means something. `TRIOS_CADENCE_SECONDS` overrides it.
+ */
+export const CADENCE_SECONDS = Number(process.env.TRIOS_CADENCE_SECONDS || 3600)
+
+/** Milliseconds since an ISO stamp - null when the record carries no clock. */
+export function ageMs(at, now = Date.now()) {
+  const t = Date.parse(at || '')
+  return Number.isFinite(t) ? Math.max(0, now - t) : null
+}
+
+/**
+ * An age a reader can hold in their head.
+ *
+ * `age unknown` for null, and never `0m old`: a record with no timestamp has not
+ * been shown to be fresh, and printing it as brand new would be the same defect
+ * as printing an unmeasured fact as 0.
+ */
+export function ageWords(ms) {
+  if (ms === null || ms === undefined) return 'age unknown'
+  const m = Math.round(ms / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m old`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ${m % 60}m old`
+  return `${Math.floor(h / 24)}d ${h % 24}h old`
+}
+
+/** Older than one cadence: the writer should have run by now and did not. */
+export function isStale(ms, cadenceSeconds = CADENCE_SECONDS) {
+  return ms !== null && ms !== undefined && ms > cadenceSeconds * 1000
+}
+
+/** Every JSON line of a record, skipping whatever does not parse. */
+function jsonl(read, file) {
+  return read(file)
+    .split('\n').filter(Boolean)
+    .map((l) => { try { return JSON.parse(l) } catch { return null } })
+    .filter(Boolean)
+}
+
+const PROVEN_RECORD = ['state', 'proven-history.jsonl']
+const PAIRED_RECORD = ['state', 'two-views.jsonl']
+const readFile = (f) => fs.readFileSync(f, 'utf8')
+
 /** running / finished, from the swarm's own board. */
 export function swarmCounts(run = sh) {
   const out = run(`${JSON.stringify(path.join(process.env.HOME || '', '.local/bin/tri'))} swarm`, 200000)
@@ -145,8 +207,8 @@ export function worstStep(run = sh) {
   return rows.sort((a, b) => b.rate - a.rate)[0]
 }
 
-/** proven / checkable across every accepted verdict, from the warm cache. */
-export function provenCounts(read = (f) => fs.readFileSync(f, 'utf8')) {
+/** proven / checkable across every accepted verdict, from the warm cache, WITH ITS AGE. */
+export function provenCounts(read = readFile) {
   // READ THE RECORD, DO NOT RECOMPUTE IT.
   //
   // This ran `proven.mjs` with a 400-second cap. That was set when the swarm had
@@ -158,10 +220,13 @@ export function provenCounts(read = (f) => fs.readFileSync(f, 'utf8')) {
   // The tool records its own reading with --record, exactly as the paired probe
   // does. The dashboard reads that. A measurement that grows with the system
   // does not belong on the path that draws the picture.
-  const rows = read(path.join(DIR, 'state', 'proven-history.jsonl'))
-    .split('\n').filter(Boolean)
-    .map((l) => { try { return JSON.parse(l) } catch { return null } })
-    .filter(Boolean)
+  //
+  // AND THE READING CARRIES ITS OWN CLOCK, which is the half that was missing.
+  // Reading a record is free at any age, so this returned three numbers and no
+  // way to tell that they were written a week earlier. `at` comes from the
+  // record's own `at` field - not from the file's mtime, which a touch, a copy
+  // or a backup would move without a new measurement ever being taken.
+  const rows = jsonl(read, path.join(DIR, ...PROVEN_RECORD))
   if (!rows.length) return null
   const last = rows[rows.length - 1]
   const r = last.recent || {}
@@ -169,7 +234,7 @@ export function provenCounts(read = (f) => fs.readFileSync(f, 'utf8')) {
   const proven = (r.proven || 0) + (b.proven || 0)
   const judged = (r.checkable || 0) + (b.checkable || 0)
   const total = (r.total || 0) + (b.total || 0)
-  return judged ? { proven, judged, unjudgeable: total - judged } : null
+  return judged ? { proven, judged, unjudgeable: total - judged, at: last.at || null } : null
 }
 
 /** How many cases the gate actually contains. */
@@ -192,11 +257,8 @@ export function selftestCases(read = (f) => fs.readFileSync(f, 'utf8')) {
  */
 export const GATEWAY_WINDOW = Number(process.env.TRIOS_GATEWAY_WINDOW || 12)
 
-export function gatewayPercent(read = (f) => fs.readFileSync(f, 'utf8'), window = GATEWAY_WINDOW) {
-  const rows = read(path.join(DIR, 'state', 'two-views.jsonl'))
-    .split('\n').filter(Boolean)
-    .map((l) => { try { return JSON.parse(l) } catch { return null } })
-    .filter(Boolean)
+export function gatewayPercent(read = readFile, window = GATEWAY_WINDOW) {
+  const rows = jsonl(read, path.join(DIR, ...PAIRED_RECORD))
   if (!rows.length) return null
   // A LIFETIME AVERAGE HIDES A FIX FOR HOURS.
   //
@@ -214,6 +276,27 @@ export function gatewayPercent(read = (f) => fs.readFileSync(f, 'utf8'), window 
 }
 
 /**
+ * When the newest sample in that window was taken.
+ *
+ * A percentage over the last twelve samples says nothing about WHEN those twelve
+ * happened. If the paired probe stops, this row keeps printing the rate of a
+ * window that ended hours ago, and it will keep printing it in exactly the same
+ * ink as a reading taken a minute ago. A rate over a dead window is a statement
+ * about the past wearing the present tense.
+ *
+ * Kept separate from `gatewayPercent` rather than folded into a richer return:
+ * that function's answer is a number, several callers compare it as one, and a
+ * shape change to carry an extra field would be a change to every one of them.
+ */
+export function gatewayAt(read = readFile) {
+  const rows = jsonl(read, path.join(DIR, ...PAIRED_RECORD))
+  return rows.length ? (rows[rows.length - 1].at || null) : null
+}
+
+/** Only the samples that actually carry a pid reading; a refused attach has none. */
+const withPids = (read) => jsonl(read, path.join(DIR, ...PAIRED_RECORD)).filter((r) => r.ssh && r.ssh.pids && r.ssh.pids.max)
+
+/**
  * How close the container is to running out of process slots.
  *
  * On 2026-09-05 the service CRASHED: `/health` 502, railway reporting the
@@ -224,14 +307,25 @@ export function gatewayPercent(read = (f) => fs.readFileSync(f, 'utf8'), window 
  *
  * Read from the paired record, which now asks while it is attached anyway.
  */
-export function pidPercent(read = (f) => fs.readFileSync(f, 'utf8')) {
-  const rows = read(path.join(DIR, 'state', 'two-views.jsonl'))
-    .split('\n').filter(Boolean)
-    .map((l) => { try { return JSON.parse(l) } catch { return null } })
-    .filter((r) => r && r.ssh && r.ssh.pids && r.ssh.pids.max)
+export function pidPercent(read = readFile) {
+  const rows = withPids(read)
   if (!rows.length) return null
   const p = rows[rows.length - 1].ssh.pids
   return Math.round((100 * p.used) / p.max)
+}
+
+/**
+ * When that pid reading was taken.
+ *
+ * NOT the newest sample in the record - the newest sample that carries pids. A
+ * refused attach brings no pid count back, so a run of refusals leaves this row
+ * showing a number from before them, and the age of the record as a whole would
+ * describe a sample this row is not using. The gap between the two is itself the
+ * finding: process pressure is only measurable while the gateway answers.
+ */
+export function pidAt(read = readFile) {
+  const rows = withPids(read)
+  return rows.length ? (rows[rows.length - 1].at || null) : null
 }
 
 /** Percent in use of the disk this loop runs on. */
@@ -289,9 +383,22 @@ export function facts(deps = {}) {
     selftest: measure(() => (read ? selftestCases(read) : selftestCases())),
     disk: measure(() => diskPercent(run)),
     gateway: measure(() => (read ? gatewayPercent(read) : gatewayPercent())),
+    // The percentages above are read from a record, so each one is paired with
+    // the clock of the sample it came from. Without it a row that stopped being
+    // written is drawn in the same ink as one taken a minute ago.
+    gatewayAt: measure(() => (read ? gatewayAt(read) : gatewayAt())),
     pids: measure(() => (read ? pidPercent(read) : pidPercent())),
+    pidsAt: measure(() => (read ? pidAt(read) : pidAt())),
     parity: measure(() => ringParity(run)),
     behind: measure(() => behindShipRef(run)),
+    // Both, deliberately. The live value is what the swarm will dispatch; the
+    // ring is what the source declares; the row prints the first and shows the
+    // second when they disagree, because the disagreement is a defect nobody
+    // was going to find by reading either number alone.
+    capacity: {
+      live: measure(() => liveCapacity(run)),
+      ring: measure(() => T27.ringConst('MAX_CONCURRENT_WORKERS')),
+    },
     at: new Date().toISOString(),
   }
 }
@@ -331,19 +438,97 @@ export function recordReading(f, file = READINGS) {
  *
  * `(of ?)` when the artifact is absent, never `(of 4)`. An invented constant
  * that happens to be right is the same defect wearing a correct answer.
+ *
+ * AND THE RING IS STILL NOT THE SWARM. Asking the ring was an improvement on
+ * typing the number and it is not the last word: the ring says what the source
+ * DECLARES, the running service says what it will actually DISPATCH, and on
+ * 2026-09-12 those were 4 and 6.
+ *
+ * This label is unchanged, because its caller is the tick-path box in
+ * `snapshot.mjs`, which must not grow a remote query. The dashboard row below
+ * asks the Queen instead (`liveCapacity`) and keeps the ring only as the
+ * comparison - see `capacityNote`.
  */
 export function capacityLabel(read) {
   const n = read ? read() : null
   return `bees running (of ${n ?? '?'})`
 }
 
-export function rows(f, prev) {
+/**
+ * What the ring says, when that is not what the swarm says.
+ *
+ * THE DRIFT IS THE FINDING, so it is not resolved in either direction. Printing
+ * only the live 6 hides that the source declares 4; printing only the ring's 4
+ * is the defect this replaced. Both, with the live one in the number column and
+ * the ring beside it in dim, and a reader can see there is something to fix.
+ *
+ * Empty string when they agree - a note that is always there is not read.
+ */
+export function capacityNote(ring, live) {
+  const r = ring ?? null
+  const l = live ?? null
+  if (l === null && r === null) return 'capacity unread, live and ring both'
+  if (l === null) return `live capacity unread; ring says ${r}`
+  if (r === null) return 'ring capacity unread - run `tri t27-gen`'
+  return r === l ? '' : `ring says ${r}`
+}
+
+export const QUEEN_STATUS = process.env.TRIOS_QUEEN_STATUS
+  || 'https://trios-agent-server-production.up.railway.app/queen/status'
+
+/**
+ * How many bees the running service will actually dispatch.
+ *
+ * THE BOX REPORTED A SATURATED SWARM OUT OF A LOCAL CONSTANT. `bees running
+ * (of 4) 4` read as every slot full; the live board said `capacity 6`. Four of
+ * four is saturation, four of six is not, and the difference was never measured
+ * - it was transcribed from the ring, which is a statement about the source
+ * tree and not about the deployment the rest of this dashboard describes.
+ *
+ * Null when the Queen does not answer, never a remembered 6. `measure` turns a
+ * throw into null and the label then prints `?`.
+ */
+export function liveCapacity(run = sh) {
+  const q = JSON.parse(run(`curl -sS -m 20 ${JSON.stringify(QUEEN_STATUS)}`, 30000))
+  const c = q && q.workers ? q.workers.capacity : null
+  return typeof c === 'number' ? c : null
+}
+
+/**
+ * A row that came out of a record, carrying the age of that record.
+ *
+ * `at` is the record's own stamp, `age` the distance from now, `stale` whether
+ * the writer has missed a cadence. The renderer uses the last one to decide
+ * between a delta and an age: a delta across a gap nobody measured is a
+ * comparison between two readings of the same frozen file, and it is always
+ * `+0` however long the writer has been dead.
+ */
+const fromRecord = (row, at, now) => {
+  const age = ageMs(at, now)
+  return { ...row, at: at || null, age, stale: isStale(age) }
+}
+
+export function rows(f, prev, now = Date.now()) {
   const p = prev || {}
+  const ring = f.capacity?.ring ?? null
+  const live = f.capacity?.live ?? null
+  const running = f.swarm?.running ?? null
+  const provenAt = f.proven?.at ?? null
   return [
-    { k: capacityLabel(() => T27.ringConst('MAX_CONCURRENT_WORKERS')), v: f.swarm?.running ?? null, prev: p.swarm?.running ?? null, goodDown: false },
+    // THE DENOMINATOR IS ASKED OF THE SWARM AND COMPARED WITH THE RING, and the
+    // value column carries both numbers - `0 / 6` is a fact about the swarm,
+    // where `4` beside a label saying `(of 4)` was a fact about a source file.
+    {
+      k: 'bees running / capacity',
+      v: running,
+      vText: `${running ?? '-'} / ${live ?? '?'}`,
+      prev: p.swarm?.running ?? null,
+      goodDown: false,
+      note: capacityNote(ring, live),
+    },
     { k: 'dispatches finished', v: f.swarm?.finished ?? null, prev: p.swarm?.finished ?? null, goodDown: false },
-    { k: 'judged verdicts that prove', v: f.proven?.proven ?? null, prev: p.proven?.proven ?? null, goodDown: false },
-    { k: 'briefs with nothing checkable', v: f.proven?.unjudgeable ?? null, prev: p.proven?.unjudgeable ?? null },
+    fromRecord({ k: 'judged verdicts that prove', v: f.proven?.proven ?? null, prev: p.proven?.proven ?? null, goodDown: false }, provenAt, now),
+    fromRecord({ k: 'briefs with nothing checkable', v: f.proven?.unjudgeable ?? null, prev: p.proven?.unjudgeable ?? null }, provenAt, now),
     { k: 'hours 12: no bee working, percent', v: f.idle ?? null, prev: p.idle ?? null },
     { k: 'send-backs looping with no ceiling', v: f.looping?.looping ?? null, prev: p.looping?.looping ?? null },
     { k: 'rows where one rule answers two ways', v: f.divergent?.rows ?? null, prev: p.divergent?.rows ?? null },
@@ -352,12 +537,49 @@ export function rows(f, prev) {
     { k: 'ring T27-00 cases agreeing with the twin', v: f.parity?.agree ?? null, prev: p.parity?.agree ?? null, goodDown: false },
     { k: 'commits this checkout is behind what ships', v: f.behind ?? null, prev: p.behind ?? null },
     { k: 'disk this loop runs on, percent', v: f.disk ?? null, prev: p.disk ?? null },
-    { k: `ssh gateway answers, last ${GATEWAY_WINDOW}, percent`, v: f.gateway ?? null, prev: p.gateway ?? null, goodDown: false },
-    { k: 'container process slots used, percent', v: f.pids ?? null, prev: p.pids ?? null },
+    fromRecord({ k: `ssh gateway answers, last ${GATEWAY_WINDOW}, percent`, v: f.gateway ?? null, prev: p.gateway ?? null, goodDown: false }, f.gatewayAt ?? null, now),
+    fromRecord({ k: 'container process slots used, percent', v: f.pids ?? null, prev: p.pids ?? null }, f.pidsAt ?? null, now),
   ]
 }
 
+/**
+ * Dim for a row whose source has stopped, red for the age that says so.
+ *
+ * The only colour in this file, and it carries one distinction: whether the
+ * number in front of you was taken within the cadence that was supposed to take
+ * it. `NO_COLOR` and `--no-color` turn it off, and the words remain - the age is
+ * printed either way, because a reader piping this to a file must not lose the
+ * one fact the colour exists to draw attention to.
+ */
+// THE ENVIRONMENT IS SHARED; THE COMMAND LINE IS NOT. `snapshot.mjs` and
+// `selftest.mjs` both import this file, and a `--no-color` aimed at either of
+// them used to reach in here and silently reconfigure the exported renderer.
+// `NO_COLOR` stays at module scope because it IS shared by design; the flag is
+// read in the main block at the foot, where it belongs to this process alone.
+let PLAIN = !!process.env.NO_COLOR
+const dim = (s) => (PLAIN ? s : `\x1b[2m${s}\x1b[0m`)
+const red = (s) => (PLAIN ? s : `\x1b[31m${s}\x1b[0m`)
+
+export function renderRow(r) {
+  // A STALE ROW SHOWS ITS AGE INSTEAD OF A DELTA, not as well as one. Both
+  // readings come out of the same unchanged file, so the delta is `+0` by
+  // construction - it looks like a settled metric and is a dead writer, and
+  // printing the two side by side would leave the reader to pick. The age is
+  // the fact; the delta across a gap nobody measured is not one.
+  const d = !r.stale && r.v !== null && r.prev !== null
+    ? (r.v - r.prev >= 0 ? `+${r.v - r.prev}` : String(r.v - r.prev))
+    : ''
+  const value = r.vText ?? String(r.v ?? '-')
+  const line = `  ${String(r.k).padEnd(38)} ${value.padStart(6)}  ${d.padStart(5)}`
+  const notes = []
+  if (r.age !== null && r.age !== undefined) notes.push(r.stale ? red(ageWords(r.age)) : dim(ageWords(r.age)))
+  else if (r.at === null && 'at' in r) notes.push(red('source carries no clock'))
+  if (r.note) notes.push(dim(r.note))
+  return (r.stale ? dim(line) : line) + (notes.length ? `  ${notes.join('  ')}` : '')
+}
+
 if (isMain) {
+  if (process.argv.includes('--no-color')) PLAIN = true
   const f = facts()
   if (process.argv.includes('--facts')) {
     console.log(JSON.stringify(f, null, 2))
@@ -365,9 +587,12 @@ if (isMain) {
   }
   const prev = lastReading()
   console.log('measured now, nothing typed:\n')
-  for (const r of rows(f, prev)) {
-    const d = r.v !== null && r.prev !== null ? (r.v - r.prev >= 0 ? `+${r.v - r.prev}` : String(r.v - r.prev)) : ''
-    console.log(`  ${String(r.k).padEnd(38)} ${String(r.v ?? '-').padStart(6)}  ${d.padStart(5)}`)
+  for (const r of rows(f, prev)) console.log(renderRow(r))
+  const stale = rows(f, prev).filter((r) => r.stale)
+  if (stale.length) {
+    console.log(`\n  ${stale.length} row(s) are older than the ${Math.round(CADENCE_SECONDS / 60)}-minute cadence that writes them,`)
+    console.log('  shown dim with their age instead of a delta. A stopped writer and a stable')
+    console.log('  metric look identical until the age is on the screen.')
   }
   const missing = rows(f, prev).filter((r) => r.v === null).map((r) => r.k)
   if (missing.length) {
