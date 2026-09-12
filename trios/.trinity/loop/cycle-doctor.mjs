@@ -74,6 +74,16 @@ const ARMS = {
   // the comment above gives. It is the only short English word in the loop's
   // vocabulary for "did this step get its turn", and nothing else claimed it.
   reach: 'reach',
+  // 2026-09-13. `driver` was added the day before and left out of this map for
+  // a day - the arm worked, and nothing would have said so if a later arm had
+  // shadowed it, which is exactly the failure `tri feed --act` shipped with.
+  // Being listed here is the only thing that keeps a working word working.
+  driver: 'driver',
+  // `drift` was resolved against every arm above this line before insertion.
+  // The word is deliberately not `tri-drift`: the subject of the sentence is
+  // the CLI itself, and a command named after its own implementation file goes
+  // stale the moment the file is renamed.
+  drift: 'drift',
 }
 
 // Files that belong to iterations 1-96. The cycle must not write them.

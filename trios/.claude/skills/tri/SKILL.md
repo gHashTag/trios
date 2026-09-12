@@ -5,6 +5,20 @@ argument-hint: [short] [full] [audit] [coverage] [lang:ru|en]
 allowed-tools: fs_read, fs_write, fs_edit, shell_execute, fs_list
 ---
 
+## This is not the `tri` command
+
+Two different things are called `tri` on this machine, and reading this file
+looking for the other one has wasted at least one session.
+
+- **This skill** is a status report for the trios tree. It issues `shell_execute`
+  calls and prints a table. Nothing here is executable.
+- **`tri`, the command** is 1686 lines of bash at `~/.local/bin/tri`, invoked by
+  absolute path by four launchd timers. It fronts the whole improvement loop and
+  three other projects. Its command list is `tri help` (172 lines) - read that,
+  never a copy of it, because a hand-copied list is the defect this repository
+  finds most often. See `.claude/skills/tri-cli/SKILL.md` for the facts about the
+  file itself that `tri help` cannot tell you.
+
 ## Mode Detection
 
 Check arguments for mode:

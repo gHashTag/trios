@@ -4255,6 +4255,54 @@ check('snapshot no longer coalesces the dispatch counts to zero', () => {
   }
 })
 
+// THE CLI ITSELF. Until 2026-09-13 `tri` was 1686 lines of bash in exactly one
+// place on this disk and in no repository, invoked by absolute path by four
+// launchd timers. These four gates are about the copy that now exists and about
+// the reading that decides whether it is still the right one. Each was seen
+// failing: the first three by construction below, and the live one by running
+// it before the copy existed, where it printed UNTRACKED and exited 1.
+check('a drift verdict is only ever a MEASURED difference', async () => {
+  const T = await import('./tri-drift.mjs')
+  const v = (r) => T.verdictOf(r).word
+  if (v({ measured: 0, distinct: [], tracked: 'aa' }) !== 'UNMEASURED') throw new Error('nothing read is not agreement')
+  if (T.verdictOf({ measured: 0, distinct: [], tracked: 'aa' }).code !== 2) throw new Error('unmeasured must not share an exit code with drift')
+  if (v({ measured: 1, distinct: ['aa'], tracked: null }) !== 'UNTRACKED') throw new Error('a missing copy is a finding, not a pass')
+  if (v({ measured: 2, distinct: ['aa', 'bb'], tracked: 'aa' }) !== 'SPLIT') throw new Error('two files called tri is a finding even when one of them matches')
+  if (v({ measured: 1, distinct: ['bb'], tracked: 'aa' }) !== 'DRIFT') throw new Error('a measured difference is drift')
+  if (v({ measured: 1, distinct: ['aa'], tracked: 'aa' }) !== 'same') throw new Error('agreement must still be reportable')
+})
+
+check('a path in a plist comment is not a declaration', () => {
+  // The first draft regexed the raw XML. Those plists carry long prose comments
+  // that quote commands and absolute paths, and reading prose as evidence is
+  // this repository's most-repeated defect - it would have been the eleventh
+  // instance. So the platform's own parser converts the file and only
+  // ProgramArguments is scanned. This proves the distinction on the two strings
+  // that matter.
+  return import('./tri-drift.mjs').then((T) => {
+    const real = T.triPathsInArgs(['/bin/zsh', '-lc', 'L=/tmp/x.log; /Users/playra/.local/bin/tri cycle >> "$L" 2>&1'])
+    if (real.length !== 1 || real[0] !== '/Users/playra/.local/bin/tri') throw new Error(`the executable must be found, got ${JSON.stringify(real)}`)
+    const prose = T.triPathsInArgs(['run tri cycle from /Users/playra/BrowserOS/trios/.trinity/loop and see /Users/playra/t27'])
+    if (prose.length) throw new Error(`prose is not a declaration, got ${JSON.stringify(prose)}`)
+  })
+})
+
+check('a job that invokes tri through PATH is reported, not silently skipped', async () => {
+  // No timer does this today, so the branch would never run in production. An
+  // untested branch is not a working branch.
+  const T = await import('./tri-drift.mjs')
+  if (!T.mentionsBareTri(['/bin/zsh', '-lc', 'tri cycle'])) throw new Error('a bare tri must be noticed')
+  if (T.mentionsBareTri(['/bin/zsh', '-lc', '/Users/playra/.local/bin/tri cycle'])) throw new Error('an absolute path is not a bare invocation')
+  if (T.mentionsBareTri(['/bin/zsh', '-lc', 'trios cycle'])) throw new Error('trios is a different word')
+})
+
+check('the CLI the timers run is the CLI in this repository', async () => {
+  const T = await import('./tri-drift.mjs')
+  const r = T.reading()
+  const v = T.verdictOf(r)
+  if (v.code !== 0) throw new Error(`${v.word}: ${v.why} - run \`tri drift\` for the per-path reading`)
+})
+
 check('the harness can fail an async check', async () => {
   // Guarding the fix above: before it, this file reported 0 failures while an
   // async case was rejecting into the void.

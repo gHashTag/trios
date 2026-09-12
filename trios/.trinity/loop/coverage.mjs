@@ -85,6 +85,11 @@ const ACTS = {
   'dash-cc.mjs': { kinds: [], note: 'renders one reading as a page and derives nothing from it; every number on the page carries the command that measured it' },
   'mask.mjs': { kinds: [], note: 'one pure function - blanks comment and string interiors so a detector reads code and not prose; it touches nothing' },
   'driver.mjs': { kinds: [], note: 'one reading for both generations - what, if anything, fires an iteration; it schedules nothing and changes nothing' },
+  // The act path is `--adopt`, and it was exercised the hour it was written -
+  // which is the whole point of this file. The reap defect is an act path that
+  // has never run; the first thing `--adopt` did was create the copy whose
+  // absence the report path had just printed in red.
+  'tri-drift.mjs': { kinds: ['tri-adopt'], note: 'the only copy of the 1686-line CLI the timers run - this says whether the tracked one still is it' },
 }
 
 export function coverage() {

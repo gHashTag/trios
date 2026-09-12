@@ -1,0 +1,1699 @@
+#!/usr/bin/env bash
+
+# EDITED IN PLACE WHILE A TIMER MAY BE RUNNING IT.
+# A launchd timer read this file mid-write on 2026-09-05 and bash reported a
+# syntax error on a line that was, and is, correct - it had simply seen a
+# truncated file, because open(path,'w') truncates before it writes.
+# Edits to this file are written to a temp file and renamed.
+# tri — Trinity S³AI ops CLI. Дефолт (без аргументов) — прежнее поведение:
+# railway ssh → claude. Подкоманды работают локально и ускоряют цикл.
+set -uo pipefail
+REPO="$HOME/999-multibots-telegraf"
+KEY_HELP='ключ: railway variables list -s vibee-render -e production --kv | grep ^AGENT_KEYS= | cut -d= -f2- (взять первый ключ до ":")'
+
+case "${1:-}" in
+  ""|ssh)
+    # прежний путь — без изменений
+    railway link -p reasonable-perception -e production > /dev/null 2>&1
+    railway service link opencode > /dev/null 2>&1
+    exec railway ssh -- bash -lc 'claude --dangerously-skip-permissions'
+    ;;
+  status)
+    echo "== render health =="; curl -s -m 5 http://127.0.0.1:3333/health || echo "RENDER DOWN"
+    echo; echo "== player =="; curl -s -m 5 -o /dev/null -w "5174:%{http_code}\n" http://localhost:5174/ 2>/dev/null || echo "player down"
+    echo; echo "== feed stats =="; curl -s -m 8 https://vibee-render-production.up.railway.app/api/feed/stats 2>/dev/null | head -c 300
+    echo; echo "== loop state =="; cat "$REPO/loop/state.json" 2>/dev/null
+    echo; echo "== последние витки =="; tail -5 "$REPO/loop/LOOP_STATE.md" 2>/dev/null
+    ;;
+  regress)
+    bash "$REPO/loop/regression-check.sh"
+    ;;
+  morning)
+    cat "$REPO/loop/MORNING.md" 2>/dev/null || echo "нет MORNING.md — прогони morning-summary.ts"
+    ;;
+  loop)
+    tail -60 "$REPO/loop/LOOP_REPORT.md" 2>/dev/null
+    ;;
+  vibee-feed)
+    # RENAMED from `feed` on 2026-09-05. It shadowed the loop's own `feed` for
+    # its whole life: a shell `case` takes the FIRST match, so `tri feed --act`
+    # - which a launchd timer has been running every 300 seconds - reached this
+    # content feed and never the loop step it was written for. The loop's feed
+    # had never once run from its timer.
+    curl -s -m 8 "https://vibee-render-production.up.railway.app/api/feed?limit=${2:-5}" \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); [print(t['id'], t.get('name','')[:50], '| ⭐', t.get('starsCount',0), '| 👁', t.get('viewsCount',0)) for t in d.get('templates',[])]" 2>/dev/null \
+      || echo "лента недоступна"
+    ;;
+  chat)
+    shift
+    KEY=$(railway variables list -s vibee-render -e production --kv 2>/dev/null | grep ^AGENT_KEYS= | cut -d= -f2- | cut -d, -f1 | cut -d: -f1)
+    if [ -z "$KEY" ] || [ -z "${1:-}" ]; then echo "нужен текст: tri chat \"вопрос\"; $KEY_HELP"; exit 1; fi
+    curl -sN -m 120 https://vibee-render-production.up.railway.app/api/agent/chat \
+      -H "X-Agent-Key: $KEY" -H 'Content-Type: application/json' \
+      -d "$(python3 -c 'import json,sys; print(json.dumps({"messages":[{"role":"user","content":sys.argv[1]}]}))' "$*")" \
+      | python3 -c "
+import sys, json
+for line in sys.stdin:
+    try: ev = json.loads(line)
+    except: continue
+    if ev.get('тип') == 'текст': print(ev['текст'], end='')
+    elif ev.get('тип') == 'результат': print(f\"  [{ev['имя']} · {ev['мс']}мс]\", file=sys.stderr)
+print()
+"
+    ;;
+  handover)
+    # СВОДКА ВЛАДЕЛЬЦУ ЧИТАЕТСЯ, А НЕ ПОМНИТСЯ.
+    #
+    # Здесь стоял heredoc, замороженный на волне 116, и он печатал состояние
+    # четырнадцати волн назад как текущее: дерево было на 130, а первая строка
+    # говорила «волна 116». Заметить это было неоткуда — рука к тому же не
+    # упоминалась в `tri help`. Правка 2026-09-13: источник теперь тот же, что у
+    # `tri next` — самый свежий trios/.trinity/wave-loop-*.md, и первой строкой
+    # печатается ВОЗРАСТ файла, взятый с файловой системы. Сводка недельной
+    # давности не должна выглядеть как сегодняшняя.
+    #
+    # Печатается начало волны (о чём она) и её хвост с вариантами продолжения;
+    # середину даёт `tri wave-plan` — волна целиком.
+    T=/Users/playra/BrowserOS/trios
+    w=$(ls "$T/.trinity"/wave-loop-*.md 2>/dev/null | sort | tail -1)
+    [ -z "$w" ] && { echo "нет ни одной волны в $T/.trinity/wave-loop-*.md"; exit 1; }
+    total=$(ls "$T/.trinity"/wave-loop-*.md 2>/dev/null | wc -l | tr -d ' ')
+    age=$(( ( $(date +%s) - $(stat -f %m "$w") ) / 3600 ))
+    echo "СВОДКА ВЛАДЕЛЬЦУ — из $w"
+    echo "записана ${age} ч назад; волн на диске: $total"
+    echo
+    # ЗАГОЛОВОК, А НЕ СЛОВО. Первый вариант этой строки искал `[Вв]арианты` где
+    # угодно — и в этом же дереве есть строка «Инвариант — работающий
+    # механизм», где слово «вариант» сидит внутри другого слова. Ищем строку
+    # ЗАГОЛОВКА (`^#`) и целиком ту формулировку, которой волны называют свой
+    # хвост, на обоих языках, которыми они написаны.
+    opt=$(grep -n -m1 -E '^#{1,6} .*([Oo]ptions for the next wave|вариант(а|ы|ов) (сотрудничества|на следующую))' "$w" | cut -d: -f1)
+    nlines=$(wc -l < "$w" | tr -d ' ')
+    head_end=40
+    if [ -n "$opt" ] && [ "$opt" -le 41 ]; then head_end=$((opt-1)); fi
+    [ "$head_end" -ge 1 ] && sed -n "1,${head_end}p" "$w"
+    if [ -n "$opt" ]; then
+      [ "$opt" -gt $((head_end+1)) ] && echo "…(середина пропущена — волна целиком: tri wave-plan)"
+      echo
+      sed -n "${opt},\$p" "$w"
+    elif [ "$nlines" -gt "$head_end" ]; then
+      echo "…(ещё $((nlines-head_end)) строк, заголовка с вариантами в этой волне нет — целиком: tri wave-plan)"
+    fi
+    echo
+    echo "(проза выше написана автором волны, не сгенерирована здесь)"
+    ;;
+  handover-116-archived)
+    # Замороженная сводка волны 116, снятая с `tri handover` 2026-09-13. Она
+    # остаётся читаемой, но больше не выдаёт себя за текущее состояние: её
+    # волна названа в имени команды.
+    cat <<'BRIEF'
+СВОДКА ВОЛНЫ 116 (АРХИВ, НЕ ТЕКУЩЕЕ СОСТОЯНИЕ) — три открытые границы
+(t27 развалилась на две по измерению 5d837a855 — mesh-корпус и
+rings-спеки это РАЗНОЕ)
+
+ЗАКРЫТО ВЫХОДНЫМИ (вашими фиксами — обе подтверждены этим циклом):
+- LOCK-АНОМАЛИЯ: была бэктиком в `: "..."` комментарии (4d56070ef) —
+  `make check` в бэктиках исполнялся как подстановка команд. Плоский
+  make cassettes даёт вердикт за ~2 мин (было 26+ мин зависания).
+  Обходы (TRIOS_SKIP_LOCK и имена) — мёртвая история; удалять вам.
+- ПРОВАЙДЕРНЫЙ КЛЮЧ: пчела работает в контейнере без ключа (d26a4abfc)
+  через openai-compatible + loopback-репетицию (TRIOS_QUEEN_REHEARSAL,
+  никогда тихий фолбэк при живом ключе). Диспатч исполнялся 3×, параллельно.
+
+ОТКРЫТО:
+
+1a. ГЕНЕРАТОР T27 — MESH-КОРПУС (сабмодуль trios-mesh, ваш ~/t27):
+    13 несобирающихся спек, 11 причин в t27c: главный класс (9 спек) —
+    параметры-массивы без mut в эмите, один патч закрывает 6+.
+    Карта: wave-loop-098. Проверка после фикса: tri spec-diag.
+
+1b. T27 — RINGS-СПЕКИ (rings/T27-00|01|02): t27c ЗДЕСЬ НЕ блокер —
+    exit 0 + 121 строк Rust на decision core (измерено 5d837a855).
+    Отсутствует: спека T27-02 (Queen tick), сгенерированные .rs,
+    хостящий крейт. can_start_another задублирован в двух языках
+    (queen_core.t27:198 + QueenDelegation.swift:472) — сегодня
+    согласованы, это и есть риск расползания. Облачная пчела это
+    делать НЕ может (в образе нет Swift/Rust/t27c) — только локально.
+
+2. RELEASE-ПЕРЕСБОРКА: стор юзера — 0 отпечатков (приложение старее
+   фикса). Починка доказана живьём: fp 9d26541f, 8 воспроизведений
+   (tri regression). Одна пересборка двигает число.
+
+Также в полёте: фикс четырёх кассет (одна причина, aa3b6fc14) — после
+него плоский make cassettes должен позеленеть. MVP-архитектура теперь
+в репо (docs/architecture/, 6d1d50656) — доска цитирует внутреннюю копию.
+
+СЛОМАН ОРАКУЛ (найдено волной 120): Swift-e2e сьют (make test /
+make mutants) не собирается с 12b97dedc — шесть rings-файлов делают
+import QueenCore, а tests/swift/run_chat_sse_e2e.sh:91 гонит rings
+одним модулем. Все 22 мутанта нескорируемы; гейт честно FAIL-closed,
+зелёным не врёт. Лечение — научить скрипт модулю QueenCore (учесть
+дубль-копию QueenSpecQuality.swift в rings против queen-core).
+С ВОЛНЫ 125 СКРИПТ БЛОКИРОВАЛ И ЖИВОЙ ПРОТОКОЛ — ЦЕПОЧКА ВОССТАНОВЛЕНА
+циклом (волны 126-130): скрипт починен паттерном build.sh, сьют 972/972
+зелёный, 22-й мутант пойман, бандл пересобран (cp x x-баг build.sh
+исправлен), девятое live-verify: вердикт met, fp d3c1d66d (новый хеш —
+дерево двинулось; прежние 8 — 9d26541f). Осталось владельцу: сверка
+списков модуля 11 vs 15, флаг library-evolution, и пост-бандл шаг
+`swift test` падает (libQueenCore.a как input — утечка модульных
+флагов).
+BRIEF
+    ;;
+  mutants-logic-refresh)
+    # Волна 122: build.sh эмитит .trinity/build/QueenCore тулчейном,
+    # под которым его запустили; сюиты clade-e2e компилирует дефолтным.
+    # Рассинхрон (6.0.3 против 6.3.3) роняет mutants-logic на import.
+    # Здесь: пересобрать артефакт дефолтным тулчейном (вызов из
+    # build.sh:607-613) и прогнать гейт. DRY=1 — только печать.
+    T=/Users/playra/BrowserOS/trios; QC="$T/.trinity/build/QueenCore"
+    CORE=(rings/SR-00/QueenSpecQuality rings/SR-00/QueenIssueBoundary \
+      rings/SR-00/QueenBeeResult rings/SR-00/QueenBoundaryPaths \
+      rings/SR-00/QueenEpics rings/SR-00/QueenEvidencePolicy \
+      rings/SR-00/QueenLanguagePolicy rings/SR-00/QueenLocalisation \
+      rings/SR-00/QueenMergeGate rings/SR-00/QueenMissionContract \
+      rings/SR-00/QueenRetryPolicy rings/SR-00/QueenReviewDecision \
+      rings/SR-00/QueenSelfAudit rings/SR-00/QueenSkillMatch \
+      rings/SR-00/QueenT27Acceptance)
+    cd "$T" || exit 1
+    CUR=$(swift --version 2>/dev/null | head -1)
+    MOD=$(strings "$QC/QueenCore.swiftmodule" 2>/dev/null | grep -m1 -o 'Swift 6[0-9.]*' || echo unknown)
+    echo "toolchain: $CUR | module: ${MOD:-none}"
+    if [ "${DRY:-0}" = 1 ]; then echo "DRY: would swiftc -emit-module ${CORE[*]}"; exit 0; fi
+    FILES=(); for f in "${CORE[@]}"; do FILES+=("$T/$f.swift"); done
+    mkdir -p "$QC"
+    swiftc -parse-as-library -emit-module -emit-library -static \
+      -module-name QueenCore -emit-module-path "$QC/QueenCore.swiftmodule" \
+      -o "$QC/libQueenCore.a" "${FILES[@]}" 2>"$QC/err" \
+      || { echo "[FAIL] module rebuild failed:"; head -4 "$QC/err"; exit 1; }
+    echo "[OK] module rebuilt with the default toolchain"
+    make -C "$T" mutants-logic
+    ;;
+  spec-diag)
+    # Батч-диагноз несобирающихся спек (волна 099): gen-rust + rustc,
+    # класс ошибки на спеку. Перезапускать после генераторных фиксов t27.
+    T=/Users/playra/BrowserOS/trios; T27C="$T/.trinity/t27c-build/release/t27c"
+    L="${2:-$T/.trinity/wave-097-lowering.log}"
+    D=$(mktemp -d /tmp/tri_specdiag.XXXXXX)
+    for s in $(grep -oE "nocompile\] [a-z0-9_]+" "$L" 2>/dev/null | awk '{print $2}' | sort -u); do
+      F=$(find "$T/rings" -name "$s.t27" | head -1); [ -z "$F" ] && { echo "$s => спека не найдена"; continue; }
+      "$T27C" gen-rust "$F" > "$D/$s.txt" 2>/dev/null
+      E=$(rustc --edition 2021 --crate-type lib --emit=metadata --out-dir "$D" "$D/$s.txt" 2>&1 \
+        | grep -oE "error\[E[0-9]+\]|error: [a-z ]+" | sort | uniq -c | tr '\n' ' ')
+      echo "$s => ${E:-OK}"
+    done; rm -rf "$D"
+    ;;
+  regression)
+    # Живая регрессия цикла (волна 095): доска + локи + live-verify
+    # одной командой — обязательный минимум Queen-волны по протоколу.
+    tri board; echo; tri locks; echo
+    tri live-verify "${2:-}" "${3:-}" 2>&1 | tail -1
+    ;;
+  live-verify)
+    # Живой отпечаток одним запуском (рецепт волны 081): цепочка
+    # approve→delegate→verify через env-канал test-бандла, затем стор.
+    T=/Users/playra/BrowserOS/trios
+    ISSUE="${2:-gHashTag/trios#1286}"; CRIT="${3:-make check passes}"
+    pkill -f "trios-test.app/Contents" 2>/dev/null; sleep 1
+    ( cd "$T" && TRIOS_E2E_QUEEN_COMMAND="/approve $ISSUE;;/delegate $ISSUE queen-swift --paths docs --criteria $CRIT;;/verify $ISSUE $CRIT met" \
+        ./trios-test.app/Contents/MacOS/trios > /tmp/tri_live_verify.log 2>&1 ) &
+    echo "живой прогон пошёл (/tmp/tri_live_verify.log); стор через ~75с:"
+    sleep 75; pkill -f "trios-test.app/Contents" 2>/dev/null
+    python3 -c "
+import json
+try:
+    for t in json.load(open('$T/.trinity-test/state/queen_delegation.json')):
+        print(t['id'][:8], t['state'], 'verdicts:', t.get('criterionVerdicts'), 'fp:', (t.get('treeStateFingerprint') or 'NONE')[:20])
+except FileNotFoundError: print('стор не создан')"
+    ;;
+  selftest)
+    echo "tri: ок"; command -v railway >/dev/null && echo "railway: ок" || echo "railway: НЕТ"
+    command -v python3 >/dev/null && echo "python3: ок"
+    [ -d "$REPO/loop" ] && echo "loop-каталог: ок" || echo "loop-каталог: НЕТ"
+    ;;
+  anomalies|anom)
+    # Шаг 0 витка: что сломалось на проде, пока меня не было.
+    node "$REPO/.claude/loop-opus/anomalies.mjs"
+    ;;
+  verify)
+    # Не затёрла ли прошлую правку чужим мержем (страховка непрерывного цикла).
+    node "$REPO/.claude/loop-opus/verify-landed.mjs"
+    ;;
+  providers|prov)
+    # Живой статус провайдеров через детектор аномалий (маршрут /api/providers/status
+    # за авторизацией и голым curl отдаёт 401; anomalies.mjs берёт его правильно).
+    node "$REPO/.claude/loop-opus/anomalies.mjs" 2>/dev/null \
+      | sed -n '/Провайдеры/,/Конвейер/p' | sed '$d'
+    echo "  (FAL/ElevenLabs — ждут владельца; GLM работает)"
+    ;;
+  lesson)
+    # Быстро записать урок в оснастку цикла: tri lesson "заголовок" "тело"
+    shift
+    L="$REPO/.claude/loop-opus/LESSONS.md"
+    if [ -z "${1:-}" ]; then echo "нужен заголовок: tri lesson \"заголовок\" [тело]"; exit 1; fi
+    { printf '\n## %s\n\n' "$1"; [ -n "${2:-}" ] && printf '%s\n' "$2"; } >> "$L"
+    echo "записано в $L"
+    ;;
+  dash)
+    # Пересобрать и показать продакшн-дашборд (замер запуском, не память).
+    node "$REPO/scripts/dashboard.cjs" 2>/dev/null | tail -40 \
+      || cat "$REPO/docs/dashboard/STATUS.md" 2>/dev/null
+    ;;
+  board)
+    # Дашборд trios: последняя итерация + живые замеры STATUS.md
+    T=/Users/playra/BrowserOS/trios
+    tail -1 "$T/.trinity/dashboard/iterations.jsonl" 2>/dev/null | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)
+    print("итерация", d["iteration"], ":", d["title"])
+    print("gate:", d.get("gate","?"))
+except Exception as e: print("iterations.jsonl не читается:", e)'
+    echo; sed -n '/## Measured here/,/## How to update/p' "$T/.trinity/dashboard/STATUS.md" 2>/dev/null | head -25
+    ;;
+  wave)
+    # Каркас следующей волны: trios/.trinity/wave-loop-NNN.md
+    T=/Users/playra/BrowserOS/trios
+    n=$(ls "$T/.trinity"/wave-loop-*.md 2>/dev/null | sed 's/.*loop-0*//;s/\.md//' | sort -n | tail -1)
+    next=$((10#${n:-0}+1)); f="$T/.trinity/wave-loop-$(printf '%03d' "$next").md"
+    printf '# T27 Wave Loop - Plan WAVE-%03d\n\nDomain: \n\n## Audit - weak spots\n\n| ID | Weak spot | Evidence |\n|----|-----------|----------|\n\n## Competitor research\n\n- \n\n## Plan\n\n## Report\n\n## Three options for the next wave\n\n1. \n2. \n3. \n' "$next" > "$f" && echo "$f"
+    ;;
+  locks)
+    # Кто держит общие локи триоса прямо сейчас
+    for d in /tmp/trios_harness.lock /tmp/trios_e2e.lock; do
+      if [ -e "$d/pid" ]; then o=$(cat "$d/pid" 2>/dev/null); echo "$d: pid=${o:-?} $(ps -p "$o" -o etime= 2>/dev/null || echo '(мёртв — лок можно вернуть)')"
+      elif [ -d "$d" ]; then echo "$d: занят, pid-файла нет"; else echo "$d: свободен"; fi
+    done
+    w=$(pgrep -f "Serialised against every other harness" 2>/dev/null | wc -l | tr -d ' ')
+    echo "ожидают лок кассет: $w процесс(ов)"
+    ;;
+  next)
+    # Три варианта сотрудничества из последней волны
+    T=/Users/playra/BrowserOS/trios
+    w=$(ls "$T/.trinity"/wave-loop-*.md 2>/dev/null | sort | tail -1)
+    echo "$w:"; sed -n '/[Oo]ptions for the next wave/,$p' "$w" 2>/dev/null || echo "нет волн"
+    ;;
+  # ---- continuous improvement loop (added 2026-09-04) -----------------------
+  # State, ledger and dashboard live in trios/.trinity/loop/. Every command
+  # here READS or appends; none of them mutates the swarm or the repository.
+  iter)
+    node /Users/playra/BrowserOS/trios/.trinity/loop/loop.mjs status
+    ;;
+  iter-dash)
+    node /Users/playra/BrowserOS/trios/.trinity/loop/loop.mjs dash
+    ;;
+  iter-log)
+    node /Users/playra/BrowserOS/trios/.trinity/loop/loop.mjs ledger "${2:-20}"
+    ;;
+  iter-anchors)
+    node /Users/playra/BrowserOS/trios/.trinity/loop/loop.mjs anchors
+    ;;
+  iter-render)
+    # Measure the swarm, update the anchors and redraw the dashboard, in the one
+    # order that makes the deltas true. Optional: --work <facts.json>.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/snapshot.mjs "$@"
+    ;;
+  iter-unlock)
+    # Only after checking `tri iter` says the lock is stale. Taking a HELD lock
+    # lets two cron fires write at once, which is the failure the lock exists for.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/loop.mjs unlock
+    ;;
+  swarm)
+    # One line of live truth about the Queen. Measured, never remembered.
+    curl -sS -m 15 https://trios-agent-server-production.up.railway.app/queen/status \
+      | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s),t=j.lastTick||{},d=j.dispatches||{};
+console.log("running "+d.running+"  finished "+d.finished+"  |  "+(t.allowed?"DISPATCHED":t.refusal));
+console.log("skips "+t.skippedCount+"  "+JSON.stringify(t.skipSummary||{}));})' 2>/dev/null \
+      || echo "queen unreachable"
+    ;;
+  fence)
+    # Which paths parked dispatches hold, and therefore which boundaries a new
+    # issue must avoid. A parked dispatch never releases, so this is a fence.
+    railway ssh --service trios-agent-server -- sh -c 'cd /app/apps/server && bun -e "
+const {Pool}=require(\"pg\");const p=new Pool({connectionString:process.env.DATABASE_URL});
+p.query(\"select d.issue, d.review_state, d.owned_paths from queen_dispatch d where d.finished_at is not null and (d.review_state is null or d.review_state in (%A,%B,%C)) order by d.issue\".replace(\"%A\",\"'\''wait'\''\").replace(\"%B\",\"'\''sendBack'\''\").replace(\"%C\",\"'\''escalate'\''\")).then(r=>{
+const s=new Set();r.rows.forEach(x=>(x.owned_paths||[]).forEach(q=>s.add(q)));
+console.log(\"parked dispatches: \"+r.rows.length+\"   paths they fence: \"+s.size);
+[...s].sort().forEach(q=>console.log(\"  \"+q));process.exit(0)}).catch(e=>{console.log(\"ERR\",e.message);process.exit(1)})
+"' 2>&1 | grep -v "Using SSH\|railway.json\|Migrate\|Existing"
+    ;;
+  fp-check)
+    # Do the checkers accuse anything KNOWN GOOD? The corpus is real - briefs a
+    # worker actually satisfied, source the tree actually ships - because all
+    # six false accusations this loop shipped failed on real input while the
+    # synthetic fixtures agreed with the checker that wrote them.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/fp-check.mjs "${2:-12}"
+    ;;
+  fields)
+    # Fields a decision reads that its query may never select. A field that
+    # never arrives is `undefined`, and `undefined ?? 0` is a number every
+    # assertion about it will pass - which is how a retry ceiling bounded
+    # nothing while reporting success.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/fields.mjs "${2:-}"
+    ;;
+  clocks)
+    # Every clock a decision is keyed on, and whether anything rewrites it.
+    # A valve keyed on a field the review sweep overwrites could never fire and
+    # cost a six-hour swarm outage; this asks where else that class lives.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/clocks.mjs
+    ;;
+  trend)
+    # A level is not a rate. claimed at 15 falling is a fence coming down;
+    # claimed at 15 rising is one being rebuilt, and the number cannot tell
+    # them apart. Reads the snapshot lines the loop already records.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/trend.mjs "${2:-6}"
+    ;;
+  loop-coverage)
+    # Which loop tools have never actually DONE anything. The report path and
+    # the act path are different code; a tool that has only ever reported is a
+    # tool whose real work is unproven.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/coverage.mjs
+    ;;
+  needs-you)
+    # The escalations addressed to a person that reach none. queen_report is
+    # written by the tick and read by no route; this is the missing reader.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/needs-you.mjs "$@"
+    ;;
+  judge-packet)
+    # Assemble what a judge needs for the briefs no mechanical check can reach.
+    # The tool assembles; the model judges. Nothing here decides anything.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/judge-packet.mjs "$@"
+    ;;
+  unpark)
+    # A retry ceiling reached without ANY criterion being judged. Measured
+    # 2026-09-04: in five parked dispatches the count of unmet criteria was
+    # exactly the count of verdict lines the worker omitted, so the whole retry
+    # budget went on the shape of a report and the work was never assessed.
+    # Releases only those; a criterion tested and failed keeps its count.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/unpark.mjs "$@"
+    ;;
+  stale-escalations)
+    # An escalation whose stated CAUSE no longer reproduces. Not a timer: a
+    # send-back is clock-released because its input can never change, while an
+    # escalation names a claim about the world that can be measured again. It
+    # asks the shipping Swift parser, never a copy, and never releases an issue
+    # whose body asks for a person in its own words.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/stale-escalations.mjs "$@"
+    ;;
+  holds)
+    # What the swarm currently holds, and whether any two dispatches claim one
+    # file. Paths compare COMPONENT-WISE: rings/SR-0 is a string prefix of
+    # rings/SR-00/Queen.swift and is not a directory containing it.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/disjoint.mjs
+    ;;
+  reap-local)
+    # The LAPTOP fills too. `git worktree add` failed mid-checkout on
+    # 2026-09-04 with "No space left on device" at 100% full, while reap.mjs
+    # reported the container volume healthy - which it was. Removes only
+    # worktrees whose HEAD is already in the base AND whose tree is clean;
+    # never --force, and a dirty tree is somebody's unfinished thought.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/reap-local.mjs "$@"
+    ;;
+  land)
+    # WORK THAT WAS FINISHED, ACCEPTED, CLOSED - AND NEVER IN THE BRANCH.
+    # Measured 2026-09-04: 174 queen branches on the remote, FIVE contained in
+    # the base, and all 169 others carrying a real diff. A closed issue whose
+    # code is not in the branch is a false statement about the repository.
+    # Merges only a closed issue's branch, only when merge-tree says it applies
+    # cleanly, only into feat/queen-supervisor, bounded per run, never forcing
+    # and never deleting - and it REFUSES to run again if the count did not move.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/land.mjs "$@"
+    ;;
+  why)
+    # WHY IS THE SWARM IDLE. Asked four times in one night and answered by hand
+    # each time, differently: the chain failing from its own timer, the refill
+    # queued behind five audits, accepted work never closed so every boundary
+    # stayed held, a detector corpus run dry, a full disk, a stuck lock. None is
+    # guessable from "RUNNING 0", and several look identical from outside.
+    # Checks the causes in the order that makes them true and stops at the first
+    # that explains what is seen, with the evidence and the command to run.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/why.mjs "$@"
+    ;;
+  feed)
+    # Just the three steps that decide whether a worker has anything to start:
+    # push-work -> close-done -> author. The full chain takes 480s of its 600s
+    # cycle and the queue empties in 13 minutes, so the audits are worth running
+    # but not worth making the workers wait for. Takes the same lock, and stands
+    # down if the chain holds it.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/feed.mjs "$@"
+    ;;
+  queue)
+    # Queue DEPTH, which is not the open count. Measured 2026-09-04: five
+    # authored issues open, four already dispatched, so the real queue was ONE
+    # while the author refused to file "at the WIP limit". Kanban limits work in
+    # progress and never the backlog.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/queue.mjs
+    ;;
+  mix)
+    # WHAT KIND of work the swarm is doing. Load says whether workers are busy;
+    # acceptance says whether it lands; neither says whether it was worth doing.
+    # On 2026-09-04 both looked perfect while all FORTY of the last authored
+    # issues were the same thing - replacing box-drawing characters in comments.
+    # Exits 3 when one kind is more than four fifths of the backlog.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/queue.mjs --mix "$@"
+    ;;
+  ab)
+    # TWO WINDOWS, ONE NUMBER, and whether the difference is bigger than noise.
+    # I compared percentages by eye all night and was wrong twice in ways that
+    # changed what I recommended. Wilson score intervals, because the normal
+    # approximation runs outside [0,1] exactly at the small samples where the
+    # question gets asked. It NEVER reports better or worse from overlapping
+    # intervals - "no detectable difference" is a real answer.
+    #   tri ab <hitsA> <nA> <hitsB> <nB> [labelA] [labelB]
+    #   tri ab --verdict-first
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/ab.mjs "$@"
+    ;;
+  verdicts)
+    # The verdict MIX, which is the swarm's real health - load says whether
+    # workers are busy, this says whether the work is landing. On 2026-09-04
+    # they disagreed sharply: four bees running while 17% was accepted and 28%
+    # answered wait, meaning nobody could judge it at all.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/queue.mjs --verdicts "$@"
+    ;;
+  latency)
+    # Where the time actually goes, and the arrival rate four workers need to
+    # stay busy. The answer was not what I assumed for a whole iteration: review
+    # is p50 0.8s and the bee is p50 792s, so throughput is bounded by how much
+    # startable work exists, never by the reviewer.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/queue.mjs --latency
+    ;;
+  loop-selftest)
+    # Calibrate the loop's own instruments. Each case proves the NEGATIVE first:
+    # a checker never shown failing has not been tested. No network, no
+    # container, no database - a calibration that needs production gets skipped.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/selftest.mjs
+    ;;
+  author)
+    # Turn a measured deficit into a gated, filed brief. Under a WIP limit that
+    # refills only when one is closed, and every draft passes brief-gate first.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/author.mjs "$@"
+    ;;
+  heal)
+    # Every swarm repair, in the order that makes them true:
+    # reap -> lease -> push-work -> close-done. `tri heal --dry` reports only.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/heal.mjs "$@"
+    ;;
+  close-done)
+    # Close issues whose work the Queen accepted and cannot close herself.
+    # Refuses EPICs and anything whose branch is not on the remote.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/close-done.mjs "$@"
+    ;;
+  push-work)
+    # Push bee branches that carry work and are not yet on the remote. Never
+    # force-pushes: a branch whose remote history differs is reported, not fixed.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/push-work.mjs "$@"
+    ;;
+  lease)
+    # Claim lease with an idle timer, XAUTOCLAIM semantics, run from outside the
+    # supervisor. Reports by default; `tri lease --release` acts. Clears the
+    # PATH fence only - the claim itself is a separate mechanism, see the skill.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/lease.mjs "$@"
+    ;;
+  reap)
+    # Worktree garbage collection with kubelet-style hysteresis. Reports by
+    # default; `tri reap --reap` acts. Never uses --force: without it git
+    # refuses any tree holding uncommitted work, which is the safety.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/reap.mjs "$@"
+    ;;
+  facts)
+    # The dashboard numbers, measured. A fact that cannot be taken shows as '-'
+    # and is never filled in from memory.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/dash.mjs "$@"
+    ;;
+  failures)
+    # Which chain steps have been failing, how often, and with what evidence.
+    # A single failure is noise; the same failure forty-six times is the system.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/failures.mjs "$@"
+    ;;
+  share-modules)
+    # One installed dependency tree, linked into every worktree that wants it.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/share-modules.mjs "$@"
+    ;;
+  reap-finished)
+    # Remove a worktree when its dispatch is done and its branch is published -
+    # lifetime, not disk pressure.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/reap-finished.mjs "$@"
+    ;;
+  rescue)
+    # Work a bee wrote and never committed, saved onto its own branch before
+    # anything reclaims the worktree holding it.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/rescue.mjs "$@"
+    ;;
+  container)
+    # What PID 1 is, and how close the container is to running out of process
+    # slots. A crash from fork exhaustion is a rising number, not an event.
+    node -e '
+      import("/Users/playra/BrowserOS/trios/.trinity/loop/channel.mjs").then(async (CH) => {
+        const probe = [
+          "echo PID1 $(cat /proc/1/comm)",
+          "echo PIDS $(cat /sys/fs/cgroup/pids.current)/$(cat /sys/fs/cgroup/pids.max)",
+          "z=0; tot=0; for d in /proc/[0-9]*; do s=$(awk \"{print \\$3}\" \"$d/stat\" 2>/dev/null) || continue; tot=$((tot+1)); [ \"$s\" = Z ] && z=$((z+1)); done",
+          "echo PROCS $tot ZOMBIES $z",
+        ].join("; ")
+        try { console.log(CH.remote(probe, { attempts: 2 })) }
+        catch (e) { console.log("could not reach the container:", String(e.message).slice(0, 140)) }
+      })'
+    ;;
+  two-views)
+    # Both views of the service at one moment: does /health agree with whether
+    # railway will attach? A green health check is not evidence the channel will.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/two-views.mjs "$@"
+    ;;
+  channel)
+    # Is the one way into the container up? Answers, or says it is down.
+    node /Users/playra/BrowserOS/trios/.trinity/loop/channel.mjs
+    ;;
+  salvage)
+    # What a stale branch would STILL add, as names the base does not have.
+    # Never rebases, never applies - the old branch is a specification of intent.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/salvage.mjs "$@"
+    ;;
+  proven)
+    # Is the swarm's RECENT work still proving anything, against the baseline
+    # this same process established? Wilson intervals, not a threshold.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/proven.mjs "$@"
+    ;;
+  coverage)
+    # How much of what the swarm accepts this can check at all. A low number
+    # accuses the BRIEFS, not the bees.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/verdict-audit.mjs --accepted "$@" 2>/dev/null | tail -5
+    ;;
+  verdict-audit)
+    # Check what a bee CLAIMED against the diff it actually pushed. Only
+    # possible since the branches were pushed on 2026-09-04.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/verdict-audit.mjs "$@"
+    ;;
+  exposure)
+    # What the LIVE service serves to an origin it has never heard of. Status
+    # codes and path names only - never a response body. The public list is read
+    # from server.ts and the audit's reasoned allowlist, never typed here.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/exposure.mjs "$@"
+    ;;
+  unverdicted)
+    # A finished dispatch whose transcript carries no verdict block: the review
+    # can never judge it, and `wait` is the valve no timer may touch. A
+    # transcript that could not be fetched accuses nobody; a transcript that DOES
+    # carry a block is reported as a parser fault instead.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/unverdicted.mjs "$@"
+    ;;
+  silent-loop)
+    # An attempt is charged against the retry ceiling only when a criterion was
+    # tested and FAILED; a bee that went silent is deliberately not charged, so
+    # that work nobody assessed never reaches a person. The cost of that rule is
+    # this: a bee silent EVERY time loops with no ceiling at all. Attempts come
+    # from the archive (the board is keyed by issue and holds one row per issue,
+    # so counting its rows answers nothing), and an issue that DID charge the
+    # ceiling is reported first, because it is evidence against the claim.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/silent-loop.mjs "$@"
+    ;;
+  unwired)
+    # A gate that exists and runs nowhere. `make queen-core-sync` compares the
+    # eleven policy files that exist twice, byte for byte, and appeared in no
+    # workflow - while one of the thirteen had already drifted. Writing a check
+    # is the easy half; whether it protects anything is whether something runs
+    # it without being reminded. Ranked by whether a CI runner COULD run it, so
+    # the list stays short enough to read.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/unwired.mjs "$@"
+    ;;
+  reach)
+    # How often each step of the heal chain ACTUALLY RUNS. `heal complete:` has
+    # been printed at the end of every run ever made, and it names a skipped step
+    # rather than announcing it - one token among twenty-nine. Measured over 230
+    # runs: `author`, the step that REFILLS THE BACKLOG, ran once; `verdict-audit`,
+    # the instrument that compares what the swarm CLAIMS against what it PUSHED,
+    # ran once - in the week the swarm reported 439 of 439 finished and put
+    # nothing on the remote. A step is not slow because it is last. It is
+    # unreached because it is last, and under a fixed-order deadline last is a
+    # permanent condition. Read from the ledger, never from heal's own rotation
+    # cursor: an instrument that grades a chain by reading that chain's
+    # bookkeeping is the evaluator reading state written by the thing it
+    # evaluates. Non-zero exit when any step is under the floor - that is the
+    # answer, not a malfunction.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/reach.mjs "$@"
+    ;;
+  idle)
+    # The golden rule: the bees work, and start again the moment they finish.
+    # Nothing measured whether they do. `bees running (of 4)` on the dashboard is
+    # an INSTANT of a bimodal quantity - it read 4 as often as 0 and could never
+    # have shown that half the day had no bee running. This counts idleness over
+    # a WINDOW and names what stopped the rounds. It restarts nothing: idleness
+    # has several causes and the cure differs for each.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/idle.mjs "$@"
+    ;;
+  agree)
+    # Two implementations of one rule, asked the same question about the rows the
+    # system actually holds. This repository's most expensive defects are all
+    # this shape - the boundary rule in three copies, `can_start_another` in
+    # five, five SR-00 rules retyped into TypeScript. A comment claiming two
+    # functions agree is a test that has not been written; this is that test.
+    # Agreement is NOT correctness: two implementations can be wrong together.
+    # Divergence is reported with its DIRECTION, because a bare count invites
+    # picking a winner when neither side may be the rule.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/agree.mjs "$@"
+    ;;
+  rejudge)
+    # Take the work as it is stored, run the review's OWN functions over it
+    # again, and report where the recorded verdict is not the answer the code
+    # gives. Agreement is NOT correctness: it compares the record with the code
+    # running in production, and a defect there reproduces perfectly because the
+    # record is its own output. It goes quiet exactly when it should be loudest,
+    # so it is a companion to a deploy - when a review fix ships, the rows the
+    # old behaviour left behind are the list of work the fix released.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/rejudge.mjs "$@"
+    ;;
+  accept-rate)
+    # Does a brief that CAN be failed get accepted less often? Split by whether
+    # the brief passes the gate, with an era split so "the failing ones are
+    # simply older" is ruled out rather than assumed. An empty cell prints a
+    # dash: a rate over no denominator is absent, not zero.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/accept-rate.mjs "$@"
+    ;;
+  flaky)
+    # Which red tests are broken and which are weather - a frequency over N
+    # runs, not a hunch. An unreadable run is excluded from the denominator,
+    # never counted as a pass. It measures how often; "flaky" is a judgement it
+    # does not make.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/flaky.mjs "$@"
+    ;;
+  ci-diff)
+    # "Is this red mine?" as a set difference, not by eye. Prints NEW, fixed
+    # and already-failing; a NEW failure is the only thing that should stop
+    # anybody. It does not decide whether to merge.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/ci-diff.mjs "$@"
+    ;;
+  forked-files)
+    # Seventeen Swift files exist in both rings/SR-00 and queen-core/Sources.
+    # A difference AT HEAD is a fork already compiling twice; a difference only
+    # on disk is an edit somebody has not mirrored. Reports, never edits.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/forked-files.mjs "$@"
+    ;;
+  t27-parity)
+    # Does the GENERATED ring answer the same as the hand-written twin that
+    # production runs? Exhaustive over ring-00's bounded input space. A side
+    # that is missing is reported as missing, never as agreement.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/t27-parity.mjs "$@"
+    ;;
+  t27-gen)
+    # Regenerate rings/T27-00/generated/ from the .t27 spec. The artifact is
+    # committed and never edited; this is the only thing that may write it.
+    # The compiler is built into trios/.trinity/t27c-build so nothing writes
+    # into ~/t27, which another agent owns (L0b).
+    T27C=/Users/playra/BrowserOS/trios/.trinity/t27c-build/release/t27c
+    if [ ! -x "$T27C" ]; then
+      echo "building t27c (nothing is written into ~/t27)…"
+      CARGO_TARGET_DIR=/Users/playra/BrowserOS/trios/.trinity/t27c-build \
+        cargo build --release --manifest-path "$HOME/t27/bootstrap/Cargo.toml" || exit 1
+    fi
+    node /Users/playra/BrowserOS/trios/.trinity/loop/t27-parity.mjs --build
+    ;;
+  boundary)
+    # What a bee was actually ALLOWED to touch, and what it touched anyway.
+    # Prints the brief's heading, the paths the server reserved out of it, any
+    # path it narrowed away, and each stray marked CREATED or edited - a created
+    # stray is the one that breaks a harness, an edited one is usually untidy.
+    # An unreadable boundary checks nothing rather than accusing everything.
+    [ -z "${2:-}" ] && { echo "tri boundary <N> [N ...]"; exit 1; }
+    shift
+    node /Users/playra/BrowserOS/trios/.trinity/loop/verdict-audit.mjs --boundary "$@"
+    ;;
+  brief-gate)
+    # Gate an issue draft before filing it. Ports the server's own boundary
+    # parser, so it fails exactly where the Queen would fail.
+    [ -z "${2:-}" ] && { echo "tri brief-gate <draft.md> [draft2.md ...]"; exit 1; }
+    shift
+    node /Users/playra/BrowserOS/trios/.trinity/loop/brief-gate.mjs "$@"
+    ;;
+  deploy-wait|live-wait)
+    # «Зелёная сборка не доказывает» — ждём, пока правка ДОЕДЕТ до живого
+    # render после merge. Опрашиваем путь, пока в ответе не появится маркер.
+    # Ключ (для закрытых маршрутов) тянем из Railway сам; для публичных путей
+    # (/health, /mcp) он не нужен.
+    #   tri deploy-wait <путь> <маркер> [попыток]
+    RENDER="https://vibee-render-production.up.railway.app"
+    PATHQ="${2:-/health}"; MARK="${3:-}"; TRIES="${4:-40}"
+    K=$(railway variables list -s vibee-render -e production --kv 2>/dev/null | grep '^RENDER_API_KEY=' | cut -d= -f2-)
+    for i in $(seq 1 "$TRIES"); do
+      body=$(curl -s -m 15 -H "X-Api-Key: $K" "$RENDER$PATHQ" 2>/dev/null)
+      if [ -z "$MARK" ] || printf '%s' "$body" | grep -qF "$MARK"; then
+        echo "✅ живой [$i]: $PATHQ → $(printf '%s' "$body" | head -c 140)"; exit 0
+      fi
+      echo "⏳ [$i/$TRIES] $PATHQ ещё без «$MARK»: $(printf '%s' "$body" | head -c 80)"
+      sleep 30
+    done
+    echo "❌ ТАЙМАУТ: «$MARK» не появился на $PATHQ за $TRIES попыток"; exit 1
+    ;;
+  # ---- job campaign (added 2026-08-28) -------------------------------------
+  # Everything below reads the mailbox and the CRM derived from it. None of it
+  # sends: sending is a deliberate act with a human in the loop.
+  jobs)
+    exec python3 "$HOME/job-search/crm/loop.py" status
+    ;;
+  jobs-run)
+    # One loop iteration. Refuses if any guard cannot prove itself first.
+    exec python3 "$HOME/job-search/crm/loop.py" run
+    ;;
+  jobs-guards)
+    # The gate in front of every outbound letter. Exit 1 means do not send.
+    exec python3 "$HOME/job-search/crm/loop.py" preflight
+    ;;
+  jobs-anomalies)
+    exec python3 "$HOME/job-search/crm/loop.py" anomalies
+    ;;
+  jobs-journal)
+    exec python3 "$HOME/job-search/crm/loop.py" journal "${2:-10}"
+    ;;
+  jobs-next)
+    exec python3 "$HOME/job-search/crm/jcrm.py" next
+    ;;
+  jobs-owed)
+    exec python3 "$HOME/job-search/crm/jcrm.py" owed
+    ;;
+  jobs-board)
+    exec python3 "$HOME/job-search/crm/jcrm.py" board
+    ;;
+  jobs-show)
+    [ -z "${2:-}" ] && { echo "tri jobs-show <кто>"; exit 1; }
+    exec python3 "$HOME/job-search/crm/jcrm.py" show "$2"
+    ;;
+  jobs-dash)
+    python3 "$HOME/job-search/crm/jcrm.py" sync > /dev/null || exit 1
+    python3 "$HOME/job-search/crm/jcrm.py" dashboard || exit 1
+    # The trailing test used to BE the exit status, so a successful rebuild
+    # without "open" reported failure and broke every `tri jobs-dash && ...`.
+    if [ "${2:-}" = "open" ]; then open "$HOME/job-search/crm/dashboard.html"; fi
+    exit 0
+    ;;
+  jobs-check)
+    # Four guards over one draft, in the order that matters: leakage, truth,
+    # duplicate signature, then voice. Any non-zero and the letter does not go.
+    [ -z "${2:-}" ] && { echo "tri jobs-check <draft.md>"; exit 1; }
+    python3 "$HOME/skills/_state/bin/letter_extract.py" "$2" > /dev/null || { echo "letter_extract: REFUSED"; python3 "$HOME/skills/_state/bin/letter_extract.py" "$2"; exit 1; }
+    python3 "$HOME/skills/_state/bin/letter_extract.py" "$2" | tail -n +2 > /tmp/tri-body.$$
+    python3 "$HOME/skills/claim-guard/scripts/claim_guard.py" /tmp/tri-body.$$ || { rm -f /tmp/tri-body.$$; exit 1; }
+    rm -f /tmp/tri-body.$$
+    python3 "$HOME/skills/business-voice/scripts/signature_guard.py" "$2" || exit 1
+    exec python3 "$HOME/skills/business-voice/scripts/tone_check.py" "$2"
+    ;;
+  jobs-lesson)
+    # Append a lesson to the skill that will be loaded next time, not to a note
+    # nobody opens. Two arguments: heading and body.
+    [ -z "${3:-}" ] && { echo 'tri jobs-lesson "заголовок" "текст"'; exit 1; }
+    f="$HOME/skills/correspondence-crm/LESSONS.md"
+    { echo; echo "## $(date '+%Y-%m-%d %H:%M') — $2"; echo; echo "$3"; } >> "$f"
+    echo "записано в $f"
+    ;;
+  jobs-drafts)
+    # Каждый черновик в один из: отправлен почтой, отправлен через hh,
+    # без адресата (портал), ждёт отправки. Actionable — только последний.
+    exec python3 "$HOME/job-search/crm/drafts.py" "${2:-report}"
+    ;;
+  jobs-leads)
+    # Потенциальные заказчики по теме, а не вакансии. Тиры по наличию связи.
+    exec python3 "$HOME/job-search/crm/leads.py" "${2:-all}"
+    ;;
+  # ---- telegram, read-only ---------------------------------------------
+  tg-dialogs)   exec tg dialogs -n "${2:-25}" ;;
+  tg-unread)    exec tg unread ;;
+  tg-msg)       [ -z "${2:-}" ] && { echo "tri tg-msg <chat|@user> [N]"; exit 1; }
+                exec tg messages "$2" -n "${3:-25}" ;;
+  tg-search)    [ -z "${2:-}" ] && { echo "tri tg-search <текст> [N]"; exit 1; }
+                exec tg search "$2" -n "${3:-25}" ;;
+  tg-who)       exec tg whoami ;;
+  help|-h|--help)
+    cat <<'USAGE'
+tri — Trinity S³AI ops CLI
+  tri (или tri ssh) — railway ssh → claude (прежнее поведение)
+  tri status       — здоровье стека + лента + состояние лупа
+  tri regress      — регресс-чек лупа (15 проверок)
+  tri morning      — утренняя сводка loop/MORNING.md
+  tri loop         — хвост отчёта цикла
+  tri vibee-feed [N] — последние N постов ленты vibee со звёздами/просмотрами
+                     (ПЕРЕИМЕНОВАНА 2026-09-05: прежнее её имя носит теперь шаг
+                     заправки цикла — строка с `--act` ниже, это другая команда)
+  tri chat "текст" — вопрос агенту (ключ тянется из Railway сам)
+  tri selftest     — проверка зависимостей
+  tri anomalies (то же самое — tri anom) — шаг 0: что сломалось на проде (провайдеры, лента, маршруты)
+  tri verify       — не затёрта ли прошлая правка чужим мержем
+  tri providers (то же самое — tri prov) — живой статус провайдеров (чем агент может работать)
+  tri lesson "H" "B" — быстро записать урок в loop-opus/LESSONS.md
+  tri dash         — пересобрать продакшн-дашборд STATUS.md
+  tri board        — дашборд trios: последняя итерация + замеры STATUS.md
+  tri wave         — каркас следующей волны wave-loop-NNN.md
+  tri wave-plan [N] — план ТЕКУЩЕЙ волны целиком (самый свежий wave-loop-*.md) с возрастом
+  tri handover     — сводка владельцу из самой свежей волны: начало + варианты + возраст
+  tri handover-116-archived — замороженный брифинг волны 116 (архив, не текущее состояние)
+  tri locks        — кто держит локи кассет/e2e триоса сейчас
+  tri next         — хвост последней волны trios. МЕРА 2026-09-13: печатает его
+                     на 44 волнах из 78 — его образец ищет только английский
+                     заголовок, а 15 волн (включая последнюю) назвали хвост
+                     по-русски, и на них команда печатает одно имя файла.
+                     сам хвост оттуда сейчас печатает команда handover ниже
+  tri mutants-logic-refresh [DRY=1] — пересобрать .trinity/build/QueenCore дефолтным
+                     тулчейном и прогнать make mutants-logic (рассинхрон тулчейнов)
+  tri deploy-wait (то же самое — tri live-wait) <путь> <маркер> [N] — ждать, пока правка доедет до живого render
+  tri live-verify [issue] [crit] — живой отпечаток цепочкой за один запуск
+  tri regression [issue] [crit] — доска + локи + live-verify одной командой
+  tri spec-diag [log] — класс ошибки каждой несобирающейся спеки
+  tri jobs         — статус кампании одной строкой (guards/urgent/итерации)
+  tri jobs-run     — одна итерация цикла: preflight → sync → аномалии → дашборд
+  tri jobs-guards  — доказать guard'ы перед отправкой (exit 1 = не отправлять)
+  tri jobs-next    — что делать дальше, по убыванию отдачи
+  tri jobs-owed    — кто ждёт ответа, старейший долг первым
+  tri jobs-board   — воронка по стадиям
+  tri jobs-show X  — одна переписка целиком, обе стороны
+  tri jobs-dash [open] — пересобрать дашборд (и открыть)
+  tri jobs-check F — четыре guard'а: утечки, правда, дубль подписи, голос
+  tri jobs-anomalies / jobs-journal [N] — что не так / история итераций
+  tri jobs-drafts [report|actionable] — разбор черновиков: что ушло, что ждёт
+  tri jobs-leads [new|channels] — заказчики по теме: кому есть смысл писать
+  tri jobs-lesson "H" "B" — записать урок в correspondence-crm/LESSONS.md
+  tri tg-unread / tg-dialogs [N] — телеграм: непрочитанные / чаты (только чтение)
+  tri tg-msg <чат> [N] / tg-search <текст> [N] / tg-who
+  tri game            — луп игры t27.ai/#/queen: состояние (итерация, задачи, находки)
+  tri game-claim / game-release — замок цикла (exit 75 = другой прогон держит)
+  tri game-iterate    — новый цикл: счётчик + last_run
+  tri game-anomalies [--heal] — живые проверки: эндпоинты, апекс vs main, публикатор, чанк; --heal чинит
+  tri game-next       — верхняя открытая задача бэклога
+  tri game-task ID [--title|--status|--note|--force] / game-finding "T" [--severity] / game-gate ID [--result]
+  tri game-dash [open] — DASHBOARD.md + dashboard.html (дизайн Claude Code); последним в цикле
+  tri game-report [N] — последний отчёт цикла (первые N строк)
+  tri game-ingest J [--cycle N] — влить план воркфлоу из journal.jsonl в бэклог (идемпотентно)
+  tri game-lesson "H" "B" — записать урок в queen-game-loop/LESSONS.md
+  tri game-wire [board|status|hardware|activity|research] — что реально несут публичные эндпоинты (поля на N карточках)
+  tri game-prove MARKER | --entry index-X.js | --apex [--after index-OLD.js] [--minutes 9] — ждать, пока t27.ai отдаст Queen-чанк с маркером / названный entry / entry из apex index.html (отличный от --after); exit 0 = доказано
+  tri game-gates [fast|full] [LOG] — цепочка гейтов Queen (full = + 5 headless-Chrome контрактов, ~8 мин); exit 0 = все зелёные
+  tri game-ship BRANCH TITLE MSGFILE BODYFILE -- PATHSPEC... — add по pathspec, commit, push, PR, squash-merge, dispatch паблишера (без watch и без prove)
+  tri game-close TASK_ID "msg" — закрытие цикла: task done, аномалии --heal, closed_at, iterate, dash, release, коммит скилла (отчёт и CONTEXT.md правятся руками ДО)
+  tri game-spike [--no-build] — замер движков на текущем checkout: canvas2D vs Babylon, rAF p50/p95/p99, пропуски vsync, brotli чанков (GPU через ANGLE/Metal)
+  tri game-local [--build|--stop] — «запусти локально»: vite preview собранного сайта на 127.0.0.1:4173 и открыть #/queen в браузере по умолчанию (не в панели приложения: там страница скрыта и движок стоит)
+  tri game-models [list|pull <slug>] — модели поля (public/queen/models) с размерами и лицензией; pull тянет пак Kenney по slug только после слова пользователя, печатая источник и размер
+  tri game-objects [--json] — учёт объектов поля: что нарисовано, на каком слое и какая сущность за этим стоит
+  tri game-foundation [--out PATH] [--repo R] [--limit N] — снимок GitHub для фундамента (закрытые задачи, эпики с детьми и кольцом, релизы, кольца) в public/queen/foundation.json; пишет только при изменении содержимого без generatedAt, иначе печатает unchanged
+  tri game-plan [путь] — план здания модуля из modules.json той же чистой функцией, что рисует поле (ядро, масштаб, высота, крылья, антенны, поворот, хеш)
+  tri game-verify     — самопроверка состояния лупа игры: дубли id, неизвестные статусы и severity, протухший замок (выход 1 = состояние противоречиво)
+  tri game-status [API] — что читают статус-пилюля и плитка VERDICTS: swarmState, планировщик, диспатчи (running/unreviewed), решение последнего тика
+  tri game-round [API] — тикает ли Королева: lastRoundAt и roundSeconds против ЧАСОВ СЕРВЕРА (заголовок Date), не против ноутбука
+  tri game-clock [API] — отдаёт ли статус-эндпоинт свои часы браузеру на t27.ai (Date, Access-Control-Expose-Headers) и каков сдвиг с этой машиной
+  tri game-bees [API] — живые пчёлы с public-board и возраст последнего слова каждой на проводе активности против длины раунда (warm/COLD)
+  tri game-events [KIND] [HOURS] [API] — свежие события одного вида на проводе активности с их состоянием, словами INTEL FEED (по умолчанию review)
+  tri game-feed [HOURS] [API] — что заголовок INTEL FEED должен сказать о свежем ответе провода: строк, размах между старейшей и новейшей, виды
+  tri game-activity [HOURS] [API] — выборка /queen/public-activity за N часов: виды, вердикты ревью по (issue, state) со всеми штампами, свежий тик
+  tri game-measure NAME [--build] — прогнать ОДИН headless-контракт qa/queen-NAME-contract.mjs на текущем dist (отказ, пока идёт цепочка гейтов: dist общий)
+  tri game-contract NAME "что доказывает" — завести qa/queen-NAME-contract.mjs из pick-харнесса, зарегистрировать check:queen-NAME и дописать в полный список гейтов (хвост падает НАРОЧНО)
+  tri game-bar        — ширины колонок ресурсной полосы на четырёх десктопных размерах в обоих языках (замер, нашедший бренд-надбровие на 200 px)
+  tri game-copy KEY [KEY...] — английское и русское значение COPY-ключа из Queen.tsx и сколько мест его используют
+  tri game-branch NAME — первое действие цикла: fetch origin и ветка NAME от origin/main в checkout trinity (отказ, если в дереве чужие правки)
+  --- continuous loop (trios) ---
+  tri iter / iter-dash / iter-log [N] / iter-anchors — состояние цикла, дашборд, журнал
+  tri iter-render [--work f.json] — замерить рой, обновить опоры, перерисовать дашборд
+  tri iter-unlock — снять замок цикла (только если `tri iter` говорит stale)
+  tri swarm — живое состояние Королевы одной строкой
+  tri fence — какие пути держат застрявшие задания (границы, которых избегать)
+  tri brief-gate <draft.md ...> — проверить черновик задачи парсером самой Королевы
+  tri facts [--record|--facts]    — измеренные числа дашборда; неизмеримое показывается как '-'
+  tri failures [--since N|<step>] — какие шаги цепочки падают, как часто и с какими уликами
+  tri channel                     — жив ли единственный канал в контейнер
+  tri share-modules [--share]     — одна установка зависимостей, связанная ссылками во все деревья
+  tri reap-finished [--reap]      — убрать деревья, чья работа уже опубликована (по сроку жизни, не по давлению)
+  tri rescue [--rescue]           — спасти работу, которую пчела не закоммитила, пока её не стёрли
+  tri container                   — кто PID 1 и близко ли к исчерпанию процессов
+  tri two-views [--record|--report] — согласны ли /health и ssh-шлюз в один момент
+  tri salvage <N> [--brief]       — что уцелело от устаревшей ветки: имена, которых нет в базе; --brief пишет задание
+  tri proven [--by-source]        — доказывает ли свежая работа что-нибудь; --by-source: разрез по виду работы
+  tri coverage [--fresh]          — какую долю принятых вердиктов аудит может проверить (кэш: 10с против 217с)
+  tri verdict-audit <N ...> | --accepted — сверить заявленный вердикт пчелы с её диффом
+  tri boundary <N ...>            — что пчеле разрешили трогать и что она тронула; CREATED против edited
+  tri t27-gen                     — перегенерировать кольцо T27-00 из .t27 (артефакт не правят руками)
+  tri t27-parity                  — согласны ли сгенерированное кольцо и рукописный близнец из продакшена
+  tri forked-files                — файл, который лежит в двух местах, не должен начать говорить разное
+  tri ci-diff <run|--pr a b>      — какие падения в CI НОВЫЕ, а какие были красными до тебя
+  tri exposure                    — что живой сервис отдаёт origin'у, которого он не знает
+  tri flaky [N|<run-id>...]       — какие красные тесты падают ВСЕГДА, а какие через раз
+  tri accept-rate                 — принимают ли реже бриф, который МОЖНО провалить
+  tri unverdicted [--limit N]     — диспатчи без блока VERDICT: ревью их никогда не рассудит
+  tri silent-loop [--limit N]     — попытки, которые не тратят лимит повторов: у цикла нет потолка
+  tri rejudge [--state S]         — вердикт, который текущий код уже не повторит (согласие ≠ правота)
+  tri agree [--pair NAME]         — два кода одного правила на реальных строках: где расходятся и куда
+  tri idle [--hours N]            — сколько рой простоял и что помешало раундам (золотое правило)
+  tri unwired [--all]             — гейт, который написан, но его никто не запускает
+  tri reach [--since D] [--floor N] — какой шаг цепочки heal ДОХОДИТ до запуска, а какой всегда последний
+  tri reap [--reap] — сборка worktree по порогам 80/60, без --force
+  tri lease [--release] — аренда заявки с таймером простоя, потолок повторов 2
+  tri heal [--dry] — все ремонты роя одной цепочкой в верном порядке
+  tri author [--file] — завести задачу из измеренного дефицита, лимит 5 открытых
+  tri loop-selftest — поверка собственных приборов цикла (без сети; счётчик печатает сам прогон, а не эта строка)
+  tri judge-packet <N ...> | --unauditable — собрать пакет для судейского прочтения
+  tri needs-you [--all] — что ждёт человека и сколько уже ждёт
+  tri loop-coverage — у каких инструментов цикла боевая ветка ни разу не исполнялась
+  tri trend [часов] — скорость счётчиков, а не их уровень
+  tri clocks — на каких полях висят решения и не переписывает ли их кто-то
+  tri fields [файл] — читает ли код поля, которых запрос не выбирает
+  tri fp-check [N] — не обвиняют ли проверяльщики заведомо годное
+  tri push-work [--push] — отправить ветки пчёл, которых нет на удалённом
+  tri close-done [--close] — закрыть задачи с принятой работой (эпики не трогает)
+  tri unpark [--release] — снять потолок повторов, потраченный на молчание, а не на работу
+  tri stale-escalations [--release] — отпустить эскалацию, чья причина больше не воспроизводится
+  tri holds — что рой держит сейчас и не заявлены ли два диспатча на один файл
+  tri queue — глубина очереди (не число открытых): что ещё никто не начинал
+  tri latency — куда уходит время: ревью против работы пчелы, и сколько задач в час
+  tri reap-local [--reap] — убрать слитые и чистые рабочие деревья с диска ноутбука
+  tri verdicts [часов] — доля принятого, возвращённого и неосуждённого: здоровье, а не загрузка
+  tri why [--all] — почему рой стоит: причина, улика и что с этим делать
+  tri feed [--act] — только заправка: пуш, закрытие, заведение, без аудитов
+  tri mix — каким ВИДОМ работы занят рой: загрузка и приёмка этого не покажут
+  tri land [--land] — посадить принятую работу, что осталась на ветках вне базы
+  tri ab <a> <nA> <b> <nB> — отличается ли разница от шума, или это просто мало данных
+  --- cycle: измерить, перекрестно допросить, нарисовать, записать ---
+  tri cycle [--deep] — один проход: замер, аномалии, дашборд, запись в журнал (выход 2 = аномалии найдены, это ответ)
+  tri cycle-repair — то же плюс перечисленные безопасные ремонты (замок мёртвого хозяина, ЧИСТЫЕ деревья)
+  tri cycle-dash — показать последний дашборд, и первой строкой его возраст с файловой системы
+  tri cycle-html — тот же замер, но широкий: у каждой цифры видна команда, которой её измерили, и рядом с каждой аномалией её ремонт. Выход 2, если замеру больше одного цикла
+  tri cycle-anom [N] (то же самое — tri cycle-anomalies) — каждая аномалия целиком: заявление, правда, ремонт (на дашборде помещается семь)
+  tri cycle-sense [--deep] — только замер, без рисования
+  tri cycle-log [N] — журнал проходов: сколько аномалий, какие витали, что чинили
+  tri cycle-note did|next "текст" — проза пишется руками; дашборд рисует пустоту, если её не написали
+  tri cycle-doctor — на месте ли всё, что циклу нужно, и достижима ли каждая его команда
+  tri driver — крутит ли итерации хоть кто-нибудь. Выход 1 — водителя нет (измеренный ноль), 2 — прочитать не удалось (это НЕ ноль)
+  tri drift [--adopt] — тот ли это файл, что крутят таймеры, и лежит ли он в репозитории
+                     (выход 1 — измеренное расхождение, 2 — прочитать не удалось; --adopt только руками)
+  tri backlog — что бэклог СОДЕРЖИТ, прочитанный по задаче, а не выведенный из счётчиков пропусков
+  --- опыт и навыки ---
+  tri learn --audit — сколько указателей индекса памяти ведёт в файл, которого нет
+  tri learn <slug> --hook "..." --desc "..." --body-file F [--type feedback] — сохранить опыт: сперва файл, потом указатель
+  tri skills [фильтр] — какие навыки лежат на диске и у каких нет своего SKILL.md
+  tri proof <файл.md> ...  — существует ли то, на что документ ссылается (выход 2, если нет)
+  tri loop-lesson "текст" — записать урок ЦИКЛА в state.json и ledger.jsonl одной командой,
+                     в момент находки (не путать с командой `lesson` выше: та пишет в loop-opus/LESSONS.md)
+  tri lesson-orphans [--all] — какие уроки из state.json не дошли НИ ДО ОДНОГО навыка
+                     дерева trios (--all: плюс оба домашних каталога навыков; какие
+                     именно корни прочитаны, команда печатает сама); выход 2 = сироты
+  --- приборы цикла, у которых до 2026-09-13 не было точки входа ---
+  tri which-board [--json|--no-gh|--selftest] — какую доску GitHub читает каждый прибор цикла
+                     и движется ли она; выход 2 = набор приборов расколот (команда `board` выше — другое: дашборд trios)
+  tri judge-calibration --build [N] | --score FILE | --report — померить СУДЬЮ на вопросах,
+                     ответ на которые арифметика; выход 2 = судья подтвердил фантом
+  tri dash2 [--write] [--reading F] [--no-color] — дашборд цикла СВЕЖИМ замером: живость двумя
+                     сигналами, у каждого числа возраст, неизмеренное как '-' (уже нарисованный показывает `cycle-dash`)
+  tri help (то же самое — tri -h, tri --help) — эта справка
+USAGE
+    ;;
+  # ---- queen game loop (t27.ai/#/queen) ----------------------------------
+  game)         exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" status ;;
+  game-claim)   exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" claim ;;
+  game-release) exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" release ;;
+  game-iterate) exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" iterate --subject "Queen game — t27.ai/#/queen" ;;
+  game-task)    shift; exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" task "$@" ;;
+  game-finding) shift; exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" finding "$@" ;;
+  game-gate)    shift; exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" gate "$@" ;;
+  game-verify)  exec python3 "$HOME/skills/queen-game-loop/_state/loop.py" verify ;;
+  game-next)    exec python3 "$HOME/skills/queen-game-loop/_state/dash.py" next ;;
+  game-anomalies)
+    # Live checks with a real exit code; --heal dispatches the publisher when the apex lags main.
+    exec python3 "$HOME/skills/queen-game-loop/scripts/anomalies.py" "${2:-}"
+    ;;
+  game-dash)
+    python3 "$HOME/skills/queen-game-loop/_state/loop.py" dashboard > /dev/null || exit 1
+    python3 "$HOME/skills/queen-game-loop/_state/dash.py" || exit 1
+    if [ "${2:-}" = "open" ]; then open "$HOME/skills/queen-game-loop/_state/dashboard.html"; fi
+    exit 0
+    ;;
+  game-ingest)
+    # Ingest a research workflow's plan (tasks, findings, variants) from its journal.jsonl; idempotent.
+    [ -z "${2:-}" ] && { echo "tri game-ingest <workflow journal.jsonl> [--cycle N]"; exit 1; }
+    shift; exec python3 "$HOME/skills/queen-game-loop/scripts/ingest_plan.py" "$@"
+    ;;
+  game-report)
+    f=$(ls "$HOME/skills/queen-game-loop/_state"/cycle-*.md 2>/dev/null | tail -1); [ -z "$f" ] && { echo "no cycle report yet"; exit 1; }
+    echo "$f"; sed -n "1,${2:-60}p" "$f"
+    ;;
+  game-wire)    shift; exec python3 "$HOME/skills/queen-game-loop/scripts/wire.py" "$@" ;;
+  game-plan)    shift; exec node --experimental-strip-types "$HOME/skills/queen-game-loop/scripts/plan.mjs" "$@" 2>/dev/null ;;
+  game-models)  shift; exec bash "$HOME/skills/queen-game-loop/scripts/models.sh" "$@" ;;
+  game-bees) shift; exec bash "$HOME/skills/queen-game-loop/scripts/bees.sh" "$@" ;;
+  game-foundation) shift; exec python3 "$HOME/skills/queen-game-loop/scripts/foundation_scan.py" "$@" ;;
+  game-objects) shift; exec bash "$HOME/skills/queen-game-loop/scripts/objects.sh" "$@" ;;
+  game-events) shift; exec bash "$HOME/skills/queen-game-loop/scripts/events.sh" "$@" ;;
+  game-feed) shift; exec bash "$HOME/skills/queen-game-loop/scripts/feed.sh" "$@" ;;
+  game-status) shift; exec bash "$HOME/skills/queen-game-loop/scripts/status.sh" "$@" ;;
+  game-round) shift; exec bash "$HOME/skills/queen-game-loop/scripts/round.sh" "$@" ;;
+  game-bar) shift; exec bash "$HOME/skills/queen-game-loop/scripts/bar.sh" "$@" ;;
+  game-copy) shift; exec bash "$HOME/skills/queen-game-loop/scripts/copy.sh" "$@" ;;
+  game-measure) shift; exec bash "$HOME/skills/queen-game-loop/scripts/measure.sh" "$@" ;;
+  game-activity) shift; exec bash "$HOME/skills/queen-game-loop/scripts/activity.sh" "$@" ;;
+  game-contract) shift; exec bash "$HOME/skills/queen-game-loop/scripts/contract.sh" "$@" ;;
+  game-branch) shift; exec bash "$HOME/skills/queen-game-loop/scripts/branch.sh" "$@" ;;
+  game-clock) shift; exec "$HOME/skills/queen-game-loop/scripts/clock.sh" "$@" ;;
+  game-local)   shift; exec bash "$HOME/skills/queen-game-loop/scripts/local.sh" "$@" ;;
+  game-spike)   shift; exec bash "$HOME/skills/queen-game-loop/scripts/spike.sh" "$@" ;;
+  game-close)   shift; exec bash "$HOME/skills/queen-game-loop/scripts/close.sh" "$@" ;;
+  game-ship)    shift; exec bash "$HOME/skills/queen-game-loop/scripts/ship.sh" "$@" ;;
+  game-gates)   shift; exec bash "$HOME/skills/queen-game-loop/scripts/gates.sh" "$@" ;;
+  game-prove)   shift; exec python3 "$HOME/skills/queen-game-loop/scripts/prove.py" "$@" ;;
+  game-lesson)
+    [ -z "${3:-}" ] && { echo 'tri game-lesson "заголовок" "текст"'; exit 1; }
+    f="$HOME/skills/queen-game-loop/LESSONS.md"
+    { echo; echo "## $(date '+%Y-%m-%d %H:%M') — $2"; echo; echo "$3"; } >> "$f"
+    echo "записано в $f"
+    ;;
+
+  # --- the continuous cycle -------------------------------------------------
+  #
+  # Added 2026-09-12, after the loop sat stopped for 147.9 hours. The driver
+  # that ran iterations 1-96 was a Claude cron job scoped to a chat session; it
+  # died with that session, and nothing on the dashboard distinguished "the
+  # driver is scheduled" from "the launchd timers fired recently", so a dead
+  # loop kept a green light. `cycle.mjs` is a plain file any scheduler can run.
+  #
+  # These arms sit at the END of the case on purpose. A shell `case` takes the
+  # FIRST match, which is how `tri feed --act` reached an unrelated arm for its
+  # whole life while a timer ran it every 300 seconds. Every word below was
+  # checked against every arm above before insertion, and `tri cycle-doctor`
+  # re-checks it on every run rather than trusting that check to stay true.
+
+  cycle)
+    # Measure, cross-examine, draw, record. Changes nothing else - see the cron
+    # contract at the top of cycle.mjs. Exits 2 when anomalies were found, which
+    # is the answer and not a failure.
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/cycle.mjs "$@"
+    ;;
+  cycle-repair)
+    # The same, plus the enumerated safe repairs: release a lock whose holder is
+    # provably dead, and remove CLEAN worktrees when the volume is nearly full.
+    # `git worktree remove` runs without --force, so a worktree holding unlanded
+    # bee work refuses to go. That refusal is the point.
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/cycle.mjs --repair "$@"
+    ;;
+  cycle-dash)
+    f=/Users/playra/BrowserOS/trios/.trinity/loop/DASHBOARD2.ansi
+    [ -f "$f" ] || { echo "no dashboard drawn yet - run: tri cycle"; exit 1; }
+    # The age comes FIRST and comes from the filesystem, not from the file's own
+    # header. The old DASHBOARD.txt advertised a live cron job for six days
+    # after that job stopped existing; reading a dashboard without its age is
+    # how that went unnoticed.
+    echo "drawn $(( ( $(date +%s) - $(stat -f %m "$f") ) / 60 )) min ago"
+    cat "$f"
+    ;;
+  cycle-html)
+    # The wide dashboard. The terminal one is 74 columns and drops the
+    # provenance the reading paid to measure; this one keeps all four fields per
+    # metric and prints the repair line beside each anomaly.
+    #
+    # It exits 2 when the reading it drew is older than a cycle. That is not a
+    # failure of the renderer and the page still gets written - it is the
+    # renderer refusing to let a stale picture pass for a live one.
+    shift 2>/dev/null || true
+    node /Users/playra/BrowserOS/trios/.trinity/loop/dash-cc.mjs "$@"
+    rc=$?
+    case " $* " in *" --stdout "*) exit $rc ;; esac
+    [ "${TRI_NO_OPEN:-}" = "1" ] || open /Users/playra/BrowserOS/trios/.trinity/loop/DASHBOARD.html
+    exit $rc
+    ;;
+  cycle-anom|cycle-anomalies)
+    # Every anomaly with its claim, its truth, and its repair - the dashboard
+    # only has room for seven.
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/anomaly.mjs "${2:-}"
+    ;;
+  cycle-sense)
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/sense.mjs "$@"
+    ;;
+  cycle-log)
+    tail -"${2:-12}" /Users/playra/BrowserOS/trios/.trinity/loop/cycle-ledger.jsonl 2>/dev/null \
+      | python3 -c '
+import sys, json
+for line in sys.stdin:
+    try: d = json.loads(line)
+    except Exception: continue
+    v = d.get("vitals", {})
+    sev = d.get("severity", {})
+    print("%4s  %s  %-7s %2d anomalies (%db/%dh)  iter %s stale %sh  bees %s  disk %s%%" % (
+        d.get("cycle"), d.get("at","")[:19], d.get("mode",""), d.get("anomalies",0),
+        sev.get("blocker",0), sev.get("high",0),
+        v.get("iteration"), v.get("staleHours"), v.get("beesRunning"), v.get("diskPercent")))
+    for r in d.get("repairs", []):
+        print("        repaired: " + r.get("did",""))
+'
+    ;;
+  cycle-note)
+    # Prose is written, never generated. The dashboard renders whatever is in
+    # cycle-notes.json and renders nothing when it is empty, rather than
+    # inventing a summary of an iteration nobody described.
+    #   tri cycle-note did  "what this iteration actually changed"
+    #   tri cycle-note next "one of the three ways to continue"
+    #   tri cycle-note clear
+    [ -z "${2:-}" ] && { echo 'tri cycle-note did|next "text"   |   tri cycle-note clear'; exit 1; }
+    python3 - "$2" "${3:-}" << 'PYNOTE'
+import json, os, sys
+p = "/Users/playra/BrowserOS/trios/.trinity/loop/cycle-notes.json"
+kind, text = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(p, encoding="utf-8"))
+except Exception:
+    d = {}
+if kind == "clear":
+    d = {"did": [], "next": []}
+elif kind in ("did", "next"):
+    if not text:
+        sys.exit("tri cycle-note %s \"text\"" % kind)
+    d.setdefault(kind, []).append(text)
+else:
+    sys.exit("kind must be did, next or clear")
+json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print("%s: %d did, %d next" % (p, len(d.get("did", [])), len(d.get("next", []))))
+PYNOTE
+    ;;
+  cycle-doctor)
+    # Does the cycle still have everything it needs, and is every one of its own
+    # commands still reachable? Run this before trusting a schedule.
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/cycle-doctor.mjs "${2:-}"
+    ;;
+  driver)
+    # IS ANYTHING FIRING AN ITERATION? The loop ran 96 of them and then stopped
+    # for six days while every housekeeping timer went on writing, because the
+    # thing that opened iterations was a session-scoped scheduled task that died
+    # with its session and left nothing behind. Four live launchd timers say
+    # NOTHING about whether an iteration will ever open again - they are
+    # housekeeping - which is why this prints all three schedulers separately
+    # instead of one reassuring total.
+    #
+    # THREE EXIT CODES, because two of them used to be one:
+    #   0  a scheduled task exists
+    #   1  MEASURED zero - the driver is gone
+    #   2  scheduled_tasks.json did not parse into a shape this knows, so the
+    #      answer is unknown. That used to be reported as zero, which is a
+    #      confident red verdict assembled from a file nobody could read.
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/driver.mjs "$@"
+    ;;
+  drift)
+    # IS THE CLI THE TIMERS RUN THE CLI IN THE REPOSITORY? Until 2026-09-13 this
+    # file - 1686 lines, the only entry point to the whole loop - existed in
+    # exactly one place on this machine and in no repository at all, while four
+    # launchd timers executed it by absolute path every 300 to 900 seconds. The
+    # tracked copy lives at trios/bin/tri; this is the gate that says whether it
+    # still describes what actually runs. Exit 1 = measured difference, exit 2 =
+    # nothing could be read, which is NOT agreement.
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/tri-drift.mjs "$@"
+    ;;
+  backlog)
+    # What the backlog CONTAINS, read issue by issue rather than inferred from
+    # the Queen's skip counts. On 2026-09-12: 590 open, 40 delegable, 24 briefs
+    # one heading short, and 526 reports and free prose. The swarm is not
+    # blocked by a parser - 89% of its food was written to record findings, and
+    # a finding is not an instruction.
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/backlog.mjs "$@"
+    ;;
+
+  learn)
+    # Опыт сохраняется ФАЙЛОМ, и строка индекса пишется только после того, как
+    # файл лёг на диск. 2026-09-12 в MEMORY.md нашлось 183 указателя, из них 101
+    # (55%) вёл в файл, которого нет: указатель и файл были двумя отдельными
+    # ручными правками, и происходила регулярно только одна. Здесь этот порядок
+    # сделан структурным - написать указатель без файла отсюда невозможно.
+    #   tri learn --audit                     — что в индексе висит в пустоту
+    #   tri learn <slug> --hook "строка" --desc "..." --body-file F [--type T]
+    shift 2>/dev/null || true
+    python3 - "$@" << 'PYLEARN'
+import os, re, sys
+
+MEM = "/Users/playra/.claude/projects/-Users-playra-BrowserOS/memory"
+IDX = os.path.join(MEM, "MEMORY.md")
+KINDS = ("user", "feedback", "project", "reference")
+POINTER = re.compile(r"\]\(([a-z0-9][a-z0-9-]*\.md)\)")
+
+
+def pointers():
+    if not os.path.exists(IDX):
+        return []
+    out = []
+    for n, line in enumerate(open(IDX, encoding="utf-8"), 1):
+        m = POINTER.search(line)
+        if m:
+            out.append((n, m.group(1), line.rstrip("\n")))
+    return out
+
+
+def audit():
+    pts = pointers()
+    dead = [(n, t) for n, t, _ in pts if not os.path.exists(os.path.join(MEM, t))]
+    on_disk = set(
+        f for f in os.listdir(MEM) if f.endswith(".md") and f != "MEMORY.md"
+    )
+    indexed = set(t for _, t, _ in pts)
+    # A file reached only through a [[link]] in another memory is indexed enough.
+    linked = set()
+    for f in on_disk:
+        body = open(os.path.join(MEM, f), encoding="utf-8", errors="replace").read()
+        for name in re.findall(r"\[\[([a-z0-9][a-z0-9-]*)\]\]", body):
+            linked.add(name + ".md")
+    orphan = sorted(on_disk - indexed - linked)
+    print("pointers in MEMORY.md   : %d" % len(pts))
+    print("resolve to a real file  : %d" % (len(pts) - len(dead)))
+    print("dangling                : %d" % len(dead))
+    print("files on disk           : %d" % len(on_disk))
+    print("on disk, unreachable    : %d" % len(orphan))
+    for n, t in dead:
+        print("  dangling  MEMORY.md:%-4d %s" % (n, t))
+    for f in orphan:
+        print("  unreachable          %s" % f)
+    if not dead and not orphan:
+        print("\nindex and disk agree")
+        return 0
+    print(
+        "\nA dangling pointer is not harmless: the one line of prose after the dash"
+        "\nis then the whole memory, while the link advertises a document behind it."
+    )
+    return 2
+
+
+args = sys.argv[1:]
+if not args or args[0] in ("-h", "--help"):
+    print('tri learn --audit')
+    print('tri learn <slug> --hook "строка индекса" --desc "..." --body-file F [--type feedback]')
+    sys.exit(1)
+if args[0] == "--audit":
+    sys.exit(audit())
+
+slug = args[0]
+opt = {}
+i = 1
+while i < len(args):
+    if args[i].startswith("--") and i + 1 < len(args):
+        opt[args[i][2:]] = args[i + 1]
+        i += 2
+    else:
+        sys.exit("не понял аргумент: %s" % args[i])
+
+if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+    sys.exit("slug должен быть kebab-case ascii: %s" % slug)
+kind = opt.get("type", "project")
+if kind not in KINDS:
+    sys.exit("--type должен быть одним из: %s" % ", ".join(KINDS))
+for need in ("hook", "desc"):
+    if not opt.get(need):
+        sys.exit("--%s обязателен: индекс без него нечитаем" % need)
+bf = opt.get("body-file")
+if not bf:
+    sys.exit("--body-file обязателен: тело памяти пишется, а не генерируется")
+if not os.path.exists(bf):
+    sys.exit("нет такого файла: %s" % bf)
+body = open(bf, encoding="utf-8").read().strip()
+if not body:
+    sys.exit("тело пустое: %s" % bf)
+
+path = os.path.join(MEM, slug + ".md")
+existed = os.path.exists(path)
+desc = opt["desc"].replace('"', "'")
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write("---\nname: %s\ndescription: \"%s\"\nmetadata:\n  type: %s\n---\n\n%s\n"
+             % (slug, desc, kind, body))
+
+# Только теперь - указатель. И только если его ещё нет.
+line = "- [%s](%s.md) — %s" % (opt.get("title", slug), slug, opt["hook"])
+have = [t for _, t, _ in pointers()]
+if slug + ".md" in have:
+    print("%s: %s" % ("переписан" if existed else "создан", path))
+    print("указатель уже был в MEMORY.md, не дублирую")
+else:
+    with open(IDX, "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+    print("создан: %s" % path)
+    print("в индекс: %s" % line)
+PYLEARN
+    ;;
+  skills)
+    # Что лежит на диске как навык - и у каких навыков нет собственного
+    # SKILL.md, то есть имя каталога есть, а инструкции нет. Это НЕ ответ на
+    # вопрос "какие навыки видит Королева": её доступность меряется на проводе,
+    # а не в файловой системе (WAVE-066: она доставала 4 из 26).
+    python3 - "${2:-}" << 'PYSKILLS'
+import os, sys
+
+ROOTS = [
+    ("проект  ", "/Users/playra/BrowserOS/trios/.claude/skills"),
+    ("личные  ", os.path.expanduser("~/.claude/skills")),
+    ("библиотека", os.path.expanduser("~/skills")),
+]
+want = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
+total = broken = 0
+for label, root in ROOTS:
+    if not os.path.isdir(root):
+        print("%s  %s  — нет каталога" % (label, root))
+        continue
+    # `.git`, `_state`, `_archive` и прочая обвязка каталогом навыка не является.
+    # Без этой строки команда в первом же запуске выдала 8 находок, из которых
+    # настоящей была одна: инструмент, считающий шум находками, - тот самый
+    # дефект, ради которого этот цикл и заведён.
+    names = sorted(
+        d
+        for d in os.listdir(root)
+        if os.path.isdir(os.path.join(root, d)) and not d.startswith((".", "_"))
+    )
+    print("\n%s  %s  (%d)" % (label, root, len(names)))
+    for n in names:
+        if want and want not in n:
+            continue
+        sk = os.path.join(root, n, "SKILL.md")
+        total += 1
+        if os.path.exists(sk):
+            size = os.path.getsize(sk)
+            head = ""
+            for line in open(sk, encoding="utf-8", errors="replace"):
+                if line.startswith("description:"):
+                    head = line.split(":", 1)[1].strip().strip('"')[:70]
+                    break
+            print("  %-34s %6d b  %s" % (n, size, head))
+        else:
+            broken += 1
+            print("  %-34s      -  НЕТ SKILL.md" % n)
+print("\nвсего каталогов: %d, без SKILL.md: %d" % (total, broken))
+sys.exit(2 if broken else 0)
+PYSKILLS
+    ;;
+  proof)
+    # Ссылается ли документ на то, что существует. claim-guard когда-то дал
+    # зелёный свет на опечатку в имени файла: путь был процитирован, файла не
+    # было, и никто не спросил диск. Здесь спрашивают диск.
+    #   tri proof <файл.md> [...]      — выход 2, если хоть один путь не найден
+    [ -z "${2:-}" ] && { echo 'tri proof <файл.md> [...]'; exit 1; }
+    shift 2>/dev/null || true
+    python3 - "$@" << 'PYPROOF'
+import os, re, subprocess, sys
+
+REPO = "/Users/playra/BrowserOS"
+CODE = re.compile(r"`([^`\n]{2,160})`")
+LOOKS_PATH = re.compile(r"^[~./A-Za-z0-9_-][A-Za-z0-9_./~*-]*$")
+# Расширение, которое действительно бывает у файла этого дерева. Без этого
+# списка `ProjectPaths.trinity` (обращение к свойству в Swift) читается как путь
+# и попадает в отчёт ненайденным - обвинение, которого никто не делал.
+EXTS = {
+    ".md", ".mjs", ".js", ".ts", ".tsx", ".json", ".jsonl", ".swift", ".sh",
+    ".py", ".rs", ".toml", ".yml", ".yaml", ".t27", ".zig", ".c", ".h", ".v",
+    ".plist", ".txt", ".ansi", ".lock", ".app", ".png", ".svg", ".log", ".env",
+}
+
+# Путь в документе относителен не текущему каталогу, а чаще всего каталогу
+# самого документа или корню дерева. 2026-07 отчёт объявил 15 мёртвых ссылок,
+# и все 15 были живыми - их просто мерили не от того корня. Здесь спрашивают
+# git: он знает настоящий набор путей.
+try:
+    tracked = set(
+        subprocess.run(
+            ["git", "-C", REPO, "ls-files"],
+            capture_output=True, text=True, timeout=60, check=True,
+        ).stdout.split("\n")
+    ) - {""}
+except Exception as e:
+    print("git ls-files не ответил (%s) - проверяю только файловой системой" % e)
+    tracked = set()
+by_base = {}
+for t in tracked:
+    by_base.setdefault(os.path.basename(t), []).append(t)
+
+
+def resolves(cand, docdir):
+    exp = os.path.expanduser(cand)
+    if os.path.isabs(exp):
+        return os.path.exists(exp)
+    roots = [docdir, REPO, os.getcwd()]
+    # ...и каждый каталог между документом и корнем дерева.
+    d = docdir
+    while d.startswith(REPO) and d != REPO:
+        d = os.path.dirname(d)
+        roots.append(d)
+    if any(os.path.exists(os.path.join(r, exp)) for r in roots):
+        return True
+    if cand in tracked or any(t.endswith("/" + cand) for t in tracked):
+        return True
+    if "/" not in cand and cand in by_base:
+        return True
+    if "*" in cand:                      # `.worktrees/*/trios` - проверяем ствол
+        stem = cand.split("*")[0].rstrip("/")
+        return bool(stem) and any(os.path.exists(os.path.join(r, stem)) for r in roots)
+    return False
+
+
+bad = checked = 0
+for doc in sys.argv[1:]:
+    if not os.path.exists(doc):
+        print("НЕТ ДОКУМЕНТА  %s" % doc)
+        bad += 1
+        continue
+    docdir = os.path.dirname(os.path.abspath(doc))
+    text = open(doc, encoding="utf-8", errors="replace").read()
+    seen, misses = set(), []
+    for raw in CODE.findall(text):
+        cand = raw.split(":")[0].strip().rstrip(".,;")
+        if cand in seen or not LOOKS_PATH.match(cand):
+            continue
+        ext = os.path.splitext(cand)[1].lower()
+        if "/" not in cand and ext not in EXTS:
+            continue                     # одиночное слово - это не путь
+        if "/" in cand and ext and ext not in EXTS and not cand.endswith("/"):
+            pass                         # каталог с точкой в имени - всё же путь
+        seen.add(cand)
+        checked += 1
+        if not resolves(cand, docdir):
+            misses.append(cand)
+    print("\n%s — путей %d, не найдено %d" % (doc, len(seen), len(misses)))
+    for m in misses:
+        print("  НЕ НАЙДЕН  %s" % m)
+    bad += len(misses)
+print("\nпроверено путей: %d, не найдено: %d" % (checked, bad))
+print("(корни: каталог документа, каждый каталог до корня дерева, и git ls-files)")
+sys.exit(2 if bad else 0)
+PYPROOF
+    ;;
+
+  # --- инструменты цикла, у которых не было точки входа (2026-09-13) --------
+  #
+  # Аудит 2026-09-13 нашёл здесь два класса: инструмент, написанный и не
+  # подключённый ни к одной руке (judge-calibration.mjs и dash2.mjs, 27 КБ на
+  # двоих, ноль импортёров), и руку без строки в `tri help` (23 из 146). Обе
+  # руки ниже добавлены ВМЕСТЕ со своими строками справки одним прогоном:
+  # недокументированная рука — это и есть второй из этих двух дефектов.
+  #
+  # Имена сверены со всеми метками выше перед вставкой: `case` берёт ПЕРВОЕ
+  # совпадение, и именно так `tri feed --act` всю свою жизнь попадал в чужую
+  # руку. `board`, `lesson`, `status`, `wave` уже заняты и означают другое —
+  # поэтому здесь `which-board`, `loop-lesson`, `wave-plan`.
+
+  which-board)
+    # КАКУЮ доску на GitHub читает каждый прибор цикла и движется ли она.
+    # Имя не `board`: `tri board` (выше) рисует дашборд trios из
+    # iterations.jsonl и STATUS.md — другой вопрос и другой источник.
+    # Выход 2 = набор приборов расколот или читает доску, которая стоит,
+    # пока работает другая. Это ответ, а не сбой.
+    #   tri which-board [--json] [--no-gh] [--selftest]
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/board.mjs "$@"
+    ;;
+  judge-calibration)
+    # Померить СУДЬЮ до того, как доверить ему работу, которую не достаёт ни
+    # один механический чек. Вопросы строятся из кэша verdict-audit, ответ на
+    # каждый — арифметика, а не мнение; ключ пишется в state/, а не в
+    # packets/, чтобы судья не прочитал ответы. Выход 2 = судья подтвердил
+    # фантом (находка о судье, не поломка прибора).
+    #   tri judge-calibration --build [N] | --score FILE | --report
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/judge-calibration.mjs "$@"
+    ;;
+  dash2)
+    # Дашборд цикла, нарисованный так, чтобы ОСТАНОВЛЕННЫЙ цикл не выглядел
+    # работающим: живость — два независимых сигнала, у каждого числа есть
+    # возраст, неизмеренное печатается как '-', а проза читается из
+    # cycle-notes.json и никогда не генерируется.
+    #   tri dash2 [--write] [--reading FILE] [--no-color]
+    # `tri cycle-dash` показывает УЖЕ нарисованный DASHBOARD2.ansi с его
+    # возрастом; здесь берётся свежий замер.
+    shift 2>/dev/null || true
+    exec node /Users/playra/BrowserOS/trios/.trinity/loop/dash2.mjs "$@"
+    ;;
+  loop-lesson)
+    # Урок записывается В МОМЕНТ НАХОДКИ, одной командой, а не в конце сессии.
+    # Пишет ровно туда, куда пишет сам цикл: state.json -> lessons[] плюс
+    # строка в ledger.jsonl — через lesson() из loop.mjs, чтобы здесь не
+    # завелась вторая реализация того же формата (две копии одного правила —
+    # самый дорогой дефект этого дерева, см. `tri agree`).
+    # ИМЯ НЕ `lesson`: `tri lesson` (выше) пишет в ДРУГОЕ дерево —
+    # 999-multibots-telegraf/.claude/loop-opus/LESSONS.md.
+    #   tri loop-lesson "что выяснилось — одним абзацем"
+    shift 2>/dev/null || true
+    TEXT="$*"
+    [ -z "$TEXT" ] && { echo 'tri loop-lesson "что выяснилось — одним абзацем"'; exit 1; }
+    TRI_LESSON_TEXT="$TEXT" node --input-type=module -e '
+      const m = await import("/Users/playra/BrowserOS/trios/.trinity/loop/loop.mjs")
+      const text = process.env.TRI_LESSON_TEXT
+      m.lesson(text)
+      const s = m.loadState()
+      const last = s.lessons[s.lessons.length - 1]
+      console.log("lesson " + s.lessons.length + " recorded, iteration " + last.iteration + ", " + last.at)
+      console.log(last.text)
+      console.log("(state.json + ledger.jsonl; sanity: tri lesson-orphans)")
+    '
+    ;;
+  lesson-orphans)
+    # Какие уроки цикла не дошли НИ ДО ОДНОГО навыка. Урок живёт в
+    # state.json и читается только тем, кто откроет state.json; навык
+    # загружается сам. 2026-09-13 замер нашёл семь таких уроков.
+    #
+    # ЧТО ИМЕННО ИЗМЕРЯЕТСЯ, и почему это ВЕРХНЯЯ ГРАНИЦА, а не вердикт:
+    # совпадением считается дословное окно из шести слов (шаг 3, нормировка —
+    # нижний регистр, всё кроме букв и цифр в пробел). Урок, пересказанный в
+    # навыке ДРУГИМИ словами, здесь будет выглядеть сиротой. При ручной
+    # проверке 2026-09-13 из одиннадцати нулей четыре оказались изложены в
+    # queen-swarm-unblock другими словами — то есть список надо дочитывать
+    # глазами, а не считать приговором.
+    #   tri lesson-orphans [--all]   (--all: + ~/skills и ~/.claude/skills)
+    # Выход 2 = найдены сироты. Это ответ, а не сбой.
+    shift 2>/dev/null || true
+    python3 - "$@" << 'PYORPHAN'
+import json, os, re, sys
+
+STATE = "/Users/playra/BrowserOS/trios/.trinity/loop/state.json"
+ROOTS = ["/Users/playra/BrowserOS/trios/.claude/skills"]
+if "--all" in sys.argv[1:]:
+    ROOTS += [os.path.expanduser("~/skills"), os.path.expanduser("~/.claude/skills")]
+
+WORD = re.compile(r"[^a-z0-9]+")
+N, STEP = 6, 3
+
+
+def shingles(text, step=STEP):
+    w = [x for x in WORD.sub(" ", text.lower()).split() if x]
+    return [" ".join(w[i:i + N]) for i in range(0, max(0, len(w) - N + 1), step)]
+
+
+try:
+    state = json.load(open(STATE, encoding="utf-8"))
+except Exception as e:
+    sys.exit("state.json не читается: %s" % e)
+lessons = state.get("lessons") or []
+if not lessons:
+    sys.exit("в state.json нет уроков — тогда и сирот быть не может")
+
+# Корпус навыков: КАЖДОЕ окно из шести слов, шагом 1, иначе выравнивание окон
+# решало бы за содержание.
+corpus, files = {}, []
+for root in ROOTS:
+    if not os.path.isdir(root):
+        print("нет каталога: %s" % root)
+        continue
+    for dirpath, _dirs, names in os.walk(root):
+        for n in names:
+            if not n.endswith(".md"):
+                continue
+            p = os.path.join(dirpath, n)
+            files.append(p)
+            try:
+                body = open(p, encoding="utf-8", errors="replace").read()
+            except Exception:
+                continue
+            for sh in shingles(body, step=1):
+                corpus.setdefault(sh, p)
+
+orphans = []
+rows = []
+for i, les in enumerate(lessons, 1):
+    text = (les.get("text") or "").strip()
+    sh = shingles(text)
+    if not sh:
+        continue
+    hits = [corpus[s] for s in sh if s in corpus]
+    score = len(hits) / len(sh)
+    best = max(set(hits), key=hits.count) if hits else None
+    rows.append((i, les.get("iteration"), score, best, text))
+    if not hits:
+        orphans.append((i, les.get("iteration"), text))
+
+print("уроков в state.json     : %d" % len(lessons))
+print("файлов навыков прочитано: %d" % len(files))
+for r in ROOTS:
+    print("  корень: %s" % r)
+print("ни одного общего окна   : %d" % len(orphans))
+print()
+for i, it, text in orphans:
+    print("  L%-3d итерация %-4s %s" % (i, it, text[:96].replace("\n", " ")))
+if rows:
+    rows.sort(key=lambda r: r[2])
+    print("\nближайшие к нулю, но не нулевые (для калибровки порога):")
+    for i, it, score, best, text in [r for r in rows if r[2] > 0][:5]:
+        print("  L%-3d %.2f  %s" % (i, score, os.path.basename(os.path.dirname(best or "")) or "?"))
+print(
+    "\nЭто ВЕРХНЯЯ ГРАНИЦА: совпадение здесь дословное (окно из шести слов),"
+    "\nа урок можно изложить в навыке другими словами. Список дочитывают глазами."
+)
+sys.exit(2 if orphans else 0)
+PYORPHAN
+    ;;
+  wave-plan)
+    # План ТЕКУЩЕЙ волны целиком — самый свежий trios/.trinity/wave-loop-*.md.
+    # `tri wave` заводит СЛЕДУЮЩУЮ пустую волну, `tri next` печатает только
+    # хвост с вариантами, `tri handover` — сводку владельцу из той же волны.
+    # Здесь файл целиком, и первой строкой его возраст с файловой системы.
+    #   tri wave-plan [N]   (N — только первые N строк)
+    T=/Users/playra/BrowserOS/trios
+    w=$(ls "$T/.trinity"/wave-loop-*.md 2>/dev/null | sort | tail -1)
+    [ -z "$w" ] && { echo "нет ни одной волны в $T/.trinity/wave-loop-*.md"; exit 1; }
+    total=$(ls "$T/.trinity"/wave-loop-*.md 2>/dev/null | wc -l | tr -d ' ')
+    age=$(( ( $(date +%s) - $(stat -f %m "$w") ) / 3600 ))
+    echo "$w  (записан ${age} ч назад; волн на диске: $total, строк: $(wc -l < "$w" | tr -d ' '))"
+    echo
+    # Без вложенного `case`: его метки попадали бы в любой перебор меток этого
+    # файла (`grep '^\s*[a-z0-9-]*)'`) и завели бы команду `0`, которой нет.
+    N="${2:-}"
+    if [ -z "$N" ]; then
+      cat "$w"
+    elif [ "$N" -ge 1 ] 2>/dev/null; then
+      sed -n "1,${N}p" "$w"
+    else
+      echo "tri wave-plan [N] — N это число строк"; exit 1
+    fi
+    ;;
+
+  *)
+    echo "неизвестная команда: $1 (tri help)"; exit 1
+    ;;
+esac
