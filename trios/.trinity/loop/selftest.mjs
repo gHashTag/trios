@@ -588,6 +588,38 @@ check('a subquery alias is NOT reported missing - it broke this parser twice', (
   if (bad.length) throw new Error(`accused a query of omitting ${bad[0].missing.join(', ')}, which the subquery provides`)
 })
 
+check('a tool that writes to the ledger cannot be undeclared', async () => {
+  const COV = await import(path.join(DIR, 'coverage.mjs'))
+
+  // TWO FAULTS THAT PRINTED THE SAME WAY. `UNTRACKED` meant both "this tool
+  // acts on the swarm and nothing is watching its act path" - the reap defect,
+  // which is what coverage.mjs exists for - and "nobody wrote a sentence
+  // saying what this measure is". The second sense reached twenty-one files,
+  // so fp-check's coverage line was red on every single run and became
+  // furniture. The loud case has to be able to be alone.
+  if (!COV.appendedKinds("L.append({ kind: 'reaped', freed })").includes('reaped')) {
+    throw new Error('the plainest append in the tree is not seen, so this rule cannot find an acting tool')
+  }
+  if (!COV.appendedKinds("append({\n  kind: 'push-work-withheld',\n  dir,\n})").includes('push-work-withheld')) {
+    throw new Error('an append spread over lines is still an append')
+  }
+  if (COV.appendedKinds("// L.append({ kind: 'nothing' })\nconst x = 1").length) {
+    throw new Error('a commented-out append is not an append - reading prose as evidence is this loop\'s signature defect')
+  }
+
+  const rows = COV.coverage()
+  const acting = rows.filter((r) => r.state === 'UNTRACKED')
+  if (acting.length) {
+    throw new Error(`${acting.map((r) => r.file).join(', ')} append to the ledger and are in no declaration - acting with nothing watching`)
+  }
+  // And the map must not name files that are gone: a declaration for a deleted
+  // tool is a row that can never go red, which reads as coverage.
+  const files = new Set(fs.readdirSync(DIR).filter((f) => f.endsWith('.mjs')))
+  const ghosts = [...String(fs.readFileSync(path.join(DIR, 'coverage.mjs'), 'utf8')).matchAll(/^\s*'([\w.-]+\.mjs)':\s*\{/gm)]
+    .map((m) => m[1]).filter((f) => !files.has(f))
+  if (ghosts.length) throw new Error(`${ghosts.join(', ')} are declared and do not exist - a declaration that can never go red`)
+})
+
 check('a false-positive check that checked nothing says so', async () => {
   const FP = await import(path.join(DIR, 'fp-check.mjs'))
 

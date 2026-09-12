@@ -21,6 +21,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { maskLiterals } from './mask.mjs'
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
 const LEDGER = path.join(DIR, 'ledger.jsonl')
@@ -90,6 +91,74 @@ const ACTS = {
   // has never run; the first thing `--adopt` did was create the copy whose
   // absence the report path had just printed in red.
   'tri-drift.mjs': { kinds: ['tri-adopt'], note: 'the only copy of the 1686-line CLI the timers run - this says whether the tracked one still is it' },
+
+  // ------------------------------------------------------------------
+  // Twenty-one measures and guards, declared 2026-09-13.
+  //
+  // The comment eight lines above says the last four were "left UNTRACKED for
+  // four iterations because each was written after this map and nothing made me
+  // come back", and that the false-positive corpus "asked within the hour". It
+  // then happened again, five times over: twenty-one tools accumulated while
+  // fp-check printed one ACCUSED line about them on every run. A warning that
+  // is always on is not a warning, and this one had been on long enough to be
+  // read as part of the furniture.
+  //
+  // I tried to derive this map instead of writing it, and measured that I
+  // could not: the appends in eleven of the forty declared files disagree with
+  // their declaration, because which kind means "THIS tool acted" is a
+  // judgement - loop.mjs appends seven kinds on behalf of its callers and acts
+  // on nothing itself. Deriving it would have manufactured eleven false
+  // accusations inside the file whose whole job is to prevent them. What IS
+  // measured, and is now enforced below, is that every one of these twenty-one
+  // appends nothing at all, so none of them can have an unproven act path.
+  'accept-rate.mjs': { kinds: [], note: 'a measure: how often a brief that could have been refused is accepted instead' },
+  'agree.mjs': { kinds: [], note: 'a comparison: two implementations of one rule asked the same question about real data' },
+  'anomaly.mjs': { kinds: [], note: 'a diagnosis: where this system\'s own reports disagree with its own data' },
+  'backlog.mjs': { kinds: [], note: 'a measure: what the backlog contains, issue by issue' },
+  'board.mjs': { kinds: [], note: 'a measure: which GitHub board the instruments read, and whether it is moving' },
+  'ci-diff.mjs': { kinds: [], note: 'a comparison: was this red before my change, or because of it' },
+  'cycle-doctor.mjs': { kinds: [], note: 'a guard: is the cycle still installed correctly and its contract still true' },
+  'cycle.mjs': { kinds: [], note: 'the outer driver - it files its lines through loop.mjs and appends none of its own' },
+  'dash2.mjs': { kinds: [], note: 'a renderer: the loop\'s own dashboard, drawn so a stopped loop cannot look like a running one' },
+  'exposure.mjs': { kinds: [], note: 'a guard: what the live service serves to an origin it has never heard of' },
+  'flaky.mjs': { kinds: [], note: 'a comparison: which red tests are broken and which are weather' },
+  'forked-files.mjs': { kinds: [], note: 'a guard: one file on two paths with nothing comparing them' },
+  'idle.mjs': { kinds: [], note: 'a measure: how much of the day the swarm spent doing nothing, and what stopped it' },
+  'judge-calibration.mjs': { kinds: [], note: 'a measure of the judge itself, before the judge is trusted with what no checker reaches' },
+  'reach.mjs': { kinds: [], note: 'a measure: how often each step of the heal chain actually runs' },
+  'rejudge.mjs': { kinds: [], note: 'a guard: a recorded verdict the current code cannot reproduce' },
+  'sense.mjs': { kinds: [], note: 'one reading of the loop\'s vital signs, measured rather than remembered; the accessors live here' },
+  'silent-loop.mjs': { kinds: [], note: 'a guard: an attempt that spends no retry budget can be repeated for ever' },
+  't27-parity.mjs': { kinds: [], note: 'a comparison: does the generated ring agree with the hand-written twin in production' },
+  'unverdicted.mjs': { kinds: [], note: 'a guard: a finished dispatch whose worker wrote no verdict block waits for ever' },
+  'unwired.mjs': { kinds: [], note: 'a guard: a gate that exists and runs nowhere' },
+}
+
+/**
+ * Every ledger kind a file appends, read from the file.
+ *
+ * NOT used to derive the map - measured above that it cannot be. It answers one
+ * narrower question that the source CAN settle: does this tool write to the
+ * ledger at all? A tool that appends nothing has no act path to leave unproven,
+ * so an undeclared one is a missing sentence. A tool that DOES append and is
+ * undeclared is acting on the swarm with nothing watching, which is the state
+ * this file was written for, and the two must not print the same way.
+ */
+export function appendedKinds(src) {
+  const text = String(src)
+  // FOUND IN THE MASK, SLICED FROM THE ORIGINAL - mask.mjs's contract, and the
+  // reason that file exists. The first draft of this ran the regex over the raw
+  // source and counted a COMMENTED-OUT append as an append. It was caught by
+  // the gate written in the same hour to enforce this very rule, which is the
+  // most this loop can ask of a gate and the least I should ask of myself.
+  const mask = maskLiterals(text)
+  const out = new Set()
+  for (const m of mask.matchAll(/(?:L\.)?append\(\s*\{[^}]*?\bkind:\s*'/gs)) {
+    const from = m.index + m[0].length
+    const to = text.indexOf("'", from)
+    if (to > from) out.add(text.slice(from, to))
+  }
+  return [...out]
 }
 
 export function coverage() {
@@ -100,7 +169,15 @@ export function coverage() {
   const out = []
   for (const file of fs.readdirSync(DIR).filter((f) => f.endsWith('.mjs')).sort()) {
     const spec = ACTS[file]
-    if (!spec) { out.push({ file, state: 'UNTRACKED', note: 'no act kind declared - add one, or say why it never acts' }); continue }
+    if (!spec) {
+      // Two different faults, and printing them the same way is how twenty-one
+      // missing sentences drowned out the one case that matters.
+      const appends = appendedKinds(fs.readFileSync(path.join(DIR, file), 'utf8'))
+      out.push(appends.length
+        ? { file, state: 'UNTRACKED', note: `appends ${appends.join(', ')} and is in no declaration - it acts on the swarm with nothing watching` }
+        : { file, state: 'undeclared', note: 'appends nothing, so it has no act path to prove - it is missing a sentence saying what it is' })
+      continue
+    }
     if (!spec.kinds.length) { out.push({ file, state: 'report-only', note: spec.note || '' }); continue }
     const hits = rows.filter((r) => spec.kinds.includes(r.kind))
     if (!hits.length) { out.push({ file, state: 'NEVER ACTED', note: `no ${spec.kinds.join(' or ')} line in the ledger` }); continue }
@@ -116,7 +193,7 @@ if (isMain) {
 
   console.log('loop tool coverage - has each tool ever done its real work?\n')
   for (const r of rows) {
-    const mark = { acted: 'ok  ', 'report-only': '..  ', 'NEVER ACTED': '!!  ', UNTRACKED: '??  ' }[r.state]
+    const mark = { acted: 'ok  ', 'report-only': '..  ', 'NEVER ACTED': '!!  ', UNTRACKED: '??  ', undeclared: '..  ' }[r.state]
     const when = r.at ? `${String(r.at).slice(5, 16)}  x${r.count}` : ''
     console.log(`  ${mark}${r.file.padEnd(20)} ${r.state.padEnd(12)} ${when}${r.note ? '  ' + r.note : ''}`)
   }

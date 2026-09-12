@@ -178,15 +178,26 @@ export function run(limit = 12) {
   // this corpus. Counting it here made every newly written tool look like a
   // false accusation for as long as its first act took to happen, which would
   // have taught me to ignore this checker.
-  const cov = COV.coverage().filter((r) => r.state === 'UNTRACKED')
-  const unproven = COV.coverage().filter((r) => r.state === 'NEVER ACTED')
+  //
+  // `UNTRACKED` now means only one thing: a tool that APPENDS to the ledger and
+  // is in no declaration - it acts on the swarm and coverage is not watching.
+  // It used to also mean "a measure nobody wrote a sentence about", and that
+  // second sense reached twenty-one files, so this line was red on every run
+  // for days and taught me to skim past it. A warning that is always on is not
+  // a warning. The missing sentences are `undeclared`, which coverage.mjs
+  // reports and this does not accuse.
+  const all = COV.coverage()
+  const cov = all.filter((r) => r.state === 'UNTRACKED')
+  const unproven = all.filter((r) => r.state === 'NEVER ACTED')
+  const unnamed = all.filter((r) => r.state === 'undeclared')
   results.push({
     checker: 'coverage',
     subject: 'the loop tools',
     ok: cov.length === 0,
     why: cov.length
-      ? cov.map((c) => `${c.file}: undeclared`).join(', ')
-      : `every tool is declared${unproven.length ? `; ${unproven.length} act path(s) still unproven, which coverage.mjs reports` : ''}`,
+      ? cov.map((c) => `${c.file}: acts and is undeclared`).join(', ')
+      : `every acting tool is declared${unproven.length ? `; ${unproven.length} act path(s) still unproven` : ''}` +
+        `${unnamed.length ? `; ${unnamed.length} measure(s) still want a sentence` : ''}`,
   })
 
   // trend, against the ledger it has been fed all night. "too few points" here
