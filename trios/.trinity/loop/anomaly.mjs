@@ -213,12 +213,25 @@ export function findAnomalies(r) {
   // --- 7. the volume ------------------------------------------------------
   const disk = r.disk.v ? r.disk.v.percentUsed : null
   if (disk !== null && disk >= DISK_WARN) {
+    // THE WORKTREE COUNT USED TO STAND BESIDE THE PERCENTAGE AND READ AS ITS
+    // CAUSE. It was measured on 2026-09-13 and it is not: 19 worktrees, 2.5G,
+    // against 384G used. The repair that sentence invited - delete them - would
+    // have freed six tenths of one percent and could have destroyed a bee's
+    // uncommitted work. So the share is stated when it is known, and its
+    // absence is stated when it is not.
+    const d = r.disk.v
+    const share = d.ownPercentOfUsed !== null && d.ownPercentOfUsed !== undefined
+      ? `the loop's own worktrees are ${d.ownGB}G of that, ${d.ownPercentOfUsed}% of what is used`
+      : 'how much of it the loop owns was not measured this run (needs --deep)'
+    const repair = d.ownPercentOfUsed !== null && d.ownPercentOfUsed !== undefined && d.ownPercentOfUsed < 5
+      ? `removing every worktree would free ${d.ownGB}G and would not move this number. The space is somebody else's: measure the volume before deleting anything, and treat this as a report.`
+      : 'tri reap-local to report, then remove CLEAN worktrees only - never --force, because git refusing a dirty tree is the safety.'
     out.push(A(
       'volume-near-full', 'high',
       'the loop has disk to work with',
-      `the volume is ${disk}% used with ${g && g.worktrees !== null ? g.worktrees : '?'} worktrees on it; bees die at 0 seconds when git worktree add cannot write`,
-      'tri reap-local to report, then remove CLEAN worktrees only - never --force, because git refusing a dirty tree is the safety.',
-      r.disk.v.raw,
+      `the volume is ${disk}% used; ${share}; bees die at 0 seconds when git worktree add cannot write`,
+      repair,
+      d.raw,
     ))
   }
 

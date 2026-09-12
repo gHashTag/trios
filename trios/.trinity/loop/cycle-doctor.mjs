@@ -444,6 +444,74 @@ if (SELFTEST) {
     if (n === c.expect) ok('selftest: ' + c.name, `${n} finding(s), as expected`)
     else bad('selftest: ' + c.name, `expected ${c.expect} finding(s), got ${n}`, 'the write scan is no longer evidence; fix maskLiterals or the argument walk')
   }
+
+  // --- the volume anomaly says whose disk it is ----------------------------
+  //
+  // `findAnomalies` had no behavioural test of any kind until this block. The
+  // sentence it used to emit put a worktree count next to "95% used", which is
+  // two true facts arranged to read as a cause: the repair a reader takes from
+  // it is to delete the worktrees, and on 2026-09-13 that would have freed 2.5G
+  // out of 384G and could have destroyed a bee's uncommitted work.
+  //
+  // Importing anomaly.mjs here is only safe because it grew a main guard the
+  // same night. Before that this import would have run the detector.
+  const { findAnomalies } = await import('./anomaly.mjs')
+  // A READING WITH EVERY LEAF UNMEASURED, TAKEN FROM THE REAL SHAPE.
+  //
+  // The first two attempts typed the shape from memory. The first named six of
+  // the eleven top-level facts and the detector threw on the seventh; the second
+  // named all eleven and still threw, because `r.loop` is a GROUP of measures
+  // (`r.loop.staleHours.v`) and not a measure. Hand-copying a structure is the
+  // defect this repository is named for. So the shape comes from `sense.mjs`
+  // itself - one fast reading, about a second - and every leaf is then nulled.
+  // A field added to a reading tomorrow is in this fixture tomorrow.
+  const { takeReading } = await import('./sense.mjs')
+  const shape = takeReading({ fast: true })
+  const nullLeaves = (o) => {
+    if (!o || typeof o !== 'object') return o
+    if ('v' in o) { o.v = null; return o }
+    for (const k of Object.keys(o)) nullLeaves(o[k])
+    return o
+  }
+  const blank = () => nullLeaves(JSON.parse(JSON.stringify(shape)))
+  const volume = (out) => out.find((a) => a.id === 'volume-near-full')
+
+  const DISK_CASES = [
+    {
+      name: 'a measured small share says the space is not ours',
+      disk: { percentUsed: 95, raw: 'disk3s1 460Gi 384Gi 22Gi 95%', ownGB: 2.5, ownPercentOfUsed: 0.6 },
+      want: (a) => a && /2\.5G/.test(a.truth) && /would not move this number/.test(a.repair),
+      why: 'the share is measured and small, so the repair must say deleting worktrees is not it',
+    },
+    {
+      name: 'an unmeasured share is declared unmeasured, not implied',
+      disk: { percentUsed: 95, raw: 'x', ownGB: null, ownPercentOfUsed: null },
+      want: (a) => a && /not measured this run/.test(a.truth) && !/worktrees are/.test(a.truth),
+      why: 'a null share must read as "not measured", never as a number and never as nothing',
+    },
+    {
+      name: 'a large share keeps the reaping repair',
+      disk: { percentUsed: 95, raw: 'x', ownGB: 200, ownPercentOfUsed: 52.1 },
+      want: (a) => a && /reap-local/.test(a.repair) && /never --force/.test(a.repair),
+      why: 'when the loop really does own the disk, reaping IS the repair - and still never --force',
+    },
+    {
+      name: 'a volume below the threshold raises nothing',
+      disk: { percentUsed: 40, raw: 'x', ownGB: 2.5, ownPercentOfUsed: 0.6 },
+      want: (a) => !a,
+      why: 'the detector must not raise a finding about a volume with room on it',
+    },
+  ]
+  for (const c of DISK_CASES) {
+    const r = blank()
+    r.disk.v = c.disk
+    let a = null
+    let threw = null
+    try { a = volume(findAnomalies(r)) } catch (e) { threw = e.message }
+    if (threw) bad('selftest: ' + c.name, 'findAnomalies threw: ' + threw, 'the detector must survive a reading whose other facts are null')
+    else if (c.want(a)) ok('selftest: ' + c.name, c.why)
+    else bad('selftest: ' + c.name, `got: ${a ? a.truth + ' || ' + a.repair : '(no finding)'}`, c.why)
+  }
 }
 
 // --- 4. something schedules it ---------------------------------------------

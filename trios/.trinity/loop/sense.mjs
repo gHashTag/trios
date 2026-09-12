@@ -333,11 +333,40 @@ function gitFacts() {
   }
 }
 
-/** Free space on the volume the loop and its worktrees live on. */
+/**
+ * Free space on the volume the loop and its worktrees live on, and how much of
+ * what is used belongs to the loop.
+ *
+ * WHOSE DISK IS IT. The percentage alone, printed beside a worktree count, reads
+ * as a cause - and the repair it invites is to delete the worktrees, which can
+ * destroy a bee's uncommitted work. Measured on 2026-09-13: the volume was 95%
+ * used, 384G of 460G, and every worktree the loop owns came to 2.5G of it. Six
+ * tenths of one percent. Deleting all of them would not have moved the number
+ * that raised the alarm.
+ *
+ * `du` over the worktree root takes seconds, so it is behind --deep. When it was
+ * not measured the field stays null and the anomaly says it was not measured,
+ * rather than implying a share it does not know.
+ */
 function diskFacts() {
   const out = sh(`df -h ${JSON.stringify(REPO)} | tail -1`, 10000)
   const m = out.match(/(\d+)%/)
-  return { percentUsed: m ? Number(m[1]) : null, raw: out.replace(/\s+/g, ' ') }
+  const fact = { percentUsed: m ? Number(m[1]) : null, raw: out.replace(/\s+/g, ' '), ownGB: null, ownPercentOfUsed: null }
+  if (DEEP) {
+    try {
+      const wt = path.join(TRIOS, '.worktrees')
+      const ownK = fs.existsSync(wt) ? Number(sh(`du -sk ${JSON.stringify(wt)} | cut -f1`, 180000)) : 0
+      const usedK = Number(sh(`df -k ${JSON.stringify(REPO)} | tail -1 | awk '{print $3}'`, 10000))
+      if (Number.isFinite(ownK) && Number.isFinite(usedK) && usedK > 0) {
+        fact.ownGB = Math.round((ownK / 1048576) * 10) / 10
+        fact.ownPercentOfUsed = Math.round((ownK / usedK) * 1000) / 10
+      }
+    } catch {
+      // Stays null. Not measured is not zero, and a zero here would read as
+      // "the loop owns none of it", which is a different and stronger claim.
+    }
+  }
+  return fact
 }
 
 /**
