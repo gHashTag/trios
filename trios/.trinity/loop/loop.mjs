@@ -467,6 +467,52 @@ export function lastBeginAt(s = loadState()) {
   return s.startedAt ? { at: s.startedAt, src: 'state.json' } : { at: null, src: null }
 }
 
+/**
+ * How many times was the NEXT iteration actually turned away while `n` was the
+ * current one, and when was the first refusal?
+ *
+ * AN UNRECORDED ITERATION IS NORMAL; A REFUSED ONE IS NOT. Every iteration
+ * spends its whole working life with nothing in the register - the unit is
+ * recorded at the end, which is the point of recording it. So "has this
+ * iteration recorded a unit" is the wrong question to paint red on a dashboard:
+ * the answer is no for the first minute of every iteration that ever runs, and
+ * a warning that is always on is not a warning. The first draft of the wedge
+ * line did exactly that, and the very next `beginIteration` proved it by
+ * lighting up two minutes into a healthy iteration 97.
+ *
+ * The event that separates the two cases is measured and already in the ledger:
+ * `beginIteration` appends a `begin-refused` row every time it turns someone
+ * away. Nobody tried to advance past a fresh iteration, so there is no row.
+ * Iteration 96 has one, from 2026-09-12T16:46:14, six days after it closed.
+ *
+ * Returns null when the ledger cannot be read - which is not zero refusals, it
+ * is no reading. `text` is for the test, so the branch can be exercised without
+ * writing rows into the ledger the loop is appending to.
+ */
+export function beginRefusals(n, text) {
+  let lines
+  try {
+    lines = (text === undefined ? tailOf(LEDGER, 1 << 20) : text).split('\n')
+  } catch {
+    return null
+  }
+  if (text === undefined && !fs.existsSync(LEDGER)) return null
+  let count = 0
+  let first = null
+  for (const l of lines) {
+    const t = l.trim()
+    // A cheap pre-filter only. The row is parsed and its `kind` decides, so the
+    // words "begin-refused" inside a note can never be counted as a refusal.
+    if (!t.startsWith('{') || !t.includes('begin-refused')) continue
+    let j
+    try { j = JSON.parse(t) } catch { continue }
+    if (!j || j.kind !== 'begin-refused' || j.iteration !== n) continue
+    count += 1
+    if (!first && j.at) first = j.at
+  }
+  return { count, first }
+}
+
 // A RATE IS NOT A COUNT, AND A COLLAPSING SAMPLE IS NOT AN IMPROVEMENT.
 //
 // `send-backs looping with no ceiling 79` fell to 5 and would have been drawn
@@ -624,7 +670,11 @@ const VALUE_W = 10
  * iteration last began.
  */
 export function renderDashboard(facts, to = {}) {
-  const s = loadState()
+  // `to.state` for the same reason as `to.driver`: the wedge line below has two
+  // branches and only one of them is true today, so without injection the other
+  // could only be proven by writing a hostile state.json into the tree the loop
+  // is reading. An untested branch is not a working branch.
+  const s = to.state || loadState()
   const clock = to.at || Date.now()
   const begin = lastBeginAt(s)
   const sinceBegin = begin.at ? clock - Date.parse(begin.at) : null
@@ -650,7 +700,37 @@ export function renderDashboard(facts, to = {}) {
     dim(`claude-cron ${n(drv.claudeCron)}  crontab ${n(drv.crontab)}  launchd ${n(drv.launchd)}`) +
     (drv.claudeCron === 0 ? dim('  nothing fires an iteration') : '')
   ))
+  // AND WHETHER THE COUNTER CAN STILL MOVE.
+  //
+  // Iteration 96 closed on 2026-09-06 having written neither a unit nor an
+  // explicit none, which means `beginIteration` must refuse 97 - by design, and
+  // the design is right. What was wrong is that NOTHING SAID SO. For six days
+  // this box drew `#96` in bold beside a start time, while feed, heal and land
+  // went on appending rows underneath it, and the loop looked like a loop.
+  //
+  // There was a warning. `endIteration` calls `process.emitWarning` when it
+  // closes an unrecorded iteration - to a stderr nobody reads, from a timer
+  // nobody watches. It has also never once run: it was added beside a
+  // `recorded` field on the `end` row, and 0 of the 98 `end` rows in the ledger
+  // carry that field, because no iteration has closed since it was written. A
+  // warning that has never executed is not a warning; it is a comment with a
+  // function call in it.
+  //
+  // So the refusal is stated here, on the face, where the operator looks - but
+  // only once it IS a refusal. See `beginRefusals`: an iteration with nothing in
+  // the register is every iteration for its whole working life, and the first
+  // draft of this line painted that red. What is worth red is a `begin-refused`
+  // row: something tried to advance the counter and was turned away.
+  const ref = to.refusals === undefined ? beginRefusals(s.iteration) : to.refusals
+  const wedged = !iterationRecorded(s, s.iteration) && ref && ref.count > 0
   out.push(row(`${dim('iteration')}  ${bold('#' + s.iteration)}    ${dim('started')} ${(s.startedAt || '-').slice(0, 19)}Z`))
+  // Its own row, not a suffix: at W=76 a suffix carrying both the count and the
+  // date is clipped, and the first thing clipped is the date - which is the half
+  // that says whether this happened once an hour ago or has been happening for
+  // six days. The gate below asserts the date, and it caught exactly that.
+  if (wedged) {
+    out.push(row(`           ${red(`#${s.iteration + 1} REFUSED x${ref.count}`)}${dim(` - first refused ${(ref.first || '-').slice(0, 16)}Z`)}`))
+  }
   out.push(row(`${dim('subject')}    ${s.title || '-'}`))
   out.push(rule())
   out.push(row(bold('SWARM') + dim('   value | change / the span it covers | a row says if it is older')))

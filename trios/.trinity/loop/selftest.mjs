@@ -4255,6 +4255,76 @@ check('snapshot no longer coalesces the dispatch counts to zero', () => {
   }
 })
 
+check('the box says when the counter can no longer move', () => {
+  // Iteration 96 closed unrecorded on 2026-09-06 and the dashboard drew `#96`
+  // in bold for six days without a word about 97 being impossible. The only
+  // warning was a `process.emitWarning` in endIteration - to a stderr nobody
+  // reads, and one that has never executed: 0 of the 98 `end` rows carry the
+  // `recorded` field added beside it.
+  //
+  // Seen failing: with the wedge clause removed, the first assertion below
+  // finds no refusal in the rendered box.
+  // loop.mjs keeps its own `strip` module-local; the box is coloured, so the
+  // assertion reads the text and not the escapes.
+  const strip = (t) => t.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '')
+  // AND IT RENDERS TO A SCRATCH PATH. renderDashboard WRITES - DASHBOARD.txt,
+  // DASHBOARD.ansi and DASHBOARD.meta.json - and the first draft of this gate
+  // called it without redirecting, so three fixture renders with an empty swarm
+  // landed on the operator's real box. The comment warning about exactly this
+  // is eleven lines above the write call. A test that writes where production
+  // reads is this suite's oldest scar; it once truncated a shipped file to zero
+  // bytes.
+  const drv = { claudeCron: 1, crontab: 0, launchd: 0, at: '2026-09-13T00:00:00.000Z' }
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-dash-'))
+  const at = (name) => path.join(scratch, name)
+  // The refusals are injected for the same reason as the state: the real answer
+  // is read from the ledger the loop is appending to, and a test must never
+  // write rows there to make its own assertion true.
+  const draw = (state, refusals) => strip(L.renderDashboard(
+    { swarm: [], work: [], anomalies: [], next: [] },
+    { driver: drv, state, refusals, ansi: at('d.ansi'), text: at('d.txt'), meta: at('d.json') }
+  ))
+  const base = { iteration: 96, startedAt: '2026-09-06T09:16:25.836Z', title: 't', done: {}, doneNone: {} }
+  const refused = { count: 3, first: '2026-09-12T16:46:14.000Z' }
+  const box = draw(base, refused)
+  if (!/#97 REFUSED x3/.test(box)) throw new Error('an iteration something was turned away from must say so where it is read')
+  if (!/2026-09-12T16:46Z/.test(box)) throw new Error('the refusal must carry when it started, not just that it happened')
+  // AN UNRECORDED ITERATION IS NOT A WEDGE. This is the false alarm the first
+  // draft shipped: every iteration has an empty register for its whole working
+  // life, so with no measured refusal the box must stay quiet.
+  if (/REFUSED/.test(draw(base, { count: 0, first: null }))) {
+    throw new Error('a fresh iteration has recorded nothing yet and that is normal - red here is alarm fatigue')
+  }
+  // A ledger that could not be read is not zero refusals.
+  if (/REFUSED/.test(draw(base, null))) throw new Error('an unreadable ledger is no measurement, and no measurement is not a verdict')
+  if (/REFUSED/.test(draw({ ...base, done: { abc: { unit: 'a thing', iteration: 96, at: base.startedAt } } }, refused))) {
+    throw new Error('a recorded unit unwedges the counter')
+  }
+  if (/REFUSED/.test(draw({ ...base, doneNone: { 96: { reason: 'nothing shipped', at: base.startedAt } } }, refused))) {
+    throw new Error('an explicit none is the second door and must also unwedge it')
+  }
+  fs.rmSync(scratch, { recursive: true, force: true })
+})
+
+// AND THE COUNTING ITSELF, against a ledger body rather than the live file.
+check('a refusal is counted from its kind, for its own iteration, never from prose', () => {
+  const rows = [
+    JSON.stringify({ at: '2026-09-12T16:46:14.000Z', kind: 'begin-refused', iteration: 96 }),
+    JSON.stringify({ at: '2026-09-12T17:00:00.000Z', kind: 'begin-refused', iteration: 96 }),
+    JSON.stringify({ at: '2026-09-12T18:00:00.000Z', kind: 'begin-refused', iteration: 42 }),
+    // The trap: the words are in the row, the kind is not. Reading the line
+    // instead of the field is this repository's most-repeated defect.
+    JSON.stringify({ at: '2026-09-12T19:00:00.000Z', kind: 'note', iteration: 96, note: 'begin-refused happened earlier' }),
+    'not json at all',
+    '',
+  ].join('\n')
+  const r = L.beginRefusals(96, rows)
+  if (r.count !== 2) throw new Error(`counted ${r.count}, expected 2 - a note mentioning the word is not a refusal`)
+  if (r.first !== '2026-09-12T16:46:14.000Z') throw new Error('first must be the earliest refusal, not the latest')
+  if (L.beginRefusals(42, rows).count !== 1) throw new Error('a refusal belongs to the iteration it names')
+  if (L.beginRefusals(97, rows).count !== 0) throw new Error('an iteration nobody was turned away from has none')
+})
+
 // THE CLI ITSELF. Until 2026-09-13 `tri` was 1686 lines of bash in exactly one
 // place on this disk and in no repository, invoked by absolute path by four
 // launchd timers. These four gates are about the copy that now exists and about
