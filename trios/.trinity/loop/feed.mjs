@@ -174,6 +174,23 @@ export const EMPTY_HANDED = [
     return Number(m[2]) > 0 && Number(m[1]) === 0
       ? `${m[2]} clean branch(es) in the batch and none landed` : null
   },
+  // land.mjs again, for the case the rule above cannot see: `N landable,
+  // showing the next 0`.
+  //
+  // The rule above takes its pair from `landed M of C clean in this batch`, so
+  // C is the CLEAN count. When every landable branch conflicts the batch is
+  // empty, C is 0, `want > 0` is false, and the rule stays silent - which is
+  // how `land=ok` was printed 587 times running while 2 accepted branches sat
+  // unlandable and close-done refused to close anything behind them. A step
+  // that lined up work and delivered none is the exact case this third status
+  // was invented for; it simply had the wrong pair of numbers to read.
+  //
+  // No new exit code for this. The chain has three words - ok, empty-handed,
+  // FAILED - and this is the middle one. A fourth mechanism saying the same
+  // thing is two constants for one quantity, which is the defect this file's
+  // neighbours keep finding.
+  (out) => pair(out, /^(\d+) landable, showing the next/m, /landable, showing the next (\d+)/,
+    (want) => `${want} branch(es) are landable and none could be put in a batch - they conflict`),
 ]
 
 /** The reason this step came back empty-handed, or null if it did not. */

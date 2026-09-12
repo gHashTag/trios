@@ -397,7 +397,18 @@ if (isMain) {
 
   if (!batch.length && landable.length) {
     console.log('')
-    console.log(`ALL ${landable.length} remaining branch(es) conflict. Nothing here can be landed by merging.`)
+    // `REFUSED ` IS NOT DECORATION - IT IS THE ONLY WAY OUT OF THIS FUNCTION.
+    //
+    // The chain condenses each step to one line and keeps verbatim only what
+    // matches feed.mjs PASS_THROUGH, `/^\s*(REFUSED |FAILED to file |!!)/`.
+    // This block used to open with `ALL 2 remaining branch(es) conflict`, which
+    // matches nothing, so the summariser dropped all nine lines and the chain
+    // printed `land=ok`. It did that on 587 consecutive runs over 183.7 hours -
+    // 584 of them with work it had just called landable - and the sentence
+    // "this is where the pipeline stops" has never appeared in feed.timer.log
+    // or heal.timer.log, not once. The last branch actually landed on
+    // 2026-09-05T05:05:44Z.
+    console.log(`REFUSED - ALL ${landable.length} remaining branch(es) conflict. Nothing here can be landed by merging.`)
     console.log('A conflict is reported for a person, never resolved by guessing. And a rebase')
     console.log('is usually the WRONG remedy once the base has moved: replaying an old branch')
     console.log('can delete work that landed since, and applying cleanly proves nothing, because')

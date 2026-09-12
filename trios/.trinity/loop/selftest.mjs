@@ -42,6 +42,9 @@ const SE = await import(path.join(DIR, 'stale-escalations.mjs'))
 const D = await import(path.join(DIR, 'disjoint.mjs'))
 const AB = await import(path.join(DIR, 'ab.mjs'))
 const A = await import(path.join(DIR, 'author.mjs'))
+// The chain's own condenser: what survives into the log, and what counts as
+// empty-handed. It had no gate of any kind until 2026-09-13.
+const F = await import(path.join(DIR, 'feed.mjs'))
 
 let pass = 0
 const failures = []
@@ -1357,6 +1360,80 @@ check('issues declared not-a-task are subtracted before the backlog is blamed', 
   if (firesWith({ missingBoundary: { count: 5 } }, { notATask: 5 }).includes('the open issues are workable')) {
     throw new Error('five skipped, five declared permanent - there is nothing left to report')
   }
+})
+
+// THE STEP THAT SAID `ok` 587 TIMES RUNNING WHILE LANDING NOTHING.
+//
+// `land` has reported ok on 587 consecutive ledger rows over 183.7 hours. On
+// 584 of them it had branches it had just called landable. The last branch that
+// actually landed did so on 2026-09-05T05:05:44Z.
+//
+// Two separate holes, both in the condensing layer, and NEITHER had a gate -
+// this suite had nothing at all for passThrough or emptyHanded, which is how a
+// step could report success for a week with the truth printed on its own stdout:
+//
+//   1. land printed nine lines ending "this is where the pipeline stops", and
+//      the summariser dropped every one of them because PASS_THROUGH only keeps
+//      lines starting REFUSED / FAILED to file / !!. The sentence has never
+//      appeared in feed.timer.log or heal.timer.log.
+//   2. the EMPTY_HANDED rule for land reads `landed M of C clean in this batch`,
+//      and when every landable branch conflicts the batch is empty, so C is 0
+//      and the rule cannot fire.
+//
+// This transcript is from the real run of `node land.mjs` on 2026-09-12.
+const LAND_ALL_CONFLICT = [
+  '  CONFL queen-3507       base moved under it',
+  '',
+  'REFUSED - ALL 2 remaining branch(es) conflict. Nothing here can be landed by merging.',
+  'A conflict is reported for a person, never resolved by guessing. And a rebase',
+  'Meanwhile close-done refuses to close anything that has not landed, so this is',
+  'where the pipeline stops.',
+  '',
+  '2 landable, showing the next 0 (batch 5).',
+].join('\n')
+
+check('an all-conflict landing reaches the log instead of being condensed away', () => {
+  const kept = F.passThrough(LAND_ALL_CONFLICT)
+  if (!kept.length) throw new Error('the chain dropped every line of the refusal - this is the 587-run silence')
+  if (!kept.some((l) => /ALL 2 remaining branch\(es\) conflict/.test(l))) {
+    throw new Error(`kept ${kept.length} line(s) but not the one that says why: ${kept.join(' | ')}`)
+  }
+  // AND THE GATE MUST BE ABLE TO GO RED. The same block as it was printed for
+  // 183.7 hours, with the one word removed, has to vanish completely - or this
+  // gate is passing on something other than the prefix and would not have
+  // caught the original defect either.
+  if (F.passThrough(LAND_ALL_CONFLICT.replace('REFUSED - ', '')).length) {
+    throw new Error('the unprefixed block survives condensation, so this gate is not testing the prefix')
+  }
+})
+
+check('a step that lined up work and delivered none is not `ok`', () => {
+  const why = F.emptyHanded(LAND_ALL_CONFLICT)
+  if (!why) throw new Error('2 landable and 0 batched is empty-handed, not ok')
+  if (!/2 branch/.test(why)) throw new Error(`the reason must carry the count it lined up: ${why}`)
+  // AND A STEP THAT LINED NOTHING UP IS IDLE, WHICH IS ALREADY `ok`. Nothing
+  // landable is not a failure to land.
+  const quiet = '0 landable, showing the next 0 (batch 5).\nlanded 0 of 0 clean in this batch'
+  if (F.emptyHanded(quiet)) throw new Error('an empty queue must not be reported as empty-handed')
+  // The existing rule still owns the case it was written for: a clean batch
+  // that landed nothing.
+  const clean = '3 landable, showing the next 3 (batch 5).\nlanded 0 of 3 clean in this batch'
+  if (!/3 clean branch\(es\)/.test(F.emptyHanded(clean) || '')) throw new Error('the clean-batch rule must still answer first for its own case')
+  // AND EXACTLY ONE RULE ANSWERS FOR IT. If the all-conflict case were already
+  // covered by an older rule this whole fix would be a second constant for one
+  // quantity; if it is covered by none, the step reports ok. The count says
+  // which, and the suite that had no gate here could say neither.
+  const firing = F.EMPTY_HANDED.map((r) => r(LAND_ALL_CONFLICT)).filter(Boolean)
+  if (firing.length !== 1) throw new Error(`${firing.length} rules answer for an all-conflict landing, want exactly 1: ${firing.join(' | ')}`)
+})
+
+check('the two files agree on the words the condenser is looking for', () => {
+  // The fixture above is a transcript, so it can go stale against the thing it
+  // transcribes. These two literals are the whole coupling: if land.mjs stops
+  // printing either of them, the gates above are asserting over fiction.
+  const src = fs.readFileSync(path.join(DIR, 'land.mjs'), 'utf8')
+  if (!src.includes('REFUSED - ALL ')) throw new Error('land.mjs no longer opens its refusal with a word the condenser keeps')
+  if (!src.includes(' landable, showing the next ')) throw new Error('land.mjs no longer prints the pair the empty-handed rule reads')
 })
 
 check('the feed stands down when the chain holds the lock', () => {
