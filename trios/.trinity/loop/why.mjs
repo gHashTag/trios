@@ -28,6 +28,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { skipCount } from './sense.mjs'
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.TRIOS_ROOT || '/Users/playra/BrowserOS'
@@ -63,9 +64,20 @@ export function status() {
  * The first that fires is the answer; the rest are printed only under `--all`,
  * because a diagnosis that lists six possibilities has not diagnosed anything.
  */
-export function checks(s) {
+export function checks(s, opts = {}) {
   const tick = s?.lastTick ?? {}
   const skips = tick.skipSummary ?? {}
+  // EVERY BUCKET GOES THROUGH THE SHARED READER. `skipSummary` used to serve
+  // plain integers and now serves `{count, issues[], more}`. This file kept
+  // writing `Number(skips.missingBoundary ?? 0)` - and `Number({count:448})` is
+  // NaN, which is false against every `>=`, so four of the six causes below
+  // could not fire at all. `tri why` was blind to the largest fact on the board
+  // and printed no cause rather than saying it could not tell.
+  //
+  // `sense.mjs` had learned the new shape. Two readers of one payload, one of
+  // them never told - the defect this repository finds more often than any
+  // other. There is now one accessor and it is imported, not copied.
+  const skip = (k) => skipCount(skips, k)
   const running = Number(s?.dispatches?.running ?? 0)
 
   return [
@@ -277,37 +289,60 @@ export function checks(s) {
     },
     {
       name: 'accepted work has been closed',
-      test: () => (Number(skips.completed ?? 0) >= 8 ? {
-        cause: `${skips.completed} issues whose work was ACCEPTED are still open, and each holds its boundary - so the selector finds no free path and the author files nothing`,
-        evidence: `skipSummary.completed = ${skips.completed}`,
-        remedy: 'tri push-work --push && tri close-done --close',
-      } : null),
+      test: () => {
+        const done = skip('completed')
+        // null is not zero and is not eight. An unmeasured bucket cannot fire a
+        // diagnosis and must not be silently read as "nothing there".
+        if (done === null || done < 8) return null
+        return {
+          cause: `${done} issues whose work was ACCEPTED are still open, and each holds its boundary - so the selector finds no free path and the author files nothing`,
+          evidence: `skipSummary.completed = ${done}`,
+          remedy: 'tri push-work --push && tri close-done --close',
+        }
+      },
     },
     {
       name: 'candidates are not all claimed',
       test: () => {
-        const claimed = Number(skips.claimed ?? 0)
-        const others = Object.entries(skips).filter(([k]) => k !== 'claimed').reduce((n, [, v]) => n + Number(v), 0)
+        const claimed = skip('claimed')
+        if (claimed === null) return null
+        // The sum of the OTHER buckets, each read through the same accessor.
+        // The previous `reduce((n,[,v]) => n + Number(v), 0)` added objects and
+        // produced NaN, so `claimed <= others` was false whatever the board
+        // said - the comparison this cause turns on could not be made.
+        const others = Object.keys(skips)
+          .filter((k) => k !== 'claimed')
+          .reduce((n, k) => n + (skip(k) ?? 0), 0)
         if (claimed < 8 || claimed <= others) return null
         return {
           cause: `${claimed} candidates are claimed by dispatches that have not been released`,
-          evidence: `skipSummary = ${JSON.stringify(skips)}`,
+          evidence: `claimed ${claimed} against ${others} in every other bucket`,
           remedy: 'tri unpark && tri lease   - some may be at the retry ceiling, which is a decision for a person',
         }
       },
     },
     {
       name: 'boundaries do not collide',
-      test: () => (Number(skips.fileConflict ?? 0) >= 3 ? {
-        cause: `${skips.fileConflict} candidates want files another worker holds`,
-        evidence: `skipSummary.fileConflict = ${skips.fileConflict}`,
-        remedy: 'tri holds   - and file work with disjoint boundaries, N tasks only give N workers if their paths differ',
-      } : null),
+      test: () => {
+        const clash = skip('fileConflict')
+        if (clash === null || clash < 3) return null
+        return {
+          cause: `${clash} candidates want files another worker holds`,
+          evidence: `skipSummary.fileConflict = ${clash}`,
+          remedy: 'tri holds   - and file work with disjoint boundaries, N tasks only give N workers if their paths differ',
+        }
+      },
     },
     {
       name: 'the open issues are workable',
       test: () => {
-        const bad = Number(skips.missingBoundary ?? 0) + Number(skips.incompleteSpec ?? 0)
+        const noBoundary = skip('missingBoundary')
+        const noSpec = skip('incompleteSpec')
+        // Either may be absent from the payload; both absent is no reading at
+        // all and cannot fire. One absent is not counted as zero in the
+        // evidence line below - it is shown as `-`.
+        if (noBoundary === null && noSpec === null) return null
+        const bad = (noBoundary ?? 0) + (noSpec ?? 0)
         if (bad < 3) return null
         // A KNOWN, PERMANENT, CORRECT SKIP IS NOT A CAUSE.
         //
@@ -322,14 +357,19 @@ export function checks(s) {
         //
         // The label makes the fact machine-readable. Prose cannot be relied on;
         // a label can.
-        const declared = Number(sh(
+        //
+        // Injectable because this is the ONE cause that leaves the machine, and
+        // a branch that can only be reached over the network is a branch no test
+        // reaches. It went untested for exactly that reason, and the NaN below
+        // it survived six days of green gates that read this file as text.
+        const declared = opts.notATask !== undefined ? opts.notATask : Number(sh(
           `gh issue list --repo ${REPO} --state open --label not-a-task --limit 100 --json number -q 'length'`,
         ) ?? 0)
         const real = bad - declared
         if (real < 3) return null
         return {
           cause: `${real} open issues are not delegatable - no Boundary section, or no criteria to judge them by`,
-          evidence: `missingBoundary ${skips.missingBoundary ?? 0}, incompleteSpec ${skips.incompleteSpec ?? 0}` +
+          evidence: `missingBoundary ${noBoundary ?? '-'}, incompleteSpec ${noSpec ?? '-'}` +
             (declared ? `, of which ${declared} carry not-a-task and are correctly skipped for ever` : ''),
           remedy: 'give them a ## Boundary and a ## Success Criteria, or label them not-a-task, or close them',
         }

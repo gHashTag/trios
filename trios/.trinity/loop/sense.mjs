@@ -182,6 +182,32 @@ function timerFacts() {
 // ---------------------------------------------------------------------------
 
 /**
+ * One bucket of the Queen's skip summary, as a number or null.
+ *
+ * THE SHAPE CHANGED UNDER TWO READERS AND ONLY ONE WAS TOLD. `skipSummary` once
+ * served plain integers; it now serves `{count, issues[], more}`. This function
+ * learned the new shape and kept the old one working. `why.mjs` did not: it
+ * still wrote `Number(skips.missingBoundary ?? 0)`, and `Number({count:448})` is
+ * NaN, so every comparison against it was false and four of that file's six idle
+ * diagnoses could not fire. `tri why` was structurally blind to the 448-issue
+ * missingBoundary cause - the single largest fact about the swarm - and said
+ * nothing rather than saying it could not tell.
+ *
+ * So it lives here once, exported, and both read it. A hand-copied accessor is
+ * how the drift happened.
+ *
+ * null, never 0: an absent bucket is a bucket nobody measured, and a diagnosis
+ * that fires on `>= 3` must not be handed a zero it was never given.
+ */
+export function skipCount(summary, key) {
+  const s = summary || {}
+  const v = s[key]
+  if (v && typeof v.count === 'number') return v.count
+  if (typeof v === 'number') return v
+  return null
+}
+
+/**
  * The Queen's own board: bees, dispatches, and - the number this loop exists
  * for - the reason she refused to start anything.
  *
@@ -196,7 +222,7 @@ function queenFacts() {
   const t = j.lastTick || {}
   const d = j.dispatches || {}
   const s = t.skipSummary || {}
-  const n = (k) => (s[k] && typeof s[k].count === 'number' ? s[k].count : (typeof s[k] === 'number' ? s[k] : null))
+  const n = (k) => skipCount(s, k)
   return {
     running: typeof d.running === 'number' ? d.running : null,
     finished: typeof d.finished === 'number' ? d.finished : null,

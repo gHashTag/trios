@@ -32,6 +32,11 @@ const G = await import(path.join(DIR, 'brief-gate.mjs'))
 const JP = await import(path.join(DIR, 'judge-packet.mjs'))
 const TR = await import(path.join(DIR, 'trend.mjs'))
 const CLK = await import(path.join(DIR, 'clocks.mjs'))
+// why.mjs and sense.mjs are imported to be RUN, not read. Every gate this suite
+// had for why.mjs read it as source text, which is how an arithmetic defect -
+// Number({count:448}) is NaN - lived through all of them.
+const W = await import(path.join(DIR, 'why.mjs'))
+const S = await import(path.join(DIR, 'sense.mjs'))
 const FLD = await import(path.join(DIR, 'fields.mjs'))
 const SE = await import(path.join(DIR, 'stale-escalations.mjs'))
 const D = await import(path.join(DIR, 'disjoint.mjs'))
@@ -1244,6 +1249,114 @@ check('an unknown cause is reported as unknown, not as health', () => {
   const src = fs.readFileSync(path.join(DIR, 'why.mjs'), 'utf8')
   if (!/No known cause fires/.test(src)) throw new Error('silence must not read as "nothing is wrong"')
   if (!/process\.exit\(2\)/.test(src)) throw new Error('an undiagnosed idle swarm must not exit 0')
+})
+
+// AND NOW THE SAME FILE, RUN INSTEAD OF READ.
+//
+// The three gates above are the whole of what this suite asked of why.mjs, and
+// every one of them reads the source as TEXT. That is how the defect below
+// survived them: `skipSummary` stopped serving integers and started serving
+// `{count, issues[], more}`, why.mjs went on writing `Number(skips.X ?? 0)`,
+// and `Number({count:448})` is NaN - false against every `>=`. Four of the six
+// causes could not fire. `tri why` was blind to the single largest fact about
+// the swarm, 448 issues with no boundary, and printed no cause at all rather
+// than saying it could not tell.
+//
+// A gate that reads a file cannot see an arithmetic result. These call it.
+// ONLY THE SKIP-SUMMARY CAUSES ARE RUN. `checks()` returns every cause, and
+// several of them leave the machine - curl to the supervisor, `gh issue list`,
+// ssh to the container. The first draft of this helper called `.test()` on all
+// of them, six times over, and turned a 60-second suite into one that had to be
+// killed at five minutes. A test that reaches the network is not a unit test; it
+// is an outage waiting for a quiet morning.
+const SKIP_CAUSES = new Set([
+  'accepted work has been closed',
+  'candidates are not all claimed',
+  'boundaries do not collide',
+  'the open issues are workable',
+])
+const causesOf = (skipSummary, opts) => {
+  const s = { lastTick: { allowed: false, refusal: 'nothing to choose', skipSummary }, dispatches: { running: 0 } }
+  const all = W.checks(s, opts)
+  // If a cause is renamed, this set silently stops covering it - so say so here
+  // rather than quietly asserting over an empty list.
+  const seen = all.filter((c) => SKIP_CAUSES.has(c.name))
+  if (seen.length !== SKIP_CAUSES.size) {
+    throw new Error(`${seen.length} of ${SKIP_CAUSES.size} skip-summary causes found by name - a cause was renamed and this gate stopped watching it`)
+  }
+  return seen.map((c) => { const hit = c.test(); return hit ? { name: c.name, ...hit } : null }).filter(Boolean)
+}
+const firesWith = (skipSummary, opts) => causesOf(skipSummary, opts).map((c) => c.name)
+
+check('a skip bucket is read through one accessor, in both of its shapes', () => {
+  const objects = { missingBoundary: { count: 448, issues: [], more: 423 }, claimed: { count: 14, issues: [] } }
+  if (S.skipCount(objects, 'missingBoundary') !== 448) throw new Error('the shape the service serves today must read as its count')
+  if (S.skipCount({ missingBoundary: 448 }, 'missingBoundary') !== 448) throw new Error('the older integer shape must keep working')
+  // ABSENT IS NOT ZERO. A diagnosis that fires on `>= 3` must never be handed a
+  // zero nobody measured.
+  if (S.skipCount(objects, 'fileConflict') !== null) throw new Error('a bucket the payload does not carry is unmeasured, not empty')
+  if (S.skipCount(null, 'anything') !== null) throw new Error('no summary at all is no reading')
+  if (S.skipCount({ x: { issues: [] } }, 'x') !== null) throw new Error('an object without a count is not a count')
+})
+
+check('the idle causes fire on the payload the service actually serves', () => {
+  // The live shape, read from /queen/status on 2026-09-12: every bucket an
+  // object. Before the fix this returned [] - not one cause.
+  const live = {
+    claimed: { count: 14, issues: [], more: 0 },
+    completed: { count: 24, issues: [], more: 0 },
+    missingBoundary: { count: 448, issues: [], more: 423 },
+  }
+  const fired = causesOf(live, { notATask: 0 })
+  const named = fired.map((c) => c.name)
+  if (!named.includes('the open issues are workable')) {
+    throw new Error(`448 issues with no boundary must be a cause; fired: ${named.join(', ') || 'none'}`)
+  }
+  if (!named.includes('accepted work has been closed')) throw new Error('24 completed-but-open is a cause and was NaN before')
+  // AND THE SENTENCE MUST CARRY THE NUMBER. Firing is not enough: with the old
+  // reader the cause still fired and said "NaN open issues are not delegatable",
+  // which is worse than silence because it looks like a measurement.
+  for (const c of fired) {
+    const text = `${c.cause} ${c.evidence}`
+    if (/NaN|undefined|\[object Object\]/.test(text)) throw new Error(`a cause printed a non-number: ${text.slice(0, 120)}`)
+  }
+  if (!fired.find((c) => c.name === 'the open issues are workable')?.cause.startsWith('448 ')) {
+    throw new Error('the count in the sentence must be the count the service served')
+  }
+  // And the integer shape must give the same answer, or the fix has merely
+  // moved the blindness to the other side.
+  const old = firesWith({ claimed: 14, completed: 24, missingBoundary: 448 }, { notATask: 0 })
+  if (old.join('|') !== named.join('|')) throw new Error(`the two shapes must diagnose identically: ${old.join(',')} vs ${named.join(',')}`)
+})
+
+check('a bucket the payload does not carry cannot fire a cause', () => {
+  // The failure this replaces is `?? 0`: an absence asserted as a zero. Here it
+  // is the opposite risk - an absence must not be read as a large number either.
+  // Nothing is known about fileConflict, so nothing may be said about it.
+  const named = firesWith({ claimed: { count: 2 } }, { notATask: 0 })
+  if (named.includes('boundaries do not collide')) throw new Error('an unmeasured fileConflict bucket must not accuse anyone')
+  if (named.includes('the open issues are workable')) throw new Error('an unmeasured boundary bucket is not 448 and is not 0')
+})
+
+check('the claimed cause compares against the other buckets, not against NaN', () => {
+  // `others` was `reduce((n,[,v]) => n + Number(v), 0)` over the raw values, so
+  // with object buckets it was NaN and `claimed <= others` was false whatever
+  // the board said. The comparison this cause turns on could not be made.
+  const dominant = firesWith({ claimed: { count: 40 }, completed: { count: 1 } }, { notATask: 0 })
+  if (!dominant.includes('candidates are not all claimed')) throw new Error('40 claimed against 1 other must fire')
+  const outnumbered = firesWith({ claimed: { count: 40 }, missingBoundary: { count: 400 } }, { notATask: 0 })
+  if (outnumbered.includes('candidates are not all claimed')) throw new Error('40 claimed against 400 others is not the cause')
+})
+
+check('issues declared not-a-task are subtracted before the backlog is blamed', () => {
+  // A true statement filed under the wrong heading teaches the reader to ignore
+  // the tool. The subtraction is the reason this cause is injectable at all.
+  if (firesWith({ missingBoundary: { count: 5 } }, { notATask: 0 }).includes('the open issues are workable') === false) {
+    throw new Error('five undelegatable issues with none declared is the cause')
+  }
+  if (firesWith({ missingBoundary: { count: 5 } }, { notATask: 5 }).includes('the open issues are workable')) {
+    throw new Error('five skipped, five declared permanent - there is nothing left to report')
+  }
 })
 
 check('the feed stands down when the chain holds the lock', () => {
