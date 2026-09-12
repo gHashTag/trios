@@ -43,7 +43,7 @@ const WANT_JSON = process.argv.slice(2).includes('--json')
 // `cycle.mjs` alone - I wrote a comment here claiming otherwise and then read
 // the call site, which passes `cycleSrc` and nothing else. The delegation hole
 // that exposed is closed separately, by `writesOldLoopFile` below.
-const INSTRUMENTS = ['sense.mjs', 'anomaly.mjs', 'dash2.mjs', 'dash-cc.mjs', 'cycle.mjs', 'backlog.mjs', 'cycle-doctor.mjs', 'mask.mjs']
+const INSTRUMENTS = ['sense.mjs', 'anomaly.mjs', 'dash2.mjs', 'dash-cc.mjs', 'cycle.mjs', 'backlog.mjs', 'cycle-doctor.mjs', 'mask.mjs', 'driver.mjs']
 
 // The words `tri` gained on 2026-09-12, each with the arm that must answer it.
 const ARMS = {

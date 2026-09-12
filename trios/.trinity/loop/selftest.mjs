@@ -4168,6 +4168,93 @@ check('the extractor is no longer the bottleneck - the briefs are', () => {
   if (forms.size > 6) throw new Error('11 of 12 unauditable briefs state no command at all; a new form is not the missing piece')
 })
 
+// THE DRIVER READING. Two zeros in it were asserted, not measured, and the
+// zero it produces is the entire meaning of the red `driver GONE` in the
+// dashboard header.
+//
+// EACH OF THESE HAS BEEN SEEN FAILING, because a gate never seen failing is
+// not known to work. The first three were run against the old semantics put
+// back byte for byte (`Array.isArray(j.tasks) ? ... : 0`, `Number(x) || 0`,
+// `!d.claudeCron`) and all three went red. The fourth is about duplication
+// rather than semantics, so it was run against the copies at HEAD instead:
+// there, neither file imports driver.mjs and sense.mjs still carries the
+// reading inline, so it convicts both.
+check('a scheduled_tasks.json whose shape moved is unmeasured, not empty', async () => {
+  const D = await import('./driver.mjs')
+  // The old line was `Array.isArray(j.tasks) ? j.tasks.length : 0`. Both of
+  // these parse, neither is a shape it knows, and both used to answer 0 - an
+  // asserted absence that renders as a confident red verdict.
+  if (D.countTasks({ scheduledTasks: [{ id: 'x' }, { id: 'y' }] }) !== null) throw new Error('a renamed key is not zero tasks')
+  if (D.countTasks({}) !== null) throw new Error('a missing key is not zero tasks')
+  if (D.countTasks(null) !== null) throw new Error('nothing parsed is not zero tasks')
+  // And the shapes it does know still measure.
+  if (D.countTasks({ tasks: [] }) !== 0) throw new Error('an empty list IS a measured zero')
+  if (D.countTasks([{ id: 'x' }]) !== 1) throw new Error('a bare array at the root is a shape worth reading')
+})
+
+check('a count that did not parse is null, because NaN is not zero', async () => {
+  const D = await import('./driver.mjs')
+  // The old line was `Number(x) || 0`. A missing launchctl, a permissions
+  // error and an empty answer all became a measured-looking 0.
+  if (D.countLines('command not found') !== null) throw new Error('an error message is not a count of zero')
+  if (D.countLines('') !== null) throw new Error('no output is not a count of zero')
+  if (D.countLines('0\n') !== 0) throw new Error('a real zero must survive')
+  if (D.countLines(' 4 ') !== 4) throw new Error('a real count must survive')
+})
+
+check('only a MEASURED zero says the driver is gone', async () => {
+  const D = await import('./driver.mjs')
+  if (!D.driverGone({ claudeCron: 0 })) throw new Error('zero scheduled tasks is the driver being gone')
+  if (D.driverGone({ claudeCron: null })) throw new Error('an unmeasured reading must not be rendered as a verdict')
+  if (D.driverGone({ claudeCron: 2 })) throw new Error('two tasks is not gone')
+})
+
+check('the driver reading has one definition, not two that agree by transcription', () => {
+  // `sense.mjs driver()` and `loop.mjs driverReading()` were the same twenty
+  // lines typed twice, and the second said in a comment that they agreed "by
+  // construction". This is what by-construction looks like.
+  //
+  // Read through the mask, not through codeOf: codeOf only drops WHOLE-LINE
+  // comments, so a trailing `// was Array.isArray(j.tasks)` would convict a
+  // clean file. That is the defect class this session met nine times, twice in
+  // a comment describing an earlier instance of itself.
+  for (const f of ['loop.mjs', 'sense.mjs']) {
+    const src = fs.readFileSync(path.join(DIR, f), 'utf8')
+    // The import is read with the same scanner the import-graph gate uses:
+    // keyword found in the mask, name sliced out of the original. A regex over
+    // the mask alone cannot work here - the mask blanks the specifier too.
+    if (!specifiersIn(src).includes('./driver.mjs')) throw new Error(`${f} must read the driver from driver.mjs`)
+    if (/Array\.isArray\(j\.tasks\)/.test(maskLiterals(src))) throw new Error(`${f} still carries its own copy of the reading`)
+  }
+})
+
+check('the two most alarming numbers on the box are never asserted from an absent key', async () => {
+  // `d.running ?? 0` printed "bees running (of 4)  0" - a dead swarm - whenever
+  // the Queen's answer arrived without a dispatch block. The skip rows had been
+  // taught that absent is not zero; these two were left behind for a round.
+  //
+  // Seen failing: with `?? 0` restored, the first assertion below reports v=0.
+  const S = await import('./snapshot.mjs')
+  const anchored = []
+  const metric = S.makeMetric((key, v) => { anchored.push([key, v]); return null })
+  const absent = metric('swarm.running', 'bees running (of 4)', undefined, false)
+  if (absent.v === 0) throw new Error('an absent dispatch block is not a swarm of zero bees')
+  if (absent.v !== 'absent') throw new Error(`an absent value must draw as absent, got ${JSON.stringify(absent.v)}`)
+  if (!/key absent/.test(absent.k)) throw new Error('the label must carry the distinction the value column cannot')
+  if (anchored.length) throw new Error(`an unread number must not be anchored, got ${JSON.stringify(anchored)}`)
+  // A real zero is still a real zero, and it still anchors.
+  const real = metric('swarm.running', 'bees running (of 4)', 0, false)
+  if (real.v !== 0) throw new Error('a measured zero must survive')
+  if (anchored.length !== 1) throw new Error('a measured value must be anchored')
+})
+
+check('snapshot no longer coalesces the dispatch counts to zero', () => {
+  const code = maskLiterals(fs.readFileSync(path.join(DIR, 'snapshot.mjs'), 'utf8'))
+  for (const field of ['running', 'finished']) {
+    if (new RegExp(`d\\.${field}\\s*\\?\\?\\s*0`).test(code)) throw new Error(`d.${field} ?? 0 fabricates a zero from an absent key`)
+  }
+})
+
 check('the harness can fail an async check', async () => {
   // Guarding the fix above: before it, this file reported 0 failures while an
   // async case was rejecting into the void.

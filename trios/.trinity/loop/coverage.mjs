@@ -84,6 +84,7 @@ const ACTS = {
   'selftest.mjs': { kinds: [], note: 'the calibration harness - proven by running, not by acting' },
   'dash-cc.mjs': { kinds: [], note: 'renders one reading as a page and derives nothing from it; every number on the page carries the command that measured it' },
   'mask.mjs': { kinds: [], note: 'one pure function - blanks comment and string interiors so a detector reads code and not prose; it touches nothing' },
+  'driver.mjs': { kinds: [], note: 'one reading for both generations - what, if anything, fires an iteration; it schedules nothing and changes nothing' },
 }
 
 export function coverage() {

@@ -114,31 +114,15 @@ function readState() {
   return JSON.parse(fs.readFileSync(path.join(DIR, 'state.json'), 'utf8'))
 }
 
-/**
- * Is anything actually driving the loop?
- *
- * Three things could be: a Claude scheduled task (.claude/scheduled_tasks.json),
- * a line in the user crontab, or a launchd agent. The first is the one that ran
- * iterations 1-96 and the one that silently went away, because a session-only
- * cron job dies with the session that made it and leaves no trace behind. So it
- * is checked FIRST and by reading the file, not by remembering the job id.
- */
-function driver() {
-  const out = { claudeCron: null, crontab: null, launchd: null }
-  try {
-    const j = JSON.parse(fs.readFileSync(path.join(REPO, '.claude/scheduled_tasks.json'), 'utf8'))
-    out.claudeCron = Array.isArray(j.tasks) ? j.tasks.length : 0
-  } catch { out.claudeCron = null }
-  try {
-    const ct = sh('crontab -l 2>/dev/null || true', 8000)
-    out.crontab = ct.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).length
-  } catch { out.crontab = null }
-  try {
-    const ll = sh("launchctl list 2>/dev/null | grep -c 'ai.t27.trios-' || true", 8000)
-    out.launchd = Number(ll.trim()) || 0
-  } catch { out.launchd = null }
-  return out
-}
+// Is anything actually driving the loop? The reading moved to `driver.mjs`,
+// because this function and `loop.mjs driverReading()` were the same twenty
+// lines typed twice - and one of them carried a comment asserting they agreed
+// "by construction". They agreed by transcription. The move also fixed two
+// zeros that were asserted rather than measured; the argument is in that file.
+//
+// A pure-function import, not a state one: the new cycle still reads none of
+// the old generation's files, which is what `cycle-doctor.mjs` guards.
+import { driverReading as driver } from './driver.mjs'
 
 /**
  * The lock, and whether it is stale.

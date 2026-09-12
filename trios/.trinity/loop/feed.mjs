@@ -98,6 +98,93 @@ export function summarise(out) {
   return (line || '').slice(0, 90)
 }
 
+// ---------------------------------------------------------------------------
+// THE LINES THAT MUST SURVIVE CONDENSATION.
+//
+// `summarise` maps a step's whole stdout to ONE line, so anything the step said
+// that no pattern matches is gone. Measured 2026-09-12: `grep -c "REFUSED by
+// the gate"` over feed.timer.log and heal.timer.log returned 0 and 0, while the
+// gate was refusing five briefs on every acting run - the five drafts are still
+// in /tmp and brief-gate still refuses them. author.mjs printed the refusal and
+// the reason; both chains threw them away, matched `filed 0`, and reported
+// `author=ok`.
+//
+// NARROW ON PURPOSE, because the recurring defect in this directory is a regex
+// that matches a word which is not the thing. Only three openings pass:
+//
+//   `REFUSED `        author.mjs:802, at column 0
+//   `FAILED to file ` author.mjs:807, at column 0
+//   `!!`              brief-gate's problem lines, which author re-prints
+//                     indented inside the refusal block - hence the leading
+//                     \s*, without which the REASON for a refusal is still lost
+//
+// What deliberately does NOT match: `REFUSING to continue` from land.mjs (it
+// has a SUMMARY line of its own), and two-views' `HTTP ok, ssh REFUSED`, which
+// is mid-line. Both are pinned in the test below.
+export const PASS_THROUGH = /^\s*(REFUSED |FAILED to file |!!)/
+
+// A BOUND, because an unbounded pass-through is how a log becomes unreadable.
+// brief-gate --open prints one `!!` line per failing open brief and there were
+// 19 of them on the day this was written; author's five refusals cost about ten
+// lines. Twenty covers both, and the overflow is counted rather than hidden.
+export const PASS_THROUGH_MAX = 20
+
+export function passThrough(out, max = PASS_THROUGH_MAX) {
+  const hits = String(out).split('\n').filter((l) => PASS_THROUGH.test(l))
+  if (hits.length <= max) return hits
+  return [...hits.slice(0, max), `... and ${hits.length - max} more line(s) like these`]
+}
+
+// ---------------------------------------------------------------------------
+// A THIRD STATUS: the step ran, and produced none of what it set out to produce.
+//
+// `ok` and `FAILED` were the only two words these chains had, so a step that
+// did everything except the one thing it exists for got the first of them.
+// author lined up five candidates, the gate refused all five, and the chain
+// printed `filed 0` and then `author=ok`.
+//
+// Each rule reads the step's OWN two numbers - what it lined up, and what it
+// delivered - and fires only when the first is above zero and the second is
+// exactly zero. A step that lined nothing up is not empty-handed; it is idle,
+// and idle is already `ok`. Both numbers must be present: a step that never
+// printed its second number was cut off, which is `timed out`, not this.
+const pair = (out, wantRe, gotRe, say) => {
+  const w = out.match(wantRe)
+  const g = out.match(gotRe)
+  if (!w || !g) return null
+  const want = Number(w[1])
+  const got = Number(g[1])
+  return want > 0 && got === 0 ? say(want) : null
+}
+
+export const EMPTY_HANDED = [
+  // author.mjs: `not yet filed: N   would file M` ... `filed K`
+  (out) => pair(out, /would file (\d+)/, /^filed (\d+)$/m,
+    (want) => `lined up ${want} candidate(s) and filed none of them`),
+  // push-work.mjs: `... not pushed: N` ... `pushed M`
+  (out) => pair(out, /not pushed: (\d+)/, /^pushed (\d+)$/m,
+    (want) => `${want} branch(es) hold work that is still not on the remote`),
+  // close-done.mjs: `closable N   skipped X` ... `closed M   failed F`
+  (out) => pair(out, /^closable (\d+)/m, /^closed (\d+)\s/m,
+    (want) => `${want} issue(s) were closable and none were closed`),
+  // land.mjs: `landed M of C clean in this batch`
+  (out) => {
+    const m = out.match(/landed (\d+) of (\d+) clean/)
+    if (!m) return null
+    return Number(m[2]) > 0 && Number(m[1]) === 0
+      ? `${m[2]} clean branch(es) in the batch and none landed` : null
+  },
+]
+
+/** The reason this step came back empty-handed, or null if it did not. */
+export function emptyHanded(out) {
+  for (const rule of EMPTY_HANDED) {
+    const why = rule(String(out))
+    if (why) return why
+  }
+  return null
+}
+
 if (isMain) {
   const ACT = process.argv.includes('--act')
     // EIGHT MINUTES, not four, and the per-step cap is 300 s rather than 180.
@@ -108,6 +195,18 @@ if (isMain) {
   // That breaks the rule the chain already carries: a half-run step is worse
   // than an unrun one. Being slower is not the failure; being cut off is.
   const DEADLINE_MS = Number(process.env.FEED_DEADLINE_MS ?? 8 * 60 * 1000)
+
+  // EVERY RUN IS DATED, AT ITS FIRST LINE.
+  //
+  // Measured 2026-09-12: heal.timer.log held 24794 lines across 305 runs and
+  // not one clock; feed.timer.log the same. A truncation found at log line 5710
+  // could therefore be placed only as "somewhere in the earlier 23% of the
+  // file" - not before or after any dated change to the thing that wrote it.
+  //
+  // Printed BEFORE the lock is asked for, so a run that stands down is dated
+  // too: those are the runs whose absence needs explaining. It is the opening
+  // bracket of the `feed complete:` line that already closes every run.
+  console.log(`${new Date().toISOString()} feed start${ACT ? '' : ' (report only)'}`)
 
   if (ACT) {
     const state = L.lockHolder()
@@ -168,24 +267,49 @@ if (isMain) {
         status = /STALLED|would file 0|at the WIP limit/.test(out) ? 'ok' : 'FAILED'
       }
     }
+    // A step that RAN and delivered none of what it lined up is neither `ok`
+    // nor `FAILED`. Asked only of a step that did not already fail or time out:
+    // those two say something stronger, and must not be overwritten.
+    const barren = status === 'ok' ? emptyHanded(out) : null
+    if (barren) status = 'empty-handed'
+    const verbatim = passThrough(out)
     const line = status === 'ok'
       ? summarise(out)
-      : status === 'timed out'
-        ? `timed out part-way - what it did before that stands: ${summarise(out)}`
-        : `FAILED\n${out.split('\n').slice(-4).join('\n')}`
+      : status === 'empty-handed'
+        ? `EMPTY-HANDED - ${barren}; it reported: ${summarise(out)}`
+        : status === 'timed out'
+          ? `timed out part-way - what it did before that stands: ${summarise(out)}`
+          : `FAILED\n${out.split('\n').slice(-4).join('\n')}`
     console.log(`    ${line}`)
+    // The refusal and its reason, in the step's own words. Condensing these
+    // away is what made `grep -c "REFUSED by the gate" feed.timer.log` answer 0
+    // through every run that ever refused a brief.
+    for (const l of verbatim) console.log(`      ${l.trim()}`)
     results.push({
       step: s.name,
       status,
       summary: line.slice(0, 120),
+      emptyHanded: barren || undefined,
+      // Kept, not only printed, for the same reason `evidence` is.
+      verbatim: verbatim.length ? verbatim.map((l) => l.trim()) : undefined,
       // Same reason as in heal.mjs: a failure whose evidence is only printed is
       // a failure nobody can diagnose an hour later.
-      evidence: status === 'FAILED' ? out.trim().split('\n').slice(-6).join(' | ').slice(0, 400) : undefined,
+      evidence: (status === 'FAILED' || status === 'empty-handed')
+        ? out.trim().split('\n').slice(-6).join(' | ').slice(0, 400)
+        : undefined,
     })
   }
 
   const bad = results.filter((r) => r.status === 'FAILED')
   console.log(`\nfeed ${ACT ? 'complete' : '(report only)'}: ${results.map((r) => `${r.step}=${r.status}`).join(' ')}`)
+  // NAMED AFTER THE TOKEN LIST, not only inside it. A step that fed the swarm
+  // nothing is the one thing this chain exists to prevent, and reading it out
+  // of a line of `step=status` tokens is how it went unread for 305 runs.
+  const barrenSteps = results.filter((r) => r.status === 'empty-handed')
+  for (const b of barrenSteps) {
+    console.log(`  EMPTY-HANDED  ${b.step}: ${b.emptyHanded}`)
+    for (const l of b.verbatim || []) console.log(`      ${l}`)
+  }
   if (ACT) L.append({ kind: 'feed', results, elapsedMs: Date.now() - startedAt })
   process.exit(bad.length ? 1 : 0)
 }

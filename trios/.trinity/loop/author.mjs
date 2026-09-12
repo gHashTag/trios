@@ -274,7 +274,7 @@ export function asciiOffenders() {
 }
 
 /** The brief for an L3 cleanup. One file, one mechanical test. */
-function asciiBrief(c) {
+export function asciiBrief(c) {
   const codes = c.chars.map((ch) => `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`).join(', ')
   return `# ${c.rel} breaks L3 with ${c.bad} non-ASCII characters, all of them in comments
 
@@ -404,7 +404,28 @@ export function untestedModules() {
 
 const ident = (name) => 'split' + name.replace(/\.ts$/, '').split(/[-.]/).map((p) => p[0].toUpperCase() + p.slice(1)).join('')
 
-function brief(c) {
+// THE SECOND TEMPLATE TO FAIL THE SAME GATE, and this one cost 411 rounds.
+//
+// Commit fa5185a9a (2026-09-05) taught `brief-gate` to refuse a criterion that
+// asks for a count without demanding the counting command be independent, and
+// in the same commit added the answering clause to the `untested` and `ascii`
+// templates. It was never carried back to THIS one. From 2026-09-05T17:57:36Z
+// every run filed NOTHING - counted in the ledger on 2026-09-12, 411
+// consecutive `authored` rows with `filed: 0`, out of 465 such rows in all -
+// and every one of them was reported to the chain as `author=ok`, because the
+// only candidates left standing after the disjoint filter were `length` ones
+// and the gate refused every one of them.
+//
+// The clause is written to be SATISFIABLE by the tool this brief asks for. A
+// survey enumerates declarations by nature, so demanding a command that "must
+// not name what it counts" would be an unmeetable criterion - the defect class
+// this file already paid for twice. What it demands instead is the honest
+// property: the number comes from the parse, not from a list somebody typed.
+//
+// EXPORTED so a test can gate the template itself. Both times this defect
+// shipped, it shipped because nothing ran the gate over the generated brief
+// until a bee was already starving.
+export function brief(c) {
   const id = ident(c.name)
   const surveyPath = `trios/docs/split/${c.name.replace(/\.ts$/, '')}-survey.md`
   const toolPath = `trios/tools/${c.name.replace(/\.ts$/, '')}-split-survey.mjs`
@@ -479,8 +500,8 @@ that judgement possible.
 
 ## Success Criteria
 
-- \`${toolPath}\` exists and runs as \`node ${toolPath}\`.
-- Its output lists every top-level declaration in \`${c.rel}\` with a line range, and the count of declarations it found is printed; the run is quoted in the bee's closing report.
+- \`${toolPath}\` exists and runs as \`node ${toolPath}\`, and its raw stdout is quoted in the bee's closing report, unedited and unsummarised.
+- Its output lists every top-level declaration in \`${c.rel}\` with a line range, and the count of declarations it found is printed; that count MUST be derived from the parse the run performs - not hard-coded, and not read from any list of declaration names carried in the tool.
 - The total of all declaration line ranges plus the unparsed count accounts for the file, and the run prints both that total and the file's own line count so a reader can see they agree.
 - Two consecutive runs produce identical bytes; the comparison is quoted.
 - \`${surveyPath}\` carries the table and the single recommended extraction with its call sites, or the explicit statement that none is independently extractable.
@@ -495,7 +516,7 @@ that judgement possible.
 
 const testIdent = (name) => name.replace(/\.ts$/, '').split(/[-.]/).map((p, i) => i ? p[0].toUpperCase() + p.slice(1) : p).join('') + 'Contract'
 
-function untestedBrief(c) {
+export function untestedBrief(c) {
   const id = testIdent(c.name)
   // THE TEST GOES WHERE THAT APP KEEPS ITS TESTS. Sending an apps/agent test to
   // apps/server/tests would put it in a suite that does not run it and a
@@ -698,6 +719,18 @@ console.log(`queue depth target ${WIP}   room: ${Math.max(0, WIP - open)}\n`)
 // closed is exactly as much evidence that the drain has stopped as one nobody
 // ever started; the question this asks is "is anything finishing", not "is
 // anything starting". The queue depth answers the second question, above.
+//
+// AND THE LAST CLAUSE ASKS THE OPEN SET, NOT THE QUEUE. It read `open > 0`,
+// which is `q.queue` - the UNSTARTED count - so the guard turned itself off in
+// exactly the state it exists to catch: every authored issue dispatched and
+// none closing. Measured here 2026-09-12: 100 open, 100 dispatched, 0 still
+// queue, oldest open 170.0 h, nothing closed in six - and the old clause said
+// nothing about it. The ledger's 94 prior `author-stalled` rows stop dead on
+// 2026-09-06, the last one raised at a far milder 22.1 h with `queue` still 1;
+// the moment that last unstarted issue was dispatched the guard went quiet and
+// stayed quiet while the state got worse.
+// "Is anything finishing" is a property of the open set. `open` (= q.queue)
+// belongs only in the `room` calculation below.
 const STALL_H = Number(process.env.AUTHOR_STALL_H ?? 6)
 const closedRecently = tryShell(
   `gh issue list --repo ${REPO} --state closed --label ${LABEL} --limit 50 --search "closed:>=$(date -u -v-${STALL_H}H +%Y-%m-%dT%H:%M:%SZ)" --json number -q 'length'`,
@@ -707,7 +740,7 @@ const oldestOpenH = (() => {
   return iso ? (Date.now() - Date.parse(iso)) / 3600000 : 0
 })()
 
-if (closedRecently !== null && Number(closedRecently) === 0 && oldestOpenH > STALL_H && open > 0) {
+if (closedRecently !== null && Number(closedRecently) === 0 && oldestOpenH > STALL_H && q.open > 0) {
   console.error(
     `STALLED: ${q.open} authored issue(s) open (${q.queue} still queue, ${q.inProgress} dispatched), ` +
     `the oldest for ${oldestOpenH.toFixed(1)} h, and none closed in the last ${STALL_H} h. ` +
@@ -790,6 +823,10 @@ if (!process.argv.includes('--file')) { console.log('\nreport only. re-run with 
 if (!take.length) { console.log('\nnothing to file - at the WIP limit, or every subject already has an issue'); process.exit(0) }
 
 let filed = 0
+// WHAT WAS REFUSED, kept rather than only printed. A refusal that exists solely
+// as a line in a log the chain condenses is a refusal nobody ever reads: 411
+// consecutive runs filed nothing and every one of them reported `author=ok`.
+const refusals = []
 for (const s of take) {
   const body = s.brief(s.c)
   const tmp = path.join('/tmp', `authored-${s.kind}-${s.c.name}.md`)
@@ -799,13 +836,50 @@ for (const s of take) {
   try {
     execSync(`node ${path.join(DIR, 'brief-gate.mjs')} ${tmp}`, { cwd: ROOT, stdio: 'pipe' })
   } catch (e) {
+    // TRIMMED to the left margin on purpose. The gate indents its findings, and
+    // the summariser upstream keeps a line only when it STARTS with `REFUSED`,
+    // `FAILED to file` or `!!`; eight leading spaces were enough to lose the
+    // one sentence that says why nothing was filed.
+    const why = String(e.stdout || '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('!!'))
     console.log(`REFUSED by the gate: ${s.kind} ${s.c.rel}`)
-    console.log(String(e.stdout || '').split('\n').filter((l) => l.includes('!!')).join('\n'))
+    for (const l of why) console.log(l)
+    refusals.push({ gate: true, kind: s.kind, rel: s.c.rel, why: why.join(' ') || '(the gate printed no reason)' })
     continue
   }
   const url = tryShell(`gh issue create --repo ${REPO} --title ${L.shq(s.title(s.c))} --body-file ${tmp} --label ${LABEL}`)
-  if (url) { console.log(`filed ${url}`); filed++ } else { console.log(`FAILED to file ${s.c.rel}`) }
+  if (url) { console.log(`filed ${url}`); filed++ } else { console.log(`FAILED to file ${s.c.rel}`); refusals.push({ gate: false, kind: s.kind, rel: s.c.rel, why: 'gh issue create returned nothing' }) }
 }
 console.log(`\nfiled ${filed}`)
-L.append({ kind: 'authored', filed, signals: Object.fromEntries(bySignal.map((s) => [s.kind, s.items.length])), open, wip: WIP })
+// THREE NUMBERS, SO THE FOURTH CANNOT HIDE. `filed` alone cannot tell a round
+// that had nothing to do from one whose every draft was refused - which is the
+// whole reason 411 of these rows read as success. With `selected` and `refused`
+// beside it, the failures at `gh issue create` are selected - filed - refused,
+// and each of the three is counted at the moment it happens.
+const gateRefused = refusals.filter((r) => r.gate).length
+L.append({ kind: 'authored', filed, selected: take.length, refused: gateRefused, signals: Object.fromEntries(bySignal.map((s) => [s.kind, s.items.length])), open, wip: WIP })
+
+// A ROUND THAT SELECTED WORK AND FILED NONE OF IT IS A FAILED ROUND.
+//
+// This step is in the chain's CRITICAL set because it is the only thing that
+// refills the queue. It selected candidates, wrote every one of them, had every
+// one refused, and then exited 0 - so `filed 0` read as "nothing to do" and the
+// swarm starved for 411 rounds behind a green summary. Nothing was broken; the
+// report was.
+//
+// The non-zero exit IS the report here, and it is deliberately NOT the same as
+// the stall refusal above: exit 3 means "a healthy generator declined to file
+// into a backlog nobody drains", exit 4 means "the generator tried and could
+// not". Those are opposite conditions and must not print the same way.
+//
+// `REFUSED ` WITH THE SPACE, because the summariser's pass-through is
+// `feed.mjs:PASS_THROUGH = /^\s*(REFUSED |FAILED to file |!!)/` - it is narrow
+// on purpose so that land's `REFUSING to continue` and two-views' mid-line
+// `ssh REFUSED` do not slip through. A colon straight after the word would not
+// match, and this whole block would be condensed away again.
+if (take.length > 0 && filed === 0) {
+  console.log('')
+  console.log(`REFUSED - ${take.length} candidate(s) selected, 0 filed; the queue got nothing this round.`)
+  for (const r of refusals) console.log(`REFUSED  ${r.kind.padEnd(9)} ${r.rel}  -  ${r.why}`)
+  process.exit(4)
+}
 }
