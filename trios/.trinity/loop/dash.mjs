@@ -427,6 +427,40 @@ export function recordReading(f, file = READINGS) {
 }
 
 /**
+ * THE FRESHNESS RULE, APPLIED TO THE ANCHOR THE WHOLE DELTA COLUMN HANGS ON.
+ *
+ * The rule is already written at the top of this file: a stopped writer and a
+ * stable metric look identical until the age is on the screen. It was applied
+ * to the four rows READ from other records, and not to `prev` - the reading
+ * every delta in every row is measured against.
+ *
+ * Measured 2026-09-13: the newest line in `dash-readings.jsonl` was stamped
+ * 2026-09-06T09:18:28Z, seven days earlier, and NOTHING in the tree ran
+ * `dash.mjs --record`. It is in no STEPS list in feed.mjs or heal.mjs, in no
+ * plist, in no Makefile target. So the box printed `selftest cases 298 +27`
+ * and `bees running 0/6 -4`, which read as "since last time" and were a week.
+ *
+ * A delta over an unmeasured gap is not a delta. When the anchor is older than
+ * one cadence the column is EMPTY and the reason is printed once, exactly as a
+ * stale row shows its age instead of a number.
+ */
+export function anchorAge(prev, now = Date.now()) {
+  if (!prev) return null
+  return ageMs(prev.at, now)
+}
+
+export function anchorIsStale(prev, now = Date.now(), cadenceSeconds = CADENCE_SECONDS) {
+  // No anchor at all is not a stale anchor - there is simply nothing to compare
+  // against, and every row already renders an empty delta for a null `prev`.
+  if (!prev) return false
+  const a = anchorAge(prev, now)
+  // AN ANCHOR WITH NO CLOCK IS NOT A FRESH ANCHOR. A reading written before the
+  // `at` field existed would otherwise licence a delta of unknown span.
+  if (a === null) return true
+  return isStale(a, cadenceSeconds)
+}
+
+/**
  * The swarm's capacity, ASKED rather than typed.
  *
  * `bees running (of 4)` had the ring's `MAX_CONCURRENT_WORKERS` written into it
@@ -509,7 +543,11 @@ const fromRecord = (row, at, now) => {
 }
 
 export function rows(f, prev, now = Date.now()) {
-  const p = prev || {}
+  // HERE, NOT IN THE RENDERER. Every caller of this function - the box, the
+  // snapshot, the suite - gets the same answer about the same anchor. A rule
+  // enforced at one of three readers is two readers of one shape, which is the
+  // defect this loop's instruments keep finding in everything else.
+  const p = anchorIsStale(prev, now) ? {} : (prev || {})
   const ring = f.capacity?.ring ?? null
   const live = f.capacity?.live ?? null
   const running = f.swarm?.running ?? null
@@ -580,6 +618,23 @@ export function renderRow(r) {
 
 if (isMain) {
   if (process.argv.includes('--no-color')) PLAIN = true
+  // `--if-due` EXISTS SO THE WRITER CAN BE WIRED WITHOUT SLOWING THE CHAIN.
+  //
+  // Taking these facts costs about 110 seconds: it curls the service, sshes the
+  // container and runs the suite. The heal chain fires every 600 s with an
+  // eight-minute deadline for all of its steps, and the cadence these readings
+  // are judged against is 3600 s. Recording on every fire would be six times
+  // more often than the freshness rule asks and would spend a fifth of the
+  // chain's budget doing it.
+  //
+  // So the step asks first, and a run that is not due exits in milliseconds
+  // having measured nothing. The alternative - a second timer - is a second
+  // place the cadence is written down.
+  if (process.argv.includes('--if-due') && !anchorIsStale(lastReading())) {
+    const a = anchorAge(lastReading())
+    console.log(`not due: the last reading is ${ageWords(a)}, inside the ${Math.round(CADENCE_SECONDS / 60)}-minute cadence. Measured nothing.`)
+    process.exit(0)
+  }
   const f = facts()
   if (process.argv.includes('--facts')) {
     console.log(JSON.stringify(f, null, 2))
@@ -588,6 +643,13 @@ if (isMain) {
   const prev = lastReading()
   console.log('measured now, nothing typed:\n')
   for (const r of rows(f, prev)) console.log(renderRow(r))
+  if (anchorIsStale(prev)) {
+    console.log(`\n  ${red('NO DELTA COLUMN')}: the reading it would be measured against was taken`)
+    console.log(`  ${red(ageWords(anchorAge(prev)))}, past the ${Math.round(CADENCE_SECONDS / 60)}-minute cadence. A delta over a gap nobody`)
+    console.log(`  measured is not a delta. Write a fresh anchor with ${'`node dash.mjs --record`'}.`)
+  } else if (!prev) {
+    console.log('\n  No delta column: nothing has been recorded yet.')
+  }
   const stale = rows(f, prev).filter((r) => r.stale)
   if (stale.length) {
     console.log(`\n  ${stale.length} row(s) are older than the ${Math.round(CADENCE_SECONDS / 60)}-minute cadence that writes them,`)

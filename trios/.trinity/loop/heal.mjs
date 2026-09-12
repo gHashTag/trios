@@ -262,6 +262,19 @@ const STEPS = [
   // distribution and not about any one branch.
   { name: 'proven', file: 'proven.mjs', reportsOnly: true, act: '--record', dryArgs: '', why: 'is the recent work still proving anything' },
   { name: 'judge-packet', file: 'judge-packet.mjs', reportsOnly: true, act: '--unauditable', dryArgs: '--unauditable', why: 'queue the unauditable for judgement' },
+  // THE BOX'S ANCHOR HAD NO WRITER.
+  //
+  // `dash.mjs --record` appears in no STEPS list, no plist and no Makefile
+  // target, and the newest line in `dash-readings.jsonl` was seven days old on
+  // 2026-09-13. Every delta on the box was therefore measured against a week
+  // ago and printed as though it meant "since last time" - `selftest cases +27`
+  // over seven days, `bees running -4` over seven days.
+  //
+  // `--if-due` keeps this cheap: the facts cost about 110 s to take and the
+  // cadence is an hour, so five runs in six exit in milliseconds having
+  // measured nothing. The pacing lives in dash.mjs beside the cadence it is
+  // paced by, not in a second timer that would hold a second copy of it.
+  { name: 'dash', file: 'dash.mjs', reportsOnly: true, act: '--record --if-due --no-color', dryArgs: '--no-color', why: 'the box compares against a reading somebody has to write' },
 ]
 
 // One line per step, taken from the step's own output rather than invented, so

@@ -2668,9 +2668,60 @@ check('a non-zero exit is read as an answer, not as a failed measurement', () =>
 
 check('the delta is measured too, from the last recorded reading', async () => {
   const { rows } = await import('./dash.mjs')
-  const r = rows({ swarm: { running: 4, finished: 258 } }, { swarm: { running: 4, finished: 255 } })
+  const now = Date.parse('2026-09-13T12:00:00Z')
+  const r = rows({ swarm: { running: 4, finished: 258 } }, { swarm: { running: 4, finished: 255 }, at: '2026-09-13T11:40:00Z' }, now)
   const fin = r.find((x) => x.k === 'dispatches finished')
   if (fin.v !== 258 || fin.prev !== 255) throw new Error('previous comes from the record, not from memory')
+})
+
+// THE ANCHOR EVERY DELTA HANGS ON HAD NO WRITER FOR SEVEN DAYS.
+//
+// This file states the freshness rule at the top - a stopped writer and a
+// stable metric look identical until the age is on the screen - and applied it
+// to the four rows READ from other records. It did not apply it to `prev`, the
+// reading every row in every column is measured against.
+//
+// Measured 2026-09-13: the newest line in dash-readings.jsonl was stamped
+// 2026-09-06T09:18:28Z, and `dash.mjs --record` appeared in no STEPS list, no
+// plist and no Makefile target. The box printed `selftest cases 298 +27` and
+// `bees running 0/6 -4`, which read as "since last time" and were seven days.
+check('a delta over a gap nobody measured is not shown as a delta', async () => {
+  const { rows, anchorIsStale } = await import('./dash.mjs')
+  const now = Date.parse('2026-09-13T12:00:00Z')
+  const f = { swarm: { running: 0, finished: 439 } }
+  const fresh = { swarm: { running: 4, finished: 387 }, at: '2026-09-13T11:30:00Z' }
+  const week = { swarm: { running: 4, finished: 387 }, at: '2026-09-06T09:18:28.067Z' }
+
+  const ok = rows(f, fresh, now).find((x) => x.k === 'dispatches finished')
+  if (ok.prev !== 387) throw new Error('an anchor inside the cadence is still an anchor')
+
+  const old = rows(f, week, now).find((x) => x.k === 'dispatches finished')
+  if (old.prev !== null) throw new Error(`a seven-day-old anchor produced a delta of ${old.v - old.prev}, read as "since last time"`)
+  if (old.v !== 439) throw new Error('and the value itself is measured now and must survive')
+
+  // The four classifications, each for its own reason.
+  if (anchorIsStale(null, now)) throw new Error('no anchor at all is not a stale anchor - there is simply nothing to compare')
+  if (!anchorIsStale({ swarm: {} }, now)) throw new Error('an anchor with no clock has not been shown to be fresh')
+  if (anchorIsStale(fresh, now)) throw new Error('30 minutes is inside the hour this file justifies')
+  if (!anchorIsStale(week, now)) throw new Error('seven days is not')
+})
+
+check('the reading the box compares against has something that writes it', () => {
+  // A self-reporting box is the durable protection - it now says NO DELTA
+  // COLUMN rather than printing a week as though it were ten minutes - but a
+  // fact that is never refreshed is still a fact nobody can act on.
+  const heal = fs.readFileSync(path.join(DIR, 'heal.mjs'), 'utf8')
+  const feed = fs.readFileSync(path.join(DIR, 'feed.mjs'), 'utf8')
+  const step = (heal + feed).match(/\{[^}]*file: 'dash\.mjs'[^}]*\}/)
+  if (!step) throw new Error('dash.mjs --record is in no STEPS list, so dash-readings.jsonl has no writer')
+  if (!/--record/.test(step[0])) throw new Error('the step runs dash.mjs but does not ask it to record')
+  // AND IT MUST PACE ITSELF. Taking these facts costs about 110 s; the heal
+  // chain fires every 600 s with an eight-minute deadline for every step it
+  // has. Recording on every fire would spend a fifth of that budget six times
+  // more often than the one-hour cadence asks for.
+  if (!/--if-due/.test(step[0])) throw new Error('a 110-second measurement on a 600-second timer must ask whether it is due')
+  const dash = codeOf('dash.mjs')
+  if (!/--if-due/.test(dash)) throw new Error('and dash.mjs has to honour the flag the step passes it')
 })
 
 check('the classifier is built from the record, not from one observation', async () => {
