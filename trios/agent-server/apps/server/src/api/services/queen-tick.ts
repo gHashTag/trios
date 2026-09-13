@@ -67,6 +67,38 @@ import {
   startedLine,
 } from './queen-report-lines'
 
+/**
+ * The last non-secret allocator cursor already written durably. It survives a
+ * scheduler cycle and makes a pool wider than the concurrency ceiling rotate
+ * instead of starting at credential zero forever.
+ */
+export function latestProviderKeyIndex(
+  rows: Array<{ key_index?: unknown; dispatched_at?: unknown }>,
+): number | undefined {
+  let latestAt = Number.NEGATIVE_INFINITY
+  let latestIndex: number | undefined
+  for (const row of rows) {
+    const index = row.key_index
+    const at =
+      row.dispatched_at instanceof Date
+        ? row.dispatched_at.getTime()
+        : typeof row.dispatched_at === 'string'
+          ? Date.parse(row.dispatched_at)
+          : Number.NaN
+    if (
+      typeof index === 'number' &&
+      Number.isInteger(index) &&
+      index >= 0 &&
+      Number.isFinite(at) &&
+      at > latestAt
+    ) {
+      latestAt = at
+      latestIndex = index
+    }
+  }
+  return latestIndex
+}
+
 const LEASE_NAME = 'queen-tick'
 /**
  * Where the policy binary is, with an override no deployment sets.
@@ -1112,6 +1144,7 @@ export async function runRound(
     .filter((r) => r.finished_at == null)
     .map((r) => r.key_index)
     .filter((i): i is number => typeof i === 'number')
+  let keyCursor = latestProviderKeyIndex(inFlight.rows)
 
   // `watch.held` first, and re-read on every pass: the heartbeat can refuse a
   // renewal in the minutes a single dispatch takes, and every write below this
@@ -1137,6 +1170,7 @@ export async function runRound(
       ),
       paths,
       takenKeys,
+      keyCursor,
       criteria,
       criteriaSource,
     )
@@ -1158,6 +1192,7 @@ export async function runRound(
     ]
     if (typeof dispatch.keyIndex === 'number') {
       takenKeys = [...takenKeys, dispatch.keyIndex]
+      keyCursor = dispatch.keyIndex
     }
     // `queend` applies canStartAnother itself, so the loop ends when the policy
     // says so rather than on a count kept here - two places counting workers is

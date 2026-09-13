@@ -10,14 +10,12 @@ import {
 } from '../../src/api/services/queen-dispatch'
 import {
   createRoundGate,
+  latestProviderKeyIndex,
   refillOnBeeCompletion,
   runRound,
 } from '../../src/api/services/queen-tick'
 import { logger } from '../../src/lib/logger'
-import {
-  queendPathEnvVar,
-  resolveQueendPath,
-} from '../__helpers__/queend-path'
+import { queendPathEnvVar, resolveQueendPath } from '../__helpers__/queend-path'
 
 /**
  * The round itself, driven against the real policy binary.
@@ -55,6 +53,26 @@ import {
 const BIN = resolveQueendPath()
 const QUEEND_ENV = queendPathEnvVar()
 const present = existsSync(BIN)
+
+describe('provider key cursor', () => {
+  it('resumes after the latest durable dispatch instead of key zero', () => {
+    expect(
+      latestProviderKeyIndex([
+        { key_index: 5, dispatched_at: '2026-09-13T08:00:00Z' },
+        { key_index: 1, dispatched_at: '2026-09-13T08:05:00Z' },
+        { key_index: null, dispatched_at: '2026-09-13T08:10:00Z' },
+      ]),
+    ).toBe(1)
+  })
+
+  it('ignores malformed rows rather than inventing a cursor', () => {
+    expect(
+      latestProviderKeyIndex([
+        { key_index: 'secret-shaped', dispatched_at: 'not-a-date' },
+      ]),
+    ).toBeUndefined()
+  })
+})
 
 /** Every provider credential dispatch consults, so no bee is ever really run. */
 const PROVIDER_KEYS = [

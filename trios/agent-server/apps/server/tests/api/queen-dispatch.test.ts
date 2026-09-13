@@ -10,6 +10,7 @@ import {
   committedFiles,
   configuredWorkerCapacity,
   configuredWorkerLanesPerCredential,
+  dispatchBee,
   drain,
   finishDispatch,
   missingProviderRefusal,
@@ -21,6 +22,14 @@ import {
   workspaceRoot,
 } from '../../src/api/services/queen-dispatch'
 import { logger } from '../../src/lib/logger'
+
+const GENERIC_WORKER_KEYS = [
+  'TRIOS_QUEEN_WORKER_API_KEY',
+  ...Array.from(
+    { length: 15 },
+    (_, index) => `TRIOS_QUEEN_WORKER_API_KEY_${index + 2}`,
+  ),
+]
 
 const KEYS = [
   'ZAI_API_KEY',
@@ -36,7 +45,11 @@ const KEYS = [
   // is not a tidiness problem: it survives into the next FILE and makes a
   // "nothing is connected" case read one connected credential.
   'OPENAI_API_KEY_2',
+  ...GENERIC_WORKER_KEYS,
+  'TRIOS_QUEEN_WORKER_PROVIDER',
+  'TRIOS_QUEEN_WORKER_BASE_URL',
   'TRIOS_QUEEN_WORKER_MODEL',
+  'TRIOS_QUEEN_WORKER_CONTEXT',
   'TRIOS_ZAI_CONCURRENCY_PER_KEY',
 ]
 
@@ -66,9 +79,16 @@ describe('queen dispatch precheck', () => {
 
   it('names every variable that would fix it, and who may set it', () => {
     const refusal = missingProviderRefusal()
-    for (const key of KEYS.filter((k) => k.endsWith('API_KEY'))) {
+    for (const key of [
+      'ZAI_API_KEY',
+      'ANTHROPIC_API_KEY',
+      'OPENROUTER_API_KEY',
+      'MOONSHOT_API_KEY',
+      'OPENAI_API_KEY',
+    ]) {
       expect(refusal).toContain(key)
     }
+    expect(refusal).not.toContain('TRIOS_QUEEN_WORKER_API_KEY')
     expect(refusal).toContain('operator')
   })
 
@@ -97,6 +117,127 @@ describe('queen dispatch precheck', () => {
 
   it('roots the checkout under the workspace volume, not the app directory', () => {
     expect(workspaceRoot()).toBe('/workspace/BrowserOS')
+  })
+
+  describe('configured OpenAI-compatible endpoint key pool', () => {
+    /**
+     * Production contract measured on 2026-09-13: Railway held seven named,
+     * non-empty generic worker-key variables with six distinct values, aimed
+     * at the ordinary Z.ai Model API. Capacity, selection, and the provider
+     * sent to /chat must all describe that same six-key pool. A duplicated
+     * value is one credential, and no key value may enter public telemetry.
+     */
+    it('connects six distinct credentials behind the four-worker policy ceiling', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+
+      const configured = ['a', 'b', 'c', 'c', 'd', 'e', 'f']
+      configured.forEach((value, index) => {
+        process.env[GENERIC_WORKER_KEYS[index]] = value
+      })
+
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 6,
+        lanesPerCredential: 1,
+        effectiveCapacity: 4,
+      })
+      const choices = Array.from({ length: 6 }, (_, occupied) =>
+        resolveWorkerProvider(Array.from({ length: occupied }, (_, i) => i)),
+      )
+      expect(choices.map((choice) => choice?.provider)).toEqual(
+        Array(6).fill('zai'),
+      )
+      expect(choices.map((choice) => choice?.keyIndex)).toEqual([
+        0, 1, 2, 3, 4, 5,
+      ])
+      expect(choices.map((choice) => choice?.keyCount)).toEqual(
+        Array(6).fill(6),
+      )
+      expect(resolveWorkerProvider([0, 1, 2, 3, 4, 5])?.exhausted).toBe(6)
+    })
+
+    it('continues after the last assigned key so all six participate across four-Bee waves', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+      ;['a', 'b', 'c', 'd', 'e', 'f'].forEach((value, index) => {
+        process.env[GENERIC_WORKER_KEYS[index]] = value
+      })
+
+      const wave = (after: number | undefined) => {
+        const selected: number[] = []
+        let cursor = after
+        for (let bee = 0; bee < 4; bee++) {
+          const choice = resolveWorkerProvider(selected, cursor)
+          expect(choice?.apiKey).toBeDefined()
+          selected.push(choice?.keyIndex ?? -1)
+          cursor = choice?.keyIndex
+        }
+        return { selected, cursor }
+      }
+
+      const first = wave(undefined)
+      const second = wave(first.cursor)
+      expect(first.selected).toEqual([0, 1, 2, 3])
+      expect(second.selected).toEqual([4, 5, 0, 1])
+    })
+
+    it('does not invent a credential for a remote endpoint with no API key', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+      // An explicit endpoint is authoritative. A legacy provider key must not
+      // silently bypass it and send the turn to a different API.
+      process.env.ZAI_API_KEY = 'legacy-key-for-another-route'
+
+      expect(resolveWorkerProvider()).toBeNull()
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 0,
+        lanesPerCredential: 1,
+        effectiveCapacity: 0,
+      })
+      expect(missingProviderRefusal()).toContain('TRIOS_QUEEN_WORKER_API_KEY')
+      expect(missingProviderRefusal()).not.toContain('ZAI_API_KEY')
+    })
+
+    it('names the generic endpoint variable when every configured key is busy', async () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY = 'a'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_2 = 'b'
+      const pool = {
+        query: async () => ({ rowCount: 1, rows: [] }),
+      } as unknown as Pool
+
+      const outcome = await dispatchBee(pool, 1308, 'brief', [], [0, 1])
+
+      expect(outcome.started).toBe(false)
+      expect(outcome.detail).toContain('TRIOS_QUEEN_WORKER_API_KEY_3')
+      expect(outcome.detail).not.toContain('ZAI_API_KEY_3')
+    })
+
+    it('keeps an explicitly local endpoint as one measured lane on any hostname', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'ollama'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'http://ollama:11434/v1'
+
+      expect(resolveWorkerProvider()?.provider).toBe('ollama')
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 1,
+        lanesPerCredential: 1,
+        effectiveCapacity: 1,
+      })
+    })
+
+    it('reports no capacity for an unsupported endpoint provider', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'not-a-provider'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://example.invalid/v1'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY = 'real-but-unroutable'
+
+      expect(resolveWorkerProvider()).toBeNull()
+      expect(workerCapacityBreakdown().effectiveCapacity).toBe(0)
+      expect(missingProviderRefusal()).toContain('TRIOS_QUEEN_WORKER_PROVIDER')
+    })
   })
 
   // Four bees on one key share one rate limit, so the swarm's real ceiling
@@ -1044,7 +1185,9 @@ describe('an existing worktree', () => {
       //
       // The first clause is still pinned exactly, so a reworded phrase is still
       // caught; the rest of the list is allowed to grow.
-      expect(prepared.detail.split('; ')[0]).toBe('reused an existing worktree (clean)')
+      expect(prepared.detail.split('; ')[0]).toBe(
+        'reused an existing worktree (clean)',
+      )
     } finally {
       restore()
     }

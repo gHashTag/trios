@@ -48,6 +48,10 @@
 import { Hono } from 'hono'
 import { Pool } from 'pg'
 import { logger } from '../../lib/logger'
+import {
+  type WorkerCapacityBreakdown,
+  workerCapacityBreakdown,
+} from '../services/queen-dispatch'
 import { queenLeaseDatabaseUrl } from '../services/queen-lease'
 
 interface QueryResult {
@@ -473,8 +477,7 @@ async function build(
         (lastTick.rows[0]?.decision as { refusal?: string } | undefined)
           ?.refusal ?? null,
       roundSeconds: Number(process.env.TRIOS_QUEEN_TICK_SECONDS ?? '0') || null,
-      workerKeys: providerKeyCount(),
-      workerLimit: 4,
+      ...boardWorkerCapacity(),
     },
   }
 }
@@ -505,31 +508,18 @@ export interface Pulse {
 }
 
 /**
- * How many provider keys this deployment holds. The COUNT, never a value.
- *
- * An empty string is not a key. A platform variable saved with an empty box
- * leaves the name behind, and counting the name would report a swarm that can
- * run four bees while three of them have nothing to authenticate with - the
- * same trap this repository's config file has been sitting in for months.
+ * Translate the allocator's closed capacity factorisation into the legacy
+ * board pulse names. The allocator remains the single authority for trimming,
+ * deduplication, configured-endpoint keys, lanes, and the compiled ceiling.
+ * This adapter exposes counts only; no secret or key suffix reaches the board.
  */
-export function providerKeyCount(
-  env: Record<string, string | undefined> = process.env,
-): number {
-  const names = [
-    'ZAI_API_KEY',
-    'ANTHROPIC_API_KEY',
-    'OPENROUTER_API_KEY',
-    'MOONSHOT_API_KEY',
-    'OPENAI_API_KEY',
-  ]
-  let found = 0
-  for (const name of names) {
-    if ((env[name] ?? '').length > 0) found++
-    for (let i = 2; i <= 16; i++) {
-      if ((env[name + '_' + i] ?? '').length > 0) found++
-    }
+export function boardWorkerCapacity(
+  breakdown: WorkerCapacityBreakdown = workerCapacityBreakdown(),
+): Pick<Pulse, 'workerKeys' | 'workerLimit'> {
+  return {
+    workerKeys: breakdown.connectedCredentials,
+    workerLimit: breakdown.effectiveCapacity,
   }
-  return found
 }
 
 /**

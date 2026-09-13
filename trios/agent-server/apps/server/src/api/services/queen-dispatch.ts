@@ -259,6 +259,10 @@ function workerLanesFor(provider: string): number {
   return provider === 'zai' ? configuredWorkerLanesPerCredential() : 1
 }
 
+// The compiled Queen policy currently admits at most four simultaneous Bees.
+// Capacity telemetry must not promise more until that policy changes too.
+const QUEEN_COMPILED_WORKER_LIMIT = 4
+
 /**
  * The closed, anonymous capacity breakdown every capacity number is made of
  * (#1308).
@@ -283,17 +287,27 @@ export interface WorkerCapacityBreakdown {
 }
 
 export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
-  // The local endpoint is one credential at one lane. Reporting the paid
-  // providers' numbers while dispatch actually runs on this one would make the
-  // capacity a dashboard shows and the ceiling dispatch allocates against two
-  // different stories about one configuration - the exact thing this function
-  // exists to prevent.
-  if (localWorkerBaseUrl()) {
-    const lanesPerCredential = workerLanesFor('ollama')
+  const endpoint = configuredWorkerBaseUrl()
+  if (endpoint) {
+    const genericKeys = keysFor(GENERIC_WORKER_KEY_ENV)
+    // An explicitly configured Ollama is one measured inference server even
+    // when it happens to have an access token. Multiple names for that token
+    // are not independent compute. A remote API, by contrast, gets exactly one
+    // conservative lane for every distinct credential.
+    const provider = configuredWorkerProvider()
+    const connectedCredentials = provider
+      ? provider === 'ollama'
+        ? 1
+        : genericKeys.length
+      : 0
+    const lanesPerCredential = 1
     return {
-      connectedCredentials: 1,
+      connectedCredentials,
       lanesPerCredential,
-      effectiveCapacity: lanesPerCredential,
+      effectiveCapacity: Math.min(
+        connectedCredentials * lanesPerCredential,
+        QUEEN_COMPILED_WORKER_LIMIT,
+      ),
     }
   }
   for (const candidate of WORKER_PROVIDERS) {
@@ -303,7 +317,10 @@ export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
       return {
         connectedCredentials: keys.length,
         lanesPerCredential,
-        effectiveCapacity: keys.length * lanesPerCredential,
+        effectiveCapacity: Math.min(
+          keys.length * lanesPerCredential,
+          QUEEN_COMPILED_WORKER_LIMIT,
+        ),
       }
     }
   }
@@ -330,8 +347,8 @@ export function configuredWorkerCapacity(): number {
 }
 
 /**
- * A worker endpoint this deployment can reach WITHOUT a subscription, named by
- * URL.
+ * A worker endpoint named by URL. It can be a keyless local Ollama or a remote
+ * OpenAI-compatible API backed by the generic worker-key pool.
  *
  * It is consulted before every paid candidate because setting it is an explicit
  * operator choice - "use this, not the key" - and unsetting it restores the
@@ -348,13 +365,19 @@ export function configuredWorkerCapacity(): number {
  */
 const DEFAULT_LOCAL_WORKER_MODEL = 'qwen3:1.7b'
 const DEFAULT_LOCAL_CONTEXT_WINDOW = 16_384
+const GENERIC_WORKER_KEY_ENV = 'TRIOS_QUEEN_WORKER_API_KEY'
+const CONFIGURED_ENDPOINT_PROVIDERS = new Set([
+  'ollama',
+  'openai-compatible',
+  'zai',
+])
 
-function localWorkerBaseUrl(): string | undefined {
+function configuredWorkerBaseUrl(): string | undefined {
   const raw = process.env.TRIOS_QUEEN_WORKER_BASE_URL
-  return raw && raw.trim() ? raw.trim().replace(/\/+$/, '') : undefined
+  return raw?.trim() ? raw.trim().replace(/\/+$/, '') : undefined
 }
 
-function localWorkerContextWindow(): number {
+function configuredWorkerContextWindow(): number {
   const parsed = Number(process.env.TRIOS_QUEEN_WORKER_CONTEXT)
   if (!Number.isInteger(parsed) || parsed < 2048) {
     return DEFAULT_LOCAL_CONTEXT_WINDOW
@@ -362,36 +385,93 @@ function localWorkerContextWindow(): number {
   return parsed
 }
 
-function localWorkerProvider(
+function configuredWorkerProvider(): string | null {
+  const provider = process.env.TRIOS_QUEEN_WORKER_PROVIDER?.trim() || 'ollama'
+  return CONFIGURED_ENDPOINT_PROVIDERS.has(provider) ? provider : null
+}
+
+/**
+ * Select the least-used available credential, scanning circularly after the
+ * last durable assignment. This preserves parallel spreading while ensuring
+ * a four-Bee policy can exercise a six-key pool across successive rounds.
+ */
+function availableKeyIndex(
+  occupancy: number[],
+  laneCount: number,
+  afterKeyIndex?: number,
+): number {
+  const leastBusy = Math.min(
+    ...occupancy.filter((busy) => busy < laneCount),
+    Number.POSITIVE_INFINITY,
+  )
+  if (!Number.isFinite(leastBusy)) return -1
+  const start =
+    typeof afterKeyIndex === 'number' && Number.isInteger(afterKeyIndex)
+      ? ((afterKeyIndex % occupancy.length) + occupancy.length + 1) %
+        occupancy.length
+      : 0
+  for (let offset = 0; offset < occupancy.length; offset++) {
+    const index = (start + offset) % occupancy.length
+    if (occupancy[index] === leastBusy) return index
+  }
+  return -1
+}
+
+function configuredEndpointProvider(
   override: string | undefined,
   takenKeyIndices: number[],
+  afterKeyIndex?: number,
 ): WorkerProvider | null {
-  const baseUrl = localWorkerBaseUrl()
+  const baseUrl = configuredWorkerBaseUrl()
   if (!baseUrl) return null
   const model = override || DEFAULT_LOCAL_WORKER_MODEL
-  // ONE lane, and that is a measurement rather than caution: the ollama this
-  // points at was proven to serve a single inference slot (n_ctx_slot equals
-  // the full OLLAMA_CONTEXT_LENGTH, and slot id 0 was the only id across 156
-  // log lines). Two simultaneous requests did not run in parallel - one waited
-  // ~57s in queue. A second lane would queue behind the first while reporting
-  // a parallelism the server cannot deliver. workerLanesFor already gives any
-  // non-zai provider exactly one; this states why it must stay that way here.
-  const laneCount = workerLanesFor('ollama')
-  const busy = takenKeyIndices.filter((taken) => taken === 0).length
-  if (busy >= laneCount) {
-    return { provider: 'ollama', model, exhausted: laneCount }
+  const provider = configuredWorkerProvider()
+  if (!provider) return null
+  const local = provider === 'ollama'
+  const keys = keysFor(GENERIC_WORKER_KEY_ENV)
+
+  if (local) {
+    // ONE lane, and that is a measurement rather than caution: the Ollama this
+    // points at was proven to serve a single inference slot. More token names
+    // cannot make the inference server parallel.
+    const busy = takenKeyIndices.filter((taken) => taken === 0).length
+    if (busy >= 1) return { provider: 'ollama', model, exhausted: 1 }
+    return {
+      provider: 'ollama',
+      model,
+      baseUrl,
+      // Ollama ignores the fallback; the SDK requires one to be present.
+      apiKey: keys[0] || 'local',
+      keyIndex: 0,
+      keyCount: 1,
+      laneIndex: busy,
+      laneCount: 1,
+      contextWindow: configuredWorkerContextWindow(),
+    }
+  }
+
+  // A remote endpoint is not local compute and cannot authenticate with a
+  // fabricated token. Refuse before worktree creation when no real key exists.
+  if (keys.length === 0) return null
+
+  const occupancy = keys.map(
+    (_, candidateIndex) =>
+      takenKeyIndices.filter((taken) => taken === candidateIndex).length,
+  )
+  const index = availableKeyIndex(occupancy, 1, afterKeyIndex)
+  if (index < 0) {
+    return { provider, model, exhausted: keys.length }
   }
   return {
-    provider: 'ollama',
+    provider,
     model,
     baseUrl,
-    // Ollama ignores the value; the SDK requires one to be present.
-    apiKey: process.env.TRIOS_QUEEN_WORKER_API_KEY || 'local',
-    keyIndex: 0,
-    keyCount: 1,
-    laneIndex: busy,
-    laneCount,
-    contextWindow: localWorkerContextWindow(),
+    apiKey: keys[index],
+    keyIndex: index,
+    keyCount: keys.length,
+    laneIndex: 0,
+    laneCount: 1,
+    contextWindow: configuredWorkerContextWindow(),
   }
 }
 
@@ -415,10 +495,15 @@ function localWorkerProvider(
  */
 export function resolveWorkerProvider(
   takenKeyIndices: number[] = [],
+  afterKeyIndex?: number,
 ): WorkerProvider | null {
   const override = process.env.TRIOS_QUEEN_WORKER_MODEL
-  const local = localWorkerProvider(override, takenKeyIndices)
-  if (local) return local
+  // An explicit endpoint is authoritative, including its refusal. Falling
+  // through when it has no key would silently send the bee to a different
+  // provider configured by a legacy variable.
+  if (configuredWorkerBaseUrl()) {
+    return configuredEndpointProvider(override, takenKeyIndices, afterKeyIndex)
+  }
   for (const candidate of WORKER_PROVIDERS) {
     const keys = keysFor(candidate.envVar)
     if (keys.length > 0) {
@@ -426,19 +511,7 @@ export function resolveWorkerProvider(
       const occupancy = keys.map(
         (_, index) => takenKeyIndices.filter((taken) => taken === index).length,
       )
-      let index = -1
-      let leastBusy = Number.POSITIVE_INFINITY
-      for (
-        let candidateIndex = 0;
-        candidateIndex < keys.length;
-        candidateIndex++
-      ) {
-        const busy = occupancy[candidateIndex]
-        if (busy < laneCount && busy < leastBusy) {
-          index = candidateIndex
-          leastBusy = busy
-        }
-      }
+      const index = availableKeyIndex(occupancy, laneCount, afterKeyIndex)
       // Every lane busy. Reusing one again would be the quiet version of this
       // problem, so report the actual logical capacity reached.
       if (index < 0) {
@@ -492,9 +565,21 @@ export function resolveWorkerProvider(
 
 /** One line naming what is missing, and who can supply it. */
 export function missingProviderRefusal(): string {
+  const endpoint = configuredWorkerBaseUrl()
+  const provider = configuredWorkerProvider()
+  const variables = endpoint
+    ? [GENERIC_WORKER_KEY_ENV]
+    : WORKER_PROVIDERS.map((candidate) => candidate.envVar)
+  const providerHint =
+    endpoint && !provider
+      ? ` and set TRIOS_QUEEN_WORKER_PROVIDER to one of ${[
+          ...CONFIGURED_ENDPOINT_PROVIDERS,
+        ].join(', ')}`
+      : ''
   return (
     'no provider credential in this deployment - set one of ' +
-    WORKER_PROVIDERS.map((p) => p.envVar).join(', ') +
+    variables.join(', ') +
+    providerHint +
     '. Only the operator can: a key typed by anything else is a key that ' +
     'passed through a place it should not have.'
   )
@@ -2084,6 +2169,7 @@ export async function dispatchBee(
   brief: string,
   ownedPaths: string[],
   takenKeyIndices: number[] = [],
+  afterKeyIndex?: number,
   /**
    * What this bee will be judged by, recorded WITH the dispatch.
    *
@@ -2097,16 +2183,22 @@ export async function dispatchBee(
 ): Promise<DispatchOutcome> {
   const branch = `queen-${issue}`
 
-  const chosen = resolveWorkerProvider(takenKeyIndices)
+  const chosen = resolveWorkerProvider(takenKeyIndices, afterKeyIndex)
   if (chosen?.exhausted !== undefined) {
     // Not a missing credential: every key this deployment has is already
     // carrying a bee. Named separately because the fix is different - one more
     // key, not a first one.
+    const keyVariable = configuredWorkerBaseUrl()
+      ? GENERIC_WORKER_KEY_ENV
+      : WORKER_PROVIDERS.find(
+          (candidate) => candidate.provider === chosen.provider,
+        )?.envVar
+    const nextKey = keyVariable
+      ? `${keyVariable}_${chosen.exhausted + 1}`
+      : 'the matching provider variable'
     const detail =
       `all ${chosen.exhausted} provider key(s) are already in use by bees in ` +
-      'flight. Add another with ZAI_API_KEY_' +
-      String(chosen.exhausted + 1) +
-      ' (or the equivalent for your provider) to widen the swarm.'
+      `flight. Add another with ${nextKey} to widen the swarm.`
     logger.warn('Queen tick chose an issue but every key is busy', {
       issue,
       detail,

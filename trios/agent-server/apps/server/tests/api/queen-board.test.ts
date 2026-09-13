@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  boardWorkerCapacity,
   composeCards,
   createQueenKanbanRoute,
   publicBoardProjection,
@@ -68,6 +69,18 @@ const present = existsSync(BIN)
 
 const HOUR = 3600_000
 const NOW = Date.parse('2026-08-31T12:00:00Z')
+
+describe('board worker capacity', () => {
+  it('shows connected credentials separately from the effective policy ceiling', () => {
+    expect(
+      boardWorkerCapacity({
+        connectedCredentials: 6,
+        lanesPerCredential: 1,
+        effectiveCapacity: 4,
+      }),
+    ).toEqual({ workerKeys: 6, workerLimit: 4 })
+  })
+})
 
 /**
  * An instant as second-precision ISO 8601 - `2026-08-31T12:00:00Z`, not
