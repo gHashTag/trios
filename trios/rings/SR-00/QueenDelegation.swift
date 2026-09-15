@@ -467,22 +467,25 @@ public enum QueenDelegationPolicy {
     ///
     /// Bounded because every running worker costs the Queen context on every
     /// review, and because merge conflicts scale with concurrency.
+    /// Read from the environment, because this number exists TWICE and the two
+    /// copies must not drift.
     ///
-    /// The second of those two reasons no longer holds the way it did. Every
-    /// task now declares a `## Boundary` and owns the files in it alone, and the
-    /// publishing side refuses a branch that wrote outside its own - measured
-    /// 2026-09-15, that check caught 14 of 48 branches carrying a neighbour's
-    /// commit. Conflicts between bees are prevented by construction rather than
-    /// by keeping the swarm small.
+    /// The other is QUEEN_COMPILED_WORKER_LIMIT in queen-dispatch.ts, which
+    /// reports capacity. They drifted the first time this was raised: the
+    /// TypeScript side was changed, the image rebuilt, and the swarm reported
+    /// `capacity: 12` while every tick refused with "4 workers already running
+    /// (limit 4)" - telemetry promising more than the policy allows, which
+    /// sends an operator hunting a bug in dispatch. The cause was that the
+    /// policy is compiled from THIS file while an identical copy lives at
+    /// trios/rings/SR-00/QueenDelegation.swift, and the edit went to that one.
     ///
-    /// The first reason is real and is why this stays BOUNDED rather than
-    /// becoming unlimited: review cost is linear in running workers, and a typo
-    /// must not be able to turn a credential pool into an unbounded fan-out.
+    /// Both sides now read one variable with one default and one ceiling, so
+    /// the only way to raise the swarm is to raise it for both at once.
     ///
-    /// Read from the environment so this policy and the TypeScript capacity
-    /// telemetry that mirrors it cannot disagree - they read the same variable,
-    /// with the same default and the same ceiling. A number compiled into two
-    /// places is a number that eventually differs in one of them.
+    /// Bounded, not unlimited: review cost is linear in running workers. The
+    /// other original reason - "merge conflicts scale with concurrency" - no
+    /// longer holds, because every task declares a `## Boundary` and owns those
+    /// files alone, and publishing refuses a branch that wrote outside its own.
     public static var maximumConcurrentWorkers: Int {
         let raw = ProcessInfo.processInfo.environment["TRIOS_QUEEN_MAX_WORKERS"]
         guard let raw, let parsed = Int(raw), parsed >= 1 else { return 4 }
