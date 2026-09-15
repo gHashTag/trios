@@ -50,6 +50,7 @@ import {
   createQueenKanbanRoute,
   createQueenPublicBoardRoute,
 } from './routes/queen-kanban'
+import { createQueenExportRoute } from './routes/queen-export'
 import { createQueenLeaseRoute } from './routes/queen-lease'
 import { createQueenNeedsYouRoute } from './routes/queen-needs-you'
 import { createQueenPublicActivityRoute } from './routes/queen-public-activity'
@@ -268,6 +269,13 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenLeaseRoute())
 
+  // Guarded like the lease, and for a stronger reason: it hands out the
+  // contents of work in progress. It holds no credential and cannot publish -
+  // the push happens outside, by whoever has the token.
+  const queenExportRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenExportRoute())
+
   const queenRegistryRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenRegistryRoute())
@@ -398,6 +406,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/feed', createQueenFeedRoute())
     .route('/queen/feed/data', queenFeedDataRoutes)
     .route('/queen/lease', queenLeaseRoutes)
+    .route('/queen/export', queenExportRoutes)
     .route('/queen/rehearsal', queenRehearsalRoutes)
     .use('/shutdown/*', requireTrustedAppOrigin())
     .route(
