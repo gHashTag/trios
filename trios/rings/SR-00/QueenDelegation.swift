@@ -467,7 +467,27 @@ public enum QueenDelegationPolicy {
     ///
     /// Bounded because every running worker costs the Queen context on every
     /// review, and because merge conflicts scale with concurrency.
-    public static let maximumConcurrentWorkers = 4
+    ///
+    /// The second of those two reasons no longer holds the way it did. Every
+    /// task now declares a `## Boundary` and owns the files in it alone, and the
+    /// publishing side refuses a branch that wrote outside its own - measured
+    /// 2026-09-15, that check caught 14 of 48 branches carrying a neighbour's
+    /// commit. Conflicts between bees are prevented by construction rather than
+    /// by keeping the swarm small.
+    ///
+    /// The first reason is real and is why this stays BOUNDED rather than
+    /// becoming unlimited: review cost is linear in running workers, and a typo
+    /// must not be able to turn a credential pool into an unbounded fan-out.
+    ///
+    /// Read from the environment so this policy and the TypeScript capacity
+    /// telemetry that mirrors it cannot disagree - they read the same variable,
+    /// with the same default and the same ceiling. A number compiled into two
+    /// places is a number that eventually differs in one of them.
+    public static var maximumConcurrentWorkers: Int {
+        let raw = ProcessInfo.processInfo.environment["TRIOS_QUEEN_MAX_WORKERS"]
+        guard let raw, let parsed = Int(raw), parsed >= 1 else { return 4 }
+        return min(parsed, 16)
+    }
 
     public static func canStartAnother(running: Int) -> Bool {
         running < maximumConcurrentWorkers

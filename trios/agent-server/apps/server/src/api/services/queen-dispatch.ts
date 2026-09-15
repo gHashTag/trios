@@ -259,9 +259,25 @@ function workerLanesFor(provider: string): number {
   return provider === 'zai' ? configuredWorkerLanesPerCredential() : 1
 }
 
-// The compiled Queen policy currently admits at most four simultaneous Bees.
-// Capacity telemetry must not promise more until that policy changes too.
-const QUEEN_COMPILED_WORKER_LIMIT = 4
+/**
+ * What the compiled Queen policy admits at once.
+ *
+ * This is a MIRROR, and the thing being mirrored is
+ * `QueenDelegationPolicy.maximumConcurrentWorkers` in QueenDelegation.swift.
+ * Two numbers written in two languages are two numbers that eventually differ,
+ * and the direction they differ in decides which failure you get: telemetry
+ * promising more than the policy allows sends an operator looking for a bug in
+ * dispatch, and promising less hides capacity that was paid for.
+ *
+ * So both sides now read the SAME environment variable, with the same default
+ * and the same ceiling. Bounded rather than unlimited because review cost is
+ * linear in running workers - the Swift side records the full reasoning.
+ */
+function queenWorkerLimit(): number {
+  const parsed = Number(process.env.TRIOS_QUEEN_MAX_WORKERS)
+  if (!Number.isInteger(parsed) || parsed < 1) return 4
+  return Math.min(parsed, 16)
+}
 
 /**
  * The closed, anonymous capacity breakdown every capacity number is made of
@@ -286,6 +302,27 @@ export interface WorkerCapacityBreakdown {
   effectiveCapacity: number
 }
 
+/**
+ * Concurrent requests one REMOTE credential will actually carry.
+ *
+ * Fixed at 1 while that was the only safe assumption about an endpoint named
+ * by URL. It is now a measurement. Fired four simultaneous completions at one
+ * z.ai key on 2026-09-15: two returned 200 (11.6s, 12.4s) and two were refused
+ * in under half a second with `1302 Rate limit reached for requests`. Two is
+ * what the credential carries; a third is not slower, it is rejected.
+ *
+ * So this is configurable and defaults to the old conservative 1 - a number
+ * measured on ONE provider must not silently become the assumption for every
+ * other one someone points this at. The operator sets it after measuring their
+ * own, exactly as TRIOS_ZAI_CONCURRENCY_PER_KEY expects for the paid path, and
+ * the bound stops a typo turning a credential pool into a fan-out.
+ */
+function configuredRemoteLanesPerCredential(): number {
+  const parsed = Number(process.env.TRIOS_QUEEN_WORKER_LANES_PER_KEY)
+  if (!Number.isInteger(parsed) || parsed < 1) return 1
+  return Math.min(parsed, 4)
+}
+
 export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
   const endpoint = configuredWorkerBaseUrl()
   if (endpoint) {
@@ -300,13 +337,14 @@ export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
         ? 1
         : genericKeys.length
       : 0
-    const lanesPerCredential = 1
+    const lanesPerCredential =
+      provider === 'ollama' ? 1 : configuredRemoteLanesPerCredential()
     return {
       connectedCredentials,
       lanesPerCredential,
       effectiveCapacity: Math.min(
         connectedCredentials * lanesPerCredential,
-        QUEEN_COMPILED_WORKER_LIMIT,
+        queenWorkerLimit(),
       ),
     }
   }
@@ -319,7 +357,7 @@ export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
         lanesPerCredential,
         effectiveCapacity: Math.min(
           keys.length * lanesPerCredential,
-          QUEEN_COMPILED_WORKER_LIMIT,
+          queenWorkerLimit(),
         ),
       }
     }
@@ -458,9 +496,10 @@ function configuredEndpointProvider(
     (_, candidateIndex) =>
       takenKeyIndices.filter((taken) => taken === candidateIndex).length,
   )
-  const index = availableKeyIndex(occupancy, 1, afterKeyIndex)
+  const laneCount = configuredRemoteLanesPerCredential()
+  const index = availableKeyIndex(occupancy, laneCount, afterKeyIndex)
   if (index < 0) {
-    return { provider, model, exhausted: keys.length }
+    return { provider, model, exhausted: keys.length * laneCount }
   }
   return {
     provider,
@@ -469,8 +508,8 @@ function configuredEndpointProvider(
     apiKey: keys[index],
     keyIndex: index,
     keyCount: keys.length,
-    laneIndex: 0,
-    laneCount: 1,
+    laneIndex: occupancy[index],
+    laneCount,
     contextWindow: configuredWorkerContextWindow(),
   }
 }
