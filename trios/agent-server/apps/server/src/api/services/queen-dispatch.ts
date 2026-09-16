@@ -934,17 +934,47 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
         # one of those is how a review queue stops moving, and this swarm has
         # already spent a night stopped. So measure the base too, and say which
         # of the two this is.
+        # Does this branch fail to COMPILE, or does it compile and fail when
+        # RUN? --test-no-exec builds the test binary without running it, and
+        # the difference decides who is responsible. 21 specs in this corpus
+        # compile and then panic on an unimplemented body; judged with plain
+        # zig test their base always "fails", so a bee could break compilation
+        # on any of them and be told the breakage was pre-existing. Measured on
+        # fifo_tb, which did exactly that.
+        branch_compiles=0
+        compile_out="$(cd "$mine" && "$zigbin" test --test-no-exec _witness.zig 2>&1)" && branch_compiles=1
+        # Report the COMPILE error when there is one. The run output leads with
+        # "test command terminated with signal ABRT", which names the symptom
+        # of a panicking test and says nothing about the syntax error that
+        # stopped the build -- a blocking verdict has to say what to fix.
+        if [ "$branch_compiles" = 0 ]; then
+          where="$(printf '%s' "$compile_out" | grep -m1 -oE '[^ :]+\.zig:[0-9]+' | cut -d: -f1)"
+          [ -n "$where" ] || where='?'
+          why="$(printf '%s' "$compile_out" | grep -m1 'error:' | sed 's/.*error: //' | cut -c1-160)"
+        fi
+        # Paths come back absolute because the tree lives under a mktemp dir,
+        # and an operator reading a verdict needs the path in the corpus.
+        where="$(printf '%s' "$where" | sed -e "s|^$mine/||" -e 's|^.*/tree/||')"
+
         basebroke=1
+        base_compiles=0
         rm -f "$mirror"
         if git show "$base:$file" > "$mirror" 2>/dev/null; then
           rm -f "$mine/$rel"
-          if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null \
-             && [ -s "$mine/$rel" ] \
-             && (cd "$mine" && "$zigbin" test _witness.zig > /dev/null 2>&1); then
-            basebroke=0
+          if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
+            (cd "$mine" && "$zigbin" test --test-no-exec _witness.zig > /dev/null 2>&1) && base_compiles=1
+            (cd "$mine" && "$zigbin" test _witness.zig > /dev/null 2>&1) && basebroke=0
           fi
         fi
-        if [ "$basebroke" = 0 ]; then
+        # Held against the bee when the base compiled and this does not, or
+        # when both compile and the base's tests passed while these do not.
+        regressed=1
+        if [ "$base_compiles" = 1 ] && [ "$branch_compiles" = 0 ]; then
+          regressed=0
+        elif [ "$basebroke" = 0 ]; then
+          regressed=0
+        fi
+        if [ "$regressed" = 0 ]; then
           echo "W oracle fail [$where] $why"
         else
           echo "W oracle pre-broken [$where] $why"
