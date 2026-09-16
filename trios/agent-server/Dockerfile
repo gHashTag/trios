@@ -82,7 +82,7 @@ WORKDIR /src
 RUN git clone --depth 1 --filter=blob:none --sparse --branch "${T27_REF}" \
         https://github.com/gHashTag/t27.git t27 \
  && cd t27 \
- && git sparse-checkout set bootstrap gen \
+ && git sparse-checkout set bootstrap gen specs \
  && git rev-parse HEAD > /src/REF \
  && echo "t27c built from gHashTag/t27@$(cat /src/REF) (ref ${T27_REF})"
 # Standalone: the root Cargo.toml names workspace members the sparse checkout
@@ -92,6 +92,22 @@ RUN cp -r t27/bootstrap /build && cp t27/Cargo.lock /build/Cargo.lock \
  && cd /build && cargo build --release \
  && strip /build/target/release/t27c \
  && /build/target/release/t27c --version
+
+# The oracle's dependency tree, generated HERE because this is the stage that
+# holds the corpus. The runtime stage's own specs/ is the agent server's, sixty
+# files; the 946 the oracle measures live in gHashTag/t27 and arrive only in
+# this sparse checkout. Baking it from the runtime stage produced a 60-file
+# tree, and a tree missing a spec's imports fails it with FileNotFound --
+# indistinguishable, from the outside, from the spec being broken.
+RUN set -e; \
+    mkdir -p /oracle-tree; \
+    cd /src/t27; \
+    find specs -name '*.t27' | while read -r f; do \
+      d="/oracle-tree/$(printf '%s' "$f" | sed -e 's|^specs/||' -e 's|\.t27$|.zig|')"; \
+      mkdir -p "$(dirname "$d")"; \
+      /build/target/release/t27c gen "$f" > "$d" 2>/dev/null || rm -f "$d"; \
+    done; \
+    echo "oracle tree: $(find /oracle-tree -name '*.zig' | wc -l) generated"
 
 # The oracle's compiler.
 #
@@ -240,28 +256,19 @@ RUN /usr/local/bin/t27c --version && echo "t27c from gHashTag/t27@$(cat /usr/loc
 COPY --from=zig /opt/zig /opt/zig
 RUN ln -s /opt/zig/zig /usr/local/bin/zig && zig version
 
-# The oracle's dependency tree, generated ONCE here rather than on the first
-# review.
+# The oracle's dependency tree, built in the t27c stage from the real corpus.
 #
 # A generated file imports its neighbours by a path relative to where the SPEC
 # sits, so the Zig has to mirror specs/ for anything to resolve. Building that
-# mirror is ~950 t27c invocations; on a 2 vCPU container that is minutes, and
-# the witness is killed at 120s -- on timeout its script exits non-zero and the
-# review records `parses: false`, which is a spec being failed for a defect it
-# does not have. Baking it makes the per-review cost a hardlink copy.
+# mirror is ~950 t27c runs; on a 2 vCPU container that is minutes, and the
+# witness is killed at 120s -- on timeout its script exits non-zero and the
+# review records `parses: false`, which is a spec failed for a defect it does
+# not have. Baking it makes the per-review cost a hardlink copy.
 #
-# The tree holds the dependencies, never the verdict: the reviewed file is
+# The tree holds the DEPENDENCIES, never the verdict: the reviewed file is
 # always regenerated from the bee's own commit before anything is compiled.
-# Failures here are not fatal -- a spec that will not generate simply has no
-# .zig in the tree, exactly as it has none today.
-RUN set -e; \
-    mkdir -p /usr/local/share/t27-oracle-tree; \
-    find specs -name '*.t27' | while read -r f; do \
-      d="/usr/local/share/t27-oracle-tree/$(printf '%s' "$f" | sed -e 's|^specs/||' -e 's|\.t27$|.zig|')"; \
-      mkdir -p "$(dirname "$d")"; \
-      /usr/local/bin/t27c gen "$f" > "$d" 2>/dev/null || rm -f "$d"; \
-    done; \
-    echo "oracle tree: $(find /usr/local/share/t27-oracle-tree -name '*.zig' | wc -l) generated"
+COPY --from=t27c /oracle-tree /usr/local/share/t27-oracle-tree
+RUN echo "oracle tree: $(find /usr/local/share/t27-oracle-tree -name '*.zig' | wc -l) specs"
 
 # Bind wide, because the platform routes to this container from outside and a
 # server on loopback accepts nothing while looking perfectly healthy from
