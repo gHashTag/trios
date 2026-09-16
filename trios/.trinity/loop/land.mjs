@@ -50,6 +50,13 @@ export const BASE = process.env.LAND_BASE || 'feat/queen-supervisor'
 const BATCH = Number(process.env.LAND_BATCH ?? 5)
 const isMain = process.argv[1] && process.argv[1].endsWith('/land.mjs')
 
+/*
+ * Shell-quote. JSON.stringify is NOT a shell escape: it emits double quotes, in
+ * which backticks, $ and \ all keep their meaning. Single quotes are the only
+ * form the shell leaves entirely alone.
+ */
+const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`
+
 const sh = (c, opts = {}) => {
   try {
     return execSync(c, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], timeout: 120000, ...opts }).trim()
@@ -435,13 +442,68 @@ if (isMain) {
   let landed = 0
   for (const r of batch.filter((x) => x.clean)) {
     const title = sh(`gh issue view ${r.issue} --repo ${REPO} --json title -q .title`) || `queen work for #${r.issue}`
-    const body = `Work the Queen accepted on \`${r.branch}\`, closed as gHashTag/trios#${r.issue}, and never merged.\n\n` +
-      `Measured 2026-09-04: 174 \`queen-*\` branches on the remote and FIVE contained in \`${BASE}\`. ` +
+    /*
+     * THE BODY WAS BEING EATEN BY THE SHELL, AND NAMED THE WRONG REPOSITORY.
+     *
+     * Two defects measured on PR #3868 (2026-09-16), both visible in the
+     * workflow's own echo of PR_BODY:
+     *
+     *   "Work the Queen accepted on , closed as gHashTag/trios#3829"
+     *                              ^^ the branch name is gone
+     *
+     * 1. JSON.stringify yields a DOUBLE-quoted string, and this body contained
+     *    backticks. Passed through a shell, `queen-3829` is command
+     *    substitution: the shell ran the branch name as a command, it printed
+     *    nothing, and the empty output replaced it. Every backticked span in
+     *    every PR body opened by this tool was silently deleted -- and worse,
+     *    an arbitrary branch name was being EXECUTED. So: no backticks, and
+     *    single-quote escaping for everything handed to the shell.
+     *
+     * 2. The reference was hard-coded to gHashTag/trios while the issues now
+     *    live in the repo named by TRIOS_ISSUE_REPO. A cross-repo reference is
+     *    not a link the L1 TRACEABILITY gate accepts, so check-linked-issue --
+     *    one of the five REQUIRED checks on master -- failed on every PR this
+     *    tool opened, for a repository name rather than for anything in the code.
+     */
+    const closes = REPO === CODE_REPO ? `Closes #${r.issue}` : `Closes ${REPO}#${r.issue}`
+    const body = `${closes}\n\n` +
+      `Work the Queen accepted on ${r.branch}, closed as ${REPO}#${r.issue}, and never merged.\n\n` +
+      `Measured 2026-09-04: 174 queen-* branches on the remote and FIVE contained in ${BASE}. ` +
       `The other 169 all carry a real diff. A closed issue whose code is not in the branch is a false ` +
       `statement about the repository, and the loop had been making 169 of them.\n\n` +
-      `Merges cleanly against the current base, checked with \`git merge-tree\` before this PR was opened.`
-    const url = sh(`gh pr create --repo ${CODE_REPO} --base ${BASE} --head ${r.branch} --title ${JSON.stringify(`${title}`.slice(0, 90))} --body ${JSON.stringify(body)}`)
-    if (!url) { console.log(`  could not open a PR for ${r.branch}`); continue }
+      `Merges cleanly against the current base, checked with git merge-tree before this PR was opened.`
+    /*
+     * AN OPEN PULL REQUEST IS NOT A FAILURE TO OPEN ONE.
+     *
+     * `gh pr create` exits non-zero when a PR for this head already exists, and
+     * sh() swallows the message, so every such branch was reported as "could
+     * not open a PR" -- a sentence that names the wrong cause and offers no way
+     * to the right one. Measured 2026-09-16: 25 consecutive batches landed 0 of
+     * 5 while the landable count stood at 106, because the first PRs had
+     * already been opened by an earlier run that then failed to merge them.
+     *
+     * So: create, and if that fails, ASK whether one is already open before
+     * concluding anything. Only a head with no open PR at all is a real
+     * failure, and then the gh error itself is printed rather than a paraphrase.
+     */
+    let url = sh(`gh pr create --repo ${CODE_REPO} --base ${BASE} --head ${r.branch} --title ${shq(String(title).slice(0, 90))} --body ${shq(body)}`)
+    let reused = false
+    if (!url) {
+      const existing = sh(`gh pr list --repo ${CODE_REPO} --head ${r.branch} --base ${BASE} --state open --json url -q '.[0].url'`)
+      if (existing) { url = existing; reused = true }
+    }
+    if (!url) {
+      const why = sh(`gh pr create --repo ${CODE_REPO} --base ${BASE} --head ${r.branch} --title ${shq(String(title).slice(0, 90))} --body ${shq(body)} 2>&1 || true`, { stdio: ['ignore', 'pipe', 'pipe'] })
+      console.log(`  no PR for ${r.branch} and none could be opened: ${(why || 'gh said nothing').split('\n')[0]}`)
+      continue
+    }
+    if (reused) {
+      // An already-open PR carries the OLD, shell-eaten body with the wrong
+      // repository in its issue reference. Rewrite it, or check-linked-issue
+      // stays red on a PR whose code was never the problem.
+      sh(`gh pr edit ${url} --repo ${CODE_REPO} --body ${shq(body)}`)
+      console.log(`  reusing already-open ${url} for ${r.branch} (body corrected)`)
+    }
     const num = (url.match(/\/(\d+)$/) || [])[1]
     // No --delete-branch: the branch is the evidence that the work happened.
     const merged = sh(`gh pr merge ${num} --repo ${CODE_REPO} --squash --admin`)
