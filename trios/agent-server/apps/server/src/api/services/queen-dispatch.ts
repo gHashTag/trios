@@ -760,6 +760,8 @@ export interface SpecWitness {
   discardedTokens: number
   /** Occurrences of the literal `TODO: Implement` stub marker. */
   stubMarkers: number
+  /** Bodies the codegen refused to lower: a signature with nothing in it. */
+  emptyBodies: number
   /** `t27c typecheck` exited 0 on the committed file. */
   typechecks: boolean
   /** The same, on the base ref's version of the file; null when it is new. */
@@ -808,6 +810,16 @@ else
 fi
 "$t27c" parse-complete --specs-dir "$tmp/specs" 2>&1 | grep -E 'consume all|TRUNCATE|DISCARD|do not parse' | sed 's/^ */W pc /'
 echo "W todo $(grep -c 'TODO: Implement' "$spec" || true)"
+# EMPTINESS BY THE CODEGEN, because the marker above is blind to most of it.
+# Much of the corpus writes '// TODO: Implement from .tri spec' in a body it
+# never wrote, and the grep finds those. But four of the capability specs write
+# '// Implementation: ...' instead, and 198 files hold 854 bodies that contain
+# only a comment of some shape - on every one of those the marker count is 0 and
+# the file reads as finished. The codegen cannot be fooled that way: a body with
+# no statement lowers to 'not yet implemented' whatever the comment says.
+# Measured on all six capability specs, this count equalled a brace-matching
+# empty-body detector exactly: 13/19/33/21/3/7.
+echo "W empty $("$t27c" gen "$spec" 2>&1 | grep -c 'not yet implemented' || true)"
 if "$t27c" typecheck "$spec" > /dev/null 2>&1; then echo 'W typecheck ok'; else echo 'W typecheck fail'; fi
 if git show "$base:$file" > "$tmp/base.t27" 2>/dev/null; then
   if "$t27c" typecheck "$tmp/base.t27" > /dev/null 2>&1; then echo 'W base ok'; else echo 'W base fail'; fi
@@ -828,6 +840,7 @@ export function readWitnessLines(file: string, out: string): SpecWitness {
     complete: false,
     discardedTokens: 0,
     stubMarkers: 0,
+    emptyBodies: 0,
     typechecks: false,
     baseTypechecks: null,
     error: '',
@@ -845,7 +858,10 @@ export function readWitnessLines(file: string, out: string): SpecWitness {
       w.present = false
       return w
     }
-    if (body === 'parse ok') w.parses = true
+    if (body.startsWith('empty ')) {
+      const n = Number(body.slice('empty '.length).trim())
+      if (Number.isInteger(n)) w.emptyBodies = n
+    } else if (body === 'parse ok') w.parses = true
     else if (body.startsWith('parse fail')) {
       w.parses = false
       w.error = body.slice('parse fail'.length).trim()
@@ -958,6 +974,12 @@ export function witnessVerdicts(
       met: s.stubMarkers === 0,
     })
     const regressed = !s.typechecks && s.baseTypechecks !== false
+    lines.push({
+      criterion: `t27c: ${s.file} has no empty function body${
+        s.emptyBodies > 0 ? ` (${s.emptyBodies} left)` : ''
+      }`,
+      met: s.emptyBodies === 0,
+    })
     lines.push({
       criterion: `t27c: ${s.file} typecheck does not regress${
         regressed

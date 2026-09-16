@@ -1846,11 +1846,34 @@ export async function reviewFinishedDispatches(
     // Taken only once the bee has judged anything: a bee with no verdict block
     // is the torn-transcript case, and a compiler's yes must not stand in for
     // the answers the bee never wrote.
+    // THE COMPILER MAY REFUSE WORK THE BEE DID NOT DEFEND. IT MAY NOT PASS IT.
+    //
+    // The rule above this was: witness only once the bee has judged something,
+    // because "a compiler's yes must not stand in for the answers the bee never
+    // wrote". That reasoning is kept whole - and it is one-directional. A yes
+    // stands in for an answer; a NO stands in for nothing. If the branch left
+    // 21 function bodies empty, no verdict block the bee might have written
+    // would have made that untrue.
+    //
+    // What it costs to keep waiting instead: a finished-but-unjudged dispatch
+    // holds its file boundary for reviewBoundaryHoldHours (48), and the
+    // frozen-wait valve only releases it after six. Measured 2026-09-16: 50
+    // dispatches claimed, 11 more refused for fileConflict behind them, and the
+    // swarm idle at 2 of 10 lanes with work it could not reach. Every one of
+    // those waits was for an answer that was never coming - the model in use
+    // writes a verdict block in about 1 turn in 400.
+    //
+    // So: measure either way, and use the measurement only to fail. When the
+    // bee said nothing and the compiler finds nothing wrong, this still reads
+    // `wait` exactly as before, because that is the case the original rule was
+    // written for.
     const witness: Witness | null =
-      verdicts.length > 0
+      verdicts.length > 0 || files.some((f) => f.endsWith('.t27'))
         ? await witnessSpecs(row.issue as number, files)
         : null
-    const machine = witness ? witnessVerdicts(witness) : []
+    const machineAll = witness ? witnessVerdicts(witness) : []
+    const machine =
+      verdicts.length > 0 ? machineAll : machineAll.filter((v) => !v.met)
     const machineFailed = machine.filter((v) => !v.met).map((v) => v.criterion)
     const specCount = files.filter((f) => f.endsWith('.t27')).length
     const questioned =
@@ -1860,7 +1883,30 @@ export async function reviewFinishedDispatches(
             ...unjudged.map((criterion) => ({ criterion, met: false })),
             ...machine,
           ]
-        : verdicts.map((v) => ({ criterion: v.criterion, met: v.met }))
+        : machine.length === 0
+          ? // Silent bee, nothing measurably wrong: unchanged. queend sees an
+            // empty list, answers wait, and the frozen-wait valve handles it
+            // exactly as before. This is the case the original rule protects.
+            []
+          : // Silent bee AND the compiler proved a fault. The policy will not
+            // decide on a partial set - `verdicts.count >= totalCriteria` or it
+            // waits - so a lone proven failure would sit for 48 hours beside
+            // the criteria nobody looked at.
+            //
+            // Those criteria are not unknown, they are UNVERIFIED, and this
+            // codebase already rules on that: "`could-not-check` counts as
+            // UNMET. A criterion nobody verified has not been satisfied, and
+            // treating 'I could not tell' as 'yes' is how work closes on
+            // faith." Counting them unmet is that rule applied, not a new one.
+            //
+            // Nothing is passed on faith here. The verdict this produces can
+            // only be a send-back or an escalation: every line in the set is a
+            // failure, so `unmet.isEmpty` is never true and the accept branch
+            // is unreachable by construction.
+            [
+              ...machine,
+              ...promised.map((criterion) => ({ criterion, met: false })),
+            ]
     // No compiler on this image while the branch changed specs: nothing was
     // measured, so nothing is accepted. This asks a PERSON rather than waiting,
     // because a wait here would never resolve on its own - the frozen-wait
