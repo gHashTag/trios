@@ -248,6 +248,24 @@ function githubReadHeaders(): Record<string, string> {
   return headers
 }
 
+/**
+ * One word for what the oracle said about a review, for the log line.
+ *
+ * Without it the only way to know whether `zig test` ran in production was to
+ * read the criterion text, and nothing logs or exposes that: a gate nobody can
+ * observe is indistinguishable from one that is not running. Distinguishing
+ * `not measured` from `pass` is the whole point -- an unmeasured spec must
+ * never be reported as a passing one.
+ */
+function oracleOutcome(witness: Witness | null): string {
+  if (witness?.kind !== 'witnessed') return 'no witness'
+  const measured = witness.specs.filter((s) => s.oracle !== null)
+  if (measured.length === 0) {
+    return witness.specs.some((s) => s.oraclePreBroken) ? 'pre-broken' : 'not measured'
+  }
+  return measured.every((s) => s.oracle) ? 'pass' : 'fail'
+}
+
 export async function openIssues(repo: string): Promise<{
   issues: Array<{ number: number; body: string; title: string }>
   complete: boolean
@@ -1988,6 +2006,7 @@ export async function reviewFinishedDispatches(
       specs: specCount,
       t27c: witness?.kind === 'witnessed' ? witness.t27c : 'absent',
       machineUnmet: machineFailed.length,
+      oracle: oracleOutcome(witness),
     })
     if (unwitnessed) {
       logger.warn(
