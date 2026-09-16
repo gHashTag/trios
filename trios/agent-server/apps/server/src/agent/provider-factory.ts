@@ -17,6 +17,7 @@ import { createCodexFetch } from '../lib/clients/oauth/codex-fetch'
 import { createCopilotFetch } from '../lib/clients/oauth/copilot-fetch'
 import { logger } from '../lib/logger'
 import { createOpenRouterCompatibleFetch } from '../lib/openrouter-fetch'
+import { createOverloadRetryFetch } from '../lib/overload-retry-fetch'
 import type { ResolvedAgentConfig } from './types'
 
 type ProviderFactory = (
@@ -149,10 +150,23 @@ function createOpenAICompatibleFactory(
 ): (modelId: string) => unknown {
   if (!config.baseUrl)
     throw new Error('OpenAI-compatible provider requires baseUrl')
+  // An endpoint named by URL is whatever the operator pointed at, and one of
+  // them (integrate.api.nvidia.com) answers overload as a 200 stream carrying
+  // an error object - which the SDK's own retry cannot see. The wrapper peeks
+  // and retries; see overload-retry-fetch.ts for the measurement.
   return createOpenAICompatible({
     name: 'openai-compatible',
     baseURL: config.baseUrl,
     ...(config.apiKey && { apiKey: config.apiKey }),
+    fetch: createOverloadRetryFetch({
+      onRetry: ({ attempt, delayMs, reason }) =>
+        logger.warn('OpenAI-compatible endpoint overloaded, retrying', {
+          baseUrl: config.baseUrl,
+          attempt,
+          delayMs,
+          reason,
+        }),
+    }),
   })
 }
 
