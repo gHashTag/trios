@@ -418,7 +418,15 @@ if (isMain) {
   let landed = 0
   for (const r of batch.filter((x) => x.clean)) {
     const title = sh(`gh issue view ${r.issue} --repo ${REPO} --json title -q .title`) || `queen work for #${r.issue}`
-    const body = `Work the Queen accepted on \`${r.branch}\`, closed as gHashTag/trios#${r.issue}, and never merged.\n\n` +
+    // The issue repo is configurable and the reference must follow it. This
+    // line read `gHashTag/trios#${r.issue}` literally, so every PR opened
+    // against gHashTag/t27 pointed at an issue number in a repository that
+    // does not have it -- and `check-linked-issue`, which is a REQUIRED check
+    // there, found no reference it could resolve and failed the PR. Five bee
+    // PRs were blocked on it today.
+    const ref = REPO === CODE_REPO ? `#${r.issue}` : `${REPO}#${r.issue}`
+    const body = `Closes ${ref}\n\n` +
+      `Work the Queen accepted on \`${r.branch}\`, closed as ${REPO}#${r.issue}, and never merged.\n\n` +
       `Measured 2026-09-04: 174 \`queen-*\` branches on the remote and FIVE contained in \`${BASE}\`. ` +
       `The other 169 all carry a real diff. A closed issue whose code is not in the branch is a false ` +
       `statement about the repository, and the loop had been making 169 of them.\n\n` +
