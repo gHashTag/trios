@@ -75,6 +75,7 @@ const SVC = process.env.QUEEN_SERVICE || 'trios-agent-server'
 // retry: the loop's launcher resolves a bare `railway` to a June-2025 4.5.4
 // that cannot attach, while an interactive shell finds 5.49.2. This file is the
 // second independent railway invocation in the loop, and it had the same bug.
+import * as CH from './channel.mjs'
 import { RAILWAY_BIN as PICKED } from './channel.mjs'
 export const RAILWAY = `${PICKED} ssh --project 564d9ebd-7aa8-44fe-93ec-e0b03c87158d --environment production`
 
@@ -122,12 +123,34 @@ export const clean = (s) =>
  * which is how `any($1)` once reached Postgres as `any()` and a branch survey
  * reported 0 of 118.
  */
+/*
+ * THE CONTAINER IS NOT REACHED FROM A DIRECTORY, AND THIS ONE WAS.
+ *
+ * The comment three paragraphs above says the project is named EXPLICITLY so
+ * that the invocation does not depend on where the process happens to be
+ * standing. The `cwd: path.join(ROOT, 'trios')` that used to sit here undid
+ * exactly that: it tied a query against a database in the cloud to a path in
+ * whichever local checkout `TRIOS_ROOT` pointed at, and `execSync` fails
+ * outright when that path does not exist.
+ *
+ * Measured 2026-09-16. `land.mjs` builds its accepted-issue set through this
+ * function, inside a `try { } catch { }` whose comment reads "the forge answer
+ * alone still works, just more narrowly". Pointed at the t27 mirror, ROOT/trios
+ * did not exist, the call threw, the catch swallowed it, and the set came back
+ * EMPTY - so `tri land` reported all 182 branches as "#N is neither accepted by
+ * the Queen nor closed", which is a statement about 343 accepted dispatches it
+ * never managed to read. The same query run by hand answered in one second.
+ *
+ * A silence that reads as a fact is the defect this whole loop keeps finding in
+ * itself. The cwd is gone, and the call goes through the one channel in
+ * channel.mjs rather than a private copy of it - which is also what this file's
+ * own RAILWAY comment argues for, eight lines up.
+ */
 export function remote(js) {
-  const script = `cd /app && node -e ${shq(js)}`
-  const out = tryShell(`${RAILWAY} --service ${SVC} -- sh -c ${shq(script)}`, {
-    cwd: path.join(ROOT, 'trios'),
-  })
-  return out === null ? null : clean(out)
+  try {
+    const out = CH.remote(`cd /app && node -e ${shq(js)}`, { service: SVC })
+    return out === null ? null : clean(out)
+  } catch { return null }
 }
 
 /**

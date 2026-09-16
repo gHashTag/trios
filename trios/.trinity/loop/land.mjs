@@ -40,7 +40,13 @@ const DIR = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.TRIOS_ROOT || '/Users/playra/BrowserOS'
 const REPO = process.env.TRIOS_ISSUE_REPO || 'gHashTag/trios'
 const CODE_REPO = process.env.TRIOS_CODE_REPO || 'gHashTag/BrowserOS'
-const BASE = process.env.LAND_BASE || 'feat/queen-supervisor'
+// EXPORTED because close-done.mjs kept its own copy of this value while
+// calling `isLanded()` from here. Both defaulted to feat/queen-supervisor, so
+// they agreed by coincidence; setting LAND_BASE would have made close-done
+// TEST one base and REPORT another, and the mismatch is invisible from either
+// file alone. One rule, in one place - the principle close-done's own comment
+// argues for, three lines above the copy.
+export const BASE = process.env.LAND_BASE || 'feat/queen-supervisor'
 const BATCH = Number(process.env.LAND_BATCH ?? 5)
 const isMain = process.argv[1] && process.argv[1].endsWith('/land.mjs')
 

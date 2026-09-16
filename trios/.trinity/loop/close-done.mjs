@@ -44,6 +44,11 @@ const isMain = process.argv[1] && process.argv[1].endsWith('/close-done.mjs')
 
 const ROOT = process.env.TRIOS_ROOT || '/Users/playra/BrowserOS'
 const REPO = process.env.TRIOS_ISSUE_REPO || 'gHashTag/trios'
+// The CODE repository, which is not the ISSUE repository and was a literal
+// inside the closing comment below. A comment that names the wrong repository
+// sends every reader who follows it to a branch that is not there - and the
+// comment is the only thing a closed issue leaves behind.
+const CODE_REPO = process.env.TRIOS_CODE_REPO || 'gHashTag/BrowserOS'
 const SVC = 'trios-agent-server'
 
 /**
@@ -67,7 +72,12 @@ const SVC = 'trios-agent-server'
 // how the next copy-paste resurrects it: judge-packet.mjs kept one, executed it,
 // and wrote 42 packets accusing bees of a silence it had never measured.
 
-const BASE = 'origin/feat/queen-supervisor'
+// TAKEN FROM land.mjs, NOT DECLARED HERE. This was a hardcoded literal while
+// the landedness test three hundred lines below runs `LAND.isLanded()`, which
+// reads land.mjs's own LAND_BASE. Identical defaults hid it. The `origin/`
+// prefix stays local to this file because here the base is used as a REF to
+// diff against, whereas land.mjs uses the bare branch name.
+const BASE = `origin/${LAND.BASE}`
 
 const sh = (c, o = {}) => execSync(c, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], ...o }).trim()
 const tryShell = (c) => { try { return sh(c) } catch { return null } }
@@ -168,7 +178,7 @@ for (const p of closable) {
   const body = [
     'Closed after verifying the work exists.',
     '',
-    `The Queen accepted this dispatch. The result is commit \`${p.sha}\` on branch \`${p.branch}\` - _${p.subject.replace(/`/g, '')}_ - ${p.files} file(s) changed, on \`gHashTag/BrowserOS\`.`,
+    `The Queen accepted this dispatch. The result is commit \`${p.sha}\` on branch \`${p.branch}\` - _${p.subject.replace(/`/g, '')}_ - ${p.files} file(s) changed, on \`${CODE_REPO}\`.`,
     '',
     'It stayed open because the deployed supervisor cannot write to GitHub: `queen-tick.ts` makes exactly two `api.github.com` calls and both are GET. Until that write path exists, an accepted issue stays open and is re-skipped as `completed` on every tick, crowding out real candidates. Closed by `tri close-done`.',
   ].join('\n')
