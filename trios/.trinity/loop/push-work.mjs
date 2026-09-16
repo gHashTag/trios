@@ -141,10 +141,15 @@ function push(script, timeout = 280000) {
 // absent from the report.
 export const CHECKOUTS = [
   { dir: '/workspace/BrowserOS', base: 'feat/queen-supervisor', push: true },
-  // Awaiting the owner's word. Until then this line is a measurement, not a
-  // plan: it makes 45 branches of finished work countable from outside the
-  // container instead of invisible.
-  { dir: '/workspace/t27', base: 'master', push: false },
+  // AUTHORISED 2026-09-16 by the owner, asked directly and answered directly.
+  // The hold had done its job and then became the problem: by that date the 45
+  // branches were 145, and the jam they caused was measured end to end -
+  // unpushed work cannot be seen, `close-done` rightly refuses to close an
+  // issue whose branch is on no remote, so 130 accepted issues stayed open,
+  // each holding its boundary, and the selector found no free path among 201
+  // well-formed candidates. The tick said `nothing to choose` while the
+  // backlog held 747 issues. Withholding the push was the first link.
+  { dir: '/workspace/t27', base: 'master', push: true },
 ]
 
 // Every git call into the container needs `-c safe.directory=*`: the repo is

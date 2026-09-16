@@ -189,21 +189,6 @@ export function checks(s, opts = {}) {
       },
     },
     {
-      name: 'the LAPTOP disk has room',
-      test: () => {
-        // The path the worktrees live on, not `/`. On macOS the root is a
-        // sealed system snapshot that reads 55% while the data volume - where
-        // every checkout actually is - was at 97%.
-        const used = RL.diskUsedPercent(ROOT)
-        if (used === null || used < 92) return null
-        return {
-          cause: `the disk this loop runs on is ${used}% full - a worktree checkout fails part-way and the dispatch dies at 0 s`,
-          evidence: sh(`df -h ${JSON.stringify(ROOT)} | tail -1`) || '',
-          remedy: 'tri reap-local --reap',
-        }
-      },
-    },
-    {
       name: 'recent dispatches actually started',
       test: () => {
         // THE ROW SAYS WHY, AND NOTHING WAS READING IT.
@@ -387,6 +372,45 @@ export function checks(s, opts = {}) {
           cause: `the author has only ${left} candidate(s) left across every detector - the backlog is about to run dry`,
           evidence: (out.match(/^signals:.*$/m) || [''])[0],
           remedy: 'add a detector, or widen one - a detector with a finite corpus is a detector that stops',
+        }
+      },
+    },
+    /*
+     * LAST, AND IT USED TO BE SIXTH. THE POSITION WAS THE DEFECT.
+     *
+     * "The first that fires is the answer; the rest are printed only under
+     * --all." So a check that fires MASKS every check below it, and this one
+     * sat above all eight that explain an idle swarm - including "recent
+     * dispatches actually started" and the whole queue chain.
+     *
+     * Measured 2026-09-16: the laptop read 96%, this fired, and `tri why`
+     * answered "the disk this loop runs on is 96% full - a worktree checkout
+     * fails part-way and the dispatch dies at 0 s". Every clause after the
+     * percentage was false. Bees do not run here; their worktrees are on the
+     * container volume, which the check ABOVE measures and which read 63%,
+     * healthy. The real cause - 145 branches on no remote, so no accepted
+     * issue could be closed, so every boundary stayed held - sat eight checks
+     * further down and was never printed. Nine gibibytes of laptop cache were
+     * freed on the strength of that sentence and not one bee started.
+     *
+     * The check is KEPT because a full laptop disk is real and does break
+     * things - but the things it breaks are the instruments in THIS directory,
+     * which run here: reap-local's own scan, land.mjs's merge-tree, the local
+     * fetch in close-done. It does not stop a dispatch, and it must never
+     * again be allowed to answer a question about the swarm.
+     */
+    {
+      name: 'the LAPTOP disk has room',
+      test: () => {
+        // The path the worktrees live on, not `/`. On macOS the root is a
+        // sealed system snapshot that reads 55% while the data volume - where
+        // every checkout actually is - was at 97%.
+        const used = RL.diskUsedPercent(ROOT)
+        if (used === null || used < 92) return null
+        return {
+          cause: `the disk this loop runs on is ${used}% full - the loop's OWN instruments run here and fail part-way; this does NOT explain an idle swarm, whose worktrees are on the container volume measured separately above`,
+          evidence: sh(`df -h ${JSON.stringify(ROOT)} | tail -1`) || '',
+          remedy: 'tri reap-local --reap',
         }
       },
     },

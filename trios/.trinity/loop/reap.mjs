@@ -77,8 +77,43 @@ const SVC = 'trios-agent-server'
 // how the next copy-paste resurrects it: judge-packet.mjs kept one, executed it,
 // and wrote 42 packets accusing bees of a silence it had never measured.
 
-const WT = '/workspace/BrowserOS/.worktrees'
-const GIT = 'git -c safe.directory=* -C /workspace/BrowserOS'
+/*
+ * THE CONTAINER HAS TWO REPOSITORIES AND THIS STEP SAW ONE.
+ *
+ * Exactly the defect fixed in push-work.mjs on 2026-09-15 (79a413a4d), left
+ * standing here for a day because the two files were never read together.
+ *
+ * Measured 2026-09-16, with these two lines still hardcoded to BrowserOS:
+ *
+ *     tri reap        ->  "volume 64% used, 16.7 G free, 5 worktrees"
+ *     tri reap --reap ->  "REAPED removed=0 refused=0 of 5 ... reclaimed 0.0 G"
+ *     du -sh          ->  /workspace/t27/.worktrees   24G   85 worktrees
+ *
+ * 85 trees holding 24 of the volume's 29 used gigabytes were INVISIBLE, and
+ * the rate line said the volume was full in about 15 hours. So the reaper
+ * reported a healthy 5-tree checkout, reclaimed nothing, and exited 0 while
+ * the thing it exists to prevent was fifteen hours away. `KEEP_NEWEST` is 6
+ * and BrowserOS had 5 trees, so it could not have removed one even in
+ * principle - a tool that cannot do its job and says nothing, which is the
+ * defect this file's own header names.
+ *
+ * The list is IMPORTED, not copied. A third transcription of "which
+ * directories are checkouts" is a third thing to forget to update; push-work
+ * exports it for exactly this reason. Only `dir` is read here - `base` and
+ * `push` are that file's business.
+ */
+const PW = await import(path.join(path.dirname(fileURLToPath(import.meta.url)), 'push-work.mjs'))
+const CHECKOUTS = PW.CHECKOUTS.map((c) => ({
+  dir: c.dir,
+  wt: `${c.dir}/.worktrees`,
+  git: PW.gitAt(c.dir),
+}))
+
+// The volume is SHARED by every checkout, so any one of their worktree paths
+// answers `df` identically. The first is used for the level and the rate; the
+// tree COUNT is summed across all of them, because that is the number the
+// report was wrong about.
+const WT = CHECKOUTS[0].wt
 
 function remote(script) {
   // One channel, one retry, in channel.mjs. This file used to carry its own
@@ -87,13 +122,16 @@ function remote(script) {
 }
 
 export function usage() {
-  const raw = remote(`df -P ${WT} | tail -1; echo ---; ls ${WT} 2>/dev/null | wc -l`)
-  const [dfLine, , countLine] = raw.split('\n')
+  // One `ls | wc -l` per checkout, summed. A single count from a single
+  // directory is what reported 5 while 85 more sat one directory away.
+  const counts = CHECKOUTS.map((c) => `ls ${c.wt} 2>/dev/null | wc -l`).join('; ')
+  const raw = remote(`df -P ${WT} | tail -1; echo ---; ${counts}`)
+  const [dfLine, , ...countLines] = raw.split('\n')
   const cols = (dfLine || '').trim().split(/\s+/)
   return {
     percent: Number(String(cols[4] || '0').replace('%', '')),
     freeKb: Number(cols[3] || 0),
-    trees: Number((countLine || '0').trim()),
+    trees: countLines.reduce((n, l) => n + (Number(String(l).trim()) || 0), 0),
   }
 }
 
@@ -151,11 +189,20 @@ if (!process.argv.includes('--reap')) {
 // newline becomes a literal backslash-n inside `sh -c "..."`, so a multi-line
 // script arrives as one line and fails to parse. This branch had never been
 // executed, so the bug sat here unnoticed until push-work.mjs hit it.
+// KEEP_NEWEST is applied PER CHECKOUT - the newest few trees in each are the
+// ones a running bee is most likely standing in - while the `pct <= LOW` test
+// reads the SHARED volume, so once the whole volume is down to LOW the
+// remaining checkouts break on their first test and nothing further is
+// touched. That is why the count is per-checkout (`t`) and the totals are not.
 const script = [
-  'removed=0; refused=0; i=0',
-  `total=$(ls -d ${WT}/*/ 2>/dev/null | wc -l)`,
-  `for d in $(ls -dtr ${WT}/*/ 2>/dev/null); do i=$((i+1)); if [ $((total - i)) -lt ${KEEP_NEWEST} ]; then break; fi; pct=$(df -P ${WT} | tail -1 | awk '{gsub("%","",$5); print $5}'); if [ "$pct" -le ${LOW} ]; then break; fi; if ${GIT} worktree remove "$d" 2>/dev/null; then removed=$((removed+1)); else refused=$((refused+1)); fi; done`,
-  `${GIT} worktree prune`,
+  'removed=0; refused=0; total=0',
+  ...CHECKOUTS.map((c) =>
+    `t=$(ls -d ${c.wt}/*/ 2>/dev/null | wc -l); total=$((total+t)); i=0; ` +
+    `for d in $(ls -dtr ${c.wt}/*/ 2>/dev/null); do i=$((i+1)); if [ $((t - i)) -lt ${KEEP_NEWEST} ]; then break; fi; ` +
+    `pct=$(df -P ${WT} | tail -1 | awk '{gsub("%","",$5); print $5}'); if [ "$pct" -le ${LOW} ]; then break; fi; ` +
+    `if ${c.git} worktree remove "$d" 2>/dev/null; then removed=$((removed+1)); else refused=$((refused+1)); fi; done; ` +
+    `${c.git} worktree prune`,
+  ),
   'echo "REAPED removed=$removed refused=$refused of $total"',
 ].join('; ')
 
