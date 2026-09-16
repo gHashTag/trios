@@ -723,8 +723,34 @@ function run(
  * grounds to escalate rather than accept, so an unreadable branch cannot be
  * mistaken for finished work.
  */
+/**
+ * The ref a review compares against.
+ *
+ * Two files disagreed about what TRIOS_REPO_REF means. queen-export.ts reads it
+ * as a BRANCH NAME and prefixes origin/; this file read it raw, with a default
+ * of origin/dev that is already qualified. Production sets it to `master`, so
+ * export resolved origin/master while every review compared against the LOCAL
+ * `master` -- a branch the container checked out once and never moved.
+ *
+ * Measured 2026-09-16: the review reported `oracle="fail"` on branches whose
+ * defect is present on real master, and `pre-broken` never appeared once in
+ * several hundred reviews. Bees were being sent back for failures they did not
+ * cause, because the thing they were compared against had drifted ~100 commits
+ * behind. Setting the variable to `origin/master` to compensate produced
+ * `origin/origin/master` in the export path and broke publishing outright --
+ * the variable was never the place to fix it.
+ *
+ * One resolver for both files: qualify a bare branch name, leave a qualified
+ * ref alone. `master` and `origin/master` now mean the same thing.
+ */
+export function baseRef(): string {
+  const v = process.env.TRIOS_REPO_REF?.trim()
+  if (!v) return 'origin/dev'
+  return v.includes('/') ? v : `origin/${v}`
+}
+
 export async function committedFiles(issue: number): Promise<string[]> {
-  const base = process.env.TRIOS_REPO_REF || 'origin/dev'
+  const base = baseRef()
   const out = await run(
     'git',
     ['diff', '--name-only', `${base}...queen-${issue}`],
@@ -1094,7 +1120,7 @@ export async function witnessSpecs(
       detail: `${bin} --version exited ${version.code}: ${version.out.slice(0, 200)}`,
     }
   }
-  const base = process.env.TRIOS_REPO_REF || 'origin/dev'
+  const base = baseRef()
   const branch = `queen-${issue}`
   const out: SpecWitness[] = []
   for (const file of specs) {
@@ -1633,7 +1659,7 @@ export async function prepareWorktree(
     }
   }
 
-  const base = process.env.TRIOS_REPO_REF || 'origin/dev'
+  const base = baseRef()
   const added = await run(
     'git',
     ['worktree', 'add', '-B', branch, path, base],

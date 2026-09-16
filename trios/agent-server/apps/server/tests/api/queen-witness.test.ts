@@ -21,6 +21,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Pool } from 'pg'
 import {
+  baseRef,
   readWitnessLines,
   type SpecWitness,
   type Witness,
@@ -479,5 +480,35 @@ describe('the oracle verdict, which is the only line about code working', () => 
         l.criterion.startsWith('zig:'),
       ),
     ).toBe(false)
+  })
+})
+
+
+describe('baseRef, the ref a review compares against', () => {
+  const saved = process.env.TRIOS_REPO_REF
+  afterEach(() => {
+    if (saved === undefined) delete process.env.TRIOS_REPO_REF
+    else process.env.TRIOS_REPO_REF = saved
+  })
+
+  it('qualifies a bare branch name', () => {
+    // Production sets `master`. Read raw, that is the container's LOCAL master:
+    // checked out once, never moved, and ~100 commits behind by the time a
+    // review used it. Every bee was then judged against a base that had drifted.
+    process.env.TRIOS_REPO_REF = 'master'
+    expect(baseRef()).toBe('origin/master')
+  })
+
+  it('leaves an already-qualified ref alone', () => {
+    // The old default was `origin/dev`, and the export route prefixed
+    // `origin/` unconditionally. Setting the variable to `origin/master` to
+    // work around that produced `origin/origin/master` and broke publishing.
+    process.env.TRIOS_REPO_REF = 'origin/master'
+    expect(baseRef()).toBe('origin/master')
+  })
+
+  it('falls back to the historical default', () => {
+    delete process.env.TRIOS_REPO_REF
+    expect(baseRef()).toBe('origin/dev')
   })
 })

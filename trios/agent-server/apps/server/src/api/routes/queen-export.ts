@@ -36,14 +36,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { logger } from '../../lib/logger'
-import { workspaceRoot } from '../services/queen-dispatch'
+import { baseRef, workspaceRoot } from '../services/queen-dispatch'
 
-/** The ref bee branches are cut from, as the tick sees it. */
-function baseRef(): string {
-  return process.env.TRIOS_REPO_REF
-    ? `origin/${process.env.TRIOS_REPO_REF}`
-    : 'origin/dev'
-}
 
 /**
  * Git, run so that nothing in the checkout can steer it.
