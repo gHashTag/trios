@@ -1121,6 +1121,25 @@ export async function witnessSpecs(
     }
   }
   const base = baseRef()
+  // Fetch, or refresh the base before judging is something nobody does.
+  //
+  // The workspace fetches when a worktree is PREPARED, and a dispatch row can
+  // then sit in review for hours while master moves. `git show origin/master:f`
+  // in this root returns whatever the last fetch left behind, so the branch is
+  // compared against a base that has drifted -- and a defect fixed upstream, or
+  // already present upstream, is attributed to whoever touched the file last.
+  //
+  // Measured 2026-09-16: `fpga/testbench/fifo_tb.t27` fails on real master with
+  // `local variable shadows declaration of 'wr_en'`, and the review kept
+  // reporting it as this bee's regression across every tick. Cheap when there
+  // is nothing to fetch, and it runs once per reviewed issue, not per file.
+  const fetched = await run('git', ['fetch', '--quiet', 'origin'], root, 60_000)
+  if (fetched.code !== 0) {
+    logger.warn('Could not refresh the base before a review; it may have drifted', {
+      issue,
+      detail: fetched.out.slice(0, 200),
+    })
+  }
   const branch = `queen-${issue}`
   const out: SpecWitness[] = []
   for (const file of specs) {
