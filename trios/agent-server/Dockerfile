@@ -93,6 +93,29 @@ RUN cp -r t27/bootstrap /build && cp t27/Cargo.lock /build/Cargo.lock \
  && strip /build/target/release/t27c \
  && /build/target/release/t27c --version
 
+# The oracle's compiler.
+#
+# t27c says whether a spec PARSES. Only Zig says whether what it generates RUNS,
+# and until this stage existed nothing in the review could tell those apart: a
+# bee could satisfy every stated criterion with code that does not compile, and
+# did, 384 times out of 946.
+#
+# 0.16.0 exactly, because that is the version the corpus baseline in
+# tools/oracle/baseline.tsv was measured against. A different Zig is a different
+# verdict, and a ratchet that moves because the compiler moved is not a ratchet.
+# Fetched as a tarball rather than apt because Debian has no zig package.
+FROM debian:bookworm-slim AS zig
+ARG ZIG_VERSION=0.16.0
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
+      -o /tmp/zig.tar.xz \
+ && mkdir -p /opt/zig \
+ && tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1 \
+ && rm /tmp/zig.tar.xz \
+ && /opt/zig/zig version
+
 FROM oven/bun:1.3.6 AS runtime
 WORKDIR /app
 
@@ -210,6 +233,35 @@ COPY --from=queen-core /usr/lib/swift/linux /usr/lib/swift/linux
 COPY --from=t27c /build/target/release/t27c /usr/local/bin/t27c
 COPY --from=t27c /src/REF /usr/local/share/t27c/REF
 RUN /usr/local/bin/t27c --version && echo "t27c from gHashTag/t27@$(cat /usr/local/share/t27c/REF)"
+
+# Zig ships as a binary plus a lib/ tree it reads at run time, so both come
+# across and the binary is reached through a symlink rather than being moved
+# away from its lib.
+COPY --from=zig /opt/zig /opt/zig
+RUN ln -s /opt/zig/zig /usr/local/bin/zig && zig version
+
+# The oracle's dependency tree, generated ONCE here rather than on the first
+# review.
+#
+# A generated file imports its neighbours by a path relative to where the SPEC
+# sits, so the Zig has to mirror specs/ for anything to resolve. Building that
+# mirror is ~950 t27c invocations; on a 2 vCPU container that is minutes, and
+# the witness is killed at 120s -- on timeout its script exits non-zero and the
+# review records `parses: false`, which is a spec being failed for a defect it
+# does not have. Baking it makes the per-review cost a hardlink copy.
+#
+# The tree holds the dependencies, never the verdict: the reviewed file is
+# always regenerated from the bee's own commit before anything is compiled.
+# Failures here are not fatal -- a spec that will not generate simply has no
+# .zig in the tree, exactly as it has none today.
+RUN set -e; \
+    mkdir -p /usr/local/share/t27-oracle-tree; \
+    find specs -name '*.t27' | while read -r f; do \
+      d="/usr/local/share/t27-oracle-tree/$(printf '%s' "$f" | sed -e 's|^specs/||' -e 's|\.t27$|.zig|')"; \
+      mkdir -p "$(dirname "$d")"; \
+      /usr/local/bin/t27c gen "$f" > "$d" 2>/dev/null || rm -f "$d"; \
+    done; \
+    echo "oracle tree: $(find /usr/local/share/t27-oracle-tree -name '*.zig' | wc -l) generated"
 
 # Bind wide, because the platform routes to this container from outside and a
 # server on loopback accepts nothing while looking perfectly healthy from

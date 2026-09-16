@@ -768,6 +768,24 @@ export interface SpecWitness {
   baseTypechecks: boolean | null
   /** The first error line the compiler printed, or ''. */
   error: string
+  /**
+   * Whether the Zig this spec generates compiles and passes its own tests.
+   *
+   * `null` means NOT MEASURED -- no zig on the image, no generated tree, a file
+   * outside specs/ -- and must never be read as a pass. Everything else in this
+   * record says whether the spec parses; this is the only field that says
+   * whether it works.
+   */
+  oracle: boolean | null
+  /** When `oracle` is false: the file the error was in, and the error. */
+  oracleError: string
+  /**
+   * The base ref did not compile either, so this failure is inherited, not
+   * caused. 384 of 946 specs are in that state; a review that blamed a bee for
+   * landing on one of them would stop the queue, which is the failure this
+   * whole loop exists to avoid.
+   */
+  oraclePreBroken: boolean
 }
 
 /**
@@ -798,6 +816,11 @@ function t27cBinary(): string {
 const WITNESS_SCRIPT = String.raw`
 set -u
 branch="$1"; file="$2"; base="$3"; t27c="$4"
+ORACLE_TREE=/usr/local/share/t27-oracle-tree
+# printenv, not a braced default: this script is a String.raw template and a
+# dollar-brace would be read as a TypeScript interpolation.
+oracle_tree_override="$(printenv TRIOS_ORACLE_TREE 2>/dev/null || true)"
+if [ -n "$oracle_tree_override" ]; then ORACLE_TREE="$oracle_tree_override"; fi
 tmp="$(mktemp -d)" || exit 97
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/specs/one"
@@ -821,6 +844,88 @@ echo "W todo $(grep -c 'TODO: Implement' "$spec" || true)"
 # empty-body detector exactly: 13/19/33/21/3/7.
 echo "W empty $("$t27c" gen "$spec" 2>&1 | grep -c 'not yet implemented' || true)"
 if "$t27c" typecheck "$spec" > /dev/null 2>&1; then echo 'W typecheck ok'; else echo 'W typecheck fail'; fi
+# THE ORACLE. Everything above asks whether the spec PARSES; this asks whether
+# what it generates RUNS. Measured 2026-09-16 across the whole corpus: 541 of
+# 946 specs pass, 384 do not compile at all. A bee can satisfy every stated
+# criterion with code in that second group, and has.
+#
+# Three details are load-bearing, each learned by getting it wrong first:
+#   - The tree MIRRORS specs/. Generated files import each other by relative
+#     path, so a flat directory fails everything with "import of file outside
+#     module path", which reads like a toolchain problem and is not.
+#   - A shim at the tree ROOT is what makes the tree one Zig module. Zig takes
+#     the module root from the root source file's directory and 0.15/0.16 have
+#     no flag to override it.
+#   - The shared tree is hardlink-copied per review before the reviewed file is
+#     REMOVED and rewritten. Writing through a hardlink would edit the cache
+#     every other concurrent review is reading.
+#
+# NO BRACED PARAMETER EXPANSION ANYWHERE BELOW. This script is a String.raw
+# template literal in TypeScript, so a dollar-brace is read by the compiler as
+# an interpolation and the file stops parsing. sed does the trimming instead.
+#
+# Silent on every failure that is not the spec's: no zig, no cache, a file
+# outside specs/. A missing verdict means "not measured" and the review falls
+# back to what it did before; only a real compile is allowed to say "fail".
+zigbin="$(command -v zig 2>/dev/null || true)"
+case "$file" in specs/*) inspecs=1 ;; *) inspecs=0 ;; esac
+if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
+  ZIG_GLOBAL_CACHE_DIR=/tmp/zig-cache
+  export ZIG_GLOBAL_CACHE_DIR
+  # Baked at image build (see Dockerfile). NOT generated here: the mirror is
+  # ~950 t27c runs, the witness is killed at 120s, and a killed witness records
+  # the spec as failing to parse -- a bee blamed for a defect it does not have.
+  # No tree, no verdict: TRIOS_ORACLE_TREE lets a test point somewhere else.
+  cache="$ORACLE_TREE"
+  rel="$(printf '%s' "$file" | sed -e 's|^specs/||' -e 's|\.t27$|.zig|')"
+  # A MIRRORED spec path, not the flat $spec the checks above use. t27c writes
+  # each import as a path relative to where the SPEC sits, so the same file
+  # generated from specs/one/quick_sort.t27 emits "../base/types.zig" and from
+  # specs/tri/sort/quick_sort.t27 emits "../../base/types.zig". Handing the
+  # flat copy to the oracle makes every import miss by one directory and every
+  # spec fail with FileNotFound -- which reads exactly like a broken spec.
+  relt="$(printf '%s' "$file" | sed -e 's|^specs/||')"
+  mirror="$tmp/mirror/specs/$relt"
+  mkdir -p "$(dirname "$mirror")"
+  git show "$branch:$file" > "$mirror" 2>/dev/null || true
+  mine="$tmp/tree"
+  if [ -d "$cache" ] && cp -al "$cache" "$mine" 2>/dev/null; then
+    mkdir -p "$(dirname "$mine/$rel")"
+    rm -f "$mine/$rel"
+    if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
+      printf 'test { _ = @import("%s"); }\n' "$rel" > "$mine/_witness.zig"
+      if oracle_out="$(cd "$mine" && "$zigbin" test _witness.zig 2>&1)"; then
+        echo 'W oracle pass'
+      else
+        # Name the file the error is IN. 343 of 361 failures in the first full
+        # run were inherited from an import, not produced by the file under
+        # test, and a count that ignores that sends bees to fix correct code.
+        where="$(printf '%s' "$oracle_out" | grep -m1 -oE '^[^ :]+\.zig:[0-9]+' | cut -d: -f1)"
+        [ -n "$where" ] || where='?'
+        why="$(printf '%s' "$oracle_out" | grep -m1 'error:' | sed 's/.*error: //' | cut -c1-160)"
+        # A failure is only the BEE'S failure if the base compiled. 384 of 946
+        # specs do not compile today; holding a bee responsible for arriving at
+        # one of those is how a review queue stops moving, and this swarm has
+        # already spent a night stopped. So measure the base too, and say which
+        # of the two this is.
+        basebroke=1
+        if git show "$base:$file" > "$mirror" 2>/dev/null; then
+          rm -f "$mine/$rel"
+          if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null \
+             && [ -s "$mine/$rel" ] \
+             && (cd "$mine" && "$zigbin" test _witness.zig > /dev/null 2>&1); then
+            basebroke=0
+          fi
+        fi
+        if [ "$basebroke" = 0 ]; then
+          echo "W oracle fail [$where] $why"
+        else
+          echo "W oracle pre-broken [$where] $why"
+        fi
+      fi
+    fi
+  fi
+fi
 if git show "$base:$file" > "$tmp/base.t27" 2>/dev/null; then
   if "$t27c" typecheck "$tmp/base.t27" > /dev/null 2>&1; then echo 'W base ok'; else echo 'W base fail'; fi
 else
@@ -844,6 +949,9 @@ export function readWitnessLines(file: string, out: string): SpecWitness {
     typechecks: false,
     baseTypechecks: null,
     error: '',
+    oracle: null,
+    oracleError: '',
+    oraclePreBroken: false,
   }
   // The completeness report is four counters; the file is complete only when
   // the one spec scanned landed in "parse and consume all". A report that
@@ -861,6 +969,17 @@ export function readWitnessLines(file: string, out: string): SpecWitness {
     if (body.startsWith('empty ')) {
       const n = Number(body.slice('empty '.length).trim())
       if (Number.isInteger(n)) w.emptyBodies = n
+    } else if (body === 'oracle pass') {
+      w.oracle = true
+      w.oraclePreBroken = false
+    } else if (body.startsWith('oracle pre-broken')) {
+      w.oracle = false
+      w.oraclePreBroken = true
+      w.oracleError = body.slice('oracle pre-broken'.length).trim()
+    } else if (body.startsWith('oracle fail')) {
+      w.oracle = false
+      w.oraclePreBroken = false
+      w.oracleError = body.slice('oracle fail'.length).trim()
     } else if (body === 'parse ok') w.parses = true
     else if (body.startsWith('parse fail')) {
       w.parses = false
@@ -990,6 +1109,20 @@ export function witnessVerdicts(
       }`,
       met: !regressed,
     })
+    // The only criterion here about the code WORKING rather than PARSING.
+    // Omitted when `oracle` is null -- no zig on the image, no generated tree
+    // -- because an unmeasured file must never read as a passing one. Omitted
+    // too when the base was already broken: 384 of 946 specs do not compile,
+    // and charging a bee for landing on one of those stops the queue rather
+    // than improving it.
+    if (s.oracle !== null && !s.oraclePreBroken) {
+      lines.push({
+        criterion: `zig: ${s.file} compiles and passes its own tests${
+          s.oracle ? '' : ` (${s.oracleError})`
+        }`,
+        met: s.oracle,
+      })
+    }
   }
   return lines
 }

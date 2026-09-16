@@ -422,3 +422,62 @@ describe('the review, with the compiler', () => {
     },
   )
 })
+
+describe('the oracle verdict, which is the only line about code working', () => {
+  const witnessed = (specs: SpecWitness[]): Witness => ({
+    kind: 'witnessed',
+    t27c: 't27c 0.2.0',
+    specs,
+  })
+  const base = [
+    'W parse ok',
+    'W pc parse and consume all 1',
+    'W todo 0',
+    'W empty 0',
+    'W typecheck ok',
+    'W base ok',
+  ]
+  const lines = (extra: string[]) =>
+    witnessVerdicts(witnessed([readWitnessLines('specs/a.t27', [...base, ...extra].join('\n'))]))
+
+  it('says nothing at all when zig never ran', () => {
+    // An unmeasured file must not read as a passing one. This is the state on
+    // any image without zig, and the reason the field is `boolean | null`
+    // rather than a boolean defaulting to false.
+    const w = readWitnessLines('specs/a.t27', base.join('\n'))
+    expect(w.oracle).toBeNull()
+    expect(lines([]).some((l) => l.criterion.startsWith('zig:'))).toBe(false)
+  })
+
+  it('records a met line when the generated Zig compiles and its tests pass', () => {
+    const l = lines(['W oracle pass']).find((x) => x.criterion.startsWith('zig:'))
+    expect(l).toBeDefined()
+    expect(l?.met).toBe(true)
+  })
+
+  it('holds a regression against the bee, naming the file the error is in', () => {
+    const l = lines([
+      'W oracle fail [a.zig] @intCast must have a known result type',
+    ]).find((x) => x.criterion.startsWith('zig:'))
+    expect(l?.met).toBe(false)
+    expect(l?.criterion).toContain('[a.zig]')
+  })
+
+  it('stays silent when the base was already broken', () => {
+    // 384 of 946 specs did not compile on 2026-09-16. Failing a bee for
+    // landing on one of those stops the queue instead of improving it, which
+    // is the exact failure this loop exists to prevent -- so the line is
+    // omitted rather than emitted unmet.
+    const w = readWitnessLines(
+      'specs/a.t27',
+      [...base, 'W oracle pre-broken [b.zig] some inherited error'].join('\n'),
+    )
+    expect(w.oracle).toBe(false)
+    expect(w.oraclePreBroken).toBe(true)
+    expect(
+      lines(['W oracle pre-broken [b.zig] some inherited error']).some((l) =>
+        l.criterion.startsWith('zig:'),
+      ),
+    ).toBe(false)
+  })
+})
