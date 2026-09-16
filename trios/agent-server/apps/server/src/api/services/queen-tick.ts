@@ -1784,6 +1784,25 @@ export async function reviewFinishedDispatches(
   // fell off the board. Three sat that way today. A wait row is re-read each
   // round and rejudged; the UPDATE below overwrites it in place, so an
   // unchanged transcript yields the same wait and costs one query.
+  // A `wait` row is revisited forever, and until now nothing ever asked whether
+  // its issue still existed. Measured 2026-09-16: 406 of the 488 rows re-judged
+  // in a single log window were issues closed in July and August. Their
+  // branches no longer carry a spec, so the witness reports `t27c="absent"`,
+  // nothing can be judged, the verdict is `wait` again, and the row returns
+  // next tick -- one `queend` call each, every round, forever. That is what
+  // "review is overflowing" actually was.
+  //
+  // `queen_issues` is the open set, and since the paging fix it is complete
+  // enough to subtract against. Guarded on a NON-EMPTY board: an empty one
+  // means the sync has not run yet in this process, and filtering against it
+  // would silently stop every review rather than fewer of them.
+  const board = await pool.query<{ n: string }>(
+    'SELECT count(*)::text AS n FROM queen_issues',
+  )
+  const boardIsTrustworthy = Number(board.rows[0]?.n ?? 0) > 0
+  const stillOpen = boardIsTrustworthy
+    ? 'AND EXISTS (SELECT 1 FROM queen_issues i WHERE i.number = d.issue)'
+    : ''
   const done = await pool.query(
     `SELECT d.issue, d.conversation_id, d.review_state,
             d.criteria, d.criteria_source, d.send_backs, d.owned_paths,
@@ -1794,8 +1813,12 @@ export async function reviewFinishedDispatches(
        FROM queen_dispatch d
       WHERE d.started = true AND d.finished_at IS NOT NULL
         AND (d.review_state IS NULL OR d.review_state = 'wait')
-        AND d.outcome NOT LIKE 'reaped%'`,
+        AND d.outcome NOT LIKE 'reaped%'
+        ${stillOpen}`,
   )
+  if (!boardIsTrustworthy) {
+    logger.warn('Review ran against every dispatch row: the issue board is empty')
+  }
   const acted: string[] = []
   const strayed: Array<{ issue: number; paths: string[] }> = []
   const tally: ReviewTally[] = []
