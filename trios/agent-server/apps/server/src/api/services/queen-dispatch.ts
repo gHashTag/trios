@@ -889,7 +889,20 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
   mkdir -p "$(dirname "$mirror")"
   git show "$branch:$file" > "$mirror" 2>/dev/null || true
   mine="$tmp/tree"
-  if [ -d "$cache" ] && cp -al "$cache" "$mine" 2>/dev/null; then
+  # cp -al first: 856 files as hardlinks costs nothing. It fails across mount
+  # points, and the tree lives in an image layer while $tmp is under /tmp, so
+  # on the real container that is exactly what happens -- the first production
+  # telemetry read oracle="not measured" on every review that reached a spec,
+  # with no error anywhere, because this test simply returned false. A real
+  # copy is the fallback; it is slower and still well inside the witness's
+  # budget.
+  copied=0
+  if [ -d "$cache" ]; then
+    if cp -al "$cache" "$mine" 2>/dev/null; then copied=1
+    elif cp -a "$cache" "$mine" 2>/dev/null; then copied=1
+    else echo "W oracle skipped could not stage the tree"; fi
+  fi
+  if [ "$copied" = 1 ]; then
     mkdir -p "$(dirname "$mine/$rel")"
     rm -f "$mine/$rel"
     if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
@@ -969,6 +982,11 @@ export function readWitnessLines(file: string, out: string): SpecWitness {
     if (body.startsWith('empty ')) {
       const n = Number(body.slice('empty '.length).trim())
       if (Number.isInteger(n)) w.emptyBodies = n
+    } else if (body.startsWith('oracle skipped')) {
+      // Measured nothing, and said why. Distinct from silence so the telemetry
+      // can tell "no zig on this image" from "the tree would not stage".
+      w.oracle = null
+      w.oracleError = body.slice('oracle skipped'.length).trim()
     } else if (body === 'oracle pass') {
       w.oracle = true
       w.oraclePreBroken = false
