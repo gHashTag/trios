@@ -184,8 +184,27 @@ const ISSUE_PAGE_SIZE = 100
  * and five requests against an anonymous rate limit of 60/hour on a loop that
  * ticks at most a few times an hour. A repository that really has more than 500
  * open items is not one this loop should be silently guessing about.
+ *
+ * It became one. Measured 2026-09-16: 751 open issues and 20 open pull requests
+ * on the same endpoint, so the walk stopped at 500 and `complete` was false on
+ * every round -- permanently. That is worse than guessing, because the drop in
+ * `rememberIssues` is gated on `complete`: the board stopped retiring closed
+ * issues entirely and became a graveyard. ~200 issues from July and August,
+ * merged or closed months earlier, were re-reviewed on every tick, each one
+ * holding a `claimed` slot and returning `wait` forever because their branches
+ * no longer carry a spec for the compiler to judge. The queue drained into the
+ * dead and the bees sat at 0 with 277 real cards waiting.
+ *
+ * The cap exists to protect the rate limit, so it is sized by what the limit
+ * actually is. With `TRIOS_GITHUB_API_TOKEN` the ceiling is 5,000/hour and
+ * thirty pages costs at most thirty of them; anonymous it stays at five, and a
+ * repository this size will keep reporting a truncated list -- which is the
+ * honest answer rather than a silent partial delete.
  */
-const ISSUE_PAGE_CAP = 5
+const ISSUE_PAGE_CAP_ANON = 5
+const ISSUE_PAGE_CAP_TOKEN = 30
+const issuePageCap = (): number =>
+  process.env.TRIOS_GITHUB_API_TOKEN?.trim() ? ISSUE_PAGE_CAP_TOKEN : ISSUE_PAGE_CAP_ANON
 
 /**
  * Open issues, read without a credential.
@@ -235,7 +254,8 @@ export async function openIssues(repo: string): Promise<{
 }> {
   const collected: Array<{ number: number; body: string; title: string }> = []
   let complete = false
-  for (let page = 1; page <= ISSUE_PAGE_CAP; page++) {
+  const cap = issuePageCap()
+  for (let page = 1; page <= cap; page++) {
     const response = await fetch(
       `https://api.github.com/repos/${repo}/issues` +
         `?state=open&per_page=${ISSUE_PAGE_SIZE}&page=${page}`,
@@ -398,7 +418,7 @@ export async function rememberIssues(
   if (!complete) {
     logger.warn('Open issue list was truncated; keeping the board as it is', {
       fetched: issues.length,
-      pages: ISSUE_PAGE_CAP,
+      pages: issuePageCap(),
     })
     return
   }
