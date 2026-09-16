@@ -885,8 +885,21 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
   # flat copy to the oracle makes every import miss by one directory and every
   # spec fail with FileNotFound -- which reads exactly like a broken spec.
   relt="$(printf '%s' "$file" | sed -e 's|^specs/||')"
-  mirror="$tmp/mirror/specs/$relt"
+  # The WHOLE specs tree, not just this file. t27c resolves a use against the
+  # FILESYSTEM: a use of fpga::fifo::Fifo emits "../fifo.zig".Fifo when
+  # specs/fpga/fifo.t27 is present next to it, and falls back to
+  # "../fifo/Fifo.zig" when it is not. A one-file mirror therefore made every
+  # spec that uses a neighbour generate an import to a path nothing produces,
+  # and the oracle reported FileNotFound on 20+ branches that were fine. I
+  # filed an issue blaming the corpus for it before checking.
+  mirror_root="$tmp/mirror"
+  mkdir -p "$mirror_root"
+  cp -al specs "$mirror_root/specs" 2>/dev/null || cp -a specs "$mirror_root/specs" 2>/dev/null || true
+  mirror="$mirror_root/specs/$relt"
   mkdir -p "$(dirname "$mirror")"
+  # rm first: the copy above may be hardlinks, and writing through one would
+  # edit the worktree's own spec.
+  rm -f "$mirror"
   git show "$branch:$file" > "$mirror" 2>/dev/null || true
   mine="$tmp/tree"
   # cp -al first: 856 files as hardlinks costs nothing. It fails across mount
@@ -922,6 +935,7 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
         # already spent a night stopped. So measure the base too, and say which
         # of the two this is.
         basebroke=1
+        rm -f "$mirror"
         if git show "$base:$file" > "$mirror" 2>/dev/null; then
           rm -f "$mine/$rel"
           if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null \
