@@ -2007,6 +2007,15 @@ export async function reviewFinishedDispatches(
       t27c: witness?.kind === 'witnessed' ? witness.t27c : 'absent',
       machineUnmet: machineFailed.length,
       oracle: oracleOutcome(witness),
+      // The verdict alone was not enough to settle a disagreement: production
+      // reported `fail` on branches a local run of the same witness called
+      // `pre-broken`, and with no error text logged there was no way to tell
+      // which base each was measuring against. One word is a signal; the
+      // reason is evidence.
+      oracleDetail:
+        witness?.kind === 'witnessed'
+          ? (witness.specs.find((sp) => sp.oracleError)?.oracleError ?? '').slice(0, 180)
+          : '',
     })
     if (unwitnessed) {
       logger.warn(
