@@ -1,0 +1,221 @@
+// LESSON CORE - how a manager's remark becomes a change, and where it goes.
+//
+// Extracted from mxfill77/turbobaby-userbot `lesson_router.py`.
+//
+// A human tells the bot it got something wrong. That remark has to be turned
+// into an edit, and the whole difficulty is that TWO INDEPENDENT QUESTIONS hide
+// inside one sentence:
+//
+//   WHERE does the correction go?  style | fact | supervision | unclear
+//   WHAT KIND of correction is it?  behavior | code | unsure
+//
+// They are orthogonal. "The auditor must catch a missing price" is SUPERVISION
+// on the first axis and CODE on the second. Collapsing them into one verdict is
+// how a rule about phrasing ends up as a code ticket, and it did.
+//
+// THE RULE THAT GOVERNS BOTH: a weak or mixed signal is never resolved by
+// guessing. It becomes `unclear`/`unsure` and goes to a person. Every branch
+// below that returns a confident answer had to earn it.
+//
+// The keyword vocabularies themselves are not law and are not here - they are
+// strings, they change weekly, and which words mean "code" is an editorial
+// question. What IS law is what the counts mean once taken, and that is what
+// this file holds. The caller counts; this file decides.
+//
+// phi^2 + 1/phi^2 = 3 | TRINITY
+
+module lesson_core;
+
+// ─── WHERE THE CORRECTION GOES ────────────────────────────────────────────────
+
+pub const ROUTE_STYLE: i32 = 0;        // the rule book - manner, wording, tone
+pub const ROUTE_FACT: i32 = 1;         // truth and logic - what is actually so
+pub const ROUTE_SUPERVISION: i32 = 2;  // the auditor's checklist - what to watch
+pub const ROUTE_UNCLEAR: i32 = 3;      // not decided - goes to the owner
+
+// ─── WHAT KIND OF CORRECTION IT IS ────────────────────────────────────────────
+
+pub const TYPE_BEHAVIOR: i32 = 0;      // the bot's manner - fixed with a written rule
+pub const TYPE_CODE: i32 = 1;          // the machine - fixed with code and a test
+pub const TYPE_UNSURE: i32 = 2;        // not decided
+
+pub const CONF_HIGH: i32 = 1;
+pub const CONF_LOW: i32 = 0;
+
+// ─── THE TWO OVERRIDES ────────────────────────────────────────────────────────
+//
+// Both axes were once decided purely by counting keyword hits, and both got the
+// same two cases wrong - in OPPOSITE directions. The fixes are stated here as
+// two named predicates that outrank the counts, and they are applied IN THIS
+// ORDER on both axes, so the axes cannot disagree about the same sentence.
+//
+// OVERRIDE ONE - a condition on the STATE OF THE DATA is the machine, whatever
+// verb it wears. "Do not write 'got the data' if the client sent only a pin" is
+// a guard on the window tracker. The speech act "do not write" made the counter
+// say `behavior`; it is `fact`/`code`. A default-offer condition is excluded:
+// there the condition says WHEN the default applies, which is behaviour.
+pub fn data_state_condition(has_default_offer: bool, has_condition_marker: bool,
+                            has_data_state_marker: bool) bool {
+    if (has_default_offer) { return false; }
+    if (has_condition_marker == false) { return false; }
+    return has_data_state_marker;
+}
+
+// OVERRIDE TWO - the exact mirror. A rule about how to PRESENT an already
+// computed result is manner, even though the money words are right there.
+// "Don't say you'll check and come back - give the price if the rate is known"
+// went out as a code ticket on the strength of ONE word: "rate". It needed no
+// code at all; that rule already lived as text in the style prompt.
+//
+// A conjunction of three, not a single marker - anything weaker would have
+// swallowed the code branch. It is asked STRICTLY AFTER override one, so the
+// data-state rule keeps winning the cases it was written for.
+pub fn wording_of_known_result(has_wording_act: bool, has_calc_source: bool,
+                               has_unavailable: bool) bool {
+    if (has_wording_act == false) { return false; }
+    if (has_calc_source) { return false; }       // "take the price from column J" is the machine
+    return has_unavailable == false;             // "the bridge is silent" is also the machine
+}
+
+// ─── AXIS ONE: WHERE ──────────────────────────────────────────────────────────
+//
+// Precedence supervision -> fact -> style: an explicit marker of the higher
+// category beats incidental words of the lower one. No signal at all is not
+// style-by-default, it is UNCLEAR - "bad, redo it" carries no destination, and
+// inventing one writes noise into the rule book.
+pub fn route_of(empty: bool, supervision_hits: i32, fact_hits: i32,
+                style_hits: i32, data_state: bool, wording_known: bool) i32 {
+    if (empty) { return ROUTE_UNCLEAR; }
+    if (supervision_hits > 0) { return ROUTE_SUPERVISION; }
+    if (data_state) { return ROUTE_FACT; }
+    if (wording_known) { return ROUTE_STYLE; }
+    if (fact_hits > 0) { return ROUTE_FACT; }
+    if (style_hits > 0) { return ROUTE_STYLE; }
+    return ROUTE_UNCLEAR;
+}
+
+// ─── AXIS TWO: WHAT KIND ──────────────────────────────────────────────────────
+
+// THE SHARP-MAJORITY RULE. When both vocabularies catch, a confident type is
+// given only on a decisive lead - at least twice the other side. A near-tie is
+// not a weak answer, it is no answer, and is returned as such.
+pub const TYPE_DOMINANCE: i32 = 2;
+
+pub fn dominates(a: i32, b: i32) bool {
+    if (a <= b) { return false; }
+    return a >= TYPE_DOMINANCE * b;
+}
+
+pub fn type_of(empty: bool, behavior_hits: i32, code_hits: i32,
+               data_state: bool, wording_known: bool) i32 {
+    if (empty) { return TYPE_UNSURE; }
+    if (data_state) { return TYPE_CODE; }
+    if (wording_known) { return TYPE_BEHAVIOR; }
+    if (behavior_hits == 0) {
+        if (code_hits == 0) { return TYPE_UNSURE; }
+        return TYPE_CODE;                         // clean code signal
+    }
+    if (code_hits == 0) { return TYPE_BEHAVIOR; } // clean behaviour signal
+    if (dominates(behavior_hits, code_hits)) { return TYPE_BEHAVIOR; }
+    if (dominates(code_hits, behavior_hits)) { return TYPE_CODE; }
+    return TYPE_UNSURE;
+}
+
+// The invariant that ties type to confidence: a decided type is always
+// confident, and an undecided one never is. There is no third combination, and
+// a caller that produces one has a bug rather than a nuance.
+pub fn type_confidence(kind: i32) i32 {
+    if (kind == TYPE_UNSURE) { return CONF_LOW; }
+    return CONF_HIGH;
+}
+
+// ─── THE THINKER, AND WHY IT IS ONLY EVER AN OVERLAY ──────────────────────────
+//
+// A model may also read the remark and return a class. It sits ABOVE the
+// counting, not instead of it: it resolves phrasings the vocabularies miss. But
+// its failure must cost nothing, so every failure path falls back to the count,
+// which was the behaviour before the model existed.
+//
+// EXACTLY ONE RETRY. The first call is the plain prompt; a malformed answer buys
+// one more call with a strictness reminder, and nothing after that. An unbounded
+// retry against a model that is answering wrongly is a way of paying repeatedly
+// for the same wrong answer.
+pub const THINKER_ATTEMPTS: i32 = 2;
+pub const THINKER_TIMEOUT_SEC: i32 = 120;
+
+pub fn thinker_may_retry(attempts_made: i32) bool {
+    if (attempts_made >= THINKER_ATTEMPTS) { return false; }
+    return true;
+}
+
+// Which answer is used. The thinker wins only when it BOTH parsed and was
+// confident. A low-confidence reading is not better than a count - it is a guess
+// with better prose, which is worse, because it reads as authority.
+pub fn use_thinker(parsed: bool, confidence: i32) bool {
+    if (parsed == false) { return false; }
+    if (confidence == CONF_LOW) { return false; }
+    return true;
+}
+
+// ─── WHEN THE VERDICT IS LOW: ASK, DO NOT APPLY ───────────────────────────────
+//
+// A low-confidence lesson is not written into the rule book. It goes back to the
+// teacher as "did I read you correctly?" and waits. Waiting is the entire point
+// - the alternative is a rule book that slowly fills with misreadings nobody
+// remembers approving.
+pub const LOW_WAIT_TIMEOUT_SEC: i32 = 86400;   // 24h, then the owner gets it
+
+pub fn applies_directly(confidence: i32, route: i32) bool {
+    if (route == ROUTE_UNCLEAR) { return false; }
+    if (confidence == CONF_LOW) { return false; }
+    return true;
+}
+
+// THE TIMEOUT IS NOT A DELETION. The teacher's silence for a day does not
+// discard the lesson - it moves it to the owner as a clarification card and
+// clears the wait. A lesson dropped for silence is the one failure mode this
+// whole path exists to avoid.
+pub const WAIT_PENDING: i32 = 0;    // still waiting for the teacher
+pub const WAIT_BLIND: i32 = 1;      // no timestamp - do not time out what you cannot age
+pub const WAIT_ALREADY: i32 = 2;    // already handed over; a second tick must not duplicate
+pub const WAIT_TO_OWNER: i32 = 3;   // hand it to the owner and clear the wait
+
+pub fn wait_action(already_timed_out: bool, created_known: bool,
+                   age_sec: i32, timeout_sec: i32) i32 {
+    // Idempotent FIRST. The daemon ticks every pending wait on every round, and
+    // marking before delivering is what stops the second tick sending a second
+    // card about the same remark.
+    if (already_timed_out) { return WAIT_ALREADY; }
+    if (created_known == false) { return WAIT_BLIND; }
+    if (age_sec < timeout_sec) { return WAIT_PENDING; }
+    return WAIT_TO_OWNER;
+}
+
+// An age that cannot be computed is zero, not infinity. The failure of a clock
+// must never look like the passage of time - that is the same class of defect as
+// a failed probe looking like an absent process (see supervision_core).
+pub fn wait_age_sec(created_known: bool, created_at_sec: i32, now_sec: i32) i32 {
+    if (created_known == false) { return 0; }
+    if (created_at_sec <= 0) { return 0; }
+    if (now_sec <= created_at_sec) { return 0; }
+    return now_sec - created_at_sec;
+}
+
+// ─── DELIVERY ─────────────────────────────────────────────────────────────────
+//
+// The channel to the owner can be down. That is not a reason to lose the lesson
+// and not a reason to crash the daemon's tick: the wait is cleared either way
+// and the remark stays in the log. So "delivered" is reported as a fact rather
+// than assumed from having tried.
+pub fn wait_cleared(action: i32) bool {
+    if (action == WAIT_TO_OWNER) { return true; }
+    return false;
+}
+
+pub fn lesson_lost(action: i32, delivered: bool, logged: bool) bool {
+    if (action != WAIT_TO_OWNER) { return false; }
+    if (delivered) { return false; }
+    return logged == false;
+}
+
+// phi^2 + 1/phi^2 = 3 | TRINITY
