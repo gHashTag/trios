@@ -73,8 +73,14 @@ repository or handed to an agent (policy: Railway only via the owner's login).
   variable references to the self-hosted Inngest service (its display name is
   `inngest/inngest`), so the keys are never copied by hand and rotate with it.
 - `INNGEST_SERVE_HOST` = `https://trios-agent-server-production.up.railway.app`,
-  written out in full: `api.t27.ai` is attached to the service but its DNS is
-  still pending, and `${{RAILWAY_PUBLIC_DOMAIN}}` may resolve to it first.
+  written out in full: `api.t27.ai` is attached to the service but is not
+  serving, and `${{RAILWAY_PUBLIC_DOMAIN}}` may resolve to it first.
+  "DNS is still pending" was wrong and sent two rounds looking at the CNAME,
+  which is live and correct. What is missing is Railway's ownership check: a
+  TXT record `_railway-verify.api` at Unstoppable Domains, holding the
+  `railway-verify=...` value the Railway domain page prints. Only the domain
+  owner can add it; until they do, the hostname resolves and Railway refuses
+  to route it.
 - `TRIOS_GITHUB_API_TOKEN` was NOT among the service's variables when the
   server first came up (measured in the Variables tab; 28 variables before,
   32 after). The operator added it on 2026-09-13 ~06:27 UTC (33 variables);
