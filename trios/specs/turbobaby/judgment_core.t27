@@ -1,0 +1,337 @@
+// TURBOBABY JUDGMENT — the law that decides whether work was done, whether an
+// outside channel may be called again, and when a repeated question becomes one
+// question.
+//
+// Extracted from mxfill77/turbobaby-userbot: done_judge_pc.py, review_auto.py
+// and decision_waits.py. Three instruments that look unrelated and are not: each
+// one exists because a two-valued answer had already shipped a wrong decision,
+// and each fixed it by naming a THIRD outcome that means "there was nothing to
+// judge with".
+//
+// THE DISTINCTION THIS FILE IS BUILT ON. "Read the address and found nothing" is
+// not the same as "could not read the address". The first is a fact about the
+// work - a real failure. The second is a fact about the judge - the work is
+// unjudged, and calling it failed would charge the executor for the judge's own
+// blindness. done_judge_pc says this at nine separate return sites, and this
+// module keeps every one of them distinguishable.
+//
+// ON BUDGETS. Every ceiling here was measured, not chosen for roundness, and the
+// measurement is recorded beside it. A ceiling whose provenance is lost is a
+// ceiling somebody will "tidy" to a nicer number.
+//
+// phi^2 + 1/phi^2 = 3 | TRINITY
+
+module judgment_core;
+
+// ─── THE THREE WORDS ──────────────────────────────────────────────────────────
+// Until 2026-09-11 the instrument returned three verdicts and the queue carried
+// two: DISPROVEN and UNKNOWN arrived identically, and no later reader could tell
+// them apart - the reason survived, the outcome word did not.
+
+pub const DONE: i32 = 0;
+pub const UNPROVEN: i32 = 1;
+pub const UNKNOWN: i32 = 2;
+
+// UNKNOWN is not a failure of the work. This single line is the reason the third
+// word exists, and it must never be folded into the one above it.
+pub fn counts_as_failure(verdict: i32) bool {
+    if (verdict == UNPROVEN) { return true; }
+    return false;
+}
+
+pub fn work_accepted(verdict: i32) bool {
+    if (verdict == DONE) { return true; }
+    return false;
+}
+
+// A verdict the judge could not reach is not a verdict, so it is not charged
+// against the executor's attempt ceiling either. Charging it would let a broken
+// judge exhaust a task's lives without ever reading it.
+pub fn charges_attempt(verdict: i32) bool {
+    if (verdict == UNKNOWN) { return false; }
+    return true;
+}
+
+// ─── JUDGING BY ADDRESS ───────────────────────────────────────────────────────
+// A task names the ADDRESS of its result - a folder and the words the product
+// must answer to. The judge measures that address before the run and after it,
+// and judges the difference. It never takes the executor's word for anything.
+
+pub const NOTHING_TO_JUDGE_WITH: i32 = 0;   // unknown: the judge was blind
+pub const ADDRESS_ANSWERED_EMPTY: i32 = 1;  // unproven: the judge read, and it said no
+pub const PRODUCT_FOUND: i32 = 2;
+
+// The preconditions for judging at all. Each false answer here yields UNKNOWN,
+// and the order is the Python's own: an address that was never named cannot be
+// proved against, and a baseline that was never taken cannot prove novelty.
+pub fn judgeable(address_named: bool, address_has_words: bool,
+                 baseline_taken: bool, address_readable: bool) bool {
+    if (address_named == false) { return false; }
+    if (address_has_words == false) { return false; }
+    if (baseline_taken == false) { return false; }
+    if (address_readable == false) { return false; }
+    return true;
+}
+
+// AMBIGUITY IS NOT A CHOICE. Exactly one file may both answer the address's words
+// and have changed during the run. Two or more and the judge does not know which
+// one is this task's product - and must say so, rather than take the first
+// alphabetically. In a parallel round the first alphabetically is precisely the
+// other hand's work.
+pub fn candidate_is_unambiguous(fresh_hits: i32) bool {
+    if (fresh_hits > 1) { return false; }
+    return true;
+}
+
+// Two different kinds of empty, and they must not be confused. "Nothing appeared"
+// is the run's silence; "it VANISHED" is the run's action. Same outcome word,
+// different diagnosis - and both are UNPROVEN, because the read SUCCEEDED and
+// returned "no". This is the exact case where the leniency of UNKNOWN must not
+// apply.
+pub fn address_empty_is_unproven(read_succeeded: bool) bool {
+    if (read_succeeded == false) { return false; }
+    return true;
+}
+
+// A VERBATIM COPY IS NOT A PRODUCT. Asked only of a candidate the run changed -
+// an unchanged one is caught downstream by scope and does not need its branch
+// taken away here.
+pub fn copy_of_prior(changed_in_run: bool, content_existed_before: bool) bool {
+    if (changed_in_run == false) { return false; }
+    if (content_existed_before == false) { return false; }
+    return true;
+}
+
+// The whole address judgment, once, so it cannot drift into nine transcriptions.
+pub fn address_verdict(address_named: bool, address_has_words: bool,
+                       baseline_taken: bool, address_readable: bool,
+                       prior_snapshot_taken: bool,
+                       fresh_hits: i32, files_present: i32,
+                       candidate_found: bool, candidate_changed: bool,
+                       candidate_is_copy: bool) i32 {
+    if (judgeable(address_named, address_has_words, baseline_taken,
+                  address_readable) == false) { return UNKNOWN; }
+    if (candidate_is_unambiguous(fresh_hits) == false) { return UNKNOWN; }
+    if (candidate_found == false) {
+        // Read and answered - whether the folder is empty or holds only files
+        // that answer some other task's words, the judge got an answer of "no".
+        return UNPROVEN;
+    }
+    if (candidate_changed) {
+        // Without a snapshot of the folder taken before the run, a product and a
+        // copy of something already there are indistinguishable. That is the
+        // judge's gap, not the executor's failure.
+        if (prior_snapshot_taken == false) { return UNKNOWN; }
+        if (candidate_is_copy) { return UNPROVEN; }
+    }
+    if (files_present <= 0) { return UNPROVEN; }
+    return DONE;
+}
+
+// A judge that CRASHED has not judged. The exception path resolves to UNKNOWN
+// for the same reason as every other blindness here: "this is not `done`" and
+// "this is failed work" are different sentences.
+pub fn judge_crash_verdict() i32 {
+    return UNKNOWN;
+}
+
+// ─── CALLING AN OUTSIDE CHANNEL ───────────────────────────────────────────────
+// The review contour hands work to an external reviewer. The call is SYNCHRONOUS
+// inside the round, so a channel that is down takes its entire timeout every
+// time and returns nothing.
+
+// First attempt plus EXACTLY ONE retry. Not round for prettiness: a cold packet
+// measured at 16k tokens, and a blind retry into a dead channel multiplies the
+// price while learning nothing.
+pub const MAX_ATTEMPTS: i32 = 2;
+
+// ...and the retry is not immediate. "No more than once" reads two ways - one
+// retry in total, or no more than one per period - so both readings are enforced
+// at once rather than one of them being picked.
+pub const RETRY_AFTER_SEC: i32 = 3600;
+
+pub const ATTEMPT_FIRST: i32 = 0;
+pub const ATTEMPT_RETRY: i32 = 1;
+pub const ATTEMPT_CLOSED: i32 = 2;
+pub const ATTEMPT_EXHAUSTED: i32 = 3;
+pub const ATTEMPT_TOO_SOON: i32 = 4;
+
+// The refusal carries WHICH refusal it is. A single boolean here would make
+// "this occasion is finished" and "come back in an hour" the same event in the
+// log, and only one of them is ever worth waiting on.
+pub fn attempt_verdict(known: bool, closed: bool, attempts: i32,
+                       since_last_sec: i32, last_known: bool) i32 {
+    if (known == false) { return ATTEMPT_FIRST; }
+    if (closed) { return ATTEMPT_CLOSED; }
+    if (attempts >= MAX_ATTEMPTS) { return ATTEMPT_EXHAUSTED; }
+    if (last_known) {
+        if (since_last_sec < RETRY_AFTER_SEC) { return ATTEMPT_TOO_SOON; }
+    }
+    return ATTEMPT_RETRY;
+}
+
+pub fn attempt_allowed(verdict: i32) bool {
+    if (verdict == ATTEMPT_FIRST) { return true; }
+    if (verdict == ATTEMPT_RETRY) { return true; }
+    return false;
+}
+
+// ─── CHANNEL HEALTH ───────────────────────────────────────────────────────────
+// Measured over a corpus of 152 calls: one channel answered 76 of 76; the other
+// failed in runs of 14 and 22 consecutive, with ZERO isolated failures. A
+// threshold of two consecutive therefore produces no false "down" anywhere in
+// that corpus, and costs exactly one extra full call - the price of not burying
+// a live channel over a single hiccup.
+pub const CHANNEL_DOWN_STRIKES: i32 = 2;
+
+// A dead channel revives ITSELF, with no owner involved: one probe packet per
+// window. Six hours is the same order as the contour's other silence threshold,
+// and gives the channel four chances a day against measured runs of 14 and 22.
+pub const CHANNEL_PROBE_AFTER_SEC: i32 = 21600;
+
+// WHAT IS NOT THE CHANNEL'S FAULT. Three failures happen before anything leaves
+// this side - the outbound guard stopped our packet, our own sender crashed, our
+// key was never set. Nothing went out, so judging the channel by them means
+// burying something alive for our own mistake.
+pub const FAULT_NONE: i32 = 0;
+pub const FAULT_CHANNEL: i32 = 1;
+pub const FAULT_OURS: i32 = 2;
+
+pub fn channel_failed(answered: bool, fault: i32) bool {
+    if (answered) { return false; }
+    if (fault == FAULT_OURS) { return false; }
+    return true;
+}
+
+// Answering clears the counter ENTIRELY, and the same motion stands a dead
+// channel back up. There is no separate revival branch, because a separate
+// branch is a place where "answered" and "alive again" can disagree.
+pub fn strikes_after(strikes: i32, answered: bool, fault: i32) i32 {
+    if (channel_failed(answered, fault) == false) { return 0; }
+    return strikes + 1;
+}
+
+pub fn channel_down(strikes: i32) bool {
+    if (strikes >= CHANNEL_DOWN_STRIKES) { return true; }
+    return false;
+}
+
+// The probe interval is counted FROM THE PROBE, not from when the channel went
+// down - otherwise every subsequent round would probe again immediately, and the
+// budget the threshold bought would be spent in minutes.
+pub fn probe_due(strikes: i32, since_last_probe_sec: i32, probed_before: bool) bool {
+    if (channel_down(strikes) == false) { return false; }
+    if (probed_before == false) { return true; }
+    if (since_last_probe_sec >= CHANNEL_PROBE_AFTER_SEC) { return true; }
+    return false;
+}
+
+// ─── AN OCCASION, NOT A FEED ──────────────────────────────────────────────────
+// Outsiders are called ON AN OCCASION - a large class closed, two of our own
+// measurements disagreeing, an architecture change. A packet per closed chain
+// does not answer that: one measured day held 21 closed chains and 8 occasions.
+//
+// "Large" is named by the count of CONFIRMED commits, never by the size of the
+// text. Across 103 receipts: 38 chains with no commit, 46 with one, 15 with two,
+// 4 with three - so two and above is exactly the line between work that touched
+// more than one step and a one-line edit.
+pub const EVENT_MIN_COMMITS: i32 = 2;
+
+// A commit claimed in a report is not a commit. Only the verified count may
+// cross this threshold; the claim is evidence of intent, not of change.
+pub fn operational_change(verified_commits: i32) bool {
+    if (verified_commits >= EVENT_MIN_COMMITS) { return true; }
+    return false;
+}
+
+// ─── FOLDING REPEATED QUESTIONS ───────────────────────────────────────────────
+// A gate that refuses 53 times in a day is a card every 27 minutes. Across the
+// owner's night that is roughly 18 cards, nearly all of them the same question.
+
+// THRESHOLD = 2. At ONE open occasion a digest is the same card through an extra
+// layer: the owner loses the button and gains a paraphrase. Folding begins
+// exactly where the word "repeat" becomes applicable at all.
+pub const FOLD_MIN: i32 = 2;
+
+// FREQUENCY = 6h per class. Two independent measurements agreed on it, and the
+// second one matters more than the first: six hours was ALREADY named on this
+// contour as the journal-silence threshold. One contour must not hold two
+// different ideas of how much silence is tolerable, or diagnosis drifts toward
+// whichever number was remembered.
+pub const DIGEST_EVERY_SEC: i32 = 21600;
+
+// The tail of closed occasions: a trace of the answer, not a dump.
+pub const KEEP_CLOSED: i32 = 50;
+
+pub fn fold_into_digest(open_waits: i32) bool {
+    if (open_waits >= FOLD_MIN) { return true; }
+    return false;
+}
+
+pub fn digest_due(open_waits: i32, since_last_digest_sec: i32,
+                  ever_digested: bool) bool {
+    if (fold_into_digest(open_waits) == false) { return false; }
+    if (ever_digested == false) { return true; }
+    if (since_last_digest_sec >= DIGEST_EVERY_SEC) { return true; }
+    return false;
+}
+
+// ─── PARKING AN OCCASION ──────────────────────────────────────────────────────
+// Three outcomes, and RESHAPED is not decoration: it is the refusal to resurrect
+// an approval blindly. If the composition changed, the occasion is NEW, the
+// count restarts at zero, and the answer to the previous one does not apply.
+
+pub const PARK_NEW: i32 = 0;
+pub const PARK_AGAIN: i32 = 1;
+pub const PARK_RESHAPED: i32 = 2;
+
+pub fn park_outcome(known: bool, shape_matches: bool) i32 {
+    if (known == false) { return PARK_NEW; }
+    if (shape_matches == false) { return PARK_RESHAPED; }
+    return PARK_AGAIN;
+}
+
+pub fn prior_answer_applies(outcome: i32) bool {
+    if (outcome == PARK_AGAIN) { return true; }
+    return false;
+}
+
+pub fn wait_count_after(previous: i32, outcome: i32) i32 {
+    if (outcome == PARK_AGAIN) { return previous + 1; }
+    return 1;
+}
+
+// ─── A STANDING DECISION NEEDS AN EXPLICIT WORD ───────────────────────────────
+// The lists of words that establish or clear a permanent rule are CLOSED, and
+// guessing is forbidden in both directions. "Probably not needed", "don't ask for
+// now", "leave me alone" are NOT a rule. A system that establishes permanent
+// silence from the mood of a sentence will one day establish it for itself.
+//
+// Both handles are constants, never environment: a deadline that a stale config
+// can silently shorten has stopped being a lock.
+pub fn rule_established(exact_word_matched: bool) bool {
+    if (exact_word_matched == false) { return false; }
+    return true;
+}
+
+pub fn may_stay_silent(rule_active: bool) bool {
+    if (rule_active) { return true; }
+    return false;
+}
+
+// The three answers to a folded class. `applied` means "the caller is PERMITTED
+// to apply this", never "applied" - the caller applies it, through its own gates.
+pub const ANS_APPLIED: i32 = 0;
+pub const ANS_CHANGED: i32 = 1;
+pub const ANS_GONE: i32 = 2;
+
+pub fn answer_outcome(still_open: bool, shape_matches: bool) i32 {
+    if (still_open == false) { return ANS_GONE; }
+    if (shape_matches == false) { return ANS_CHANGED; }
+    return ANS_APPLIED;
+}
+
+pub fn answer_may_be_applied(outcome: i32) bool {
+    if (outcome == ANS_APPLIED) { return true; }
+    return false;
+}
