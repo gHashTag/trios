@@ -242,8 +242,13 @@ export interface WorkerProvider {
  * reported by nothing, which is the zero-length-key trap again: it looks
  * configured and supplies nothing. Widening the list does not widen the swarm -
  * `queenWorkerLimit` still decides that.
+ *
+ * 1024 rather than a round thousand so that this bound can never sit BELOW a
+ * worker ceiling expressed as a power of two: with one lane per credential a
+ * swarm of N bees needs N keys, and a key bound under the worker bound would be
+ * a second, hidden ceiling that reports nothing when it is hit.
  */
-export const MAX_KEYS_PER_POOL = 1000
+export const MAX_KEYS_PER_POOL = 1024
 
 function keysFor(envVar: string): string[] {
   const keys: string[] = []

@@ -69,8 +69,8 @@ const KEYS = [
   'TRIOS_QUEEN_MAX_WORKERS',
   // The far end of the key list (MAX_KEYS_PER_POOL) and the first name past it.
   'TRIOS_QUEEN_WORKER_API_KEY_17',
-  'TRIOS_QUEEN_WORKER_API_KEY_1000',
-  'TRIOS_QUEEN_WORKER_API_KEY_1001',
+  'TRIOS_QUEEN_WORKER_API_KEY_1024',
+  'TRIOS_QUEEN_WORKER_API_KEY_1025',
   'TRIOS_ZAI_CONCURRENCY_PER_KEY',
   ...POOL_VARIABLES,
 ]
@@ -491,18 +491,18 @@ describe('queen dispatch precheck', () => {
       // 16 was where the loop ended, not a measurement: a seventeenth variable
       // was read by nothing and reported by nothing.
       process.env.TRIOS_QUEEN_WORKER_API_KEY_17 = 'z17'
-      process.env.TRIOS_QUEEN_WORKER_API_KEY_1000 = 'z1000'
-      process.env.TRIOS_QUEEN_WORKER_API_KEY_1001 = 'past-the-bound'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_1024 = 'z1024'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_1025 = 'past-the-bound'
       process.env.TRIOS_QUEEN_MAX_WORKERS = '16'
 
-      expect(MAX_KEYS_PER_POOL).toBe(1000)
+      expect(MAX_KEYS_PER_POOL).toBe(1024)
       expect(workerCapacityBreakdown()).toEqual({
         connectedCredentials: 3,
         lanesPerCredential: 1,
         effectiveCapacity: 3,
       })
       expect(resolveWorkerProvider([0])?.apiKey).toBe('z17')
-      expect(resolveWorkerProvider([0, 1])?.apiKey).toBe('z1000')
+      expect(resolveWorkerProvider([0, 1])?.apiKey).toBe('z1024')
       expect(resolveWorkerProvider([0, 1, 2])?.exhausted).toBe(3)
     })
 
