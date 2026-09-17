@@ -167,11 +167,12 @@ help:
 # as a mystery and used to justify a slack ceiling. Cutting at the end of the
 # app build removes the guesswork.
 #
-# The count was 5 when the gate went in and is 4 now: the discarded runProcess
-# result in branch creation became the failure reason the user sees. The four
-# that remain are deprecated Text concatenation in RichTextRenderer, and
-# replacing them means rebuilding inline markdown on AttributedString - visible
-# to the user, and not something to change without looking at the screen.
+# The count was 5 when the gate went in and 4 for a long time after: the
+# discarded runProcess result in branch creation became the failure reason the
+# user sees. Those four were the deprecated Text concatenations in
+# RichTextRenderer, whose removal was the AttributedString rewrite of
+# styledText - see WARNING_CEILING below for how that debt was tracked and
+# then paid.
 #
 # Uses /usr/bin/grep deliberately: this shell has grep shadowed by a function.
 #
@@ -251,22 +252,18 @@ help:
 # slow is a check nobody runs, which is how this gate rotted the first time. See
 # WARN_FULL_ROOT below for what replaced it; the target still prints its own
 # [warnings] timing line, so the figure stays honest either way.
-# WHY FOUR, ASKED HONESTLY. This number is a READING, not a requirement. It is
-# exactly the count of `'+' was deprecated in macOS 26.0` warnings in
-# BR-OUTPUT/RichTextRenderer.swift lines 73/75/77/79, and it was set to that
-# count. The requirement is zero. The same shape sat in XCTEST_ERROR_CEILING for
-# months at 2, where 2 was the number of errors a broken source list happened to
-# produce; asking "why is it green at this number" is what found it.
+# Zero is the requirement, and this ceiling states it. The value was 4 for as
+# long as BR-OUTPUT/RichTextRenderer.swift concatenated Text values with the
+# deprecated +; the AttributedString rewrite of styledText removed those four
+# concatenations, and the count is genuinely 0 (verified by touching the file
+# and recompiling, not from cache).
 #
-# It is not lowered to zero today because the fix is not a one-liner: the four
-# calls concatenate Text values that carry DIFFERENT styling (bold, italic,
-# monospaced), so the modern replacement is an AttributedString rewrite of
-# styledText, not a substitution. That changes rendering, and rendering is not
-# verifiable from a build log. Tracked rather than pretended away.
-# Zero, and derived from the requirement rather than from a reading. It was 4
-# for as long as BR-OUTPUT/RichTextRenderer.swift concatenated Text values with
-# the deprecated +; that rewrite landed on AttributedString and the count is
-# genuinely 0 (verified by touching the file and recompiling, not from cache).
+# The 4 was a reading - exactly the `'+' was deprecated in macOS 26.0` count -
+# and it sat here as a named debt, not a requirement, because the fix was an
+# AttributedString rewrite that changes rendering, and rendering is not
+# verifiable from a build log. The same shape sat in XCTEST_ERROR_CEILING for
+# months at 2, where 2 was the number of errors a broken source list happened
+# to produce; asking "why is it green at this number" is what found it.
 WARNING_CEILING := 0
 
 # Where the per-file warning cache lives. Inside the dev object directory on
@@ -1469,6 +1466,26 @@ recipe-backticks:
 		echo "[OK] no command substitution hidden in recipe prose"; \
 	fi
 
+# --- Skill frontmatter gate ----------------------------------------------
+#
+# The deployed skill loader (trios/agent-server/apps/server/src/skills/
+# loader.ts) runs every SKILL.md through gray-matter and drops any file whose
+# frontmatter is not valid YAML with a non-empty name and description. Most
+# of the shipped skills violated that contract and nothing read those files,
+# so the breakage was invisible: the Swift-side SkillCatalog hand-parses and
+# falls back to the directory name and first heading, which painted every
+# skill as healthy.
+#
+# The gate is a structural line reader in tools/skill-frontmatter-gate.mjs,
+# not a YAML parser: Node ships none, and Bun's disagrees with the shipped
+# loader on duplicated mapping keys, so a parser-based gate could pass a file
+# the loader drops. Skills owned by issue 1356 (doctor, clade-seal,
+# t27-phi-loop, t27-tri-pipeline) are audited and reported but never counted
+# here, so this check stays green while that issue edits its own files.
+.PHONY: skill-frontmatter
+skill-frontmatter:
+	node "$(ROOT)/tools/skill-frontmatter-gate.mjs"
+
 # --- Empty-source guard ------------------------------------------------
 #
 # Mid-run on #1238, rings/SR-00/QueenObserver.swift turned up at zero bytes
@@ -2023,7 +2040,7 @@ check-bypass:
 	@echo "[check-bypass] diagnostic full walk: lock phase jumped (owner root-heals; never for CI)"
 	@TRIOS_SKIP_LOCK=1 $(MAKE) --no-print-directory check
 
-check: check-selftest keychain-doors type-floor t27-rings t27-lowering chain make-dollars recipe-backticks empty-sources sources-drift sources-drift-selftest finish-mark-order guard-shapes variant-fence parse-tests run-completeness-selftest cassette-isolation vendor-step dev warnings test cassettes mutants-changed
+check: check-selftest keychain-doors type-floor t27-rings t27-lowering chain make-dollars recipe-backticks empty-sources sources-drift sources-drift-selftest finish-mark-order guard-shapes variant-fence parse-tests run-completeness-selftest cassette-isolation vendor-step dev warnings test cassettes mutants-changed skill-frontmatter
 
 # Replay every cassette and assert the expected signal appears in the log.
 #
@@ -2067,32 +2084,72 @@ SWEEP_CANARY := queen/0-sweep-canary
 #
 # Scoped to the recipe, not the file: DEV_APP and .trinity-dev are legitimate
 # everywhere else in this Makefile.
+#
+# #1276: the gate used to stop at the Makefile. `make check` drives shell
+# scripts as well - build.sh runs tests/swift/run_chat_sse_e2e.sh at the end
+# of a build, `make e2e` and the mutants rows bash it directly - so a
+# `.trinity-dev` rm inside that script passed the gate untouched: the same
+# hole, one level down. The gate now follows the recipe into every
+# tests/**/*.sh path the cassette recipe names (FR-001) plus every script in
+# ISOLATION_SCRIPTS below, and holds all of them to one forbidden list
+# (FR-002), reported on failure with file and line (FR-003).
+#
+# ISOLATION_SCRIPTS - the scripts the gate always scans. Repo-root RELATIVE on
+# purpose: the recipe body re-reads this very line out of the Makefile at run
+# time (grep + cut), so its value must be a path that works both under make
+# and when the body is lifted out verbatim and run with plain sh from the
+# repo root - which is how the gate is proven, the worker image carrying no
+# make. A $(ROOT)-prefixed path would arrive under plain sh as a broken
+# literal.
+ISOLATION_SCRIPTS := tests/swift/run_chat_sse_e2e.sh
+#
+# The forbidden list is written ONCE, in the single grep at the tail of the
+# recipe, and applied to the cassette recipe and to every scanned script in
+# the same invocation - two lists could drift apart, and a drifted half is a
+# hole. The dev-log needle is spelled `(LOG)` rather than `$(LOG)` because the
+# recipe body carries no dollar sign at all: a single one would be eaten by
+# make (or run as a substitution by plain sh), a doubled one would survive
+# make but not plain sh, and `(LOG)` catches both spellings a recipe could
+# use to reach the dev log - `$(LOG)` and `$$(LOG)` - while carrying none
+# itself.
+#
+# The body is one sh -c block reading only repo-root-relative paths so it can
+# be lifted out between its quotes and run as `sh -c '<body>'` from the repo
+# root with no make in sight (FR-004); it therefore carries no dollar sign,
+# no backtick and no nested single quote.
 .PHONY: cassette-isolation
 cassette-isolation:
-	@body=$$(awk '/^cassettes: /,/^# --- Running/' "$(ROOT)/Makefile"); \
-	if [ -z "$$body" ]; then \
-		echo "[FAIL] cassette-isolation could not find the cassettes recipe to read"; \
-		exit 1; \
-	fi; \
-	fail=0; \
-	for needle in 'trios-dev' '.trinity-dev' 'DEV_APP' 'DEV_PROC' '$$(LOG)'; do \
-		if printf '%s\n' "$$body" | /usr/bin/grep -qF -- "$$needle"; then \
-			echo "  [FAIL] the cassette recipe names '$$needle'"; \
-			echo "         The harness runs as the test variant precisely so it can"; \
-			echo "         kill and wipe freely. Reaching into dev destroys the"; \
-			echo "         Queen's live delegation registry (#1275 follow-up)."; \
-			fail=1; \
-		fi; \
-	done; \
-	if ! printf '%s\n' "$$body" | /usr/bin/grep -qF -- 'trios-test'; then \
-		echo "  [FAIL] the cassette recipe names no test variant at all -"; \
-		echo "         a rename would satisfy every check above by accident."; \
-		fail=1; \
-	fi; \
-	if [ $$fail -eq 0 ]; then \
-		echo "[OK] the cassette recipe stays inside the test variant"; \
-	fi; \
-	exit $$fail
+	@sh -c 'if sed -n "/^cassettes: /,/^# --- Running/p" Makefile | grep -q .; then :; else \
+	echo "[FAIL] cassette-isolation could not find the cassettes recipe to read"; exit 1; fi; \
+	if sed -n "/^cassettes: /,/^# --- Running/p" Makefile | grep -qF trios-test; then :; else \
+	echo "[FAIL] the cassette recipe names no test variant at all -"; \
+	echo "       a rename would satisfy every check above by accident."; exit 1; fi; \
+	{ sed -n "/^cassettes: /,/^# --- Running/p" Makefile | grep -o "tests/[A-Za-z0-9_./-]*[.]sh"; \
+	grep "^ISOLATION_SCRIPTS := " Makefile | cut -d " " -f 3- | tr " " "\n" | grep .; } | sort -u \
+	| grep -q . || { echo "[FAIL] cassette-isolation collected no scripts to scan:"; \
+	echo "       ISOLATION_SCRIPTS is empty and the cassette recipe names no"; \
+	echo "       tests/**/*.sh script. A gate that scans no script is the #1276 hole."; exit 1; }; \
+	{ sed -n "/^cassettes: /,/^# --- Running/p" Makefile | grep -o "tests/[A-Za-z0-9_./-]*[.]sh"; \
+	grep "^ISOLATION_SCRIPTS := " Makefile | cut -d " " -f 3- | tr " " "\n" | grep .; } | sort -u \
+	| sed "s/^/  [cassette-isolation] scanning /"; \
+	{ sed -n "/^cassettes: /,/^# --- Running/p" Makefile | grep -o "tests/[A-Za-z0-9_./-]*[.]sh"; \
+	grep "^ISOLATION_SCRIPTS := " Makefile | cut -d " " -f 3- | tr " " "\n" | grep .; } | sort -u \
+	| xargs -n1 test -f || { echo "[FAIL] a script this gate scans (one from the list above) is"; \
+	echo "       not a regular file - a scan that cannot open its file scans nothing"; \
+	echo "       (#1276)."; exit 1; }; \
+	if { sed -n "/^cassettes: /,/^# --- Running/{=;p;}" Makefile | paste -d : - - \
+	| sed "s/^/Makefile:/"; \
+	{ sed -n "/^cassettes: /,/^# --- Running/p" Makefile | grep -o "tests/[A-Za-z0-9_./-]*[.]sh"; \
+	grep "^ISOLATION_SCRIPTS := " Makefile | cut -d " " -f 3- | tr " " "\n" | grep .; } | sort -u \
+	| xargs grep -nH ""; } \
+	| grep -F -e trios-dev -e .trinity-dev -e DEV_APP -e DEV_PROC -e "(LOG)"; then \
+	echo "[FAIL] the cassette pipeline reaches into the dev variant - the first"; \
+	echo "       match above carries its file and line. The harness runs as the"; \
+	echo "       test variant precisely so it can kill and wipe freely. Reaching"; \
+	echo "       into dev destroys the live delegation registry of the Queen (#1275"; \
+	echo "       follow-up; #1276 is the same hole one level down, in the scripts"; \
+	echo "       the recipe calls)."; exit 1; \
+	else echo "[OK] the cassette recipe and every script it drives stay inside the test variant"; fi'
 
 # The harness bundle the cassette suite drives.
 #
@@ -3078,6 +3135,11 @@ run-completeness-selftest:
 	fi; \
 	exit $$fail
 
+# TRIOS_E2E_DISABLE_KEYCHAIN=1 on the swift test line in this recipe is a
+# contract, not a spell in someone's memory: without it
+# KeychainSymmetricKeyStoreTests dies on "Fatal error: Unexpectedly found nil"
+# against a real keychain, and nothing after it executes. The six tests pass
+# with it; the run still exits with signal 5 - that remains unexplained.
 xctest:
 	@tmp=$$(mktemp -d /tmp/trios_xctest.XXXXXX) || exit 1; \
 	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
@@ -3138,7 +3200,9 @@ xctest:
 	if [ "$$reached" -eq 1 ] && [ "$$errors" -lt $(XCTEST_ERROR_CEILING) ]; then \
 		echo "[NOTE] under the ceiling. Lower XCTEST_ERROR_CEILING in the Makefile so the"; \
 		echo "       gain cannot be given back."; \
-	fi
+	fi; \
+	TRIOS_E2E_DISABLE_KEYCHAIN=1 TRIOS_VARIANT=dev swift test --package-path "$(ROOT)/.." "$${xflags[@]}" > "$$tmp/run" 2>&1 || true; \
+	$(MAKE) --no-print-directory xctest-log-complete LOG="$$tmp/run" || true
 
 # --- Mutation ------------------------------------------------------------
 
@@ -5556,7 +5620,12 @@ backlog-audit:
 # stops.  Verifying a restore against a checksum taken from the same file
 # before it was backed up, which is what this used to do, cannot fail: it
 # compares the copy with the thing it was copied from.  Same hole as `make
-# mutants` had, same fix (b4d1946fe).
+# mutants` had, same fix (b4d1946fe).  The restore itself is one function,
+# restore_one victim backup mutated_sha: before any cp it compares the live
+# file to mutated_sha - the sum of the state this recipe last wrote, taken
+# from the composed bytes and never re-read off disk - and on a mismatch it
+# prints [REFUSED] with both paths and restores nothing, so what a second
+# writer left survives us, with the backup kept as the only way back.
 .PHONY: check-selftest
 check-selftest:
 	@fail=0; \
@@ -5570,22 +5639,23 @@ check-selftest:
 	md_backup=$$(mktemp); \
 	cp "$$md_file" "$$md_backup"; \
 	md_sha=$$(shasum "$$md_file" | cut -d" " -f1); \
-	: "held_victim / held_md are the sha of the state this recipe last left on"; \
-	: "disk.  claim_* re-reads the file and refuses when it no longer holds it."; \
-	: "A held sha is never taken by reading the file back after writing to it:"; \
-	: "a writer that lands between the write and that read is measured INTO the"; \
-	: "expected state and then restored away.  Driven on #1266 - a poll loop beat"; \
-	: "the shasum every time.  So each mutation is composed in a temp file first"; \
-	: "and the sha comes from the bytes we are about to write, not from disk."; \
+	: "held_victim / held_md carry, per file, the mutated_sha of the state this"; \
+	: "recipe last left on disk.  claim_* re-reads the file and refuses when it"; \
+	: "no longer holds it.  A mutated_sha is never taken by reading the file"; \
+	: "back after writing to it:  a writer that lands between the write and"; \
+	: "that read is measured INTO the expected state and then restored away."; \
+	: "Driven on #1266 - a poll loop beat the shasum every time.  So each"; \
+	: "mutation is composed in a temp file first and the sha comes from the"; \
+	: "bytes we are about to write, not from disk."; \
 	vt=$$(mktemp); mt=$$(mktemp); \
 	held_victim=$$victim_sha; held_md=$$md_sha; \
 	lost_victim=0; lost_md=0; \
 	still_held() { [ "$$(shasum "$$1" 2>/dev/null | cut -d" " -f1)" = "$$2" ]; }; \
 	refuse() { \
-		echo "  [FAIL] $$1 changed while check-selftest held it."; \
-		echo "         Writing to it now would silently discard that change, so"; \
-		echo "         the file is left exactly as it stands; resolve by hand."; \
-		echo "         Pre-harness copy of the file: $$2"; \
+		echo "  [REFUSED] $$1 changed while check-selftest held it."; \
+		echo "            Writing to it now would silently discard that change, so"; \
+		echo "            the file is left exactly as it stands; resolve by hand."; \
+		echo "            Pre-harness copy of the file: $$2"; \
 		fail=1; \
 	}; \
 	claim_victim() { \
@@ -5609,31 +5679,54 @@ check-selftest:
 		  printf 'private func checkSelftestKeychainDoor() {\n'; \
 		  printf '    _ = SecItemAdd([:] as CFDictionary, nil)\n'; \
 		  printf '}\n'; } > "$$vt"; \
-		held_victim=$$(shasum "$$vt" | cut -d" " -f1); \
+		mutated_sha=$$(shasum "$$vt" | cut -d" " -f1); \
+		held_victim=$$mutated_sha; \
 		cp "$$vt" "$$victim"; \
 	}; \
 	empty_victim() { \
 		claim_victim || return 1; \
-		held_victim=$$(printf '' | shasum | cut -d" " -f1); \
+		mutated_sha=$$(printf '' | shasum | cut -d" " -f1); \
+		held_victim=$$mutated_sha; \
 		: > "$$victim"; \
 	}; \
 	mutate_md() { \
 		claim_md || return 1; \
 		{ cat "$$md_backup"; printf '\techo "$$PLANTED_BUG"\n'; } > "$$mt"; \
-		held_md=$$(shasum "$$mt" | cut -d" " -f1); \
+		mutated_sha=$$(shasum "$$mt" | cut -d" " -f1); \
+		held_md=$$mutated_sha; \
 		cp "$$mt" "$$md_file"; \
 	}; \
+	restore_one() { \
+		: "the restore trap, extracted for #1266 into one function of three"; \
+		: "arguments: 1=victim path, 2=backup path, 3=mutated_sha - the sum of"; \
+		: "the state this recipe last wrote to the victim.  The live file is"; \
+		: "compared to THAT sum, never to the backup: a backup always sums to"; \
+		: "itself, so a restore verified against the copy it restored from"; \
+		: "cannot fail, it can only prove that cp ran (#1266, b4d1946fe)."; \
+		mutated_sha=$$3; \
+		now_sha=$$(shasum "$$1" 2>/dev/null | cut -d" " -f1); \
+		if [ "$$now_sha" != "$$mutated_sha" ]; then \
+			echo "  [REFUSED] $$1 changed while check-selftest held it mutated."; \
+			echo "            Restoring $$2 over it would silently revert that write."; \
+			echo "            The file is left as the second writer left it; the"; \
+			echo "            backup is kept, because that path is the only way back."; \
+			echo "            victim: $$1"; \
+			echo "            backup: $$2"; \
+			return 1; \
+		fi; \
+		cp "$$2" "$$1" || { \
+			echo "  [FAIL] could not restore $$1 from $$2"; return 1; \
+		}; \
+	}; \
 	restore_victim() { \
-		claim_victim || return 1; \
-		cp "$$backup" "$$victim" || { \
-			echo "  [FAIL] could not restore $$victim from $$backup"; fail=1; return 1; \
+		restore_one "$$victim" "$$backup" "$$held_victim" || { \
+			lost_victim=1; fail=1; return 1; \
 		}; \
 		held_victim=$$victim_sha; \
 	}; \
 	restore_md() { \
-		claim_md || return 1; \
-		cp "$$md_backup" "$$md_file" || { \
-			echo "  [FAIL] could not restore $$md_file from $$md_backup"; fail=1; return 1; \
+		restore_one "$$md_file" "$$md_backup" "$$held_md" || { \
+			lost_md=1; fail=1; return 1; \
 		}; \
 		held_md=$$md_sha; \
 	}; \

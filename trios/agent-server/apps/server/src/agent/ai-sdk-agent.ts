@@ -1,3 +1,4 @@
+import { isBrowserlessByConfiguration } from './browserless'
 import { devToolsMiddleware } from '@ai-sdk/devtools'
 import type {
   LanguageModelV3,
@@ -32,7 +33,11 @@ import { buildMemoryToolSet } from '../tools/memory/build-toolset'
 import type { ToolRegistry } from '../tools/tool-registry'
 import { CHAT_MODE_ALLOWED_TOOLS } from './chat-mode'
 import { createCompactionPrepareStep, type StepWithUsage } from './compaction'
-import { buildMcpServerSpecs, createMcpClients } from './mcp-builder'
+import {
+  buildMcpServerSpecs,
+  createMcpClients,
+  type McpConnectFailure,
+} from './mcp-builder'
 import {
   getMessageNormalizationOptions,
   normalizeMessagesForModel,
@@ -58,14 +63,20 @@ export class AiSdkAgent {
     private _agent: ToolLoopAgent,
     private _messages: UIMessage[],
     private _mcpClients: Array<{ close(): Promise<void> }>,
+    private _mcpConnectFailures: McpConnectFailure[],
     private conversationId: string,
     private _toolNames: Set<string>,
     private toolContext: ToolContext,
   ) {}
 
-  /** Tool names registered on this agent — used to sanitize messages during session rebuilds. */
+  /** Tool names registered on this agent - used to sanitize messages during session rebuilds. */
   get toolNames(): Set<string> {
     return this._toolNames
+  }
+
+  /** MCP servers that were requested for this session but never connected, after all retries. */
+  get mcpConnectFailures(): McpConnectFailure[] {
+    return this._mcpConnectFailures
   }
 
   static async create(config: AiSdkAgentConfig): Promise<AiSdkAgent> {
@@ -123,7 +134,7 @@ export class AiSdkAgent {
     }
 
     // Get Klavis tools from shared background handle (no per-session connection).
-    // Only expose when user has enabled servers — matches old per-session gating.
+    // Only expose when user has enabled servers - matches old per-session gating.
     const klavisTools =
       config.klavisRef?.handle &&
       config.browserContext?.enabledMcpServers?.length
@@ -134,7 +145,18 @@ export class AiSdkAgent {
     const specs = await buildMcpServerSpecs({
       browserContext: config.browserContext,
     })
-    const { clients, tools: customMcpTools } = await createMcpClients(specs)
+    const {
+      clients,
+      tools: customMcpTools,
+      failures: mcpConnectFailures,
+    } = await createMcpClients(specs)
+    // A lost MCP server must be visible to the caller, not only to a log file
+    if (mcpConnectFailures.length > 0) {
+      logger.error('MCP servers failed to connect after all retries', {
+        conversationId: config.resolvedConfig.conversationId,
+        failures: mcpConnectFailures,
+      })
+    }
     const collidingToolNames = Object.keys(customMcpTools).filter(
       (name) => name in klavisTools,
     )
@@ -181,7 +203,7 @@ export class AiSdkAgent {
       }
     }
 
-    // Add filesystem tools — skip in chat mode (read-only) and when no workspace is selected
+    // Add filesystem tools - skip in chat mode (read-only) and when no workspace is selected
     const filesystemTools =
       !config.resolvedConfig.chatMode && config.resolvedConfig.workingDir
         ? buildFilesystemToolSet(config.resolvedConfig.workingDir)
@@ -189,8 +211,30 @@ export class AiSdkAgent {
     const memoryTools = config.resolvedConfig.chatMode
       ? {}
       : buildMemoryToolSet()
+    // NO BROWSER WILL EVER EXIST HERE, SO DO NOT DESCRIBE ONE.
+    //
+    // A tool costs its schema in every request whether or not it is ever
+    // called. Measured on the swarm's first turn against a 16k model:
+    // toolCount=79 and an opening prompt of 15,747 tokens against an
+    // n_ctx_slot of 16,384 - 96.1% of the window spent before the model
+    // generated a single token, most of it on browser schemas that could only
+    // have failed. With n_keep=4 an overflow discards the system prompt first,
+    // so the turn ends without the "## VERDICT" block the review parses, and
+    // the dispatch sits in `wait` for six hours having done nothing.
+    //
+    // Gated on configuration, NOT on isCdpConnected(): a desktop browser that
+    // has not come up yet answers false to that and will answer true shortly,
+    // because main.ts retries every 10s. Only `cdpPort === null` means no
+    // browser is coming.
+    const browserless = isBrowserlessByConfiguration()
+    const usableBrowserTools = browserless ? {} : browserTools
+    if (browserless && Object.keys(browserTools).length > 0) {
+      logger.info('Headless by configuration, omitting browser tools', {
+        omitted: Object.keys(browserTools).length,
+      })
+    }
     const tools = {
-      ...browserTools,
+      ...usableBrowserTools,
       ...externalMcpTools,
       ...filesystemTools,
       ...memoryTools,
@@ -256,7 +300,7 @@ export class AiSdkAgent {
         ),
       })
 
-    // Codex requires store=false — tell the SDK to inline content
+    // Codex requires store=false - tell the SDK to inline content
     // instead of using item_reference (which fails with store=false)
     const isChatGPTPro =
       config.resolvedConfig.provider === LLM_PROVIDERS.CHATGPT_PRO
@@ -290,6 +334,7 @@ export class AiSdkAgent {
       agent,
       [],
       clients,
+      mcpConnectFailures,
       config.resolvedConfig.conversationId,
       new Set(Object.keys(tools)),
       toolContext,

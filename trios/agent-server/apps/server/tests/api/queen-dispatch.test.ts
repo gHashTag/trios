@@ -1,26 +1,35 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, it } from 'bun:test'
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Pool } from 'pg'
 import {
-  clearRefusedKeys,
+  classifyQuotaExhaustion,
   closeDispatch,
   committedFileCount,
   committedFiles,
+  configuredWorkerCapacity,
+  configuredWorkerLanesPerCredential,
+  dispatchBee,
   drain,
   finishDispatch,
-  keyIsLive,
   missingProviderRefusal,
-  noteKeyRefused,
   prepareWorktree,
   recordDispatch,
-  refusedKeyCount,
   resolveWorkerProvider,
-  Scribe,
+  setDurableCloseListener,
+  workerCapacityBreakdown,
   workspaceRoot,
 } from '../../src/api/services/queen-dispatch'
 import { logger } from '../../src/lib/logger'
+
+const GENERIC_WORKER_KEYS = [
+  'TRIOS_QUEEN_WORKER_API_KEY',
+  ...Array.from(
+    { length: 15 },
+    (_, index) => `TRIOS_QUEEN_WORKER_API_KEY_${index + 2}`,
+  ),
+]
 
 const KEYS = [
   'ZAI_API_KEY',
@@ -31,10 +40,31 @@ const KEYS = [
   'OPENROUTER_API_KEY',
   'MOONSHOT_API_KEY',
   'OPENAI_API_KEY',
+  // #1308's factorisation table configures a second OpenAI slot. Bun runs the
+  // api test files in ONE process, so a suffixed name missing from this list
+  // is not a tidiness problem: it survives into the next FILE and makes a
+  // "nothing is connected" case read one connected credential.
+  'OPENAI_API_KEY_2',
+  ...GENERIC_WORKER_KEYS,
+  'TRIOS_QUEEN_WORKER_PROVIDER',
+  'TRIOS_QUEEN_WORKER_BASE_URL',
   'TRIOS_QUEEN_WORKER_MODEL',
+  'TRIOS_QUEEN_WORKER_CONTEXT',
+  'TRIOS_ZAI_CONCURRENCY_PER_KEY',
 ]
 
 afterEach(() => {
+  for (const key of KEYS) delete process.env[key]
+})
+
+// The suite must pass under the environment #1293's independent test describes:
+// `ZAI_API_KEY=x ZAI_API_KEY_2=x bun test ...`. Variables present when the
+// process starts would otherwise walk into the FIRST case, which asserts that a
+// deployment with no credential refuses - and clearing only between cases is
+// one case too late. Clearing here also keeps any real secret sitting in the
+// runner's environment out of every assertion below, so a failure can never
+// print one.
+beforeAll(() => {
   for (const key of KEYS) delete process.env[key]
 })
 
@@ -49,9 +79,16 @@ describe('queen dispatch precheck', () => {
 
   it('names every variable that would fix it, and who may set it', () => {
     const refusal = missingProviderRefusal()
-    for (const key of KEYS.filter((k) => k.endsWith('API_KEY'))) {
+    for (const key of [
+      'ZAI_API_KEY',
+      'ANTHROPIC_API_KEY',
+      'OPENROUTER_API_KEY',
+      'MOONSHOT_API_KEY',
+      'OPENAI_API_KEY',
+    ]) {
       expect(refusal).toContain(key)
     }
+    expect(refusal).not.toContain('TRIOS_QUEEN_WORKER_API_KEY')
     expect(refusal).toContain('operator')
   })
 
@@ -82,6 +119,127 @@ describe('queen dispatch precheck', () => {
     expect(workspaceRoot()).toBe('/workspace/BrowserOS')
   })
 
+  describe('configured OpenAI-compatible endpoint key pool', () => {
+    /**
+     * Production contract measured on 2026-09-13: Railway held seven named,
+     * non-empty generic worker-key variables with six distinct values, aimed
+     * at the ordinary Z.ai Model API. Capacity, selection, and the provider
+     * sent to /chat must all describe that same six-key pool. A duplicated
+     * value is one credential, and no key value may enter public telemetry.
+     */
+    it('connects six distinct credentials behind the four-worker policy ceiling', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+
+      const configured = ['a', 'b', 'c', 'c', 'd', 'e', 'f']
+      configured.forEach((value, index) => {
+        process.env[GENERIC_WORKER_KEYS[index]] = value
+      })
+
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 6,
+        lanesPerCredential: 1,
+        effectiveCapacity: 4,
+      })
+      const choices = Array.from({ length: 6 }, (_, occupied) =>
+        resolveWorkerProvider(Array.from({ length: occupied }, (_, i) => i)),
+      )
+      expect(choices.map((choice) => choice?.provider)).toEqual(
+        Array(6).fill('zai'),
+      )
+      expect(choices.map((choice) => choice?.keyIndex)).toEqual([
+        0, 1, 2, 3, 4, 5,
+      ])
+      expect(choices.map((choice) => choice?.keyCount)).toEqual(
+        Array(6).fill(6),
+      )
+      expect(resolveWorkerProvider([0, 1, 2, 3, 4, 5])?.exhausted).toBe(6)
+    })
+
+    it('continues after the last assigned key so all six participate across four-Bee waves', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+      ;['a', 'b', 'c', 'd', 'e', 'f'].forEach((value, index) => {
+        process.env[GENERIC_WORKER_KEYS[index]] = value
+      })
+
+      const wave = (after: number | undefined) => {
+        const selected: number[] = []
+        let cursor = after
+        for (let bee = 0; bee < 4; bee++) {
+          const choice = resolveWorkerProvider(selected, cursor)
+          expect(choice?.apiKey).toBeDefined()
+          selected.push(choice?.keyIndex ?? -1)
+          cursor = choice?.keyIndex
+        }
+        return { selected, cursor }
+      }
+
+      const first = wave(undefined)
+      const second = wave(first.cursor)
+      expect(first.selected).toEqual([0, 1, 2, 3])
+      expect(second.selected).toEqual([4, 5, 0, 1])
+    })
+
+    it('does not invent a credential for a remote endpoint with no API key', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+      // An explicit endpoint is authoritative. A legacy provider key must not
+      // silently bypass it and send the turn to a different API.
+      process.env.ZAI_API_KEY = 'legacy-key-for-another-route'
+
+      expect(resolveWorkerProvider()).toBeNull()
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 0,
+        lanesPerCredential: 1,
+        effectiveCapacity: 0,
+      })
+      expect(missingProviderRefusal()).toContain('TRIOS_QUEEN_WORKER_API_KEY')
+      expect(missingProviderRefusal()).not.toContain('ZAI_API_KEY')
+    })
+
+    it('names the generic endpoint variable when every configured key is busy', async () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY = 'a'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_2 = 'b'
+      const pool = {
+        query: async () => ({ rowCount: 1, rows: [] }),
+      } as unknown as Pool
+
+      const outcome = await dispatchBee(pool, 1308, 'brief', [], [0, 1])
+
+      expect(outcome.started).toBe(false)
+      expect(outcome.detail).toContain('TRIOS_QUEEN_WORKER_API_KEY_3')
+      expect(outcome.detail).not.toContain('ZAI_API_KEY_3')
+    })
+
+    it('keeps an explicitly local endpoint as one measured lane on any hostname', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'ollama'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'http://ollama:11434/v1'
+
+      expect(resolveWorkerProvider()?.provider).toBe('ollama')
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 1,
+        lanesPerCredential: 1,
+        effectiveCapacity: 1,
+      })
+    })
+
+    it('reports no capacity for an unsupported endpoint provider', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'not-a-provider'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://example.invalid/v1'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY = 'real-but-unroutable'
+
+      expect(resolveWorkerProvider()).toBeNull()
+      expect(workerCapacityBreakdown().effectiveCapacity).toBe(0)
+      expect(missingProviderRefusal()).toContain('TRIOS_QUEEN_WORKER_PROVIDER')
+    })
+  })
+
   // Four bees on one key share one rate limit, so the swarm's real ceiling
   // becomes whatever that key allows rather than what the Queen permits - and
   // the 429 arrives blamed on the work.
@@ -105,6 +263,49 @@ describe('queen dispatch precheck', () => {
       const chosen = resolveWorkerProvider([0, 1])
       expect(chosen?.exhausted).toBe(2)
       expect(chosen?.apiKey).toBeUndefined()
+    })
+
+    it('spreads Max-plan lanes across keys before reusing either key', () => {
+      process.env.ZAI_API_KEY = 'a'
+      process.env.ZAI_API_KEY_2 = 'b'
+      process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '2'
+      expect(configuredWorkerLanesPerCredential()).toBe(2)
+      expect(configuredWorkerCapacity()).toBe(4)
+
+      const first = resolveWorkerProvider([])
+      const second = resolveWorkerProvider([0])
+      const third = resolveWorkerProvider([0, 1])
+      const fourth = resolveWorkerProvider([0, 1, 0])
+      const exhausted = resolveWorkerProvider([0, 1, 0, 1])
+
+      expect([
+        first?.keyIndex,
+        second?.keyIndex,
+        third?.keyIndex,
+        fourth?.keyIndex,
+      ]).toEqual([0, 1, 0, 1])
+      expect([
+        first?.laneIndex,
+        second?.laneIndex,
+        third?.laneIndex,
+        fourth?.laneIndex,
+      ]).toEqual([0, 0, 1, 1])
+      expect(exhausted?.exhausted).toBe(4)
+      expect(exhausted?.apiKey).toBeUndefined()
+    })
+
+    it('fails safe at one lane and bounds an operator override to four', () => {
+      expect(configuredWorkerLanesPerCredential(undefined)).toBe(1)
+      expect(configuredWorkerLanesPerCredential('0')).toBe(1)
+      expect(configuredWorkerLanesPerCredential('not-a-number')).toBe(1)
+      expect(configuredWorkerLanesPerCredential('99')).toBe(4)
+    })
+
+    it('does not apply the Z.ai lane override to another provider', () => {
+      process.env.ANTHROPIC_API_KEY = 'anthropic-a'
+      process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '2'
+      expect(configuredWorkerCapacity()).toBe(1)
+      expect(resolveWorkerProvider([0])?.exhausted).toBe(1)
     })
 
     // The trap this design exists to avoid. The four issues in flight when it
@@ -134,6 +335,243 @@ describe('queen dispatch precheck', () => {
       expect(resolveWorkerProvider([])?.keyCount).toBe(2)
       expect(resolveWorkerProvider([0])?.apiKey).toBe('c')
     })
+
+    // #1293. A variable duplicated across names - the platform's copy button,
+    // an env block pasted twice - is one account with one rate limit. Counting
+    // it twice makes the dashboard promise parallel capacity that shares a
+    // single limit, and the second "free" slot hands a bee a secret its
+    // sibling is already spending.
+    describe('duplicate secrets', () => {
+      it('reports one slot when both variables hold the same key', () => {
+        process.env.ZAI_API_KEY = 'a'
+        process.env.ZAI_API_KEY_2 = 'a'
+        expect(configuredWorkerCapacity()).toBe(1)
+      })
+
+      it('reports two slots for two distinct keys', () => {
+        process.env.ZAI_API_KEY = 'a'
+        process.env.ZAI_API_KEY_2 = 'b'
+        expect(configuredWorkerCapacity()).toBe(2)
+      })
+
+      // The fixture from the issue: a, a, b - exactly two worker slots.
+      it('counts a, a and b as exactly two worker slots', () => {
+        process.env.ZAI_API_KEY = 'a'
+        process.env.ZAI_API_KEY_2 = 'a'
+        process.env.ZAI_API_KEY_3 = 'b'
+        expect(configuredWorkerCapacity()).toBe(2)
+      })
+
+      // Selection must agree with capacity. If the count says two but the
+      // rotation still had three indices, the dashboard's "one free key" and
+      // the dispatch's key 3 would be two different stories about the same
+      // two secrets - and the third story would hand out a duplicate.
+      it('never assigns the same secret as two independent keys', () => {
+        process.env.ZAI_API_KEY = 'a'
+        process.env.ZAI_API_KEY_2 = 'a'
+        process.env.ZAI_API_KEY_3 = 'b'
+        const first = resolveWorkerProvider([])
+        expect(first?.keyCount).toBe(2)
+        const second = resolveWorkerProvider([first?.keyIndex ?? 0])
+        expect(second?.keyIndex).toBe(1)
+        expect(second?.apiKey).not.toBe(first?.apiKey)
+        // There is no third secret, so a third bee is told the pool is
+        // exhausted rather than handed a copy of one already in flight.
+        const third = resolveWorkerProvider([0, 1])
+        expect(third?.exhausted).toBe(2)
+        expect(third?.apiKey).toBeUndefined()
+      })
+
+      // Deduplication must not reorder or un-skip: the unsuffixed variable
+      // stays index 0 (first occurrence wins), and an empty value stays
+      // absent even when duplicates surround it.
+      it('keeps the unsuffixed key first and empty values absent', () => {
+        process.env.ZAI_API_KEY = 'b'
+        process.env.ZAI_API_KEY_2 = ''
+        process.env.ZAI_API_KEY_3 = 'a'
+        process.env.ZAI_API_KEY_4 = 'b'
+        const first = resolveWorkerProvider([])
+        expect(first?.keyCount).toBe(2)
+        expect(first?.keyIndex).toBe(0)
+        expect(resolveWorkerProvider([0])?.apiKey).toBe('a')
+        expect(resolveWorkerProvider([0, 1])?.exhausted).toBe(2)
+      })
+    })
+  })
+})
+
+/**
+ * #1308. `workers.capacity` answers a number; this breakdown answers what the
+ * number is MADE of. An operator seeing capacity 4 cannot act on it without
+ * knowing whether it is two subscriptions at a lane each - one of which may be
+ * quietly disconnected - or one subscription at two lanes each, and a total
+ * alone keeps that a guess.
+ */
+describe('worker capacity breakdown', () => {
+  // Scenario 1 of the issue: two distinct configured Z.ai credentials and two
+  // lanes per credential. The response is closed - three integers, no trace of
+  // WHICH credentials produced them.
+  it('factors capacity into connected credentials and lanes per credential', () => {
+    process.env.ZAI_API_KEY = 'planted-secret-a'
+    process.env.ZAI_API_KEY_2 = 'planted-secret-b'
+    process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '2'
+    expect(workerCapacityBreakdown()).toEqual({
+      connectedCredentials: 2,
+      lanesPerCredential: 2,
+      effectiveCapacity: 4,
+    })
+    // The same authority dispatch allocates against, not a second story.
+    expect(configuredWorkerCapacity()).toBe(4)
+    expect(resolveWorkerProvider([0, 1, 0, 1])?.exhausted).toBe(4)
+  })
+
+  // FR-002/FR-003: closed and anonymous. Anything beyond these three fields -
+  // a hash, a suffix, an index, a variable name, a value - is a disclosure.
+  it('is three numeric fields and nothing else', () => {
+    process.env.ZAI_API_KEY = 'planted-secret-a'
+    process.env.ZAI_API_KEY_2 = 'planted-secret-b'
+    const breakdown = workerCapacityBreakdown() as unknown as Record<
+      string,
+      unknown
+    >
+    expect(Object.keys(breakdown).sort()).toEqual([
+      'connectedCredentials',
+      'effectiveCapacity',
+      'lanesPerCredential',
+    ])
+    for (const value of Object.values(breakdown)) {
+      expect(typeof value).toBe('number')
+      expect(Number.isInteger(value)).toBe(true)
+    }
+    const serialized = JSON.stringify(breakdown)
+    expect(serialized).not.toContain('planted-secret')
+    expect(serialized).not.toContain('ZAI_API_KEY')
+    expect(serialized).not.toContain('ANTHROPIC_API_KEY')
+  })
+
+  // Scenario 2: a credential duplicated across slots is one account with one
+  // rate limit (#1293). Neither factor may be inflated by it.
+  it('counts a duplicated credential once so nothing is inflated', () => {
+    process.env.ZAI_API_KEY = 'planted-secret-a'
+    process.env.ZAI_API_KEY_2 = 'planted-secret-a'
+    process.env.ZAI_API_KEY_3 = 'planted-secret-b'
+    process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '2'
+    expect(workerCapacityBreakdown()).toEqual({
+      connectedCredentials: 2,
+      lanesPerCredential: 2,
+      effectiveCapacity: 4,
+    })
+    expect(configuredWorkerCapacity()).toBe(4)
+  })
+
+  // FR-003: counted after TRIMMING. ' key' and 'key' in two boxes are one
+  // credential wearing its whitespace differently, and the count must say so
+  // before a second slot is handed a secret the first is already spending.
+  it('trims values before counting, so padded duplicates are one credential', () => {
+    process.env.ZAI_API_KEY = '  planted-secret-a  '
+    process.env.ZAI_API_KEY_2 = 'planted-secret-a'
+    process.env.ZAI_API_KEY_3 = ' planted-secret-b '
+    expect(workerCapacityBreakdown().connectedCredentials).toBe(2)
+    // Selection reads the same trimmed list, so the two can never disagree.
+    expect(resolveWorkerProvider([])?.keyCount).toBe(2)
+  })
+
+  it('treats a whitespace-only value as the empty box it supplies nothing from', () => {
+    process.env.ZAI_API_KEY = '   '
+    expect(workerCapacityBreakdown().connectedCredentials).toBe(0)
+    expect(configuredWorkerCapacity()).toBe(0)
+  })
+
+  // Scenario 3: no supported provider credentials. Every factor is zero or
+  // its safe default, and nothing about a secret leaves with it.
+  it('reports zeros and the safe lane default when nothing is connected', () => {
+    expect(workerCapacityBreakdown()).toEqual({
+      connectedCredentials: 0,
+      lanesPerCredential: 1,
+      effectiveCapacity: 0,
+    })
+    expect(configuredWorkerCapacity()).toBe(0)
+  })
+
+  // FR-005: the lane factor keeps its existing safe default and bound.
+  it('keeps the safe default of one lane and the bound of four', () => {
+    process.env.ZAI_API_KEY = 'planted-secret-a'
+    process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '0'
+    expect(workerCapacityBreakdown()).toEqual({
+      connectedCredentials: 1,
+      lanesPerCredential: 1,
+      effectiveCapacity: 1,
+    })
+    process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '99'
+    expect(workerCapacityBreakdown()).toEqual({
+      connectedCredentials: 1,
+      lanesPerCredential: 4,
+      effectiveCapacity: 4,
+    })
+  })
+
+  // The lane override belongs to Z.ai's tiered plans; another provider's
+  // capacity stays one credential times one lane, exactly as before.
+  it('does not apply the Z.ai lane factor to another provider', () => {
+    process.env.ANTHROPIC_API_KEY = 'planted-anthropic-secret'
+    process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '3'
+    expect(workerCapacityBreakdown()).toEqual({
+      connectedCredentials: 1,
+      lanesPerCredential: 1,
+      effectiveCapacity: 1,
+    })
+    expect(configuredWorkerCapacity()).toBe(1)
+  })
+
+  it('factors only the first configured provider, in preference order', () => {
+    process.env.ZAI_API_KEY = 'planted-secret-a'
+    process.env.ANTHROPIC_API_KEY = 'planted-anthropic-secret'
+    process.env.OPENAI_API_KEY = 'planted-openai-secret'
+    expect(workerCapacityBreakdown().connectedCredentials).toBe(1)
+  })
+
+  // FR-004: effective capacity is the number dispatch allocates against, so
+  // the two must be one number in every configuration, not two that happen to
+  // agree today. Each fixture starts from a cleared environment.
+  it('equals configuredWorkerCapacity in every tested configuration', () => {
+    const configurations: Array<() => void> = [
+      () => undefined,
+      () => {
+        process.env.ZAI_API_KEY = 'a'
+      },
+      () => {
+        process.env.ZAI_API_KEY = 'a'
+        process.env.ZAI_API_KEY_2 = 'b'
+        process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '2'
+      },
+      () => {
+        process.env.ZAI_API_KEY = 'a'
+        process.env.ZAI_API_KEY_2 = 'a'
+        process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '4'
+      },
+      () => {
+        process.env.ANTHROPIC_API_KEY = 'anthropic-a'
+        process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY = '2'
+      },
+      () => {
+        process.env.OPENAI_API_KEY = 'openai-a'
+        process.env.OPENAI_API_KEY_2 = 'openai-b'
+      },
+      () => {
+        process.env.ZAI_API_KEY = '  a  '
+        process.env.ZAI_API_KEY_2 = 'a'
+        process.env.ZAI_API_KEY_3 = ' b '
+      },
+    ]
+    for (const configure of configurations) {
+      for (const key of KEYS) delete process.env[key]
+      configure()
+      const breakdown = workerCapacityBreakdown()
+      expect(breakdown.effectiveCapacity).toBe(configuredWorkerCapacity())
+      expect(breakdown.effectiveCapacity).toBe(
+        breakdown.connectedCredentials * breakdown.lanesPerCredential,
+      )
+    }
   })
 })
 
@@ -349,6 +787,287 @@ describe('draining a turn', () => {
 })
 
 /**
+ * #1301. Coding Plan removed the synthetic USD start gate (#1300), so the
+ * provider's quota response became the authoritative stop signal: a bee that
+ * hits one cannot be helped by another retry until Z.ai resets the window or
+ * the operator pays. A generic worker failure hides that, and a board that
+ * cannot tell a quota stop from a flaky turn reaps and retries work that was
+ * never going to run.
+ *
+ * The classification is CLOSED, deliberately: only Z.ai's documented business
+ * codes (docs.z.ai, "Errors" - all delivered as HTTP 429), only for the
+ * provider zai, matched as code tokens and never as prose. Another provider
+ * answering with the same words - even the same code - is answering for
+ * itself and acquires no Z.ai Coding Plan state; a transient Z.ai 429
+ * (request rate, temporary overload) stays an ordinary ending, because
+ * another retry can help it.
+ */
+describe('classifying a quota stop at the dispatch boundary', () => {
+  it('classifies a Coding Plan usage-limit response with its reset window', () => {
+    const outcome = classifyQuotaExhaustion(
+      'zai',
+      '[1308] Usage limit reached for 5 prompts. Your limit will reset at 2025-06-01 12:00:00 GMT+08:00.',
+    )
+    expect(outcome).toBe('provider quota exhausted (zai code 1308)')
+  })
+
+  it('classifies every documented quota code, and only those', () => {
+    const quotaCodes = [
+      '1113', // Insufficient balance or no resource package.
+      '1308', // Usage limit reached for a window.
+      '1309', // GLM Coding Plan package expired.
+      '1310', // Weekly/Monthly limit exhausted.
+      '1311', // Plan does not include the model.
+      '1313', // Fair Usage Policy.
+      '1314', // Enterprise package expired.
+      '1315', // Key limited to enterprise coding package.
+      '1316', // 5-hour limit, no balance for extra usage.
+      '1317', // 7-day limit, no balance for extra usage.
+      '1318', // 5-hour limit, monthly spend limit.
+      '1319', // 7-day limit, monthly spend limit.
+      '1320', // 5-hour limit, monthly spend limit.
+      '1321', // 7-day limit, monthly spend limit.
+    ]
+    for (const code of quotaCodes) {
+      expect(classifyQuotaExhaustion('zai', `[${code}] stopped`)).toBe(
+        `provider quota exhausted (zai code ${code})`,
+      )
+    }
+    // The transient 429s clear on their own. Closing a bee as quota-stopped
+    // over either would retire work another retry could have finished.
+    expect(
+      classifyQuotaExhaustion('zai', '[1302] Rate limit reached'),
+    ).toBeNull()
+    expect(
+      classifyQuotaExhaustion(
+        'zai',
+        '[1305] The service may be temporarily overloaded',
+      ),
+    ).toBeNull()
+    // Documented codes outside the quota family are not quota stops either.
+    for (const code of ['1000', '1211', '1220', '1301']) {
+      expect(classifyQuotaExhaustion('zai', `[${code}] other`)).toBeNull()
+    }
+  })
+
+  // The message this server's own transport builds is `[code] message`
+  // (lib/openrouter-fetch.ts), but a raw body can surface whole inside an
+  // error message; the documented envelope field is read for that shape.
+  it('reads the code from the documented envelope when a raw body surfaces', () => {
+    const outcome = classifyQuotaExhaustion(
+      'zai',
+      'AI_APICallError: {"error":{"code":"1316","message":"Usage limit reached for the past 5 hours. Insufficient balance for extra usage. Resets at 2025-06-01."}}',
+    )
+    expect(outcome).toBe('provider quota exhausted (zai code 1316)')
+  })
+
+  it('does not classify an ordinary provider failure', () => {
+    expect(classifyQuotaExhaustion('zai', 'fetch failed')).toBeNull()
+    expect(
+      classifyQuotaExhaustion('zai', 'HTTP 500: Internal Error'),
+    ).toBeNull()
+    expect(classifyQuotaExhaustion('zai', '')).toBeNull()
+    // Prose alone proves nothing: the classification matches codes, not
+    // words, so an undocumented body that merely sounds exhausted stays an
+    // ordinary ending and keeps whatever retry path it always had.
+    expect(
+      classifyQuotaExhaustion(
+        'zai',
+        'Insufficient balance or no resource package. Please recharge.',
+      ),
+    ).toBeNull()
+    expect(
+      classifyQuotaExhaustion(
+        'zai',
+        'Usage limit reached for the past 5 hours',
+      ),
+    ).toBeNull()
+  })
+
+  // Scenario 3 of the issue: another provider returning similar prose must
+  // not acquire Z.ai Coding Plan state. The check is the provider, first and
+  // last, so even the exact documented code means nothing in another name.
+  it('infers no Z.ai state about another provider, prose or code', () => {
+    for (const provider of [
+      'openrouter',
+      'anthropic',
+      'openai',
+      'moonshot',
+      '',
+    ]) {
+      expect(
+        classifyQuotaExhaustion(
+          provider,
+          '[1113] Insufficient balance or no resource package. Please recharge.',
+        ),
+      ).toBeNull()
+      expect(
+        classifyQuotaExhaustion(
+          provider,
+          '[1308] Usage limit reached for 5 prompts',
+        ),
+      ).toBeNull()
+    }
+  })
+
+  // Scenario 1 of the issue: the stored outcome identifies quota exhaustion
+  // without exposing the response body or the credential. The provider's own
+  // prose - and anything a message might have echoed - stays off the row.
+  it('never carries the body or a credential into the classification', () => {
+    const failure =
+      '[1310] Weekly/Monthly Limit Exhausted. Your limit will reset at 2025-06-02 00:00 (account key sk-zai-1234-example).'
+    const outcome = classifyQuotaExhaustion('zai', failure)
+    expect(outcome).toBe('provider quota exhausted (zai code 1310)')
+    expect(outcome).not.toContain('reset at')
+    expect(outcome).not.toContain('sk-zai-1234-example')
+    // Deterministic: the same failure closes with the same words every time.
+    expect(classifyQuotaExhaustion('zai', failure)).toBe(outcome)
+  })
+})
+
+/**
+ * The dispatch result path: /chat answers 200 and streams a provider refusal
+ * as a terminal error frame, so the quota classification has to survive the
+ * path a real bee's stream takes - Scribe frames, drain, closeDispatch - and
+ * land on the queen_dispatch row, not merely exist as a pure function.
+ *
+ * Every non-quota path must close exactly as it did before #1301, because
+ * retry, refill and the board read these endings.
+ */
+describe('closing a quota-limited bee', () => {
+  const sse = (frames: unknown[]) =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder()
+          for (const frame of frames) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(frame)}\n\n`),
+            )
+          }
+          controller.close()
+        },
+      }),
+    )
+
+  it('stores the quota classification instead of an ordinary finish', async () => {
+    const { pool, asked } = recordingPool()
+    await drain(
+      pool,
+      sse([
+        { type: 'text-delta', delta: 'starting' },
+        // The terminal error frame, carrying the business code this server's
+        // own transport prefixes (lib/openrouter-fetch.ts) and the provider's
+        // prose - which must reach the row as neither.
+        {
+          type: 'error',
+          errorText:
+            '[1308] Usage limit reached for 5 prompts. Your limit will reset at 2025-06-01 12:00:00 GMT+08:00.',
+        },
+        { type: 'finish', finishReason: 'error' },
+      ]),
+      'conv-1301',
+      1301,
+      'zai',
+    )
+    const closing = touching(asked, 'UPDATE queen_dispatch')
+    expect(closing.length).toBe(1)
+    expect(closing[0].params[1]).toBe(
+      'provider quota exhausted (zai code 1308)',
+    )
+    // The reset timestamp and the provider prose stay off the ending.
+    expect(JSON.stringify(closing[0].params)).not.toContain('reset at')
+    expect(JSON.stringify(closing[0].params)).not.toContain(
+      'Usage limit reached',
+    )
+  })
+
+  // Scenario 2 of the issue: a transient non-quota failure keeps the existing
+  // classification and with it every retry behavior that reads the outcome.
+  it('keeps the ordinary ending for a transient Z.ai failure', async () => {
+    const { pool, asked } = recordingPool()
+    await drain(
+      pool,
+      sse([
+        { type: 'error', errorText: '[1302] Rate limit reached for requests' },
+        { type: 'finish', finishReason: 'error' },
+      ]),
+      'conv-1301',
+      1301,
+      'zai',
+    )
+    const closing = touching(asked, 'UPDATE queen_dispatch')
+    expect(closing[0].params[1]).toBe('finished')
+  })
+
+  // Scenario 3 of the issue, on the result path: identical prose under
+  // another provider's name closes as an ordinary ending.
+  it('keeps the ordinary ending when the provider is not Z.ai', async () => {
+    const { pool, asked } = recordingPool()
+    await drain(
+      pool,
+      sse([
+        {
+          type: 'error',
+          errorText: '[1113] Insufficient balance or no resource package.',
+        },
+        { type: 'finish', finishReason: 'error' },
+      ]),
+      'conv-1301',
+      1301,
+      'openrouter',
+    )
+    const closing = touching(asked, 'UPDATE queen_dispatch')
+    expect(closing[0].params[1]).toBe('finished')
+  })
+
+  // drain predates the provider argument; every caller that passes nothing
+  // must close exactly as before, so the argument stays optional and inert.
+  it('keeps the ordinary ending for callers that pass no provider', async () => {
+    const { pool, asked } = recordingPool()
+    await drain(
+      pool,
+      sse([
+        {
+          type: 'error',
+          errorText: '[1308] Usage limit reached for 5 prompts',
+        },
+        { type: 'finish', finishReason: 'error' },
+      ]),
+      'conv-1301',
+      1301,
+    )
+    const closing = touching(asked, 'UPDATE queen_dispatch')
+    expect(closing[0].params[1]).toBe('finished')
+  })
+
+  // A quota stop is an ending the turn really reached, not a failure to end:
+  // the row closes, the key frees, and the refill signal (#1295) fires just
+  // as it does for any durable close. Suppressing it here would hold a paid
+  // key idle against the very issue this classification exists to keep honest.
+  it('still frees the slot: a quota close signals like any durable close', async () => {
+    const heard: number[] = []
+    setDurableCloseListener((issue) => heard.push(issue))
+    try {
+      const { pool } = recordingPool(() => ({ rowCount: 1, rows: [] }))
+      await drain(
+        pool,
+        sse([
+          { type: 'error', errorText: '[1113] Insufficient balance' },
+          { type: 'finish', finishReason: 'error' },
+        ]),
+        'conv-1301',
+        1301,
+        'zai',
+      )
+      expect(heard).toEqual([1301])
+    } finally {
+      setDurableCloseListener(undefined)
+    }
+  })
+})
+
+/**
  * queen_dispatch is keyed by issue alone, so a second attempt overwrites the
  * first in place: which key it took, how long it ran and why it ended all stop
  * existing. #1244 was dispatched six times and one row survived it.
@@ -454,7 +1173,21 @@ describe('an existing worktree', () => {
     const { restore } = hive()
     try {
       const prepared = await prepareWorktree(99)
-      expect(prepared.detail).toBe('reused an existing worktree (clean)')
+      // THE DETAIL IS A LIST OF CLAUSES NOW, AND THIS PIN PREDATES THE SECOND.
+      //
+      // `prepareWorktree` appends `; installed its own modules (…)` or
+      // `; linked N node_modules into the store for …` on both the fresh and
+      // the reuse path, because a worktree whose dependencies were not shared
+      // is the difference between a 159 MB tree and a 2.5 GB one and belongs in
+      // the record. This assertion was written when `detail` was one phrase, so
+      // it has failed on every run since - 12 of 12 measured, which is not
+      // flake, which is what it was being called.
+      //
+      // The first clause is still pinned exactly, so a reworded phrase is still
+      // caught; the rest of the list is allowed to grow.
+      expect(prepared.detail.split('; ')[0]).toBe(
+        'reused an existing worktree (clean)',
+      )
     } finally {
       restore()
     }
@@ -485,246 +1218,111 @@ describe('an existing worktree', () => {
 })
 
 /**
- * A provider that refuses is not a bee that finished.
+ * #1295. A finished bee frees a healthy paid key, and until this the next
+ * eligible mission waited for the periodic tick - up to 1,800 seconds of idle
+ * capacity per finished bee, on a swarm whose whole point is that no laptop
+ * has to be awake to keep it busy.
  *
- * Measured 2026-09-03: #1323, #1324 and #1325 each ran on key index 1, produced
- * ONE frame, and were written down as `outcome = finished` with the review
- * answering `wait` - indistinguishable from a bee that worked and under-
- * reported. Key 0 was healthy at the same moment, finishing a 257-frame turn.
+ * The signal must be EARNED by a durable close. An UPDATE that changed
+ * nothing does not throw, so "the write succeeded" and "the write matched no
+ * row" were the same answer one layer out - and announcing a freed slot about
+ * a row that still reads `running` would wake a round that sees the bee as in
+ * flight and skips the very work the signal promised. The retry and, behind
+ * it, the stall reaper stay authoritative for every close that did not land.
  *
- * The stream ends CLEANLY when an account runs out of balance: the refusal
- * arrives as a frame, not as a thrown exception, so `drain`'s catch never runs
- * and its default outcome stood. The swarm went on feeding issues to a dead
- * credential and calling the results finished, which is the difference between
- * a supervisor that is idle and one that is lying to itself.
+ * These cases use a recording pool rather than a database because the
+ * question is which CLOSES signal, not whether Postgres can UPDATE - and the
+ * issue's own independent test asks for exactly that shape: fake pools, no
+ * sleeping, no real provider.
  */
-describe('a provider refusal', () => {
-  // Local, because the sibling helper lives inside another describe block.
-  const sse = (frames: unknown[]) =>
-    new Response(
-      frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join('') +
-        'data: [DONE]\n\n',
-    )
-
-  it('is recognised in the frame the provider actually sends', () => {
-    const zai =
-      '{"type":"error","error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}'
-    expect(Scribe.providerRefusal('error', zai)).toContain(
-      'Insufficient balance',
-    )
-  })
-
-  it('is recognised when the SDK wraps it', () => {
-    const wrapped = '{"type":"finish","detail":"AI_APICallError: [1113] quota"}'
-    expect(Scribe.providerRefusal('finish', wrapped)).toContain(
-      'AI_APICallError',
-    )
-  })
-
-  // Ordinary traffic must not be read as a refusal, or a healthy swarm writes
-  // off its own keys and stops.
-  it('is not seen in ordinary traffic', () => {
-    expect(
-      Scribe.providerRefusal('text-delta', '{"delta":"working on it"}'),
-    ).toBeNull()
-    expect(
-      Scribe.providerRefusal('usage', '{"usage":{"inputTokens":9}}'),
-    ).toBeNull()
-  })
-
-  it('writes the ending as a refusal and quotes the provider', async () => {
-    const { pool, asked } = recordingPool()
-    await drain(
-      pool,
-      sse([
-        {
-          type: 'error',
-          error: {
-            code: '1113',
-            message: 'Insufficient balance, please recharge',
-          },
-        },
-      ]),
-      'conv-refused',
-      1323,
-      'zai',
-      1,
-    )
-    const closing = touching(asked, 'UPDATE queen_dispatch')[0]
-    expect(String(closing.params[1])).toContain('provider refused')
-    expect(String(closing.params[1])).toContain('Insufficient balance')
-  })
-
-  // And the rotation must hear about it, or the next round spends another
-  // issue learning the same fact.
-  it('stops the rotation handing that key out again', async () => {
-    const before = refusedKeyCount('zai')
-    const { pool } = recordingPool()
-    await drain(
-      pool,
-      sse([{ type: 'error', error: { message: 'Insufficient balance' } }]),
-      'conv-refused-2',
-      1324,
-      'zai',
-      1,
-    )
-    expect(refusedKeyCount('zai')).toBeGreaterThan(before - 1)
-    expect(refusedKeyCount('zai')).toBeGreaterThanOrEqual(1)
-  })
-})
-
-/**
- * A credential is asked whether it can pay BEFORE an issue is spent on it.
- *
- * Measured 2026-09-03 with four keys configured: two answered HTTP 200 and two
- * answered 429 with Z.AI business code 1113, "Insufficient balance or no
- * resource package". Without the probe the rotation hands each dead key an
- * issue, the turn dies on its first frame, and - before the refusal fix - that
- * was written down as finished work awaiting a verdict. Two dead keys meant two
- * issues consumed to learn what one request answers.
- */
-describe('checking a credential before spending an issue', () => {
-  const realFetch = globalThis.fetch
+describe('a durable close frees the slot at once', () => {
   afterEach(() => {
-    globalThis.fetch = realFetch
+    // The listener is module state. A case that forgets to clear it would
+    // hand its hook to every later close in this file - a signal from a test
+    // nobody is looking at.
+    setDurableCloseListener(undefined)
   })
 
-  const answer = (status: number, body: string) => {
-    globalThis.fetch = (async () =>
-      new Response(body, { status })) as typeof fetch
-  }
-
-  it('reads an exhausted package as dead', async () => {
-    answer(429, '{"error":{"code":"1113","message":"Insufficient balance"}}')
-    expect(
-      await keyIsLive({
-        provider: 'zai',
-        model: 'glm-5.3',
-        apiKey: 'k',
-        keyIndex: 90,
+  /** A stream that has already ended, the way a real bee's does. */
+  const endedStream = () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode('data: {"type":"finish"}\n\n'),
+          )
+          controller.close()
+        },
       }),
-    ).toBe(false)
+    )
+
+  // Scenario 1: one updated row is the durable running-to-finished
+  // transition, and it must ask for a refill without waiting for the timer.
+  it('signals one refill when the ending landed on one row', async () => {
+    const heard: number[] = []
+    setDurableCloseListener((issue) => heard.push(issue))
+    const { pool } = recordingPool(() => ({ rowCount: 1, rows: [] }))
+    await closeDispatch(pool, 1295, 'conv-1295', 'finished')
+    expect(heard).toEqual([1295])
   })
 
-  it('reads a rejected key as dead', async () => {
-    answer(401, 'unauthorized')
-    expect(
-      await keyIsLive({
-        provider: 'zai',
-        model: 'glm-5.3',
-        apiKey: 'k',
-        keyIndex: 91,
-      }),
-    ).toBe(false)
+  // The stream ending is WHEN the slot frees, so the signal must travel the
+  // drain path a real bee takes - not only a hand-made closeDispatch call.
+  it('signals when the stream ends and the close is durable', async () => {
+    const heard: number[] = []
+    setDurableCloseListener((issue) => heard.push(issue))
+    const { pool } = recordingPool(() => ({ rowCount: 1, rows: [] }))
+    await drain(pool, endedStream(), 'conv-1295', 1295)
+    expect(heard).toEqual([1295])
   })
 
-  it('reads a working key as live', async () => {
-    answer(200, '{"choices":[]}')
-    expect(
-      await keyIsLive({
-        provider: 'zai',
-        model: 'glm-5.3',
-        apiKey: 'k',
-        keyIndex: 92,
-      }),
-    ).toBe(true)
+  // Scenario 3, first half: zero rows means the transition never happened.
+  it('signals nothing when the ending matched no row', async () => {
+    const heard: number[] = []
+    setDurableCloseListener((issue) => heard.push(issue))
+    const { pool, asked } = recordingPool(() => ({ rowCount: 0, rows: [] }))
+    await closeDispatch(pool, 1295, 'conv-1295', 'finished')
+    expect(heard).toEqual([])
+    // Unchanged: nothing threw, so there is no retry to make.
+    expect(asked.length).toBe(1)
   })
 
-  // A network failure is not a refusal. Refusing to dispatch because our own
-  // network hiccuped would stall the swarm for a reason that has nothing to do
-  // with the credential.
-  it('assumes live when the provider cannot be reached at all', async () => {
-    globalThis.fetch = (async () => {
-      throw new Error('getaddrinfo ENOTFOUND')
-    }) as typeof fetch
-    expect(
-      await keyIsLive({
-        provider: 'zai',
-        model: 'glm-5.3',
-        apiKey: 'k',
-        keyIndex: 93,
-      }),
-    ).toBe(true)
+  // Scenario 3, second half: a close whose every write failed leaves the row
+  // running. The stall reaper, not a hopeful signal, decides when that slot
+  // is free.
+  it('signals nothing when both write attempts fail', async () => {
+    const heard: number[] = []
+    setDurableCloseListener((issue) => heard.push(issue))
+    const { pool, asked } = recordingPool(() => new Error('still down'))
+    await closeDispatch(pool, 1295, 'conv-1295', 'finished')
+    expect(heard).toEqual([])
+    // Unchanged: one retry, then silence.
+    expect(asked.length).toBe(2)
   })
 
-  // A rehearsal turn aims at this server and has no credential to check.
-  it('does not probe a rehearsal', async () => {
-    let called = false
-    globalThis.fetch = (async () => {
-      called = true
-      return new Response('{}', { status: 200 })
-    }) as typeof fetch
-    expect(
-      await keyIsLive({
-        provider: 'openai-compatible',
-        model: 'rehearsal',
-        apiKey: 'x',
-        rehearsal: true,
-        keyIndex: 94,
-      }),
-    ).toBe(true)
-    expect(called).toBe(false)
-  })
-})
-
-/**
- * Busy and refused are opposite problems, and telling the operator the wrong
- * one costs them money.
- *
- * Seen on the live board 2026-09-03 with two bees running on the two
- * credentials that could pay:
- *
- *   ALL 4 PROVIDER KEY(S) ARE ALREADY IN USE BY BEES IN FLIGHT.
- *   ADD ANOTHER WITH ZAI_API_KEY_5
- *
- * Four were configured, two were carrying a bee and two had answered 1113
- * Insufficient balance. The advice was to buy a fifth key, which would have
- * fixed nothing: a refused key is not capacity that exists, it is capacity that
- * has been paid for and run out.
- */
-describe('running out of credentials', () => {
-  // The refusal cache lives for the life of the process, so it leaks between
-  // checks unless it is cleared - and it did, failing the healthy-swarm case
-  // because the case above had written two keys off.
-  beforeEach(() => {
-    clearRefusedKeys()
+  // A close that needed its retry but LANDED is closed as far as the board
+  // can see - the row says finished - and suppressing the signal here would
+  // restore the half-hour wait for exactly the deployments with the flakiest
+  // databases, which are the ones that most need the slot back.
+  it('signals when only the retry landed, because the row is closed either way', async () => {
+    const heard: number[] = []
+    setDurableCloseListener((issue) => heard.push(issue))
+    const { pool, asked } = recordingPool((_sql, attempt) =>
+      attempt === 1
+        ? new Error('connection terminated unexpectedly')
+        : { rowCount: 1, rows: [] },
+    )
+    await closeDispatch(pool, 1295, 'conv-1295', 'finished')
+    expect(asked.length).toBe(2)
+    expect(heard).toEqual([1295])
   })
 
-  const withKeys = (n: number, fn: () => void) => {
-    const saved: Record<string, string | undefined> = {}
-    for (let i = 1; i <= n; i++) {
-      const name = i === 1 ? 'ZAI_API_KEY' : `ZAI_API_KEY_${i}`
-      saved[name] = process.env[name]
-      process.env[name] = `key-${i}`
-    }
-    try {
-      fn()
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k]
-        else process.env[k] = v
-      }
-    }
-  }
-
-  it('counts a busy key apart from a refused one', () => {
-    withKeys(4, () => {
-      noteKeyRefused('zai', 1)
-      noteKeyRefused('zai', 3)
-      const out = resolveWorkerProvider([0, 2])
-      expect(out?.exhausted).toBe(4)
-      expect(out?.busy).toBe(2)
-      expect(out?.refusedCount).toBe(2)
-    })
-  })
-
-  // With nothing refused the old advice is the right advice, and it must
-  // survive: more keys IS the fix when every key is working and carrying a bee.
-  it('still asks for another key when every one of them is working', () => {
-    withKeys(2, () => {
-      const out = resolveWorkerProvider([0, 1])
-      expect(out?.exhausted).toBe(2)
-      expect(out?.refusedCount).toBe(0)
-    })
+  // The tick loop is the only listener. A server running without it (local
+  // development, the app alongside) must close exactly as before, because a
+  // completion with nobody local to refill is a normal minute, not an error.
+  it('closes quietly when no listener is installed', async () => {
+    const { pool, asked } = recordingPool(() => ({ rowCount: 1, rows: [] }))
+    await closeDispatch(pool, 1295, 'conv-1295', 'finished')
+    expect(asked.length).toBe(1)
   })
 })

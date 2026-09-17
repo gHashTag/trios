@@ -467,7 +467,30 @@ public enum QueenDelegationPolicy {
     ///
     /// Bounded because every running worker costs the Queen context on every
     /// review, and because merge conflicts scale with concurrency.
-    public static let maximumConcurrentWorkers = 4
+    /// Read from the environment, because this number exists TWICE and the two
+    /// copies must not drift.
+    ///
+    /// The other is QUEEN_COMPILED_WORKER_LIMIT in queen-dispatch.ts, which
+    /// reports capacity. They drifted the first time this was raised: the
+    /// TypeScript side was changed, the image rebuilt, and the swarm reported
+    /// `capacity: 12` while every tick refused with "4 workers already running
+    /// (limit 4)" - telemetry promising more than the policy allows, which
+    /// sends an operator hunting a bug in dispatch. The cause was that the
+    /// policy is compiled from THIS file while an identical copy lives at
+    /// trios/rings/SR-00/QueenDelegation.swift, and the edit went to that one.
+    ///
+    /// Both sides now read one variable with one default and one ceiling, so
+    /// the only way to raise the swarm is to raise it for both at once.
+    ///
+    /// Bounded, not unlimited: review cost is linear in running workers. The
+    /// other original reason - "merge conflicts scale with concurrency" - no
+    /// longer holds, because every task declares a `## Boundary` and owns those
+    /// files alone, and publishing refuses a branch that wrote outside its own.
+    public static var maximumConcurrentWorkers: Int {
+        let raw = ProcessInfo.processInfo.environment["TRIOS_QUEEN_MAX_WORKERS"]
+        guard let raw, let parsed = Int(raw), parsed >= 1 else { return 4 }
+        return min(parsed, 16)
+    }
 
     public static func canStartAnother(running: Int) -> Bool {
         running < maximumConcurrentWorkers

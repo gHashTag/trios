@@ -92,7 +92,7 @@ Every file this task may touch, one per line, backticked:
 ## Boundary
 
 `rings/SR-02/ChatViewModel.swift`
-`docs/queen-choice.md`
+`docs/queen-verdicts.md`
 ```
 
 This is the one that decides whether the task exists for the Queen at all. It
@@ -101,6 +101,43 @@ waits rather than colliding.
 
 Name files, not directories. A directory is a region, and a task that claims a
 region holds everything under it against everyone.
+
+Not every file name parses as a path. A token, once backticks and
+punctuation are stripped, is accepted only when it contains a `/` or ends
+in a dotted extension such as `.swift`, `.md` or `.json`. That test is the
+whole of `QueenIssueBoundary.pathToken`, and its purpose is to keep prose
+out of the boundary: to the parser, `Makefile` is a word. A name with
+neither a slash nor a dot is not a wrong path that gets corrected - it is a
+word that is dropped, and nothing says so.
+
+The names this bites are root files with no extension: `Makefile`,
+`Dockerfile`, `LICENSE`, `Justfile`. Written bare, the token carries no
+slash and no dot, so it is discarded and the boundary comes out empty. The
+failure is silent - no warning, no error - and the issue then parses as
+having no boundary at all. The author sees a `## Boundary` section they
+wrote; the Queen sees an issue she may not start, and the round's refusal
+says "not yet a spec - missing boundary" about an issue whose boundary is
+right there. Measured against the shipped binary, with the bodies identical
+apart from the boundary line:
+
+    `Makefile`     ->  delegatable = false
+    `./Makefile`   ->  delegatable = true
+
+The spelling that works puts a slash in the token, so a root file is
+claimed by its directory prefix:
+
+```
+## Boundary
+
+`docs/issue-spec-template.md`
+`./Makefile`
+```
+
+This already cost a round: #1272 had to be written `./Makefile` for the
+Queen to take it, and that spelling was found by testing the binary rather
+than by reading anything. The parser has not been fixed and still drops the
+bare spelling - only this document changed. Run the `queend` recipe below
+before you file, or the next round learns it the same way.
 
 ## What the checker does and does not do
 
@@ -120,10 +157,22 @@ would let a thin task through and then blame the bee for the ambiguity.
 
 ## Checking one before you file it
 
+The checker is `queend`, the executable SwiftPM product of `agent-server/queen-core`.
+Nothing in `build.sh` or the `Makefile` builds it, and the image build at
+`agent-server/Dockerfile` is the only place that ships it. Build it in
+place, then pipe the issue body to it:
+
 ```bash
+cd agent-server/queen-core
+swift build -c release
 echo '{"kind":"spec","candidateBodies":{"1":"<the body>"}}' \
-  | .trinity/build/QueenCore/queend
+  | "$(swift build -c release --show-bin-path)/queend"
 ```
+
+Building it requires `swift`; a machine without the Swift toolchain
+cannot run this check. (An earlier revision of this section piped the
+spec into a build-output path that no build in this repository ever
+wrote, so the command failed on every machine that tried it.)
 
 It answers with what is missing and, for each gap, a sentence you can paste into
 the issue.

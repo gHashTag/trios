@@ -225,11 +225,13 @@ case "choose":
     // Refusing to START is the whole intervention. Killing a bee mid-edit
     // leaves a tree nobody chose, which is why `SwarmBudget` calls itself
     // advisory; declining the next one is safe at any instant.
+    let billingMode = SwarmBillingMode.current()
     let budget = SwarmBudget.current(
         stateDirectory: question.root ?? "/workspace/BrowserOS"
     )
     let spent = SwarmBudget.spentToday(tasks: tasks, now: now)
-    if case .exhausted(let overBy) = budget.verdict(spentToday: spent) {
+    if billingMode.enforcesEstimatedUSDCap,
+       case .exhausted(let overBy) = budget.verdict(spentToday: spent) {
         emit(Answer(kind: "choose", strays: nil,
                     refusal: "the swarm has spent about \(ModelPricing.format(spent)) today, "
                         + "\(ModelPricing.format(overBy)) past its "
@@ -245,14 +247,20 @@ case "choose":
     for number in candidates {
         // Every task recorded against this issue, not the first one found.
         // A retry after a failure leaves two, and which of them the registry
-        // happens to list first is not a fact about the work.
-        let claim = QueenDelegationPolicy.claimOnIssue(
-            states: tasks.filter { $0.issue.number == number }.map(\.state)
-        )
+        // happens to list first is not a fact about the work. The array is
+        // read once and handed to both calls below: filtering `tasks` a
+        // second time would be a second reading of the registry, and two
+        // readings can disagree about which tasks exist.
+        let states = tasks.filter { $0.issue.number == number }.map(\.state)
+        let claim = QueenDelegationPolicy.claimOnIssue(states: states)
         switch claim {
-        case .live(let state):
-            skipped.append("#\(number): a worker has it or is expected back "
-                + "(\(state.rawValue))")
+        case .live:
+            // The sentence is the policy's, not this file's: four states
+            // count as live and only one has a bee on the files. A queued
+            // claim is stuck, not busy, and the policy already has the
+            // words that tell those two readings apart.
+            skipped.append("#\(number): "
+                + QueenDelegationPolicy.spokenForReport(states: states).detail)
             continue
         case .done(let state):
             skipped.append("#\(number): the work already landed "

@@ -54,111 +54,83 @@ RUN cp "$(swift build -c release --show-bin-path)/queend" /queen-core/queend \
  && /queen-core/queend </dev/null 2>/dev/null; \
     test -x /queen-core/queend
 
-# RING-00, the .t27 decision core, as a binary the production round can call.
+# The T27 compiler, for the bees and for the review of the bees.
 #
-# `rings/T27-00/generated/queen_core.rs` is generated from
-# `rings/T27-00/queen_core.t27` by t27c, and until this stage existed nothing
-# outside `tests/t27/ring00_parity.sh` had ever executed it. Two bare `rustc`
-# invocations are its entire build - no cargo, no lockfile, no dependency -
-# which is why this stage needs a toolchain and not a package manager.
+# MEASURED 2026-09-10 (gHashTag/t27#3560): 34 finished bee branches harvested
+# from this container, every one reviewed as "met" on the bee's own verdict
+# block. Run through `t27c` on a Mac: 20 did not parse, 4 parsed with DISCARDED
+# tokens, 1 regressed typecheck, 9 held. Neither the bee nor the reviewer had
+# the compiler; both were guessing, and the review had no way to say so.
 #
-# THE BUILD CONTEXT DOES NOT CONTAIN THE RINGS. MEASURED 2026-09-03, AND THE
-# TWO COPY LINES BELOW FAIL UNTIL SOMEONE ACTS ON THIS.
+# Built the way t27's own Dockerfile builds it: `bootstrap/` alone, standalone,
+# with the repository's root Cargo.lock (bootstrap/Cargo.lock is stale against
+# bootstrap/Cargo.toml and fails `--locked`). A sparse, blob-less clone of two
+# directories, not the 400 MB repository. The commit that was built is written
+# to /usr/local/share/t27c/REF and shipped, so a review can say WHICH compiler
+# it measured with.
 #
-# The context root for this service is `trios/agent-server`, not `trios`:
-# `railway.json` and `.dockerignore` both sit here, and all nine COPY sources
-# already in this file (package.json, bun.lock, apps/server, packages/shared,
-# queen-core/Package.swift, queen-core/Sources, docker-entrypoint.sh, ...)
-# resolve under `trios/agent-server` and none of them resolve under `trios`.
-# The rings live at `trios/rings`, one level ABOVE that root, and a COPY cannot
-# reach outside its context.
+# T27_REF is an ARG, not a pin: the bees work against t27 master and the
+# compiler that judges them should be the one master builds. The cost is that
+# a cached layer serves the sha it recorded, not today's - the REF file is the
+# truth, not the ARG. Bump the ARG to rebuild.
 #
-# The obvious fix is the wrong one. Pointing the service root at `trios` would
-# send a 9.2 GB context - 3.6 GB of `.worktrees`, 883 MB of `target`, 380 MB of
-# `.app` bundles - and `trios/` has no `.dockerignore`, so none of it would be
-# filtered. That is precisely the timeout the `.dockerignore` at the top of
-# this directory was written about. The two files actually needed total 16 KB.
-#
-# So the ring sources have to come INTO this context. Either is fine and the
-# COPY lines below are already correct for both, which is why they are written
-# this way and will not need editing afterwards:
-#
-#   (a) put the ring sources under `agent-server/rings/T27-00/` - 16 KB, but
-#       a second copy of a generated artifact, so it needs a gate that fails
-#       when it drifts from `rings/T27-00/generated/queen_core.rs`;
-#   (b) move the service root to `trios` AND add a `trios/.dockerignore` that
-#       excludes everything except `agent-server` and `rings/T27-00` - no
-#       duplication, but every other COPY in this file then needs an
-#       `agent-server/` prefix and the Railway root directory must change.
-#
-# Neither is a change this file can make alone. Until one lands, this build
-# stops here with a missing-file error, which is the correct outcome: a ring
-# that is silently skipped is the decorative ring we started with.
-#
-# bookworm on purpose, against a trixie runtime. `oven/bun:1.3.6` is built on
-# Debian trixie - read out of the image config, whose first history entry is
-# `debian.sh --arch 'amd64' out/ 'trixie'` - so its glibc is 2.41. Building on
-# bookworm's 2.36 produces a binary that newer glibc loads; building on the
-# newer base and running on the older one is the direction that breaks, so the
-# older base is the safe end to pin. No architecture is named anywhere here:
-# both images are multi-arch and BuildKit matches the platform.
-FROM rust:1-slim-bookworm AS t27core
-WORKDIR /ring
+# Build time: 15 min on 2 vCPU (sandbox, cold cache, 2026-09-13). Nothing here
+# is parallel with the Swift stage by BuildKit's choice, not ours.
+FROM rust:1-bookworm AS t27c
+ARG T27_REF=master
+WORKDIR /src
+RUN git clone --depth 1 --filter=blob:none --sparse --branch "${T27_REF}" \
+        https://github.com/gHashTag/t27.git t27 \
+ && cd t27 \
+ && git sparse-checkout set bootstrap gen specs \
+ && git rev-parse HEAD > /src/REF \
+ && echo "t27c built from gHashTag/t27@$(cat /src/REF) (ref ${T27_REF})"
+# Standalone: the root Cargo.toml names workspace members the sparse checkout
+# does not have, so `bootstrap/` is copied out from under it and built alone.
+RUN cp -r t27/bootstrap /build && cp t27/Cargo.lock /build/Cargo.lock \
+ && rm -rf /build/target \
+ && cd /build && cargo build --release \
+ && strip /build/target/release/t27c \
+ && /build/target/release/t27c --version
 
-# The repository layout is reproduced rather than flattened, and that is load
-# bearing. The shim embeds the generated file with
-# `include_str!("../generated/queen_core.rs")` so `t27core constants` lists
-# what the .t27 actually declares instead of a table someone maintains by
-# hand. Copy the two files into one directory and that include stops
-# resolving - measured while writing this stage, not guessed.
-COPY t27-core/queen_core.rs rings/T27-00/generated/queen_core.rs
-COPY t27-core/t27core.rs                 rings/T27-00/shim/t27core.rs
-
-# The generated artifact alone first. Its stated contract is that it compiles
-# under bare `rustc --crate-type lib --edition 2021`, and this is that claim
-# executed on Linux rather than read.
-RUN rustc --edition 2021 --crate-type lib \
-      rings/T27-00/generated/queen_core.rs -o libqueen_core.rlib
-
-# The shim as its own crate, linked against it - the same two-step build the
-# parity harness uses. Warnings are deliberately not errors: the generated
-# file carries redundant-parenthesis warnings that belong to the code
-# generator, and failing a deploy on them would put a style rule between the
-# Queen and her ring.
-RUN rustc --edition 2021 -O rings/T27-00/shim/t27core.rs \
-      --extern queen_core=libqueen_core.rlib -o /ring/t27core
-
-# A binary that exists is not a binary that answers. One row per subcommand,
-# each the answer the Swift policy gives for the same input, plus the refusal
-# path - because a decision core that guesses at its input is the single
-# failure this contract exists to prevent.
-#
-# The constant count is derived from the artifact on both sides rather than
-# written here as a number. A hand-copied count is the defect this ring exists
-# to end; it would also go stale the first time the .t27 gains a constant.
+# The oracle's dependency tree, generated HERE because this is the stage that
+# holds the corpus. The runtime stage's own specs/ is the agent server's, sixty
+# files; the 946 the oracle measures live in gHashTag/t27 and arrive only in
+# this sparse checkout. Baking it from the runtime stage produced a 60-file
+# tree, and a tree missing a spec's imports fails it with FileNotFound --
+# indistinguishable, from the outside, from the spec being broken.
 RUN set -e; \
-    t=/ring/t27core; \
-    "$t" capacity 0       | grep -qx 'can_start_another=true'; \
-    "$t" capacity 0       | grep -qx 'free_slots=4'; \
-    "$t" capacity 4       | grep -qx 'can_start_another=false'; \
-    "$t" review 3 2 0 2 0 | grep -qx 'name=wait'; \
-    "$t" review 3 3 0 2 0 | grep -qx 'name=accept'; \
-    "$t" review 3 3 1 2 0 | grep -qx 'name=send_back'; \
-    "$t" review 3 3 1 2 2 | grep -qx 'name=escalate'; \
-    "$t" retry 1          | grep -qx 'name=attempt'; \
-    "$t" retry 2          | grep -qx 'name=escalate'; \
-    "$t" merge 2 1 0 1    | grep -qx 'name=approve'; \
-    "$t" merge 1 1 0 1    | grep -qx 'name=wait'; \
-    "$t" merge 3 1 0 1    | grep -qx 'name=wake_worker'; \
-    "$t" merge 2 1 1 1    | grep -qx 'name=refuse'; \
-    "$t" counts 0         | grep -qx 'counts_against_issue=false'; \
-    "$t" counts 1         | grep -qx 'counts_against_issue=true'; \
-    "$t" constants        | grep -qx 'REVIEW_SEND_BACK=2'; \
-    test "$("$t" constants | wc -l)" \
-       -eq "$(grep -c '^pub const' rings/T27-00/generated/queen_core.rs)"; \
-    if "$t" capacity abc 2>/dev/null; then \
-      echo "t27core accepted a non-integer instead of refusing"; exit 1; fi; \
-    echo "RING-00 answers on Linux"
+    mkdir -p /oracle-tree; \
+    cd /src/t27; \
+    find specs -name '*.t27' | while read -r f; do \
+      d="/oracle-tree/$(printf '%s' "$f" | sed -e 's|^specs/||' -e 's|\.t27$|.zig|')"; \
+      mkdir -p "$(dirname "$d")"; \
+      /build/target/release/t27c gen "$f" > "$d" 2>/dev/null || rm -f "$d"; \
+    done; \
+    echo "oracle tree: $(find /oracle-tree -name '*.zig' | wc -l) generated"
+
+# The oracle's compiler.
+#
+# t27c says whether a spec PARSES. Only Zig says whether what it generates RUNS,
+# and until this stage existed nothing in the review could tell those apart: a
+# bee could satisfy every stated criterion with code that does not compile, and
+# did, 384 times out of 946.
+#
+# 0.16.0 exactly, because that is the version the corpus baseline in
+# tools/oracle/baseline.tsv was measured against. A different Zig is a different
+# verdict, and a ratchet that moves because the compiler moved is not a ratchet.
+# Fetched as a tarball rather than apt because Debian has no zig package.
+FROM debian:bookworm-slim AS zig
+ARG ZIG_VERSION=0.16.0
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
+      -o /tmp/zig.tar.xz \
+ && mkdir -p /opt/zig \
+ && tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1 \
+ && rm /tmp/zig.tar.xz \
+ && /opt/zig/zig version
 
 FROM oven/bun:1.3.6 AS runtime
 WORKDIR /app
@@ -166,8 +138,28 @@ WORKDIR /app
 # git is not a convenience here: a bee's whole output is a branch and a push.
 # ca-certificates is what makes the Postgres TLS handshake and every provider
 # call possible.
+# tini is here because PID 1 in this container is an application, not an init.
+#
+# MEASURED 2026-09-05, on the running deployment, after it had crashed:
+#
+#   pid 1 is: bun
+#   50 processes, 37 zombies
+#   zombies whose parent is PID 1: 37   with another parent: 0
+#   top commands among them: git (21), esbuild (16)
+#
+# The bash tool spawns `sh -c <command>` and awaits it, so the direct child is
+# reaped. Its GRANDCHILDREN are not: when the shell exits, git and esbuild are
+# orphaned and reparented to PID 1, which must call wait() for them. bun does
+# not, so they stay zombies for the life of the container.
+#
+# The pid table fills, `posix_spawn` starts returning EAGAIN - the deployment
+# log carried `error="EAGAIN: resource temporarily unavailable"` for forty
+# minutes - and then the service crashes, which is how it was found.
+#
+# tini as PID 1 reaps orphans and forwards signals. It is what `docker run
+# --init` installs, and it is the standard answer to exactly this.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates openssh-client \
+ && apt-get install -y --no-install-recommends git ca-certificates openssh-client tini \
  && rm -rf /var/lib/apt/lists/*
 
 # An unprivileged account for the agents' shell commands.
@@ -198,6 +190,20 @@ COPY --from=deps /app /app
 COPY apps/server apps/server
 COPY packages/shared packages/shared
 COPY packages/cdp-protocol packages/cdp-protocol
+
+# The Queen's scheduler reads its cards and the compiler from here at start-up
+# (apps/server/src/inngest/spec-catalog.ts, DEFAULT_SPECS_ROOT = ../../../../specs
+# = /app/specs). The first GitHub deploy of #480 (Railway, 2026-09-13) came up
+# with GET /queen/scheduler -> 503 "ENOENT /app/specs/t27_compiler.wasm": the
+# route told the truth, the image simply did not carry the directory. The check
+# below fails the build if the wasm is not the bytes specs/PIN names, so a
+# drifted pin is caught here and not at the first request.
+COPY specs specs
+RUN test -f specs/t27_compiler.wasm \
+ && want="$(sed -n 's/.*sha256 \([0-9a-f]\{64\}\).*/\1/p' specs/PIN | head -n1)" \
+ && have="$(sha256sum specs/t27_compiler.wasm | cut -d' ' -f1)" \
+ && test -n "$want" && test "$want" = "$have" \
+ && echo "specs/t27_compiler.wasm sha256 $have matches specs/PIN"
 
 # Where bees check out and work.
 #
@@ -234,23 +240,35 @@ COPY --from=queen-core /queen-core/PROOF /app/queen-core-linux.proof
 COPY --from=queen-core /queen-core/queend /usr/local/bin/queend
 COPY --from=queen-core /usr/lib/swift/linux /usr/lib/swift/linux
 
-# RING-00 itself, on PATH. This COPY is also what forces the t27core stage to
-# run at all - the same BuildKit rule the `queen-core-linux.proof` copy above
-# exists for, and the same trap: a stage nothing copies from never compiles
-# and so never fails. The Rust toolchain stays behind in that stage exactly as
-# the Swift one does; what ships is one small binary with no dependency beyond
-# libc.
-COPY --from=t27core /ring/t27core /usr/local/bin/t27core
+# The compiler, on PATH for the bee (su resets PATH to the login default, which
+# includes /usr/local/bin) and for the review, which runs it as the bee. Built
+# against bookworm's glibc 2.36; the binary links only libc, libm and libgcc_s
+# (ldd, 2026-09-13), so it loads on bookworm or anything newer that oven/bun
+# ships on. `--version` below is the proof that it loads, taken at build time
+# rather than at the first review.
+COPY --from=t27c /build/target/release/t27c /usr/local/bin/t27c
+COPY --from=t27c /src/REF /usr/local/share/t27c/REF
+RUN /usr/local/bin/t27c --version && echo "t27c from gHashTag/t27@$(cat /usr/local/share/t27c/REF)"
 
-# And it answers HERE, in the image that actually ships, not only in the stage
-# that built it. This is the check the `queend` copy above does not have: a
-# binary compiled on one Debian and copied onto another is exactly where a
-# glibc mismatch appears, and it appears at runtime, silently, on whichever
-# round first asks the ring a question. Running it during the build turns that
-# into a failed deploy instead.
-RUN t27core constants | grep -q '^MAX_CONCURRENT_WORKERS=' \
- && t27core capacity 0 > /dev/null \
- && echo "RING-00 executes in the runtime image"
+# Zig ships as a binary plus a lib/ tree it reads at run time, so both come
+# across and the binary is reached through a symlink rather than being moved
+# away from its lib.
+COPY --from=zig /opt/zig /opt/zig
+RUN ln -s /opt/zig/zig /usr/local/bin/zig && zig version
+
+# The oracle's dependency tree, built in the t27c stage from the real corpus.
+#
+# A generated file imports its neighbours by a path relative to where the SPEC
+# sits, so the Zig has to mirror specs/ for anything to resolve. Building that
+# mirror is ~950 t27c runs; on a 2 vCPU container that is minutes, and the
+# witness is killed at 120s -- on timeout its script exits non-zero and the
+# review records `parses: false`, which is a spec failed for a defect it does
+# not have. Baking it makes the per-review cost a hardlink copy.
+#
+# The tree holds the DEPENDENCIES, never the verdict: the reviewed file is
+# always regenerated from the bee's own commit before anything is compiled.
+COPY --from=t27c /oracle-tree /usr/local/share/t27-oracle-tree
+RUN echo "oracle tree: $(find /usr/local/share/t27-oracle-tree -name '*.zig' | wc -l) specs"
 
 # Bind wide, because the platform routes to this container from outside and a
 # server on loopback accepts nothing while looking perfectly healthy from
@@ -271,5 +289,8 @@ EXPOSE 8080
 # is not there. Not claiming to be a distribution build is the honest answer.
 
 # No --cdp-port on purpose. See the header.
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# tini first, then the entrypoint, which ends in `exec "$@"` so the server still
+# becomes the process that receives signals - with an init above it to bury the
+# orphans it leaves behind.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["bun", "apps/server/src/index.ts"]

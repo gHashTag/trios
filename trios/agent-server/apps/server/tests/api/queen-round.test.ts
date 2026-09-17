@@ -2,10 +2,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Pool } from 'pg'
-import { runRound } from '../../src/api/services/queen-tick'
+import {
+  closeDispatch,
+  setDurableCloseListener,
+} from '../../src/api/services/queen-dispatch'
+import {
+  createRoundGate,
+  latestProviderKeyIndex,
+  refillOnBeeCompletion,
+  runRound,
+} from '../../src/api/services/queen-tick'
 import { logger } from '../../src/lib/logger'
+import { queendPathEnvVar, resolveQueendPath } from '../__helpers__/queend-path'
 
 /**
  * The round itself, driven against the real policy binary.
@@ -20,7 +30,9 @@ import { logger } from '../../src/lib/logger'
  * Queen's board, `conversation_id` included.
  *
  * WHAT IS REAL HERE AND WHAT IS NOT. The policy is real - `queend`, the same
- * binary the container runs, pointed at by TRIOS_QUEEND_PATH. The database is
+ * binary the container runs, resolved by the shared helper in
+ * `tests/__helpers__/queend-path.ts`, exactly as production resolves it. The
+ * database is
  * a recording fake, because the assertion is about which statements a round
  * issues. GitHub is stubbed at `fetch`, because a test that reaches the network
  * fails for reasons that have nothing to do with what it claims. The workspace
@@ -34,11 +46,33 @@ import { logger } from '../../src/lib/logger'
  * cannot drift unnoticed.
  */
 
-const BIN = join(
-  import.meta.dir,
-  '../../../../queen-core/.build/release/queend',
-)
+// Captured at module scope, BEFORE the beforeEach below wipes the
+// environment: what the operator pointed at is what the round must drive,
+// not whatever is left after the hook has run. Re-resolving after the hook
+// deleted the variable is the old defect in a new shape.
+const BIN = resolveQueendPath()
+const QUEEND_ENV = queendPathEnvVar()
 const present = existsSync(BIN)
+
+describe('provider key cursor', () => {
+  it('resumes after the latest durable dispatch instead of key zero', () => {
+    expect(
+      latestProviderKeyIndex([
+        { key_index: 5, dispatched_at: '2026-09-13T08:00:00Z' },
+        { key_index: 1, dispatched_at: '2026-09-13T08:05:00Z' },
+        { key_index: null, dispatched_at: '2026-09-13T08:10:00Z' },
+      ]),
+    ).toBe(1)
+  })
+
+  it('ignores malformed rows rather than inventing a cursor', () => {
+    expect(
+      latestProviderKeyIndex([
+        { key_index: 'secret-shaped', dispatched_at: 'not-a-date' },
+      ]),
+    ).toBeUndefined()
+  })
+})
 
 /** Every provider credential dispatch consults, so no bee is ever really run. */
 const PROVIDER_KEYS = [
@@ -106,14 +140,14 @@ const realFetch = globalThis.fetch
 beforeEach(() => {
   for (const key of [
     ...PROVIDER_KEYS,
-    'TRIOS_QUEEND_PATH',
+    QUEEND_ENV,
     'WORKSPACE_DIR',
     'TRIOS_GITHUB_REPO',
   ]) {
     saved[key] = process.env[key]
     delete process.env[key]
   }
-  process.env.TRIOS_QUEEND_PATH = BIN
+  process.env[QUEEND_ENV] = BIN
   // Named, because the round no longer guesses. It used to fall back to
   // `gHashTag/BrowserOS` - the monorepo this checkout happens to be, not the
   // issue tracker - and a supervisor that guesses which repository it serves
@@ -139,11 +173,17 @@ afterEach(() => {
     else process.env[key] = value
   }
   globalThis.fetch = realFetch
+  // The refill wiring installs a module-level listener; a case that leaves
+  // one behind hands its hook to every later close in this process.
+  setDurableCloseListener(undefined)
 })
 
 describe('queen round, lease lost', () => {
   it('drives the binary the container drives', () => {
-    expect(BIN).toContain('queen-core/.build/release/queend')
+    // The hook above points the round at BIN through the same variable
+    // production reads; the shared resolver must name that binary back, or
+    // the round is driving something other than what was resolved.
+    expect(resolveQueendPath()).toBe(BIN)
   })
 
   /**
@@ -336,11 +376,10 @@ describe('queen round, send-backs counted', () => {
  * write as a violation - the exact false accusation `QueenBoundaryPaths`
  * records being paid for on #1286.
  */
-function repoWithStray(): string {
+function repoWithCommit(files: Array<{ path: string; body: string }>): string {
   const root = mkdtempSync(join(tmpdir(), 'queen-round-'))
   const repo = join(root, 'BrowserOS')
-  mkdirSync(join(repo, 'trios', 'docs'), { recursive: true })
-  mkdirSync(join(repo, 'trios', 'src'), { recursive: true })
+  mkdirSync(repo, { recursive: true })
   const git = (...args: string[]) =>
     spawnSync('git', args, { cwd: repo, encoding: 'utf8' })
   git('init', '-b', 'main')
@@ -350,12 +389,26 @@ function repoWithStray(): string {
   git('add', '-A')
   git('commit', '-m', 'base')
   git('checkout', '-b', `queen-${ISSUE}`)
-  writeFileSync(join(repo, 'trios', 'docs', 'only-1234.md'), 'inside\n')
-  writeFileSync(join(repo, 'trios', 'src', 'stray.ts'), 'export const x = 1\n')
+  for (const file of files) {
+    mkdirSync(dirname(join(repo, file.path)), { recursive: true })
+    writeFileSync(join(repo, file.path), file.body)
+  }
   git('add', '-A')
   git('commit', '-m', 'work')
   git('checkout', 'main')
   return root
+}
+
+function repoWithStray(): string {
+  return repoWithCommit([
+    { path: 'trios/docs/only-1234.md', body: 'inside\n' },
+    { path: 'trios/src/stray.ts', body: 'export const x = 1\n' },
+  ])
+}
+
+/** A dispatch row whose boundary may be spelled any way an issue author chose. */
+function finishedRowWithBoundary(ownedPaths: string[]): FinishedRow {
+  return { ...finishedRow(0), owned_paths: ownedPaths }
 }
 
 describe('queen round, boundary checked', () => {
@@ -389,6 +442,62 @@ describe('queen round, boundary checked', () => {
     // teaches everyone that a failure here means nothing. Judged on the work,
     // not on how busy the laptop was.
     30000,
+  )
+
+  /**
+   * The #1306 regression. The write and the boundary both begin `trios/`, in
+   * the identical spelling, and that is the case the old comparison accused:
+   * the write was reduced to the project-relative namespace (`docs/…`) while
+   * the owned path kept its repository-relative `trios/`, so neither equality
+   * nor the prefix test could ever succeed. The bee had committed exactly the
+   * one file it was given.
+   */
+  it.if(present)(
+    'does not accuse a bee whose boundary is spelled repository-relative',
+    async () => {
+      process.env.WORKSPACE_DIR = repoWithCommit([
+        { path: 'trios/docs/only-1234.md', body: 'inside\n' },
+      ])
+      process.env.TRIOS_REPO_REF = 'main'
+      const { pool, queries } = roundPool([
+        finishedRowWithBoundary(['trios/docs/only-1234.md']),
+      ])
+      await runRound(pool, 'me', 7, { held: false }, [ISSUE])
+      delete process.env.TRIOS_REPO_REF
+
+      const update = reviewUpdate(queries)
+      expect(JSON.parse(String(update?.params[3]))).toEqual([])
+
+      // No accusation reaches the operator either: every round writes a
+      // summary report, so the assertion is that this one carries no
+      // boundary complaint rather than that it was never written.
+      const report = queries.find((q) =>
+        q.sql.includes('INSERT INTO queen_report'),
+      )
+      expect(String(report?.params[1])).not.toContain('outside the boundary')
+    },
+  )
+
+  /**
+   * One boundary, two spellings: the file it names repository-relative and the
+   * directory it names project-relative. A comparison that reduced only one
+   * half could accept neither together - whichever half was left carrying its
+   * `trios/` never matched the other.
+   */
+  it.if(present)(
+    'accepts a boundary mixing repository-relative and project-relative spellings',
+    async () => {
+      process.env.WORKSPACE_DIR = repoWithStray()
+      process.env.TRIOS_REPO_REF = 'main'
+      const { pool, queries } = roundPool([
+        finishedRowWithBoundary(['trios/docs/only-1234.md', 'src']),
+      ])
+      await runRound(pool, 'me', 7, { held: false }, [ISSUE])
+      delete process.env.TRIOS_REPO_REF
+
+      const update = reviewUpdate(queries)
+      expect(JSON.parse(String(update?.params[3]))).toEqual([])
+    },
   )
 })
 
@@ -455,5 +564,209 @@ describe('queen round, repository named', () => {
       if (before === undefined) delete process.env.TRIOS_GITHUB_REPO
       else process.env.TRIOS_GITHUB_REPO = before
     }
+  })
+})
+
+/**
+ * #1295. The refill gate: one local round at a time, woken by finished bees.
+ *
+ * A bee's completion frees a key the swarm paid for, and before this the next
+ * eligible mission waited out the periodic tick for it. The gate is the whole
+ * answer and adds nothing else: rounds still run through `runQueenTickOnce`,
+ * so the lease, the fencing, `queend` and the dispatch loop are exactly what
+ * they were - what changes is only WHEN a round starts.
+ *
+ * WHAT IS REAL HERE: nothing, deliberately. The gate is pure scheduling - one
+ * round at a time, one deferred follow-up - so these cases drive it with a
+ * controllable round released by hand. No timer, no sleep, no provider, no
+ * database, because the questions are only ever "how many rounds" and "how
+ * many at once", and a real round underneath would answer with failures of
+ * its own that have suites of their own.
+ */
+describe('the refill gate', () => {
+  /** A round the test can hold open and release, so ordering is observed
+   *  rather than timed. */
+  function controlledRound() {
+    const events: string[] = []
+    let inFlight = 0
+    let peak = 0
+    const held: Array<() => void> = []
+    const run = async () => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      events.push('start')
+      await new Promise<void>((release) => held.push(release))
+      events.push('end')
+      inFlight -= 1
+    }
+    return {
+      events,
+      run,
+      release: () => held.shift()?.(),
+      /** The most rounds that ever ran at once, measured here rather than
+       *  trusted from the gate's own books. */
+      peak: () => peak,
+    }
+  }
+
+  /** Let every pending continuation run. Microtasks only - the gate schedules
+   *  no timers, so nothing here ever waits in real time. */
+  const settle = async () => {
+    for (let i = 0; i < 16; i++) await Promise.resolve()
+  }
+
+  it('starts a round at once when a slot frees and none is running', async () => {
+    const round = controlledRound()
+    const gate = createRoundGate(round.run)
+
+    gate.request('bee #1295 finished')
+    // At once means synchronously here: no timer fired, nothing was slept.
+    expect(round.events).toEqual(['start'])
+
+    round.release()
+    await settle()
+    await gate.idle()
+    expect(gate.roundsStarted()).toBe(1)
+  })
+
+  /**
+   * THE FOCUSED TEST of the issue: two completions landing while a round is
+   * already in flight must coalesce into at most one follow-up round, and no
+   * two local rounds may overlap - a second concurrent round in this process
+   * would hold the lease as the same holder (the heartbeat comment in
+   * queen-tick.ts records that overlap being reachable), read a half-written
+   * board, and dispatch against work the first round is still recording.
+   */
+  it('holds local round concurrency at 1 across a two-completion burst', async () => {
+    const round = controlledRound()
+    const gate = createRoundGate(round.run)
+
+    // The round already in flight: the one a completion lands during.
+    gate.request('the round already in flight')
+    expect(round.events).toEqual(['start'])
+
+    gate.request('bee #1295-a finished')
+    gate.request('bee #1295-b finished')
+    // Coalesced: neither completion started a round of its own.
+    expect(round.events).toEqual(['start'])
+    expect(gate.roundsStarted()).toBe(1)
+
+    round.release()
+    await settle()
+    // Exactly one follow-up for the burst - not one per completion.
+    expect(gate.roundsStarted()).toBe(2)
+    expect(round.events).toEqual(['start', 'end', 'start'])
+
+    round.release()
+    await settle()
+    await gate.idle()
+    expect(gate.roundsStarted()).toBe(2)
+    // Never two at once, measured outside the gate's own counting...
+    expect(round.peak()).toBe(1)
+    // ...and the gate's own books say the same thing.
+    expect(gate.maxInFlight()).toBe(1)
+  })
+
+  // Work-conserving cuts both ways: a signal that arrives while the
+  // FOLLOW-UP runs must still get its own round, or a busy swarm quietly
+  // stops refilling the moment two bees finish close together.
+  it('still answers a signal that arrives while the follow-up runs', async () => {
+    const round = controlledRound()
+    const gate = createRoundGate(round.run)
+
+    gate.request('first')
+    gate.request('bee #1 finished')
+    round.release()
+    await settle()
+    expect(gate.roundsStarted()).toBe(2)
+
+    gate.request('bee #2 finished')
+    round.release()
+    await settle()
+    expect(gate.roundsStarted()).toBe(3)
+
+    round.release()
+    await settle()
+    await gate.idle()
+    // Three rounds asked for by name, three rounds run, no runaway fourth.
+    expect(gate.roundsStarted()).toBe(3)
+  })
+
+  // Scenario 4, the gate's half: with no completion, nothing starts. The
+  // timer's half is `startQueenTick`, unchanged - it still requests the
+  // initial round and keeps the configured interval.
+  it('runs nothing until something asks, and no more after the last ask', async () => {
+    const round = controlledRound()
+    const gate = createRoundGate(round.run)
+
+    await settle()
+    await gate.idle()
+    expect(round.events).toEqual([])
+    expect(gate.roundsStarted()).toBe(0)
+  })
+
+  // Shutdown symmetry with the timer: `handover` clears the interval so no
+  // periodic round starts after SIGTERM, and the gate must not undo that by
+  // starting one a late completion asked for. A refill round after handover
+  // would re-acquire the lease from a container that has already given the
+  // hive away.
+  it('refuses rounds once stopped, and drops the queued follow-up', async () => {
+    const round = controlledRound()
+    const gate = createRoundGate(round.run)
+
+    gate.request('in flight when SIGTERM arrives')
+    gate.request('bee #1 finished')
+    gate.stop()
+    round.release()
+    await settle()
+    await gate.idle()
+
+    expect(round.events).toEqual(['start', 'end'])
+    expect(gate.roundsStarted()).toBe(1)
+
+    gate.request('bee #2 finished')
+    await settle()
+    expect(gate.roundsStarted()).toBe(1)
+  })
+})
+
+/**
+ * The wiring, not the gate: a durable close must reach the round the tick
+ * loop runs, through the same connection `startQueenTick` makes. A gate that
+ * exists while nothing signals it is indistinguishable from no gate - so this
+ * drives the real hook and the real close, with only the round replaced.
+ */
+describe('a finished bee reaches the gate the tick installs', () => {
+  /** A pool whose every statement answers with `rowCount` rows. */
+  const answeringPool = (rowCount: number) =>
+    ({
+      query: async () => ({ rowCount, rows: [] }),
+    }) as unknown as Pool
+
+  it('runs exactly one round for one durable close', async () => {
+    const rounds: string[] = []
+    const gate = createRoundGate(async () => {
+      rounds.push('round')
+    })
+    refillOnBeeCompletion(gate.request)
+
+    await closeDispatch(answeringPool(1), 1295, 'conv-1295', 'finished')
+    await gate.idle()
+    expect(rounds).toEqual(['round'])
+  })
+
+  // FR-003 at the far end of the wire: a zero-row close reaches nobody. The
+  // gate must not run a round on the strength of a slot the board still shows
+  // as held.
+  it('runs nothing for a close that matched no row', async () => {
+    const rounds: string[] = []
+    const gate = createRoundGate(async () => {
+      rounds.push('round')
+    })
+    refillOnBeeCompletion(gate.request)
+
+    await closeDispatch(answeringPool(0), 1295, 'conv-1295', 'finished')
+    await gate.idle()
+    expect(rounds).toEqual([])
   })
 })

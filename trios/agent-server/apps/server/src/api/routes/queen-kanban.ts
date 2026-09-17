@@ -47,8 +47,27 @@
 
 import { Hono } from 'hono'
 import { Pool } from 'pg'
-import { refusedKeyCount } from '../services/queen-dispatch'
+import { logger } from '../../lib/logger'
+import {
+  type WorkerCapacityBreakdown,
+  workerCapacityBreakdown,
+} from '../services/queen-dispatch'
 import { queenLeaseDatabaseUrl } from '../services/queen-lease'
+
+interface QueryResult {
+  rowCount: number | null
+  rows: Array<Record<string, unknown>>
+}
+
+/**
+ * What the board needs of a connection pool: query, and end. Declared so a
+ * test can stand in for pg without opening a socket, the way the four sibling
+ * public routes already declare theirs.
+ */
+interface PublicBoardPool {
+  query(sql: string, values?: unknown[]): Promise<QueryResult>
+  end(): Promise<void>
+}
 
 interface Card {
   number: number
@@ -374,7 +393,9 @@ export interface BoardInput {
   now?: number
 }
 
-async function build(pool: Pool): Promise<{ cards: Card[]; pulse: Pulse }> {
+async function build(
+  pool: PublicBoardPool,
+): Promise<{ cards: Card[]; pulse: Pulse }> {
   const variant = process.env.TRIOS_VARIANT || 'prod'
   const [registry, dispatches, issues, lastTick, day] = await Promise.all([
     pool.query('SELECT tasks FROM queen_registry WHERE variant = $1', [
@@ -448,19 +469,15 @@ async function build(pool: Pool): Promise<{ cards: Card[]; pulse: Pulse }> {
       inputTokens: Number(counts.input_tokens ?? 0),
       outputTokens: Number(counts.output_tokens ?? 0),
       lastRoundAt: lastTick.rows[0]?.decided_at
-        ? new Date(lastTick.rows[0].decided_at).toISOString()
+        ? new Date(
+            lastTick.rows[0].decided_at as string | number | Date,
+          ).toISOString()
         : null,
       lastRefusal:
         (lastTick.rows[0]?.decision as { refusal?: string } | undefined)
           ?.refusal ?? null,
       roundSeconds: Number(process.env.TRIOS_QUEEN_TICK_SECONDS ?? '0') || null,
-      workerKeys: providerKeyCount(),
-      // Configured is not usable. Four keys were set on 2026-09-03 and two of
-      // them answered 429 with Z.AI code 1113 - an exhausted package. A page
-      // that reports the configured count as the ceiling sends the reader
-      // looking for two bees that can never start.
-      workerKeysRefused: refusedKeyCount('zai'),
-      workerLimit: 4,
+      ...boardWorkerCapacity(),
     },
   }
 }
@@ -487,37 +504,22 @@ export interface Pulse {
   lastRefusal: string | null
   roundSeconds: number | null
   workerKeys: number
-  /** Of those, how many the provider has refused in this process. */
-  workerKeysRefused: number
   workerLimit: number
 }
 
 /**
- * How many provider keys this deployment holds. The COUNT, never a value.
- *
- * An empty string is not a key. A platform variable saved with an empty box
- * leaves the name behind, and counting the name would report a swarm that can
- * run four bees while three of them have nothing to authenticate with - the
- * same trap this repository's config file has been sitting in for months.
+ * Translate the allocator's closed capacity factorisation into the legacy
+ * board pulse names. The allocator remains the single authority for trimming,
+ * deduplication, configured-endpoint keys, lanes, and the compiled ceiling.
+ * This adapter exposes counts only; no secret or key suffix reaches the board.
  */
-export function providerKeyCount(
-  env: Record<string, string | undefined> = process.env,
-): number {
-  const names = [
-    'ZAI_API_KEY',
-    'ANTHROPIC_API_KEY',
-    'OPENROUTER_API_KEY',
-    'MOONSHOT_API_KEY',
-    'OPENAI_API_KEY',
-  ]
-  let found = 0
-  for (const name of names) {
-    if ((env[name] ?? '').length > 0) found++
-    for (let i = 2; i <= 16; i++) {
-      if ((env[name + '_' + i] ?? '').length > 0) found++
-    }
+export function boardWorkerCapacity(
+  breakdown: WorkerCapacityBreakdown = workerCapacityBreakdown(),
+): Pick<Pulse, 'workerKeys' | 'workerLimit'> {
+  return {
+    workerKeys: breakdown.connectedCredentials,
+    workerLimit: breakdown.effectiveCapacity,
   }
-  return found
 }
 
 /**
@@ -904,7 +906,7 @@ const SHELL = `<!doctype html>
   var p=d.pulse||{}
   var v=$('verdict')
   var run=by.running||0
-  var keys=Math.max((p.workerKeys||0)-(p.workerKeysRefused||0),0)
+  var keys=p.workerKeys||0
   var ceiling=Math.min(keys||0, p.workerLimit||4)
   var head, why
   if(run>0){
@@ -1050,17 +1052,43 @@ export function createQueenBoardRoute() {
   })
 }
 
-export function createQueenPublicBoardRoute() {
+/**
+ * Injectable dependencies for the public board, in the shape the four sibling
+ * public routes already accept.
+ */
+interface QueenPublicBoardDeps {
+  databaseUrl?: () => string | undefined
+  createPool?: (url: string) => PublicBoardPool
+}
+
+export function createQueenPublicBoardRoute(deps: QueenPublicBoardDeps = {}) {
+  const databaseUrl = deps.databaseUrl ?? queenLeaseDatabaseUrl
+  const createPool =
+    deps.createPool ??
+    ((url: string) => new Pool({ connectionString: url }) as PublicBoardPool)
+
   return new Hono().get('/', async (c) => {
-    const url = queenLeaseDatabaseUrl()
+    c.header('Cache-Control', 'no-store')
+    const url = databaseUrl()
     if (!url) return c.json({ error: 'No database configured' }, 503)
     const repo = process.env.TRIOS_GITHUB_REPO || 'gHashTag/trios'
-    const pool = new Pool({ connectionString: url })
+    const pool = createPool(url)
     try {
       const built = await build(pool)
       return c.json(publicBoardProjection({ repo, ...built }), 200, {
         'Cache-Control': 'no-store',
       })
+    } catch (error) {
+      // The failure answer is as public as the success answer: this route is
+      // one of the five a cross-origin browser may read. A raw rejection
+      // names the internal hostname, the username, or the missing relation -
+      // pg's own words, published under a wildcard CORS header. So the public
+      // gets the same fixed sentence and 503 the sibling routes answer, and
+      // the operator keeps the whole diagnosis in the log.
+      logger.warn('Queen public board query failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return c.json({ error: 'Queen board is unavailable' }, 503)
     } finally {
       await pool.end()
     }

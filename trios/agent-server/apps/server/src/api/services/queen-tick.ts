@@ -39,11 +39,16 @@
 import { spawn } from 'node:child_process'
 import { Pool } from 'pg'
 import { logger } from '../../lib/logger'
+import { outstandingEscalations } from '../routes/queen-needs-you'
 import {
   committedFiles,
   dispatchBee,
   reapDispatchesFromPreviousBoot,
   reapStalledDispatches,
+  setDurableCloseListener,
+  type Witness,
+  witnessSpecs,
+  witnessVerdicts,
   workspaceRoot,
 } from './queen-dispatch'
 import {
@@ -53,6 +58,46 @@ import {
   queenLeaseDatabaseUrl,
   releaseQueenLease,
 } from './queen-lease'
+import {
+  type DispatchReportOutcome,
+  dispatchesThatStarted,
+  nothingStartedLine,
+  refusedLines,
+  reportHeadline,
+  startedLine,
+} from './queen-report-lines'
+
+/**
+ * The last non-secret allocator cursor already written durably. It survives a
+ * scheduler cycle and makes a pool wider than the concurrency ceiling rotate
+ * instead of starting at credential zero forever.
+ */
+export function latestProviderKeyIndex(
+  rows: Array<{ key_index?: unknown; dispatched_at?: unknown }>,
+): number | undefined {
+  let latestAt = Number.NEGATIVE_INFINITY
+  let latestIndex: number | undefined
+  for (const row of rows) {
+    const index = row.key_index
+    const at =
+      row.dispatched_at instanceof Date
+        ? row.dispatched_at.getTime()
+        : typeof row.dispatched_at === 'string'
+          ? Date.parse(row.dispatched_at)
+          : Number.NaN
+    if (
+      typeof index === 'number' &&
+      Number.isInteger(index) &&
+      index >= 0 &&
+      Number.isFinite(at) &&
+      at > latestAt
+    ) {
+      latestAt = at
+      latestIndex = index
+    }
+  }
+  return latestIndex
+}
 
 const LEASE_NAME = 'queen-tick'
 /**
@@ -152,8 +197,27 @@ const ISSUE_PAGE_SIZE = 100
  * and five requests against an anonymous rate limit of 60/hour on a loop that
  * ticks at most a few times an hour. A repository that really has more than 500
  * open items is not one this loop should be silently guessing about.
+ *
+ * It became one. Measured 2026-09-16: 751 open issues and 20 open pull requests
+ * on the same endpoint, so the walk stopped at 500 and `complete` was false on
+ * every round -- permanently. That is worse than guessing, because the drop in
+ * `rememberIssues` is gated on `complete`: the board stopped retiring closed
+ * issues entirely and became a graveyard. ~200 issues from July and August,
+ * merged or closed months earlier, were re-reviewed on every tick, each one
+ * holding a `claimed` slot and returning `wait` forever because their branches
+ * no longer carry a spec for the compiler to judge. The queue drained into the
+ * dead and the bees sat at 0 with 277 real cards waiting.
+ *
+ * The cap exists to protect the rate limit, so it is sized by what the limit
+ * actually is. With `TRIOS_GITHUB_API_TOKEN` the ceiling is 5,000/hour and
+ * thirty pages costs at most thirty of them; anonymous it stays at five, and a
+ * repository this size will keep reporting a truncated list -- which is the
+ * honest answer rather than a silent partial delete.
  */
-const ISSUE_PAGE_CAP = 5
+const ISSUE_PAGE_CAP_ANON = 5
+const ISSUE_PAGE_CAP_TOKEN = 30
+const issuePageCap = (): number =>
+  process.env.TRIOS_GITHUB_API_TOKEN?.trim() ? ISSUE_PAGE_CAP_TOKEN : ISSUE_PAGE_CAP_ANON
 
 /**
  * Open issues, read without a credential.
@@ -171,17 +235,62 @@ const ISSUE_PAGE_CAP = 5
  * `complete` is what stops that: a truncated list is still worth deciding
  * against, but it must never be treated as the whole truth.
  */
+/**
+ * Headers for a GitHub READ.
+ *
+ * Anonymous is 60 requests an hour per EGRESS IP, and on Railway that address
+ * is shared with every other deployment on the host - so the budget this
+ * server actually gets is an unknowable fraction of 60. Paginating the open
+ * issues every TRIOS_QUEEN_TICK_SECONDS exhausts it, `openIssues` throws
+ * `GitHub returned 403`, and the whole round dies before any bee is
+ * dispatched. Measured on the live swarm: four such rounds between 16:50 and
+ * 17:08 UTC on 2026-09-08, each one a tick that looked like it simply chose
+ * nothing.
+ *
+ * A token lifts the ceiling to 5,000/hr. Read-only suffices - nothing on this
+ * path writes - so it is deliberately a DIFFERENT variable from anything a bee
+ * commits with, and it is optional: unset, this returns exactly the headers
+ * this code sent before, and the anonymous limit applies as it always did.
+ */
+function githubReadHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+  }
+  const token = process.env.TRIOS_GITHUB_API_TOKEN?.trim()
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
+
+/**
+ * One word for what the oracle said about a review, for the log line.
+ *
+ * Without it the only way to know whether `zig test` ran in production was to
+ * read the criterion text, and nothing logs or exposes that: a gate nobody can
+ * observe is indistinguishable from one that is not running. Distinguishing
+ * `not measured` from `pass` is the whole point -- an unmeasured spec must
+ * never be reported as a passing one.
+ */
+function oracleOutcome(witness: Witness | null): string {
+  if (witness?.kind !== 'witnessed') return 'no witness'
+  const measured = witness.specs.filter((s) => s.oracle !== null)
+  if (measured.length === 0) {
+    return witness.specs.some((s) => s.oraclePreBroken) ? 'pre-broken' : 'not measured'
+  }
+  return measured.every((s) => s.oracle) ? 'pass' : 'fail'
+}
+
 export async function openIssues(repo: string): Promise<{
   issues: Array<{ number: number; body: string; title: string }>
   complete: boolean
 }> {
   const collected: Array<{ number: number; body: string; title: string }> = []
   let complete = false
-  for (let page = 1; page <= ISSUE_PAGE_CAP; page++) {
+  const cap = issuePageCap()
+  for (let page = 1; page <= cap; page++) {
     const response = await fetch(
       `https://api.github.com/repos/${repo}/issues` +
         `?state=open&per_page=${ISSUE_PAGE_SIZE}&page=${page}`,
-      { headers: { Accept: 'application/vnd.github+json' } },
+      { headers: githubReadHeaders() },
     )
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`)
     const batch = (await response.json()) as Array<{
@@ -232,7 +341,15 @@ async function ensureQueenColumns(pool: Pool): Promise<void> {
   await pool.query(`
     ALTER TABLE queen_issues
       ADD COLUMN IF NOT EXISTS criteria jsonb NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS criteria_source text NOT NULL DEFAULT 'none';
+      ADD COLUMN IF NOT EXISTS criteria_source text NOT NULL DEFAULT 'none',
+      -- Whether this issue's boundary reaches beyond documentation (#1358):
+      -- true when at least one owned path is not a .md file. Stored BESIDE
+      -- delegatable and deliberately not consulted by it - the tick
+      -- records the distinction so an operator can see how much of the
+      -- backlog can only produce prose; whether the Queen may be steered by
+      -- it is a separate decision that has not been made. A boundary of one
+      -- .md file still delegates exactly as it did before.
+      ADD COLUMN IF NOT EXISTS boundary_reaches_source boolean NOT NULL DEFAULT false;
     ALTER TABLE queen_dispatch
       ADD COLUMN IF NOT EXISTS criteria jsonb NOT NULL DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS criteria_source text NOT NULL DEFAULT 'none',
@@ -294,17 +411,19 @@ export async function rememberIssues(
   if (issues.length === 0) return
   for (const issue of issues) {
     const boundary = boundaryPathsOf(issue.body)
+    const reachesSource = boundaryReachesSource(boundary)
     const v = verdicts?.[String(issue.number)]
     await pool.query(
       `INSERT INTO queen_issues
          (number, title, state, owned_paths, seen_at, is_spec, delegatable,
-          missing, criteria, criteria_source)
-       VALUES ($1, $2, 'open', $3::jsonb, now(), $4, $5, $6::jsonb, $7::jsonb, $8)
+          boundary_reaches_source, missing, criteria, criteria_source)
+       VALUES ($1, $2, 'open', $3::jsonb, now(), $4, $5, $6, $7::jsonb, $8::jsonb, $9)
        ON CONFLICT (number) DO UPDATE
          SET title = EXCLUDED.title, state = 'open',
              owned_paths = EXCLUDED.owned_paths, seen_at = now(),
              is_spec = EXCLUDED.is_spec,
              delegatable = EXCLUDED.delegatable,
+             boundary_reaches_source = EXCLUDED.boundary_reaches_source,
              missing = EXCLUDED.missing,
              criteria = EXCLUDED.criteria,
              criteria_source = EXCLUDED.criteria_source`,
@@ -313,7 +432,14 @@ export async function rememberIssues(
         issue.title.slice(0, 300),
         JSON.stringify(boundary),
         v?.isSpec ?? false,
+        // NOT `... && boundaryReachesSource(boundary)` - see #1358. Making
+        // the distinction visible and acting on it are different decisions,
+        // and the second belongs to the operator: silently narrowing what
+        // the Queen will pick up would stop the swarm, which is the opposite
+        // of the intent. tests/api/boundary-reach.test.ts fails if this line
+        // ever narrows.
         v?.delegatable ?? boundary.length > 0,
+        reachesSource,
         JSON.stringify(v?.missing ?? []),
         JSON.stringify(v?.criteria ?? []),
         v?.criteriaSource ?? 'none',
@@ -323,7 +449,7 @@ export async function rememberIssues(
   if (!complete) {
     logger.warn('Open issue list was truncated; keeping the board as it is', {
       fetched: issues.length,
-      pages: ISSUE_PAGE_CAP,
+      pages: issuePageCap(),
     })
     return
   }
@@ -388,14 +514,98 @@ const isoSeconds = (value: unknown): string =>
  *   escalate  -> awaitingReview: a person is needed, and the 48-hour clock runs
  *   wait/none -> awaitingReview: not judged yet, so the hold stands
  */
+/**
+ * The lease on a send-back, and why `rejected` cannot be permanent.
+ *
+ * `QueenDelegationPolicy.claimOnIssue` counts `rejected` as a LIVE claim, and
+ * says why in its own comment: "the same bee is expected to return to those
+ * files". Nothing returns. The header of this file states it plainly - a
+ * send-back verdict is recorded and the task waits - so `rejected` is a promise
+ * the system does not keep, and the issue is held for as long as it stands.
+ *
+ * Measured in production 2026-09-04: 18 of 28 open issues were skipped as
+ * `claimed`, and every one of the send-backs among them was holding ITSELF.
+ * An issue blocked by its own failed attempt can never be retried.
+ *
+ * The repair needs no new policy, because the policy already has the right
+ * state. `failed` is free in `claimOnIssue`, over the comment "A failure is the
+ * state that most obviously means 'do this again'". So a send-back that has sat
+ * past the idle floor, and still has attempts left under
+ * `QueenRetryPolicy.maximumRealAttempts`, is reported as `failed` rather than
+ * `rejected` - which is what it is: an attempt that did not land.
+ *
+ * WHAT IS DELIBERATELY NOT CHANGED.
+ *   - `escalate` and `wait` still map to `awaitingReview`. An escalation wants
+ *     a person, and a wait is re-read by the reviewer each round, so neither is
+ *     the false promise this fixes.
+ *   - The ceiling is not a new number. Past it the claim stands, and a person
+ *     decides - the same quarantine a message queue gives an item whose
+ *     delivery count is exhausted.
+ *   - `idle` defaults to 0, so every existing caller and test keeps today's
+ *     behaviour until it passes the new argument.
+ */
+export const SEND_BACK_IDLE_FLOOR_MS = 60 * 60 * 1000
+
+/**
+ * The same defect in the third state, with a much longer floor.
+ *
+ * `wait` means "not judged yet", and the sweep deliberately re-reads wait rows
+ * so a torn or unparsed verdict gets another look. Its own comment states the
+ * limit of that: "an unchanged transcript yields the same wait". The transcript
+ * of a FINISHED bee never changes, so re-reading is not re-judging - the same
+ * input gives the same answer every round, while the policy's reason reads
+ * "N of M criteria judged SO FAR" and there is no later.
+ *
+ * Measured 2026-09-04: #1361 and #1362 sat in `wait` for hours, holding their
+ * boundaries and counted in `claimed` against every candidate touching them.
+ *
+ * Six hours, not one. A wait CAN resolve by itself - a transcript merely slow
+ * to flush will parse on a later sweep - so the clock must be long enough that
+ * only a genuinely frozen one is released. A send-back gets no second look at
+ * all, which is why its floor is an hour.
+ */
+export const WAIT_FROZEN_FLOOR_MS = 6 * 60 * 60 * 1000
+
 export function stateOfDispatch(
   finished: boolean,
   reviewState: unknown,
-): 'running' | 'accepted' | 'rejected' | 'awaitingReview' {
+  lease: { idleMs?: number; sendBacks?: number; ceiling?: number } = {},
+): 'running' | 'accepted' | 'rejected' | 'awaitingReview' | 'failed' {
   if (!finished) return 'running'
   const verdict = String(reviewState ?? '')
   if (verdict === 'accept') return 'accepted'
-  if (verdict === 'sendBack') return 'rejected'
+  const idleMs = lease.idleMs ?? 0
+  const sendBacks = lease.sendBacks ?? 0
+  // Read from QueenRetryPolicy.maximumRealAttempts rather than restated, so
+  // there is one ceiling and not two that agree until someone edits one.
+  const ceiling = lease.ceiling ?? 2
+
+  // A verdict that SAYS failed is a failure. This case was missing, so
+  // `review_state = 'failed'` fell through to `awaitingReview` at the bottom -
+  // a LIVE claim in `QueenDelegationPolicy.claimOnIssue` - and the issue stayed
+  // held by the very row that recorded its release.
+  //
+  // Measured 2026-09-04: five dispatches were deliberately set to `failed` to
+  // return their issues to the pool (#1133, #1175, #1216, #1240, #1311). All
+  // five stayed in `claimed`, the tick kept refusing with "nothing to choose"
+  // against 22 candidates, and the swarm sat at zero bees of four. The write
+  // was correct; the reader had no case for it.
+  //
+  // The function already RETURNS 'failed' two lines below for a send-back that
+  // outlived its floor. It could produce the state and not recognise it.
+  if (verdict === 'failed' || verdict === 'cancelled') return 'failed'
+
+  if (verdict === 'sendBack') {
+    if (idleMs >= SEND_BACK_IDLE_FLOOR_MS && sendBacks < ceiling)
+      return 'failed'
+    return 'rejected'
+  }
+  // A wait that has outlasted the frozen floor was never judged and never will
+  // be, because nothing about its input can change. `escalate` is deliberately
+  // excluded: it asks for a person, and a timer is not a person.
+  if (verdict === '' || verdict === 'wait') {
+    if (idleMs >= WAIT_FROZEN_FLOOR_MS && sendBacks < ceiling) return 'failed'
+  }
   return 'awaitingReview'
 }
 
@@ -513,7 +723,12 @@ export function boardTask(
      * being chosen twice, and `stillHoldsBoundary` expires its file claim after
      * 48 hours rather than never.
      */
-    state?: 'running' | 'accepted' | 'rejected' | 'awaitingReview'
+    // `failed` belongs here. `stateOfDispatch` gained that case so a verdict
+    // that SAYS failed stops being read as a live claim, and this parameter was
+    // not widened with it - so the one call site that passes the result did not
+    // typecheck. `bun test` does not typecheck, every test passed, and the
+    // error shipped. Two gates, and only one of them was run.
+    state?: 'running' | 'accepted' | 'rejected' | 'awaitingReview' | 'failed'
     provider?: string
     model?: string
     inputTokens?: number
@@ -564,8 +779,12 @@ export function boardTask(
  * nil into []. If a caller ever needs the difference, the flag goes back in
  * HERE and in `rememberIssues`, which currently JSON-stringifies the result
  * into `owned_paths` with no way to say "the issue never said".
+ *
+ * EXPORTED so `tests/api/boundary-reach.test.ts` can run it against the very
+ * same bodies as its twin in `trios/tools/doc-only-boundary-audit.mjs` and
+ * fail if the two parsers ever disagree about which paths an issue claims.
  */
-function boundaryPathsOf(body: string): string[] {
+export function boundaryPathsOf(body: string): string[] {
   const lines = body.split('\n')
   let inside = false
   const paths: string[] = []
@@ -590,6 +809,47 @@ function boundaryPathsOf(body: string): string[] {
   return paths
 }
 
+// The suffixes that make a boundary path count as documentation (#1358).
+// One array, one place to disagree with; the audit prints it at the top of
+// every run so a reader can.
+const DOC_FILE_SUFFIXES = ['.md']
+
+/// Whether one boundary path is documentation. The FILE NAME decides, not
+/// the directory: `trios/docs/x.md` is documentation and `docs/diagram.png`
+/// is not. Case-insensitive, so `README.MD` is documentation.
+function isDocumentationPath(path: string): boolean {
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  return DOC_FILE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))
+}
+
+/**
+ * Whether a boundary reaches beyond documentation (#1358).
+ *
+ * TRUE when at least one path in it is not documentation. A boundary of one
+ * `.md` file has length 1, so `delegatable` as derived today calls it work -
+ * and an issue worked exactly as written changes no behaviour, which is how
+ * "there is no target queue depth" (#1333) was accepted and closed while the
+ * defect it names stayed in the code.
+ *
+ * THIS VALUE IS RECORDED, NOT ACTED ON. `delegatable` keeps its meaning and
+ * its value (`v?.delegatable ?? boundary.length > 0`): whether the Queen may
+ * be pointed away from prose-only tasks is the operator's decision, not this
+ * change's, and silently narrowing what she picks up would stop the swarm.
+ *
+ * The rule is a PINNED TWIN of the one `trios/tools/doc-only-boundary-audit.mjs`
+ * exports under the same name - not an import, and the reason is the
+ * deployment: the agent-server image is built from `agent-server/` alone
+ * (its Dockerfile copies `apps/server` and `packages/*` and nothing from the
+ * repository root), so a static import of that tool would die at boot with
+ * "module not found" and take the whole round with it. The twin cannot drift
+ * silently: `tests/api/boundary-reach.test.ts` imports the audit's export
+ * and fails unless both agree on every shape a boundary can take, and both
+ * parsers against the same bodies.
+ */
+export function boundaryReachesSource(paths: string[]): boolean {
+  return paths.some((path) => !isDocumentationPath(path))
+}
+
 /** One body per candidate, keyed as queend expects. */
 async function bodiesFor(
   repo: string,
@@ -599,7 +859,7 @@ async function bodiesFor(
   for (const number of numbers) {
     const response = await fetch(
       `https://api.github.com/repos/${repo}/issues/${number}`,
-      { headers: { Accept: 'application/vnd.github+json' } },
+      { headers: githubReadHeaders() },
     )
     if (!response.ok) continue
     const issue = (await response.json()) as { body?: string | null }
@@ -1093,8 +1353,13 @@ export async function runRound(
   // is why the boundary is stored at dispatch - a task holding no paths holds
   // nothing against anyone.
   const inFlight = await pool.query(
+    // `reviewed_at` and `send_backs` are the lease's two inputs and were not
+    // selected here before. Without them the ceiling check reads 0 for every
+    // row, so `0 < 2` always holds and a send-back would be released no matter
+    // how many attempts it had already burned - the unbounded retry the ceiling
+    // exists to prevent.
     `SELECT issue, branch, owned_paths, conversation_id, dispatched_at,
-            key_index, finished_at, review_state,
+            key_index, finished_at, review_state, reviewed_at, send_backs,
             provider, model, input_tokens, output_tokens
        FROM queen_dispatch
       WHERE started = true
@@ -1134,7 +1399,23 @@ export async function runRound(
       title: finished
         ? 'finished by the cloud tick, waiting for a verdict'
         : 'dispatched by the cloud tick',
-      state: stateOfDispatch(finished, row.review_state),
+      state: stateOfDispatch(finished, row.review_state, {
+        // THE CLOCK MUST BE ONE NOTHING TOUCHES.
+        //
+        // This read `reviewed_at ?? finished_at` and the wait valve could
+        // therefore never fire. `reviewFinishedDispatches` re-reads every
+        // `wait` row each round and UPDATEs it in place - its own comment says
+        // so - which refreshes `reviewed_at` every five minutes. Measured in
+        // production 2026-09-04: #1327 and #1329 had been frozen for 18.4
+        // hours and reported 0.06 hours of idle, because the sweep had touched
+        // them a moment earlier. A six-hour floor against a clock reset every
+        // five minutes is a floor that cannot be reached.
+        //
+        // `finished_at` is written once, when the bee stops, and never again.
+        // It is the only honest measure of how long a verdict has stood.
+        idleMs: finished ? Date.now() - Date.parse(String(row.finished_at)) : 0,
+        sendBacks: Number(row.send_backs ?? 0),
+      }),
       // The price, so the daily cap can see the work it exists to govern.
       // `estimatedCostUSD` returns nil unless BOTH provider and model are
       // present, so a record missing either contributes nothing to the sum and
@@ -1214,6 +1495,7 @@ export async function runRound(
     .filter((r) => r.finished_at == null)
     .map((r) => r.key_index)
     .filter((i): i is number => typeof i === 'number')
+  let keyCursor = latestProviderKeyIndex(inFlight.rows)
 
   // `watch.held` first, and re-read on every pass: the heartbeat can refuse a
   // renewal in the minutes a single dispatch takes, and every write below this
@@ -1239,6 +1521,7 @@ export async function runRound(
       ),
       paths,
       takenKeys,
+      keyCursor,
       criteria,
       criteriaSource,
     )
@@ -1260,6 +1543,7 @@ export async function runRound(
     ]
     if (typeof dispatch.keyIndex === 'number') {
       takenKeys = [...takenKeys, dispatch.keyIndex]
+      keyCursor = dispatch.keyIndex
     }
     // `queend` applies canStartAnother itself, so the loop ends when the policy
     // says so rather than on a count kept here - two places counting workers is
@@ -1280,7 +1564,10 @@ export async function runRound(
     )
     if (!current?.allowed) {
       logger.info('Queen tick stopped dispatching', {
-        started: started.length,
+        // Counted from the booleans, not the array: the array also holds the
+        // refusal that stopped the loop, and counting that as a bee is the
+        // #1379 defect in miniature.
+        started: dispatchesThatStarted(started).length,
         why: current?.refusal ?? 'no answer',
       })
     }
@@ -1288,12 +1575,15 @@ export async function runRound(
 
   if (!watch.held) {
     logger.warn('Queen tick stood down mid-round; the lease moved', {
-      started: started.length,
+      started: dispatchesThatStarted(started).length,
     })
   }
 
   await report(pool, reviewed, started, choice, candidates.length)
-  if (started.length > 0) {
+  // A round every one of whose dispatches was refused started nothing, so it
+  // reports no dispatch - the tick response agrees with the report, and a
+  // caller cannot mistake a refusal for a bee in flight.
+  if (dispatchesThatStarted(started).length > 0) {
     return { ran: true, choice, dispatch: started }
   }
   return { ran: true, choice }
@@ -1385,6 +1675,42 @@ export function briefFor(
     'unchecked criterion is not a pass, and saying so plainly costs you',
     'nothing.',
     '',
+    // The compiler, named, and the fact that the review runs it. Harvested
+    // 2026-09-10 (gHashTag/t27#3560): 34 branches whose bees had written
+    // "met", 9 of which parsed clean when `t27c` was actually run. The other 25
+    // bees were not lying so much as guessing, because nothing told them the
+    // compiler was on the machine or that anyone would run it after them.
+    'The T27 compiler is installed: `t27c` is on your PATH (/usr/local/bin/t27c).',
+    'For every `.t27` file you change, run `t27c parse <file>` and',
+    '`t27c typecheck <file>` yourself before you answer, and quote the result.',
+    'The review runs the same commands on your COMMIT - parse, parse-complete',
+    "and typecheck - and the compiler's answer stands above your verdict line.",
+    'A file with a parse error, a DISCARDED token run, or a `TODO: Implement`',
+    'stub marker is unmet whatever the line says.',
+    '',
+    "## The Queen's scheduler",
+    '',
+    // The scheduler is a tool the Queen holds, not one the bee holds
+    // (gHashTag/t27 specs/tools/mcp/inngest-dev.t27, AGENTS = ["T"];
+    // specs/automation/inngest-queen-scheduler.t27). Every cron and skill card
+    // under specs/crons and specs/skills is an Inngest function of the app
+    // `t27-queen`, served by this server at /api/inngest. A bee meets the
+    // scheduler in two places: as the author of a `[skill] <ID>` issue, and as
+    // the thing it must not try to drive.
+    'Crons and skills are functions of the Inngest app `t27-queen`, one per',
+    'card under `specs/crons/` and `specs/skills/` (gHashTag/t27), and the',
+    'scheduler is a tool the Queen holds (`mcp/inngest-dev`), not one you hold.',
+    'If this issue is titled `[skill] <ID>` with the label `queen-skill`, the',
+    'scheduler opened it from the event `skill/<ID>.run`: the card',
+    '`specs/skills/<file>.t27` named in the body is the contract, and the skill',
+    'body it points at (SKILL.md) is what you follow. To change WHEN something',
+    'runs, change its card (SCHEDULE, TZ, ENABLED, RUNS) - never a workflow',
+    '`schedule:` or a setInterval; the app re-reads the cards on deploy. Do not',
+    'send `cron/<ID>.tick` or `skill/<ID>.run` events and do not call the',
+    'Inngest MCP yourself: it needs `Authorization: Bearer <INNGEST_SIGNING_KEY>`,',
+    'which this machine does not hold by design. If your task needs a run to',
+    'happen, say so in your verdict and the Queen fires it.',
+    '',
     '## Out of scope',
     '',
     'Anything the issue does not ask for. Work that seems obviously needed and',
@@ -1398,18 +1724,21 @@ export function briefFor(
     'by the operator. A failed push reads as a failed task; a commit is the',
     'deliverable.',
     '',
-    '## Your verdict, which the Queen reads',
+    // The trailer, in the exact form the repository's traceability gate
+    // accepts. The 9 bee commits carried into gHashTag/t27#3560 all had to be
+    // rewritten by hand: they closed with "Resolves gHashTag/t27#N", which
+    // reads well and matches nothing - the L1 gate wants a bare `#N`.
+    `End your commit message with the line \`Closes #${issue}\` - exactly that`,
+    'form, on its own line, bare issue number. "Resolves owner/repo#N" does not',
+    "pass the repository's traceability gate and the commit is rewritten by hand.",
+    "Sealing (`t27c seal`) and the `docs/now/` entry are the operator's at",
+    'harvest time, not yours: they fall outside your boundary.',
     '',
-    'End your LAST message with exactly this block and nothing after it:',
-    '',
-    '## VERDICT',
-    "- <the criterion, in the issue's own words>: met | unmet | could-not-check",
-    '- <the next one>: met | unmet | could-not-check',
-    '',
-    'One line per criterion in "What you will be judged by", in that order. A',
-    'criterion you could not check is could-not-check, never met - claiming met',
-    'for work you did not verify is the one failure nothing downstream can',
-    'catch, because the reviewer has only your word for it.',
+    // The template, one numbered slot per criterion (#1421). Emitted only when
+    // the task states criteria, so a task with none is unchanged: its bee
+    // states its own criteria first and still needs the standing generic
+    // request to answer them in.
+    ...verdictSection(criteria),
   ].join('\n')
 }
 
@@ -1450,6 +1779,92 @@ function criteriaBlock(criteria: string[], source: string): string[] {
 }
 
 /**
+ * The VERDICT template the bee fills in, one numbered slot per criterion
+ * (#1421).
+ *
+ * Five dispatches on 2026-09-04 came back or escalated with the reviewer
+ * reporting "Finished work omitted N verdict lines", where N was exactly the
+ * number of criteria the reviewer called unmet. The workers had not refused
+ * to answer. The brief already numbered the criteria - but it never required
+ * the report to be numbered the same way, so a worker writing prose about
+ * its work satisfied the letter of the instruction and none of its purpose,
+ * and nothing checked before the turn ended.
+ *
+ * A template with one numbered slot per criterion closes the first half: a
+ * slot is either filled or visibly empty, the numbers are the ones the
+ * criteria already carry, and the brief says in words which reading an empty
+ * slot gets. The bee is also told to check itself before stopping - the one
+ * moment an omission is still free to fix. `missingVerdictSlots` below is
+ * the same check as a function, for whatever tells a bee that has already
+ * stopped.
+ *
+ * NUMBERED ONLY WHEN THERE ARE CRITERIA TO NUMBER. A task with none keeps
+ * the standing generic request, unchanged: its bee is asked by
+ * `criteriaBlock` to state its own criteria before working, and numbering
+ * slots here would number criteria nobody has written yet.
+ */
+function verdictSection(criteria: string[]): string[] {
+  // THE BLOCK GOES FIRST, and this is the measurement that moved it.
+  //
+  // Only 17% of dispatches in a three-hour window were accepted; 33% came back
+  // as sendBack and 28% as `wait`, which means the review could not judge them
+  // at all. Reading the transcripts settles why. #1429 discussed all four of
+  // its criteria in prose - "Criterion 4 ... **Met.**" - and then wrote a
+  // VERDICT block containing two lines. #1427 the same. #1430 wrote three of
+  // four. The accepted ones wrote exactly one line per criterion.
+  //
+  // The block was required to come LAST, after 25-35 kB of prose. So the ONLY
+  // machine-read part of the report sat in the position where a turn that runs
+  // short loses it first, and a worker treating it as a closing summary rather
+  // than the deliverable trims it exactly there.
+  //
+  // Putting it first costs nothing the worker knows: it has done the work and
+  // taken its measurements before it composes the message. What it changes is
+  // what survives when something is cut - prose, which nothing reads
+  // mechanically, instead of the verdict, on which every downstream decision
+  // depends.
+  const head = [
+    '## Your verdict, which the Queen reads',
+    '',
+    'BEGIN your LAST message with exactly this block, before anything else you',
+    'write. Not at the end - at the very top. Everything after it is prose for a',
+    'person; this block is the only part read by machine, and a report that runs',
+    'long loses whatever is last.',
+    '',
+    '## VERDICT',
+  ]
+  if (criteria.length === 0) {
+    return [
+      ...head,
+      "- <the criterion, in the issue's own words>: met | unmet | could-not-check",
+      '- <the next one>: met | unmet | could-not-check',
+      '',
+      'One line per criterion in "What you will be judged by", in that order. A',
+      'criterion you could not check is could-not-check, never met - claiming met',
+      'for work you did not verify is the one failure nothing downstream can',
+      'catch, because the reviewer has only your word for it.',
+    ]
+  }
+  return [
+    ...head,
+    ...criteria.map(
+      (_, i) =>
+        `- ${i + 1}. <criterion ${i + 1}, in the issue's own words>: ` +
+        'met | unmet | could-not-check',
+    ),
+    '',
+    'One numbered slot per criterion in "What you will be judged by", same',
+    'numbers, same order. A slot you leave out is read as unmet, so answer',
+    'every number - including one you could not check, which is',
+    'could-not-check, never met. Claiming met for work you did not verify is',
+    'the one failure nothing downstream can catch, because the reviewer has',
+    'only your word for it. Before you stop, re-read this block against your',
+    'last message and fill in every number you have not answered, while you',
+    'still can.',
+  ]
+}
+
+/**
  * Who the bee is, sent in the field the server actually reads.
  *
  * Separate from the briefing because they are different things: the brief is
@@ -1475,6 +1890,10 @@ export function workerSystemPrompt(
   }
   lines.push(
     'Everything you write is English. When you stop, answer every acceptance criterion in turn: met, not met, or could not check.',
+    // Said twice on purpose - once here, once in the brief - because the
+    // system prompt survives a context that the brief may have scrolled out
+    // of. A bee that finishes without the trailer costs a hand rewrite.
+    `The T27 compiler t27c is installed on this machine; run \`t27c parse\` and \`t27c typecheck\` on every .t27 file you change, because the review runs them on your commit. Your final commit message ends with the line \`Closes #${issue}\`.`,
   )
   return lines.join(' ')
 }
@@ -1484,16 +1903,21 @@ export function workerSystemPrompt(
  *
  * `queend` has been able to answer the `boundary` question since it was
  * written and nothing has ever asked it: the one place holding both halves of
- * the comparison threw the file names away at `.length`. This is the caller.
+ * the comparison threw the file names away at `.length`. This is the caller,
+ * and deliberately only that - the comparison itself stays in
+ * `QueenBoundaryPaths`, one rule for the container and the Mac.
  *
  * The ROOT is the project directory, not the checkout root, and that is the
  * whole subtlety. `committedFiles` runs `git diff --name-only` from the
  * repository root, so a path arrives as `trios/docs/x.md` while an owned path
- * is project-relative `docs/x.md`. `QueenBoundaryPaths.strippingProject` drops
- * the LAST component of the root it is handed, so handing it `/workspace/
- * BrowserOS` would strip nothing and report every correct write as a stray -
- * the same false accusation that file's own header records being paid for on
- * #1286.
+ * may be spelled either repository-relative (`trios/docs/x.md`, as #1306's
+ * own boundary is) or project-relative (`docs/x.md`). The policy reduces BOTH
+ * halves to the project-relative namespace before comparing, so either
+ * spelling of a boundary accepts the writes it names.
+ * `QueenBoundaryPaths.strippingProject` drops the LAST component of the root
+ * it is handed, so handing it `/workspace/BrowserOS` would strip nothing and
+ * report every correct write as a stray - the same false accusation that
+ * file's own header records being paid for on #1286.
  *
  * Empty on any failure, and empty when the issue declared no boundary: a task
  * that owns no paths is not a task that owns everything, and `strays` says so
@@ -1520,6 +1944,95 @@ async function boundaryStrays(
 }
 
 /**
+ * The criteria a bee never wrote a verdict line for.
+ *
+ * SILENCE IS NOT FAILURE. The review marks a criterion unmet when the VERDICT
+ * block carries no line for it, and that default is correct - an unanswered
+ * criterion is not a satisfied one. But it is a different FACT from a criterion
+ * the bee tested and reported unmet, and until #1420 nothing in the round could
+ * tell the two apart: a send-back that said "4 criterion(s) not met" was read
+ * by the worker as "I failed four things" when four things had merely never
+ * been mentioned. Measured 2026-09-04, from the six dispatches parked at the
+ * retry ceiling, the unmet count was the omitted count in every one - #1133,
+ * #1175, #1316, #1318, #1311 - and three of the six had escalated to a person
+ * without the work ever being assessed. The oldest had waited 91 hours.
+ *
+ * MATCHING. A bee quotes the criteria "in the issue's own words", but a quote
+ * is not a copy: backticks, punctuation and case all drift, and
+ * `parseVerdictBlock` slices a line's criterion at 300 characters, so a line
+ * quoting a long criterion holds only its beginning. Comparing punctuation and
+ * case exactly would mark a faithfully quoted criterion as omitted. Both sides
+ * are reduced to letters, digits and single spaces, and a criterion counts as
+ * judged when one side contains the other - containment in EITHER direction,
+ * because the 300-character slice means the promised text may contain the
+ * line's text and not the other way round. The containment guard exists
+ * because a one-word line would otherwise be contained by everything and mark
+ * every criterion judged; an exact match always counts, however short.
+ */
+export function unjudgedCriteria(
+  promised: string[],
+  judged: Array<{ criterion: string; met: boolean }>,
+): string[] {
+  const normalize = (text: string): string =>
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  const said = judged.map((v) => normalize(v.criterion))
+  return promised.filter((criterion) => {
+    const want = normalize(criterion)
+    if (want.length === 0) return false
+    return !said.some(
+      (line) =>
+        line === want ||
+        (Math.min(line.length, want.length) >= 12 &&
+          (line.includes(want) || want.includes(line))),
+    )
+  })
+}
+
+/**
+ * The send-back message, with silence and failure named as the two different
+ * things they are (#1420, FR-002).
+ *
+ * The opener and the closing instruction are taken from the policy's own note
+ * rather than restated here - the pass number ("for a third pass") is the
+ * policy's ordinal, and a second copy of it in TypeScript would be the second
+ * implementation of one rule this file is otherwise careful never to have. What
+ * is composed here is the middle: the unmet criteria under two distinct
+ * headings, so a worker reading the message can tell "you did not do this"
+ * from "you did not say whether you did this". The first heading is a verdict
+ * the bee wrote itself; the second is a default applied against it, and a
+ * worker must be able to see which is which to answer either.
+ */
+function sendBackMessage(
+  policyNote: string,
+  failed: string[],
+  unjudged: string[],
+): string {
+  const lines = policyNote.split('\n')
+  const opener = lines[0] ?? ''
+  const closer = lines[lines.length - 1] ?? ''
+  const list = (items: string[]): string[] =>
+    items.length === 0
+      ? ['  (none)']
+      : items.map((criterion, i) => `  ${i + 1}. ${criterion}`)
+  return [
+    opener,
+    '',
+    'Criteria that were tested and failed:',
+    ...list(failed),
+    '',
+    'Criteria you never wrote a verdict line for, judged unmet because you',
+    'said nothing:',
+    ...list(unjudged),
+    '',
+    closer,
+  ].join('\n')
+}
+
+/**
  * Read each finished turn's own verdict block and decide on it.
  *
  * The bee ends its last message with a VERDICT block: one line per acceptance
@@ -1530,6 +2043,25 @@ async function boundaryStrays(
  * `could-not-check` counts as UNMET. A criterion nobody verified has not been
  * satisfied, and treating "I could not tell" as "yes" is how work closes on
  * faith. The bee is told this in its brief so the accounting is not a surprise.
+ *
+ * A CRITERION THE BEE SAID NOTHING ABOUT COUNTS AS UNMET TOO - the correct
+ * default, for the same reason - but as a different fact (#1420). Once the bee
+ * has judged SOME of its criteria, the ones with no line are added to the
+ * question as unmet verdicts, so the policy itself decides sendBack or
+ * escalate on the complete picture; the tally records judged and unjudged
+ * separately, and the send-back message names them under two headings. A bee
+ * whose block is missing ENTIRELY is still read as a wait rather than a
+ * wall of omissions, because an absent block is the signature of a torn or
+ * slow transcript (#1335) and the frozen-wait valve already handles a verdict
+ * that can never change; a bee that judged half its criteria read the
+ * instruction and chose silence on the rest.
+ *
+ * THE RETRY BUDGET IS SPENT ON THE WORK (FR-003). An attempt whose unmet
+ * criteria are ALL unjudged - the bee attempted no criterion it was given - is
+ * returned without counting against `QueenRetryPolicy.maximumRealAttempts`,
+ * because a ceiling spent on silence is a ceiling that retires issues nobody
+ * ever worked. The count still advances when any unmet criterion was judged,
+ * and only then.
  *
  * Only an escalation reaches a person. accept releases the issue, sendBack
  * frees it to be dispatched again with the note, and wait leaves it alone.
@@ -1544,28 +2076,91 @@ async function boundaryStrays(
  * `sendBackNote` is given `priorSendBacks + 1`. The count now comes off the
  * row, so the fifth return says "sixth pass" and the third does not happen.
  */
+
+/** Judged and unjudged counts for one dispatch, as the round records them. */
+export interface ReviewTally {
+  issue: number
+  /** Criteria the bee wrote a verdict line for, whatever the verdict said. */
+  judged: number
+  /** Criteria the bee never wrote a verdict line for. */
+  unjudged: number
+}
+
 interface ReviewRound {
   /** `#1234:accept`, one per dispatch judged this round. */
   acted: string[]
   /** Issues whose commit reached outside the boundary, and where. */
   strays: Array<{ issue: number; paths: string[] }>
+  /** Judged and unjudged, per dispatch reviewed this round (#1420, FR-001). */
+  tally: ReviewTally[]
 }
 
-async function reviewFinishedDispatches(pool: Pool): Promise<ReviewRound> {
+/**
+ * EXPORTED FOR THE SUITE, as `runRound` is: the review is the half of the
+ * round the unjudged accounting lives in, and a test that cannot call it can
+ * only assert around it. The pool is the same recording fake the round's own
+ * suite drives, so what the assertions read is exactly what a round writes.
+ */
+export async function reviewFinishedDispatches(
+  pool: Pool,
+): Promise<ReviewRound> {
+  // TWO THINGS ABOUT THIS QUERY, BOTH MEASURED ON 2026-09-03.
+  //
+  // The say rows are joined with NOTHING between them, not a newline. The
+  // scribe flushes the bee's text on a size-or-time bound (400 chars or 2.5 s),
+  // so a row boundary can fall inside a word - and did: #1335's closing block
+  // was stored as `## VERD` + `ICT`, the join put a newline between them, and
+  // `parseVerdictBlock` found no header. The review recorded "0 of 5 criteria
+  // judged so far" against a bee that had answered all five. Joining with the
+  // empty string restores the stream the bee actually wrote; re-run against
+  // every finished dispatch, exactly two headers came back whole (#1309, #1335)
+  // and no intact one changed.
+  //
+  // `wait` is revisited, not just NULL. A wait verdict means "not judged yet",
+  // and nothing ever judged it again: the sweep took `review_state IS NULL`
+  // only, so a bee whose verdict was unreadable for any reason - a torn
+  // header, a parser gap - held its boundary for the full 48 hours and then
+  // fell off the board. Three sat that way today. A wait row is re-read each
+  // round and rejudged; the UPDATE below overwrites it in place, so an
+  // unchanged transcript yields the same wait and costs one query.
+  // A `wait` row is revisited forever, and until now nothing ever asked whether
+  // its issue still existed. Measured 2026-09-16: 406 of the 488 rows re-judged
+  // in a single log window were issues closed in July and August. Their
+  // branches no longer carry a spec, so the witness reports `t27c="absent"`,
+  // nothing can be judged, the verdict is `wait` again, and the row returns
+  // next tick -- one `queend` call each, every round, forever. That is what
+  // "review is overflowing" actually was.
+  //
+  // `queen_issues` is the open set, and since the paging fix it is complete
+  // enough to subtract against. Guarded on a NON-EMPTY board: an empty one
+  // means the sync has not run yet in this process, and filtering against it
+  // would silently stop every review rather than fewer of them.
+  const board = await pool.query<{ n: string }>(
+    'SELECT count(*)::text AS n FROM queen_issues',
+  )
+  const boardIsTrustworthy = Number(board.rows[0]?.n ?? 0) > 0
+  const stillOpen = boardIsTrustworthy
+    ? 'AND EXISTS (SELECT 1 FROM queen_issues i WHERE i.number = d.issue)'
+    : ''
   const done = await pool.query(
     `SELECT d.issue, d.conversation_id, d.review_state,
             d.criteria, d.criteria_source, d.send_backs, d.owned_paths,
-            (SELECT string_agg(t.text, '\n' ORDER BY t.seq)
+            (SELECT string_agg(t.text, '' ORDER BY t.seq)
                FROM queen_transcript t
               WHERE t.conversation_id = d.conversation_id AND t.kind = 'say')
               AS said
        FROM queen_dispatch d
       WHERE d.started = true AND d.finished_at IS NOT NULL
-        AND d.review_state IS NULL
-        AND d.outcome NOT LIKE 'reaped%'`,
+        AND (d.review_state IS NULL OR d.review_state = 'wait')
+        AND d.outcome NOT LIKE 'reaped%'
+        ${stillOpen}`,
   )
+  if (!boardIsTrustworthy) {
+    logger.warn('Review ran against every dispatch row: the issue board is empty')
+  }
   const acted: string[] = []
   const strayed: Array<{ issue: number; paths: string[] }> = []
+  const tally: ReviewTally[] = []
   for (const row of done.rows) {
     const said = String(row.said ?? '')
     const verdicts = parseVerdictBlock(said)
@@ -1581,6 +2176,12 @@ async function reviewFinishedDispatches(pool: Pool): Promise<ReviewRound> {
     const promised = Array.isArray(row.criteria)
       ? (row.criteria as string[])
       : []
+    // The half of the contract the bee never answered. #1420: the six
+    // dispatches parked at the retry ceiling that morning all had an unmet
+    // count that was exactly their omitted count - criteria that were never
+    // judged at all, indistinguishable in the record from criteria that were
+    // judged and failed.
+    const unjudged = unjudgedCriteria(promised, verdicts)
     // A bee that wrote MORE lines than it was given is judged on what it wrote:
     // that is the case where the Queen supplied none and the bee stated its
     // own, which the brief asks for.
@@ -1607,23 +2208,167 @@ async function reviewFinishedDispatches(pool: Pool): Promise<ReviewRound> {
     // is not - `priorSendBacks` decodes as Int and a string would make queend
     // refuse the whole question.
     const priorSendBacks = Number(row.send_backs ?? 0) || 0
-    const answer = await askQueend({
-      kind: 'review',
-      verdicts: verdicts.map((v) => ({ criterion: v.criterion, met: v.met })),
-      totalCriteria,
-      committedFiles: files.length,
-      priorSendBacks,
-    }).catch(() => null)
-    const state = String(answer?.verdict ?? 'wait')
+    // The criteria the bee judged as it wrote them, plus - once it has judged
+    // ANY - the ones it never wrote a line for, added as unmet so the POLICY
+    // decides on the complete picture rather than the review substituting a
+    // decision of its own. The omission is the correct default (an unanswered
+    // criterion is not a satisfied one), and sending the list through queend
+    // keeps sendBack-versus-escalate one rule in one place. A bee whose block
+    // is missing entirely is excluded: no verdicts at all is the torn-transcript
+    // signature the wait state exists for, and the frozen-wait valve releases
+    // it if the transcript never does arrive.
+    // The machine's answer, next to the bee's. Every `.t27` file the branch
+    // changed is read from the COMMIT and run through `t27c parse`,
+    // `parse-complete` and `typecheck`; each measurement becomes a verdict line
+    // the policy weighs exactly like the bee's own. Measured 2026-09-10
+    // (gHashTag/t27#3560): 34 branches this review had passed on the bee's
+    // word, 9 held up under the compiler - 20 did not parse at all. A review
+    // that reads "met" and does not run the compiler is not a review.
+    //
+    // Taken only once the bee has judged anything: a bee with no verdict block
+    // is the torn-transcript case, and a compiler's yes must not stand in for
+    // the answers the bee never wrote.
+    // THE COMPILER MAY REFUSE WORK THE BEE DID NOT DEFEND. IT MAY NOT PASS IT.
+    //
+    // The rule above this was: witness only once the bee has judged something,
+    // because "a compiler's yes must not stand in for the answers the bee never
+    // wrote". That reasoning is kept whole - and it is one-directional. A yes
+    // stands in for an answer; a NO stands in for nothing. If the branch left
+    // 21 function bodies empty, no verdict block the bee might have written
+    // would have made that untrue.
+    //
+    // What it costs to keep waiting instead: a finished-but-unjudged dispatch
+    // holds its file boundary for reviewBoundaryHoldHours (48), and the
+    // frozen-wait valve only releases it after six. Measured 2026-09-16: 50
+    // dispatches claimed, 11 more refused for fileConflict behind them, and the
+    // swarm idle at 2 of 10 lanes with work it could not reach. Every one of
+    // those waits was for an answer that was never coming - the model in use
+    // writes a verdict block in about 1 turn in 400.
+    //
+    // So: measure either way, and use the measurement only to fail. When the
+    // bee said nothing and the compiler finds nothing wrong, this still reads
+    // `wait` exactly as before, because that is the case the original rule was
+    // written for.
+    const witness: Witness | null =
+      verdicts.length > 0 || files.some((f) => f.endsWith('.t27'))
+        ? await witnessSpecs(row.issue as number, files)
+        : null
+    const machineAll = witness ? witnessVerdicts(witness) : []
+    const machine =
+      verdicts.length > 0 ? machineAll : machineAll.filter((v) => !v.met)
+    const machineFailed = machine.filter((v) => !v.met).map((v) => v.criterion)
+    const specCount = files.filter((f) => f.endsWith('.t27')).length
+    const questioned =
+      verdicts.length > 0
+        ? [
+            ...verdicts.map((v) => ({ criterion: v.criterion, met: v.met })),
+            ...unjudged.map((criterion) => ({ criterion, met: false })),
+            ...machine,
+          ]
+        : machine.length === 0
+          ? // Silent bee, nothing measurably wrong: unchanged. queend sees an
+            // empty list, answers wait, and the frozen-wait valve handles it
+            // exactly as before. This is the case the original rule protects.
+            []
+          : // Silent bee AND the compiler proved a fault. The policy will not
+            // decide on a partial set - `verdicts.count >= totalCriteria` or it
+            // waits - so a lone proven failure would sit for 48 hours beside
+            // the criteria nobody looked at.
+            //
+            // Those criteria are not unknown, they are UNVERIFIED, and this
+            // codebase already rules on that: "`could-not-check` counts as
+            // UNMET. A criterion nobody verified has not been satisfied, and
+            // treating 'I could not tell' as 'yes' is how work closes on
+            // faith." Counting them unmet is that rule applied, not a new one.
+            //
+            // Nothing is passed on faith here. The verdict this produces can
+            // only be a send-back or an escalation: every line in the set is a
+            // failure, so `unmet.isEmpty` is never true and the accept branch
+            // is unreachable by construction.
+            [
+              ...machine,
+              ...promised.map((criterion) => ({ criterion, met: false })),
+            ]
+    // No compiler on this image while the branch changed specs: nothing was
+    // measured, so nothing is accepted. This asks a PERSON rather than waiting,
+    // because a wait here would never resolve on its own - the frozen-wait
+    // valve would fail the dispatch after six hours and return the issue to
+    // the pool, losing a finished branch to a missing binary. `escalate` keeps
+    // the branch on the board with the reason written down.
+    const unwitnessed = witness?.kind === 'absent' && specCount > 0
+    const answer = unwitnessed
+      ? null
+      : await askQueend({
+          kind: 'review',
+          verdicts: questioned,
+          totalCriteria,
+          committedFiles: files.length,
+          priorSendBacks,
+        }).catch(() => null)
+    const state = unwitnessed ? 'escalate' : String(answer?.verdict ?? 'wait')
+    // Judged versus unjudged, recorded per dispatch (#1420, FR-001): "2 of 5
+    // judged" is a fact about the worker's reporting, not about the work, and
+    // the two belong in the record as separate numbers. The compiler's failed
+    // lines join the judged-and-failed list: they were checked, and found
+    // wanting, which is what that list means.
+    const failed = [
+      ...verdicts.filter((v) => !v.met).map((v) => v.criterion),
+      ...machineFailed,
+    ]
     logger.info('Queen reviewed her own work', {
       issue: row.issue,
       verdict: state,
       criteria: totalCriteria,
       judged: verdicts.length,
+      unjudged: unjudged.length,
       source: row.criteria_source ?? 'none',
       priorSendBacks,
       strays: strays.length,
+      specs: specCount,
+      t27c: witness?.kind === 'witnessed' ? witness.t27c : 'absent',
+      machineUnmet: machineFailed.length,
+      oracle: oracleOutcome(witness),
+      // The verdict alone was not enough to settle a disagreement: production
+      // reported `fail` on branches a local run of the same witness called
+      // `pre-broken`, and with no error text logged there was no way to tell
+      // which base each was measuring against. One word is a signal; the
+      // reason is evidence.
+      oracleDetail:
+        witness?.kind === 'witnessed'
+          ? (witness.specs.find((sp) => sp.oracleError)?.oracleError ?? '').slice(0, 180)
+          : '',
     })
+    if (unwitnessed) {
+      logger.warn(
+        'Queen could not witness the specs: t27c is not on this image',
+        {
+          issue: row.issue,
+          specs: specCount,
+          detail: witness?.kind === 'absent' ? witness.detail : '',
+        },
+      )
+    }
+    // The send-back message the worker reads, with the two lists under distinct
+    // headings (#1420, FR-002): what it tested and failed, and what it never
+    // wrote a verdict line for at all.
+    const note = unwitnessed
+      ? `${specCount} .t27 file(s) changed but t27c is not available on this ` +
+        'image, so the review could not run t27c parse / parse-complete / ' +
+        'typecheck on the commit; a reviewer with t27c must, before merging. ' +
+        (witness?.kind === 'absent' ? witness.detail : '')
+      : state === 'sendBack'
+        ? sendBackMessage(String(answer?.note ?? ''), failed, unjudged)
+        : String(answer?.note ?? answer?.refusal ?? '')
+    // Whether this attempt counts against the retry ceiling (#1420, FR-003).
+    //
+    // An attempt whose unmet criteria are ALL unjudged attempted no criterion
+    // it was given: the bee went quiet, not wrong, and `send_backs` measures
+    // how many times work has been judged and found wanting. Counting silence
+    // was how three of the six dispatches measured on 2026-09-04 reached
+    // maximumRealAttempts and escalated to a person without the work ever
+    // being assessed - the oldest after 91 hours. The attempt still comes back
+    // (the criteria are still unmet); it just does not spend the budget.
+    const countsAgainstTheIssue = !(failed.length === 0 && unjudged.length > 0)
     await pool.query(
       // The increment is part of the same statement that records the verdict,
       // because a count kept by a second write is a count that a crash between
@@ -1632,27 +2377,63 @@ async function reviewFinishedDispatches(pool: Pool): Promise<ReviewRound> {
       `UPDATE queen_dispatch
           SET review_state = $2, review_note = $3, reviewed_at = now(),
               strays = $4::jsonb,
-              send_backs = CASE WHEN $2::text = 'sendBack'
+              send_backs = CASE WHEN $2::text = 'sendBack' AND $5::boolean
                                 THEN send_backs + 1 ELSE send_backs END
         WHERE issue = $1`,
       [
         row.issue,
         state,
-        String(answer?.note ?? answer?.refusal ?? '').slice(0, 900),
+        note.slice(0, 900),
         JSON.stringify(strays),
+        countsAgainstTheIssue,
       ],
     )
     acted.push(`#${row.issue}:${state}`)
+    tally.push({
+      issue: row.issue as number,
+      judged: verdicts.length,
+      unjudged: unjudged.length,
+    })
   }
-  return { acted, strays: strayed }
+  return { acted, strays: strayed, tally }
 }
 
 /** The bee's own VERDICT block, or nothing. */
 export function parseVerdictBlock(
   text: string,
 ): Array<{ criterion: string; met: boolean }> {
-  const at = text.lastIndexOf('## VERDICT')
-  if (at < 0) return []
+  // EVERY occurrence is tried, and the most complete one wins.
+  //
+  // This took `lastIndexOf`, which was right while the block was required to be
+  // last. The block is now required to be FIRST, and a report that quotes the
+  // words "## VERDICT" later - in a summary, in a quoted brief, in an
+  // explanation of this very rule - would otherwise hand the parser a heading
+  // with no bullets under it and yield nothing at all.
+  //
+  // Trying each and keeping the longest parse is stable under either
+  // convention, so a worker running an older brief is not punished for it.
+  const starts: number[] = []
+  for (
+    let i = text.indexOf('## VERDICT');
+    i >= 0;
+    i = text.indexOf('## VERDICT', i + 1)
+  ) {
+    starts.push(i)
+  }
+  if (!starts.length) return []
+  let best: Array<{ criterion: string; met: boolean }> = []
+  for (const start of starts) {
+    const found = parseVerdictFrom(text, start)
+    if (found.length > best.length) best = found
+  }
+  return best
+}
+
+/** One VERDICT block, read from a known offset. */
+function parseVerdictFrom(
+  text: string,
+  at: number,
+): Array<{ criterion: string; met: boolean }> {
   const out: Array<{ criterion: string; met: boolean }> = []
   // A WRAPPED CRITERION IS STILL ONE CRITERION.
   //
@@ -1704,6 +2485,44 @@ export function parseVerdictBlock(
 }
 
 /**
+ * Which numbered slots of the VERDICT template a report leaves unanswered
+ * (#1421).
+ *
+ * The second half of the same defect: the brief now hands the bee a template
+ * with numbered slots, and this is the check that names the numbers a given
+ * report did not fill. It reads the SAME block `parseVerdictBlock` reads -
+ * one parser, so a line this counts as answered is exactly a line the review
+ * counts as judged - and calls a slot covered only when a parsed verdict
+ * line carries its number.
+ *
+ * A NUMBER, NOT A POSITION. The old contract was order-based: the third
+ * verdict line was the third criterion whether or not it said so, which is
+ * how prose about the work came to satisfy the letter of the instruction
+ * while the reviewer counted "Finished work omitted N verdict lines". Under
+ * the numbered template, a report that answers in prose without numbers has
+ * covered nothing: every slot is missing, and the answer that follows is
+ * "fill these in", never a guess about which sentence meant which criterion.
+ *
+ * Not yet wired past this file: the path that would tell a still-running bee
+ * which numbers it owes lives in `queen-dispatch.ts`, outside this change's
+ * boundary. The brief tells the bee to run this check on itself before it
+ * stops; the wiring, when it arrives, calls this same function so the two
+ * can never disagree about what "missing" means.
+ */
+export function missingVerdictSlots(text: string, total: number): number[] {
+  const covered = new Set<number>()
+  for (const verdict of parseVerdictBlock(text)) {
+    const slot = verdict.criterion.match(/^(\d{1,3})\.\s/)
+    if (slot) covered.add(Number(slot[1]))
+  }
+  const missing: number[] = []
+  for (let i = 1; i <= total; i++) {
+    if (!covered.has(i)) missing.push(i)
+  }
+  return missing
+}
+
+/**
  * One round, in sentences, for whoever is not reading the logs.
  *
  * The operator gives the direction and is told afterwards, so being told has to
@@ -1717,7 +2536,7 @@ export function parseVerdictBlock(
 async function report(
   pool: Pool,
   reviewed: ReviewRound,
-  started: Array<{ started?: boolean; issue?: number; detail?: string }>,
+  started: Array<DispatchReportOutcome>,
   choice: QueendChoice,
   candidates: number,
 ): Promise<void> {
@@ -1726,13 +2545,13 @@ async function report(
   const accepted = reviewed.acted.filter((r) => r.endsWith(':accept'))
   const sentBack = reviewed.acted.filter((r) => r.endsWith(':sendBack'))
 
-  if (started.length > 0) {
-    lines.push(
-      `Started ${started.length} bee(s): ` +
-        started.map((d) => `#${d.issue}`).join(', ') +
-        '.',
-    )
-  }
+  // The sentences about dispatch are built in queen-report-lines.ts, which
+  // counts bees from the `started` boolean at the point each sentence is
+  // built. Counting the array here instead counted refusals as workers, and
+  // a round that started nothing was reported as a bee in flight (#1379).
+  const dispatchSentence = startedLine(started)
+  if (dispatchSentence !== '') lines.push(dispatchSentence)
+  for (const refused of refusedLines(started)) lines.push(refused)
   if (accepted.length > 0) {
     lines.push(`Accepted ${accepted.length}: ${accepted.join(', ')}.`)
   }
@@ -1761,23 +2580,18 @@ async function report(
         '.',
     )
   }
-  if (started.length === 0) {
+  if (dispatchesThatStarted(started).length === 0) {
     // The refusal, verbatim. A round that started nothing is the case where a
     // summary in my own words would be the least trustworthy thing on the page.
-    lines.push(
-      `Started nothing. ${choice.refusal ?? 'No reason given'}. ` +
-        `${candidates} issue(s) were on the table.`,
-    )
+    // This fires for a round that dispatched and was refused as it does for a
+    // round that never dispatched - the sentence is the same because the fact
+    // (no bee started) is the same. The refused dispatches above carry the why.
+    lines.push(nothingStartedLine(choice.refusal, candidates))
     const skipped = (choice.skipped ?? []).slice(0, 6)
     if (skipped.length > 0) lines.push('', ...skipped.map((s) => `  ${s}`))
   }
 
-  const headline =
-    escalated.length > 0
-      ? `${escalated.length} waiting on you`
-      : started.length > 0
-        ? `${started.length} bee(s) working`
-        : (choice.refusal ?? 'nothing to do')
+  const headline = reportHeadline(escalated.length, started, choice.refusal)
 
   await pool
     .query(
@@ -1786,7 +2600,20 @@ async function report(
       [
         headline.slice(0, 200),
         lines.join('\n').slice(0, 4000),
-        escalated.length > 0,
+        // OUTSTANDING, not new. This read `escalated.length > 0` - the
+        // escalations raised in THIS round - so a round that raised none wrote
+        // `needs_you = false` while six were still waiting. Measured
+        // 2026-09-04: of the 40 most recent reports, ZERO carried the flag
+        // against six outstanding escalations. The one boolean whose whole job
+        // is to say a person is needed was false whenever the need was not
+        // brand new.
+        //
+        // The count comes from the same function `/queen/needs-you` answers
+        // with, so the flag and the page cannot drift into disagreeing about
+        // what "waiting on you" means.
+        (await outstandingEscalations(pool).catch(() =>
+          escalated.length > 0 ? 1 : 0,
+        )) > 0,
       ],
     )
     .catch(() => {
@@ -1819,6 +2646,140 @@ async function recordTick(
        WHERE queen_tick.fence <= EXCLUDED.fence`,
     [LEASE_NAME, holder, fence, JSON.stringify(choice)],
   )
+}
+
+/**
+ * The refill gate (#1295): one local round at a time, woken by finished bees.
+ *
+ * WHY IT EXISTS. A bee's completion frees a healthy paid key, and until this
+ * the next eligible mission waited for the periodic tick - up to 1,800 seconds
+ * of idle capacity per finished bee, on a swarm whose whole point is that no
+ * laptop has to be awake to keep it busy. The timer stays; it is the
+ * guarantee that rounds happen even when nothing finishes. The gate only
+ * decides WHEN a round starts.
+ *
+ * WHY A GATE AND NOT A CALL. Two rounds in one process is a reachable state,
+ * not a theoretical one - the heartbeat comment above records the timer and
+ * the on-demand route overlapping, and a refill signal arriving mid-round
+ * would have made it routine. Both rounds would hold the lease as the SAME
+ * holder (acquisition renews on `holder = EXCLUDED.holder`), so nothing
+ * stops the second one, and it reads a board the first round is still
+ * writing - dispatches recorded, keys taken. One round at a time is the only
+ * shape that cannot race itself.
+ *
+ * WORK-CONSERVING AND SINGLE-FLIGHT, by construction: a request while a
+ * round runs sets ONE flag, and the round's own ending starts at most ONE
+ * follow-up. A burst of completions coalesces; a signal arriving during the
+ * follow-up starts another after it, so nothing that asks is ever dropped.
+ *
+ * NOT A SECOND SCHEDULER. There is no clock in here - no interval, no delay,
+ * no queue that outlives a round. Every round runs through the one runner it
+ * was handed, which in production is `runQueenTickOnce`: the same lease, the
+ * same fencing, the same `queend`, the same dispatch loop. The periodic timer
+ * remains the only thing that wakes the gate on its own.
+ */
+export interface RoundGate {
+  /** Ask for one round: start it now if idle, coalesce if one is running. */
+  request(why: string): void
+  /** Resolves once no round is running and none is queued. */
+  idle(): Promise<void>
+  /** Rounds this gate has started, so tests and logs can count them. */
+  roundsStarted(): number
+  /** The most rounds this gate has ever had in flight at once. Must be 1. */
+  maxInFlight(): number
+  /** Refuse further rounds (shutdown). A round already running finishes. */
+  stop(): void
+}
+
+export function createRoundGate(runOneRound: () => Promise<void>): RoundGate {
+  let running = false
+  let wanted = false
+  let stopped = false
+  let started = 0
+  let inFlight = 0
+  let peak = 0
+  let waiters: Array<() => void> = []
+
+  /** Wake everyone once the gate is truly empty: nothing running, nothing
+   *  queued. Called from the one place those two facts can both be true. */
+  const settle = () => {
+    if (running || wanted) return
+    const due = waiters
+    waiters = []
+    for (const wake of due) wake()
+  }
+
+  async function turn(why: string): Promise<void> {
+    running = true
+    started += 1
+    inFlight += 1
+    peak = Math.max(peak, inFlight)
+    logger.info('Queen round starting', { why, round: started })
+    try {
+      await runOneRound()
+    } catch (error) {
+      // The production runner catches its own failures; this is the belt
+      // under that, because a gate whose turn rejects would drop every
+      // follow-up signal with it.
+      logger.warn('Queen round failed inside the refill gate', {
+        why,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    inFlight -= 1
+    running = false
+    if (wanted && !stopped) {
+      // ONE follow-up, started here and not awaited: awaiting it would
+      // chain every later round onto the first caller's stack, and the
+      // caller - a stream that just ended - has nothing left to wait for.
+      wanted = false
+      void turn('follow-up: a bee finished while a round was running')
+      return
+    }
+    settle()
+  }
+
+  return {
+    request(why: string): void {
+      if (stopped) return
+      if (running) {
+        // The flag, not a count: however many bees finished, the board is
+        // read once and the follow-up sees them all.
+        wanted = true
+        return
+      }
+      void turn(why)
+    },
+    idle(): Promise<void> {
+      return new Promise((resolve) => {
+        waiters.push(resolve)
+        settle()
+      })
+    },
+    roundsStarted: () => started,
+    maxInFlight: () => peak,
+    stop(): void {
+      // Mirror of `handover` clearing the interval: no round may START after
+      // the process has given the hive away. A refill round that re-acquired
+      // the lease after SIGTERM would pin the hive to a dying container for
+      // the TTL, which is the failure the handover exists to prevent.
+      stopped = true
+      wanted = false
+      settle()
+    },
+  }
+}
+
+/**
+ * Connect a durable bee completion to the round gate.
+ *
+ * EXPORTED FOR THE SUITE: the wiring is the feature. A gate that exists while
+ * nothing signals it is indistinguishable from no gate, and the one line
+ * `startQueenTick` adds is otherwise unreachable without a real timer - so
+ * this is the seam the suite drives instead.
+ */
+export function refillOnBeeCompletion(request: (why: string) => void): void {
+  setDurableCloseListener((issue) => request(`bee #${issue} finished`))
 }
 
 let timer: ReturnType<typeof setInterval> | undefined
@@ -1860,8 +2821,8 @@ export function startQueenTick(): void {
     })
     .catch(() => {})
 
-  const round = () => {
-    runQueenTickOnce(pool).catch((error) => {
+  const round = async (): Promise<void> => {
+    await runQueenTickOnce(pool).catch((error) => {
       // A failed round must not kill the loop. The next one may well succeed -
       // GitHub rate limits reset, a database blips - and a supervisor that stops
       // supervising on its first bad minute is worse than no supervisor, because
@@ -1872,11 +2833,22 @@ export function startQueenTick(): void {
     })
   }
 
-  round()
-  timer = setInterval(round, interval * 1000)
+  // THE GATE (#1295). One local round at a time, fed by the timer below AND
+  // by finished bees: a durable completion asks for a round here instead of
+  // waiting out the interval for one. The timer is unchanged - same interval,
+  // same guard, still the only clock - and the gate holds no clock of its
+  // own, so this adds no scheduler, only a queue of at most one.
+  const gate = createRoundGate(round)
+  refillOnBeeCompletion(gate.request)
+
+  gate.request('service starting')
+  timer = setInterval(() => gate.request('periodic tick'), interval * 1000)
 
   const handover = () => {
     if (timer) clearInterval(timer)
+    // The gate with it, for the same reason as the timer: no round may start
+    // after the process has handed the hive back.
+    gate.stop()
     // Every beat, not one: a round in flight owns its own handle, and on
     // SIGTERM nobody is going to reach its `finally` before the process ends.
     for (const beat of heartbeats) clearInterval(beat)

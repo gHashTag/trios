@@ -17,6 +17,7 @@ import { websocket } from 'hono/bun'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { HttpAgentError } from '../agent/errors'
 import { INLINED_ENV } from '../env'
+import { mountQueenScheduler } from '../inngest'
 import { KlavisClient } from '../lib/clients/klavis/klavis-client'
 import { initializeOAuth, shutdownOAuth } from '../lib/clients/oauth'
 import type { OAuthTokenManager } from '../lib/clients/oauth/token-manager'
@@ -44,16 +45,17 @@ import {
   createQueenFeedDataRoute,
   createQueenFeedRoute,
 } from './routes/queen-feed'
-import { createQueenHqRoute } from './routes/queen-hq'
 import {
   createQueenBoardRoute,
   createQueenKanbanRoute,
   createQueenPublicBoardRoute,
 } from './routes/queen-kanban'
+import { createQueenExportRoute } from './routes/queen-export'
 import { createQueenLeaseRoute } from './routes/queen-lease'
+import { createQueenNeedsYouRoute } from './routes/queen-needs-you'
 import { createQueenPublicActivityRoute } from './routes/queen-public-activity'
+import { createQueenPublicAgentsRoute } from './routes/queen-public-agents'
 import { createQueenPublicHardwareRoute } from './routes/queen-public-hardware'
-import { createQueenPublicModulesRoute } from './routes/queen-public-modules'
 import { createQueenPublicResearchRoute } from './routes/queen-public-research'
 import { createQueenPublicStatusRoute } from './routes/queen-public-status'
 import { createQueenRegistryRoute } from './routes/queen-registry'
@@ -237,6 +239,28 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenRoadmapDataRoute())
 
+  // THE COMMENT AT THE MOUNT SAID THIS WAS GUARDED AND NOTHING GUARDED IT.
+  //
+  // `/queen/needs-you` was mounted as a bare route factory while its own
+  // comment said it "sits behind the trusted-origin catch-all with
+  // /queen/board". There is no catch-all at the mount level: every guarded
+  // sibling here carries `.use('/*', requireTrustedAppOrigin())` INSIDE its own
+  // sub-app, and this one had none. Measured against production on 2026-09-06:
+  // `GET /queen/needs-you` answered 200 to a request carrying a hostile Origin,
+  // returning outstanding escalations with issue numbers, attempt counts, ages
+  // and the worker-written reason text, plus twenty stored report headlines.
+  //
+  // The route-guard gate had been reporting it since it landed. That gate has
+  // been red on this branch for days with pull requests merging across it,
+  // which is how a hole its author did not intend stayed open.
+  //
+  // Wrapped exactly like its siblings rather than with a path-prefix `.use`:
+  // the guard belongs inside the app that serves the data, where no path shape
+  // can route around it.
+  const queenNeedsYouRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenNeedsYouRoute())
+
   const queenBoardRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenBoardRoute())
@@ -244,6 +268,13 @@ export async function createHttpServer(config: HttpServerConfig) {
   const queenLeaseRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenLeaseRoute())
+
+  // Guarded like the lease, and for a stronger reason: it hands out the
+  // contents of work in progress. It holds no credential and cannot publish -
+  // the push happens outside, by whoever has the token.
+  const queenExportRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenExportRoute())
 
   const queenRegistryRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
@@ -320,8 +351,13 @@ export async function createHttpServer(config: HttpServerConfig) {
       }),
     )
 
+  // The Queen's scheduler: one Inngest function per cron/skill card under
+  // trios/agent-server/specs, read with the real t27 compiler at start-up.
+  // See src/inngest/index.ts and docs/queen-inngest.md.
+  const queenScheduler = await mountQueenScheduler()
+
   const app = new Hono<Env>()
-    // These five sanitized projections are the only routes a cross-origin
+    // These six sanitized projections are the only routes a cross-origin
     // browser may read, and they are registered BEFORE the global middleware
     // on purpose: trustedCorsMiddleware answers OPTIONS itself and returns,
     // so anything mounted after it never sees a preflight. See
@@ -332,15 +368,23 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/queen/public-activity', publicReadCorsMiddleware())
     .use('/queen/public-hardware', publicReadCorsMiddleware())
     .use('/queen/public-research', publicReadCorsMiddleware())
-    .use('/queen/public-modules', publicReadCorsMiddleware())
+    .use('/queen/public-agents', publicReadCorsMiddleware())
+    .use('/queen/scheduler', publicReadCorsMiddleware())
     .use('/*', trustedCorsMiddleware())
+    // The Inngest server registers and invokes functions here; each request
+    // is signed with INNGEST_SIGNING_KEY and verified by the SDK, so this sits
+    // outside the trusted-origin guard on purpose (the caller is a server).
+    .route('/api/inngest', queenScheduler.inngest)
+    // Read-only: functions, triggers, reasons, refused cards, WHICH env vars
+    // are set. Nothing here that is not already in the public t27 specs.
+    .route('/queen/scheduler', queenScheduler.scheduler)
     .route('/health', createHealthRoute({ browser, stateBackend: a2aService }))
     .route('/queen/status', createQueenPublicStatusRoute())
-    .route('/queen/public-board', createQueenPublicBoardRoute())
     .route('/queen/public-activity', createQueenPublicActivityRoute())
     .route('/queen/public-hardware', createQueenPublicHardwareRoute())
     .route('/queen/public-research', createQueenPublicResearchRoute())
-    .route('/queen/public-modules', createQueenPublicModulesRoute())
+    .route('/queen/public-agents', createQueenPublicAgentsRoute())
+    .route('/queen/public-board', createQueenPublicBoardRoute())
     .route('/queen/registry', queenRegistryRoutes)
     // The shell only. It holds no state and no token; every byte of data it
     // shows comes from /queen/lease, which stays guarded. See the route header
@@ -350,14 +394,19 @@ export async function createHttpServer(config: HttpServerConfig) {
     // repository, so there is nothing here a reader could not get from git.
     .route('/queen/tree', createQueenTreeRoute())
     .route('/queen/kanban', createQueenKanbanRoute())
-    // One screen: the hive, the readings and the one button that wakes her.
-    .route('/queen/hq', createQueenHqRoute())
+    // Deliberately NOT on the public-read list above. It carries issue numbers
+    // and worker-written reasons - nothing secret, but operator information -
+    // so it sits behind the trusted-origin catch-all with /queen/board rather
+    // than being served to any origin. The five escalations it exists to
+    // surface are for the operator, not for a public page.
+    .route('/queen/needs-you', queenNeedsYouRoutes)
     .route('/queen/board', queenBoardRoutes)
     .route('/queen/roadmap', createQueenRoadmapRoute())
     .route('/queen/roadmap/data', queenRoadmapDataRoutes)
     .route('/queen/feed', createQueenFeedRoute())
     .route('/queen/feed/data', queenFeedDataRoutes)
     .route('/queen/lease', queenLeaseRoutes)
+    .route('/queen/export', queenExportRoutes)
     .route('/queen/rehearsal', queenRehearsalRoutes)
     .use('/shutdown/*', requireTrustedAppOrigin())
     .route(

@@ -2,17 +2,50 @@
  * Public native research graph for t27.ai.
  *
  * The canonical graph is the evidence-backed file used by /queen/tree. This
- * route adds directionally-correct prerequisites/unlocks and a secret-free
- * view of paid worker-slot utilisation. It deliberately keeps graph state and
- * worker activity separate: "partial" means the repository has incomplete
- * evidence, not that a model is currently spending tokens on it.
+ * route adds directionally-correct prerequisites/unlocks, a secret-free
+ * view of paid worker-slot utilisation, and - since #1308 - the anonymous
+ * capacity factors behind that utilisation: how many credentials are
+ * connected and how many lanes each carries, read from the same dispatch
+ * authority that allocates against them. It deliberately keeps graph state
+ * and worker activity separate: "partial" means the repository has incomplete
+ * evidence, not that a model is currently spending tokens on it. The
+ * `billing` block explains, in the same closed vocabulary /queen/status
+ * publishes, which quota gate those paid workers answer to - without which
+ * an idle subscription swarm reads as broken capacity.
  */
 
 import { Hono } from 'hono'
 import { Pool } from 'pg'
 import { logger } from '../../lib/logger'
-import { configuredWorkerCapacity } from '../services/queen-dispatch'
-import { loadTree as loadCanonicalTree, type Tree } from './queen-tree'
+import {
+  type WorkerCapacityBreakdown,
+  workerCapacityBreakdown,
+} from '../services/queen-dispatch'
+import { configuredBillingMode } from './queen-public-status'
+import {
+  isTreeLoadFailure,
+  loadTree as loadCanonicalTree,
+  type Tree,
+  type TreeLoadFailure,
+} from './queen-tree'
+
+/**
+ * The closed billing vocabulary, derived from the one resolver both public
+ * pages share. Deriving it instead of re-declaring it means this route can
+ * never drift from /queen/status even if the vocabulary grows.
+ */
+type BillingMode = ReturnType<typeof configuredBillingMode>
+
+/**
+ * Every value `quotaAuthority` can carry.
+ *
+ *   provider_quota      a Coding Plan spends a provider-side subscription
+ *                       quota; its resets and refusals belong to the
+ *                       provider and are observed, never computed locally
+ *   estimated_usd_gate  metered API work is gated by the Queen's own
+ *                       estimated USD cap, which can refuse a new Bee
+ */
+type QuotaAuthority = 'provider_quota' | 'estimated_usd_gate'
 
 interface QueryResult {
   rowCount: number | null
@@ -25,10 +58,13 @@ interface ResearchPool {
 }
 
 interface QueenPublicResearchDeps {
-  loadTree?: () => Promise<Tree | null>
+  loadTree?: () => Promise<Tree | TreeLoadFailure | null>
   databaseUrl?: () => string | undefined
   createPool?: (url: string) => ResearchPool
-  workerCapacity?: () => number
+  /** The closed capacity authority; defaults to dispatch's own breakdown. */
+  workerCapacityBreakdown?: () => WorkerCapacityBreakdown
+  /** The closed billing vocabulary; defaults to the status page's resolver. */
+  billingMode?: () => BillingMode
   publicOrigin?: (requestUrl: string) => string
 }
 
@@ -114,6 +150,9 @@ function projectTree(tree: Tree) {
 }
 
 function workerProjection(capacity: number, busyIndices: number[]) {
+  // The capacity arrives from the closed breakdown authority (#1308); the
+  // anonymous factor fields join it in the response without changing any of
+  // the contracts below.
   const safeCapacity = Math.max(0, Math.floor(capacity))
   // key_index identifies a credential, not a logical lane. With an explicit
   // multi-lane plan two rows may legitimately carry the same index; counting
@@ -136,6 +175,28 @@ function workerProjection(capacity: number, busyIndices: number[]) {
   }
 }
 
+/**
+ * The closed billing explanation behind the worker panel.
+ *
+ * This is an explanation, not a decision: queend owns whether a Bee starts,
+ * and no value here can make one run. The mode comes from the exact
+ * resolver /queen/status publishes, so the two pages can never disagree
+ * about the same swarm. `quotaAuthority` names which gate actually refuses
+ * work under that mode. Only these two closed words leave this file - never
+ * credentials, never provider response bodies, never balances or quota
+ * telemetry, all of which this route never reads in the first place.
+ */
+function billingProjection(mode: BillingMode): {
+  billingMode: BillingMode
+  quotaAuthority: QuotaAuthority
+} {
+  return {
+    billingMode: mode,
+    quotaAuthority:
+      mode === 'coding_plan' ? 'provider_quota' : 'estimated_usd_gate',
+  }
+}
+
 export function createQueenPublicResearchRoute(
   deps: QueenPublicResearchDeps = {},
 ) {
@@ -144,13 +205,21 @@ export function createQueenPublicResearchRoute(
   const createPool =
     deps.createPool ??
     ((url: string) => new Pool({ connectionString: url }) as ResearchPool)
-  const workerCapacity = deps.workerCapacity ?? configuredWorkerCapacity
+  const capacityBreakdown =
+    deps.workerCapacityBreakdown ?? workerCapacityBreakdown
+  const billingMode = deps.billingMode ?? configuredBillingMode
   const publicOrigin = deps.publicOrigin ?? configuredPublicOrigin
 
   return new Hono().get('/', async (c) => {
     c.header('Cache-Control', 'no-store')
     const tree = await loadTree()
-    if (!tree)
+    // Every way the canonical file can be broken answers the same fixed
+    // sentence. This endpoint is public behind a wildcard CORS policy, so the
+    // established cause - which path, which field, what position - goes to the
+    // log (the loader already wrote it) and never into this body. Before the
+    // loader checked the shape, a wrong-shape file reached projectTree() as a
+    // Tree and escaped as an unhandled 500 instead of this 503.
+    if (!tree || isTreeLoadFailure(tree))
       return c.json({ error: 'Canonical research graph is unavailable' }, 503)
 
     const graph = projectTree(tree)
@@ -183,10 +252,18 @@ export function createQueenPublicResearchRoute(
     // container. Build copyable A2A links from Railway's trusted public domain
     // rather than leaking the internal scheme into the bootstrap contract.
     const origin = publicOrigin(c.req.url)
+    // One authority, one number: the projection's capacity IS the breakdown's
+    // effective capacity, so an operator reading "4" and the factors below it
+    // can never see two totals that disagree about the same configuration.
+    const breakdown = capacityBreakdown()
     return c.json({
       ...graph,
       runtime,
-      workers: workerProjection(workerCapacity(), busyIndices),
+      billing: billingProjection(billingMode()),
+      workers: {
+        ...workerProjection(breakdown.effectiveCapacity, busyIndices),
+        ...breakdown,
+      },
       agentBootstrap: {
         version: 'trinity-research-a2a/v1',
         mode: 'public-read-only',

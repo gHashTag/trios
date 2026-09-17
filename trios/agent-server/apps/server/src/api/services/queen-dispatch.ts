@@ -23,12 +23,105 @@
  * publication step still belongs to a machine that has the credential.
  */
 
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { statSync } from 'node:fs'
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
-import { shellArgv, spawnEnv } from '../../tools/filesystem/bash'
+import { shellArgv } from '../../tools/filesystem/bash'
 import { workerSystemPrompt } from './queen-tick'
+
+/**
+ * #1360. Every value the `outcome` column of `queen_dispatch` may carry,
+ * enumerated in ONE place, because the column is read as a short label by
+ * everything downstream: the board groups by it, the public status page
+ * prints it, the reaper matchers prefix-match it (`NOT LIKE 'reaped%'`).
+ *
+ * What this replaces is measured, not hypothetical. Three production rows
+ * (1331, 1330, 1326) held `provider refused: ` followed by an entire
+ * serialized tool-output event - a `git log` dump with nothing to do with
+ * why the turn stopped - because the writer pasted a raw payload behind a
+ * guessed cause. `provider refused` named a cause nobody measured: what was
+ * measured was that a tool event arrived where a completion was expected.
+ *
+ * Two rules follow, and both are enforced at the write sites:
+ *
+ * 1. `outcome` carries one of these labels (or a label extended with a
+ *    closed parameter, like the quota code, still bounded by the cap below).
+ *    The full payload that produced the ending goes to the row's `detail`
+ *    column or to the `queen_transcript` feed - it moves, it is never
+ *    discarded and never lands in `outcome`.
+ *
+ * 2. A cause that was not measured is not named. `endedUnexpectedly` exists
+ *    precisely so an unknown cause can be recorded as unknown; a guessed
+ *    cause is worse than an admitted gap.
+ *
+ * `tools/outcome-shape-audit.mjs` audits stored rows against these same two
+ * rules (it mirrors the cap and this label in plain JS, with comments
+ * pointing back here, because it runs under `node` with no build step).
+ */
+export const DISPATCH_OUTCOME_LABELS = {
+  /** The turn reached its own completion frame and closed normally. */
+  finished: 'finished',
+  /** /chat answered 200 but its body had no readable stream to drain. */
+  noStream: 'no stream',
+  /**
+   * The stream broke mid-turn. The transport's own error text went to
+   * `queen_transcript` (kind `error`) and to the server log, never here.
+   */
+  streamEndedBadly: 'stream ended badly',
+  /**
+   * The stream closed without ever signalling completion - a tool event (or
+   * anything else) arrived where a completion was expected, and nothing in
+   * the stream says why. This is the honest label for the three production
+   * rows above: the cause is NOT determined, so it is not named.
+   */
+  endedUnexpectedly: 'ended unexpectedly (cause undetermined)',
+  /**
+   * The dispatch never started (no credential, no key free, no worktree, no
+   * turn). The full refusal text is the row's `detail` column, which is
+   * where a reader looks for the reason; `outcome` only says it never ran.
+   */
+  refused: 'refused',
+  /**
+   * Base of the Z.ai quota classification (#1301); the writer appends the
+   * documented business code, e.g. `provider quota exhausted (zai code
+   * 1308)`. The response body itself stays off the row.
+   */
+  providerQuotaExhausted: 'provider quota exhausted',
+  /**
+   * Base of the boot reaper's ending; the writer appends the explanation.
+   * Must keep the `reaped` prefix - queen-tick and queen-kanban match on it.
+   */
+  reapedAtBoot: 'reaped at boot',
+  /**
+   * Base of the stall reaper's ending; the writer appends the minute count.
+   * Must keep the `reaped` prefix - queen-tick and queen-kanban match on it.
+   */
+  reapedStalled: 'reaped',
+} as const
+
+/** One label from the set, as a type. */
+export type DispatchOutcomeLabel =
+  (typeof DISPATCH_OUTCOME_LABELS)[keyof typeof DISPATCH_OUTCOME_LABELS]
+
+/**
+ * #1360. The longest `outcome` this module may ever write. A named constant
+ * rather than a literal at each call site, so the column's contract is
+ * stated once and the audit tool can mirror one number. Every label above,
+ * and every parameterized extension of one, fits under it.
+ */
+export const DISPATCH_OUTCOME_MAX_LENGTH = 64
+
+/**
+ * The one place an outcome is bounded before it reaches a statement. A
+ * backstop, not the rule: the writers pass labels from the set above, and
+ * this exists so that no future caller can smuggle a payload through the
+ * column even by accident.
+ */
+function boundedOutcome(outcome: string): string {
+  return outcome.slice(0, DISPATCH_OUTCOME_MAX_LENGTH)
+}
 
 /**
  * Providers this deployment could use, in preference order, with the variable
@@ -73,12 +166,21 @@ export interface WorkerProvider {
   /** Which of this provider's keys was handed out, 0-based. */
   keyIndex?: number
   keyCount?: number
-  /** Set when no index is left; carries how many keys are configured. */
+  /** Which concurrent lane on this credential was handed out, 0-based. */
+  laneIndex?: number
+  laneCount?: number
+  /** Set when every configured worker lane is in use. */
   exhausted?: number
-  /** Of those, how many are carrying a bee right now. */
-  busy?: number
-  /** Of those, how many the provider has refused. */
-  refusedCount?: number
+  /**
+   * The model's REAL context window, when it is not the 200k default.
+   *
+   * Dispatch never sent this, so every worker ran against a 200,000-token
+   * assumption and compaction did not fire until 180,000. Against a 16k model
+   * that is not a tuning detail: the turn dies mid-sentence with no verdict
+   * block, which is exactly the transcript this repository already measured -
+   * 222,468 characters ending "Add temporary debu".
+   */
+  contextWindow?: number
 }
 
 /**
@@ -91,7 +193,7 @@ export interface WorkerProvider {
  * editor, where saving an empty box leaves the name behind.
  */
 /**
- * Every key this deployment holds for one provider, in index order.
+ * Every DISTINCT key this deployment holds for one provider, in index order.
  *
  * `ZAI_API_KEY`, then `ZAI_API_KEY_2`, `_3`, `_4`, ... The unsuffixed name is
  * index 0 so a deployment with one key needs no migration and reads exactly as
@@ -101,34 +203,319 @@ export interface WorkerProvider {
  * an empty box leaves the NAME behind, and a rotation that hands a bee index 2
  * because the name exists gives it nothing to authenticate with - the same trap
  * `~/.trios/config.json` has been sitting in for months.
+ *
+ * Identical values collapse into the slot of their first occurrence (#1293). A
+ * variable duplicated across names - the platform's copy button, an env block
+ * pasted twice - is still ONE account with ONE rate limit, and counting it
+ * twice promises the Queen parallel capacity that does not exist: the second
+ * "free" slot hands a bee a secret its sibling is already spending, and the
+ * 429 that follows is blamed on the work. Deduplicating HERE is what keeps
+ * capacity reporting and key selection in agreement, because both read this
+ * one function - the count a dashboard shows and the index a bee takes are the
+ * same list, never two different stories about one secret. First occurrence
+ * wins, so the unsuffixed variable stays index 0 in every ordering.
+ *
+ * Values are TRIMMED before they are judged (#1308). ' key' and 'key' pasted
+ * into two boxes are one credential wearing its whitespace differently, and a
+ * value that is nothing but whitespace is the empty box one paste later. The
+ * trimmed value is also the one stored: a key that authenticates never needed
+ * its padding, and handing the trimmed form out keeps the count and the
+ * selection - which both read this list - from ever disagreeing.
  */
-/**
- * How many bees the configured credentials can carry at once: one lane per
- * key of the first provider that has any keys, which is the same rule
- * chooseProvider() applies when it hands a key out. The public research
- * projection uses only this count, so no key and no provider name leaves.
- */
-export function configuredWorkerCapacity(): number {
-  for (const candidate of WORKER_PROVIDERS) {
-    const count = keysFor(candidate.envVar).length
-    if (count > 0) return count
-  }
-  return 0
-}
-
 function keysFor(envVar: string): string[] {
   const keys: string[] = []
-  const first = process.env[envVar]
-  if (first && first.length > 0) keys.push(first)
+  const seen = new Set<string>()
+  const admit = (value: string | undefined) => {
+    const trimmed = (value ?? '').trim()
+    if (trimmed.length === 0 || seen.has(trimmed)) return
+    seen.add(trimmed)
+    keys.push(trimmed)
+  }
+  admit(process.env[envVar])
   for (let i = 2; i <= 16; i++) {
-    const next = process.env[`${envVar}_${i}`]
-    if (next && next.length > 0) keys.push(next)
+    admit(process.env[`${envVar}_${i}`])
   }
   return keys
 }
 
 /**
- * A key per concurrent bee, not a key per request.
+ * Concurrent coding projects allowed on each distinct credential.
+ *
+ * One remains the fail-safe default. Z.ai's published guidance is tier based
+ * and dynamic (Lite 1, Pro 1-2, Max 2+), while an API key does not encode that
+ * contract locally. The operator must therefore opt into a wider value after
+ * checking the live plan. The bound prevents one typo from turning a paid
+ * account into an unbounded request fan-out.
+ */
+export function configuredWorkerLanesPerCredential(
+  raw = process.env.TRIOS_ZAI_CONCURRENCY_PER_KEY,
+): number {
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed < 1) return 1
+  return Math.min(parsed, 4)
+}
+
+function workerLanesFor(provider: string): number {
+  return provider === 'zai' ? configuredWorkerLanesPerCredential() : 1
+}
+
+/**
+ * What the compiled Queen policy admits at once.
+ *
+ * This is a MIRROR, and the thing being mirrored is
+ * `QueenDelegationPolicy.maximumConcurrentWorkers` in QueenDelegation.swift.
+ * Two numbers written in two languages are two numbers that eventually differ,
+ * and the direction they differ in decides which failure you get: telemetry
+ * promising more than the policy allows sends an operator looking for a bug in
+ * dispatch, and promising less hides capacity that was paid for.
+ *
+ * So both sides now read the SAME environment variable, with the same default
+ * and the same ceiling. Bounded rather than unlimited because review cost is
+ * linear in running workers - the Swift side records the full reasoning.
+ */
+function queenWorkerLimit(): number {
+  const parsed = Number(process.env.TRIOS_QUEEN_MAX_WORKERS)
+  if (!Number.isInteger(parsed) || parsed < 1) return 4
+  return Math.min(parsed, 16)
+}
+
+/**
+ * The closed, anonymous capacity breakdown every capacity number is made of
+ * (#1308).
+ *
+ * `workers.capacity` answering 4 does not say WHICH 4: two subscriptions at a
+ * lane each and one subscription at two lanes each are the same total with
+ * completely different operator implications - the first hides a disconnected
+ * paid subscription, the second promises parallelism a single rate limit
+ * cannot back. This is the ONE authority both `configuredWorkerCapacity` and
+ * the public research telemetry read, so the factorisation a dashboard shows
+ * and the ceiling dispatch allocates against are the same statement, never two
+ * different stories about one configuration.
+ *
+ * CLOSED means three integers and nothing else. No hashes, no key suffixes, no
+ * slot indexes, no provider variable names, no values: anything shaped like a
+ * credential is a disclosure, and a count cannot be inverted into one.
+ */
+export interface WorkerCapacityBreakdown {
+  connectedCredentials: number
+  lanesPerCredential: number
+  effectiveCapacity: number
+}
+
+/**
+ * Concurrent requests one REMOTE credential will actually carry.
+ *
+ * Fixed at 1 while that was the only safe assumption about an endpoint named
+ * by URL. It is now a measurement. Fired four simultaneous completions at one
+ * z.ai key on 2026-09-15: two returned 200 (11.6s, 12.4s) and two were refused
+ * in under half a second with `1302 Rate limit reached for requests`. Two is
+ * what the credential carries; a third is not slower, it is rejected.
+ *
+ * So this is configurable and defaults to the old conservative 1 - a number
+ * measured on ONE provider must not silently become the assumption for every
+ * other one someone points this at. The operator sets it after measuring their
+ * own, exactly as TRIOS_ZAI_CONCURRENCY_PER_KEY expects for the paid path, and
+ * the bound stops a typo turning a credential pool into a fan-out.
+ */
+function configuredRemoteLanesPerCredential(): number {
+  const parsed = Number(process.env.TRIOS_QUEEN_WORKER_LANES_PER_KEY)
+  if (!Number.isInteger(parsed) || parsed < 1) return 1
+  return Math.min(parsed, 4)
+}
+
+export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
+  const endpoint = configuredWorkerBaseUrl()
+  if (endpoint) {
+    const genericKeys = keysFor(GENERIC_WORKER_KEY_ENV)
+    // An explicitly configured Ollama is one measured inference server even
+    // when it happens to have an access token. Multiple names for that token
+    // are not independent compute. A remote API, by contrast, gets exactly one
+    // conservative lane for every distinct credential.
+    const provider = configuredWorkerProvider()
+    const connectedCredentials = provider
+      ? provider === 'ollama'
+        ? 1
+        : genericKeys.length
+      : 0
+    const lanesPerCredential =
+      provider === 'ollama' ? 1 : configuredRemoteLanesPerCredential()
+    return {
+      connectedCredentials,
+      lanesPerCredential,
+      effectiveCapacity: Math.min(
+        connectedCredentials * lanesPerCredential,
+        queenWorkerLimit(),
+      ),
+    }
+  }
+  for (const candidate of WORKER_PROVIDERS) {
+    const keys = keysFor(candidate.envVar)
+    if (keys.length > 0) {
+      const lanesPerCredential = workerLanesFor(candidate.provider)
+      return {
+        connectedCredentials: keys.length,
+        lanesPerCredential,
+        effectiveCapacity: Math.min(
+          keys.length * lanesPerCredential,
+          queenWorkerLimit(),
+        ),
+      }
+    }
+  }
+  // Nothing is connected. The lanes factor keeps its safe default rather than
+  // zeroing, because it describes the bound the NEXT connected credential
+  // would run under; the total is still zero, from zero credentials alone.
+  return {
+    connectedCredentials: 0,
+    lanesPerCredential: configuredWorkerLanesPerCredential(),
+    effectiveCapacity: 0,
+  }
+}
+
+/**
+ * Number of genuinely independent worker credentials available to the first
+ * configured provider, multiplied by that provider's lanes. The values never
+ * leave this module; the public research projection uses only the count to
+ * show whether paid capacity is idle. Delegates to the breakdown authority so
+ * the number allocated against and the number explained publicly can never
+ * diverge (#1308).
+ */
+export function configuredWorkerCapacity(): number {
+  return workerCapacityBreakdown().effectiveCapacity
+}
+
+/**
+ * A worker endpoint named by URL. It can be a keyless local Ollama or a remote
+ * OpenAI-compatible API backed by the generic worker-key pool.
+ *
+ * It is consulted before every paid candidate because setting it is an explicit
+ * operator choice - "use this, not the key" - and unsetting it restores the
+ * previous behaviour with no code change and no deploy.
+ *
+ * The plumbing for this already existed and was one field short of usable:
+ * `baseUrl` travels to /chat in dispatchBee and provider-factory builds an
+ * openai-compatible client from it, but the zai branch of resolveWorkerProvider
+ * returned no baseUrl at all, so the factory fell through to the hardcoded
+ * EXTERNAL_URLS.ZAI_API. TRIOS_QUEEN_WORKER_MODEL could therefore rename the
+ * model and still send the turn to api.z.ai - a switch that read as
+ * configurable and was not. Verified by enumerating every process.env name the
+ * server reads: no worker base-URL variable existed.
+ */
+const DEFAULT_LOCAL_WORKER_MODEL = 'qwen3:1.7b'
+const DEFAULT_LOCAL_CONTEXT_WINDOW = 16_384
+const GENERIC_WORKER_KEY_ENV = 'TRIOS_QUEEN_WORKER_API_KEY'
+const CONFIGURED_ENDPOINT_PROVIDERS = new Set([
+  'ollama',
+  'openai-compatible',
+  'zai',
+])
+
+function configuredWorkerBaseUrl(): string | undefined {
+  const raw = process.env.TRIOS_QUEEN_WORKER_BASE_URL
+  return raw?.trim() ? raw.trim().replace(/\/+$/, '') : undefined
+}
+
+function configuredWorkerContextWindow(): number {
+  const parsed = Number(process.env.TRIOS_QUEEN_WORKER_CONTEXT)
+  if (!Number.isInteger(parsed) || parsed < 2048) {
+    return DEFAULT_LOCAL_CONTEXT_WINDOW
+  }
+  return parsed
+}
+
+function configuredWorkerProvider(): string | null {
+  const provider = process.env.TRIOS_QUEEN_WORKER_PROVIDER?.trim() || 'ollama'
+  return CONFIGURED_ENDPOINT_PROVIDERS.has(provider) ? provider : null
+}
+
+/**
+ * Select the least-used available credential, scanning circularly after the
+ * last durable assignment. This preserves parallel spreading while ensuring
+ * a four-Bee policy can exercise a six-key pool across successive rounds.
+ */
+function availableKeyIndex(
+  occupancy: number[],
+  laneCount: number,
+  afterKeyIndex?: number,
+): number {
+  const leastBusy = Math.min(
+    ...occupancy.filter((busy) => busy < laneCount),
+    Number.POSITIVE_INFINITY,
+  )
+  if (!Number.isFinite(leastBusy)) return -1
+  const start =
+    typeof afterKeyIndex === 'number' && Number.isInteger(afterKeyIndex)
+      ? ((afterKeyIndex % occupancy.length) + occupancy.length + 1) %
+        occupancy.length
+      : 0
+  for (let offset = 0; offset < occupancy.length; offset++) {
+    const index = (start + offset) % occupancy.length
+    if (occupancy[index] === leastBusy) return index
+  }
+  return -1
+}
+
+function configuredEndpointProvider(
+  override: string | undefined,
+  takenKeyIndices: number[],
+  afterKeyIndex?: number,
+): WorkerProvider | null {
+  const baseUrl = configuredWorkerBaseUrl()
+  if (!baseUrl) return null
+  const model = override || DEFAULT_LOCAL_WORKER_MODEL
+  const provider = configuredWorkerProvider()
+  if (!provider) return null
+  const local = provider === 'ollama'
+  const keys = keysFor(GENERIC_WORKER_KEY_ENV)
+
+  if (local) {
+    // ONE lane, and that is a measurement rather than caution: the Ollama this
+    // points at was proven to serve a single inference slot. More token names
+    // cannot make the inference server parallel.
+    const busy = takenKeyIndices.filter((taken) => taken === 0).length
+    if (busy >= 1) return { provider: 'ollama', model, exhausted: 1 }
+    return {
+      provider: 'ollama',
+      model,
+      baseUrl,
+      // Ollama ignores the fallback; the SDK requires one to be present.
+      apiKey: keys[0] || 'local',
+      keyIndex: 0,
+      keyCount: 1,
+      laneIndex: busy,
+      laneCount: 1,
+      contextWindow: configuredWorkerContextWindow(),
+    }
+  }
+
+  // A remote endpoint is not local compute and cannot authenticate with a
+  // fabricated token. Refuse before worktree creation when no real key exists.
+  if (keys.length === 0) return null
+
+  const occupancy = keys.map(
+    (_, candidateIndex) =>
+      takenKeyIndices.filter((taken) => taken === candidateIndex).length,
+  )
+  const laneCount = configuredRemoteLanesPerCredential()
+  const index = availableKeyIndex(occupancy, laneCount, afterKeyIndex)
+  if (index < 0) {
+    return { provider, model, exhausted: keys.length * laneCount }
+  }
+  return {
+    provider,
+    model,
+    baseUrl,
+    apiKey: keys[index],
+    keyIndex: index,
+    keyCount: keys.length,
+    laneIndex: occupancy[index],
+    laneCount,
+    contextWindow: configuredWorkerContextWindow(),
+  }
+}
+
+/**
+ * A bounded number of concurrent lanes per distinct credential.
  *
  * Four bees sharing one credential share one rate limit, so the swarm's real
  * ceiling becomes whatever that single key allows rather than what the Queen's
@@ -140,163 +527,37 @@ function keysFor(envVar: string): string[] {
  * put all four bees on the same key and looked like rotation while doing
  * nothing.
  *
- * So the caller passes the indices already in use, and this returns the lowest
- * that is free. The index is stored with the dispatch, which is what makes a
- * retry attributable: the same bee comes back to the same key, and a key that
- * keeps failing is visible as a key rather than as four unlucky tasks.
+ * So the caller passes the credential indices already in use. Selection first
+ * spreads work across distinct credentials, then fills the next lane on the
+ * least-loaded credential. The credential index is stored with the dispatch,
+ * so repeated 429s remain attributable without publishing a secret.
  */
-/**
- * Key indices this process has seen a provider refuse, per provider.
- *
- * In memory on purpose, and cleared by a restart. A key with no balance is a
- * fact about an account at a moment; persisting it would outlive a top-up and
- * shrink the swarm for a reason nobody could see. A restart is the cheapest
- * possible retry, and the deployment restarts often.
- *
- * Without this the rotation kept handing work to key 1 after it had refused
- * three turns in a row - #1323, #1324 and #1325, one frame each - because
- * nothing carried the refusal back to the chooser.
- */
-const refusedKeys = new Map<string, Set<number>>()
-
-/** Record that a provider refused this key, so the rotation stops offering it. */
-export function noteKeyRefused(provider: string, index: number): void {
-  const seen = refusedKeys.get(provider) ?? new Set<number>()
-  seen.add(index)
-  refusedKeys.set(provider, seen)
-  logger.warn('Queen will stop handing out a refused key', {
-    provider,
-    keyIndex: index,
-    refusedSoFar: [...seen],
-  })
-}
-
-/**
- * Whether a credential can actually pay for a turn, asked before an issue is
- * spent on finding out.
- *
- * Measured 2026-09-03 with four keys configured: two answered HTTP 200 and two
- * answered 429 with Z.AI business code 1113, "Insufficient balance or no
- * resource package". Without this the rotation hands each dead key an issue,
- * the turn dies on its first frame, and the swarm learns by burning work -
- * once per key, per process. Two of the four keys were dead, so that is two
- * issues consumed to discover a fact one request answers.
- *
- * ONE request, one token, cached for the life of the process. The cache is
- * deliberately not persisted: a key with no balance is a fact about an account
- * at a moment, and a restart is the cheapest possible retry after a top-up.
- *
- * A network failure is NOT a refusal. If the probe cannot reach the provider at
- * all, the answer is "assume live" - refusing to dispatch because our own
- * network hiccuped would stall the swarm for a reason that has nothing to do
- * with the credential.
- */
-const keyLiveness = new Map<string, boolean>()
-
-export async function keyIsLive(chosen: WorkerProvider): Promise<boolean> {
-  if (!chosen.apiKey || chosen.rehearsal) return true
-  const slot = `${chosen.provider}:${chosen.keyIndex ?? 0}`
-  const known = keyLiveness.get(slot)
-  if (known !== undefined) return known
-  const base =
-    chosen.baseUrl ||
-    process.env.ZAI_BASE_URL ||
-    'https://api.z.ai/api/coding/paas/v4'
-  try {
-    const response = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${chosen.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: chosen.model,
-        messages: [{ role: 'user', content: 'hi' }],
-        max_tokens: 1,
-      }),
-      signal: AbortSignal.timeout(20_000),
-    })
-    // 429 with business code 1113 is an exhausted package, and 401/403 is a key
-    // that is not a key. Everything else - including a rate limit that is a
-    // real rate limit - is a live credential having a bad moment.
-    const body = response.ok ? '' : await response.text().catch(() => '')
-    const dead =
-      response.status === 401 ||
-      response.status === 403 ||
-      body.includes('1113') ||
-      body.includes('Insufficient balance')
-    keyLiveness.set(slot, !dead)
-    if (dead) {
-      logger.warn('Queen found a credential that cannot pay', {
-        provider: chosen.provider,
-        keyIndex: chosen.keyIndex,
-        status: response.status,
-        said: body.slice(0, 160),
-      })
-    }
-    return !dead
-  } catch (error) {
-    logger.warn('Queen could not reach the provider to check a key', {
-      provider: chosen.provider,
-      keyIndex: chosen.keyIndex,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return true
-  }
-}
-
-/**
- * Forget every refusal, so a topped-up account is tried again without a restart.
- *
- * The cache is process-lifetime by design - a key with no balance is a fact
- * about an account at a moment - and until this existed the only way to clear
- * it was to restart the container. It is also what keeps tests honest: a
- * module-level cache leaks between them, and one did, making a check about a
- * healthy swarm fail because an earlier check had written a key off.
- */
-export function clearRefusedKeys(): void {
-  refusedKeys.clear()
-  keyLiveness.clear()
-}
-
-/** For the board and for tests: which keys this process has written off. */
-export function refusedKeyCount(provider = 'zai'): number {
-  return (refusedKeys.get(provider) ?? new Set()).size
-}
-
 export function resolveWorkerProvider(
   takenKeyIndices: number[] = [],
+  afterKeyIndex?: number,
 ): WorkerProvider | null {
   const override = process.env.TRIOS_QUEEN_WORKER_MODEL
+  // An explicit endpoint is authoritative, including its refusal. Falling
+  // through when it has no key would silently send the bee to a different
+  // provider configured by a legacy variable.
+  if (configuredWorkerBaseUrl()) {
+    return configuredEndpointProvider(override, takenKeyIndices, afterKeyIndex)
+  }
   for (const candidate of WORKER_PROVIDERS) {
     const keys = keysFor(candidate.envVar)
     if (keys.length > 0) {
-      // Busy OR refused. A key the provider has already turned down is not a
-      // key: handing it out again spends an issue to learn the same fact.
-      const refused = refusedKeys.get(candidate.provider) ?? new Set<number>()
-      let index = 0
-      while (
-        index < keys.length &&
-        (takenKeyIndices.includes(index) || refused.has(index))
-      ) {
-        index++
-      }
-      // No index left. BUSY and REFUSED are different reasons and the fix for
-      // each is the opposite of the other, so they are counted apart.
-      //
-      // They were one number, and the live board showed what that costs: with
-      // two bees running on the two credentials that can pay, the refusal read
-      // "all 4 provider key(s) are already in use by bees in flight. Add
-      // another with ZAI_API_KEY_5". Four were configured, two were carrying a
-      // bee and two could not pay - and the operator was told to buy a fifth.
-      if (index >= keys.length) {
-        const refusedHere = [...refused].filter((i) => i < keys.length).length
+      const laneCount = workerLanesFor(candidate.provider)
+      const occupancy = keys.map(
+        (_, index) => takenKeyIndices.filter((taken) => taken === index).length,
+      )
+      const index = availableKeyIndex(occupancy, laneCount, afterKeyIndex)
+      // Every lane busy. Reusing one again would be the quiet version of this
+      // problem, so report the actual logical capacity reached.
+      if (index < 0) {
         return {
           provider: candidate.provider,
           model: override || candidate.model,
-          exhausted: keys.length,
-          busy: takenKeyIndices.filter((i) => i < keys.length).length,
-          refusedCount: refusedHere,
+          exhausted: keys.length * laneCount,
         }
       }
       const key = keys[index]
@@ -317,6 +578,8 @@ export function resolveWorkerProvider(
         apiKey: key,
         keyIndex: index,
         keyCount: keys.length,
+        laneIndex: occupancy[index],
+        laneCount,
       }
     }
   }
@@ -341,9 +604,21 @@ export function resolveWorkerProvider(
 
 /** One line naming what is missing, and who can supply it. */
 export function missingProviderRefusal(): string {
+  const endpoint = configuredWorkerBaseUrl()
+  const provider = configuredWorkerProvider()
+  const variables = endpoint
+    ? [GENERIC_WORKER_KEY_ENV]
+    : WORKER_PROVIDERS.map((candidate) => candidate.envVar)
+  const providerHint =
+    endpoint && !provider
+      ? ` and set TRIOS_QUEEN_WORKER_PROVIDER to one of ${[
+          ...CONFIGURED_ENDPOINT_PROVIDERS,
+        ].join(', ')}`
+      : ''
   return (
     'no provider credential in this deployment - set one of ' +
-    WORKER_PROVIDERS.map((p) => p.envVar).join(', ') +
+    variables.join(', ') +
+    providerHint +
     '. Only the operator can: a key typed by anything else is a key that ' +
     'passed through a place it should not have.'
   )
@@ -377,48 +652,54 @@ function run(
     .join(' ')
   const argv = shellArgv(quoted)
   return new Promise((resolve) => {
-    // THE SAME ENVIRONMENT THE BEE'S OWN SHELL GETS, and that is the whole fix.
-    //
-    // This spawn passed no env, so it inherited the server's full container
-    // environment - 52 variables on the live service. Something in it made git
-    // refuse https:
-    //
-    //   git fetch failed: fatal: protocol 'https' is not supported
-    //
-    // Every dispatch needing a NEW worktree died there from 2026-09-02, while
-    // reused worktrees kept working because `prepareWorktree` returns before
-    // the fetch on reuse - so the swarm looked half-alive rather than blocked.
-    //
-    // It was not git and it was not the remote. Asked directly through
-    // `filesystem_bash`, the container answered: git 2.47.3, exec-path
-    // /usr/lib/git-core, git-remote-https present and linked against libcurl,
-    // origin https://github.com/gHashTag/BrowserOS.git, no protocol or url
-    // config - and `git fetch --quiet origin` in that same directory SUCCEEDED.
-    // The only difference between the two calls was that `filesystem_bash`
-    // goes through `spawnEnv()` and this one did not.
-    //
-    // The allowlist exists for exactly this class: its own comment records that
-    // the inherited environment carried SSH_AUTH_SOCK, DATABASE_URL and a
-    // Kaggle token into every worker command. Passing a git command more
-    // environment than it needs is how one of those variables gets to decide
-    // what git may do.
-    const child = spawn(argv[0], argv.slice(1), { cwd, env: spawnEnv() })
+    // `detached` is what makes a process GROUP exist to kill. Without it the
+    // timeout below can only reach `su`, and `su` is never the process that
+    // hangs.
+    const child = spawn(argv[0], argv.slice(1), { cwd, detached: true })
     let out = ''
-    const done = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
+    let settled = false
+    let killTimer: ReturnType<typeof setTimeout> | undefined
+    let hardTimer: ReturnType<typeof setTimeout> | undefined
+
+    const finish = (code: number, extra = '') => {
+      if (settled) return
+      settled = true
+      if (killTimer) clearTimeout(killTimer)
+      if (hardTimer) clearTimeout(hardTimer)
+      resolve({ code, out: (out + extra).trim() })
+    }
+
+    // SIGKILL on `su` alone leaves the git it spawned alive, and that grandchild
+    // holds the inherited stdio pipes this promise waits on - so 'close', which
+    // needs EOF on them, cannot fire and the round hangs FOR EVER holding its
+    // lease. Measured on the live swarm: seven consecutive rounds each chose
+    // issue #1540 and not one reached a "Queen dispatch" log line of either
+    // polarity, while each stuck round kept its heartbeat alive and every 300s
+    // tick added another. Killing the whole group is what this timeout always
+    // meant to do.
+    killTimer = setTimeout(() => {
+      try {
+        if (child.pid) process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        child.kill('SIGKILL')
+      }
+    }, timeoutMs)
+
+    // Belt and braces. If anything still holds a pipe after the group kill, do
+    // not wait on it: a wrong answer is recoverable, a wedged round is not.
+    hardTimer = setTimeout(
+      () => finish(-1, '\n[run] timed out and never closed'),
+      timeoutMs + 5_000,
+    )
+
     child.stdout.on('data', (d) => {
       out += d
     })
     child.stderr.on('data', (d) => {
       out += d
     })
-    child.on('error', (e) => {
-      clearTimeout(done)
-      resolve({ code: -1, out: String(e) })
-    })
-    child.on('close', (code) => {
-      clearTimeout(done)
-      resolve({ code: code ?? -1, out: out.trim() })
-    })
+    child.on('error', (e) => finish(-1, String(e)))
+    child.on('close', (code) => finish(code ?? -1))
   })
 }
 
@@ -442,8 +723,34 @@ function run(
  * grounds to escalate rather than accept, so an unreadable branch cannot be
  * mistaken for finished work.
  */
+/**
+ * The ref a review compares against.
+ *
+ * Two files disagreed about what TRIOS_REPO_REF means. queen-export.ts reads it
+ * as a BRANCH NAME and prefixes origin/; this file read it raw, with a default
+ * of origin/dev that is already qualified. Production sets it to `master`, so
+ * export resolved origin/master while every review compared against the LOCAL
+ * `master` -- a branch the container checked out once and never moved.
+ *
+ * Measured 2026-09-16: the review reported `oracle="fail"` on branches whose
+ * defect is present on real master, and `pre-broken` never appeared once in
+ * several hundred reviews. Bees were being sent back for failures they did not
+ * cause, because the thing they were compared against had drifted ~100 commits
+ * behind. Setting the variable to `origin/master` to compensate produced
+ * `origin/origin/master` in the export path and broke publishing outright --
+ * the variable was never the place to fix it.
+ *
+ * One resolver for both files: qualify a bare branch name, leave a qualified
+ * ref alone. `master` and `origin/master` now mean the same thing.
+ */
+export function baseRef(): string {
+  const v = process.env.TRIOS_REPO_REF?.trim()
+  if (!v) return 'origin/dev'
+  return v.includes('/') ? v : `origin/${v}`
+}
+
 export async function committedFiles(issue: number): Promise<string[]> {
-  const base = process.env.TRIOS_REPO_REF || 'origin/dev'
+  const base = baseRef()
   const out = await run(
     'git',
     ['diff', '--name-only', `${base}...queen-${issue}`],
@@ -462,8 +769,490 @@ export async function committedFileCount(issue: number): Promise<number> {
   return (await committedFiles(issue)).length
 }
 
+/**
+ * What `t27c` says about ONE `.t27` file a bee committed.
+ *
+ * `present` is false for a file the branch deleted - there is no spec to read.
+ * `baseTypechecks` is null for a file the branch created - there is no earlier
+ * version to regress against.
+ */
+export interface SpecWitness {
+  file: string
+  present: boolean
+  /** `t27c parse` exited 0 - no hard parse error. */
+  parses: boolean
+  /** `t27c parse-complete` consumed the whole file: no TRUNCATE, no DISCARD. */
+  complete: boolean
+  discardedTokens: number
+  /** Occurrences of the literal `TODO: Implement` stub marker. */
+  stubMarkers: number
+  /** Bodies the codegen refused to lower: a signature with nothing in it. */
+  emptyBodies: number
+  /** `t27c typecheck` exited 0 on the committed file. */
+  typechecks: boolean
+  /** The same, on the base ref's version of the file; null when it is new. */
+  baseTypechecks: boolean | null
+  /** The first error line the compiler printed, or ''. */
+  error: string
+  /**
+   * Whether the Zig this spec generates compiles and passes its own tests.
+   *
+   * `null` means NOT MEASURED -- no zig on the image, no generated tree, a file
+   * outside specs/ -- and must never be read as a pass. Everything else in this
+   * record says whether the spec parses; this is the only field that says
+   * whether it works.
+   */
+  oracle: boolean | null
+  /** When `oracle` is false: the file the error was in, and the error. */
+  oracleError: string
+  /**
+   * The base ref did not compile either, so this failure is inherited, not
+   * caused. 384 of 946 specs are in that state; a review that blamed a bee for
+   * landing on one of them would stop the queue, which is the failure this
+   * whole loop exists to avoid.
+   */
+  oraclePreBroken: boolean
+}
+
+/**
+ * The machine's side of a review.
+ *
+ * `absent` means the compiler is not on this image (or cannot run): nothing
+ * was measured, and the caller must not read that as "nothing failed".
+ */
+export type Witness =
+  | { kind: 'absent'; detail: string }
+  | { kind: 'witnessed'; t27c: string; specs: SpecWitness[] }
+
+/** The compiler the review runs. `T27C_BIN` overrides for a test or a Mac. */
+function t27cBinary(): string {
+  return process.env.T27C_BIN || 't27c'
+}
+
+/**
+ * The witness script, one file at a time, run AS THE BEE in the repository
+ * root. Positional: $1 branch, $2 file, $3 base ref, $4 t27c binary.
+ *
+ * Everything is read from the COMMIT (`git show branch:file`), never from the
+ * worktree, because the worktree may hold edits the bee never committed and
+ * the commit is the deliverable. Each measurement prints one `W ` line; the
+ * TypeScript side parses those and nothing else, so compiler chatter cannot be
+ * mistaken for a result.
+ */
+const WITNESS_SCRIPT = String.raw`
+set -u
+branch="$1"; file="$2"; base="$3"; t27c="$4"
+ORACLE_TREE=/usr/local/share/t27-oracle-tree
+# printenv, not a braced default: this script is a String.raw template and a
+# dollar-brace would be read as a TypeScript interpolation.
+oracle_tree_override="$(printenv TRIOS_ORACLE_TREE 2>/dev/null || true)"
+if [ -n "$oracle_tree_override" ]; then ORACLE_TREE="$oracle_tree_override"; fi
+tmp="$(mktemp -d)" || exit 97
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/specs/one"
+spec="$tmp/specs/one/$(basename "$file")"
+if ! git show "$branch:$file" > "$spec" 2>/dev/null; then echo 'W absent'; exit 0; fi
+if "$t27c" parse "$spec" > "$tmp/parse.out" 2>&1; then
+  echo 'W parse ok'
+else
+  echo "W parse fail $(grep -m1 -i 'error' "$tmp/parse.out" | cut -c1-240)"
+fi
+"$t27c" parse-complete --specs-dir "$tmp/specs" 2>&1 | grep -E 'consume all|TRUNCATE|DISCARD|do not parse' | sed 's/^ */W pc /'
+echo "W todo $(grep -c 'TODO: Implement' "$spec" || true)"
+# EMPTINESS BY THE CODEGEN, because the marker above is blind to most of it.
+# Much of the corpus writes '// TODO: Implement from .tri spec' in a body it
+# never wrote, and the grep finds those. But four of the capability specs write
+# '// Implementation: ...' instead, and 198 files hold 854 bodies that contain
+# only a comment of some shape - on every one of those the marker count is 0 and
+# the file reads as finished. The codegen cannot be fooled that way: a body with
+# no statement lowers to 'not yet implemented' whatever the comment says.
+# Measured on all six capability specs, this count equalled a brace-matching
+# empty-body detector exactly: 13/19/33/21/3/7.
+echo "W empty $("$t27c" gen "$spec" 2>&1 | grep -c 'not yet implemented' || true)"
+if "$t27c" typecheck "$spec" > /dev/null 2>&1; then echo 'W typecheck ok'; else echo 'W typecheck fail'; fi
+# THE ORACLE. Everything above asks whether the spec PARSES; this asks whether
+# what it generates RUNS. Measured 2026-09-16 across the whole corpus: 541 of
+# 946 specs pass, 384 do not compile at all. A bee can satisfy every stated
+# criterion with code in that second group, and has.
+#
+# Three details are load-bearing, each learned by getting it wrong first:
+#   - The tree MIRRORS specs/. Generated files import each other by relative
+#     path, so a flat directory fails everything with "import of file outside
+#     module path", which reads like a toolchain problem and is not.
+#   - A shim at the tree ROOT is what makes the tree one Zig module. Zig takes
+#     the module root from the root source file's directory and 0.15/0.16 have
+#     no flag to override it.
+#   - The shared tree is hardlink-copied per review before the reviewed file is
+#     REMOVED and rewritten. Writing through a hardlink would edit the cache
+#     every other concurrent review is reading.
+#
+# NO BRACED PARAMETER EXPANSION ANYWHERE BELOW. This script is a String.raw
+# template literal in TypeScript, so a dollar-brace is read by the compiler as
+# an interpolation and the file stops parsing. sed does the trimming instead.
+#
+# Silent on every failure that is not the spec's: no zig, no cache, a file
+# outside specs/. A missing verdict means "not measured" and the review falls
+# back to what it did before; only a real compile is allowed to say "fail".
+zigbin="$(command -v zig 2>/dev/null || true)"
+case "$file" in specs/*) inspecs=1 ;; *) inspecs=0 ;; esac
+if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
+  ZIG_GLOBAL_CACHE_DIR=/tmp/zig-cache
+  export ZIG_GLOBAL_CACHE_DIR
+  # Baked at image build (see Dockerfile). NOT generated here: the mirror is
+  # ~950 t27c runs, the witness is killed at 120s, and a killed witness records
+  # the spec as failing to parse -- a bee blamed for a defect it does not have.
+  # No tree, no verdict: TRIOS_ORACLE_TREE lets a test point somewhere else.
+  cache="$ORACLE_TREE"
+  rel="$(printf '%s' "$file" | sed -e 's|^specs/||' -e 's|\.t27$|.zig|')"
+  # A MIRRORED spec path, not the flat $spec the checks above use. t27c writes
+  # each import as a path relative to where the SPEC sits, so the same file
+  # generated from specs/one/quick_sort.t27 emits "../base/types.zig" and from
+  # specs/tri/sort/quick_sort.t27 emits "../../base/types.zig". Handing the
+  # flat copy to the oracle makes every import miss by one directory and every
+  # spec fail with FileNotFound -- which reads exactly like a broken spec.
+  relt="$(printf '%s' "$file" | sed -e 's|^specs/||')"
+  # The WHOLE specs tree, not just this file. t27c resolves a use against the
+  # FILESYSTEM: a use of fpga::fifo::Fifo emits "../fifo.zig".Fifo when
+  # specs/fpga/fifo.t27 is present next to it, and falls back to
+  # "../fifo/Fifo.zig" when it is not. A one-file mirror therefore made every
+  # spec that uses a neighbour generate an import to a path nothing produces,
+  # and the oracle reported FileNotFound on 20+ branches that were fine. I
+  # filed an issue blaming the corpus for it before checking.
+  mirror_root="$tmp/mirror"
+  mkdir -p "$mirror_root"
+  cp -al specs "$mirror_root/specs" 2>/dev/null || cp -a specs "$mirror_root/specs" 2>/dev/null || true
+  mirror="$mirror_root/specs/$relt"
+  mkdir -p "$(dirname "$mirror")"
+  # rm first: the copy above may be hardlinks, and writing through one would
+  # edit the worktree's own spec.
+  rm -f "$mirror"
+  git show "$branch:$file" > "$mirror" 2>/dev/null || true
+  mine="$tmp/tree"
+  # cp -al first: 856 files as hardlinks costs nothing. It fails across mount
+  # points, and the tree lives in an image layer while $tmp is under /tmp, so
+  # on the real container that is exactly what happens -- the first production
+  # telemetry read oracle="not measured" on every review that reached a spec,
+  # with no error anywhere, because this test simply returned false. A real
+  # copy is the fallback; it is slower and still well inside the witness's
+  # budget.
+  copied=0
+  if [ -d "$cache" ]; then
+    if cp -al "$cache" "$mine" 2>/dev/null; then copied=1
+    elif cp -a "$cache" "$mine" 2>/dev/null; then copied=1
+    else echo "W oracle skipped could not stage the tree"; fi
+  fi
+  if [ "$copied" = 1 ]; then
+    mkdir -p "$(dirname "$mine/$rel")"
+    rm -f "$mine/$rel"
+    if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
+      printf 'test { _ = @import("%s"); }\n' "$rel" > "$mine/_witness.zig"
+      if oracle_out="$(cd "$mine" && "$zigbin" test _witness.zig 2>&1)"; then
+        echo 'W oracle pass'
+      else
+        # Name the file the error is IN. 343 of 361 failures in the first full
+        # run were inherited from an import, not produced by the file under
+        # test, and a count that ignores that sends bees to fix correct code.
+        where="$(printf '%s' "$oracle_out" | grep -m1 -oE '^[^ :]+\.zig:[0-9]+' | cut -d: -f1)"
+        [ -n "$where" ] || where='?'
+        why="$(printf '%s' "$oracle_out" | grep -m1 'error:' | sed 's/.*error: //' | cut -c1-160)"
+        # A failure is only the BEE'S failure if the base compiled. 384 of 946
+        # specs do not compile today; holding a bee responsible for arriving at
+        # one of those is how a review queue stops moving, and this swarm has
+        # already spent a night stopped. So measure the base too, and say which
+        # of the two this is.
+        # Does this branch fail to COMPILE, or does it compile and fail when
+        # RUN? --test-no-exec builds the test binary without running it, and
+        # the difference decides who is responsible. 21 specs in this corpus
+        # compile and then panic on an unimplemented body; judged with plain
+        # zig test their base always "fails", so a bee could break compilation
+        # on any of them and be told the breakage was pre-existing. Measured on
+        # fifo_tb, which did exactly that.
+        branch_compiles=0
+        compile_out="$(cd "$mine" && "$zigbin" test --test-no-exec _witness.zig 2>&1)" && branch_compiles=1
+        # Report the COMPILE error when there is one. The run output leads with
+        # "test command terminated with signal ABRT", which names the symptom
+        # of a panicking test and says nothing about the syntax error that
+        # stopped the build -- a blocking verdict has to say what to fix.
+        if [ "$branch_compiles" = 0 ]; then
+          where="$(printf '%s' "$compile_out" | grep -m1 -oE '[^ :]+\.zig:[0-9]+' | cut -d: -f1)"
+          [ -n "$where" ] || where='?'
+          why="$(printf '%s' "$compile_out" | grep -m1 'error:' | sed 's/.*error: //' | cut -c1-160)"
+        fi
+        # Paths come back absolute because the tree lives under a mktemp dir,
+        # and an operator reading a verdict needs the path in the corpus.
+        where="$(printf '%s' "$where" | sed -e "s|^$mine/||" -e 's|^.*/tree/||')"
+
+        basebroke=1
+        base_compiles=0
+        rm -f "$mirror"
+        if git show "$base:$file" > "$mirror" 2>/dev/null; then
+          rm -f "$mine/$rel"
+          if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
+            (cd "$mine" && "$zigbin" test --test-no-exec _witness.zig > /dev/null 2>&1) && base_compiles=1
+            (cd "$mine" && "$zigbin" test _witness.zig > /dev/null 2>&1) && basebroke=0
+          fi
+        fi
+        # Held against the bee when the base compiled and this does not, or
+        # when both compile and the base's tests passed while these do not.
+        regressed=1
+        if [ "$base_compiles" = 1 ] && [ "$branch_compiles" = 0 ]; then
+          regressed=0
+        elif [ "$basebroke" = 0 ]; then
+          regressed=0
+        fi
+        if [ "$regressed" = 0 ]; then
+          echo "W oracle fail [$where] $why"
+        else
+          echo "W oracle pre-broken [$where] $why"
+        fi
+      fi
+    fi
+  fi
+fi
+if git show "$base:$file" > "$tmp/base.t27" 2>/dev/null; then
+  if "$t27c" typecheck "$tmp/base.t27" > /dev/null 2>&1; then echo 'W base ok'; else echo 'W base fail'; fi
+else
+  echo 'W base new'
+fi
+`
+
+/**
+ * Turn the witness script's `W ` lines into one record. Exported for the
+ * tests: the shell is the part that needs a container, the reading is not.
+ */
+export function readWitnessLines(file: string, out: string): SpecWitness {
+  const w: SpecWitness = {
+    file,
+    present: true,
+    parses: false,
+    complete: false,
+    discardedTokens: 0,
+    stubMarkers: 0,
+    emptyBodies: 0,
+    typechecks: false,
+    baseTypechecks: null,
+    error: '',
+    oracle: null,
+    oracleError: '',
+    oraclePreBroken: false,
+  }
+  // The completeness report is four counters; the file is complete only when
+  // the one spec scanned landed in "parse and consume all". A report that
+  // never arrived (compiler crashed, output cut) leaves `complete` false: an
+  // unmeasured file is not a clean one.
+  let consumedAll = -1
+  for (const raw of out.split('\n')) {
+    const line = raw.trim()
+    if (!line.startsWith('W ')) continue
+    const body = line.slice(2)
+    if (body === 'absent') {
+      w.present = false
+      return w
+    }
+    if (body.startsWith('empty ')) {
+      const n = Number(body.slice('empty '.length).trim())
+      if (Number.isInteger(n)) w.emptyBodies = n
+    } else if (body.startsWith('oracle skipped')) {
+      // Measured nothing, and said why. Distinct from silence so the telemetry
+      // can tell "no zig on this image" from "the tree would not stage".
+      w.oracle = null
+      w.oracleError = body.slice('oracle skipped'.length).trim()
+    } else if (body === 'oracle pass') {
+      w.oracle = true
+      w.oraclePreBroken = false
+    } else if (body.startsWith('oracle pre-broken')) {
+      w.oracle = false
+      w.oraclePreBroken = true
+      w.oracleError = body.slice('oracle pre-broken'.length).trim()
+    } else if (body.startsWith('oracle fail')) {
+      w.oracle = false
+      w.oraclePreBroken = false
+      w.oracleError = body.slice('oracle fail'.length).trim()
+    } else if (body === 'parse ok') w.parses = true
+    else if (body.startsWith('parse fail')) {
+      w.parses = false
+      w.error = body.slice('parse fail'.length).trim()
+    } else if (body.startsWith('pc ')) {
+      const m = body.match(/^pc\s+(.*?)\s+(\d+)(?:\s+\((\d+) token)?/)
+      if (!m) continue
+      const [, label, count, tokens] = m
+      if (label.includes('consume all')) consumedAll = Number(count)
+      else if (label.includes('DISCARD'))
+        w.discardedTokens = Number(tokens ?? count)
+    } else if (body.startsWith('todo ')) {
+      w.stubMarkers = Number(body.slice(5).trim()) || 0
+    } else if (body === 'typecheck ok') w.typechecks = true
+    else if (body === 'typecheck fail') w.typechecks = false
+    else if (body === 'base ok') w.baseTypechecks = true
+    else if (body === 'base fail') w.baseTypechecks = false
+    else if (body === 'base new') w.baseTypechecks = null
+  }
+  w.complete = w.parses && consumedAll === 1 && w.discardedTokens === 0
+  return w
+}
+
+/**
+ * WHAT the compiler says about the `.t27` files a bee's branch changed.
+ *
+ * The review used to accept on the bee's own "met" lines. Harvested on
+ * 2026-09-10 (gHashTag/t27#3560): of 34 finished bee branches whose verdict
+ * blocks were read as met, 20 did not parse, 4 parsed with DISCARDED tokens
+ * and 1 regressed typecheck - 9 of 34 held up when `t27c` was run on the
+ * commit. The bee's word is the claim; this is the measurement, taken by the
+ * same three commands the operator ran by hand, on the same commit.
+ *
+ * Only `.t27` files are witnessed; a branch that changed none returns an
+ * empty `specs`. A missing compiler returns `absent`, which the review treats
+ * as "could not check" - never as a pass.
+ */
+export async function witnessSpecs(
+  issue: number,
+  files: string[],
+): Promise<Witness> {
+  const specs = files.filter((f) => f.endsWith('.t27'))
+  const bin = t27cBinary()
+  if (specs.length === 0) return { kind: 'witnessed', t27c: bin, specs: [] }
+  const root = workspaceRoot()
+  const version = await run(bin, ['--version'], root, 15_000)
+  if (version.code !== 0) {
+    return {
+      kind: 'absent',
+      detail: `${bin} --version exited ${version.code}: ${version.out.slice(0, 200)}`,
+    }
+  }
+  const base = baseRef()
+  // Fetch, or refresh the base before judging is something nobody does.
+  //
+  // The workspace fetches when a worktree is PREPARED, and a dispatch row can
+  // then sit in review for hours while master moves. `git show origin/master:f`
+  // in this root returns whatever the last fetch left behind, so the branch is
+  // compared against a base that has drifted -- and a defect fixed upstream, or
+  // already present upstream, is attributed to whoever touched the file last.
+  //
+  // Measured 2026-09-16: `fpga/testbench/fifo_tb.t27` fails on real master with
+  // `local variable shadows declaration of 'wr_en'`, and the review kept
+  // reporting it as this bee's regression across every tick. Cheap when there
+  // is nothing to fetch, and it runs once per reviewed issue, not per file.
+  const fetched = await run('git', ['fetch', '--quiet', 'origin'], root, 60_000)
+  if (fetched.code !== 0) {
+    logger.warn('Could not refresh the base before a review; it may have drifted', {
+      issue,
+      detail: fetched.out.slice(0, 200),
+    })
+  }
+  const branch = `queen-${issue}`
+  const out: SpecWitness[] = []
+  for (const file of specs) {
+    const r = await run(
+      'sh',
+      ['-c', WITNESS_SCRIPT, 'witness', branch, file, base, bin],
+      root,
+      120_000,
+    )
+    const w = readWitnessLines(file, r.out)
+    if (r.code !== 0 && r.code !== 1) {
+      // The script itself failed (mktemp, kill on timeout): nothing measured.
+      w.present = true
+      w.parses = false
+      w.complete = false
+      w.error = w.error || `witness script exited ${r.code}`
+    }
+    out.push(w)
+  }
+  return {
+    kind: 'witnessed',
+    t27c: version.out.split('\n')[0].trim(),
+    specs: out,
+  }
+}
+
+/**
+ * The witness as verdict lines, in the shape the review policy already
+ * weighs. One line per measurement per file, met or unmet, so `queend`'s one
+ * rule decides send-back versus escalate and nothing is decided here.
+ *
+ * The typecheck line is a RATCHET, not a gate, matching the repository's own
+ * corpus check: a file that failed typecheck before the bee touched it may
+ * still fail; a file that passed, or did not exist, must pass.
+ */
+export function witnessVerdicts(
+  witness: Witness,
+): Array<{ criterion: string; met: boolean }> {
+  if (witness.kind !== 'witnessed') return []
+  const lines: Array<{ criterion: string; met: boolean }> = []
+  for (const s of witness.specs) {
+    if (!s.present) continue
+    const why = s.error
+      ? ` (${s.error})`
+      : s.discardedTokens > 0
+        ? ` (parse-complete DISCARDED ${s.discardedTokens} token(s))`
+        : s.parses && !s.complete
+          ? ' (parse-complete did not consume the whole file)'
+          : ''
+    lines.push({
+      criterion: `t27c: ${s.file} parses clean${s.complete ? '' : why}`,
+      met: s.complete,
+    })
+    lines.push({
+      criterion: `t27c: ${s.file} has no 'TODO: Implement' stub markers${
+        s.stubMarkers > 0 ? ` (${s.stubMarkers} found)` : ''
+      }`,
+      met: s.stubMarkers === 0,
+    })
+    const regressed = !s.typechecks && s.baseTypechecks !== false
+    lines.push({
+      criterion: `t27c: ${s.file} has no empty function body${
+        s.emptyBodies > 0 ? ` (${s.emptyBodies} left)` : ''
+      }`,
+      met: s.emptyBodies === 0,
+    })
+    lines.push({
+      criterion: `t27c: ${s.file} typecheck does not regress${
+        regressed
+          ? s.baseTypechecks === null
+            ? ' (new file fails typecheck)'
+            : ' (passed on the base ref, fails on this branch)'
+          : ''
+      }`,
+      met: !regressed,
+    })
+    // The only criterion here about the code WORKING rather than PARSING.
+    // Omitted when `oracle` is null -- no zig on the image, no generated tree
+    // -- because an unmeasured file must never read as a passing one. Omitted
+    // too when the base was already broken: 384 of 946 specs do not compile,
+    // and charging a bee for landing on one of those stops the queue rather
+    // than improving it.
+    if (s.oracle !== null && !s.oraclePreBroken) {
+      lines.push({
+        criterion: `zig: ${s.file} compiles and passes its own tests${
+          s.oracle ? '' : ` (${s.oracleError})`
+        }`,
+        met: s.oracle,
+      })
+    }
+  }
+  return lines
+}
+
 export function workspaceRoot(): string {
-  return `${process.env.WORKSPACE_DIR || '/workspace'}/BrowserOS`
+  // The directory name is DERIVED from the repo URL, exactly as the entrypoint
+  // derives it — `REPO_NAME="$(basename "$TRIOS_REPO_URL" .git)"`. Hardcoding
+  // "BrowserOS" here made the two agree only by coincidence of that one URL:
+  // point TRIOS_REPO_URL at any other repository and the entrypoint clones to
+  // /workspace/<that name> while this function keeps looking in
+  // /workspace/BrowserOS, so every dispatch fails on a checkout that is present
+  // and simply not where the server looks.
+  //
+  // One input, one rule, two readers.
+  const dir = process.env.WORKSPACE_DIR || '/workspace'
+  const url = process.env.TRIOS_REPO_URL || ''
+  const name =
+    url
+      .replace(/\.git$/, '')
+      .replace(/\/+$/, '')
+      .split('/')
+      .pop() || 'BrowserOS'
+  return `${dir}/${name}`
 }
 
 /**
@@ -479,9 +1268,271 @@ export function workspaceRoot(): string {
  * treated as an error, because a round that crashed after cutting one must be
  * able to run again.
  */
+/**
+ * How full the volume this server writes to actually is.
+ *
+ * Returns null when it cannot be measured, and every caller treats that as
+ * UNKNOWN rather than as room - a guard that reads an unmeasurable disk as
+ * empty is a guard that disables itself exactly when the filesystem is unwell.
+ */
+export function volumeUsedPercent(dir = workspaceRoot()): number | null {
+  // `df -P`, NOT statfs arithmetic - and the difference is not academic.
+  //
+  // The first version computed `(blocks - bavail) / blocks` from statfs. On a
+  // Linux container that is exact. On an APFS shared container it is not:
+  // `statfs` reports the CONTAINER's size while df reports this volume's own
+  // usage, so a Mac at 57% measured 97% and the guard refused every dispatch in
+  // a unit test that merely cut a worktree in a temp directory.
+  //
+  // POSIX `df -P` gives one line, one capacity column, the same number the
+  // operating system shows a person and the same one the external reaper has
+  // been reading correctly all night. One subprocess per dispatch, and
+  // dispatches are minutes apart.
+  try {
+    const out = execFileSync('df', ['-P', dir], {
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    const line = out.trim().split('\n').pop() ?? ''
+    const m = line.match(/(\d+)%/)
+    return m ? Number(m[1]) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * GARBAGE COLLECTION BELONGS ON THE NODE.
+ *
+ * THE INCIDENT, 2026-09-05. `/workspace` reached 100% - 71 MB of 46 GB, sixty
+ * worktrees - and every dispatch died in its first second with
+ * `git worktree add failed: unable to write file docs/images/...`. An issue
+ * handed to the swarm never ran a line.
+ *
+ * A reaper existed and had not run, because it lived OUTSIDE: it reached the
+ * volume through `railway ssh`, and railway refuses a connection while the
+ * application is unhealthy - which it was, BECAUSE the volume was full. The tool
+ * that repairs the failure reached through the thing the failure breaks. A retry
+ * thirty seconds later happened to succeed; nothing guaranteed it would.
+ *
+ * Every system that has met this problem answers it the same way. kubelet
+ * garbage-collects images on the NODE against high and low watermarks, not from
+ * the control plane. CI runners clean their own disks, because a control plane
+ * cannot reach a wedged runner. ext4 reserves 5% so root can still act on a
+ * "full" filesystem. The common sentence: the collector must not depend on the
+ * thing whose failure it collects for.
+ *
+ * So the server reaps its own volume, on the same watermark model the external
+ * reaper uses - above HIGH, remove until LOW - and the external one becomes a
+ * fallback rather than the only hand.
+ *
+ * WHAT IT WILL NEVER REMOVE. A worktree holding uncommitted work. This container
+ * carries no push credential by design, so unpublished work in a tree is the
+ * ONLY copy of it, and `prepareWorktree` already refuses to clean a reused tree
+ * for exactly that reason. A dirty tree is somebody's unfinished turn; the disk
+ * is never worth it. Nor does it touch the newest few, which are likely to be
+ * running right now.
+ */
+export async function reapWorktrees(
+  opts: {
+    high?: number
+    low?: number
+    keepNewest?: number
+    volumeUsed?: (dir: string) => number | null
+  } = {},
+): Promise<{
+  before: number | null
+  after: number | null
+  removed: string[]
+  keptDirty: string[]
+  refused: string[]
+}> {
+  const high = opts.high ?? Number(process.env.QUEEN_VOLUME_HIGH ?? 80)
+  const low = opts.low ?? Number(process.env.QUEEN_VOLUME_LOW ?? 55)
+  const keepNewest =
+    opts.keepNewest ?? Number(process.env.QUEEN_VOLUME_KEEP ?? 6)
+  const root = workspaceRoot()
+  const measure = opts.volumeUsed ?? volumeUsedPercent
+  const before = measure(root)
+  const result = {
+    before,
+    after: before,
+    removed: [] as string[],
+    keptDirty: [] as string[],
+    refused: [] as string[],
+  }
+  // Unknown is not room. Below the mark is not an emergency.
+  if (before === null || before < high) return result
+
+  const listed = await run('git', ['worktree', 'list', '--porcelain'], root)
+  const paths = listed.out
+    .split('\n')
+    .filter((l) => l.startsWith('worktree '))
+    .map((l) => l.slice(9))
+    .filter((p) => p.includes('/.worktrees/'))
+
+  // Oldest first: the newest are the ones most likely to be running.
+  const withAge: Array<{ path: string; mtime: number }> = []
+  for (const p of paths) {
+    try {
+      withAge.push({ path: p, mtime: statSync(p).mtimeMs })
+    } catch {
+      // A recorded worktree whose directory is gone: prune will clear it.
+      withAge.push({ path: p, mtime: 0 })
+    }
+  }
+  withAge.sort((a, b) => a.mtime - b.mtime)
+  const candidates = withAge.slice(0, Math.max(0, withAge.length - keepNewest))
+
+  for (const c of candidates) {
+    const now = measure(root)
+    if (now !== null && now <= low) break
+
+    const dirty = await run('git', ['status', '--porcelain'], c.path, 60_000)
+    // Unreadable is not clean. A tree whose state cannot be read might hold the
+    // only copy of a turn's work.
+    if (dirty.code !== 0 || dirty.out.trim().length > 0) {
+      result.keptDirty.push(c.path)
+      continue
+    }
+    // No `--force`, here or anywhere else in this project. A tree that refuses
+    // to go is a tree a person should look at.
+    const removedOne = await run(
+      'git',
+      ['worktree', 'remove', c.path],
+      root,
+      120_000,
+    )
+    if (removedOne.code === 0) result.removed.push(c.path)
+    else result.refused.push(c.path)
+  }
+
+  await run('git', ['worktree', 'prune'], root, 60_000)
+  result.after = measure(root)
+  return result
+}
+
+/**
+ * Link this worktree's node_modules into a shared store instead of installing.
+ *
+ * WHY AT CREATION AND NOT AFTER. Every dispatch ran `bun install` and wrote
+ * about 2.5 GB of its own node_modules; the loop's `share-modules` reclaimed it
+ * afterwards, which bounded the damage and never stopped it. Six worktrees were
+ * carrying 15.4 GB of the same packages when this was written.
+ *
+ * PROVEN BY INTERVENTION before a line of this existed, on a scratch worktree
+ * cut from the same HEAD:
+ *
+ *   bare checkout                                     159 MB
+ *   with the farm built, before any install           159 MB
+ *   after `bun install --frozen-lockfile`             159 MB
+ *     "Checked 2250 installs across 2424 packages (no changes) [580.00ms]"
+ *   and its test suite: 8 tests, 0 fail, through the farm
+ *
+ * The earlier attempt at this was recorded in the loop's own notes as REFUTED -
+ * "a pre-built farm cannot survive bun install", 159M becoming 2562M. That was a
+ * bug in the farm builder: a POSIX glob that does not match dotfiles left out
+ * `.bun`, which is bun's entire isolated store. With it linked, bun sees the
+ * tree as satisfied and writes nothing.
+ *
+ * WHAT IT WILL NOT DO. It does nothing at all unless a store already exists for
+ * this exact lockfile hash, so a worktree whose dependencies differ installs
+ * normally and the first tree of any new lockfile donates its install. And it
+ * never fails a dispatch: this is an optimisation, and a bee that installs its
+ * own copy is slower and correct.
+ */
+export async function farmNodeModules(
+  worktree: string,
+  root: string,
+): Promise<string> {
+  const store = process.env.TRIOS_MODULE_STORE || `${root}/.node_modules_store`
+  // One shell, because this is filesystem work and splitting it into a dozen
+  // spawns would be slower and no clearer.
+  const script = [
+    'set -e',
+    `W=${JSON.stringify(worktree)}`,
+    `STORE=${JSON.stringify(store)}`,
+    'L="$W/trios/agent-server/bun.lock"',
+    '[ -f "$L" ] || L="$W/trios/agent-server/bun.lockb"',
+    '[ -f "$L" ] || { echo "NOFARM no lockfile"; exit 0; }',
+    'H=$(md5sum "$L" 2>/dev/null | cut -c1-12)',
+    'S="$STORE/$H"',
+    '[ -d "$S" ] || { echo "NOFARM no store for $H"; exit 0; }',
+    'n=0',
+    'for rel in $(cd "$S" && find . -maxdepth 6 -name node_modules -type d -prune 2>/dev/null | sed "s|^\\./||"); do',
+    '  src="$S/$rel"',
+    '  rm -rf "$W/$rel"; mkdir -p "$W/$rel"',
+    // Dotfiles included. `.bun` is 2242 entries and 2.37 GB of it, and leaving
+    // it out is what made this look impossible the first time.
+    '  for e in "$src"/* "$src"/.[!.]*; do [ -e "$e" ] || continue; ln -s "$e" "$W/$rel/$(basename "$e")" 2>/dev/null || true; done',
+    // A workspace links its OWN packages by relative path inside node_modules.
+    // Shared away they resolve against the store and find nothing, so they are
+    // pointed back at this worktree's sources.
+    '  if [ -d "$src/@browseros" ]; then',
+    '    rm -f "$W/$rel/@browseros"; mkdir -p "$W/$rel/@browseros"',
+    '    for w in "$src/@browseros"/*; do',
+    '      real=$(readlink -f "$w" 2>/dev/null || echo "")',
+    '      mapped=$(echo "$real" | sed "s|$S|$W|")',
+    '      if [ -d "$mapped" ]; then ln -s "$mapped" "$W/$rel/@browseros/$(basename "$w")"',
+    '      else ln -s "$w" "$W/$rel/@browseros/$(basename "$w")"; fi',
+    '    done',
+    '  fi',
+    '  n=$((n+1))',
+    'done',
+    'echo "FARMED $n directories against $H"',
+  ].join('\n')
+
+  try {
+    const r = await run('sh', ['-c', script], root, 120_000)
+    const m = r.out.match(/FARMED (\d+) directories against (\S+)/)
+    if (m) return `; linked ${m[1]} node_modules into the store for ${m[2]}`
+    const no = r.out.match(/NOFARM (.+)/)
+    return no ? `; installed its own modules (${no[1].trim()})` : ''
+  } catch (error) {
+    // An optimisation that throws is worse than one that does not run - but one
+    // that fails SILENTLY is how a gap survives. It says so and carries on.
+    return `; the module farm could not be built (${
+      error instanceof Error ? error.message.slice(0, 80) : 'unknown'
+    })`
+  }
+}
+
+/**
+ * Does this path exist at all?
+ *
+ * Deliberately not `git worktree list`: the case this guards is precisely the
+ * one where those two answers disagree.
+ */
+function pathExists(target: string): boolean {
+  try {
+    statSync(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function prepareWorktree(
   issue: number,
+  deps: {
+    // INJECTED, and the test that forced it is the argument for it.
+    //
+    // The first version read the real filesystem unconditionally, so a unit test
+    // that cuts a worktree in a temp directory started passing or failing
+    // according to how full the DEVELOPER'S disk was. It failed on a machine at
+    // 57% because `statfs` on an APFS shared container reports the container's
+    // size, not this volume's usage - `(blocks - bavail) / blocks` came out at
+    // 97% where `df` says 57.
+    //
+    // In the Linux container this guard actually runs in, statfs is exact. On a
+    // developer's Mac it is not, and a guard whose behaviour depends on the host
+    // filesystem is a guard no test can pin. So the measurement is a dependency
+    // with a real default, like the pool and the clock everywhere else here.
+    volumeUsed?: (dir: string) => number | null
+  } = {},
 ): Promise<{ ok: boolean; path: string; detail: string }> {
+  const measure = deps.volumeUsed ?? volumeUsedPercent
   const root = workspaceRoot()
   const branch = `queen-${issue}`
   const path = `${root}/.worktrees/${branch}`
@@ -508,14 +1559,108 @@ export async function prepareWorktree(
     const changed = dirty.out
       .split('\n')
       .filter((l) => l.trim().length > 0).length
+    // A REUSED TREE NEEDS THE FARM AS MUCH AS A FRESH ONE.
+    //
+    // The farm was added after `git worktree add` and this path returns before
+    // reaching it, so every reused worktree kept whatever node_modules it had.
+    // Found the same day: #1627, cut after the change went live, lockfile hash
+    // matching an existing store, and still carrying 2,562 MB of its own
+    // packages - because its dispatch says "reused an existing worktree
+    // (clean)".
+    //
+    // One tree of fifteen, which is exactly how a gap like this hides: the
+    // aggregate looked fixed.
+    const reusedFarm = await farmNodeModules(path, root)
     return {
       ok: true,
       path,
       detail:
-        changed === 0
+        (changed === 0
           ? 'reused an existing worktree (clean)'
           : `reused an existing worktree (${changed} uncommitted file(s) ` +
-            'left by a previous attempt)',
+            'left by a previous attempt)') + reusedFarm,
+    }
+  }
+
+  // A DIRECTORY CAN EXIST WHILE GIT DOES NOT LIST IT, and the reuse branch
+  // above cannot see that because it asks git rather than the disk.
+  //
+  // A container that dies between `git worktree add` and its metadata write
+  // leaves the checkout on the volume with nothing in .git/worktrees pointing
+  // at it. Every later round for that issue then dies on
+  //
+  //   fatal: '/workspace/BrowserOS/.worktrees/queen-1540' already exists
+  //
+  // which is exactly what wedged #1540: seven consecutive rounds chose it, each
+  // recorded `started: false`, and the swarm reported four idle lanes while
+  // having no way to use one. The dispatch row carried the sentence the whole
+  // time; nothing read it out loud.
+  //
+  // Prune first. When the admin entry is merely stale that IS the repair, and
+  // it costs one cheap git call - so the question the next lines ask, "is this
+  // path registered?", is asked of a registry that has just been made accurate.
+  await run('git', ['worktree', 'prune'], root, 60_000)
+  const registered = await run(
+    'git',
+    ['worktree', 'list', '--porcelain'],
+    root,
+    60_000,
+  )
+  if (!registered.out.includes(path) && pathExists(path)) {
+    // An orphan: present on disk, unknown to git.
+    //
+    // NOT DELETED. This container holds no push credential by design, so
+    // anything uncommitted in that tree is the ONLY copy of a predecessor's
+    // turn - the same reason the reuse branch above counts and does not clean.
+    // Moving it aside frees the path for a fresh cut and keeps the evidence
+    // under a name that says what it is.
+    const parked = `${path}.orphan-${Date.now()}`
+    const moved = await run('mv', [path, parked], root, 60_000)
+    if (moved.code !== 0) {
+      return {
+        ok: false,
+        path,
+        detail:
+          `an unregistered worktree occupies ${path} and could not be moved ` +
+          `aside: ${moved.out.slice(0, 200)}`,
+      }
+    }
+    logger.warn('Parked an unregistered worktree directory', {
+      issue,
+      path,
+      parked,
+    })
+  }
+
+  // BEFORE THE FETCH, because a fetch onto a full volume fails the same way and
+  // the reason it reports is about refs rather than about space. The dispatch
+  // that exposed this died with "cannot update the ref ... unable to write file",
+  // which sent the reader looking at git rather than at df.
+  const used = measure(root)
+  const highMark = Number(process.env.QUEEN_VOLUME_HIGH ?? 80)
+  if (used !== null && used >= highMark) {
+    const gc = await reapWorktrees({ volumeUsed: measure })
+    logger.warn('Queen reaped worktrees before cutting a new one', {
+      before: gc.before,
+      after: gc.after,
+      removed: gc.removed.length,
+      keptDirty: gc.keptDirty.length,
+      refused: gc.refused.length,
+    })
+    const still = gc.after
+    if (still !== null && still >= 95) {
+      // REFUSE, and say what is true. Dying at `git worktree add` reports a git
+      // error for a disk problem, and every reader of that message has looked in
+      // the wrong place. A refusal that names the number is a refusal somebody
+      // can act on.
+      return {
+        ok: false,
+        path,
+        detail:
+          `volume ${still}% full after reaping ${gc.removed.length} worktree(s); ` +
+          `${gc.keptDirty.length} held uncommitted work and were kept. ` +
+          'Not cutting a worktree that would fail part-way',
+      }
     }
   }
 
@@ -526,47 +1671,14 @@ export async function prepareWorktree(
     180_000,
   )
   if (fetched.code !== 0) {
-    // MAKE THE FAILURE EXPLAIN ITSELF.
-    //
-    // `fatal: protocol 'https' is not supported` stopped every NEW worktree on
-    // 2026-09-03 while the entrypoint's own fetch, run through the identical
-    // `su -s /bin/sh <user> -c`, succeeded at the same boot - so the remote and
-    // the credentials are fine and the difference is the environment this
-    // spawn inherits. That message is what git prints when it cannot reach the
-    // `git-remote-https` helper, so the three facts that separate the causes
-    // are the exec-path, whether the helper is there, and PATH.
-    //
-    // Guessing cost several rounds. These three commands cost one second and
-    // are only run when the fetch has already failed.
-    const where = await run('git', ['--exec-path'], root, 10_000)
-    const helper = await run(
-      'sh',
-      [
-        '-c',
-        'command -v git-remote-https || ls "$(git --exec-path)" | grep -c remote-http',
-      ],
-      root,
-      10_000,
-    )
-    const path$ = await run('sh', ['-c', 'echo "$PATH"'], root, 10_000)
-    logger.error('Queen worktree fetch failed', {
-      issue,
-      error: fetched.out.slice(0, 300),
-      execPath: where.out.slice(0, 200),
-      remoteHelper: helper.out.slice(0, 200),
-      shellPath: path$.out.slice(0, 300),
-    })
     return {
       ok: false,
       path,
-      detail:
-        `git fetch failed: ${fetched.out.slice(0, 160)}` +
-        ` | exec-path ${where.out.slice(0, 60)}` +
-        ` | helper ${helper.out.slice(0, 40)}`,
+      detail: `git fetch failed: ${fetched.out.slice(0, 200)}`,
     }
   }
 
-  const base = process.env.TRIOS_REPO_REF || 'origin/dev'
+  const base = baseRef()
   const added = await run(
     'git',
     ['worktree', 'add', '-B', branch, path, base],
@@ -580,7 +1692,8 @@ export async function prepareWorktree(
       detail: `git worktree add failed: ${added.out.slice(0, 300)}`,
     }
   }
-  return { ok: true, path, detail: `cut from ${base}` }
+  const farmed = await farmNodeModules(path, root)
+  return { ok: true, path, detail: `cut from ${base}${farmed}` }
 }
 
 /**
@@ -629,6 +1742,13 @@ async function startTurn(
         model: chosen.model,
         ...(chosen.baseUrl && { baseUrl: chosen.baseUrl }),
         ...(chosen.apiKey && { apiKey: chosen.apiKey }),
+        // Without this the agent takes the 200k default and compaction waits
+        // until 180k, which against a 16k model means the turn is cut off long
+        // before it writes "## VERDICT" - and an unverdicted dispatch sits in
+        // `wait` for six hours holding its issue and its file boundaries.
+        ...(chosen.contextWindow && {
+          contextWindowSize: chosen.contextWindow,
+        }),
         // `userWorkingDir`, not `workingDirectory`. The schema names it the
         // first way and ignores unknown keys, so the wrong name was accepted
         // in silence and the bee would have run against the shared checkout
@@ -669,15 +1789,10 @@ async function startTurn(
     return {
       ok: true,
       detail: 'turn accepted',
+      // The provider travels with the drain so that a quota stop at the end
+      // of the stream can name whose quota it was (#1301).
       beginDrain: () =>
-        void drain(
-          pool,
-          response,
-          conversationId,
-          issue,
-          chosen.provider,
-          chosen.keyIndex,
-        ),
+        void drain(pool, response, conversationId, issue, chosen.provider),
     }
   } catch (error) {
     return {
@@ -700,26 +1815,10 @@ async function startTurn(
  * events somebody watching is actually waiting for, and batching them to save a
  * round trip would hide the one frame that mattered.
  */
-export class Scribe {
+class Scribe {
   private seq = 0
   private buffer = ''
   private lastFlush = Date.now()
-  /**
-   * The provider's own refusal, if the stream carried one.
-   *
-   * A turn that dies because the account has no balance ends the stream
-   * CLEANLY - the error arrives as a frame, not as a thrown exception - so
-   * `drain` recorded `outcome = 'finished'` and the review then answered
-   * `wait`. Measured 2026-09-03: #1323, #1324 and #1325 each ran on key index
-   * 1, produced ONE frame, and were written down as finished work awaiting a
-   * verdict, indistinguishable from a bee that worked and under-reported.
-   * Meanwhile key 0 was healthy and finishing 257-frame turns.
-   *
-   * So the swarm kept feeding issues to a dead credential and calling the
-   * result finished. That is the difference between a supervisor that is idle
-   * and one that is lying to itself.
-   */
-  providerError: string | null = null
   /**
    * What the turn cost, as the stream reported it.
    *
@@ -728,6 +1827,29 @@ export class Scribe {
    * it would price a real turn at nothing instead of admitting it is unknown.
    */
   tokens: TokenUsage | undefined
+
+  /**
+   * The turn's terminal stream error, if it had one (#1301).
+   *
+   * An `error` frame is terminal: `finishWithError` emits it and then closes
+   * the stream (lib/agents/acp-ui-message-stream.ts), and this is the frame a
+   * provider refusal travels in, because /chat answers 200 and streams the
+   * failure rather than answering non-ok. Kept unread until the ending, where
+   * it may close the dispatch as a quota stop instead of a finish.
+   */
+  streamError: string | undefined
+
+  /**
+   * Whether the stream ever said it was done (#1360).
+   *
+   * A `finish` frame is the turn's own voice saying it ended - every path in
+   * acp-ui-message-stream.ts that closes a healthy stream enqueues one. A
+   * stream that closes WITHOUT one did not reach its own end, and nothing in
+   * it says why: that is the situation the three production rows of #1360
+   * were mislabelled about, and it is recorded as cause-undetermined rather
+   * than guessed at.
+   */
+  sawCompletion = false
 
   constructor(
     private pool: Pool,
@@ -756,30 +1878,6 @@ export class Scribe {
     'tool-input-delta',
   ])
 
-  /**
-   * Whether this frame is the provider refusing, and in its own words.
-   *
-   * Matched on the signatures the providers actually send rather than on a
-   * status code, because the code never reaches here - the turn is a stream and
-   * the failure is inside it. Z.AI answers `[1113] Insufficient balance or no
-   * resource package. Please recharge.`; the Vercel AI SDK wraps it as
-   * `AI_APICallError`. Both are quoted whole, because a bee's log that says
-   * "provider failed" and not why costs another round to diagnose.
-   */
-  static providerRefusal(type: string, said: string): string | null {
-    const signatures = [
-      'Insufficient balance',
-      'AI_APICallError',
-      'no resource package',
-      'invalid_api_key',
-      'Incorrect API key',
-      'quota',
-    ]
-    const hit = signatures.find((s) => said.includes(s))
-    if (!hit && type !== 'error') return null
-    return said.slice(0, 400)
-  }
-
   async frame(line: string): Promise<void> {
     const trimmed = line.trim()
     if (!trimmed.startsWith('data:')) return
@@ -793,13 +1891,10 @@ export class Scribe {
       return
     }
     const type = String(event.type ?? 'event')
-    // Read BEFORE the noise filter drops it: an error frame is exactly the
-    // thing a filter built for start/finish chatter must not swallow.
-    if (this.providerError === null) {
-      const said = JSON.stringify(event)
-      const refusal = Scribe.providerRefusal(type, said)
-      if (refusal) this.providerError = refusal
-    }
+    // The completion frame is remembered before the NOISE filter drops it
+    // (#1360): `finish` carries nothing for a reader, but its PRESENCE is the
+    // difference between a turn that ended and a stream that merely stopped.
+    if (type === 'finish') this.sawCompletion = true
     if (Scribe.NOISE.has(type)) return
 
     const text =
@@ -869,6 +1964,11 @@ export class Scribe {
       )
       return
     }
+    // The terminal error frame is the one a provider quota refusal arrives
+    // in. Remembered for the ending to classify (#1301) and still noted: the
+    // feed keeps the provider's own words, while the stored outcome keeps
+    // only the closed classification - never the body, never the credential.
+    if (type === 'error' && text.length > 0) this.streamError = text
     await this.note(type, text || JSON.stringify(event).slice(0, 800))
   }
 
@@ -925,6 +2025,92 @@ export class Scribe {
 }
 
 /**
+ * #1301. Z.ai business codes whose documented meaning is that a quota
+ * window, a plan, or a balance is spent (docs.z.ai, "Errors": every one of
+ * them arrives as HTTP 429).
+ *
+ * Coding Plan removed the synthetic USD start gate (#1300), which makes these
+ * responses the authoritative stop signal: a bee that hits one cannot be
+ * helped by another retry until the provider resets the window or the
+ * operator pays. A generic worker failure hides that distinction, so the
+ * dispatch boundary keeps it as a closed list.
+ *
+ * The transient 429s are deliberately NOT here. 1302 is a request-rate limit
+ * and 1305 a temporary overload; both clear on their own, and closing a bee
+ * as quota-stopped over either would retire work another retry could have
+ * finished. `1113` is also matched at the transport
+ * (lib/provider-error-classifier.ts) to stop SDK retries; this list is about
+ * the ending, not the retry.
+ */
+const ZAI_QUOTA_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
+  '1113', // Insufficient balance or no resource package. Please recharge.
+  '1308', // Usage limit reached for a window; resets at a stated time.
+  '1309', // GLM Coding Plan package expired.
+  '1310', // Weekly/monthly limit exhausted.
+  '1311', // Subscription plan does not include the model.
+  '1313', // Fair Usage Policy limit on the account.
+  '1314', // Enterprise package expired.
+  '1315', // Key limited to enterprise coding package scenarios.
+  '1316', // 5-hour usage limit; no balance for extra usage.
+  '1317', // 7-day usage limit; no balance for extra usage.
+  '1318', // 5-hour usage limit; monthly spend limit reached.
+  '1319', // 7-day usage limit; monthly spend limit reached.
+  '1320', // 5-hour usage limit; monthly spend limit reached.
+  '1321', // 7-day usage limit; monthly spend limit reached.
+])
+
+/**
+ * The one ending a quota-stopped bee closes with (#1301).
+ *
+ * Provider and code only. The response body stays off the row - the message
+ * prose names accounts, windows and reset times, and a credential never
+ * belongs in a column at all - while the code is the documented, enumerable
+ * token a person can look up, not a fragment of prose. Deterministic by
+ * construction: the same failure closes with the same words every time.
+ */
+export function classifyQuotaExhaustion(
+  provider: string,
+  errorText: string,
+): string | null {
+  // No Z.ai state may be inferred about any other provider. Another provider
+  // answering with the same code, or the same words, is answering for itself;
+  // the Coding Plan window this classification names belongs to Z.ai alone.
+  if (provider !== 'zai') return null
+  for (const code of zaiCodesIn(errorText)) {
+    if (ZAI_QUOTA_EXHAUSTED_CODES.has(code)) {
+      // The label base is enumerated with every other outcome (#1360); the
+      // code is the one closed parameter it may carry.
+      return `${DISPATCH_OUTCOME_LABELS.providerQuotaExhausted} (zai code ${code})`
+    }
+  }
+  return null
+}
+
+/**
+ * The Z.ai business codes a turn's terminal error text carries.
+ *
+ * Only the two code-bearing shapes that can reach this module are read: the
+ * `[1113] message` prefix this server's own transport builds
+ * (lib/openrouter-fetch.ts), and the documented envelope field
+ * `{"error":{"code":"1113",...}}` for when a raw body surfaces inside a
+ * message. Bracket tokens are read first, then envelope tokens, each in text
+ * order. No prose is matched and nothing else is parsed, so an undocumented
+ * code - or digits that merely look like one - returns nothing and the ending
+ * stays whatever it was (#1301, FR-002).
+ */
+function zaiCodesIn(errorText: string): string[] {
+  const found: string[] = []
+  const shapes = [/\[(\d{4})\]/g, /"code"\s*:\s*"(\d{4})"/g]
+  for (const shape of shapes) {
+    for (const match of errorText.matchAll(shape)) {
+      const code = match[1]
+      if (code !== undefined && !found.includes(code)) found.push(code)
+    }
+  }
+  return found
+}
+
+/**
  * Read the stream to its end, and write down that it ended.
  *
  * The recording is the point, not the reading. A dispatch with no way to finish
@@ -943,20 +2129,19 @@ export async function drain(
   conversationId: string,
   issue: number,
   /**
-   * Whose credential ran this turn. Carried so a refusal can be attributed:
-   * without it the stream knows the provider said no and the rotation never
-   * hears about it, which is how key 1 was handed three issues in a row after
-   * it had already refused.
+   * Who ran this turn (#1301). Optional because every pre-existing caller
+   * closes without it and must keep closing exactly as it did: with no
+   * provider there is no quota classification, only the endings that have
+   * always existed.
    */
   provider?: string,
-  keyIndex?: number,
 ): Promise<void> {
-  let outcome = 'finished'
+  let outcome: string = DISPATCH_OUTCOME_LABELS.finished
   const scribe = new Scribe(pool, conversationId, issue)
   try {
     const reader = response.body?.getReader()
     if (!reader) {
-      outcome = 'no stream'
+      outcome = DISPATCH_OUTCOME_LABELS.noStream
     } else {
       const decoder = new TextDecoder()
       let carry = ''
@@ -974,30 +2159,65 @@ export async function drain(
       }
     }
     await scribe.flush()
-    // A stream that ENDED is not a turn that WORKED. The provider's refusal
-    // arrives inside the stream, so ending cleanly proves only that the socket
-    // closed.
-    if (scribe.providerError) {
-      outcome = `provider refused: ${scribe.providerError.slice(0, 300)}`
-      logger.error('Queen worker turn refused by the provider', {
-        conversationId,
-        issue,
-        provider,
-        keyIndex,
-        refusal: scribe.providerError.slice(0, 300),
-      })
-      if (provider && typeof keyIndex === 'number') {
-        noteKeyRefused(provider, keyIndex)
-      }
-    } else {
-      logger.info('Queen worker turn finished', { conversationId, issue })
-    }
+    logger.info('Queen worker turn finished', { conversationId, issue })
   } catch (error) {
-    outcome = `stream ended badly: ${
+    // #1360: the label is closed and the words are kept, in the two places a
+    // reader already looks for them - the transcript row below (kind `error`,
+    // bounded by that table's own 8000-character column) and the log line,
+    // which is unbounded. `outcome` itself carries only the label.
+    outcome = DISPATCH_OUTCOME_LABELS.streamEndedBadly
+    const detail = `stream ended badly: ${
       error instanceof Error ? error.message : String(error)
     }`
-    logger.warn('Queen worker stream ended badly', { conversationId, issue })
-    await scribe.note('error', outcome).catch(() => {})
+    logger.warn('Queen worker stream ended badly', {
+      conversationId,
+      issue,
+      error: detail,
+    })
+    await scribe.note('error', detail).catch(() => {})
+  }
+  // A quota-limited bee stops truthfully (#1301). Coding Plan removed the
+  // synthetic USD gate, so the provider's documented quota response is the
+  // authoritative stop signal, and a turn that reached its own end with one
+  // as its last word closes as exactly that: a closed classification naming
+  // the provider and the code, never the response body and never the
+  // credential. Nothing else moves - the close mechanics, the refill signal,
+  // the reaper and the board see the same transition they always did,
+  // because a quota stop is an ending the turn really reached, not a failure
+  // to end. The ended-badly path keeps its own outcome: a dropped connection
+  // is a transport failure, not a documented provider answer.
+  if (
+    outcome === DISPATCH_OUTCOME_LABELS.finished &&
+    provider !== undefined &&
+    scribe.streamError !== undefined
+  ) {
+    const quota = classifyQuotaExhaustion(provider, scribe.streamError)
+    if (quota !== null) outcome = quota
+  }
+  // #1360. A stream that closed without ever signalling completion ended in a
+  // way nobody measured: something - a tool event, a truncation, anything -
+  // arrived where a completion was expected, and the stream's own words about
+  // why, if it had any, are in the transcript (every frame Scribe read is a
+  // row there; nothing was dropped). The ending says the cause is NOT
+  // DETERMINED. It does not say `provider refused`: that names a cause this
+  // code never measured, and a guessed cause is worse than an admitted gap.
+  //
+  // Quota classification above runs first, because a documented Z.ai quota
+  // code in a terminal error frame IS a measured cause and keeps its closed
+  // classification even when the completion frame that should have followed
+  // never came.
+  if (outcome === DISPATCH_OUTCOME_LABELS.finished && !scribe.sawCompletion) {
+    outcome = DISPATCH_OUTCOME_LABELS.endedUnexpectedly
+    logger.warn('Queen worker turn ended without a completion frame', {
+      conversationId,
+      issue,
+    })
+    await scribe
+      .note(
+        'error',
+        'stream closed without a completion frame; outcome recorded as cause undetermined',
+      )
+      .catch(() => {})
   }
   await closeDispatch(pool, issue, conversationId, outcome, scribe.tokens)
 }
@@ -1006,6 +2226,31 @@ export async function drain(
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
+}
+
+/**
+ * Who is told when a bee's ending actually landed (#1295).
+ *
+ * Installed by the tick loop and by nothing else: a deployment running
+ * without the loop (local development, the app alongside) closes dispatches
+ * exactly as before, because a completion with no listener is a normal
+ * minute, not an error - there is simply nobody local to refill.
+ *
+ * It is a function, not a queue and not a policy. It may not dispatch, may
+ * not retry and may not decide anything; it may only ASK for a round, and the
+ * round it asks for is the same `runQueenTickOnce` the timer runs - lease,
+ * fencing, `queend` and all. A hook that could start work of its own would be
+ * a second supervisor wearing the first one's name.
+ */
+export type DurableCloseListener = (issue: number) => void
+
+let durableCloseListener: DurableCloseListener | undefined
+
+/** Install (or clear) the refill listener. The tick loop owns this. */
+export function setDurableCloseListener(
+  listener: DurableCloseListener | undefined,
+): void {
+  durableCloseListener = listener
 }
 
 /**
@@ -1024,6 +2269,13 @@ export interface TokenUsage {
  * loop here would hold a dead stream open. The first failure is the part that
  * matters: it is the only signal separating a phantom running bee from a real
  * one, and it used to produce no line anywhere.
+ *
+ * AND WHEN THE ENDING LANDS, IT SAYS SO (#1295). A durable running-to-finished
+ * transition is the one moment a healthy paid key becomes free, and until this
+ * the next eligible mission waited out the periodic tick for it. The listener
+ * is fired only on a close that landed - first attempt or retry - and never on
+ * the zero-row or failed paths, which keep the retry and the stall reaper as
+ * their authority.
  */
 export async function closeDispatch(
   pool: Pool,
@@ -1032,6 +2284,11 @@ export async function closeDispatch(
   outcome: string,
   tokens?: TokenUsage,
 ): Promise<void> {
+  // Whether the row reads finished on the database when this returns. That is
+  // the ONLY condition under which the slot may be announced as free: a signal
+  // about a row that still says `running` wakes a round that sees the bee as
+  // in flight and skips the very work the signal promised.
+  let closedDurably = false
   try {
     const closed = await finishDispatch(
       pool,
@@ -1055,6 +2312,8 @@ export async function closeDispatch(
         conversationId,
         outcome,
       })
+    } else {
+      closedDurably = true
     }
   } catch (error) {
     logger.error('Queen dispatch could not be closed', {
@@ -1062,9 +2321,29 @@ export async function closeDispatch(
       conversationId,
       error: error instanceof Error ? error.message : String(error),
     })
-    await finishDispatch(pool, issue, outcome, tokens, conversationId).catch(
-      () => {},
-    )
+    // The retry decides. A retry that lands closes the row as surely as a
+    // first attempt would have, so it signals too - a flaky database is no
+    // reason to hand the slot back half an hour late. A retry that fails
+    // returns 0 here, and 0 is also what a zero-row retry lands as, so one
+    // comparison covers both not-durable outcomes.
+    closedDurably =
+      (await finishDispatch(pool, issue, outcome, tokens, conversationId).catch(
+        () => 0,
+      )) > 0
+  }
+  if (closedDurably && durableCloseListener) {
+    // #1295: the row says finished, so the key this bee held is free and the
+    // next eligible mission should not wait out the periodic tick for it.
+    try {
+      durableCloseListener(issue)
+    } catch (error) {
+      // A listener that breaks must not take the ending with it - the row is
+      // closed, and that fact stands whatever the refill does.
+      logger.warn('Queen refill signal failed', {
+        issue,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 }
 
@@ -1100,7 +2379,10 @@ export async function finishDispatch(
         AND ($5::text IS NULL OR conversation_id::text = $5::text)`,
     [
       issue,
-      outcome.slice(0, 500),
+      // #1360: bounded by the named cap, not a bare literal - and callers
+      // pass labels from DISPATCH_OUTCOME_LABELS, so this slice is a
+      // backstop for a future caller, not the rule.
+      boundedOutcome(outcome),
       tokens?.inputTokens ?? null,
       tokens?.outputTokens ?? null,
       conversationId ?? null,
@@ -1138,9 +2420,11 @@ export async function reapDispatchesFromPreviousBoot(
   pool: Pool,
 ): Promise<number[]> {
   const reaped = await pool.query(
+    // The label base is enumerated with every other outcome (#1360); the
+    // explanation is appended and the whole value stays under the cap.
     `UPDATE queen_dispatch
         SET finished_at = now(),
-            outcome = 'reaped at boot: the container running this turn was replaced'
+            outcome = '${DISPATCH_OUTCOME_LABELS.reapedAtBoot}: the container running this turn was replaced'
       WHERE started = true AND finished_at IS NULL
       RETURNING issue`,
   )
@@ -1152,9 +2436,12 @@ export async function reapStalledDispatches(
   stallMinutes = 120,
 ): Promise<number[]> {
   const reaped = await pool.query(
+    // The label base is enumerated with every other outcome (#1360); the
+    // minute count is the one closed parameter it carries, and the whole
+    // value stays under the cap for any sane bound.
     `UPDATE queen_dispatch
         SET finished_at = now(),
-            outcome = 'reaped: no completion within ' || $1 || ' minutes'
+            outcome = '${DISPATCH_OUTCOME_LABELS.reapedStalled}: no completion within ' || $1 || ' minutes'
       WHERE started = true
         AND finished_at IS NULL
         AND dispatched_at < now() - make_interval(mins => $1)
@@ -1183,6 +2470,7 @@ export async function dispatchBee(
   brief: string,
   ownedPaths: string[],
   takenKeyIndices: number[] = [],
+  afterKeyIndex?: number,
   /**
    * What this bee will be judged by, recorded WITH the dispatch.
    *
@@ -1196,36 +2484,25 @@ export async function dispatchBee(
 ): Promise<DispatchOutcome> {
   const branch = `queen-${issue}`
 
-  // Ask the provider before spending an issue. Each dead key costs one probe
-  // once per process instead of one dispatched bee that dies on its first
-  // frame - and a bee that dies that way used to be recorded as finished work.
-  let chosen = resolveWorkerProvider(takenKeyIndices)
-  for (let attempt = 0; attempt < 8 && chosen?.apiKey; attempt++) {
-    if (await keyIsLive(chosen)) break
-    noteKeyRefused(chosen.provider, chosen.keyIndex ?? 0)
-    chosen = resolveWorkerProvider(takenKeyIndices)
-  }
+  const chosen = resolveWorkerProvider(takenKeyIndices, afterKeyIndex)
   if (chosen?.exhausted !== undefined) {
-    // Not a missing credential. But WHICH kind of unavailable decides what the
-    // operator should do, and saying the wrong one costs them money: a message
-    // that reads "all 4 keys are in use, add a fifth" when two of the four
-    // cannot pay asks for a purchase that fixes nothing.
-    const busy = chosen.busy ?? chosen.exhausted
-    const refusedCount = chosen.refusedCount ?? 0
+    // Not a missing credential: every key this deployment has is already
+    // carrying a bee. Named separately because the fix is different - one more
+    // key, not a first one.
+    const keyVariable = configuredWorkerBaseUrl()
+      ? GENERIC_WORKER_KEY_ENV
+      : WORKER_PROVIDERS.find(
+          (candidate) => candidate.provider === chosen.provider,
+        )?.envVar
+    const nextKey = keyVariable
+      ? `${keyVariable}_${chosen.exhausted + 1}`
+      : 'the matching provider variable'
     const detail =
-      refusedCount > 0
-        ? `${chosen.exhausted} provider key(s) configured: ${busy} carrying a ` +
-          `bee and ${refusedCount} refused by the provider - top those up ` +
-          'rather than adding another, a refused key is not extra capacity.'
-        : `all ${chosen.exhausted} provider key(s) are already in use by bees ` +
-          'in flight. Add another with ZAI_API_KEY_' +
-          String(chosen.exhausted + 1) +
-          ' (or the equivalent for your provider) to widen the swarm.'
-    logger.warn('Queen tick chose an issue and had no credential free', {
+      `all ${chosen.exhausted} provider key(s) are already in use by bees in ` +
+      `flight. Add another with ${nextKey} to widen the swarm.`
+    logger.warn('Queen tick chose an issue but every key is busy', {
       issue,
-      configured: chosen.exhausted,
-      busy,
-      refused: refusedCount,
+      detail,
     })
     await recordDispatch(pool, issue, branch, false, detail, ownedPaths)
     return { started: false, issue, branch, detail }
@@ -1258,7 +2535,18 @@ export async function dispatchBee(
   // standing at the root makes every project-relative boundary resolve one
   // level too high - the bee writes `<worktree>/docs/x.md` where the committer
   // looks for `trios/docs/x.md`, and its work reads as no work at all.
-  const workingDirectory = `${worktree.path}/trios`
+  // The PROJECT inside the checkout — which is not always a subdirectory.
+  //
+  // This was hardcoded to `/trios`, which is right for BrowserOS and wrong for
+  // every other repository: aimed at a repo whose code sits at its root, the
+  // bee would be handed a path that does not exist. TRIOS_REPO_SUBDIR names it,
+  // and defaults to `trios` so the existing deployment behaves exactly as
+  // before; set it empty for a repo whose project IS its root.
+  const subdir = (process.env.TRIOS_REPO_SUBDIR ?? 'trios').replace(
+    /^\/+|\/+$/g,
+    '',
+  )
+  const workingDirectory = subdir ? `${worktree.path}/${subdir}` : worktree.path
 
   const conversationId = randomUUID()
   const turn = await startTurn(
@@ -1274,6 +2562,9 @@ export async function dispatchBee(
     ? `${worktree.detail}; ${chosen.provider}/${chosen.model}` +
       (chosen.keyCount && chosen.keyCount > 1
         ? ` key ${(chosen.keyIndex ?? 0) + 1}/${chosen.keyCount}`
+        : '') +
+      (chosen.laneCount && chosen.laneCount > 1
+        ? ` lane ${(chosen.laneIndex ?? 0) + 1}/${chosen.laneCount}`
         : '') +
       (chosen.rehearsal ? ' (REHEARSAL - a recorded stream, not a model)' : '')
     : turn.detail
@@ -1327,6 +2618,17 @@ export async function recordDispatch(
   provider?: string,
   model?: string,
 ): Promise<void> {
+  // #1360. A dispatch that never started is recorded with its ending, and the
+  // ending is ONE WORD. It used to be the refusal detail verbatim, which is
+  // how a raw payload reached the `outcome` column: `detail` can carry an
+  // entire error body - an exception message has no length limit of its own -
+  // and anything that groups or renders `outcome` then received a blob.
+  // The full refusal words are not discarded: they move to (stay in) the
+  // `detail` column ($4 below), which is where a reader looks for the reason,
+  // and `outcome` says only that the dispatch refused to start.
+  const outcome = started
+    ? null
+    : boundedOutcome(DISPATCH_OUTCOME_LABELS.refused)
   // Keep the attempt this one replaces.
   //
   // `queen_dispatch` is keyed by issue alone, so the upsert below overwrites
@@ -1363,13 +2665,17 @@ export async function recordDispatch(
     // ending. Leaving `finished_at` null for a refusal would put it on the board
     // looking like work in progress - and "refused an hour ago" and "running for
     // an hour" are the two states an operator most needs to tell apart.
+    //
+    // #1360: the ending is the `refused` LABEL ($12), never the detail. The
+    // reason a reader wants is the `detail` column ($4); `outcome` is the
+    // short label everything else groups by.
     `INSERT INTO queen_dispatch
        (issue, branch, started, detail, owned_paths, conversation_id,
         dispatched_at, finished_at, outcome, key_index,
         criteria, criteria_source, provider, model)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, now(),
              CASE WHEN $3 THEN NULL ELSE now() END,
-             CASE WHEN $3 THEN NULL ELSE $4 END,
+             CASE WHEN $3 THEN NULL ELSE $12 END,
              $7, $8::jsonb, $9, $10, $11)
      ON CONFLICT (issue) DO UPDATE
        SET branch = EXCLUDED.branch,
@@ -1412,6 +2718,7 @@ export async function recordDispatch(
       criteriaSource,
       provider ?? null,
       model ?? null,
+      outcome,
     ],
   )
 }

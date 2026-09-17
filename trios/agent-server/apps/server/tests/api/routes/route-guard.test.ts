@@ -1,0 +1,145 @@
+/**
+ * @license
+ * Copyright 2025 BrowserOS
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Route-guard gate — gHashTag/trios#1382.
+ *
+ * This test deliberately builds no application of its own and re-declares no
+ * guard list. It imports the classifier from trios/tools/route-guard-audit.mjs
+ * and runs it over the real text of src/api/server.ts, so the rule exists in
+ * exactly one place (FR-009). The behavioural middleware test lives in
+ * auth-routes.test.ts, outside this issue's boundary, and is untouched.
+ */
+
+import { describe, expect, it } from 'bun:test'
+
+import {
+  DEFAULT_ALLOWLIST,
+  auditServer,
+  classifyMounts,
+  readServerSource,
+  unguardedMounts,
+} from '../../../../../../tools/route-guard-audit.mjs'
+
+const source = readServerSource()
+const report = auditServer(source, DEFAULT_ALLOWLIST)
+
+// Regression pin for the --no-allowlist run: exactly these seven mounts carry
+// no guard today, each for a reason the comments beside the mount give.
+// RE-MEASURED 2026-09-13: /api/inngest joined. It is not a shell - it is the
+// Queen's scheduler endpoint - and it is unguarded on purpose: Inngest signs
+// every request with the signing key and inngest/hono refuses the rest, so the
+// signature is the guard, and a trusted-origin check would only refuse Inngest.
+const EXPECTED_UNGUARDED_WITHOUT_ALLOWLIST = [
+  '/api/inngest',
+  '/health',
+  '/queen/dashboard',
+  '/queen/feed',
+  '/queen/kanban',
+  '/queen/roadmap',
+  '/queen/tree',
+]
+
+describe('route-guard audit over src/api/server.ts', () => {
+  it('sees the full route table', () => {
+    // RE-MEASURED 2026-09-06, and one of these moved for a reason worth
+    // recording. The table grew from 38 mounts to 40; `publicReadCount` went 5
+    // to 6 when `/queen/public-agents` was added, which is deliberate - every
+    // public-read entry is an explicit `publicReadCorsMiddleware()` call on a
+    // path that says `public` in its own name.
+    //
+    // `guardedSubAppCount` went 13 to 14 because `/queen/needs-you` was NOT
+    // guarded. Its mount carried a comment saying it sat behind the
+    // trusted-origin catch-all; nothing did. Production answered 200 to a
+    // request with a hostile Origin, returning outstanding escalations with
+    // issue numbers, ages and worker-written reason text. This gate had been
+    // reporting it since it landed, and was red on the branch the whole time.
+    //
+    // A pinned count is a restated list, and a restated list goes stale in
+    // exactly two ways: something was added on purpose, or a hole opened. The
+    // pin cannot tell them apart, so whoever updates it has to look - which is
+    // the only reason this one was found.
+    // RE-MEASURED 2026-09-13: 40 became 42 with the Queen's scheduler.
+    // `/api/inngest` is the signed Inngest endpoint (allowlisted, reason in
+    // tools/route-guard-audit.mjs); `/queen/scheduler` is the seventh
+    // public-read, an explicit `publicReadCorsMiddleware()` on a projection
+    // that names which env vars are set and never their values.
+    expect(report.totalMounts).toBe(42)
+    expect(report.prefixGuardCount).toBe(18)
+    expect(report.guardedSubAppCount).toBe(14)
+    expect(report.publicReadCount).toBe(7)
+  })
+
+  it('reports zero unguarded mounts once the reasoned allowlist is applied', () => {
+    expect(report.unguarded).toEqual([])
+    expect(unguardedMounts(source, DEFAULT_ALLOWLIST)).toEqual([])
+    expect(report.staleAllowlistEntries).toEqual([])
+    expect(report.entriesMissingReason).toEqual([])
+  })
+
+  it('reports exactly the seven reasoned exceptions when the allowlist is dropped', () => {
+    // The classifier reports mounts in file order; the assertion is on the
+    // exact set, so both sides are sorted before comparing.
+    expect([...unguardedMounts(source, [])].sort()).toEqual(
+      [...EXPECTED_UNGUARDED_WITHOUT_ALLOWLIST].sort(),
+    )
+  })
+
+  it('splits the nineteen /queen mounts into 7 public-read, 7 wrapper-guarded and 5 allowlisted shells', () => {
+    const queenMounts = classifyMounts(source).filter(
+      (mount) => mount.path === '/queen' || mount.path.startsWith('/queen/'),
+    )
+    // RE-MEASURED 2026-09-06 with the counts above. Sixteen became eighteen,
+    // and the split is the interesting part: the sixth public-read is
+    // /queen/public-agents, deliberate and named; the seventh wrapper is
+    // /queen/needs-you, which had been sitting in `unguarded` while its own
+    // mount comment claimed it was behind the trusted-origin catch-all.
+    // The five allowlisted shells are unchanged - a shell serves no data, which
+    // is the only reason any of them is allowed to answer a stranger.
+    // RE-MEASURED 2026-09-13: eighteen became nineteen; the seventh
+    // public-read is /queen/scheduler (the Inngest projection, no secrets).
+    expect(queenMounts.length).toBe(19)
+
+    const counts: Record<string, number> = {
+      'public-read': 0,
+      'prefix-guard': 0,
+      wrapper: 0,
+      unguarded: 0,
+    }
+    for (const mount of queenMounts) {
+      counts[mount.classification] += 1
+    }
+    // The four buckets must account for all sixteen mounts with the exact
+    // expected split; anything unaccounted for breaks one of these numbers.
+    expect(counts).toEqual({
+      'public-read': 7,
+      'prefix-guard': 0,
+      wrapper: 7,
+      unguarded: 5,
+    })
+
+    // Every unguarded /queen mount must be one of the allowlisted shells.
+    const allowedPaths = new Set(DEFAULT_ALLOWLIST.map((entry) => entry.path))
+    for (const mount of queenMounts) {
+      if (mount.classification !== 'unguarded') continue
+      expect(allowedPaths.has(mount.path)).toBe(true)
+    }
+  })
+
+  it('classifies /queen/registry as wrapper-guarded', () => {
+    const registry = classifyMounts(source).find(
+      (mount) => mount.path === '/queen/registry',
+    )
+    expect(registry?.classification).toBe('wrapper')
+    expect(registry?.via).toBe('queenRegistryRoutes')
+  })
+
+  it('classifies /terminal as wrapper-guarded (the standalone mount after the builder chain)', () => {
+    const terminal = classifyMounts(source).find(
+      (mount) => mount.path === '/terminal',
+    )
+    expect(terminal?.classification).toBe('wrapper')
+    expect(terminal?.via).toBe('terminalRoutes')
+  })
+})
