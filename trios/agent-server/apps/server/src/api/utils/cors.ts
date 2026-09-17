@@ -121,6 +121,8 @@ export function publicReadCorsMiddleware(): MiddlewareHandler {
     c.header('Access-Control-Allow-Origin', '*')
     c.header('Access-Control-Allow-Methods', 'GET,OPTIONS')
     c.header('Access-Control-Allow-Headers', 'Accept,Content-Type')
+    // the Queen page's round clock reads the server's clock from Date (P1-30)
+    c.header('Access-Control-Expose-Headers', 'Date')
 
     if (c.req.method === 'OPTIONS') return c.body(null, 204)
 
@@ -144,6 +146,8 @@ export function trustedCorsMiddleware(): MiddlewareHandler {
     if (allowedOrigin) {
       c.header('Access-Control-Allow-Origin', allowedOrigin)
       c.header('Access-Control-Allow-Credentials', 'true')
+      // the Queen page's round clock reads the server's clock from Date (P1-30)
+      c.header('Access-Control-Expose-Headers', 'Date')
     }
 
     if (c.req.method === 'OPTIONS') {
