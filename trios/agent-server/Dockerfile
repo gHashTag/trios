@@ -163,6 +163,12 @@ RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${Z
 FROM oven/bun:1.3.6 AS runtime
 WORKDIR /app
 
+# perl-base is declared, not assumed. The review witness forces Zig to analyse
+# every function body with a perl one-liner (force_bodies), and if perl were
+# missing it would fall back silently -- no false failures, but no protection
+# either, the same way `cp -al` once left the oracle inert in production while
+# every signal said it worked. Debian marks perl-base Essential, so this should
+# be a no-op; naming it makes that a fact rather than a belief.
 # git is not a convenience here: a bee's whole output is a branch and a push.
 # ca-certificates is what makes the Postgres TLS handshake and every provider
 # call possible.
@@ -187,7 +193,7 @@ WORKDIR /app
 # tini as PID 1 reaps orphans and forwards signals. It is what `docker run
 # --init` installs, and it is the standard answer to exactly this.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates openssh-client tini \
+ && apt-get install -y --no-install-recommends git ca-certificates openssh-client tini perl-base \
  && rm -rf /var/lib/apt/lists/*
 
 # An unprivileged account for the agents' shell commands.
