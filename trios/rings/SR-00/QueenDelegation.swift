@@ -482,14 +482,32 @@ public enum QueenDelegationPolicy {
     /// Both sides now read one variable with one default and one ceiling, so
     /// the only way to raise the swarm is to raise it for both at once.
     ///
-    /// Bounded, not unlimited: review cost is linear in running workers. The
-    /// other original reason - "merge conflicts scale with concurrency" - no
-    /// longer holds, because every task declares a `## Boundary` and owns those
-    /// files alone, and publishing refuses a branch that wrote outside its own.
+    /// The ceiling here is 1024, and it is a guard against a typo rather than
+    /// a working value. It was 16, and 16 was the wrong KIND of number to
+    /// write into the policy: what a deployment can actually run is decided by
+    /// how many credentials are connected times how many lanes each carries,
+    /// and by the number the operator puts in TRIOS_QUEEN_MAX_WORKERS. Once a
+    /// deployment could connect a second provider's endpoint and keys, a hard
+    /// 16 became a ceiling nobody had chosen, sitting below credentials that
+    /// had already been paid for - and it reported nothing when it bound,
+    /// because a clamp says nothing when it clamps.
+    ///
+    /// "Review cost is linear in running workers" stays true, and it is why
+    /// the operator chooses the VALUE by measurement - raising it in steps and
+    /// stopping where container memory, worktree disk, the remaining GitHub
+    /// API quota or the review backlog is the thing that binds. That is a
+    /// reason for the number in the environment, not for a constant in code.
+    /// The other original reason - "merge conflicts scale with concurrency" -
+    /// no longer holds, because every task declares a `## Boundary` and owns
+    /// those files alone, and publishing refuses a branch that wrote outside
+    /// its own.
+    ///
+    /// The default is unchanged: unset, unreadable or below one still means
+    /// four.
     public static var maximumConcurrentWorkers: Int {
         let raw = ProcessInfo.processInfo.environment["TRIOS_QUEEN_MAX_WORKERS"]
         guard let raw, let parsed = Int(raw), parsed >= 1 else { return 4 }
-        return min(parsed, 16)
+        return min(parsed, 1024)
     }
 
     public static func canStartAnother(running: Int) -> Bool {

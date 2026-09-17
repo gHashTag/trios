@@ -506,17 +506,46 @@ describe('queen dispatch precheck', () => {
       expect(resolveWorkerProvider([0, 1, 2])?.exhausted).toBe(3)
     })
 
-    it('widens the key list without widening the swarm', () => {
+    it('lets the credentials bind rather than a number nobody chose', () => {
       firstPool(...Array.from({ length: 16 }, (_, index) => `z${index + 1}`))
       process.env.TRIOS_QUEEN_WORKER_API_KEY_17 = 'z17'
       process.env.TRIOS_QUEEN_MAX_WORKERS = '64'
 
-      // Seventeen credentials, and the policy ceiling still answers sixteen.
+      // Seventeen credentials under an operator ceiling of sixty-four. This
+      // used to answer sixteen, and sixteen was not a number anyone had
+      // chosen for this deployment - it was the policy clamp, sitting below
+      // the credentials that had been paid for and saying nothing when it
+      // bound. The credentials are the limit here, and they say so.
       expect(workerCapacityBreakdown()).toEqual({
         connectedCredentials: 17,
         lanesPerCredential: 1,
-        effectiveCapacity: 16,
+        effectiveCapacity: 17,
       })
+    })
+
+    it('still clamps a value that can only be a typo', () => {
+      // The clamp is not gone, it moved to where it can only catch a mistake:
+      // an operator who meant 50 and typed 5000 gets MAX_KEYS_PER_POOL bees,
+      // not fifty times the swarm. Enough credentials are connected that the
+      // ceiling, not the key list, is what answers.
+      firstPool('z1')
+      const extra = Array.from(
+        { length: MAX_KEYS_PER_POOL - 1 },
+        (_, index) => `TRIOS_QUEEN_WORKER_API_KEY_${index + 2}`,
+      )
+      for (const [index, name] of extra.entries()) {
+        process.env[name] = `z${index + 2}`
+      }
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '5000'
+      try {
+        expect(workerCapacityBreakdown()).toEqual({
+          connectedCredentials: MAX_KEYS_PER_POOL,
+          lanesPerCredential: 1,
+          effectiveCapacity: 1024,
+        })
+      } finally {
+        for (const name of extra) delete process.env[name]
+      }
     })
 
     it('keeps a whole pool below the stride that separates pools', () => {
