@@ -129,6 +129,42 @@ PY
   fi
 done
 
+# NO SYMBOL MAY BE DECLARED IN TWO SPECS.
+#
+# This check exists because it caught a real defect the day it was written. The
+# client-watchdog law had been written into two of these files three hours
+# apart, by the same hand, from the same source - and the two copies had ALREADY
+# disagreed about whether a failed probe means "the process is absent". One copy
+# would have restarted a healthy process. That is the exact failure the source
+# repository logs as its class #171, reintroduced in the act of restating it.
+#
+# Duplication is the mechanism. A law written once cannot drift; a law written
+# twice drifts the first time someone edits the copy in front of them. So the
+# gate refuses the duplicate rather than the drift - by the time it is drift it
+# is already a bug, and the two copies still both look right.
+if ! SPEC_DIR="$SPEC_DIR" python3 - <<'PY'
+import os, re, sys, glob
+
+owners = {}
+for path in sorted(glob.glob(os.path.join(os.environ["SPEC_DIR"], "*.t27"))):
+    name = os.path.basename(path)
+    text = "\n".join(l for l in open(path).read().split("\n")
+                     if not l.lstrip().startswith("//"))
+    for sym in re.findall(r'\bpub (?:fn|const) (\w+)', text):
+        owners.setdefault(sym, []).append(name)
+
+dupes = {s: f for s, f in owners.items() if len(set(f)) > 1}
+if dupes:
+    print("FAIL [turbobaby_specs]: the same law is declared in two specs")
+    for sym in sorted(dupes):
+        print("       %s  <-  %s" % (sym, ", ".join(sorted(set(dupes[sym])))))
+    print("       Keep one copy and point the other at it by name.")
+    sys.exit(1)
+PY
+then
+  fail=1
+fi
+
 if [ "$fail" != "0" ]; then
   exit 1
 fi

@@ -1,0 +1,311 @@
+// TURBOBABY SUPERVISION — the law that decides whether something is dead, and
+// whether anyone is entitled to say so.
+//
+// Extracted from mxfill77/turbobaby-userbot: pc_orchestrator.py - the link
+// witness, the contour watchdog, and the awake budget. Three mechanisms that
+// answer to one class of defect, recorded in that repository as class #171 and
+// stated there in four words: COULD NOT CHECK IS NOT DEAD.
+//
+// The defect is not hypothetical and it is not rare. The same inversion appears
+// at a dozen sites in that file: a probe that timed out was read as an empty
+// result, an empty result as an absent process, an absent process as a corpse -
+// and the supervisor restarted something that was running, or blamed an executor
+// for a network it could not reach. Every one of those sites now carries a third
+// answer, and this module is where the third answer is written once.
+//
+// A SUPERVISOR THAT CANNOT SEE MUST NOT ACT. That is the whole file. What it
+// does instead of acting is SAY SO - a blind supervisor that stays silent is
+// indistinguishable from a healthy one, which is how blindness lasts for days.
+//
+// ON FAIL-OPEN. Where this module chooses a default it chooses the prior
+// behaviour, never the drastic one. A clock that cannot be read must not stop
+// the daemon; a probe that cannot run must not kill a process.
+//
+// phi^2 + 1/phi^2 = 3 | TRINITY
+
+module supervision_core;
+
+// ─── THE THIRD ANSWER ─────────────────────────────────────────────────────────
+// Every probe in this file returns one of three things, never a boolean. The
+// boolean version of each of these shipped first, and each was replaced after it
+// produced a wrong action rather than a wrong log line.
+
+pub const PROBE_ALIVE: i32 = 0;   // measured, and it is there
+pub const PROBE_ABSENT: i32 = 1;  // measured, and it is honestly not there
+pub const PROBE_BLIND: i32 = 2;   // not measured - the probe itself failed
+
+// The single most important line here. An unmeasured probe is not evidence of
+// absence, and collapsing it into one is what class #171 names.
+pub fn absence_proven(probe: i32) bool {
+    if (probe == PROBE_ABSENT) { return true; }
+    return false;
+}
+
+pub fn probe_informative(probe: i32) bool {
+    if (probe == PROBE_BLIND) { return false; }
+    return true;
+}
+
+// ─── THE LINK WITNESS ─────────────────────────────────────────────────────────
+// Channels to the outside world report whether they were reached. The witness is
+// TERNARY for the same reason: a reply of any kind - success, HTTP 500, even a
+// lost receipt - PROVES the link. Only a network-class failure disproves it, and
+// an unrecognised failure proves nothing in either direction.
+
+pub const LINK_OK: i32 = 0;
+pub const LINK_UNSURE: i32 = 1;
+pub const LINK_LOST: i32 = 2;
+
+// Two channels silent is a verdict. ONE channel silent is not - a single channel
+// may be down on its own account, and calling that "the link is gone" would stop
+// the whole band over one service's outage.
+pub const LINK_CHANNELS_FOR_LOST: i32 = 2;
+
+// ...and even to say the weaker word, one channel must have failed twice. A
+// single failure is not yet a pattern, and the cost of waiting for the second is
+// one probe.
+pub const LINK_MIN_FAILS: i32 = 2;
+
+// Older than this, a witness is not a witness. Stale evidence accumulating
+// quietly is how a supervisor comes to believe in an outage that ended hours
+// ago.
+pub const LINK_STALE_SEC: i32 = 3600;
+
+// A confirmed reply CLEARS every other channel's failures in one motion.
+// Silence elsewhere has just been explained by the service, not by the network,
+// and keeping the strikes would let one dead endpoint slowly convict the link.
+pub fn failures_after_witness(failures: i32, witness: i32) i32 {
+    if (witness == PROBE_ALIVE) { return 0; }
+    if (witness == PROBE_BLIND) { return failures; }
+    return failures + 1;
+}
+
+pub fn link_verdict(fresh_channels: i32, worst_channel_fails: i32) i32 {
+    if (fresh_channels >= LINK_CHANNELS_FOR_LOST) { return LINK_LOST; }
+    if (fresh_channels == 1) {
+        if (worst_channel_fails >= LINK_MIN_FAILS) { return LINK_UNSURE; }
+    }
+    return LINK_OK;
+}
+
+// WHILE THE LINK IS UNPROVEN, NOBODY IS AT FAULT. No task is declared hung, and
+// no failure is charged to its executor. This is the same discipline as the
+// three-word done judgment: an instrument that cannot read must not convict.
+pub fn may_declare_hung(link: i32) bool {
+    if (link == LINK_LOST) { return false; }
+    return true;
+}
+
+pub fn may_blame_executor(link: i32) bool {
+    if (link == LINK_LOST) { return false; }
+    return true;
+}
+
+// A task's age must not grow during a CONFIRMED outage - the band was not
+// checkable, so the clock was not measuring the executor. Only confirmed windows
+// are subtracted; an unproven one is not, because subtracting unmeasured time
+// would let a blind supervisor make every task look young.
+pub fn effective_age_sec(elapsed_sec: i32, confirmed_outage_sec: i32) i32 {
+    if (confirmed_outage_sec <= 0) { return elapsed_sec; }
+    if (confirmed_outage_sec >= elapsed_sec) { return 0; }
+    return elapsed_sec - confirmed_outage_sec;
+}
+
+// ─── THE CONTOUR WATCHDOG ─────────────────────────────────────────────────────
+// It watches the client-facing bots and restarts them when they die. Every
+// constant below exists to make it HARDER to restart, not easier: a supervisor
+// that restarts a healthy process is worse than one that waits.
+
+pub const CLIENT_WATCH_SEC: i32 = 300;
+pub const CLIENT_COOLDOWN_SEC: i32 = 900;   // at most one raise per process per 15 min
+pub const CLIENT_MAX_DEATHS: i32 = 3;       // three in a row -> stop and shout
+pub const CLIENT_LOG_STALE_SEC: i32 = 120;  // a log fresher than this VETOES the restart
+pub const CLIENT_BLIND_ALARM: i32 = 3;      // three blind cycles -> "the watchdog is blind"
+pub const CLIENT_DOWN_WINDOW_SEC: i32 = 600; // wider than this, "it was down for N" is not claimed
+pub const WAKE_GRACE_SEC: i32 = 120;        // after the machine wakes, no verdicts at all
+
+// THE WAKE GRACE. For the first two minutes after the machine wakes, no verdict
+// is passed on anything - not death, not a hung task, not a lost link. A laptop
+// that slept for nine hours comes back with every clock jumped and every log
+// stale, and a supervisor that reads that as evidence raises alarms about work
+// that is fine. Measured on 01.08: three false alarms in one day, all of them a
+// wall-clock jump being read as sleep.
+pub fn verdict_allowed(since_wake_sec: i32) bool {
+    if (since_wake_sec < WAKE_GRACE_SEC) { return false; }
+    return true;
+}
+
+// DEATH REQUIRES THREE CONDITIONS, not one. The probe must have SUCCEEDED, the
+// process must be absent, and the log must be stale. A fresh log means recent
+// activity - or a race in the process listing on a waking machine - and either
+// way the death is not proven.
+pub fn death_proven(probe: i32, log_age_sec: i32, log_age_known: bool) bool {
+    if (absence_proven(probe) == false) { return false; }
+    if (log_age_known == false) {
+        // No log to read at all is not a fresh log, so it does not veto. It is
+        // also not evidence of death - the two other conditions carry it.
+        return true;
+    }
+    if (log_age_sec <= CLIENT_LOG_STALE_SEC) { return false; }
+    return true;
+}
+
+// A planned idle - a bot with no token configured, say - is NOT a death, and
+// must stay outside the blind counter too. Counting deliberate silence as
+// blindness would raise the alarm about a machine that is working correctly.
+pub const ACTION_SKIP: i32 = 0;
+pub const ACTION_CHECK_FAILED: i32 = 1;
+pub const ACTION_FRESH_LOG: i32 = 2;
+pub const ACTION_ALIVE: i32 = 3;
+pub const ACTION_COOLDOWN: i32 = 4;
+pub const ACTION_HALTED: i32 = 5;
+pub const ACTION_RAISE: i32 = 6;
+pub const ACTION_GRACE: i32 = 7;
+pub const ACTION_STOPPED: i32 = 8;
+
+// The whole watchdog decision for one process, in the daemon's own order. The
+// order is load-bearing: the stop switch and the wake grace outrank everything,
+// because during either of them no measurement is trustworthy.
+pub fn watchdog_action(stopped: bool, in_wake_grace: bool, skipped: bool,
+                       probe: i32, log_age_sec: i32, log_age_known: bool,
+                       deaths: i32, since_last_raise_sec: i32,
+                       ever_raised: bool) i32 {
+    if (stopped) { return ACTION_STOPPED; }
+    if (in_wake_grace) { return ACTION_GRACE; }
+    if (skipped) { return ACTION_SKIP; }
+    if (probe == PROBE_BLIND) { return ACTION_CHECK_FAILED; }
+    if (probe == PROBE_ALIVE) { return ACTION_ALIVE; }
+    if (death_proven(probe, log_age_sec, log_age_known) == false) {
+        return ACTION_FRESH_LOG;
+    }
+    if (deaths >= CLIENT_MAX_DEATHS) { return ACTION_HALTED; }
+    if (ever_raised) {
+        if (since_last_raise_sec < CLIENT_COOLDOWN_SEC) { return ACTION_COOLDOWN; }
+    }
+    return ACTION_RAISE;
+}
+
+// A blind cycle leaves the death counter alone. Otherwise a supervisor that
+// cannot see would spend a process's three lives without ever looking at it,
+// and then halt it permanently for crimes it did not commit.
+pub fn deaths_after(deaths: i32, action: i32) i32 {
+    if (action == ACTION_ALIVE) { return 0; }
+    if (action == ACTION_SKIP) { return 0; }
+    if (action == ACTION_RAISE) { return deaths + 1; }
+    return deaths;
+}
+
+// ─── SAYING THAT YOU CANNOT SEE ───────────────────────────────────────────────
+// Blindness is only counted across the whole tick, not per process: ONE
+// successful probe anywhere proves the machine can still answer, and the others
+// were quiet for their own reasons.
+
+pub fn blind_cycles_after(blind: i32, considered: i32, any_success: bool) i32 {
+    if (considered <= 0) { return blind; }
+    if (any_success) { return 0; }
+    return blind + 1;
+}
+
+// Three blind cycles in a row and the watchdog says so out loud. This raises an
+// ALARM and never a restart - the one thing a blind supervisor must not do is
+// act on what it cannot see.
+pub fn blind_alarm_due(blind: i32) bool {
+    if (blind >= CLIENT_BLIND_ALARM) { return true; }
+    return false;
+}
+
+// The counter resets after the alarm, so the same blindness is not reported
+// every tick; it re-alarms after another full run of blind cycles.
+pub fn blind_after_alarm(blind: i32) i32 {
+    if (blind_alarm_due(blind)) { return 0; }
+    return blind;
+}
+
+// HOW LONG IT WAS DOWN is claimed only inside an observation window. Beyond it
+// there was no witness, and "down for nine hours" would be an invention with a
+// number attached - the most convincing kind.
+pub fn downtime_claimable(since_known: bool, down_sec: i32) bool {
+    if (since_known == false) { return false; }
+    if (down_sec > CLIENT_DOWN_WINDOW_SEC) { return false; }
+    return true;
+}
+
+// ─── THE AWAKE BUDGET ─────────────────────────────────────────────────────────
+// A task gets 45 minutes. The machine measured them with a clock that counts
+// sleep, so a laptop that suspended mid-task burned the whole budget doing
+// nothing and woke to a finished timeout. Measured on that PC on 2026-08-01: the
+// two clocks differed by 32284 seconds - 8.97 hours - which was exactly one
+// suspend from 03:43 to 12:41. Not a theory: that much budget could already
+// have burned for nothing.
+
+pub const PC_TASK_TIMEOUT_SEC: i32 = 2700;
+pub const AWAKE_SLICE_SEC: i32 = 60;   // how often the budget is re-evaluated
+
+// Slept time is not spent time. The budget is charged for waking seconds only.
+pub fn budget_spent_sec(elapsed_sec: i32, slept_sec: i32) i32 {
+    if (slept_sec <= 0) { return elapsed_sec; }
+    if (slept_sec >= elapsed_sec) { return 0; }
+    return elapsed_sec - slept_sec;
+}
+
+pub fn budget_exhausted(elapsed_sec: i32, slept_sec: i32) bool {
+    if (budget_spent_sec(elapsed_sec, slept_sec) >= PC_TASK_TIMEOUT_SEC) { return true; }
+    return false;
+}
+
+// WHEN THE AWAKE CLOCK IS UNAVAILABLE, FALL BACK TO THE OLD BEHAVIOUR: sleep
+// counts as work again. It is the wrong answer, and it is the SAFE wrong answer
+// - a clock that cannot be read must not be allowed to stop the daemon.
+pub fn awake_clock_or_prior(awake_clock_available: bool,
+                            awake_sec: i32, wall_sec: i32) i32 {
+    if (awake_clock_available) { return awake_sec; }
+    return wall_sec;
+}
+
+// A long gap in the wall clock used to be GUESSED at as a suspend, and on one
+// day that guess raised three false alarms - all three were long tasks, not
+// sleep. With two clocks the sleep is a measured number, so the signal only
+// fires when it was actually measured.
+pub fn long_sleep_reportable(measured: bool, slept_sec: i32) bool {
+    if (measured == false) { return false; }
+    if (slept_sec <= 0) { return false; }
+    return true;
+}
+
+// ─── TWO HANDS, AND NO MORE ───────────────────────────────────────────────────
+// The round runs two tasks at once and everything else stays sequential, because
+// the order of the remaining lines carries the round's own guarantees - the
+// heartbeat must remain the LAST line of the round, or "the round CLOSED" turns
+// into "the round started".
+//
+// The ceiling is two and there is deliberately NO handle upward: a handle down
+// exists, so a machine can go back to one hand byte-for-byte. Were there a way
+// up, "exactly two" would be a promise rather than code.
+pub const PARALLEL_TASKS_MAX: i32 = 2;
+
+pub fn parallel_tasks(requested: i32, process_budget: i32) i32 {
+    if (requested < 1) { return 1; }
+    if (requested > PARALLEL_TASKS_MAX) { return PARALLEL_TASKS_MAX; }
+    if (requested > process_budget) { return process_budget; }
+    return requested;
+}
+
+// The git lock wait is deliberately SHORTER than the task timeout: a run that
+// hits another commit must return an honest refusal inside its own budget rather
+// than be killed by the outer clock, which would report the wrong cause.
+pub const GIT_LOCK_WAIT_SEC: i32 = 900;
+
+pub fn lock_wait_fits_budget(lock_wait_sec: i32, task_timeout_sec: i32) bool {
+    if (lock_wait_sec >= task_timeout_sec) { return false; }
+    return true;
+}
+
+// A guard against a loop or a broken process tree, not a policy: twelve hops is
+// far past any real ancestry, and a walk that exceeds it has found a cycle
+// rather than a parent.
+pub const ANCESTRY_MAX_HOPS: i32 = 12;
+
+pub fn ancestry_exhausted(hops: i32) bool {
+    if (hops >= ANCESTRY_MAX_HOPS) { return true; }
+    return false;
+}

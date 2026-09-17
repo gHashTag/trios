@@ -215,13 +215,15 @@ pub fn deny_alert_due(consecutive_denials: i32) bool {
 // race halt-on-fail. Silence longer than the step timeout is an honest failure
 // and a chain halt; the thinker does not repair it.
 
+// PC_TASK_TIMEOUT_SEC and the wake grace are the PC daemon's OWN numbers and
+// live in supervision_core. They were declared here too, which is how the
+// manager and the machine it supervises come to disagree about when a task is
+// dead - each edits its own copy and both look right.
 pub const PC_STEP_TIMEOUT_SEC: i32 = 3600;
-pub const PC_TASK_TIMEOUT_SEC: i32 = 2700;
 pub const PC_SINGLE_STALE_SEC: i32 = 5400;
 pub const PC_ORPHAN_STALE_SEC: i32 = 300;
 pub const PC_CHAIN_STALE_SEC: i32 = 900;
 pub const PC_HEARTBEAT_STALE_SEC: i32 = 180;
-pub const PC_WAKE_GRACE_SEC: i32 = 120;
 
 pub fn pc_release_allowed(steps_in_flight: i32) bool {
     if (steps_in_flight > 0) { return false; }
@@ -233,30 +235,27 @@ pub fn pc_step_silent(silence_sec: i32) bool {
     return false;
 }
 
-// A verdict is not passed during the grace window after the machine wakes: a
-// wall-clock jump is not evidence that anything died.
-pub fn pc_verdict_allowed(since_wake_sec: i32) bool {
-    if (since_wake_sec < PC_WAKE_GRACE_SEC) { return false; }
-    return true;
-}
+// The wake-grace rule - no verdict at all for two minutes after the machine
+// wakes, because a wall-clock jump is not evidence that anything died - is
+// supervision_core's `verdict_allowed`. It is not restated here.
 
-// ─── CLIENT WATCHDOG ──────────────────────────────────────────────────────────
-// Three consecutive deaths stop the restarts and call a person. A fresh log
-// VETOES a restart outright: a process that is writing is not a process to kill.
-
-pub const CLIENT_MAX_DEATHS: i32 = 3;
-pub const CLIENT_COOLDOWN_SEC: i32 = 900;
-pub const CLIENT_LOG_STALE_SEC: i32 = 120;
-pub const CLIENT_BLIND_ALARM: i32 = 3;
-pub const CLIENT_DOWN_WINDOW_SEC: i32 = 600;
-
-pub fn client_restart_allowed(deaths: i32, since_last_restart_sec: i32,
-                              log_age_sec: i32) bool {
-    if (log_age_sec <= CLIENT_LOG_STALE_SEC) { return false; }
-    if (deaths >= CLIENT_MAX_DEATHS) { return false; }
-    if (since_last_restart_sec < CLIENT_COOLDOWN_SEC) { return false; }
-    return true;
-}
+// ─── CLIENT WATCHDOG — moved to supervision_core ──────────────────────────────
+// The watchdog's law lived here first, in a shorter form, and the short form was
+// already WRONG in the way the whole project exists to prevent.
+//
+// It took three inputs - deaths, cooldown, log age - and no fourth. There was no
+// way for it to say that the PROBE ITSELF had failed, so a blind probe arrived
+// as "the process is absent" and the function answered `true`: restart something
+// that was very probably running. That is class #171 of the source repository,
+// reintroduced in the act of restating it.
+//
+// This is the argument for generating law rather than transcribing it, made at
+// this file's own expense. The two copies were written three hours apart by the
+// same hand from the same source, and they had already diverged on the one
+// question that matters.
+//
+// The single copy now lives in supervision_core.t27, with the third answer:
+// watchdog_action(), death_proven(), and PROBE_BLIND.
 
 // ─── OWNER TRAFFIC ────────────────────────────────────────────────────────────
 // The owner is a scarce channel, and every budget here exists because a bot once
