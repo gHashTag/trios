@@ -14,6 +14,7 @@ import {
   drain,
   endpointPoolProblems,
   finishDispatch,
+  MAX_KEYS_PER_POOL,
   missingProviderRefusal,
   POOL_KEY_STRIDE,
   prepareWorktree,
@@ -66,6 +67,10 @@ const KEYS = [
   'TRIOS_QUEEN_WORKER_CONTEXT',
   'TRIOS_QUEEN_WORKER_LANES_PER_KEY',
   'TRIOS_QUEEN_MAX_WORKERS',
+  // The far end of the key list (MAX_KEYS_PER_POOL) and the first name past it.
+  'TRIOS_QUEEN_WORKER_API_KEY_17',
+  'TRIOS_QUEEN_WORKER_API_KEY_1000',
+  'TRIOS_QUEEN_WORKER_API_KEY_1001',
   'TRIOS_ZAI_CONCURRENCY_PER_KEY',
   ...POOL_VARIABLES,
 ]
@@ -479,6 +484,45 @@ describe('queen dispatch precheck', () => {
         lanesPerCredential: 1,
         effectiveCapacity: 1,
       })
+    })
+
+    it('reads a key past the sixteenth, up to the bound and not beyond it', () => {
+      firstPool('z1')
+      // 16 was where the loop ended, not a measurement: a seventeenth variable
+      // was read by nothing and reported by nothing.
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_17 = 'z17'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_1000 = 'z1000'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_1001 = 'past-the-bound'
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '16'
+
+      expect(MAX_KEYS_PER_POOL).toBe(1000)
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 3,
+        lanesPerCredential: 1,
+        effectiveCapacity: 3,
+      })
+      expect(resolveWorkerProvider([0])?.apiKey).toBe('z17')
+      expect(resolveWorkerProvider([0, 1])?.apiKey).toBe('z1000')
+      expect(resolveWorkerProvider([0, 1, 2])?.exhausted).toBe(3)
+    })
+
+    it('widens the key list without widening the swarm', () => {
+      firstPool(...Array.from({ length: 16 }, (_, index) => `z${index + 1}`))
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_17 = 'z17'
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '64'
+
+      // Seventeen credentials, and the policy ceiling still answers sixteen.
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 17,
+        lanesPerCredential: 1,
+        effectiveCapacity: 16,
+      })
+    })
+
+    it('keeps a whole pool below the stride that separates pools', () => {
+      // The durable index of pool n starts at (n - 1) * POOL_KEY_STRIDE. If a
+      // pool could hold that many keys, its last key would BE pool n + 1's first.
+      expect(MAX_KEYS_PER_POOL).toBeLessThan(POOL_KEY_STRIDE)
     })
 
     it('leaves a single endpoint exactly as it was', () => {
