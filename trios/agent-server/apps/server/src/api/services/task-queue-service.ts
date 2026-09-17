@@ -7,7 +7,8 @@
  */
 
 import * as crypto from 'node:crypto'
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { withDbRetry } from '../../lib/db/retry'
 import { logger } from '../../lib/logger'
 
@@ -62,12 +63,7 @@ export class TaskQueueService {
   private isShutdown = false
 
   constructor(private deps: TaskQueueDeps) {
-    this.pool = new Pool({
-      connectionString: deps.databaseUrl,
-      ssl: deps.databaseUrl.includes('neon.tech')
-        ? { rejectUnauthorized: false }
-        : undefined,
-    })
+    this.pool = createQueenPool(deps.databaseUrl)
     this.workerId = process.env.HOSTNAME || `worker-${process.pid}`
     this.pool.on('error', (err) => {
       logger.warn('TaskQueueService pool client error', {

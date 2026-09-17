@@ -6,7 +6,8 @@
  * PostgreSQL Agent Store - persistent A2A agent registry backend.
  */
 
-import { Pool, type QueryResult, type QueryResultRow } from 'pg'
+import type { Pool, QueryResult, QueryResultRow } from 'pg'
+import { createQueenPool } from '../../../lib/db/queen-pool'
 import { logger } from '../../../lib/logger'
 import type { A2aAgentCard } from './a2a-registry-service'
 
@@ -28,8 +29,7 @@ export class PgAgentStore {
 
   async connect(): Promise<void> {
     if (this.pool) return
-    this.pool = new Pool({
-      connectionString: this.dsn,
+    this.pool = createQueenPool(this.dsn, {
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

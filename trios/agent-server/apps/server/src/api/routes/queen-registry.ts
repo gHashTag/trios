@@ -18,7 +18,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 
 function databaseUrl(): string | undefined {
@@ -40,7 +40,7 @@ export function createQueenRegistryRoute() {
         return c.json({ error: 'tasks must be an array' }, 400)
       }
 
-      const pool = new Pool({ connectionString: url })
+      const pool = createQueenPool(url)
       try {
         await pool.query(
           `INSERT INTO queen_registry (variant, tasks, task_count, published_at)
@@ -64,7 +64,7 @@ export function createQueenRegistryRoute() {
       const url = databaseUrl()
       if (!url) return c.json({ error: 'No database configured' }, 503)
       const variant = c.req.query('variant') ?? 'prod'
-      const pool = new Pool({ connectionString: url })
+      const pool = createQueenPool(url)
       try {
         const result = await pool.query(
           'SELECT tasks, task_count, published_at FROM queen_registry WHERE variant = $1',

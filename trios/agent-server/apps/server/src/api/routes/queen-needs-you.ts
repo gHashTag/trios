@@ -32,7 +32,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 
 interface QueryResult {
@@ -97,8 +97,7 @@ export function createQueenNeedsYouRoute(deps: QueenNeedsYouDeps = {}) {
     (() => process.env.QUEEN_LEASE_DATABASE_URL ?? process.env.DATABASE_URL)
   const createPool =
     deps.createPool ??
-    ((url: string) =>
-      new Pool({ connectionString: url }) as unknown as NeedsYouPool)
+    ((url: string) => createQueenPool(url) as unknown as NeedsYouPool)
 
   return new Hono().get('/', async (c) => {
     c.header('Cache-Control', 'no-store')

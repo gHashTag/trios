@@ -40,7 +40,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 import { configuredWorkerCapacity } from '../services/queen-dispatch'
 
@@ -178,7 +178,8 @@ function classifySkipReason(line: string): SkipCategory {
   // state names are interpolated and would drift with the registry.
   if (line.includes('a worker already has it')) return 'claimed'
   if (line.includes('claimed, but no worker is attached yet')) return 'claimed'
-  if (line.includes('spoken for by a task with no recorded state')) return 'claimed'
+  if (line.includes('spoken for by a task with no recorded state'))
+    return 'claimed'
   if (line.includes('so it is finished or waiting on you')) return 'claimed'
   if (line.includes('the work already landed')) return 'completed'
   if (line.includes('no issue body was supplied')) return 'missingBoundary'
@@ -514,8 +515,7 @@ function queueProjection(
 export function createQueenPublicStatusRoute(deps: QueenPublicStatusDeps = {}) {
   const databaseUrl = deps.databaseUrl ?? configuredDatabaseUrl
   const createPool =
-    deps.createPool ??
-    ((url: string) => new Pool({ connectionString: url }) as StatusPool)
+    deps.createPool ?? ((url: string) => createQueenPool(url) as StatusPool)
   const tickIntervalSeconds =
     deps.tickIntervalSeconds ?? configuredTickIntervalSeconds
   const billingMode = deps.billingMode ?? configuredBillingMode

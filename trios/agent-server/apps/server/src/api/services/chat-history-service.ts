@@ -6,7 +6,8 @@
  * ChatHistoryService - Read and search conversation history from PostgreSQL
  */
 
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { withDbRetry } from '../../lib/db/retry'
 import { logger } from '../../lib/logger'
 
@@ -98,12 +99,7 @@ export class ChatHistoryService {
   private isShutdown = false
 
   constructor(private deps: ChatHistoryDeps) {
-    this.pool = new Pool({
-      connectionString: deps.databaseUrl,
-      ssl: deps.databaseUrl.includes('neon.tech')
-        ? { rejectUnauthorized: false }
-        : undefined,
-    })
+    this.pool = createQueenPool(deps.databaseUrl)
     this.pool.on('error', (err) => {
       logger.warn('ChatHistoryService pool client error', {
         error: err instanceof Error ? err.message : String(err),

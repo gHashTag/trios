@@ -31,7 +31,8 @@
 
 import { readFile } from 'node:fs/promises'
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 import { queenLeaseDatabaseUrl } from '../services/queen-lease'
 
@@ -96,7 +97,7 @@ export function createQueenRoadmapDataRoute() {
     const url = queenLeaseDatabaseUrl()
     if (!url) return c.json({ error: 'No database configured' }, 503)
     const roadmap = await loadRoadmap()
-    const pool = new Pool({ connectionString: url })
+    const pool = createQueenPool(url)
     try {
       return c.json({ roadmap, board: await boardFacts(pool) })
     } finally {

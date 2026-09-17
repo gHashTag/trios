@@ -15,7 +15,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 import {
   type WorkerCapacityBreakdown,
@@ -203,8 +203,7 @@ export function createQueenPublicResearchRoute(
   const loadTree = deps.loadTree ?? loadCanonicalTree
   const databaseUrl = deps.databaseUrl ?? configuredDatabaseUrl
   const createPool =
-    deps.createPool ??
-    ((url: string) => new Pool({ connectionString: url }) as ResearchPool)
+    deps.createPool ?? ((url: string) => createQueenPool(url) as ResearchPool)
   const capacityBreakdown =
     deps.workerCapacityBreakdown ?? workerCapacityBreakdown
   const billingMode = deps.billingMode ?? configuredBillingMode

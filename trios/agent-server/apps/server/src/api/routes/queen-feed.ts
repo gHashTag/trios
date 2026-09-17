@@ -33,7 +33,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { queenLeaseDatabaseUrl } from '../services/queen-lease'
 
 /** The transcript, guarded: this is what the bee said and did. */
@@ -44,7 +44,7 @@ export function createQueenFeedDataRoute() {
     const conversation = c.req.query('conversation')
     const issue = Number(c.req.query('issue'))
     const since = Number(c.req.query('since') ?? '0')
-    const pool = new Pool({ connectionString: url })
+    const pool = createQueenPool(url)
     try {
       // By conversation when one is named, otherwise everything for the issue -
       // a bee that was dispatched twice has two conversations, and an operator

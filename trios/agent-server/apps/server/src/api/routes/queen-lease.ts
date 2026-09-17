@@ -16,7 +16,8 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import {
   acquireQueenLease,
   queenLeaseDatabaseUrl,
@@ -52,7 +53,7 @@ const LEASE_NAME = 'queen-tick'
 let tickPool: Pool | undefined
 
 function poolForTick(url: string): Pool {
-  if (!tickPool) tickPool = new Pool({ connectionString: url })
+  if (!tickPool) tickPool = createQueenPool(url)
   return tickPool
 }
 
@@ -72,7 +73,7 @@ export function createQueenLeaseRoute() {
           3600,
         )
 
-        const pool = new Pool({ connectionString: url })
+        const pool = createQueenPool(url)
         try {
           const grant = await acquireQueenLease(pool, LEASE_NAME, holder, ttl)
           // 200 either way. Losing a lease is a normal outcome of a healthy round,
@@ -87,7 +88,7 @@ export function createQueenLeaseRoute() {
         if (!url) return c.json({ error: 'No database configured' }, 503)
         const holder = c.req.query('holder')
         if (!holder) return c.json({ error: 'holder is required' }, 400)
-        const pool = new Pool({ connectionString: url })
+        const pool = createQueenPool(url)
         try {
           return c.json({
             released: await releaseQueenLease(pool, LEASE_NAME, holder),
@@ -130,7 +131,7 @@ export function createQueenLeaseRoute() {
       .get('/', async (c) => {
         const url = queenLeaseDatabaseUrl()
         if (!url) return c.json({ error: 'No database configured' }, 503)
-        const pool = new Pool({ connectionString: url })
+        const pool = createQueenPool(url)
         try {
           const status = await queenLeaseStatus(pool, LEASE_NAME)
           const tick = await pool.query(

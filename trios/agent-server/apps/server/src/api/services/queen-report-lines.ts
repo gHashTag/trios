@@ -64,7 +64,11 @@ export function startedLine(
  * wording is unchanged: tests outside this task assert it byte for byte.
  */
 export function nothingStartedLine(
-  refusal: string | undefined,
+  // `null` as well as `undefined`: `QueendChoice.refusal` is `string | null`,
+  // and both spellings mean the same thing to the `??` below. Narrowing this
+  // to `undefined` made two call sites in queen-tick.ts a type error that no
+  // gate in CI was running to catch.
+  refusal: string | null | undefined,
   candidates: number,
 ): string {
   return (
@@ -116,7 +120,7 @@ export function refusedLines(
 export function reportHeadline(
   escalatedCount: number,
   outcomes: ReadonlyArray<DispatchReportOutcome>,
-  refusal: string | undefined,
+  refusal: string | null | undefined,
 ): string {
   if (escalatedCount > 0) return `${escalatedCount} waiting on you`
   const working = dispatchesThatStarted(outcomes).length

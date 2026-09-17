@@ -65,8 +65,31 @@ let table: BoardRow[] = []
 
 class FakePool {
   ended = false
+  /** The SQL every `connect` listener ran before the route's first query. */
+  readonly preamble: string[] = []
   constructor() {
     pools.push(this)
+  }
+  /**
+   * `on` is not decoration. `createQueenPool` names the schema through a
+   * `connect` listener, so a double without this method is a pool that cannot
+   * be told where to look - and it would let this suite pass while production
+   * read an empty `public.queen_issues`. The listener is driven immediately
+   * because this double hands out no clients of its own.
+   */
+  on(
+    event: string,
+    listener: (client: { query: (sql: string) => Promise<unknown> }) => void,
+  ) {
+    if (event === 'connect') {
+      listener({
+        query: async (sql: string) => {
+          this.preamble.push(sql)
+          return undefined
+        },
+      })
+    }
+    return this
   }
   async query() {
     return { rowCount: table.length, rows: table }
@@ -294,6 +317,16 @@ describe('queenRoadmapContract', () => {
       expect(pools).toHaveLength(2)
       expect(pools[0]).not.toBe(pools[1])
       expect(pools.every((p) => p.ended)).toBe(true)
+    })
+
+    it('tells every pool which schema to read before it reads anything', async () => {
+      // `public.queen_issues` exists, is empty, and is five columns short of
+      // the `trios` table this route actually wants. Nothing in an unqualified
+      // `SELECT ... FROM queen_issues` can tell the two apart - the wrong one
+      // answers politely with zero rows - so the only thing standing between
+      // this route and a permanently empty board is that this statement ran.
+      await askData()
+      expect(pools[0].preamble).toEqual(['SET search_path TO trios'])
     })
   })
 

@@ -46,7 +46,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 import {
   type WorkerCapacityBreakdown,
@@ -1037,7 +1037,7 @@ export function createQueenBoardRoute() {
     const url = queenLeaseDatabaseUrl()
     if (!url) return c.json({ error: 'No database configured' }, 503)
     const repo = process.env.TRIOS_GITHUB_REPO || 'gHashTag/trios'
-    const pool = new Pool({ connectionString: url })
+    const pool = createQueenPool(url)
     try {
       const built = await build(pool)
       return c.json({
@@ -1065,7 +1065,7 @@ export function createQueenPublicBoardRoute(deps: QueenPublicBoardDeps = {}) {
   const databaseUrl = deps.databaseUrl ?? queenLeaseDatabaseUrl
   const createPool =
     deps.createPool ??
-    ((url: string) => new Pool({ connectionString: url }) as PublicBoardPool)
+    ((url: string) => createQueenPool(url) as PublicBoardPool)
 
   return new Hono().get('/', async (c) => {
     c.header('Cache-Control', 'no-store')

@@ -35,7 +35,7 @@
  */
 
 import { Hono } from 'hono'
-import { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 
 interface QueryResult {
@@ -148,8 +148,7 @@ function projectAgent(
 export function createQueenPublicAgentsRoute(deps: QueenPublicAgentsDeps = {}) {
   const databaseUrl = deps.databaseUrl ?? configuredDatabaseUrl
   const createPool =
-    deps.createPool ??
-    ((url: string) => new Pool({ connectionString: url }) as AgentsPool)
+    deps.createPool ?? ((url: string) => createQueenPool(url) as AgentsPool)
   const now = deps.now ?? Date.now
 
   return new Hono().get('/', async (c) => {

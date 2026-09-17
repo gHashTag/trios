@@ -7,20 +7,16 @@
  * ChatHistoryService and TaskQueueService.
  */
 
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
 import { logger } from '../logger'
+import { createQueenPool } from './queen-pool'
 
 function getDatabaseUrl(): string | undefined {
   return process.env.DATABASE_URL || process.env.RAILWAY_SSOT_URL || undefined
 }
 
 function createPool(databaseUrl: string): Pool {
-  return new Pool({
-    connectionString: databaseUrl,
-    ssl: databaseUrl.includes('neon.tech')
-      ? { rejectUnauthorized: false }
-      : undefined,
-  })
+  return createQueenPool(databaseUrl)
 }
 
 // Exported so a test can read the exact string the container executes at boot,

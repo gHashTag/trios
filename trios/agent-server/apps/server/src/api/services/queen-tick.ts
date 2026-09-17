@@ -37,7 +37,8 @@
  */
 
 import { spawn } from 'node:child_process'
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
+import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 import { outstandingEscalations } from '../routes/queen-needs-you'
 import {
@@ -217,7 +218,9 @@ const ISSUE_PAGE_SIZE = 100
 const ISSUE_PAGE_CAP_ANON = 5
 const ISSUE_PAGE_CAP_TOKEN = 30
 const issuePageCap = (): number =>
-  process.env.TRIOS_GITHUB_API_TOKEN?.trim() ? ISSUE_PAGE_CAP_TOKEN : ISSUE_PAGE_CAP_ANON
+  process.env.TRIOS_GITHUB_API_TOKEN?.trim()
+    ? ISSUE_PAGE_CAP_TOKEN
+    : ISSUE_PAGE_CAP_ANON
 
 /**
  * Open issues, read without a credential.
@@ -274,7 +277,9 @@ function oracleOutcome(witness: Witness | null): string {
   if (witness?.kind !== 'witnessed') return 'no witness'
   const measured = witness.specs.filter((s) => s.oracle !== null)
   if (measured.length === 0) {
-    return witness.specs.some((s) => s.oraclePreBroken) ? 'pre-broken' : 'not measured'
+    return witness.specs.some((s) => s.oraclePreBroken)
+      ? 'pre-broken'
+      : 'not measured'
   }
   return measured.every((s) => s.oracle) ? 'pass' : 'fail'
 }
@@ -2156,7 +2161,9 @@ export async function reviewFinishedDispatches(
         ${stillOpen}`,
   )
   if (!boardIsTrustworthy) {
-    logger.warn('Review ran against every dispatch row: the issue board is empty')
+    logger.warn(
+      'Review ran against every dispatch row: the issue board is empty',
+    )
   }
   const acted: string[] = []
   const strayed: Array<{ issue: number; paths: string[] }> = []
@@ -2335,7 +2342,9 @@ export async function reviewFinishedDispatches(
       // reason is evidence.
       oracleDetail:
         witness?.kind === 'witnessed'
-          ? (witness.specs.find((sp) => sp.oracleError)?.oracleError ?? '').slice(0, 180)
+          ? (
+              witness.specs.find((sp) => sp.oracleError)?.oracleError ?? ''
+            ).slice(0, 180)
           : '',
     })
     if (unwitnessed) {
@@ -2801,7 +2810,7 @@ export function startQueenTick(): void {
     return
   }
 
-  const pool = new Pool({ connectionString: url })
+  const pool = createQueenPool(url)
   logger.info('Queen tick starting', {
     intervalSeconds: interval,
     holder: queenHolderName(),
