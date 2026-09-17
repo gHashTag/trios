@@ -298,13 +298,18 @@ function workerLanesFor(provider: string): number {
  * dispatch, and promising less hides capacity that was paid for.
  *
  * So both sides now read the SAME environment variable, with the same default
- * and the same ceiling. Bounded rather than unlimited because review cost is
- * linear in running workers - the Swift side records the full reasoning.
+ * and the same ceiling. That ceiling is 1024 and it is a guard against a typo,
+ * not a working value: capacity is decided by connected credentials times
+ * lanes and by the number the operator sets. It used to be 16, which sat below
+ * the credentials a deployment could connect once endpoint pools existed, and
+ * said nothing when it bound. Review cost is still linear in running workers -
+ * that is why the operator picks the VALUE by measurement. The Swift side
+ * records the full reasoning.
  */
 function queenWorkerLimit(): number {
   const parsed = Number(process.env.TRIOS_QUEEN_MAX_WORKERS)
   if (!Number.isInteger(parsed) || parsed < 1) return 4
-  return Math.min(parsed, 16)
+  return Math.min(parsed, 1024)
 }
 
 /**
