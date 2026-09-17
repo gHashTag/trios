@@ -1604,6 +1604,58 @@ describe('draining a turn', () => {
     ).toBe(true)
   })
 
+  it('gives the agent back when the turn is over, so the memory comes with it', async () => {
+    // Measured on the deployed container 2026-09-18: seven bees cost 2.5 GB
+    // between them, and an hour later, with none running, it held 11 GB and
+    // never gave it back. Every dispatch builds a session; nothing asked for
+    // one back, so the baseline grew with every bee that FINISHED.
+    const { pool } = recordingPool()
+    const asked: Array<{ url: string; method?: string; auth?: string }> = []
+    const realFetch = globalThis.fetch
+    const previous = process.env.TRIOS_API_TOKEN
+    process.env.TRIOS_API_TOKEN = 'a-token-for-the-test'
+    globalThis.fetch = (async (
+      url: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      asked.push({
+        url: String(url),
+        method: init?.method,
+        auth: new Headers(init?.headers).get('Authorization') ?? undefined,
+      })
+      return new Response('{}', { status: 200 })
+    }) as unknown as typeof fetch
+    try {
+      await drain(pool, sse([{ type: 'finish' }]), 'the-turn-that-ended', 1244)
+    } finally {
+      globalThis.fetch = realFetch
+      if (previous === undefined) delete process.env.TRIOS_API_TOKEN
+      else process.env.TRIOS_API_TOKEN = previous
+    }
+    expect(asked).toHaveLength(1)
+    expect(asked[0].method).toBe('DELETE')
+    expect(asked[0].url).toEndWith('/chat/the-turn-that-ended')
+    expect(asked[0].auth).toBe('Bearer a-token-for-the-test')
+  })
+
+  it('still closes the dispatch when the session will not be released', async () => {
+    const { pool, asked } = recordingPool()
+    const realFetch = globalThis.fetch
+    const previous = process.env.TRIOS_API_TOKEN
+    process.env.TRIOS_API_TOKEN = 'a-token-for-the-test'
+    globalThis.fetch = (async () => {
+      throw new Error('connection refused')
+    }) as unknown as typeof fetch
+    try {
+      await drain(pool, sse([{ type: 'finish' }]), 'conv-9', 1244)
+    } finally {
+      globalThis.fetch = realFetch
+      if (previous === undefined) delete process.env.TRIOS_API_TOKEN
+      else process.env.TRIOS_API_TOKEN = previous
+    }
+    expect(touching(asked, 'UPDATE queen_dispatch')).toHaveLength(1)
+  })
+
   it('reports no price rather than a free turn when the frame never came', async () => {
     const { pool, asked } = recordingPool()
     await drain(pool, sse([{ type: 'text-delta', delta: 'killed' }]), 'c', 1244)

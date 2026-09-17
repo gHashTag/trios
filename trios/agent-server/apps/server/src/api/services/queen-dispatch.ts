@@ -2672,6 +2672,9 @@ export async function closeDispatch(
   // The stream is over, so what the container guard reserved for this bee while
   // it was young is over too - whatever the database does below.
   noteBeeEnded(conversationId)
+  // ...and so is the agent that ran it. Released BEFORE the refill signal at
+  // the end, so the memory is back before the next bee is started against it.
+  await releaseSession(conversationId)
   // Whether the row reads finished on the database when this returns. That is
   // the ONLY condition under which the slot may be announced as free: a signal
   // about a row that still says `running` wakes a round that sees the bee as
@@ -3183,6 +3186,60 @@ export async function runningBeeBranches(
       error: error instanceof Error ? error.message : String(error),
     })
     return null
+  }
+}
+
+/**
+ * Give back the agent that ran this turn.
+ *
+ * THE MEASUREMENT, 2026-09-18, from the Railway metrics of the deployed
+ * container. Memory did not follow the bees; it followed the ENDINGS:
+ *
+ *   01:41  3 bees   1.8 GB      02:00  3 bees  10.5 GB
+ *   01:47  5 bees   2.0 GB      02:02  2 bees  11.1 GB
+ *   01:53  6 bees   2.5 GB      02:06  1 bee   11.0 GB
+ *   01:55  5 bees   5.0 GB      02:10  0 bees  11.0 GB
+ *
+ * Seven bees cost 2.5 GB between them; an hour later, with NO bee running, the
+ * container held eleven and never gave a byte of it back. An earlier round the
+ * same night reached 21.9 GB of 24 and was only saved by a restart. The swarm's
+ * ceiling had been cut from 18 to 9 by the site's watchdog, which could see the
+ * memory but not the cause and charged it to the bees, where it never was.
+ *
+ * The cause is here: every dispatch gets a fresh conversation id, `/chat`
+ * builds an `AgentSession` for it and keeps it in the SessionStore, and nothing
+ * in this file ever asked for it back. The session holds the agent with the
+ * whole turn's message history - for a 65k-context coding turn, more than a
+ * gigabyte - so the baseline grew with every bee that FINISHED and only a
+ * redeploy cleared it. `DELETE /chat/:conversationId` disposes the agent and
+ * drops it from the store; it has existed all along, for the UI.
+ *
+ * A turn that is over needs none of it: the review reads the transcript from
+ * `queen_transcript`, and a bee's conversation id is used once and never again.
+ * Failing to release is logged and nothing more - the ending stands either way.
+ */
+async function releaseSession(conversationId: string): Promise<void> {
+  const token = process.env.TRIOS_API_TOKEN
+  if (!token) return
+  const port = process.env.PORT || '8080'
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${port}/chat/${conversationId}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+    )
+    // 404 is the honest answer for a turn whose session was never built, and
+    // means the same thing as a delete: nothing is held any more.
+    if (!response.ok && response.status !== 404) {
+      logger.warn('Queen could not release the session of a finished bee', {
+        conversationId,
+        status: response.status,
+      })
+    }
+  } catch (error) {
+    logger.warn('Queen could not release the session of a finished bee', {
+      conversationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 }
 
