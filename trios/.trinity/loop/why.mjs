@@ -34,7 +34,42 @@ const DIR = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.TRIOS_ROOT || '/Users/playra/BrowserOS'
 const REPO = process.env.TRIOS_ISSUE_REPO || 'gHashTag/trios'
 const STATUS = process.env.QUEEN_STATUS_URL || 'https://trios-agent-server-production.up.railway.app/queen/status'
-const WORKERS = Number(process.env.QUEEN_WORKERS ?? 4)
+/**
+ * How many bees the swarm will actually dispatch, ASKED rather than typed.
+ *
+ * This was `Number(process.env.QUEEN_WORKERS ?? 4)` and it made this file the
+ * SIXTH place in the tree holding that constant - after the spec, two Swift
+ * copies, `snapshot.mjs` and the row `dash.mjs` already fixed for exactly this
+ * reason. `dash.mjs` carries the doctrine in full: the ring says what the
+ * source DECLARES, the running service says what it will DISPATCH, and those
+ * are not the same number.
+ *
+ * Measured 2026-09-17, and it is three numbers, not two:
+ *
+ *   ring artifact MAX_CONCURRENT_WORKERS  4   what the source declares
+ *   queend's live policy                 16   TRIOS_QUEEN_MAX_WORKERS, clamped
+ *   /queen/status workers.capacity       10   the provider keys that exist
+ *
+ * The binding ceiling is the smallest, 10, and the log agrees in words: "all 10
+ * provider key(s) are already in use by bees in flight". So a swarm of ten was
+ * exactly AT capacity, and this line printed "10 of 4 running" - 250% of a
+ * limit nothing enforces. `QueenDelegation.swift` predicted this failure in its
+ * own comment: telemetry disagreeing with the policy "sends an operator hunting
+ * a bug in dispatch". It sent one.
+ *
+ * The env var is kept as an override for a test, but it no longer has a
+ * default: an invented constant that happens to be right is the same defect
+ * wearing a correct answer. Null prints `?`, and `?` sends nobody hunting.
+ */
+export function ceiling(s) {
+  const env = Number(process.env.QUEEN_WORKERS)
+  if (Number.isFinite(env) && env >= 1) return env
+  const c = s?.workers?.capacity
+  return typeof c === 'number' && c >= 0 ? c : null
+}
+
+/** `10 of 10`, or `10 of ?` when the swarm did not say. Never `10 of 4`. */
+const ofCeiling = (running, cap) => `${running} of ${cap ?? '?'}`
 const PROJECT = process.env.QUEEN_PROJECT || '564d9ebd-7aa8-44fe-93ec-e0b03c87158d'
 const SERVICE = process.env.QUEEN_SERVICE || 'trios-agent-server'
 const isMain = process.argv[1] && process.argv[1].endsWith('/why.mjs')
@@ -100,7 +135,11 @@ export function checks(s, opts = {}) {
     {
       name: 'the workers are actually idle',
       test: () => {
-        if (running < WORKERS) return null
+        // An unread ceiling is not a full swarm. `running < null` is false in
+        // JavaScript, so a missing capacity would have declared every swarm
+        // saturated and fired this check on a reading nobody took.
+        const cap = ceiling(s)
+        if (cap === null || running < cap) return null
         // FULL LOAD IS NOT AN ALL-CLEAR, and saying it is was how a day of
         // cosmetic work passed unremarked. 4 of 4 running, 100% accepted, and
         // all forty of the last authored issues were the same character
@@ -110,7 +149,7 @@ export function checks(s, opts = {}) {
         const share = top && m.total ? top[1] / m.total : 0
         if (share > 0.8) {
           return {
-            cause: `${running} of ${WORKERS} workers are busy, and ${Math.round(share * 100)}% of the backlog is one kind: "${top[0]}"`,
+            cause: `${ofCeiling(running, cap)} workers are busy, and ${Math.round(share * 100)}% of the backlog is one kind: "${top[0]}"`,
             evidence: (m.counts || []).map(([k, n]) => `${k}=${n}`).join('  '),
             remedy: 'tri mix   - a swarm at full load doing one cheap thing is still a swarm doing one cheap thing',
           }
@@ -122,7 +161,7 @@ export function checks(s, opts = {}) {
         const landOut = sh(`node ${path.join(DIR, 'land.mjs')}`, { timeout: 240000 }) || ''
         const stuck = landOut.match(/ALL (\d+) remaining branch\(es\) conflict/)
         return {
-          cause: `nothing is wrong RIGHT NOW - ${running} of ${WORKERS} workers are busy`,
+          cause: `nothing is wrong RIGHT NOW - ${ofCeiling(running, cap)} workers are busy`,
           evidence: `last tick ${tick.decidedAt ?? '?'}` +
             (top ? `, backlog led by ${top[0]} at ${Math.round(share * 100)}%` : '') +
             (stuck ? `. AHEAD: all ${stuck[1]} remaining accepted branches conflict, so nothing can land and close-done will close nothing` : ''),
@@ -423,7 +462,7 @@ if (isMain) {
   const running = Number(s?.dispatches?.running ?? 0)
   const tick = s?.lastTick ?? {}
 
-  console.log(`swarm: ${running} of ${WORKERS} running   last tick ${tick.decidedAt ?? '?'}   refusal ${tick.refusal ?? 'none'}\n`)
+  console.log(`swarm: ${ofCeiling(running, ceiling(s))} running   last tick ${tick.decidedAt ?? '?'}   refusal ${tick.refusal ?? 'none'}\n`)
 
   let found = null
   for (const c of checks(s)) {

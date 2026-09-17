@@ -1348,6 +1348,45 @@ const causesOf = (skipSummary, opts) => {
 }
 const firesWith = (skipSummary, opts) => causesOf(skipSummary, opts).map((c) => c.name)
 
+check('the worker ceiling is asked for, never typed', () => {
+  // THE SWARM PRINTED `10 of 4 running` AND NOTHING WAS OVER CAPACITY. `4` was a
+  // constant in this file's why.mjs; the ring artifact says 4, queend's live
+  // policy says min(env,16), and /queen/status says 10 - the provider key count,
+  // which is the smallest and therefore the binding one. Ten running workers
+  // were exactly at the ceiling. The only thing wrong was the sentence.
+  const saved = process.env.QUEEN_WORKERS
+  delete process.env.QUEEN_WORKERS
+  try {
+    if (W.ceiling({ workers: { capacity: 10 } }) !== 10) throw new Error('the ceiling must come from the same payload that supplies `running`')
+    if (W.ceiling({ workers: { capacity: 0 } }) !== 0) throw new Error('a measured zero is a reading, not a miss')
+    // ABSENT IS NOT FOUR. `running < null` is false in JavaScript, so an unread
+    // ceiling must make the diagnosis stand down rather than declare saturation.
+    if (W.ceiling(null) !== null) throw new Error('no reading must read as null, never as a hand-written 4')
+    if (W.ceiling({ workers: {} }) !== null) throw new Error('a payload without a capacity has not stated one')
+    process.env.QUEEN_WORKERS = '7'
+    if (W.ceiling({ workers: { capacity: 10 } }) !== 7) throw new Error('an explicit operator override must still win')
+  } finally {
+    if (saved === undefined) delete process.env.QUEEN_WORKERS
+    else process.env.QUEEN_WORKERS = saved
+  }
+})
+
+check('an unread ceiling fires no capacity diagnosis', () => {
+  const saved = process.env.QUEEN_WORKERS
+  delete process.env.QUEEN_WORKERS
+  try {
+    const s = { lastTick: { allowed: false, refusal: 'nothing to choose' }, dispatches: { running: 99 } }
+    for (const c of W.checks(s, {})) {
+      const hit = c.test()
+      if (hit && /workers are busy/.test(String(hit.line || ''))) {
+        throw new Error(`a cause spoke about capacity from a ceiling nobody measured: ${hit.line}`)
+      }
+    }
+  } finally {
+    if (saved !== undefined) process.env.QUEEN_WORKERS = saved
+  }
+})
+
 check('a skip bucket is read through one accessor, in both of its shapes', () => {
   const objects = { missingBoundary: { count: 448, issues: [], more: 423 }, claimed: { count: 14, issues: [] } }
   if (S.skipCount(objects, 'missingBoundary') !== 448) throw new Error('the shape the service serves today must read as its count')
