@@ -29,6 +29,19 @@ import { statSync } from 'node:fs'
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
 import { shellArgv } from '../../tools/filesystem/bash'
+import {
+  describeReading,
+  diskLineUsedPercent,
+  judgeBeeRoom,
+  type MemoryReading,
+  noteBeeEnded,
+  noteBeeStarted,
+  readContainerMemory,
+  resourceSettings,
+  type VolumeSpace,
+  volumeSpace,
+  youngBeeCount,
+} from './queen-resources'
 import { workerSystemPrompt } from './queen-tick'
 
 /**
@@ -1673,12 +1686,22 @@ export async function reapWorktrees(
     low?: number
     keepNewest?: number
     volumeUsed?: (dir: string) => number | null
+    /**
+     * Branch names (`queen-<issue>`) of bees that are running right now.
+     *
+     * "The newest few are likely to be running" was true while four bees ran.
+     * With twenty, the seventh-newest tree belongs to a bee too, and a bee that
+     * has read a lot and written nothing yet has a CLEAN tree - exactly what
+     * this function removes. Its work would vanish under it mid-turn.
+     */
+    protect?: ReadonlySet<string>
   } = {},
 ): Promise<{
   before: number | null
   after: number | null
   removed: string[]
   keptDirty: string[]
+  keptRunning: string[]
   refused: string[]
 }> {
   const high = opts.high ?? Number(process.env.QUEEN_VOLUME_HIGH ?? 80)
@@ -1693,6 +1716,7 @@ export async function reapWorktrees(
     after: before,
     removed: [] as string[],
     keptDirty: [] as string[],
+    keptRunning: [] as string[],
     refused: [] as string[],
   }
   // Unknown is not room. Below the mark is not an emergency.
@@ -1722,6 +1746,10 @@ export async function reapWorktrees(
     const now = measure(root)
     if (now !== null && now <= low) break
 
+    if (opts.protect?.has(c.path.slice(c.path.lastIndexOf('/') + 1))) {
+      result.keptRunning.push(c.path)
+      continue
+    }
     const dirty = await run('git', ['status', '--porcelain'], c.path, 60_000)
     // Unreadable is not clean. A tree whose state cannot be read might hold the
     // only copy of a turn's work.
@@ -1863,6 +1891,18 @@ export async function prepareWorktree(
     // filesystem is a guard no test can pin. So the measurement is a dependency
     // with a real default, like the pool and the clock everywhere else here.
     volumeUsed?: (dir: string) => number | null
+    /**
+     * The branches of bees running right now, asked for only when a reap is
+     * about to happen.
+     *
+     * Without it this reap took the clean tree of a running bee. It fires at
+     * QUEEN_VOLUME_HIGH - 80% used - which on a 50 GB volume is EARLIER than the
+     * container guard refuses (7 GB free is 86%), so between the two marks the
+     * guard saw room, reaped nothing, and this call reaped unprotected.
+     * Reproduced on a scratch repository before it was fixed: ten clean trees,
+     * two of them registered as running, both gone.
+     */
+    running?: () => Promise<ReadonlySet<string> | null>
   } = {},
 ): Promise<{ ok: boolean; path: string; detail: string }> {
   const measure = deps.volumeUsed ?? volumeUsedPercent
@@ -1972,15 +2012,24 @@ export async function prepareWorktree(
   const used = measure(root)
   const highMark = Number(process.env.QUEEN_VOLUME_HIGH ?? 80)
   if (used !== null && used >= highMark) {
-    const gc = await reapWorktrees({ volumeUsed: measure })
-    logger.warn('Queen reaped worktrees before cutting a new one', {
-      before: gc.before,
-      after: gc.after,
-      removed: gc.removed.length,
-      keptDirty: gc.keptDirty.length,
-      refused: gc.refused.length,
-    })
-    const still = gc.after
+    // Null is "the registry could not be read": nothing is reaped then, and the
+    // refusal below still stands between a full volume and a half-cut tree.
+    const protect = deps.running ? await deps.running() : undefined
+    const gc =
+      protect === null
+        ? null
+        : await reapWorktrees({ volumeUsed: measure, protect })
+    if (gc) {
+      logger.warn('Queen reaped worktrees before cutting a new one', {
+        before: gc.before,
+        after: gc.after,
+        removed: gc.removed.length,
+        keptDirty: gc.keptDirty.length,
+        keptRunning: gc.keptRunning.length,
+        refused: gc.refused.length,
+      })
+    }
+    const still = gc ? gc.after : used
     if (still !== null && still >= 95) {
       // REFUSE, and say what is true. Dying at `git worktree add` reports a git
       // error for a disk problem, and every reader of that message has looked in
@@ -1989,10 +2038,13 @@ export async function prepareWorktree(
       return {
         ok: false,
         path,
-        detail:
-          `volume ${still}% full after reaping ${gc.removed.length} worktree(s); ` +
-          `${gc.keptDirty.length} held uncommitted work and were kept. ` +
-          'Not cutting a worktree that would fail part-way',
+        detail: gc
+          ? `volume ${still}% full after reaping ${gc.removed.length} worktree(s); ` +
+            `${gc.keptDirty.length} held uncommitted work and ` +
+            `${gc.keptRunning.length} belong to running bees and were kept. ` +
+            'Not cutting a worktree that would fail part-way'
+          : `volume ${still}% full and nothing was reaped, because the running ` +
+            'bees could not be listed. Not cutting a worktree that would fail part-way',
       }
     }
   }
@@ -2617,6 +2669,9 @@ export async function closeDispatch(
   outcome: string,
   tokens?: TokenUsage,
 ): Promise<void> {
+  // The stream is over, so what the container guard reserved for this bee while
+  // it was young is over too - whatever the database does below.
+  noteBeeEnded(conversationId)
   // Whether the row reads finished on the database when this returns. That is
   // the ONLY condition under which the slot may be announced as free: a signal
   // about a row that still says `running` wakes a round that sees the bee as
@@ -2792,6 +2847,13 @@ export interface DispatchOutcome {
   conversationId?: string
   /** Which provider key this bee took, so the next one takes a different one. */
   keyIndex?: number
+  /**
+   * Set only when the CONTAINER refused the start. The report reads it to tell
+   * this refusal from every other one, because this is the only one whose
+   * sentence it may quote outside the "Refused #N" line - and it quotes
+   * `summary`, never a piece cut out of `detail`.
+   */
+  room?: { resource: 'memory' | 'disk'; summary: string }
 }
 
 /**
@@ -2814,6 +2876,8 @@ export async function dispatchBee(
    */
   criteria: string[] = [],
   criteriaSource = 'none',
+  /** Measurements, injectable so a test can put the container in any state. */
+  deps: BeeRoomDeps = {},
 ): Promise<DispatchOutcome> {
   const branch = `queen-${issue}`
 
@@ -2856,7 +2920,37 @@ export async function dispatchBee(
     return { started: false, issue, branch, detail }
   }
 
-  const worktree = await prepareWorktree(issue)
+  // A key is free and a provider answers. The remaining question is the one
+  // nothing used to ask: can the CONTAINER carry another bee? Asked here, before
+  // a worktree is cut, so a refusal costs a measurement and nothing else. The
+  // tick loop breaks on a refused dispatch and the next round fires when a bee
+  // finishes - which is exactly when memory comes back.
+  const noRoom = await beeRoomRefusal(pool, branch, deps)
+  if (noRoom) {
+    logger.warn(
+      'Queen tick chose an issue but the container cannot carry another bee',
+      { issue, resource: noRoom.resource, detail: noRoom.detail },
+    )
+    // NOT RECORDED AGAINST THE ISSUE, unlike every refusal above. Those say
+    // something about the dispatch; this says something about the container,
+    // and once the swarm is memory-bound it is how nearly every round ends.
+    // `recordDispatch` would archive a history row and rewrite the issue's live
+    // row each time - wiping the last attempt's conversation, tokens and
+    // outcome for a reason that has nothing to do with the issue. The warning
+    // above and the round report, one row per round already, carry it.
+    return {
+      started: false,
+      issue,
+      branch,
+      detail: noRoom.detail,
+      room: { resource: noRoom.resource, summary: noRoom.summary },
+    }
+  }
+
+  const worktree = await prepareWorktree(issue, {
+    running: () => runningBeeBranches(pool),
+    volumeUsed: deps.volumeUsed,
+  })
   if (!worktree.ok) {
     await recordDispatch(
       pool,
@@ -2925,6 +3019,9 @@ export async function dispatchBee(
     chosen.provider,
     chosen.model,
   )
+  // A bee that just started has not allocated what it will hold. The next
+  // dispatch of this round must not read the container as empty because of it.
+  if (turn.ok) noteBeeStarted(conversationId, (deps.now ?? Date.now)())
   // ONLY NOW may the stream be read. Everything that reads the bee's output
   // eventually writes to the row above, and a writer that can outrun the row's
   // creation is a writer that silently updates nothing.
@@ -2937,6 +3034,155 @@ export async function dispatchBee(
     detail,
     conversationId,
     keyIndex: chosen.keyIndex,
+  }
+}
+
+export interface BeeRoomDeps {
+  memory?: () => MemoryReading
+  volume?: (dir: string) => VolumeSpace | null
+  reap?: typeof reapWorktrees
+  now?: () => number
+  /** Handed to `prepareWorktree`, whose own volume check reads the real disk. */
+  volumeUsed?: (dir: string) => number | null
+}
+
+/**
+ * The sentence that refuses a start because the container has no room, or null.
+ *
+ * Disk gets one chance to make room before it refuses, because it is the one
+ * resource this server can free itself: the reaper only ever ran inside
+ * `prepareWorktree`, which is AFTER this gate, so a gate that refused on a full
+ * volume would have stopped the only code that empties it. The reap protects
+ * the trees of running bees - see `reapWorktrees`. Memory gets no such chance:
+ * nothing here can free it except a bee finishing.
+ */
+async function beeRoomRefusal(
+  pool: Pool,
+  branch: string,
+  deps: BeeRoomDeps,
+): Promise<{
+  resource: 'memory' | 'disk'
+  summary: string
+  detail: string
+} | null> {
+  const settings = resourceSettings()
+  if (!settings.guardOn) {
+    sayOncePerChange(
+      'Queen resource guard is OFF by TRIOS_QUEEN_RESOURCE_GUARD; dispatching without checking memory or disk',
+      {},
+      true,
+    )
+    return null
+  }
+  const root = workspaceRoot()
+  const now = (deps.now ?? Date.now)()
+  const judge = (reaped?: {
+    removed: number
+    keptDirty: number
+    keptRunning: number
+  }) => {
+    const memory = (deps.memory ?? readContainerMemory)()
+    const volume = (deps.volume ?? volumeSpace)(root)
+    // Only the REAL measurement can mistake a missing checkout for a sick disk;
+    // an injected one answers for itself.
+    const checkoutMissing = !deps.volume && !pathExists(root)
+    const notes = [
+      ...settings.notes,
+      ...(memory.kind === 'measured' && memory.note ? [memory.note] : []),
+    ]
+    // What it reads, once - so the first thing an operator checks after a
+    // deploy (is it looking at the container or at the host?) is in the log
+    // before anything is ever refused.
+    sayOncePerChange(
+      'Queen resource guard is on',
+      { reads: describeReading(memory), volume: root, ignored: notes },
+      notes.length > 0,
+    )
+    const room = judgeBeeRoom({
+      memory,
+      volume,
+      youngBees: youngBeeCount(now, settings.warmupSeconds),
+      settings,
+      volumeDir: root,
+      reaped,
+      checkoutMissing,
+    })
+    return { room, volume }
+  }
+  const first = judge()
+  if (first.room.ok) return null
+  if (first.room.resource !== 'disk' || first.volume === null) return first.room
+
+  // WHO IS RUNNING MUST BE KNOWN, or nothing is reaped. An unreadable registry
+  // used to mean "protect nobody", which is the unprotected reap this change
+  // exists to end; and skipping a reap refuses nothing the disk had not already
+  // refused. The next round asks again.
+  const running = await runningBeeBranches(pool)
+  if (running === null) return first.room
+  const gc = await (deps.reap ?? reapWorktrees)({
+    // ...and the tree of the issue being dispatched, which is by definition not
+    // running. Without it a re-dispatch could reap its own tree here, and
+    // `prepareWorktree` would then cut it afresh with `-B`: the previous
+    // attempt's unpushed commits dropped off the branch. Reproduced on a
+    // scratch repository before this line existed.
+    protect: new Set([...running, branch]),
+    // `high: 0`: the gate has already established that the volume is short for
+    // THIS container, whatever percentage that happens to be. `low`: and it
+    // stops where the rule is satisfied, not at the collector's own low mark.
+    high: 0,
+    low: diskLineUsedPercent(first.volume, settings),
+  })
+  const second = judge({
+    removed: gc.removed.length,
+    keptDirty: gc.keptDirty.length,
+    keptRunning: gc.keptRunning.length,
+  })
+  return second.room.ok ? null : second.room
+}
+
+/**
+ * Said when it changes, not on every dispatch. The guard runs before every
+ * start; a line per start about a setting that has not moved is how a log
+ * teaches its reader to skip the line that matters.
+ */
+let guardLastSaid = ''
+function sayOncePerChange(
+  message: string,
+  fields: Record<string, unknown>,
+  warn: boolean,
+): void {
+  const said = `${message} ${JSON.stringify(fields)}`
+  if (said === guardLastSaid) return
+  guardLastSaid = said
+  if (warn) logger.warn(message, fields)
+  else logger.info(message, fields)
+}
+
+/**
+ * The branch names (`queen-<issue>`) of the bees the registry says are running,
+ * or NULL when the registry cannot be read.
+ *
+ * A worktree directory is named after its branch, so this is the set a reap
+ * must not touch however old and clean a tree looks. Null and not an empty set:
+ * "nobody is running" and "I could not find out" are different answers, and a
+ * caller that reaps on the second one removes the trees of running bees.
+ */
+export async function runningBeeBranches(
+  pool: Pool,
+): Promise<ReadonlySet<string> | null> {
+  try {
+    const rows = await pool.query(
+      `SELECT issue FROM queen_dispatch
+        WHERE started = true AND finished_at IS NULL`,
+    )
+    return new Set(
+      (rows.rows ?? []).map((row: { issue: unknown }) => `queen-${row.issue}`),
+    )
+  } catch (error) {
+    logger.warn('Queen could not list running bees, so nothing is reaped', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
   }
 }
 

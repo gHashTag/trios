@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Pool } from 'pg'
@@ -137,9 +143,20 @@ function roundPool(finished: FinishedRow[] = []) {
 const saved: Record<string, string | undefined> = {}
 const realFetch = globalThis.fetch
 
+/** What the one case that connects a credential sets, so no later case inherits it. */
+const WORKER_POOL_KEYS = [
+  'TRIOS_QUEEN_WORKER_PROVIDER',
+  'TRIOS_QUEEN_WORKER_BASE_URL',
+  'TRIOS_QUEEN_WORKER_API_KEY',
+  'TRIOS_QUEEN_RESOURCE_GUARD',
+  'TRIOS_QUEEN_BEE_MEMORY_MB',
+  'TRIOS_QUEEN_BEE_DISK_MB',
+]
+
 beforeEach(() => {
   for (const key of [
     ...PROVIDER_KEYS,
+    ...WORKER_POOL_KEYS,
     QUEEND_ENV,
     'WORKSPACE_DIR',
     'TRIOS_GITHUB_REPO',
@@ -253,6 +270,54 @@ describe('queen round, lease lost', () => {
 
       expect(result.choice?.chosen).toBe(ISSUE)
       expect(sql().some(isDispatchInsert)).toBe(true)
+    },
+  )
+})
+
+/**
+ * A round the policy ALLOWED and the container refused.
+ *
+ * `queend` says yes, a credential is free, and the container has no room. The
+ * report used to read "Started nothing. No reason given." under the headline
+ * "nothing to do" - with the guard's sentence one line lower, in the "Refused"
+ * line, where a headline reader never looks. The pure helpers are pinned in
+ * queen-report-lines.test.ts; this pins that the round actually calls them, which
+ * a review showed no test did: both call sites could be reverted to
+ * `choice.refusal` with every suite green.
+ */
+describe('queen round, no room in the container', () => {
+  it.if(present)(
+    'says so in the report, with a label in the headline and the sentence in the body',
+    async () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY = 'a'
+      // No test machine has room for a 64 GiB bee holding a 1 TiB worktree. On
+      // Linux the refusal is memory; where memory is not measured it is disk -
+      // measured on a workspace that EXISTS, because a missing one is left for
+      // `prepareWorktree` to report. Either way the container refuses.
+      process.env.TRIOS_QUEEN_BEE_MEMORY_MB = '65536'
+      process.env.TRIOS_QUEEN_BEE_DISK_MB = '1048576'
+      process.env.WORKSPACE_DIR = realpathSync(
+        mkdtempSync(join(tmpdir(), 'queen-round-no-room-')),
+      )
+      mkdirSync(join(process.env.WORKSPACE_DIR, 'BrowserOS'))
+      const { pool, queries } = roundPool()
+      await runRound(pool, 'me', 7, { held: true }, [ISSUE])
+
+      // Nothing is booked against the issue: the refusal is about the
+      // container, and it is how nearly every memory-bound round ends.
+      expect(queries.some((q) => isDispatchInsert(q.sql))).toBe(false)
+      const report = queries.find((q) =>
+        q.sql.includes('INSERT INTO queen_report'),
+      )
+      expect(report).toBeDefined()
+      const [headline, body] = report?.params as [string, string]
+      expect(headline).toMatch(/^no room in the container: (memory|disk)$/)
+      expect(body).not.toContain('No reason given')
+      expect(body).toMatch(
+        /Started nothing\. (container memory|free space on|volume) .+\. \d+ issue\(s\) were on the table\./,
+      )
     },
   )
 })
