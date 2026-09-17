@@ -41,16 +41,17 @@ import { createOAuthRoutes } from './routes/oauth'
 import { createOpenClawRoutes } from './routes/openclaw'
 import { createProviderRoutes } from './routes/provider'
 import { createQueenDashboardRoute } from './routes/queen-dashboard'
+import { createQueenExportRoute } from './routes/queen-export'
 import {
   createQueenFeedDataRoute,
   createQueenFeedRoute,
 } from './routes/queen-feed'
+import { createQueenHqRoute } from './routes/queen-hq'
 import {
   createQueenBoardRoute,
   createQueenKanbanRoute,
   createQueenPublicBoardRoute,
 } from './routes/queen-kanban'
-import { createQueenExportRoute } from './routes/queen-export'
 import { createQueenLeaseRoute } from './routes/queen-lease'
 import { createQueenNeedsYouRoute } from './routes/queen-needs-you'
 import { createQueenPublicActivityRoute } from './routes/queen-public-activity'
@@ -390,6 +391,12 @@ export async function createHttpServer(config: HttpServerConfig) {
     // shows comes from /queen/lease, which stays guarded. See the route header
     // for why a token in a URL was not the answer.
     .route('/queen/dashboard', createQueenDashboardRoute())
+    // The operator's page, written and then never mounted - `createQueenHqRoute`
+    // appeared in no file but its own, so the one page that offers "wake her
+    // now" answered 404 for as long as it has existed. Shell-only on the same
+    // terms as the dashboard: no state and no token in the HTML, and every
+    // number it draws arrives from /queen/lease, which stays guarded.
+    .route('/queen/hq', createQueenHqRoute())
     // Also shell-only: it renders a generated file that is already in the
     // repository, so there is nothing here a reader could not get from git.
     .route('/queen/tree', createQueenTreeRoute())

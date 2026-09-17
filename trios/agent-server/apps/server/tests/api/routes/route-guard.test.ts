@@ -15,9 +15,9 @@
 import { describe, expect, it } from 'bun:test'
 
 import {
-  DEFAULT_ALLOWLIST,
   auditServer,
   classifyMounts,
+  DEFAULT_ALLOWLIST,
   readServerSource,
   unguardedMounts,
 } from '../../../../../../tools/route-guard-audit.mjs'
@@ -31,11 +31,17 @@ const report = auditServer(source, DEFAULT_ALLOWLIST)
 // Queen's scheduler endpoint - and it is unguarded on purpose: Inngest signs
 // every request with the signing key and inngest/hono refuses the rest, so the
 // signature is the guard, and a trusted-origin check would only refuse Inngest.
+// RE-MEASURED 2026-09-17: /queen/hq joined. `createQueenHqRoute` had been
+// written and mounted nowhere, so the one page offering "wake her now"
+// answered 404 for its whole life; mounting it is what put it on this list. A
+// shell on the same terms as the dashboard - no state and no token in the
+// HTML - which is the only reason a page is allowed to answer a stranger.
 const EXPECTED_UNGUARDED_WITHOUT_ALLOWLIST = [
   '/api/inngest',
   '/health',
   '/queen/dashboard',
   '/queen/feed',
+  '/queen/hq',
   '/queen/kanban',
   '/queen/roadmap',
   '/queen/tree',
@@ -65,9 +71,15 @@ describe('route-guard audit over src/api/server.ts', () => {
     // tools/route-guard-audit.mjs); `/queen/scheduler` is the seventh
     // public-read, an explicit `publicReadCorsMiddleware()` on a projection
     // that names which env vars are set and never their values.
-    expect(report.totalMounts).toBe(42)
+    // RE-MEASURED 2026-09-17: 42 became 44, and the pin had already gone stale
+    // in the way its own note above predicts. One was added on purpose and
+    // nobody re-measured: `/queen/rehearsal`, a guarded wrapper, took
+    // `guardedSubAppCount` from 14 to 15 and left this gate red on the branch.
+    // The other is `/queen/hq`, mounted here for the first time - an allowlisted
+    // shell, so it moves neither the guarded nor the public-read count.
+    expect(report.totalMounts).toBe(44)
     expect(report.prefixGuardCount).toBe(18)
-    expect(report.guardedSubAppCount).toBe(14)
+    expect(report.guardedSubAppCount).toBe(15)
     expect(report.publicReadCount).toBe(7)
   })
 
@@ -86,7 +98,7 @@ describe('route-guard audit over src/api/server.ts', () => {
     )
   })
 
-  it('splits the nineteen /queen mounts into 7 public-read, 7 wrapper-guarded and 5 allowlisted shells', () => {
+  it('splits the twenty-one /queen mounts into 7 public-read, 8 wrapper-guarded and 6 allowlisted shells', () => {
     const queenMounts = classifyMounts(source).filter(
       (mount) => mount.path === '/queen' || mount.path.startsWith('/queen/'),
     )
@@ -99,7 +111,10 @@ describe('route-guard audit over src/api/server.ts', () => {
     // is the only reason any of them is allowed to answer a stranger.
     // RE-MEASURED 2026-09-13: eighteen became nineteen; the seventh
     // public-read is /queen/scheduler (the Inngest projection, no secrets).
-    expect(queenMounts.length).toBe(19)
+    // RE-MEASURED 2026-09-17: nineteen became twenty-one. The eighth wrapper is
+    // /queen/rehearsal, added with the in-container bee and never counted here;
+    // the sixth shell is /queen/hq, which until today was mounted nowhere.
+    expect(queenMounts.length).toBe(21)
 
     const counts: Record<string, number> = {
       'public-read': 0,
@@ -115,8 +130,8 @@ describe('route-guard audit over src/api/server.ts', () => {
     expect(counts).toEqual({
       'public-read': 7,
       'prefix-guard': 0,
-      wrapper: 7,
-      unguarded: 5,
+      wrapper: 8,
+      unguarded: 6,
     })
 
     // Every unguarded /queen mount must be one of the allowlisted shells.

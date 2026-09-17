@@ -139,43 +139,57 @@ describe('witnessVerdicts, the measurement as verdict lines', () => {
     expect(witnessVerdicts({ kind: 'absent', detail: 'no t27c' })).toEqual([])
   })
 
-  it('emits three met lines for a clean file', () => {
+  // The order these lines come out in, named once so the cases below index by
+  // meaning rather than by a number. A fourth line (empty function bodies) was
+  // added to `witnessVerdicts` between the parse and typecheck lines, and the
+  // cases here went on reading index 2 as "typecheck" -- one of them went red,
+  // and the DISCARD case below went GREEN on a line about empty bodies while
+  // its comment talked about the ratchet.
+  const PARSE = 0
+  const STUB_LINE = 1
+  const EMPTY_BODY = 2
+  const TYPECHECK = 3
+
+  it('emits four met lines for a clean file', () => {
     const lines = witnessVerdicts(
       witnessed([readWitnessLines('specs/a.t27', CLEAN)]),
     )
-    expect(lines).toHaveLength(3)
+    expect(lines).toHaveLength(4)
     expect(lines.every((l) => l.met)).toBe(true)
-    expect(lines[0].criterion).toBe('t27c: specs/a.t27 parses clean')
+    expect(lines[PARSE].criterion).toBe('t27c: specs/a.t27 parses clean')
+    expect(lines[EMPTY_BODY].criterion).toContain('no empty function body')
+    expect(lines[TYPECHECK].criterion).toContain('typecheck does not regress')
   })
 
   it('fails the parse line on a DISCARD and names the count', () => {
     const lines = witnessVerdicts(
       witnessed([readWitnessLines('specs/a.t27', DISCARD)]),
     )
-    const parse = lines[0]
+    const parse = lines[PARSE]
     expect(parse.met).toBe(false)
     expect(parse.criterion).toContain('DISCARDED 1 token')
     // The base already failed typecheck: not a regression, so not held
     // against the bee. A ratchet, not a gate.
-    expect(lines[2].met).toBe(true)
+    expect(lines[TYPECHECK].met).toBe(true)
+    expect(lines[TYPECHECK].criterion).toContain('typecheck does not regress')
   })
 
   it('fails the stub line and names how many', () => {
     const lines = witnessVerdicts(
       witnessed([readWitnessLines('specs/a.t27', STUB)]),
     )
-    expect(lines[1].met).toBe(false)
-    expect(lines[1].criterion).toContain('(1 found)')
+    expect(lines[STUB_LINE].met).toBe(false)
+    expect(lines[STUB_LINE].criterion).toContain('(1 found)')
   })
 
   it('holds a new file that fails typecheck as a regression', () => {
     const lines = witnessVerdicts(
       witnessed([readWitnessLines('specs/a.t27', NO_PARSE)]),
     )
-    expect(lines[0].met).toBe(false)
-    expect(lines[0].criterion).toContain('Parse error')
-    expect(lines[2].met).toBe(false)
-    expect(lines[2].criterion).toContain('new file fails typecheck')
+    expect(lines[PARSE].met).toBe(false)
+    expect(lines[PARSE].criterion).toContain('Parse error')
+    expect(lines[TYPECHECK].met).toBe(false)
+    expect(lines[TYPECHECK].criterion).toContain('new file fails typecheck')
   })
 
   it('skips a deleted file', () => {
@@ -276,6 +290,11 @@ function repoWithCommit(files: Array<{ path: string; body: string }>): string {
   writeFileSync(join(repo, 'README.md'), 'base\n')
   git('add', '-A')
   git('commit', '-m', 'base')
+  // `baseRef()` qualifies a bare branch name with `origin/`, so a fixture with
+  // no remote can never resolve the base and every diff against it fails.
+  // Until `committedFiles` learned to say so, that failure arrived as an empty
+  // file list -- indistinguishable from a bee that committed nothing.
+  git('remote', 'add', 'origin', repo)
   git('checkout', '-b', `queen-${ISSUE}`)
   for (const file of files) {
     mkdirSync(dirname(join(repo, file.path)), { recursive: true })
@@ -284,6 +303,7 @@ function repoWithCommit(files: Array<{ path: string; body: string }>): string {
   git('add', '-A')
   git('commit', '-m', 'work')
   git('checkout', 'main')
+  git('fetch', '-q', 'origin')
   return root
 }
 
@@ -439,7 +459,11 @@ describe('the oracle verdict, which is the only line about code working', () => 
     'W base ok',
   ]
   const lines = (extra: string[]) =>
-    witnessVerdicts(witnessed([readWitnessLines('specs/a.t27', [...base, ...extra].join('\n'))]))
+    witnessVerdicts(
+      witnessed([
+        readWitnessLines('specs/a.t27', [...base, ...extra].join('\n')),
+      ]),
+    )
 
   it('says nothing at all when zig never ran', () => {
     // An unmeasured file must not read as a passing one. This is the state on
@@ -451,7 +475,9 @@ describe('the oracle verdict, which is the only line about code working', () => 
   })
 
   it('records a met line when the generated Zig compiles and its tests pass', () => {
-    const l = lines(['W oracle pass']).find((x) => x.criterion.startsWith('zig:'))
+    const l = lines(['W oracle pass']).find((x) =>
+      x.criterion.startsWith('zig:'),
+    )
     expect(l).toBeDefined()
     expect(l?.met).toBe(true)
   })
@@ -482,7 +508,6 @@ describe('the oracle verdict, which is the only line about code working', () => 
     ).toBe(false)
   })
 })
-
 
 describe('baseRef, the ref a review compares against', () => {
   const saved = process.env.TRIOS_REPO_REF

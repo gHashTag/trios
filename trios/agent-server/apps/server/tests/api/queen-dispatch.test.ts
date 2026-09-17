@@ -1139,8 +1139,16 @@ describe('an existing worktree', () => {
     writeFileSync(join(root, 'README.md'), 'hive\n')
     git(root, ['add', '.'])
     git(root, ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'first'])
+    // `baseRef()` qualifies a bare branch name with `origin/`, exactly as
+    // production does, so a hive with no remote makes every `git diff
+    // origin/dev...` exit non-zero - and `committedFiles` answers a failed diff
+    // with an empty list. The file-naming case was measuring that failure and
+    // reading it as "the branch committed nothing". The container's checkout is
+    // a clone and has the remote; so does this.
+    git(root, ['remote', 'add', 'origin', root])
     const worktree = join(root, '.worktrees', 'queen-99')
     git(root, ['worktree', 'add', '-q', '-B', 'queen-99', worktree, 'dev'])
+    git(root, ['fetch', '-q', 'origin'])
     process.env.WORKSPACE_DIR = workspace
     return {
       root,

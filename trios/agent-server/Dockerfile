@@ -116,6 +116,34 @@ RUN set -e; \
 # bee could satisfy every stated criterion with code that does not compile, and
 # did, 384 times out of 946.
 #
+# RING-00, the command-line face the round already calls.
+#
+# `crossCheckRing00Capacity` has been calling /usr/local/bin/t27core every
+# round since it was written, and every round the container answered ENOENT
+# and logged "Ring-00 cross-check did not run" - a check that was dead in
+# production while reading, from the outside, like a check that had run.
+#
+# Bare rustc, no cargo and no dependencies: that is the contract stated in
+# rings/T27-00/queen_core.t27's header, and it is the same two invocations
+# tests/t27/ring00_parity.sh uses. The generated half is built first as a
+# library, then the hand-written shim against it.
+#
+# The two sources are copied from agent-server/t27-core/ because the build
+# context is this directory and rings/ sits above it. That mirror is not a
+# second copy anybody may edit: tests/t27/ring00_generated_is_current.sh
+# fails if it drifts from rings/T27-00/.
+FROM rust:1-bookworm AS t27core
+WORKDIR /build
+# The shim reads the generated file with `include_str!("../generated/...")`, so
+# the two halves have to sit in the same shape they have in rings/T27-00/ -
+# flat beside each other and the build fails at the include, not at the link.
+COPY t27-core/queen_core.rs generated/queen_core.rs
+COPY t27-core/t27core.rs shim/t27core.rs
+RUN rustc --edition 2021 --crate-type lib generated/queen_core.rs -o libqueen_core.rlib \
+ && rustc --edition 2021 -O shim/t27core.rs --extern queen_core=libqueen_core.rlib -o t27core \
+ && strip t27core \
+ && ./t27core constants > /dev/null
+
 # 0.16.0 exactly, because that is the version the corpus baseline in
 # tools/oracle/baseline.tsv was measured against. A different Zig is a different
 # verdict, and a ratchet that moves because the compiler moved is not a ratchet.
@@ -249,6 +277,13 @@ COPY --from=queen-core /usr/lib/swift/linux /usr/lib/swift/linux
 COPY --from=t27c /build/target/release/t27c /usr/local/bin/t27c
 COPY --from=t27c /src/REF /usr/local/share/t27c/REF
 RUN /usr/local/bin/t27c --version && echo "t27c from gHashTag/t27@$(cat /usr/local/share/t27c/REF)"
+
+# RING-00's face, on PATH at the exact path crossCheckRing00Capacity spawns.
+# `constants` is the proof it loads, taken at build time rather than at the
+# first round - which is where the ENOENT used to be discovered, in a log line
+# nobody read.
+COPY --from=t27core /build/t27core /usr/local/bin/t27core
+RUN /usr/local/bin/t27core constants
 
 # Zig ships as a binary plus a lib/ tree it reads at run time, so both come
 # across and the binary is reached through a symlink rather than being moved
