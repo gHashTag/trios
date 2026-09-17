@@ -231,7 +231,20 @@ export interface WorkerProvider {
  * trimmed value is also the one stored: a key that authenticates never needed
  * its padding, and handing the trimmed form out keeps the count and the
  * selection - which both read this list - from ever disagreeing.
+ *
+ * The suffix runs to MAX_KEYS_PER_POOL. It used to stop at 16, and 16 was never
+ * a measurement: it was where the loop happened to end, equal by coincidence to
+ * the policy ceiling on bees. They are different quantities. The ceiling bounds
+ * how many bees RUN; this bounds how many credentials the rotation may SPREAD
+ * them over, and a free key refuses its third concurrent request in under half
+ * a second (`1302`), so a swarm at the ceiling wants more keys than bees, not
+ * the same number. A seventeenth variable used to be read by nothing and
+ * reported by nothing, which is the zero-length-key trap again: it looks
+ * configured and supplies nothing. Widening the list does not widen the swarm -
+ * `queenWorkerLimit` still decides that.
  */
+export const MAX_KEYS_PER_POOL = 1000
+
 function keysFor(envVar: string): string[] {
   const keys: string[] = []
   const seen = new Set<string>()
@@ -242,7 +255,7 @@ function keysFor(envVar: string): string[] {
     keys.push(trimmed)
   }
   admit(process.env[envVar])
-  for (let i = 2; i <= 16; i++) {
+  for (let i = 2; i <= MAX_KEYS_PER_POOL; i++) {
     admit(process.env[`${envVar}_${i}`])
   }
   return keys
@@ -485,7 +498,7 @@ function availableKeyIndex(
  *   TRIOS_QUEEN_WORKER_POOL_<n>_MODEL      the model THAT endpoint serves (required)
  *   TRIOS_QUEEN_WORKER_POOL_<n>_PROVIDER   openai-compatible (default) or zai
  *   TRIOS_QUEEN_WORKER_POOL_<n>_CONTEXT    that model's context window
- *   TRIOS_QUEEN_WORKER_POOL_<n>_API_KEY, _API_KEY_2 ... _API_KEY_16
+ *   TRIOS_QUEEN_WORKER_POOL_<n>_API_KEY, _API_KEY_2 ... (MAX_KEYS_PER_POOL)
  *
  * A pool is REMOTE credentials by definition. A local Ollama stays what it was
  * measured to be - one inference slot - and does not join a credential pool,
@@ -508,12 +521,13 @@ const REMOTE_ENDPOINT_PROVIDERS = new Set(['openai-compatible', 'zai'])
  * which credentials are busy. Keys of the first pool keep the index they have
  * always had (0, 1, 2 ...), so rows written before this change still mean what
  * they meant. A key of pool n is `(n - 1) * POOL_KEY_STRIDE + position`: pool
- * 2's first key is 1000. The pool NUMBER is used, not its rank among the pools
+ * 2's first key is 10000. The pool NUMBER is used, not its rank among the pools
  * that happen to be valid today, so disconnecting pool 2 does not silently
- * rename every busy key of pool 3. A pool holds at most 16 keys, so the stride
- * can never be reached from inside one.
+ * rename every busy key of pool 3. A pool holds at most MAX_KEYS_PER_POOL keys,
+ * which is below the stride, so the stride can never be reached from inside
+ * one - a test holds the two constants to that.
  */
-export const POOL_KEY_STRIDE = 1000
+export const POOL_KEY_STRIDE = 10_000
 
 interface EndpointPool {
   /** 1-based; 1 is the pool made of the unnumbered variables. */
