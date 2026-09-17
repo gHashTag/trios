@@ -1013,8 +1013,10 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
 
         basebroke=1
         base_compiles=0
+        base_exists=0
         rm -f "$mirror"
         if git show "$base:$file" > "$mirror" 2>/dev/null; then
+          base_exists=1
           rm -f "$mine/$rel"
           if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
             (cd "$mine" && "$zigbin" test --test-no-exec _witness.zig > /dev/null 2>&1) && base_compiles=1
@@ -1022,9 +1024,20 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
           fi
         fi
         # Held against the bee when the base compiled and this does not, or
-        # when both compile and the base's tests passed while these do not.
+        # when both compile and the base's tests passed while these do not --
+        # or when there is no base at all.
+        #
+        # pre-broken means the base was already broken, so the failure was
+        # inherited. A file the base does not contain inherited nothing: the
+        # bee brought it into being, so a file that arrives failing is the
+        # bee's failure outright. Treating no base as a broken base filed every
+        # new spec under pre-broken, which is exactly the verdict that lets a
+        # failure through unowned -- and the porting feeder produces nothing
+        # BUT new specs.
         regressed=1
-        if [ "$base_compiles" = 1 ] && [ "$branch_compiles" = 0 ]; then
+        if [ "$base_exists" = 0 ]; then
+          regressed=0
+        elif [ "$base_compiles" = 1 ] && [ "$branch_compiles" = 0 ]; then
           regressed=0
         elif [ "$basebroke" = 0 ]; then
           regressed=0
