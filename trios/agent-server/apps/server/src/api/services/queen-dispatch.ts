@@ -956,6 +956,28 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
   # edit the worktree's own spec.
   rm -f "$mirror"
   git show "$branch:$file" > "$mirror" 2>/dev/null || true
+  # Reference every non-generic top-level function from a comptime block, so
+  # Zig analyses its body. Zig is lazy: zig test checks only what a test
+  # reaches, and a private function no test calls is never type-checked at all.
+  # std.testing.refAllDecls does not help -- reflection sees only pub
+  # declarations, and 82 percent of generated functions are private. Measured
+  # on the 189 specs that pass: 8 hid body errors this way.
+  #
+  # Whole-file read, so a signature split over lines is seen whole: a generic
+  # function must be skipped, because taking its address is itself an error and
+  # would blame a bee for nothing. Verified to reproduce a separate measurement
+  # of the same 189 specs exactly, 181 clean and 8 not, with 0 disagreements.
+  force_bodies() {
+    perl -e 'local $/; my $s = <STDIN>; my %seen; my @names;
+      while ($s =~ /^(?:pub\s+)?fn\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/mg) {
+        my ($n, $p) = ($1, $2);
+        next if $p =~ /\bcomptime\b|\banytype\b|:\s*type\b/;
+        push @names, $n unless $seen{$n}++;
+      }
+      print $s;
+      if (@names) { print "\ncomptime {\n"; print "    _ = &$_;\n" for @names; print "}\n"; }' \
+      < "$1" > "$1.forced" 2>/dev/null && mv "$1.forced" "$1"
+  }
   mine="$tmp/tree"
   # cp -al first: 856 files as hardlinks costs nothing. It fails across mount
   # points, and the tree lives in an image layer while $tmp is under /tmp, so
@@ -974,6 +996,7 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
     mkdir -p "$(dirname "$mine/$rel")"
     rm -f "$mine/$rel"
     if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
+      force_bodies "$mine/$rel"
       printf 'test { _ = @import("%s"); }\n' "$rel" > "$mine/_witness.zig"
       if oracle_out="$(cd "$mine" && "$zigbin" test _witness.zig 2>&1)"; then
         echo 'W oracle pass'
@@ -1019,6 +1042,7 @@ if [ -n "$zigbin" ] && [ "$inspecs" = 1 ]; then
           base_exists=1
           rm -f "$mine/$rel"
           if "$t27c" gen "$mirror" > "$mine/$rel" 2>/dev/null && [ -s "$mine/$rel" ]; then
+            force_bodies "$mine/$rel"
             (cd "$mine" && "$zigbin" test --test-no-exec _witness.zig > /dev/null 2>&1) && base_compiles=1
             (cd "$mine" && "$zigbin" test _witness.zig > /dev/null 2>&1) && basebroke=0
           fi
