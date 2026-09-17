@@ -388,6 +388,14 @@ function repoWithCommit(files: Array<{ path: string; body: string }>): string {
   writeFileSync(join(repo, 'README.md'), 'base\n')
   git('add', '-A')
   git('commit', '-m', 'base')
+  // `baseRef()` qualifies a bare branch name with `origin/`, exactly as
+  // production does, so a fixture with no remote makes `git diff origin/main...`
+  // exit non-zero - and `committedFiles` returns `[]` on a failed diff. Both
+  // boundary cases then passed or failed for a reason that had nothing to do
+  // with boundaries: the stray was never seen because the diff never ran. A
+  // remote pointing at the repository itself makes `origin/main` resolve, which
+  // is what the container's checkout has.
+  git('remote', 'add', 'origin', repo)
   git('checkout', '-b', `queen-${ISSUE}`)
   for (const file of files) {
     mkdirSync(dirname(join(repo, file.path)), { recursive: true })
@@ -396,6 +404,8 @@ function repoWithCommit(files: Array<{ path: string; body: string }>): string {
   git('add', '-A')
   git('commit', '-m', 'work')
   git('checkout', 'main')
+  // Only a fetch creates the remote-tracking ref the diff names.
+  git('fetch', 'origin')
   return root
 }
 

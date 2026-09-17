@@ -749,15 +749,44 @@ export function baseRef(): string {
   return v.includes('/') ? v : `origin/${v}`
 }
 
+/**
+ * The files a bee's branch committed against the base ref.
+ *
+ * WHAT THE EMPTY ARRAY MEANS. A diff that fails and a diff that finds nothing
+ * both return `[]`, and the callers cannot tell them apart: the review reads
+ * the result as "this bee committed no files", and `boundaryStrays` reads it as
+ * "no file fell outside the boundary" - clearing a bee that may have strayed
+ * all over the checkout. A missing ref, a missing branch, a workspace that is
+ * not there: every one of them is exonerating evidence produced by a failure.
+ *
+ * Some callers legitimately want the empty list (several suites point the
+ * workspace at a directory that does not exist precisely to get it), so the
+ * return type stays as it is - but the failure is no longer silent. Git's own
+ * message, the ref it could not resolve and the directory it ran in are
+ * journalled, so an empty list that came from a broken diff can be told from an
+ * empty list that came from a clean branch by reading the record.
+ */
 export async function committedFiles(issue: number): Promise<string[]> {
   const base = baseRef()
+  const root = workspaceRoot()
   const out = await run(
     'git',
     ['diff', '--name-only', `${base}...queen-${issue}`],
-    workspaceRoot(),
+    root,
     60_000,
   )
-  if (out.code !== 0) return []
+  if (out.code !== 0) {
+    logger.warn('The committed-file diff failed; no file can be named', {
+      issue,
+      base,
+      branch: `queen-${issue}`,
+      root,
+      code: out.code,
+      // `run` merges the two streams, so git's diagnosis is in `out`.
+      error: out.out.trim().slice(0, 300),
+    })
+    return []
+  }
   return out.out
     .split('\n')
     .map((l) => l.trim())
@@ -1135,10 +1164,13 @@ export async function witnessSpecs(
   // is nothing to fetch, and it runs once per reviewed issue, not per file.
   const fetched = await run('git', ['fetch', '--quiet', 'origin'], root, 60_000)
   if (fetched.code !== 0) {
-    logger.warn('Could not refresh the base before a review; it may have drifted', {
-      issue,
-      detail: fetched.out.slice(0, 200),
-    })
+    logger.warn(
+      'Could not refresh the base before a review; it may have drifted',
+      {
+        issue,
+        detail: fetched.out.slice(0, 200),
+      },
+    )
   }
   const branch = `queen-${issue}`
   const out: SpecWitness[] = []

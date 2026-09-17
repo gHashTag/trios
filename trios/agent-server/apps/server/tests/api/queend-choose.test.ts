@@ -5,8 +5,8 @@ import {
   containerQueendPath,
   DOCKERFILE_PATH as DOCKERFILE,
   productionQueendFallback,
-  QUEEN_TICK_PATH as TICK,
   resolveQueendPath,
+  QUEEN_TICK_PATH as TICK,
 } from '../__helpers__/queend-path'
 
 /**
@@ -122,7 +122,7 @@ describe('queend chooses the next bee', () => {
     const answer = ask(board([1176], [task(1176, 'running')]))
     // Swift omits a nil rather than encoding null, so the key is absent.
     expect(answer.chosen ?? null).toBeNull()
-    expect(String(answer.skipped)).toContain('a worker has it')
+    expect(String(answer.skipped)).toContain('a worker already has it')
   })
 
   // rejected means the Queen sent it back and the same bee is expected to
@@ -142,7 +142,7 @@ describe('queend chooses the next bee', () => {
     )
     // Swift omits a nil rather than encoding null, so the key is absent.
     expect(answer.chosen ?? null).toBeNull()
-    expect(String(answer.skipped)).toContain('a worker has it')
+    expect(String(answer.skipped)).toContain('a worker already has it')
   })
 
   /**

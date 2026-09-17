@@ -578,7 +578,20 @@ public enum QueenDelegationPolicy {
                 detail: "a worker already has it (\(names))"
             )
         }
-        if states.contains(where: { $0 == .queued || $0 == .rejected }) {
+        // `rejected` is NOT waiting for somebody to pick it up. It means the
+        // Queen sent the work back and the SAME bee is expected to return to
+        // those files - see ``claimOnIssue(states:)``, which keeps it live for
+        // exactly that reason. Reporting it as "claimed, but no worker is
+        // attached yet" described a different situation with the same words,
+        // which is the defect this whole type exists to keep out: the decision
+        // was right and the sentence was about something else.
+        if states.contains(.rejected) {
+            return SpokenForReport(
+                bucket: "sent back, expected back",
+                detail: "it is \(names) - sent back, and the same bee is expected back on it"
+            )
+        }
+        if states.contains(.queued) {
             return SpokenForReport(
                 bucket: "queued for a worker",
                 detail: "it is \(names) - claimed, but no worker is attached yet"

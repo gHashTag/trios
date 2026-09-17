@@ -336,9 +336,18 @@ describe('the send-back valve on the stored rows for #1316 and #1318', () => {
       expect(
         String(answer.skipped),
         'control - both issues skipped as claimed, the sentence the claimed bucket is made of',
-      ).toContain('#1316: a worker has it or is expected back (rejected)')
+        // The sentence has moved twice since this line was written, and this
+        // line followed neither move: `main.swift` stopped writing its own words
+        // for a live claim and now appends `spokenForReport(states:).detail`,
+        // and `rejected` has since been split out of the queued sentence, which
+        // described work nobody had started. What is asserted is the same fact
+        // it always was - #1316 is spoken for, and by the bee that is expected
+        // back on it.
+      ).toContain(
+        '#1316: it is rejected - sent back, and the same bee is expected back on it',
+      )
       expect(String(answer.skipped)).toContain(
-        '#1318: a worker has it or is expected back (rejected)',
+        '#1318: it is rejected - sent back, and the same bee is expected back on it',
       )
     },
   )

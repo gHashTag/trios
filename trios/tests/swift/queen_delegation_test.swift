@@ -368,6 +368,22 @@ enum QueenDelegationTests {
             "and queued does not claim a worker either"
         )
 
+        // `rejected` shared the queued sentence and so was reported as waiting
+        // for somebody to pick it up. It is the opposite: the work came back
+        // and the bee that wrote it is expected to return to those files.
+        check(
+            P.spokenForReport(states: [.rejected]).bucket == "sent back, expected back",
+            "rejected is counted apart from work nobody has started"
+        )
+        check(
+            P.spokenForReport(states: [.rejected]).detail.contains("expected back"),
+            "and the sentence says a bee is expected back, not that none is attached"
+        )
+        check(
+            !P.spokenForReport(states: [.rejected]).detail.contains("no worker is attached"),
+            "the queued sentence must not be reused for work that was sent back"
+        )
+
         // An issue can carry several tasks. One running worker outranks any
         // number of finished ones: the board really is busy on that issue.
         check(

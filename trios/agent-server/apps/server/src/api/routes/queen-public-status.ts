@@ -178,6 +178,11 @@ function classifySkipReason(line: string): SkipCategory {
   // state names are interpolated and would drift with the registry.
   if (line.includes('a worker already has it')) return 'claimed'
   if (line.includes('claimed, but no worker is attached yet')) return 'claimed'
+  // `rejected` was sharing the queued sentence and so described work nobody
+  // had started; it now says what it is. Still `claimed` - the issue is spoken
+  // for either way - but the sentence and the category now agree about which
+  // kind of spoken-for it is.
+  if (line.includes('the same bee is expected back on it')) return 'claimed'
   if (line.includes('spoken for by a task with no recorded state'))
     return 'claimed'
   if (line.includes('so it is finished or waiting on you')) return 'claimed'
