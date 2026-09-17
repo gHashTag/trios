@@ -890,6 +890,10 @@ tri — Trinity S³AI ops CLI
   tri mutants-logic-refresh [DRY=1] — пересобрать .trinity/build/QueenCore дефолтным
                      тулчейном и прогнать make mutants-logic (рассинхрон тулчейнов)
   tri deploy-wait (то же самое — tri live-wait) <путь> <маркер> [N] — ждать, пока правка доедет до живого render
+  tri tb            — TurboBaby: сводка прода + разделения с woody-weed-bot
+  tri tb-deploy     — безопасный деплой turbobaby-bot (link→up→wait→verify)
+  tri tb-verify     — инварианты разделения: vars/миграции/чужой health
+  tri tb-lint       — оба clippy-гейта CI локально (+ --test для cargo test)
   tri live-verify [issue] [crit] — живой отпечаток цепочкой за один запуск
   tri regression [issue] [crit] — доска + локи + live-verify одной командой
   tri spec-diag [log] — класс ошибки каждой несобирающейся спеки
@@ -1691,6 +1695,93 @@ PYORPHAN
     else
       echo "tri wave-plan [N] — N это число строк"; exit 1
     fi
+    ;;
+
+
+  tb)
+    # TurboBaby (репо ~/turbobaby-user-bot, Railway-проект woody, сервис turbobaby-bot).
+    # Сводка разделения двух клиентов + живость прода. ЧУЖОЙ woody-weed-bot —
+    # только curl /health, никаких railway-команд на него (инцидент 2026-09-13).
+    TB=https://turbobaby-bot-production.up.railway.app
+    WB=https://woody-weed-bot-production-370f.up.railway.app
+    echo "== turbobaby-bot =="
+    echo -n "health: "; curl -s -m 8 -o /dev/null -w "%{http_code}\n" "$TB/health" || echo DOWN
+    echo -n "photos: "; curl -s -m 8 "$TB/api/bikes" | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)["bikes"]; print(sum(1 for b in d if b.get("image_url")), "/", len(d))
+except Exception as e: print("ERR", e)'
+    echo -n "InvalidToken (50 строк лога): "; railway logs -s turbobaby-bot --lines 50 2>/dev/null | grep -ci InvalidToken
+    echo "-- последний деплой --"; railway deployment list -s turbobaby-bot 2>/dev/null | sed -n '2p'
+    echo; echo "== woody-weed-bot (чужой, только замер) =="
+    echo -n "health: "; curl -s -m 8 -o /dev/null -w "%{http_code}\n" "$WB/health" || echo DOWN
+    echo; echo "== луп-состояние (хвост) =="; tail -14 ~/turbobaby-user-bot/loop/LOOP_STATE.md 2>/dev/null
+    ;;
+
+  tb-deploy)
+    # Безопасный деплой turbobaby-bot: link -> up -> ждать SUCCESS/FAILED -> verify.
+    # Уроки ночи 2026-09-13 зашиты сюда: деплой только через link на НАШ сервис;
+    # после up проверять ЧТО доехало, а не только статус.
+    set -e
+    cd ~/turbobaby-user-bot || exit 1
+    railway link -p woody -e production -s turbobaby-bot >/dev/null 2>&1
+    echo "linked: turbobaby-bot; up…"
+    railway up -y -d 2>&1 | grep -E "Build Logs|Uploading" || true
+    s=""
+    for i in $(seq 1 60); do
+      sleep 20
+      s=$(railway deployment list -s turbobaby-bot 2>/dev/null | sed -n '2p')
+      echo "[$((i*20))s] $s"
+      case "$s" in *SUCCESS*|*FAILED*|*CRASHED*) break ;; esac
+    done
+    case "$s" in
+      *SUCCESS*) ;;
+      *) echo "ДЕПЛОЙ НЕ УСПЕЛ/УПАЛ: $s"; exit 1 ;;
+    esac
+    sleep 15
+    TB=https://turbobaby-bot-production.up.railway.app
+    echo -n "health: "; curl -s -m 8 -o /dev/null -w "%{http_code}\n" "$TB/health"
+    echo -n "photos: "; curl -s -m 8 "$TB/api/bikes" | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)["bikes"]; print(sum(1 for b in d if b.get("image_url")), "/", len(d))
+except Exception as e: print("ERR", e)'
+    echo -n "InvalidToken: "; railway logs -s turbobaby-bot --lines 50 2>/dev/null | grep -ci InvalidToken
+    echo "tb-deploy: готово"
+    ;;
+
+  tb-lint)
+    # Оба clippy-гейта CI локально, до пуша: wasm и backend, -D warnings.
+    # Вызов: tri tb-lint [--test]  (--test добавляет cargo test --features backend)
+    cd "$HOME/turbobaby-user-bot" || exit 1
+    rc=0
+    echo "== wasm gate: cargo clippy --target wasm32-unknown-unknown =="
+    cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings || rc=1
+    echo "== backend gate: cargo clippy --bin turbobaby-bot-server =="
+    cargo clippy --features backend --bin turbobaby-bot-server -- -D warnings || rc=1
+    if [ "$2" = "--test" ]; then
+      echo "== tests: cargo test --features backend =="
+      cargo test --features backend || rc=1
+    fi
+    [ "$rc" -eq 0 ] && echo "tb-lint: OK" || echo "tb-lint: FAIL"
+    exit $rc
+    ;;
+
+  tb-verify)
+    # Инварианты разделения: vars на месте, базы не перепутаны, чужой сервис жив.
+    echo "== vars turbobaby-bot (mask) =="
+    railway link -p woody -e production -s turbobaby-bot >/dev/null 2>&1
+    railway variables --kv 2>/dev/null | grep -E "^(BOT_TOKEN|DATABASE_URL)=" | sed -E "s/^(BOT_TOKEN=.{8}).*/\1…/; s#(postgresql://[^:]+:)[^@]+@#\1***@#"
+    echo "== миграции (woody=84 ours, woody_client=76 theirs) =="
+    PGURL=$(railway variables -s postgres --kv 2>/dev/null | grep "^DATABASE_PUBLIC_URL=" | cut -d= -f2-)
+    if [ -n "$PGURL" ]; then
+      for db in woody woody_client; do
+        echo -n "$db: "
+        psql "${PGURL%/*}/$db" -t -A -c "SELECT count(*) FROM _schema_migrations" 2>/dev/null || echo "ERR"
+      done
+    else
+      echo "нет DATABASE_PUBLIC_URL у postgres — пропуск"
+    fi
+    echo "== чужой сервис (только /health) =="
+    echo -n "woody-weed-bot: "; curl -s -m 8 -o /dev/null -w "%{http_code}\n" https://woody-weed-bot-production-370f.up.railway.app/health
     ;;
 
   *)
