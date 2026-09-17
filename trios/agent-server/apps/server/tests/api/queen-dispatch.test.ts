@@ -12,8 +12,11 @@ import {
   configuredWorkerLanesPerCredential,
   dispatchBee,
   drain,
+  endpointPoolProblems,
   finishDispatch,
+  MAX_KEYS_PER_POOL,
   missingProviderRefusal,
+  POOL_KEY_STRIDE,
   prepareWorktree,
   recordDispatch,
   resolveWorkerProvider,
@@ -30,6 +33,18 @@ const GENERIC_WORKER_KEYS = [
     (_, index) => `TRIOS_QUEEN_WORKER_API_KEY_${index + 2}`,
   ),
 ]
+
+// Additional endpoint pools (TRIOS_QUEEN_WORKER_POOL_<n>_*). Listed for the same
+// reason as every other name here: one process runs every api test file, and a
+// pool left behind makes the next file's "one endpoint" case read two.
+const POOL_VARIABLES = [2, 3].flatMap((pool) => [
+  ...['BASE_URL', 'MODEL', 'PROVIDER', 'CONTEXT', 'API_KEY'].map(
+    (name) => `TRIOS_QUEEN_WORKER_POOL_${pool}_${name}`,
+  ),
+  ...[2, 3, 4].map(
+    (index) => `TRIOS_QUEEN_WORKER_POOL_${pool}_API_KEY_${index}`,
+  ),
+])
 
 const KEYS = [
   'ZAI_API_KEY',
@@ -50,7 +65,14 @@ const KEYS = [
   'TRIOS_QUEEN_WORKER_BASE_URL',
   'TRIOS_QUEEN_WORKER_MODEL',
   'TRIOS_QUEEN_WORKER_CONTEXT',
+  'TRIOS_QUEEN_WORKER_LANES_PER_KEY',
+  'TRIOS_QUEEN_MAX_WORKERS',
+  // The far end of the key list (MAX_KEYS_PER_POOL) and the first name past it.
+  'TRIOS_QUEEN_WORKER_API_KEY_17',
+  'TRIOS_QUEEN_WORKER_API_KEY_1024',
+  'TRIOS_QUEEN_WORKER_API_KEY_1025',
   'TRIOS_ZAI_CONCURRENCY_PER_KEY',
+  ...POOL_VARIABLES,
 ]
 
 afterEach(() => {
@@ -237,6 +259,299 @@ describe('queen dispatch precheck', () => {
       expect(resolveWorkerProvider()).toBeNull()
       expect(workerCapacityBreakdown().effectiveCapacity).toBe(0)
       expect(missingProviderRefusal()).toContain('TRIOS_QUEEN_WORKER_PROVIDER')
+    })
+  })
+
+  /**
+   * Measured on 2026-09-17: the deployment held ten working Z.ai keys and three
+   * working NVIDIA keys, and only the first ten could carry a bee, because one
+   * endpoint URL was the whole model and a key is only as good as the URL the
+   * bee sends it to. A numbered pool is a second endpoint with its own model
+   * and its own keys; the first pool is the unnumbered variables, unchanged.
+   */
+  describe('additional endpoint pools', () => {
+    const ZAI_URL = 'https://api.z.ai/api/paas/v4'
+    const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1'
+    const NVIDIA_MODEL = 'nvidia/nemotron-3-super-120b-a12b'
+
+    const firstPool = (...keys: string[]) => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = ZAI_URL
+      process.env.TRIOS_QUEEN_WORKER_MODEL = 'glm-4.5-flash'
+      process.env.TRIOS_QUEEN_WORKER_CONTEXT = '65536'
+      keys.forEach((value, index) => {
+        process.env[GENERIC_WORKER_KEYS[index]] = value
+      })
+    }
+    const secondPool = (...keys: string[]) => {
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_BASE_URL = `${NVIDIA_URL}/`
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_MODEL = NVIDIA_MODEL
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_CONTEXT = '131072'
+      keys.forEach((value, index) => {
+        const name =
+          index === 0
+            ? 'TRIOS_QUEEN_WORKER_POOL_2_API_KEY'
+            : `TRIOS_QUEEN_WORKER_POOL_2_API_KEY_${index + 1}`
+        process.env[name] = value
+      })
+    }
+
+    it('sends each key to the endpoint of its own pool', () => {
+      firstPool('z1', 'z2', 'z3')
+      secondPool('n1', 'n2')
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '16'
+
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 5,
+        lanesPerCredential: 1,
+        effectiveCapacity: 5,
+      })
+      const taken: number[] = []
+      const choices = Array.from({ length: 5 }, () => {
+        const choice = resolveWorkerProvider([...taken])
+        taken.push(choice?.keyIndex ?? -1)
+        return choice
+      })
+      // The first pool keeps the indices it has always had; pool 2 starts at
+      // the stride, so rows written before this change still mean the same key.
+      expect(choices.map((choice) => choice?.keyIndex)).toEqual([
+        0,
+        1,
+        2,
+        POOL_KEY_STRIDE,
+        POOL_KEY_STRIDE + 1,
+      ])
+      expect(choices.map((choice) => choice?.apiKey)).toEqual([
+        'z1',
+        'z2',
+        'z3',
+        'n1',
+        'n2',
+      ])
+      expect(choices[0]).toMatchObject({
+        provider: 'zai',
+        baseUrl: ZAI_URL,
+        model: 'glm-4.5-flash',
+        contextWindow: 65536,
+        keyCount: 3,
+        poolNumber: 1,
+        poolCount: 2,
+      })
+      // A Z.ai URL with an NVIDIA key is a 401 blamed on the work. Everything
+      // that travels to /chat comes from the SAME pool as the key.
+      expect(choices[3]).toMatchObject({
+        provider: 'openai-compatible',
+        baseUrl: NVIDIA_URL,
+        model: NVIDIA_MODEL,
+        contextWindow: 131072,
+        keyCount: 2,
+        poolNumber: 2,
+        poolCount: 2,
+      })
+      expect(resolveWorkerProvider(taken)?.exhausted).toBe(5)
+    })
+
+    it('rotates across pools after the last durable assignment', () => {
+      firstPool('z1', 'z2')
+      secondPool('n1', 'n2')
+
+      expect(resolveWorkerProvider([], 1)?.keyIndex).toBe(POOL_KEY_STRIDE)
+      expect(resolveWorkerProvider([], POOL_KEY_STRIDE)?.keyIndex).toBe(
+        POOL_KEY_STRIDE + 1,
+      )
+      expect(resolveWorkerProvider([], POOL_KEY_STRIDE + 1)?.keyIndex).toBe(0)
+      // A cursor naming a key that is no longer connected starts from the top
+      // instead of being read as a position in a list it was never part of.
+      expect(resolveWorkerProvider([], 2 * POOL_KEY_STRIDE + 7)?.keyIndex).toBe(
+        0,
+      )
+    })
+
+    it('gives every credential of every pool one bee before any key carries two', () => {
+      firstPool('z1', 'z2')
+      secondPool('n1')
+      process.env.TRIOS_QUEEN_WORKER_LANES_PER_KEY = '2'
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '16'
+
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 3,
+        lanesPerCredential: 2,
+        effectiveCapacity: 6,
+      })
+      const taken: number[] = []
+      for (let bee = 0; bee < 6; bee++) {
+        const choice = resolveWorkerProvider(
+          [...taken],
+          taken[taken.length - 1],
+        )
+        taken.push(choice?.keyIndex ?? -1)
+      }
+      expect(taken).toEqual([0, 1, POOL_KEY_STRIDE, 0, 1, POOL_KEY_STRIDE])
+      expect(resolveWorkerProvider(taken)?.exhausted).toBe(6)
+    })
+
+    it('stays behind the policy ceiling however many pools are connected', () => {
+      firstPool('z1', 'z2', 'z3')
+      secondPool('n1', 'n2', 'n3')
+
+      // TRIOS_QUEEN_MAX_WORKERS unset: the measured default of four.
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 6,
+        lanesPerCredential: 1,
+        effectiveCapacity: 4,
+      })
+      expect(configuredWorkerCapacity()).toBe(4)
+    })
+
+    it('ignores a half-configured pool and says which variable is missing', () => {
+      firstPool('z1')
+      // A URL and keys but no model: the first pool's model name sent to
+      // another provider is a 404, so the pool is not connected at all.
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_BASE_URL = NVIDIA_URL
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_API_KEY = 'n1'
+      // Keys with no endpoint to send them to.
+      process.env.TRIOS_QUEEN_WORKER_POOL_3_API_KEY = 'x1'
+
+      expect(workerCapacityBreakdown().connectedCredentials).toBe(1)
+      expect(resolveWorkerProvider([0])?.exhausted).toBe(1)
+      const problems = endpointPoolProblems()
+      expect(problems).toContain('TRIOS_QUEEN_WORKER_POOL_2_MODEL is not set')
+      expect(problems.join(' ')).toContain('TRIOS_QUEEN_WORKER_POOL_3_BASE_URL')
+      // Names only. A value in a diagnostic is a disclosure.
+      expect(problems.join(' ')).not.toContain('n1')
+      expect(problems.join(' ')).not.toContain('x1')
+    })
+
+    it('names an ignored pool when every connected key is busy', async () => {
+      firstPool('z1')
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_BASE_URL = NVIDIA_URL
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_API_KEY = 'n1'
+      const pool = {
+        query: async () => ({ rowCount: 1, rows: [] }),
+      } as unknown as Pool
+
+      const outcome = await dispatchBee(pool, 1308, 'brief', [], [0])
+
+      expect(outcome.started).toBe(false)
+      expect(outcome.detail).toContain('TRIOS_QUEEN_WORKER_API_KEY_2')
+      expect(outcome.detail).toContain(
+        'TRIOS_QUEEN_WORKER_POOL_2_MODEL is not set',
+      )
+      expect(outcome.detail).not.toContain('n1')
+    })
+
+    it('refuses a pool whose provider is not a remote endpoint', () => {
+      firstPool('z1')
+      secondPool('n1')
+      process.env.TRIOS_QUEEN_WORKER_POOL_2_PROVIDER = 'ollama'
+
+      expect(workerCapacityBreakdown().connectedCredentials).toBe(1)
+      expect(endpointPoolProblems().join(' ')).toContain(
+        'TRIOS_QUEEN_WORKER_POOL_2_PROVIDER',
+      )
+    })
+
+    it('counts one secret named by two pools as one credential', () => {
+      firstPool('shared', 'z2')
+      secondPool('shared', 'n2')
+
+      expect(workerCapacityBreakdown().connectedCredentials).toBe(3)
+      const second = resolveWorkerProvider([0, 1])
+      // The first pool that names a secret keeps it; pool 2 offers only 'n2'.
+      expect(second?.apiKey).toBe('n2')
+      expect(second?.keyIndex).toBe(POOL_KEY_STRIDE)
+      expect(second?.keyCount).toBe(1)
+    })
+
+    it('does not let a valid second pool take over from a first one with no key', () => {
+      firstPool()
+      secondPool('n1')
+
+      // An explicit endpoint is authoritative, including its refusal.
+      expect(resolveWorkerProvider()).toBeNull()
+      expect(missingProviderRefusal()).toContain('TRIOS_QUEEN_WORKER_API_KEY')
+    })
+
+    it('keeps a local first endpoint as one measured lane and reads no pools', () => {
+      process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'ollama'
+      process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'http://ollama:11434/v1'
+      secondPool('n1', 'n2')
+
+      expect(resolveWorkerProvider()?.provider).toBe('ollama')
+      expect(resolveWorkerProvider()?.poolCount).toBeUndefined()
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 1,
+        lanesPerCredential: 1,
+        effectiveCapacity: 1,
+      })
+    })
+
+    it('reads a key past the sixteenth, up to the bound and not beyond it', () => {
+      firstPool('z1')
+      // 16 was where the loop ended, not a measurement: a seventeenth variable
+      // was read by nothing and reported by nothing.
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_17 = 'z17'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_1024 = 'z1024'
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_1025 = 'past-the-bound'
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '16'
+
+      expect(MAX_KEYS_PER_POOL).toBe(1024)
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 3,
+        lanesPerCredential: 1,
+        effectiveCapacity: 3,
+      })
+      expect(resolveWorkerProvider([0])?.apiKey).toBe('z17')
+      expect(resolveWorkerProvider([0, 1])?.apiKey).toBe('z1024')
+      expect(resolveWorkerProvider([0, 1, 2])?.exhausted).toBe(3)
+    })
+
+    it('widens the key list without widening the swarm', () => {
+      firstPool(...Array.from({ length: 16 }, (_, index) => `z${index + 1}`))
+      process.env.TRIOS_QUEEN_WORKER_API_KEY_17 = 'z17'
+      process.env.TRIOS_QUEEN_MAX_WORKERS = '64'
+
+      // Seventeen credentials, and the policy ceiling still answers sixteen.
+      expect(workerCapacityBreakdown()).toEqual({
+        connectedCredentials: 17,
+        lanesPerCredential: 1,
+        effectiveCapacity: 16,
+      })
+    })
+
+    it('keeps a whole pool below the stride that separates pools', () => {
+      // The durable index of pool n starts at (n - 1) * POOL_KEY_STRIDE. If a
+      // pool could hold that many keys, its last key would BE pool n + 1's first.
+      expect(MAX_KEYS_PER_POOL).toBeLessThan(POOL_KEY_STRIDE)
+    })
+
+    it('leaves a single endpoint exactly as it was', () => {
+      firstPool('z1', 'z2')
+
+      const choice = resolveWorkerProvider([0])
+      expect(choice?.keyIndex).toBe(1)
+      expect(choice?.poolNumber).toBeUndefined()
+      expect(choice?.poolCount).toBeUndefined()
+      expect(endpointPoolProblems()).toEqual([])
+    })
+
+    it('keeps the breakdown closed when several pools are connected', () => {
+      firstPool('planted-secret-z')
+      secondPool('planted-secret-n')
+      const breakdown = workerCapacityBreakdown() as unknown as Record<
+        string,
+        unknown
+      >
+
+      expect(Object.keys(breakdown).sort()).toEqual([
+        'connectedCredentials',
+        'effectiveCapacity',
+        'lanesPerCredential',
+      ])
+      const serialized = JSON.stringify(breakdown)
+      expect(serialized).not.toContain('planted-secret')
+      expect(serialized).not.toContain('POOL_2')
+      expect(serialized).not.toContain('nvidia')
     })
   })
 

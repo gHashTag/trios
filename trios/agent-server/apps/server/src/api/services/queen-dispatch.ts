@@ -163,9 +163,19 @@ export interface WorkerProvider {
   /** This server's own token, when the turn is aimed back at this server. */
   apiKey?: string
   rehearsal?: boolean
-  /** Which of this provider's keys was handed out, 0-based. */
+  /**
+   * Which key was handed out. For the first endpoint pool (and every legacy
+   * provider) this is the 0-based position in that pool's key list, exactly as
+   * before. A key of an ADDITIONAL endpoint pool carries its pool in the same
+   * integer - see POOL_KEY_STRIDE - because this is the value written to
+   * `queen_dispatch.key_index`, and one durable column has to name both.
+   */
   keyIndex?: number
+  /** How many distinct keys the pool this key came from holds. */
   keyCount?: number
+  /** 1-based number of the endpoint pool, present only when several are connected. */
+  poolNumber?: number
+  poolCount?: number
   /** Which concurrent lane on this credential was handed out, 0-based. */
   laneIndex?: number
   laneCount?: number
@@ -221,7 +231,25 @@ export interface WorkerProvider {
  * trimmed value is also the one stored: a key that authenticates never needed
  * its padding, and handing the trimmed form out keeps the count and the
  * selection - which both read this list - from ever disagreeing.
+ *
+ * The suffix runs to MAX_KEYS_PER_POOL. It used to stop at 16, and 16 was never
+ * a measurement: it was where the loop happened to end, equal by coincidence to
+ * the policy ceiling on bees. They are different quantities. The ceiling bounds
+ * how many bees RUN; this bounds how many credentials the rotation may SPREAD
+ * them over, and a free key refuses its third concurrent request in under half
+ * a second (`1302`), so a swarm at the ceiling wants more keys than bees, not
+ * the same number. A seventeenth variable used to be read by nothing and
+ * reported by nothing, which is the zero-length-key trap again: it looks
+ * configured and supplies nothing. Widening the list does not widen the swarm -
+ * `queenWorkerLimit` still decides that.
+ *
+ * 1024 rather than a round thousand so that this bound can never sit BELOW a
+ * worker ceiling expressed as a power of two: with one lane per credential a
+ * swarm of N bees needs N keys, and a key bound under the worker bound would be
+ * a second, hidden ceiling that reports nothing when it is hit.
  */
+export const MAX_KEYS_PER_POOL = 1024
+
 function keysFor(envVar: string): string[] {
   const keys: string[] = []
   const seen = new Set<string>()
@@ -232,7 +260,7 @@ function keysFor(envVar: string): string[] {
     keys.push(trimmed)
   }
   admit(process.env[envVar])
-  for (let i = 2; i <= 16; i++) {
+  for (let i = 2; i <= MAX_KEYS_PER_POOL; i++) {
     admit(process.env[`${envVar}_${i}`])
   }
   return keys
@@ -326,16 +354,19 @@ function configuredRemoteLanesPerCredential(): number {
 export function workerCapacityBreakdown(): WorkerCapacityBreakdown {
   const endpoint = configuredWorkerBaseUrl()
   if (endpoint) {
-    const genericKeys = keysFor(GENERIC_WORKER_KEY_ENV)
     // An explicitly configured Ollama is one measured inference server even
     // when it happens to have an access token. Multiple names for that token
     // are not independent compute. A remote API, by contrast, gets exactly one
-    // conservative lane for every distinct credential.
+    // conservative lane for every distinct credential - of EVERY connected
+    // endpoint pool, because dispatch allocates against the same list.
     const provider = configuredWorkerProvider()
     const connectedCredentials = provider
       ? provider === 'ollama'
         ? 1
-        : genericKeys.length
+        : configuredEndpointPools().reduce(
+            (total, pool) => total + pool.keys.length,
+            0,
+          )
       : 0
     const lanesPerCredential =
       provider === 'ollama' ? 1 : configuredRemoteLanesPerCredential()
@@ -455,6 +486,227 @@ function availableKeyIndex(
   return -1
 }
 
+/**
+ * More than one endpoint at once.
+ *
+ * One endpoint was the whole model: a single TRIOS_QUEEN_WORKER_BASE_URL, a
+ * single model, and every generic key sent there. A deployment that holds
+ * credentials for two providers could therefore use one of them - the second
+ * set of keys had nowhere to go, because a key handed to a bee is only as good
+ * as the URL the bee sends it to. Measured on 2026-09-17: ten Z.ai keys carried
+ * sixteen bees while three working NVIDIA keys sat unused next to them.
+ *
+ * So the FIRST pool is exactly the variables that already exist, unchanged in
+ * name and meaning, and further pools are numbered from 2:
+ *
+ *   TRIOS_QUEEN_WORKER_POOL_<n>_BASE_URL   the endpoint (required)
+ *   TRIOS_QUEEN_WORKER_POOL_<n>_MODEL      the model THAT endpoint serves (required)
+ *   TRIOS_QUEEN_WORKER_POOL_<n>_PROVIDER   openai-compatible (default) or zai
+ *   TRIOS_QUEEN_WORKER_POOL_<n>_CONTEXT    that model's context window
+ *   TRIOS_QUEEN_WORKER_POOL_<n>_API_KEY, _API_KEY_2 ... (MAX_KEYS_PER_POOL)
+ *
+ * A pool is REMOTE credentials by definition. A local Ollama stays what it was
+ * measured to be - one inference slot - and does not join a credential pool,
+ * so additional pools are read only when the first endpoint is a remote one.
+ *
+ * The model is required per pool and never inherited: the first pool's model
+ * name sent to a second provider is a 404 that arrives blamed on the work.
+ * Lanes per credential stay ONE number for the deployment
+ * (TRIOS_QUEEN_WORKER_LANES_PER_KEY), which keeps the closed capacity
+ * breakdown (#1308) an exact statement: credentials x lanes, bounded by the
+ * policy ceiling.
+ */
+const MAX_ENDPOINT_POOLS = 8
+const REMOTE_ENDPOINT_PROVIDERS = new Set(['openai-compatible', 'zai'])
+
+/**
+ * The durable name of a key in an additional pool.
+ *
+ * `queen_dispatch.key_index` is one integer, read back every tick to learn
+ * which credentials are busy. Keys of the first pool keep the index they have
+ * always had (0, 1, 2 ...), so rows written before this change still mean what
+ * they meant. A key of pool n is `(n - 1) * POOL_KEY_STRIDE + position`: pool
+ * 2's first key is 10000. The pool NUMBER is used, not its rank among the pools
+ * that happen to be valid today, so disconnecting pool 2 does not silently
+ * rename every busy key of pool 3. A pool holds at most MAX_KEYS_PER_POOL keys,
+ * which is below the stride, so the stride can never be reached from inside
+ * one - a test holds the two constants to that.
+ */
+export const POOL_KEY_STRIDE = 10_000
+
+interface EndpointPool {
+  /** 1-based; 1 is the pool made of the unnumbered variables. */
+  number: number
+  provider: string
+  baseUrl: string
+  model: string
+  contextWindow: number
+  keys: string[]
+}
+
+function poolVariable(poolNumber: number, name: string): string {
+  return `TRIOS_QUEEN_WORKER_POOL_${poolNumber}_${name}`
+}
+
+function cleanBaseUrl(raw: string | undefined): string | undefined {
+  return raw?.trim() ? raw.trim().replace(/\/+$/, '') : undefined
+}
+
+function contextWindowFrom(raw: string | undefined): number {
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed < 2048) {
+    return DEFAULT_LOCAL_CONTEXT_WINDOW
+  }
+  return parsed
+}
+
+/**
+ * Why a numbered pool that someone started to configure is not connected.
+ *
+ * A pool with a URL and no model, or keys and an unsupported provider, reads as
+ * configured in a variable editor and supplies nothing - the same trap as an
+ * empty key box. Dispatch ignores such a pool rather than guessing, and this is
+ * the sentence that says so. Variable NAMES only; never a value.
+ */
+export function endpointPoolProblems(): string[] {
+  const problems: string[] = []
+  for (let n = 2; n <= MAX_ENDPOINT_POOLS; n++) {
+    const baseUrl = cleanBaseUrl(process.env[poolVariable(n, 'BASE_URL')])
+    const keys = keysFor(poolVariable(n, 'API_KEY'))
+    if (!baseUrl && keys.length === 0) continue
+    if (!baseUrl) {
+      problems.push(
+        `${poolVariable(n, 'API_KEY')} is set but ${poolVariable(n, 'BASE_URL')} is not`,
+      )
+      continue
+    }
+    const provider =
+      process.env[poolVariable(n, 'PROVIDER')]?.trim() || 'openai-compatible'
+    if (!REMOTE_ENDPOINT_PROVIDERS.has(provider)) {
+      problems.push(
+        `${poolVariable(n, 'PROVIDER')} must be one of ${[...REMOTE_ENDPOINT_PROVIDERS].join(', ')}`,
+      )
+    }
+    if (!process.env[poolVariable(n, 'MODEL')]?.trim()) {
+      problems.push(`${poolVariable(n, 'MODEL')} is not set`)
+    }
+    if (keys.length === 0) {
+      problems.push(`${poolVariable(n, 'API_KEY')} is not set`)
+    }
+  }
+  return problems
+}
+
+/**
+ * Every endpoint pool dispatch may hand a key from, first pool first.
+ *
+ * Empty when no endpoint is configured (the legacy provider path decides) or
+ * when the first endpoint's provider is unsupported - an explicit endpoint is
+ * authoritative, including its refusal, and a valid second pool must not
+ * quietly take over from a broken first one.
+ */
+function configuredEndpointPools(): EndpointPool[] {
+  const baseUrl = configuredWorkerBaseUrl()
+  const provider = configuredWorkerProvider()
+  if (!baseUrl || !provider) return []
+  const seen = new Set<string>()
+  const distinct = (keys: string[]) =>
+    keys.filter((key) => {
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  const pools: EndpointPool[] = [
+    {
+      number: 1,
+      provider,
+      baseUrl,
+      model: process.env.TRIOS_QUEEN_WORKER_MODEL || DEFAULT_LOCAL_WORKER_MODEL,
+      contextWindow: configuredWorkerContextWindow(),
+      keys: distinct(keysFor(GENERIC_WORKER_KEY_ENV)),
+    },
+  ]
+  if (provider === 'ollama') return pools
+  for (let n = 2; n <= MAX_ENDPOINT_POOLS; n++) {
+    const poolUrl = cleanBaseUrl(process.env[poolVariable(n, 'BASE_URL')])
+    const poolProvider =
+      process.env[poolVariable(n, 'PROVIDER')]?.trim() || 'openai-compatible'
+    const model = process.env[poolVariable(n, 'MODEL')]?.trim()
+    if (!poolUrl || !model || !REMOTE_ENDPOINT_PROVIDERS.has(poolProvider)) {
+      continue
+    }
+    // The same secret under two pools is still one account with one rate
+    // limit (#1293); the first pool that names it keeps it.
+    const keys = distinct(keysFor(poolVariable(n, 'API_KEY')))
+    if (keys.length === 0) continue
+    pools.push({
+      number: n,
+      provider: poolProvider,
+      baseUrl: poolUrl,
+      model,
+      contextWindow: contextWindowFrom(process.env[poolVariable(n, 'CONTEXT')]),
+      keys,
+    })
+  }
+  return pools
+}
+
+/**
+ * The least-used credential across every pool, scanning circularly after the
+ * last durable assignment.
+ *
+ * Every credential is one slot wherever it points, so a wave of bees spreads
+ * over both providers before any key carries a second lane - the same rule
+ * `availableKeyIndex` applies inside one pool, over the concatenated list.
+ */
+function endpointPoolProvider(
+  pools: EndpointPool[],
+  takenKeyIndices: number[],
+  afterKeyIndex?: number,
+): WorkerProvider {
+  const slots = pools.flatMap((pool) =>
+    pool.keys.map((key, position) => ({
+      pool,
+      key,
+      durableIndex: (pool.number - 1) * POOL_KEY_STRIDE + position,
+    })),
+  )
+  const laneCount = configuredRemoteLanesPerCredential()
+  const occupancy = slots.map(
+    (slot) =>
+      takenKeyIndices.filter((taken) => taken === slot.durableIndex).length,
+  )
+  // The cursor is a durable index, not a position: translate it, and start
+  // from the top when it names a key that is no longer connected.
+  const cursor = slots.findIndex((slot) => slot.durableIndex === afterKeyIndex)
+  const position = availableKeyIndex(
+    occupancy,
+    laneCount,
+    cursor >= 0 ? cursor : undefined,
+  )
+  if (position < 0) {
+    return {
+      provider: pools[0].provider,
+      model: pools[0].model,
+      exhausted: slots.length * laneCount,
+    }
+  }
+  const { pool, key, durableIndex } = slots[position]
+  return {
+    provider: pool.provider,
+    model: pool.model,
+    baseUrl: pool.baseUrl,
+    apiKey: key,
+    keyIndex: durableIndex,
+    keyCount: pool.keys.length,
+    poolNumber: pool.number,
+    poolCount: pools.length,
+    laneIndex: occupancy[position],
+    laneCount,
+    contextWindow: pool.contextWindow,
+  }
+}
+
 function configuredEndpointProvider(
   override: string | undefined,
   takenKeyIndices: number[],
@@ -462,6 +714,13 @@ function configuredEndpointProvider(
 ): WorkerProvider | null {
   const baseUrl = configuredWorkerBaseUrl()
   if (!baseUrl) return null
+  // Several connected pools: one allocator over all of them. A single pool
+  // takes the path below, byte for byte what it was.
+  const pools = configuredEndpointPools()
+  if (pools.length > 1) {
+    if (pools[0].keys.length === 0) return null
+    return endpointPoolProvider(pools, takenKeyIndices, afterKeyIndex)
+  }
   const model = override || DEFAULT_LOCAL_WORKER_MODEL
   const provider = configuredWorkerProvider()
   if (!provider) return null
@@ -2566,9 +2825,15 @@ export async function dispatchBee(
     const nextKey = keyVariable
       ? `${keyVariable}_${chosen.exhausted + 1}`
       : 'the matching provider variable'
+    // A numbered pool someone began to configure and dispatch ignored is the
+    // likeliest reason the swarm is narrower than the operator believes.
+    const ignoredPools = configuredWorkerBaseUrl() ? endpointPoolProblems() : []
     const detail =
       `all ${chosen.exhausted} provider key(s) are already in use by bees in ` +
-      `flight. Add another with ${nextKey} to widen the swarm.`
+      `flight. Add another with ${nextKey} to widen the swarm.` +
+      (ignoredPools.length > 0
+        ? ` Not connected: ${ignoredPools.join('; ')}.`
+        : '')
     logger.warn('Queen tick chose an issue but every key is busy', {
       issue,
       detail,
@@ -2629,8 +2894,11 @@ export async function dispatchBee(
   )
   const detail = turn.ok
     ? `${worktree.detail}; ${chosen.provider}/${chosen.model}` +
+      (chosen.poolCount && chosen.poolCount > 1
+        ? ` pool ${chosen.poolNumber}`
+        : '') +
       (chosen.keyCount && chosen.keyCount > 1
-        ? ` key ${(chosen.keyIndex ?? 0) + 1}/${chosen.keyCount}`
+        ? ` key ${((chosen.keyIndex ?? 0) % POOL_KEY_STRIDE) + 1}/${chosen.keyCount}`
         : '') +
       (chosen.laneCount && chosen.laneCount > 1
         ? ` lane ${(chosen.laneIndex ?? 0) + 1}/${chosen.laneCount}`
