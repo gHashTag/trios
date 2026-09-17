@@ -1,0 +1,222 @@
+// TURBOBABY PRICE — the law that decides whether a number may be spoken.
+//
+// Extracted from mxfill77/turbobaby-userbot: price_freshness.py, noprice_gate.py,
+// door_price.py and season_gate.py. Four instruments, one question - is this bot
+// entitled to say a price right now - and one answer shape, because all four were
+// built after the same accident: silence and invention are equally forbidden, so
+// a gate that cannot prove a number must say so in words rather than guess or
+// go quiet.
+//
+// THREE OUTCOMES, NOT TWO. Every verdict here has a third value that means "there
+// was nothing to judge with". It is not a synonym for "fine". The Python says this
+// at four separate sites and each one was written after the two-valued version
+// shipped a wrong answer.
+//
+// ON MONEY AND INTEGERS. Quotes are whole baht in the source already, and handle
+// positions carry exactly two decimals. Here they are integers - baht, and handle
+// hundredths - so the source's floating-point tolerance (EPS = 1e-9) disappears
+// rather than being ported: two integers are equal or they are not. That is the
+// one place this spec is stricter than the code it came from, and deliberately so.
+//
+// ON ABSENCE. No branch turns "no number" into zero. Zero IS a price, and an
+// implausible one. Absence travels as its own boolean beside the value, never as
+// a sentinel inside it.
+//
+// phi^2 + 1/phi^2 = 3 | TRINITY
+
+module price_core;
+
+// ─── THE THREE STATES ─────────────────────────────────────────────────────────
+
+pub const STATE_FRESH: i32 = 0;
+pub const STATE_STALE: i32 = 1;
+pub const STATE_UNKNOWN: i32 = 2;
+
+// Exactly one state of three entitles the bot to name a number. This is the whole
+// policy, and it is one line so it cannot drift into two.
+pub fn may_quote(state: i32) bool {
+    if (state == STATE_FRESH) { return true; }
+    return false;
+}
+
+pub fn call_owner(state: i32) bool {
+    if (state == STATE_FRESH) { return false; }
+    return true;
+}
+
+// ─── FRESHNESS ────────────────────────────────────────────────────────────────
+// The snapshot of the price sheet's handles is compared against the live sheet.
+// Evidence has precedence: anything PROVEN stale wins, then anything that could
+// not be checked, and only a clean sweep is fresh.
+
+pub const MAX_AGE_DAYS: i32 = 14;
+
+pub const KIND_FRESH: i32 = 0;
+pub const KIND_DIVERGED: i32 = 1;
+pub const KIND_OLD: i32 = 2;
+pub const KIND_NOT_READ: i32 = 3;
+pub const KIND_NO_SNAPSHOT: i32 = 4;
+
+// `max_age_days` of 0 is a DECLARED ROLLBACK: the age branch is dead entirely,
+// and it gives no evidence in either direction. It is not "passed silently" -
+// it is not entered.
+pub fn age_branch_live(max_age_days: i32) bool {
+    if (max_age_days <= 0) { return false; }
+    return true;
+}
+
+pub fn age_proves_stale(age_days: i32, max_age_days: i32, age_known: bool) bool {
+    if (age_branch_live(max_age_days) == false) { return false; }
+    if (age_known == false) { return false; }
+    if (age_days > max_age_days) { return true; }
+    return false;
+}
+
+// Handle positions are compared as exact integers in hundredths. A handle the
+// live sheet did not yield is UNVERIFIED, never AGREED - the difference is the
+// difference between "checked and same" and "not checked".
+pub fn handle_diverged(was_hundredths: i32, now_hundredths: i32, now_read: bool) bool {
+    if (now_read == false) { return false; }
+    if (was_hundredths == now_hundredths) { return false; }
+    return true;
+}
+
+// The verdict, in the Python's own branch order.
+//
+//   no snapshot at all  -> UNKNOWN / NO_SNAPSHOT (nothing to compare against)
+//   any proven evidence -> STALE
+//   any unproven gap    -> UNKNOWN
+//   otherwise           -> FRESH
+pub fn freshness_state(has_snapshot: bool, proven_count: i32, unproven_count: i32) i32 {
+    if (has_snapshot == false) { return STATE_UNKNOWN; }
+    if (proven_count > 0) { return STATE_STALE; }
+    if (unproven_count > 0) { return STATE_UNKNOWN; }
+    return STATE_FRESH;
+}
+
+// The REASON is computed from the evidence, not from the order of checks, and it
+// does not influence `may_quote` by any branch. A diverged handle outranks age
+// because it is named by a number - "was 15, now 18" - while age only says the
+// rule MIGHT have aged.
+pub fn freshness_kind(has_snapshot: bool, state: i32, diverged_count: i32) i32 {
+    if (has_snapshot == false) { return KIND_NO_SNAPSHOT; }
+    if (state == STATE_FRESH) { return KIND_FRESH; }
+    if (state == STATE_STALE) {
+        if (diverged_count > 0) { return KIND_DIVERGED; }
+        return KIND_OLD;
+    }
+    return KIND_NOT_READ;
+}
+
+// WHAT THE OWNER MUST DO, by reason - and this is the entire point of separating
+// reasons under one outcome. Until 2026-09-06 both unknown reasons carried the
+// same advice, so an UNREAD sheet told the owner to rebuild the snapshot from the
+// very door that had not been read. Rebuilding on NOT_READ is forbidden.
+pub fn rebuild_snapshot_advised(kind: i32) bool {
+    if (kind == KIND_DIVERGED) { return true; }
+    if (kind == KIND_OLD) { return true; }
+    if (kind == KIND_NO_SNAPSHOT) { return true; }
+    return false;
+}
+
+// ─── NO PRICE IN THE RULE ─────────────────────────────────────────────────────
+// The source ANSWERED and said there is no number. That is not "the source was
+// silent", and the two must not share an outcome name.
+
+pub const NOPRICE_NONE: i32 = 0;
+pub const NOPRICE_NO_ROW: i32 = 1;
+pub const NOPRICE_NOT_JUDGED: i32 = 2;
+
+pub fn noprice_blocks_quote(kind: i32) bool {
+    if (kind == NOPRICE_NO_ROW) { return true; }
+    if (kind == NOPRICE_NOT_JUDGED) { return true; }
+    return false;
+}
+
+// NOT ONE DIGIT may reach the client on this path, and this is not a matter of
+// style. The draft post-check builds its whitelist of speakable numbers from ANY
+// number in the price note; let a date or a rule number in, and it becomes an
+// allowed price - the exact number the third outcome exists to forbid.
+pub fn digits_allowed_to_client(noprice_kind: i32) bool {
+    if (noprice_blocks_quote(noprice_kind)) { return false; }
+    return true;
+}
+
+// ─── THE DOOR ─────────────────────────────────────────────────────────────────
+// Price authority is the door, never the file. When the door answers and the file
+// disagrees, the gap is reported at ONE BAHT - not a percentage, not "noticeable".
+// One baht a day is five on a five-day rental and thirty on a month, and staying
+// quiet about it is the same silence that produced a 765-baht shortfall on a
+// single card.
+
+pub const DIVERGENCE_MIN_BAHT: i32 = 1;
+
+pub fn door_has_price(has_number: bool) bool {
+    if (has_number == false) { return false; }
+    return true;
+}
+
+pub fn divergence_reportable(door_baht: i32, file_baht: i32,
+                             door_known: bool, file_known: bool) bool {
+    if (door_known == false) { return false; }
+    if (file_known == false) { return false; }
+    if (door_baht - file_baht >= DIVERGENCE_MIN_BAHT) { return true; }
+    if (file_baht - door_baht >= DIVERGENCE_MIN_BAHT) { return true; }
+    return false;
+}
+
+// The door is authority. When the two disagree, the door's number is the price;
+// the file's number is the defect.
+pub fn authoritative_baht(door_baht: i32, file_baht: i32, door_known: bool) i32 {
+    if (door_known) { return door_baht; }
+    return file_baht;
+}
+
+// ─── SEASONS ──────────────────────────────────────────────────────────────────
+// A rental period that crosses a season boundary is not priced by this bot. The
+// third outcome - nothing to check with - is again not "fine".
+
+pub const SEASON_ONE: i32 = 0;
+pub const SEASON_CROSSES: i32 = 1;
+pub const SEASON_UNKNOWN: i32 = 2;
+
+pub fn season_span(start_period: i32, end_period: i32,
+                   start_known: bool, end_known: bool) i32 {
+    if (start_known == false) { return SEASON_UNKNOWN; }
+    if (end_known == false) { return SEASON_UNKNOWN; }
+    if (start_period == end_period) { return SEASON_ONE; }
+    return SEASON_CROSSES;
+}
+
+pub fn season_blocks_quote(span: i32) bool {
+    if (span == SEASON_ONE) { return false; }
+    return true;
+}
+
+// ─── THE GATES THEMSELVES ─────────────────────────────────────────────────────
+// Every gate here is ON unless explicitly rolled back, and the flag's sense is
+// inverted on purpose: an empty or garbled setting leaves the gate RUNNING. A
+// silent instrument is a return to the very silence it was built to end, and one
+// must not be able to reach that state with a typo.
+
+pub fn gate_enabled(off_flag_set: bool) bool {
+    if (off_flag_set) { return false; }
+    return true;
+}
+
+// The whole quote decision, assembled once so it cannot drift into four copies.
+// A number may be named only when every instrument agrees, and any instrument
+// that could not judge counts against naming it.
+pub fn quote_permitted(freshness: i32, noprice_kind: i32, season: i32) bool {
+    if (may_quote(freshness) == false) { return false; }
+    if (noprice_blocks_quote(noprice_kind)) { return false; }
+    if (season_blocks_quote(season)) { return false; }
+    return true;
+}
+
+// When a number may not be named, the bot does NOT go quiet either. It says a
+// person will quote this price. Invention and silence are forbidden equally.
+pub fn must_defer_to_human(freshness: i32, noprice_kind: i32, season: i32) bool {
+    if (quote_permitted(freshness, noprice_kind, season)) { return false; }
+    return true;
+}

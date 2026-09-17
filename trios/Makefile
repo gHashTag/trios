@@ -976,7 +976,7 @@ T27_LOWERING_EXCEPT := auto_config.t27:c:2
 # `unimplemented!()` is counted too. It is the compiler's EMPTY-BODY fallback,
 # not a per-construct stub, so it means the body was emptied rather than that
 # a function was left deliberately unwritten.
-.PHONY: t27-lowering
+.PHONY: t27-lowering t27-turbobaby
 .PHONY: queen-core
 # The Queen's policy that a Linux server could run today.
 #
@@ -1258,6 +1258,29 @@ t27-rings:
 		echo "[SKIP] t27-rings: NOT MEASURED - iverilog is not installed, so the"; \
 		echo "       Verilog half of ring 00 was not simulated by this run."; \
 	fi
+
+# The extracted TurboBaby business law under specs/turbobaby/.
+#
+# Nothing in the app imports these specs yet, and that is the whole reason this
+# target exists. `t27-rings` guards the rings because the rings run; these are
+# guarded because they DON'T - an unreferenced spec rots with nobody watching,
+# and t27c reports a spec that lost half its branches as a clean exit 0.
+#
+# The gate resolves t27c the same three ways t27-rings does. It is separate from
+# t27-rings rather than folded into it because these are not rings: they carry a
+# different product's law and must not start looking like the trunk's.
+t27-turbobaby:
+	@T27C_USE=""; \
+	if [ -x "$(T27C)" ]; then \
+		T27C_USE="$(T27C)"; \
+	elif [ -x "$(HOME)/t27/target/release/t27c" ]; then \
+		T27C_USE="$(HOME)/t27/target/release/t27c"; \
+	else \
+		echo "[SKIP] t27-turbobaby: NOT MEASURED - no t27c binary. Run"; \
+		echo "       'make t27-rings' once; it builds one."; \
+		exit 0; \
+	fi; \
+	T27C="$$T27C_USE" bash "$(ROOT)/tests/t27/turbobaby_specs.sh" || exit 1
 
 # Relaunch the app without killing bees that are mid-flight.
 #
@@ -2040,7 +2063,7 @@ check-bypass:
 	@echo "[check-bypass] diagnostic full walk: lock phase jumped (owner root-heals; never for CI)"
 	@TRIOS_SKIP_LOCK=1 $(MAKE) --no-print-directory check
 
-check: check-selftest keychain-doors type-floor t27-rings t27-lowering chain make-dollars recipe-backticks empty-sources sources-drift sources-drift-selftest finish-mark-order guard-shapes variant-fence parse-tests run-completeness-selftest cassette-isolation vendor-step dev warnings test cassettes mutants-changed skill-frontmatter
+check: check-selftest keychain-doors type-floor t27-rings t27-turbobaby t27-lowering chain make-dollars recipe-backticks empty-sources sources-drift sources-drift-selftest finish-mark-order guard-shapes variant-fence parse-tests run-completeness-selftest cassette-isolation vendor-step dev warnings test cassettes mutants-changed skill-frontmatter
 
 # Replay every cassette and assert the expected signal appears in the log.
 #

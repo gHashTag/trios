@@ -1,0 +1,284 @@
+// TURBOBABY ORCHESTRATOR — the dispatch law of the manager bot (Splinter).
+//
+// Extracted from mxfill77/turbobaby-manager-bot, chiefly orchestrator_daemon.py,
+// measured against that file's own constants and the tests that hold them. This
+// is the part of the daemon that depends on nothing but numbers already in hand:
+// how many steps a plan may have, how many times a step may be reborn, how many
+// corrections a chain tolerates before it is called drift, and which of those
+// answers is safe when the thinker says nothing at all.
+//
+// No clock, no network, no queue, no strings. Durations are named in seconds as
+// integers so a caller may compare them; nothing here reads a clock to do it.
+//
+// One law worth stating before the code, because every branch below obeys it:
+// FAIL-SAFE IS ALWAYS THE PRIOR BEHAVIOUR. A thinker that times out, returns
+// garbage, breaches a ceiling or fails to enqueue resolves to `keep` - never to
+// something worse than the plan already running. The Python says this in prose
+// at every branch; here it is the shape of the functions.
+//
+// phi^2 + 1/phi^2 = 3 | TRINITY
+
+module orchestrator_core;
+
+// ─── PLAN SHAPE ───────────────────────────────────────────────────────────────
+// The planner is told 2-7 steps. MAX_STEPS is the daemon's own ceiling: a plan
+// that arrives longer is a failed parent, not a trimmed plan. The two numbers
+// differ on purpose - 7 is the instruction, 8 is the refusal.
+
+pub const PLAN_MIN_STEPS: i32 = 2;
+pub const PLAN_MAX_STEPS: i32 = 7;
+pub const MAX_STEPS: i32 = 8;
+
+pub fn plan_size_accepted(steps: i32) bool {
+    if (steps < PLAN_MIN_STEPS) { return false; }
+    if (steps > MAX_STEPS) { return false; }
+    return true;
+}
+
+pub fn plan_size_instructed(steps: i32) bool {
+    if (steps < PLAN_MIN_STEPS) { return false; }
+    if (steps > PLAN_MAX_STEPS) { return false; }
+    return true;
+}
+
+// ─── SELF-HEAL (STEP_SELFHEAL) ────────────────────────────────────────────────
+// An executional failure of a step may be reborn EXACTLY ONCE. A repeat failure
+// of an already-marked step is terminal. A timeout diagnosis is never healed:
+// the thinker does not repair a clock.
+
+pub const STEP_REBIRTH_MAX: i32 = 1;
+pub const SELFHEAL_TIMEOUT_SEC: i32 = 180;
+
+pub const HEAL_RETRY: i32 = 0;
+pub const HEAL_HALT: i32 = 1;
+
+pub fn selfheal_verdict(rebirths_used: i32, thinker_said_retry: bool, is_timeout: bool) i32 {
+    if (is_timeout) { return HEAL_HALT; }
+    if (rebirths_used >= STEP_REBIRTH_MAX) { return HEAL_HALT; }
+    if (thinker_said_retry) { return HEAL_RETRY; }
+    return HEAL_HALT;
+}
+
+// ─── PLAN ADAPTATION (PLAN_ADAPT) ─────────────────────────────────────────────
+// After every done step the thinker compares results against the parent goal.
+// Two corrections per chain are tolerated; the third is drift, and drift needs
+// an owner rather than another plan.
+
+pub const PLAN_ADAPT_MAX: i32 = 2;
+pub const PLAN_ADAPT_TIMEOUT_SEC: i32 = 180;
+
+pub const THINK_FAILED: i32 = 0;
+pub const THINK_KEEP: i32 = 1;
+pub const THINK_ADJUST: i32 = 2;
+pub const THINK_FINISH: i32 = 3;
+
+pub const ADAPT_KEEP: i32 = 0;
+pub const ADAPT_ADJUST: i32 = 1;
+pub const ADAPT_FINISH: i32 = 2;
+pub const ADAPT_HALT: i32 = 3;
+
+// The branch order is the Python's, and the order carries meaning:
+//   no remaining steps  -> the thinker is not called at all (limits are money)
+//   failed or keep      -> zero change to the queue
+//   finish              -> the rest close early
+//   adjust over ceiling -> KEEP, not a trim: a plan that does not fit is not adapted
+//   adjust over budget  -> HALT, and the chain waits for a person
+pub fn adapt_verdict(thinker: i32, remaining: i32, corrections_used: i32,
+                     step_index: i32, new_steps: i32) i32 {
+    if (remaining <= 0) { return ADAPT_KEEP; }
+    if (thinker == THINK_FAILED) { return ADAPT_KEEP; }
+    if (thinker == THINK_KEEP) { return ADAPT_KEEP; }
+    if (thinker == THINK_FINISH) { return ADAPT_FINISH; }
+    if (new_steps <= 0) { return ADAPT_KEEP; }
+    if (step_index + new_steps > MAX_STEPS) { return ADAPT_KEEP; }
+    if (corrections_used + 1 > PLAN_ADAPT_MAX) { return ADAPT_HALT; }
+    return ADAPT_ADJUST;
+}
+
+// A correction that does not stand up WHOLE is rolled back to the prior plan.
+// The order is load-bearing: the new plan is placed in full before the old plan
+// is closed, so a half-placed correction can still be undone.
+pub fn adapt_commit_allowed(steps_placed: i32, steps_wanted: i32) bool {
+    if (steps_wanted <= 0) { return false; }
+    if (steps_placed < steps_wanted) { return false; }
+    return true;
+}
+
+// ─── CURATOR (CURATOR) ────────────────────────────────────────────────────────
+// After a terminal outcome the curator may push a goal further. Three budgets
+// guard it, and they are checked in this order because they answer different
+// questions: how deep, how hard on one goal, how much in one day.
+
+pub const CURATOR_MAX_DEPTH: i32 = 2;
+pub const CURATOR_MAX_PER_ROOT: i32 = 3;
+pub const CURATOR_MAX_PER_DAY: i32 = 10;
+pub const CURATOR_TIMEOUT_SEC: i32 = 180;
+pub const CURATOR_TASK_MAX_CHARS: i32 = 400;
+
+pub const CURATOR_CLOSED: i32 = 0;
+pub const CURATOR_FOLLOWUP: i32 = 1;
+pub const CURATOR_HUMAN: i32 = 2;
+
+pub const REFUSE_NONE: i32 = 0;
+pub const REFUSE_DEPTH: i32 = 1;
+pub const REFUSE_ROOT: i32 = 2;
+pub const REFUSE_DAY: i32 = 3;
+
+pub fn curator_refusal(depth: i32, per_root: i32, per_day: i32) i32 {
+    if (depth > CURATOR_MAX_DEPTH) { return REFUSE_DEPTH; }
+    if (per_root >= CURATOR_MAX_PER_ROOT) { return REFUSE_ROOT; }
+    if (per_day >= CURATOR_MAX_PER_DAY) { return REFUSE_DAY; }
+    return REFUSE_NONE;
+}
+
+pub fn curator_followup_allowed(depth: i32, per_root: i32, per_day: i32) bool {
+    if (curator_refusal(depth, per_root, per_day) == REFUSE_NONE) { return true; }
+    return false;
+}
+
+// A curator consultation is skipped entirely on marked outcomes: timeout
+// diagnoses, owner refusals and planned restarts are not goals to push.
+pub fn curator_consult_allowed(is_timeout: bool, is_owner_refusal: bool,
+                               is_planned_restart: bool) bool {
+    if (is_timeout) { return false; }
+    if (is_owner_refusal) { return false; }
+    if (is_planned_restart) { return false; }
+    return true;
+}
+
+// ─── TIMEOUTS ─────────────────────────────────────────────────────────────────
+// A fast task declares itself fast. The dev lane gets the long clock because it
+// carries edit, tests, gate and report in one call - the playbook's rule 3.
+
+pub const TASK_TIMEOUT_SEC: i32 = 600;
+pub const TASK_TIMEOUT_DEV_SEC: i32 = 2700;
+pub const OP_TIMEOUT_SEC: i32 = 180;
+pub const POLL_SEC: i32 = 60;
+pub const HEARTBEAT_SEC: i32 = 45;
+pub const ORPHAN_TTL_SEC: i32 = 600;
+pub const APPROVED_TTL_SEC: i32 = 1800;
+pub const NA_REMINDER_SEC: i32 = 10800;
+pub const NA_LIFETIME_SEC: i32 = 86400;
+
+pub fn task_timeout_sec(is_dev: bool) i32 {
+    if (is_dev) { return TASK_TIMEOUT_DEV_SEC; }
+    return TASK_TIMEOUT_SEC;
+}
+
+pub fn approval_expired(age_sec: i32) bool {
+    if (age_sec > APPROVED_TTL_SEC) { return true; }
+    return false;
+}
+
+pub fn needs_approval_expired(age_sec: i32) bool {
+    if (age_sec > NA_LIFETIME_SEC) { return true; }
+    return false;
+}
+
+pub fn needs_approval_remind(age_sec: i32, reminded: bool) bool {
+    if (reminded) { return false; }
+    if (age_sec < NA_REMINDER_SEC) { return false; }
+    if (age_sec > NA_LIFETIME_SEC) { return false; }
+    return true;
+}
+
+// ─── CAPACITY GUARDS ──────────────────────────────────────────────────────────
+// Memory and process pressure are refused the same way: deny, cool down, and
+// raise a card only after the third consecutive denial. Two denials are weather;
+// three is a condition.
+
+pub const MAX_CLAUDE_PROCS: i32 = 4;
+pub const CLAUDE_RSS_TOTAL_MB: i32 = 4096;
+pub const MEM_RETRY_SEC: i32 = 120;
+pub const PROC_RETRY_SEC: i32 = 120;
+pub const MEM_DENY_ALERT: i32 = 3;
+pub const PROC_DENY_ALERT: i32 = 3;
+
+pub fn proc_slot_available(running: i32) bool {
+    if (running >= MAX_CLAUDE_PROCS) { return false; }
+    return true;
+}
+
+pub fn mem_slot_available(rss_total_mb: i32) bool {
+    if (rss_total_mb >= CLAUDE_RSS_TOTAL_MB) { return false; }
+    return true;
+}
+
+pub fn deny_alert_due(consecutive_denials: i32) bool {
+    if (consecutive_denials >= MEM_DENY_ALERT) { return true; }
+    return false;
+}
+
+// ─── PC CONTOUR ───────────────────────────────────────────────────────────────
+// The PC theatre is supervised, not trusted. Steps are released ONE AT A TIME
+// because the PC orchestrator has no sequence guard of its own - a fan-out would
+// race halt-on-fail. Silence longer than the step timeout is an honest failure
+// and a chain halt; the thinker does not repair it.
+
+pub const PC_STEP_TIMEOUT_SEC: i32 = 3600;
+pub const PC_TASK_TIMEOUT_SEC: i32 = 2700;
+pub const PC_SINGLE_STALE_SEC: i32 = 5400;
+pub const PC_ORPHAN_STALE_SEC: i32 = 300;
+pub const PC_CHAIN_STALE_SEC: i32 = 900;
+pub const PC_HEARTBEAT_STALE_SEC: i32 = 180;
+pub const PC_WAKE_GRACE_SEC: i32 = 120;
+
+pub fn pc_release_allowed(steps_in_flight: i32) bool {
+    if (steps_in_flight > 0) { return false; }
+    return true;
+}
+
+pub fn pc_step_silent(silence_sec: i32) bool {
+    if (silence_sec > PC_STEP_TIMEOUT_SEC) { return true; }
+    return false;
+}
+
+// A verdict is not passed during the grace window after the machine wakes: a
+// wall-clock jump is not evidence that anything died.
+pub fn pc_verdict_allowed(since_wake_sec: i32) bool {
+    if (since_wake_sec < PC_WAKE_GRACE_SEC) { return false; }
+    return true;
+}
+
+// ─── CLIENT WATCHDOG ──────────────────────────────────────────────────────────
+// Three consecutive deaths stop the restarts and call a person. A fresh log
+// VETOES a restart outright: a process that is writing is not a process to kill.
+
+pub const CLIENT_MAX_DEATHS: i32 = 3;
+pub const CLIENT_COOLDOWN_SEC: i32 = 900;
+pub const CLIENT_LOG_STALE_SEC: i32 = 120;
+pub const CLIENT_BLIND_ALARM: i32 = 3;
+pub const CLIENT_DOWN_WINDOW_SEC: i32 = 600;
+
+pub fn client_restart_allowed(deaths: i32, since_last_restart_sec: i32,
+                              log_age_sec: i32) bool {
+    if (log_age_sec <= CLIENT_LOG_STALE_SEC) { return false; }
+    if (deaths >= CLIENT_MAX_DEATHS) { return false; }
+    if (since_last_restart_sec < CLIENT_COOLDOWN_SEC) { return false; }
+    return true;
+}
+
+// ─── OWNER TRAFFIC ────────────────────────────────────────────────────────────
+// The owner is a scarce channel, and every budget here exists because a bot once
+// spent it. A card is retried three turns, then the daemon gives up loudly
+// rather than quietly.
+
+pub const CARD_END_TRIES: i32 = 3;
+pub const DELIVER_DAY_CAP: i32 = 3;
+pub const DEDUP_WINDOW_SEC: i32 = 1800;
+pub const FACT_TTL_SEC: i32 = 21600;
+
+pub fn card_end_give_up(tries: i32) bool {
+    if (tries >= CARD_END_TRIES) { return true; }
+    return false;
+}
+
+pub fn deliver_ask_allowed(asked_today: i32) bool {
+    if (asked_today >= DELIVER_DAY_CAP) { return false; }
+    return true;
+}
+
+pub fn fact_stale(age_sec: i32) bool {
+    if (age_sec > FACT_TTL_SEC) { return true; }
+    return false;
+}
