@@ -1,5 +1,18 @@
-import { afterEach, beforeAll, describe, expect, it } from 'bun:test'
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from 'bun:test'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Pool } from 'pg'
@@ -18,12 +31,14 @@ import {
   missingProviderRefusal,
   POOL_KEY_STRIDE,
   prepareWorktree,
+  reapWorktrees,
   recordDispatch,
   resolveWorkerProvider,
   setDurableCloseListener,
   workerCapacityBreakdown,
   workspaceRoot,
 } from '../../src/api/services/queen-dispatch'
+import { resetYoungBees } from '../../src/api/services/queen-resources'
 import { logger } from '../../src/lib/logger'
 
 const GENERIC_WORKER_KEYS = [
@@ -67,6 +82,16 @@ const KEYS = [
   'TRIOS_QUEEN_WORKER_CONTEXT',
   'TRIOS_QUEEN_WORKER_LANES_PER_KEY',
   'TRIOS_QUEEN_MAX_WORKERS',
+  // Every variable the container guard reads. One of them left in a developer's
+  // shell moves the line the fixtures below are written against, and a fixture
+  // that stops being "full" walks past the gate into a real `prepareWorktree`.
+  'TRIOS_QUEEN_RESOURCE_GUARD',
+  'TRIOS_QUEEN_BEE_MEMORY_MB',
+  'TRIOS_QUEEN_MEMORY_HEADROOM_PERCENT',
+  'TRIOS_QUEEN_BEE_WARMUP_SECONDS',
+  'TRIOS_QUEEN_BEE_DISK_MB',
+  'TRIOS_QUEEN_DISK_HEADROOM_PERCENT',
+  'TRIOS_QUEEN_MEMORY_LIMIT_MB',
   // The far end of the key list (MAX_KEYS_PER_POOL) and the first name past it.
   'TRIOS_QUEEN_WORKER_API_KEY_17',
   'TRIOS_QUEEN_WORKER_API_KEY_1024',
@@ -741,6 +766,464 @@ describe('queen dispatch precheck', () => {
         expect(resolveWorkerProvider([0, 1])?.exhausted).toBe(2)
       })
     })
+  })
+})
+
+/**
+ * A key is free and a provider answers - and the container may still have no
+ * room. Measured on 2026-09-17: 24 GB, about 0.85 GB a bee, thirty-four lanes
+ * connected. Nothing in dispatch asked the container before this.
+ */
+describe('the container is asked before a worktree is cut', () => {
+  // Decimal, like every number the guard prints.
+  const GB = 1_000_000_000
+  const full = () =>
+    ({
+      kind: 'measured',
+      usedBytes: 21.2 * GB,
+      limitBytes: 24 * GB,
+      source: 'cgroup v2',
+      limitSource: 'cgroup',
+    }) as const
+  const calm = () => ({ ...full(), usedBytes: 3 * GB })
+  const roomy = () => ({ totalBytes: 50 * GB, freeBytes: 19 * GB })
+  const oneFreeKey = () => {
+    process.env.TRIOS_QUEEN_WORKER_PROVIDER = 'zai'
+    process.env.TRIOS_QUEEN_WORKER_BASE_URL = 'https://api.z.ai/api/paas/v4'
+    process.env.TRIOS_QUEEN_WORKER_API_KEY = 'a'
+  }
+  // An EMPTY directory stands where the workspace would be, for every case. A
+  // fixture that stops reading as "full" - a variable in somebody's shell moved
+  // the line - walks past the gate into the real `prepareWorktree`, and on the
+  // container the default workspace is the LIVE checkout: a unit test would
+  // fetch there and cut a worktree in it.
+  let previousWorkspace: string | undefined
+  beforeEach(() => {
+    previousWorkspace = process.env.WORKSPACE_DIR
+    process.env.WORKSPACE_DIR = realpathSync(
+      mkdtempSync(join(tmpdir(), 'queen-guard-')),
+    )
+  })
+  afterEach(() => {
+    if (previousWorkspace === undefined) delete process.env.WORKSPACE_DIR
+    else process.env.WORKSPACE_DIR = previousWorkspace
+    // Module state, shared by every test file in the bun process.
+    resetYoungBees()
+  })
+
+  const recordingPool = (running: number[] = []) => {
+    const queries: Array<{ text: string; values?: unknown[] }> = []
+    const pool = {
+      query: async (text: string, values?: unknown[]) => {
+        queries.push({ text, values })
+        return /finished_at IS NULL/.test(text)
+          ? {
+              rowCount: running.length,
+              rows: running.map((issue) => ({ issue })),
+            }
+          : { rowCount: 1, rows: [] }
+      },
+    } as unknown as Pool
+    return { pool, queries }
+  }
+
+  it('refuses on memory with the numbers, cuts nothing, and books nothing against the issue', async () => {
+    oneFreeKey()
+    const { pool, queries } = recordingPool()
+    let reaped = 0
+
+    const outcome = await dispatchBee(
+      pool,
+      1500,
+      'brief',
+      [],
+      [],
+      undefined,
+      [],
+      'none',
+      {
+        memory: full,
+        volume: roomy,
+        reap: async () => {
+          reaped += 1
+          return {
+            before: 0,
+            after: 0,
+            removed: [],
+            keptDirty: [],
+            keptRunning: [],
+            refused: [],
+          }
+        },
+      },
+    )
+
+    expect(outcome.started).toBe(false)
+    expect(outcome.detail).toMatch(
+      /^container memory is 21\.2 GB of 24\.0 GB in use/,
+    )
+    // Tagged with the guard's own sentence, because the report may quote this
+    // refusal and no other.
+    expect(outcome.room?.resource).toBe('memory')
+    expect(outcome.detail.startsWith(`${outcome.room?.summary}. `)).toBe(true)
+    // Memory cannot be freed by reaping, so the reaper is not even asked.
+    expect(reaped).toBe(0)
+    // It says something about the CONTAINER, and once the swarm is memory-bound
+    // it is how nearly every round ends. A row per round would archive history
+    // and wipe the issue's last attempt for a reason that is not the issue's.
+    expect(queries.filter((q) => /queen_dispatch/.test(q.text))).toEqual([])
+  })
+
+  it('gives the disk one reap that protects running bees and its own tree, then names what was kept', async () => {
+    oneFreeKey()
+    const { pool } = recordingPool([7, 12])
+    const calls: Array<{
+      protect?: ReadonlySet<string>
+      high?: number
+      low?: number
+    }> = []
+
+    const outcome = await dispatchBee(
+      pool,
+      1501,
+      'brief',
+      [],
+      [],
+      undefined,
+      [],
+      'none',
+      {
+        memory: calm,
+        volume: () => ({ totalBytes: 50 * GB, freeBytes: 5.1 * GB }),
+        reap: async (opts = {}) => {
+          calls.push(opts)
+          return {
+            before: 90,
+            after: 90,
+            removed: ['/w/.worktrees/queen-3'],
+            keptDirty: [],
+            keptRunning: ['/w/.worktrees/queen-7', '/w/.worktrees/queen-12'],
+            refused: [],
+          }
+        },
+      },
+    )
+
+    expect(calls).toHaveLength(1)
+    // queen-1501 is the issue being dispatched. It is not running, so without
+    // its own name here a re-dispatch could reap the tree it was about to reuse
+    // and then cut it afresh with -B, dropping the last attempt's commits.
+    expect([...(calls[0].protect ?? [])].sort()).toEqual([
+      'queen-12',
+      'queen-1501',
+      'queen-7',
+    ])
+    // It starts whatever the percentage (high 0) and stops where the rule is
+    // met - 2048 MiB + 5 GB of 50 GB is 85% used - not at the collector's 55%.
+    expect(calls[0].high).toBe(0)
+    expect(calls[0].low).toBe(85)
+    expect(outcome.started).toBe(false)
+    expect(outcome.room?.resource).toBe('disk')
+    expect(outcome.detail).toContain(
+      'has 5.1 GB free of 50.0 GB after a reap (1 removed; kept 0 with uncommitted work and 2 of running bees)',
+    )
+  })
+
+  it('reaps nothing when it cannot find out who is running', async () => {
+    // An unreadable registry used to mean "protect nobody": with twenty bees
+    // running, that reap takes the clean trees out from under most of them.
+    oneFreeKey()
+    const pool = {
+      query: async (text: string) => {
+        if (/finished_at IS NULL/.test(text)) {
+          throw new Error('Connection terminated unexpectedly')
+        }
+        return { rowCount: 1, rows: [] }
+      },
+    } as unknown as Pool
+    let reaps = 0
+    const outcome = await dispatchBee(
+      pool,
+      1505,
+      'brief',
+      [],
+      [],
+      undefined,
+      [],
+      'none',
+      {
+        memory: calm,
+        volume: () => ({ totalBytes: 50 * GB, freeBytes: 5.1 * GB }),
+        reap: async () => {
+          reaps += 1
+          throw new Error('the reaper must not be called')
+        },
+      },
+    )
+    expect(reaps).toBe(0)
+    expect(outcome.started).toBe(false)
+    expect(outcome.room?.resource).toBe('disk')
+    expect(outcome.detail).toContain('(nothing reaped yet)')
+  })
+
+  it('starts the bee when the one reap made the room', async () => {
+    // The half of the disk path that ADMITS. With it broken - the second
+    // judgement reusing the first reading, or refusing whatever it reads - a
+    // volume past the line can never recover: the gate sits in front of the only
+    // reaper there was, so every round would refuse on disk for good.
+    oneFreeKey()
+    const { pool } = recordingPool()
+    let reaps = 0
+    const outcome = await dispatchBee(
+      pool,
+      1504,
+      'brief',
+      [],
+      [],
+      undefined,
+      [],
+      'none',
+      {
+        memory: calm,
+        volume: () =>
+          reaps === 0 ? { totalBytes: 50 * GB, freeBytes: 5.1 * GB } : roomy(),
+        reap: async () => {
+          reaps += 1
+          return {
+            before: 90,
+            after: 60,
+            removed: ['/w/.worktrees/queen-3'],
+            keptDirty: [],
+            keptRunning: [],
+            refused: [],
+          }
+        },
+      },
+    )
+    expect(reaps).toBe(1)
+    // Past the gate: what stops it next is the empty workspace, not the guard.
+    expect(outcome.room).toBeUndefined()
+    expect(outcome.detail).not.toContain('GB free of')
+  })
+
+  /** A repository to cut worktrees from, standing where the workspace is. */
+  const hive = (): { root: string; git: (args: string[]) => string } => {
+    const root = join(process.env.WORKSPACE_DIR ?? '', 'BrowserOS')
+    const git = (args: string[], cwd = root) => {
+      const done = Bun.spawnSync(['git', ...args], {
+        cwd,
+        env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' },
+      })
+      if (done.exitCode !== 0) {
+        throw new Error(
+          `git ${args.join(' ')} failed: ${done.stderr.toString()}`,
+        )
+      }
+      return done.stdout.toString().trim()
+    }
+    mkdirSync(root)
+    git(['init', '-q', '-b', 'dev'])
+    git(['config', 'user.email', 'bee@example.com'])
+    git(['config', 'user.name', 'Bee'])
+    writeFileSync(join(root, 'README.md'), 'hive\n')
+    git(['add', '.'])
+    git(['-c', 'commit.gpgsign=false', 'commit', '-qm', 'first'])
+    git(['remote', 'add', 'origin', root])
+    git(['fetch', '-q', 'origin'])
+    return { root, git }
+  }
+  /** Everything a real start reads from the environment, put back afterwards. */
+  const realStarts = () => {
+    const names = [
+      'TRIOS_API_TOKEN',
+      'TRIOS_REPO_URL',
+      'TRIOS_REPO_REF',
+      'QUEEN_VOLUME_KEEP',
+    ]
+    const previous = names.map((name) => process.env[name])
+    process.env.TRIOS_API_TOKEN = 'a-token-for-the-test'
+    delete process.env.TRIOS_REPO_URL
+    delete process.env.TRIOS_REPO_REF
+    const realFetch = globalThis.fetch
+    // /chat answers 200 and the stream STAYS OPEN, as a working bee's does: a
+    // stream that is already over ends the bee, and an ended bee reserves
+    // nothing.
+    const streams: Array<ReadableStreamDefaultController<Uint8Array>> = []
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            streams.push(controller)
+          },
+        }),
+      )) as unknown as typeof fetch
+    const finish = async (index: number) => {
+      streams[index].enqueue(
+        new TextEncoder().encode('data: {"type":"finish"}\n\n'),
+      )
+      streams[index].close()
+      delete streams[index]
+      // The drain closes the dispatch on its own turn of the loop.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    return {
+      finish,
+      restore: async () => {
+        globalThis.fetch = realFetch
+        for (const index of Object.keys(streams)) await finish(Number(index))
+        names.forEach((name, i) => {
+          if (previous[i] === undefined) delete process.env[name]
+          else process.env[name] = previous[i]
+        })
+      },
+    }
+  }
+
+  it('reserves for the bee it just started, and gives it back the moment that bee ends', async () => {
+    // The wiring, not the arithmetic: a start that is not noted, or a judgement
+    // that does not count the young, admits thirty-four bees back to back on
+    // one true reading of a nearly empty container - the incident this exists
+    // to prevent. So this drives REAL starts: a repository to cut the worktree
+    // from, and `/chat` answering 200.
+    oneFreeKey()
+    hive()
+    const turns = realStarts()
+    const { pool } = recordingPool()
+    // 19.7 of 24 GB: one more bee fits under the line (21.6), two do not.
+    const nearlyFull = () => ({ ...full(), usedBytes: 19.7 * GB })
+    const start = 1_789_000_000_000
+    const go = (issue: number, ms: number) =>
+      dispatchBee(pool, issue, 'brief', [], [], undefined, [], 'none', {
+        memory: nearlyFull,
+        volume: roomy,
+        now: () => ms,
+        // Not this machine's disk: at 95% full the cut itself is refused.
+        volumeUsed: () => 40,
+      })
+    try {
+      const first = await go(1510, start)
+      expect(first.detail).toContain('zai/')
+      expect(first.started).toBe(true)
+
+      const second = await go(1511, start + 60_000)
+      expect(second.started).toBe(false)
+      expect(second.room?.resource).toBe('memory')
+      expect(second.room?.summary).toContain(
+        '1 bee(s) started in the last 10 min are still growing',
+      )
+
+      // The first bee ends - a provider refusal ends one in seconds - and its
+      // reservation ends with it, two minutes in and not ten.
+      await turns.finish(0)
+      const third = await go(1512, start + 120_000)
+      expect(third.started).toBe(true)
+
+      // The third is still running and still young: no room for another...
+      expect((await go(1513, start + 180_000)).started).toBe(false)
+      // ...until it has had its ten minutes, and its memory is in the reading.
+      expect((await go(1513, start + 13 * 60_000)).started).toBe(true)
+    } finally {
+      await turns.restore()
+    }
+  })
+
+  it('never reaps the tree of the issue it is about to dispatch again', async () => {
+    // A redeploy killed the swarm; #1520 was reaped at boot and its tree holds
+    // one committed, unpushed attempt. The container carries no push
+    // credential, so that commit is the only copy. With the volume short the
+    // gate reaps - and #1520 is by definition not running. Reaped, its tree
+    // would be cut afresh with -B and the commit would drop off the branch.
+    oneFreeKey()
+    const { root, git } = hive()
+    const turns = realStarts()
+    process.env.QUEEN_VOLUME_KEEP = '0'
+    for (const branch of ['queen-1520', 'queen-3']) {
+      git([
+        'worktree',
+        'add',
+        '-q',
+        '-b',
+        branch,
+        join(root, '.worktrees', branch),
+        'dev',
+      ])
+    }
+    const tree = join(root, '.worktrees', 'queen-1520')
+    writeFileSync(join(tree, 'attempt.md'), 'the only copy\n')
+    Bun.spawnSync(['git', 'add', '.'], { cwd: tree })
+    Bun.spawnSync(
+      [
+        'git',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '-qm',
+        'the first attempt',
+      ],
+      { cwd: tree, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } },
+    )
+    const attempt = git(['rev-parse', 'queen-1520'])
+    const { pool } = recordingPool()
+    let reaps = 0
+    try {
+      const outcome = await dispatchBee(
+        pool,
+        1520,
+        'brief',
+        [],
+        [],
+        undefined,
+        [],
+        'none',
+        {
+          memory: calm,
+          volume: () =>
+            reaps === 0
+              ? { totalBytes: 50 * GB, freeBytes: 5.1 * GB }
+              : roomy(),
+          // The real reaper against the real repository, on a fixed reading.
+          reap: async (opts = {}) => {
+            reaps += 1
+            return reapWorktrees({ ...opts, volumeUsed: () => 90 })
+          },
+          volumeUsed: () => 40,
+        },
+      )
+      expect(reaps).toBe(1)
+      // The reap did run, and did remove what nobody needs...
+      expect(existsSync(join(root, '.worktrees', 'queen-3'))).toBe(false)
+      // ...and the issue's own tree was reused with its commit where it was.
+      expect(outcome.detail).toMatch(/^reused an existing worktree/)
+      expect(git(['rev-parse', 'queen-1520'])).toBe(attempt)
+      expect(outcome.started).toBe(true)
+    } finally {
+      await turns.restore()
+    }
+  })
+
+  it('can be switched off, and then a full container refuses nothing here', async () => {
+    oneFreeKey()
+    process.env.TRIOS_QUEEN_RESOURCE_GUARD = 'off'
+    const { pool } = recordingPool()
+    const outcome = await dispatchBee(
+      pool,
+      1503,
+      'brief',
+      [],
+      [],
+      undefined,
+      [],
+      'none',
+      {
+        memory: full,
+        volume: () => null,
+      },
+    )
+    // Whatever stops it next (there is no repository in this directory), it is
+    // not the guard.
+    expect(outcome.room).toBeUndefined()
+    expect(outcome.detail).not.toContain('container memory is')
+    expect(outcome.detail).not.toContain('unknown is not room')
   })
 })
 

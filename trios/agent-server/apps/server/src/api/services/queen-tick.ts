@@ -60,6 +60,7 @@ import {
   releaseQueenLease,
 } from './queen-lease'
 import {
+  containerRefusal,
   type DispatchReportOutcome,
   dispatchesThatStarted,
   nothingStartedLine,
@@ -1488,6 +1489,7 @@ export async function runRound(
     detail: string
     conversationId?: string
     keyIndex?: number
+    room?: { resource: 'memory' | 'disk'; summary: string }
   }> = []
   let board = [...registry.rows[0].tasks, ...containerTasks]
   let current: QueendChoice | null = choice
@@ -2589,18 +2591,29 @@ async function report(
         '.',
     )
   }
+  const noRoom = containerRefusal(started)
   if (dispatchesThatStarted(started).length === 0) {
     // The refusal, verbatim. A round that started nothing is the case where a
     // summary in my own words would be the least trustworthy thing on the page.
     // This fires for a round that dispatched and was refused as it does for a
     // round that never dispatched - the sentence is the same because the fact
-    // (no bee started) is the same. The refused dispatches above carry the why.
-    lines.push(nothingStartedLine(choice.refusal, candidates))
+    // (no bee started) is the same. When `queend` allowed the round and the
+    // CONTAINER refused it, the why is the guard's sentence, and it goes here
+    // as well as in the line above: "No reason given" next to a reason is a
+    // report contradicting itself.
+    lines.push(
+      nothingStartedLine(choice.refusal ?? noRoom?.sentence, candidates),
+    )
     const skipped = (choice.skipped ?? []).slice(0, 6)
     if (skipped.length > 0) lines.push('', ...skipped.map((s) => `  ${s}`))
   }
 
-  const headline = reportHeadline(escalated.length, started, choice.refusal)
+  // The label, never the sentence: this string is served to a browser.
+  const headline = reportHeadline(
+    escalated.length,
+    started,
+    choice.refusal ?? noRoom?.headline,
+  )
 
   await pool
     .query(

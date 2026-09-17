@@ -26,6 +26,9 @@ export interface DispatchReportOutcome {
   started?: boolean
   issue?: number
   detail?: string
+  /** Set only when the CONTAINER refused the start: which resource had no
+   * room, and the guard's own one-sentence account of it. */
+  room?: { resource: 'memory' | 'disk'; summary?: string }
 }
 
 /**
@@ -109,6 +112,52 @@ export function refusedLines(
       const closed = /[.!?]$/.test(shown) ? shown : `${shown}.`
       return `Refused #${outcome.issue}: ${closed}`
     })
+}
+
+/**
+ * Why a round that `queend` allowed still started nothing, when the reason is
+ * the container.
+ *
+ * `queend` refuses for the policy's reasons - the worker limit, the budget,
+ * nothing to choose - and those reach the headline. A refusal made by the
+ * container guard in DISPATCH did not: `queend` had said yes, so the report
+ * read "Started nothing. No reason given." under the headline "nothing to do",
+ * while the actual sentence sat one line lower where a headline reader never
+ * looks.
+ *
+ * TWO STRINGS, BECAUSE THEY GO TO TWO PLACES. The headline is served to a
+ * browser by `/queen/needs-you`, whose contract is no path, no branch and no
+ * connection detail - so it gets a label from a closed vocabulary and never
+ * the sentence, which names the workspace path. The body is the operator's,
+ * and it gets the guard's own SUMMARY: one sentence that carries every number
+ * and is written to fit (see `judgeBeeRoom`). Only outcomes the guard marked
+ * with `room` are read, so git output and provider bodies - which are also
+ * details of dispatches that did not start - can reach neither string.
+ *
+ * The summary is a FIELD and is never cut out of `detail`: the prose names a
+ * path, and a path may hold ". " - "/Volumes/Ext. Drive" ended the sentence
+ * after "Ext" while this function still split on it.
+ *
+ * It comes without a closing period because `nothingStartedLine` adds exactly
+ * one. One that is too long anyway is cut at a word and closed with two dots,
+ * which that period makes the ellipsis this file uses.
+ */
+export function containerRefusal(
+  outcomes: ReadonlyArray<DispatchReportOutcome>,
+): { headline: string; sentence: string } | null {
+  const refused = outcomes.find(
+    (outcome) => outcome.started !== true && outcome.room !== undefined,
+  )
+  if (!refused?.room) return null
+  const headline = `no room in the container: ${refused.room.resource}`
+  const summary = String(refused.room.summary ?? '')
+    .trim()
+    .replace(/[.!?\s]+$/, '')
+  const sentence =
+    summary.length <= DETAIL_SHOWN
+      ? summary
+      : `${summary.slice(0, DETAIL_SHOWN - 3).replace(/\s+\S*$/, '')}..`
+  return { headline, sentence: sentence || headline }
 }
 
 /**
