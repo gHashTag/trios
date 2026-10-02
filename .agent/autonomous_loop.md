@@ -23,9 +23,12 @@ No automation merges on its own verdict -- this loop included. Green CI is
 this loop's own verdict, so it is not a reason to merge. The loop OPENS the
 pull request and HANDS IT OFF to a reviewer bee (a code-review agent with
 real tools). A merge happens only after that review: an APPROVED review plus
-the `bee-reviewed` label added after the last commit. Same gate as
+the `bee-reviewed` label added after the head ARRIVED -- the latest of its
+commit date, its first check run and the branch's last force-push (a commit
+dated before the review but pushed after it is unreviewed code). Same gate as
 gHashTag/t27#5526. A push after the review voids it; the reviewer bee
-re-reviews and re-labels.
+re-reviews and re-labels. So the RINGS.md "IN REVIEW" commit below goes in
+BEFORE the hand-off, not after.
 
 This loop NEVER runs `gh pr merge` (no `--squash`, no `--auto`, no `--admin`).
 
@@ -49,10 +52,10 @@ FOR ring IN [5, 6, 7, 8]:
 
   FINALIZE (open the PR and hand off -- do NOT merge):
     - gh pr create --title "feat(trios): ring <N> — <crate> complete"
+    - Update RINGS.md on the ring branch: ring <N> IN REVIEW (PR #<num>)
     - Wait for CI green; IF red: fix on the branch, push, wait again
     - Hand off to a reviewer bee: state in the PR body that it is ready
-      for review and that the author will not merge it
-    - Update RINGS.md on the ring branch: ring <N> IN REVIEW (PR #<num>)
+      for review and that the author will not merge it; push nothing more
     - Move on to the next ring; do not wait for the merge
     - The ring becomes SEALED only after a reviewer bee's APPROVED review
       plus `bee-reviewed` label let it merge; record that seal in a later
