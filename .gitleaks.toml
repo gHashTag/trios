@@ -24,10 +24,9 @@ regexes = ['''(?i)(your|example|changeme|placeholder|dummy|test|xxx|\*\*\*)''']
 
 [[allowlists]]
 description = "Coq proof identifiers in trios-chat (lemma names such as *_canonical_secret_*), not values"
-condition = "AND"
-paths = ['''^crates/trios-chat/proofs/chat/Trinity_Chat\.v$''']
+# No paths: a global allowlist with paths + condition=AND skips the whole file in gitleaks 8.30.
 regexTarget = "match"
-regexes = ['''^[a-z0-9_]+(\s*:\s*|,\s*)[a-z0-9_]+\s*$''']
+regexes = ['''^(wps_canonical_secret_accepted_30|kpi_canonical_init_key_accepted_31|emu_canonical_mailbox_token_accepted_34)\b''']
 
 [[allowlists]]
 description = "Prose doc comment in trios-mesh crypto.rs (HKDF session key)"
@@ -36,22 +35,14 @@ regexes = ['''^//! M1 crypto core: X25519 handshake -> HKDF session key -> ChaCh
 
 [[allowlists]]
 description = "Synthetic sk_test_ key in clade-audit's test of its own hardcoded-key detector"
-condition = "AND"
-paths = ['''^apps/trios-macos/rings/RUST-12/clade-audit/src/main\.rs$''']
 regexTarget = "line"
 regexes = ['''^\s*assert!\(re\.is_match\(r#"api_key = "sk_test_[A-Za-z0-9]+""#\)\);$''']
 
 [[allowlists]]
 description = "Synthetic secrets that trios-macos redaction tests feed to the redactor (jwt.io sample JWT, sequential fake keys, repeated-word PEM body)"
-condition = "AND"
-paths = [
-  '''^apps/trios-macos/tests/TriOSKitTests/AgentMemoryServiceRedactionTests\.swift$''',
-  '''^apps/trios-macos/tests/swift/session_recovery_export_test\.swift$''',
-  '''^apps/trios-macos/tests/swift/ChatSSEEndToEndTest\.swift$''',
-]
 regexTarget = "line"
 regexes = [
-  '''^\s*let text = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.[A-Za-z0-9_-]+"$''',
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.SflKxwRJSMeKKF2QT4fwpM''',
   '''^\s*\{"api_key":"sk-ant-api03-[a-z]+","password":"hunter2"\}$''',
   '''^\s*let secret = "sk-proj-[a-z0-9]+"$''',
   '''-----BEGIN CUSTOM PRIVATE KEY-----''',
