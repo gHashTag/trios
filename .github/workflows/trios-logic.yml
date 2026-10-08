@@ -1,0 +1,99 @@
+# Moved from gHashTag/BrowserOS with the Queen server on 2026-10-09 (#1699).
+# Only the triggers changed: they now run for the queen branches.
+name: trios logic
+
+# The app-level cassette suite (`make cassettes`) launches the .app and needs a
+# window server plus a running agent server, so it cannot run here. The same
+# logic is covered in-process by the chat SSE harness, which is what this runs:
+# ReplayTransport, QueenObserver and SalienceLearner are exercised through their
+# real code paths with no GUI and no provider.
+on:
+  push:
+    branches: [queen, queen-runners]
+    paths:
+      - 'trios/rings/**'
+      - 'trios/agent-server/queen-core/Sources/**'
+      - 'trios/tests/**'
+      - 'trios/agent-server/apps/server/src/agent/**'
+      - 'trios/Makefile'
+      - '.github/workflows/trios-logic.yml'
+  pull_request:
+    branches: [queen, queen-runners]
+    paths:
+      - 'trios/rings/**'
+      # The queen policy is duplicated into here for the image build, and the
+      # duplicate-guard below only runs if a change to EITHER copy triggers it.
+      - 'trios/agent-server/queen-core/Sources/**'
+      - 'trios/tests/**'
+      - 'trios/agent-server/apps/server/src/agent/**'
+      - 'trios/Makefile'
+      - 'trios/tests/fixtures/**'
+      - '.github/workflows/trios-logic.yml'
+
+jobs:
+  # The queen policy exists TWICE and the two copies must stay byte-identical.
+  #
+  # trios/rings/SR-00/QueenDelegation.swift is where it is read and reviewed.
+  # trios/agent-server/queen-core/Sources/QueenPolicy/QueenDelegation.swift is
+  # the one the Dockerfile copies into the image (`COPY queen-core/Sources
+  # ./Sources`), so it is the one that becomes `queend` and therefore the one
+  # that decides behaviour.
+  #
+  # Editing the wrong one is SILENT. Measured 2026-09-15: raising
+  # maximumConcurrentWorkers in the rings copy, rebuilding and deploying
+  # produced a swarm that reported `capacity: 12` while every tick refused with
+  # "4 workers already running (limit 4)" - the TypeScript mirror had been
+  # raised, the compiled policy had not, and nothing said so. The two files were
+  # byte-identical before that edit, which is exactly why nobody had noticed
+  # they were two files.
+  #
+  # This job is the cheapest possible fix: it does not unify them, it just
+  # refuses to let them differ.
+  policy-copies-agree:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The two QueenDelegation copies are identical
+        run: |
+          a=trios/rings/SR-00/QueenDelegation.swift
+          b=trios/agent-server/queen-core/Sources/QueenPolicy/QueenDelegation.swift
+          if ! diff -u "$a" "$b"; then
+            echo
+            echo "The queen policy exists in two copies and they have drifted."
+            echo "The image builds from $b, so that copy is what actually runs."
+            echo "Make them identical - editing only one is a change that does nothing."
+            exit 1
+          fi
+          echo "identical: $(wc -l < "$a") lines"
+
+  server-units:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Orphan tool-call repair
+        working-directory: trios/agent-server
+        run: bun test apps/server/src/agent/message-validation.test.ts
+
+  swift-logic:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLCipher
+        run: brew install sqlcipher
+      # The fast gates: seconds each, no build, no GUI, no provider. They were
+      # local-only until now, which meant "when was this last run?" had no
+      # answer off this one machine - and that question is what found a guard
+      # that had never once run to completion.
+      - name: Fast gates (shape, parse, guards, empty sources, keychain doors)
+        working-directory: trios
+        run: |
+          make make-dollars
+          make empty-sources
+          make keychain-doors
+          make finish-mark-order
+          make guard-shapes
+          make parse-tests
+      - name: Chat SSE, cassette replay, observer, salience learner
+        working-directory: trios
+        run: bash tests/swift/run_chat_sse_e2e.sh
