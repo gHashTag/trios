@@ -58,7 +58,7 @@ let running = false
  * What the reviewer judged since the round last asked, so the round's report
  * still says what was accepted, sent back and escalated.
  */
-interface Judged {
+export interface Judged {
   acted: string[]
   strays: Array<{ issue: number; paths: string[] }>
   tally: unknown[]
@@ -137,11 +137,7 @@ export function createReviewer(deps: ReviewerDeps) {
             if (typeof keyIndex === 'number') lanes.set(issue, keyIndex)
           },
         )
-        .then((round) => {
-          judged.acted.push(...round.acted)
-          judged.strays.push(...round.strays)
-          judged.tally.push(...round.tally)
-        })
+        .then(recordJudged)
         .catch((error) =>
           logger.warn('Queen reviewer could not review a row', {
             issue,
@@ -159,28 +155,24 @@ export function createReviewer(deps: ReviewerDeps) {
   return { pass, inFlight }
 }
 
-/**
- * Start the reviewer in this process. The round's sweep stands aside from the
- * first pass on (round_reviews). Off with TRIOS_QUEEN_REVIEWER=off, which
- * hands reviewing back to the round as before.
- */
-export function startReviewer(
+/** What one review needs from this process, shared by the loop and the actors. */
+export type ReviewFn = (
+  pool: Pool,
+  overrides: Partial<ReviewDeps>,
+  scope: {
+    issues: number[]
+    reservedKeys: () => number[]
+    onLane: (lane: { keyIndex?: number }) => void
+    deadlineMs: number
+  },
+) => Promise<Judged>
+
+export function reviewerDeps(
   pool: Pool,
   leaseName: string,
-  review: (
-    pool: Pool,
-    overrides: Partial<ReviewDeps>,
-    scope: {
-      issues: number[]
-      reservedKeys: () => number[]
-      onLane: (lane: { keyIndex?: number }) => void
-      deadlineMs: number
-    },
-  ) => Promise<Judged>,
+  review: ReviewFn,
   waiting: (pool: Pool) => Promise<number[]>,
-): (() => void) | null {
-  if ((process.env.TRIOS_QUEEN_REVIEWER ?? 'on').toLowerCase() === 'off')
-    return null
+): ReviewerDeps {
   const defaults = defaultReviewDeps()
   const overrides: Partial<ReviewDeps> = {
     reviewsPerRound: () => 1,
@@ -190,7 +182,7 @@ export function startReviewer(
       importRunnerBranch(pool, issue),
     ),
   }
-  const reviewer = createReviewer({
+  return {
     holdsLease: async () => {
       const r = await pool.query(
         `SELECT 1 FROM queen_lease
@@ -207,7 +199,37 @@ export function startReviewer(
         onLane: (lane) => onLane(lane.keyIndex),
         deadlineMs: REVIEW_ROW_SECONDS * 1000,
       }),
-  })
+  }
+}
+
+/** The actor reviewer reports here, so the round's report reads the same. */
+export function recordJudged(round: Judged): void {
+  judged.acted.push(...round.acted)
+  judged.strays.push(...round.strays)
+  judged.tally.push(...round.tally)
+}
+
+/** Set while some reviewer runs in this process; the round stands aside. */
+export function setReviewerRunning(on: boolean): void {
+  running = on
+}
+
+/**
+ * Start the reviewer in this process. The round's sweep stands aside from the
+ * first pass on (round_reviews). Off with TRIOS_QUEEN_REVIEWER=off, which
+ * hands reviewing back to the round as before.
+ */
+export function startReviewer(
+  pool: Pool,
+  leaseName: string,
+  review: ReviewFn,
+  waiting: (pool: Pool) => Promise<number[]>,
+): (() => void) | null {
+  if ((process.env.TRIOS_QUEEN_REVIEWER ?? 'on').toLowerCase() === 'off')
+    return null
+  const reviewer = createReviewer(
+    reviewerDeps(pool, leaseName, review, waiting),
+  )
   running = true
   logger.info('Queen reviewer starting', {
     everySeconds: REVIEWER_EVERY_SECONDS,
