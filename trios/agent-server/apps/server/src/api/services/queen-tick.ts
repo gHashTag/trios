@@ -102,6 +102,7 @@ import {
   reportHeadline,
   startedLine,
 } from './queen-report-lines'
+import { startReviewerActors } from './queen-review-actors'
 import {
   drainReviewerRound,
   reviewerRunning,
@@ -4984,12 +4985,12 @@ export function startQueenTick(): void {
   // The reviewer, on its own clock (reviewer.t27): several reviews at a time,
   // off the round's critical path. TRIOS_QUEEN_REVIEWER=off hands reviewing
   // back to the round.
-  const stopReviewer = startReviewer(
-    pool,
-    LEASE_NAME,
-    reviewFinishedDispatches,
-    waitingReviewIssues,
-  )
+  // TRIOS_QUEEN_REVIEWER=actors runs the same reviewer as actors (t27#7851).
+  const stopReviewer = (
+    (process.env.TRIOS_QUEEN_REVIEWER ?? 'on').toLowerCase() === 'actors'
+      ? startReviewerActors
+      : startReviewer
+  )(pool, LEASE_NAME, reviewFinishedDispatches, waitingReviewIssues)
   // The bus (events.t27 section 4): this process reads every row of the log,
   // a runner's included, so a runner's task.ended wakes her within a second.
   followControlEvents(pool).catch((error) =>
