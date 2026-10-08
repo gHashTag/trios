@@ -3,31 +3,43 @@
  * Copyright 2025 BrowserOS
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * THE ACTOR RUNTIME, MVP (gHashTag/t27 specs/queen/actors.t27, epic t27#7851).
+ * THE ACTOR RUNTIME (gHashTag/t27 specs/queen/actors.t27, epic t27#7851).
  *
  * Owner's rule, 2026-10-08: whatever runs at the same time in the Queen is an
  * actor, with a pid, a bounded mailbox and a supervisor. The card makes the
  * decisions:
- *   - whether a send reaches its target (reaches, deliver, deliver_control);
+ *   - whether a send reaches its target (reaches, deliver, deliver_control,
+ *     and across nodes is_remote, send_remote);
  *   - which lane goes first (next_lane, ctl_*);
  *   - whether a dead child comes back, and after how long (on_child_exit,
  *     unstable_streak, with_backoff, backoff_seconds, jittered_seconds);
- *   - when a turn has run too long (turn_signal).
+ *   - when a turn has run too long (turn_signal), and what killing it does
+ *     (turn_isolation, kill_effect);
+ *   - when a scheduler must yield (slice_spent);
+ *   - what a monitor across nodes hears (node_up, remote_down).
  * This file holds the state, runs the turns, and keeps the clock it is given.
  *
- * A JavaScript promise cannot be killed. A turn the card kills is abandoned
- * instead. Its pid is dead, so whatever it sends with `from` is dropped, and
- * its result is ignored. Its work is fenced by control.t27's lease. Whatever
- * it had already started outside keeps running until it ends on its own.
+ * PREEMPTION (section 8). Between turns, a slice: at most SLICE_TURNS turns
+ * or SLICE_MICROS, then the scheduler yields to the host's timers and I/O.
+ * Within a turn, isolation: a turn with `isolated` work runs it in an OS
+ * thread or an OS process, which the OS preempts, so it never holds the host's
+ * thread. Only a process is certain to stop when killed: a terminated worker
+ * thread kept spinning (measured). A kill of any other turn abandons it. Its
+ * pid is dead, so what it sends with `from` is dropped, and its late result
+ * is ignored and fenced by control.t27's lease.
  *
- * Nothing here is wired into the Queen yet. The swap waits for the benchmark
- * (t27#7851).
+ * NODES (section 9). A pid names its node. A send to another node goes over
+ * the `link`, a NodeLink. A node that stops renewing its lease is down, and
+ * every monitor across it hears X_NOCONNECTION. No code moves between nodes:
+ * a remote start names a kind registered on that node.
  */
 
 import {
   D_DROPPED_DEAD,
   D_QUEUED,
   GIVE_UP_REASON,
+  ISO_LOOP,
+  KILL_STOPS,
   LANE_CONTROL,
   LANE_DATA,
   MAILBOX_CAP,
@@ -37,6 +49,8 @@ import {
   TURN_MAX_SECONDS,
   X_CRASH,
   X_KILL,
+  X_NOCONNECTION,
+  X_NOPROC,
   X_SHUTDOWN,
 } from './queen-actors-card.gen'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
@@ -52,6 +66,17 @@ const c = (name: string, ...a: number[]) => card().call(name, ...a)
 
 export type Pid = bigint
 export const slotOf = (pid: Pid): bigint => c64('slot_of', pid)
+export const nodeOf = (pid: Pid): number => Number(c64('node_of', pid))
+export const turnIsolation = (
+  cpuBound: boolean,
+  foreignCode: boolean,
+  mustStop: boolean,
+): number =>
+  c('turn_isolation', flag(cpuBound), flag(foreignCode), flag(mustStop))
+export const holdsAfterKill = (
+  isolation: number,
+  workEnded: boolean,
+): boolean => c('holds_after_kill', isolation, flag(workEnded)) !== 0
 
 /** The runtime's clock. A test hands in a virtual one. */
 export interface Clock {
@@ -66,22 +91,72 @@ export const realClock: Clock = {
   },
 }
 
+/** A turn's work, started off the host's thread: its result, and a stop. */
+export interface IsolatedWork {
+  result: Promise<unknown>
+  stop: () => void
+}
+
+export interface Isolated<M> {
+  /** Burns CPU in this build's own code: an OS thread. */
+  cpuBound: boolean
+  /** Runs code a bee wrote, or a compiler on its work: an OS process. */
+  foreignCode: boolean
+  /**
+   * Must end when its turn is killed: an OS process. A terminated worker
+   * thread can keep running (measured, actors.t27 section 8).
+   */
+  mustStop?: boolean
+  start: (msg: M) => IsolatedWork
+}
+
 export interface ActorSpec<M> {
   name: string
   /** Called once, after the pid exists and before any message. */
   init?: (self: Pid) => void
-  /** One turn per message. A throw or a rejection is a crash. */
-  receive: (msg: M, self: Pid) => Promise<void> | void
+  /**
+   * One turn per message. A throw or a rejection is a crash. With `isolated`,
+   * the isolated work runs first and its result is the third argument.
+   */
+  receive: (msg: M, self: Pid, result?: unknown) => Promise<void> | void
   /** A control message (tags 1..63), taken before any queued data message. */
   control?: (tag: number, self: Pid) => void
   /** The domain's bound on one turn, in seconds. 0 is the card's default. */
   turnMaxSeconds?: number
+  isolated?: Isolated<M>
 }
 
 export interface Down {
   kind: 'DOWN'
   pid: Pid
   reason: number
+}
+
+/** What crosses between nodes. Everything in it must survive structuredClone. */
+export type Mail =
+  | { kind: 'send'; to: Pid; msg: unknown; from?: Pid }
+  | { kind: 'monitor'; target: Pid; watcher: Pid }
+  | { kind: 'exit'; target: Pid; reason: number }
+  | {
+      kind: 'spawn'
+      spawnKind: string
+      arg: unknown
+      ref: number
+      from: number
+    }
+  | { kind: 'spawned'; ref: number; pid: Pid | null }
+
+/**
+ * One node's view of the others. `up` reads the node's lease through the card
+ * (node_up). `carry` delivers one mail to a node, or loses it if that node is
+ * gone, as a socket to a dead host does.
+ */
+export interface NodeLink {
+  node: number
+  up(node: number): boolean
+  carry(toNode: number, mail: Mail): void
+  onMail(handler: (mail: Mail) => void): void
+  onNodeDown(handler: (node: number) => void): void
 }
 
 interface Proc {
@@ -91,7 +166,9 @@ interface Proc {
   lane: bigint
   busy: boolean
   turnAt: number
+  isolation: number
   cancelKill?: () => void
+  stopWork?: () => void
   onExit: (reason: number) => void
 }
 
@@ -100,17 +177,45 @@ export interface ActorStats {
   deadLetters: number
   crashed: number
   killed: number
+  /** Kills that stopped the work, not only the turn (kill_effect). */
+  stopped: number
+  /** Times a scheduler spent its slice and yielded to the host. */
+  yields: number
+  remoteSent: number
 }
 
-export function createActorSystem(clock: Clock = realClock) {
-  const gens: bigint[] = [0n]
+export interface ActorSystemOptions {
+  /** This system's node (section 9). 0 alone is section 1 unchanged. */
+  node?: number
+  link?: NodeLink
+  /** False turns the slice off: every turn chained as a microtask, as before. */
+  slices?: boolean
+}
+
+export function createActorSystem(
+  clock: Clock = realClock,
+  options: ActorSystemOptions = {},
+) {
+  const node = options.node ?? options.link?.node ?? 0
+  const link = options.link
+  const slicesOn = options.slices ?? true
+  const gens = new Map<bigint, bigint>()
+  let nextLocal = 1
   const live = new Map<bigint, Proc>()
   const watchers = new Map<Pid, Set<Pid>>()
+  // monitors this node holds on pids elsewhere, by the node they live on
+  const remoteWatches = new Map<number, Array<{ watcher: Pid; target: Pid }>>()
+  const kinds = new Map<string, (arg: unknown) => ActorSpec<unknown>>()
+  const spawnWaits = new Map<number, (pid: Pid | null) => void>()
+  let nextRef = 1
   const stats: ActorStats = {
     delivered: 0,
     deadLetters: 0,
     crashed: 0,
     killed: 0,
+    stopped: 0,
+    yields: 0,
+    remoteSent: 0,
   }
 
   const procOf = (pid: Pid): Proc | undefined => {
@@ -118,17 +223,96 @@ export function createActorSystem(clock: Clock = realClock) {
     return p && card().call64('reaches', pid, p.pid) !== 0 ? p : undefined
   }
   const current = (p: Proc) => live.get(slotOf(p.pid)) === p
-  const schedule = (p: Proc) => queueMicrotask(() => step(p))
+  const remote = (pid: Pid) =>
+    card().call64('is_remote', pid, BigInt(node)) !== 0
+
+  // THE SLICE (section 8). Ready processes wait in one queue. A slice lasts
+  // until the event loop turns: it counts turns across every drain the
+  // microtask queue starts, and once slice_spent says so, the next drain
+  // waits for setImmediate, so timers and sockets run between slices. Before
+  // this, one message chain ran 200 000 turns as microtasks, and nothing else
+  // in the process could run.
+  const ready: Proc[] = []
+  let head = 0
+  const queued = new Set<Proc>()
+  let draining = false
+  let sliceOpen = false
+  let sliceTurns = 0
+  let sliceT0 = 0
+  const turnStarted = () => {
+    if (!sliceOpen) {
+      sliceOpen = true
+      sliceTurns = 0
+      sliceT0 = performance.now()
+      // the loop turned: the next turn opens a new slice
+      setImmediate(() => {
+        sliceOpen = false
+      })
+    }
+    sliceTurns++
+  }
+  const spent = () =>
+    sliceOpen &&
+    c(
+      'slice_spent',
+      u32(sliceTurns),
+      u32((performance.now() - sliceT0) * 1000),
+    ) !== 0
+  const compact = () => {
+    if (head > 0) {
+      ready.splice(0, head)
+      head = 0
+    }
+  }
+  const yieldThenDrain = () => {
+    stats.yields++
+    compact()
+    setImmediate(drain)
+  }
+  const drain = () => {
+    while (head < ready.length) {
+      if (spent()) return yieldThenDrain()
+      const p = ready[head++]
+      queued.delete(p)
+      step(p)
+    }
+    compact()
+    draining = false
+  }
+  const schedule = (p: Proc) => {
+    if (!slicesOn) {
+      queueMicrotask(() => step(p))
+      return
+    }
+    if (queued.has(p)) return
+    queued.add(p)
+    ready.push(p)
+    if (!draining) {
+      draining = true
+      if (spent()) yieldThenDrain()
+      else queueMicrotask(drain)
+    }
+  }
 
   function spawn<M>(
     spec: ActorSpec<M>,
     onExit: (reason: number) => void = () => {},
     slot?: bigint,
   ): Pid {
-    const s = slot ?? BigInt(gens.push(0n) - 1)
-    const gen = c64('next_gen', gens[Number(s)])
-    gens[Number(s)] = gen
+    let s = slot
+    if (s === undefined) {
+      s = slotOf(c64('node_pid', BigInt(node), BigInt(nextLocal++), 0n))
+    }
+    const gen = c64('next_gen', gens.get(s) ?? 0n)
+    gens.set(s, gen)
     const pid = c64('pid_of', s, gen)
+    const isolation = spec.isolated
+      ? turnIsolation(
+          spec.isolated.cpuBound,
+          spec.isolated.foreignCode,
+          spec.isolated.mustStop ?? false,
+        )
+      : ISO_LOOP
     const p: Proc = {
       pid,
       spec: spec as ActorSpec<unknown>,
@@ -136,6 +320,7 @@ export function createActorSystem(clock: Clock = realClock) {
       lane: 0n,
       busy: false,
       turnAt: 0,
+      isolation,
       onExit,
     }
     live.set(s, p)
@@ -146,11 +331,24 @@ export function createActorSystem(clock: Clock = realClock) {
   /**
    * `from` names the sender. A send from a pid that is no longer alive is
    * dropped: an abandoned turn keeps running, but it is dead and reaches no one.
+   * A send to a pid on another node goes over the link, if the card says that
+   * node is up (send_remote).
    */
   function send(pid: Pid, msg: unknown, from?: Pid): number {
     if (from !== undefined && !procOf(from)) {
       stats.deadLetters++
       return D_DROPPED_DEAD
+    }
+    if (remote(pid)) {
+      const to = nodeOf(pid)
+      const d = c('send_remote', flag(!!link && link.up(to)))
+      if (d !== D_QUEUED || !link) {
+        stats.deadLetters++
+        return d
+      }
+      stats.remoteSent++
+      link.carry(to, { kind: 'send', to: pid, msg, from })
+      return d
     }
     const p = procOf(pid)
     const d = c('deliver', flag(!!p), u32(p?.box.length ?? 0), MAILBOX_CAP)
@@ -176,8 +374,24 @@ export function createActorSystem(clock: Clock = realClock) {
   }
 
   function monitor(watcher: Pid, target: Pid): void {
+    if (remote(target)) {
+      const on = nodeOf(target)
+      if (!link || !link.up(on)) {
+        send(watcher, {
+          kind: 'DOWN',
+          pid: target,
+          reason: c('remote_down', 0, 0, X_NOPROC),
+        } as Down)
+        return
+      }
+      const list = remoteWatches.get(on) ?? []
+      list.push({ watcher, target })
+      remoteWatches.set(on, list)
+      link.carry(on, { kind: 'monitor', target, watcher })
+      return
+    }
     if (!procOf(target)) {
-      send(watcher, { kind: 'DOWN', pid: target, reason: X_SHUTDOWN } as Down)
+      send(watcher, { kind: 'DOWN', pid: target, reason: X_NOPROC } as Down)
       return
     }
     const set = watchers.get(target) ?? new Set<Pid>()
@@ -187,6 +401,10 @@ export function createActorSystem(clock: Clock = realClock) {
 
   /** The end of a process. `quiet` is a stop its supervisor asked for. */
   function exit(pid: Pid, reason: number, quiet = false): void {
+    if (remote(pid)) {
+      link?.carry(nodeOf(pid), { kind: 'exit', target: pid, reason })
+      return
+    }
     const p = procOf(pid)
     if (!p) return
     live.delete(slotOf(p.pid))
@@ -201,6 +419,7 @@ export function createActorSystem(clock: Clock = realClock) {
   function step(p: Proc): void {
     if (p.busy || !current(p)) return
     const lane = c('next_lane', flag(p.lane !== 0n), flag(p.box.length > 0))
+    if (slicesOn && (lane === LANE_CONTROL || lane === LANE_DATA)) turnStarted()
     if (lane === LANE_CONTROL) {
       const tag = Number(c64('ctl_next', p.lane))
       p.lane = c64('ctl_take', p.lane)
@@ -223,33 +442,116 @@ export function createActorSystem(clock: Clock = realClock) {
       const age = Math.ceil((clock.now() - p.turnAt) / 1000)
       if (current(p) && c('turn_signal', u32(age), u32(bound)) === X_KILL) {
         stats.killed++
+        // an isolated turn's work is stopped for real; a loop turn's is not
+        if (c('kill_effect', p.isolation) === KILL_STOPS && p.stopWork) {
+          p.stopWork()
+          stats.stopped++
+        }
         exit(p.pid, c('death_reason', X_KILL))
       }
     })
-    Promise.resolve()
-      .then(() => p.spec.receive(msg, p.pid))
-      .then(
-        () => {
-          if (!current(p)) return
-          p.cancelKill?.()
-          p.busy = false
-          schedule(p)
-        },
-        () => {
-          if (!current(p)) return
-          stats.crashed++
-          exit(p.pid, X_CRASH)
-        },
-      )
+    const turn =
+      p.isolation !== ISO_LOOP && p.spec.isolated
+        ? (() => {
+            const work = p.spec.isolated.start(msg)
+            p.stopWork = work.stop
+            return work.result.then((r) => p.spec.receive(msg, p.pid, r))
+          })()
+        : Promise.resolve().then(() => p.spec.receive(msg, p.pid))
+    turn.then(
+      () => {
+        if (!current(p)) return
+        p.cancelKill?.()
+        p.stopWork = undefined
+        p.busy = false
+        schedule(p)
+      },
+      () => {
+        if (!current(p)) return
+        p.stopWork = undefined
+        stats.crashed++
+        exit(p.pid, X_CRASH)
+      },
+    )
+  }
+
+  // what arrives from other nodes
+  link?.onMail((mail) => {
+    if (mail.kind === 'send') {
+      send(mail.to, mail.msg)
+    } else if (mail.kind === 'monitor') {
+      if (!procOf(mail.target))
+        send(mail.watcher, {
+          kind: 'DOWN',
+          pid: mail.target,
+          reason: X_NOPROC,
+        } as Down)
+      else {
+        const set = watchers.get(mail.target) ?? new Set<Pid>()
+        set.add(mail.watcher)
+        watchers.set(mail.target, set)
+      }
+    } else if (mail.kind === 'exit') {
+      exit(mail.target, mail.reason)
+    } else if (mail.kind === 'spawn') {
+      const make = kinds.get(mail.spawnKind)
+      const pid = make ? spawn(make(mail.arg)) : null
+      link.carry(mail.from, { kind: 'spawned', ref: mail.ref, pid })
+    } else if (mail.kind === 'spawned') {
+      spawnWaits.get(mail.ref)?.(mail.pid)
+      spawnWaits.delete(mail.ref)
+    }
+  })
+  // a node whose lease lapsed: every monitor across it hears noconnection
+  link?.onNodeDown((down) => {
+    for (const { watcher, target } of remoteWatches.get(down) ?? [])
+      send(watcher, {
+        kind: 'DOWN',
+        pid: target,
+        reason: c('remote_down', 0, 0, X_NOPROC),
+      } as Down)
+    remoteWatches.delete(down)
+    for (const [ref, resolve] of spawnWaits) {
+      resolve(null)
+      spawnWaits.delete(ref)
+    }
+  })
+
+  /** A kind another node may start here by name (no code crosses nodes). */
+  function registerKind<A>(name: string, make: (arg: A) => ActorSpec<unknown>) {
+    kinds.set(name, make as (arg: unknown) => ActorSpec<unknown>)
+  }
+
+  /** Start a registered kind on `on`. Resolves null if it could not start. */
+  function spawnOn(
+    on: number,
+    spawnKind: string,
+    arg: unknown,
+  ): Promise<Pid | null> {
+    if (on === node) {
+      const make = kinds.get(spawnKind)
+      return Promise.resolve(make ? spawn(make(arg)) : null)
+    }
+    if (!link || !link.up(on)) return Promise.resolve(null)
+    const ref = nextRef++
+    return new Promise((resolve) => {
+      spawnWaits.set(ref, resolve)
+      link.carry(on, { kind: 'spawn', spawnKind, arg, ref, from: node })
+    })
   }
 
   return {
+    node,
     spawn,
+    spawnOn,
+    registerKind,
     send,
     post,
     monitor,
     exit,
     alive: (pid: Pid) => !!procOf(pid),
+    /** Whether a node is up as this node sees it; this node always is. */
+    up: (n: number) => n === node || (!!link && link.up(n)),
     stats,
     clock,
   }
@@ -399,6 +701,84 @@ export function supervisor(
         stop: () => {
           down = true
           stopAll()
+        },
+      }
+    },
+  }
+}
+
+export interface RemoteChildOptions {
+  name: string
+  /** A kind registered on every candidate node (registerKind). */
+  kind: string
+  arg: unknown
+  /** The nodes it may run on. */
+  nodes: () => number[]
+  /** Free room for this kind on a node, as the placer counts it. */
+  room: (node: number) => number
+  /** Told where each start landed, so the placer's count can follow. */
+  placed?: (node: number | null) => void
+  restart?: number
+}
+
+const placeBefore = (freeA: number, a: number, freeB: number, b: number) =>
+  card().call64(
+    'place_before',
+    u32(freeA),
+    BigInt(a),
+    u32(freeB),
+    BigInt(b),
+  ) !== 0
+
+/**
+ * A child started on another node (actors.t27 section 9). Each start goes to
+ * the roomiest node that is up (place_before), so a restart after its node
+ * went down lands elsewhere. It is watched from here: its DOWN - X_NOCONNECTION
+ * once its node's lease lapses - is the supervisor's onExit.
+ */
+export function remoteChild(sys: ActorSystem, opts: RemoteChildOptions): Child {
+  return {
+    name: opts.name,
+    restart: opts.restart ?? RESTART_PERMANENT,
+    start: (onExit) => {
+      let stopped = false
+      let pid: Pid | undefined
+      let best: number | null = null
+      for (const n of opts.nodes().filter((m) => sys.up(m)))
+        if (
+          best === null ||
+          placeBefore(opts.room(n), n, opts.room(best), best)
+        )
+          best = n
+      opts.placed?.(best)
+      const watcher: Pid = sys.spawn<Down>({
+        name: `${opts.name}-watch`,
+        receive: (m) => {
+          if (m.kind !== 'DOWN' || m.pid !== pid) return
+          sys.exit(watcher, X_SHUTDOWN, true)
+          if (!stopped) onExit(m.reason)
+        },
+      })
+      const failed = () => {
+        sys.exit(watcher, X_SHUTDOWN, true)
+        if (!stopped) onExit(X_NOCONNECTION)
+      }
+      if (best === null) queueMicrotask(failed)
+      else
+        void sys.spawnOn(best, opts.kind, opts.arg).then((p) => {
+          if (stopped) {
+            if (p !== null) sys.exit(p, X_SHUTDOWN)
+            return
+          }
+          if (p === null) return failed()
+          pid = p
+          sys.monitor(watcher, p)
+        })
+      return {
+        stop: () => {
+          stopped = true
+          if (pid !== undefined) sys.exit(pid, X_SHUTDOWN)
+          sys.exit(watcher, X_SHUTDOWN, true)
         },
       }
     },
