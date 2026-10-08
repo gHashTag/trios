@@ -341,31 +341,48 @@ describe('the reviewer as actors', () => {
     expect(most).toBe(4)
   })
 
-  it('a review past REVIEW_ROW_SECONDS is killed and its row goes to another worker', async () => {
+  it('a review past REVIEW_ROW_SECONDS frees its worker, but its row and its lane wait for the review to end', async () => {
     const clock = new VirtualClock()
     const sys = createActorSystem(clock)
-    const waiting = new Set([7])
-    let attempts = 0
+    const waiting = new Set([7, 8])
+    const attempts = new Map<number, number>()
+    const running = new Set<number>()
+    let overlap = 0
+    const reservedSeen: number[][] = []
     const r = reviewerTree(sys, {
       holdsLease: async () => true,
       waiting: async () => [...waiting],
-      workers: 2,
-      reviewOne: async (issue) => {
-        attempts++
-        const hang = attempts === 1
+      workers: 1,
+      reviewOne: async (issue, reservedKeys, onLane) => {
+        if (running.has(issue)) overlap++
+        running.add(issue)
+        const n = (attempts.get(issue) ?? 0) + 1
+        attempts.set(issue, n)
+        reservedSeen.push(reservedKeys())
+        const hang = issue === 7 && n === 1
+        if (hang) onLane(3)
         await new Promise<void>((res) =>
-          clock.after(hang ? 10 * 3_600_000 : 30_000, res),
+          clock.after(hang ? 2 * 3_600_000 : 30_000, res),
         )
+        running.delete(issue)
         if (!hang) waiting.delete(issue)
         return judged()
       },
     })
     r.tree.start(() => {})
     r.wake()
-    await clock.runUntil((REVIEW_ROW_SECONDS + 60) * 1000)
-    expect(attempts).toBe(2)
-    expect(waiting.size).toBe(0)
+    // the only worker is killed at the bound and comes back; it reviews row 8 while 7 still hangs
+    await clock.runUntil((REVIEW_ROW_SECONDS + 120) * 1000)
     expect(sys.stats.killed).toBe(1)
+    expect(waiting.has(8)).toBe(false)
+    expect(attempts.get(7)).toBe(1)
+    // row 8's review saw lane 3 reserved: the hung review still holds it
+    expect(reservedSeen[1]).toEqual([3])
+    // when the hung review ends, row 7 is reviewed again, never two at once
+    await clock.runUntil(3 * 3_600_000)
+    expect(attempts.get(7)).toBe(2)
+    expect(waiting.size).toBe(0)
+    expect(overlap).toBe(0)
   })
 
   it('does nothing without the lease', async () => {
