@@ -9,6 +9,11 @@ export const REVIEW_ROW_SECONDS = 300;
 // t27c gen-js: fn review_slots was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-js: fn visit_first was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-js: fn round_reviews was not emitted -- this backend lowers declarations, not bodies.
+export const WAIT_REVISIT_BASE_SECONDS = 30;
+export const WAIT_REVISIT_CAP_SECONDS = 900;
+// t27c gen-js: fn revisit_after_seconds was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn due_again was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -16,7 +21,7 @@ export const REVIEW_ROW_SECONDS = 300;
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [];
-export const __DECL_ORDER__ = ["REVIEWER_EVERY_SECONDS", "REVIEWER_CONCURRENCY", "REVIEW_ROW_SECONDS"];
+export const __DECL_ORDER__ = ["REVIEWER_EVERY_SECONDS", "REVIEWER_CONCURRENCY", "REVIEW_ROW_SECONDS", "WAIT_REVISIT_BASE_SECONDS", "WAIT_REVISIT_CAP_SECONDS"];
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

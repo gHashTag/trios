@@ -17,16 +17,17 @@
  * passes: only while this process holds the Queen's lease, one row per sweep,
  * never one row twice at once, each sweep on a lane no bee and no sibling
  * holds. The steps that write to the checkout (a runner's branch imported, a
- * criteria worktree cut and removed) run one at a time; the model calls, which
- * are the slow part, run side by side.
+ * worktree added or removed) run one at a time; everything else - criterion
+ * commands, the witness, the model calls - runs side by side.
  */
 
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
 import { importRunnerBranch } from '../routes/queen-export'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
+import { defaultExec, type Exec, measureCriteria } from './queen-criteria-run'
 import { queenHolderName } from './queen-lease'
-import { defaultReviewDeps, type ReviewDeps } from './queen-reviewer'
+import type { ReviewDeps } from './queen-reviewer'
 import {
   REVIEW_ROW_SECONDS,
   REVIEWER_EVERY_SECONDS,
@@ -51,6 +52,8 @@ export const visitFirst = (
   ) !== 0
 export const roundReviews = (reviewerRunning: boolean): boolean =>
   card().call('round_reviews', flag(reviewerRunning)) !== 0
+export const dueAgain = (waits: number, sinceVisitMs: number): boolean =>
+  card().call('due_again', u32(waits), u32(sinceVisitMs / 1000)) !== 0
 
 let running = false
 
@@ -167,22 +170,77 @@ export type ReviewFn = (
   },
 ) => Promise<Judged>
 
+/**
+ * A row that keeps answering `wait` is visited less and less (reviewer.t27
+ * revisit_after_seconds, due_again). Both runtimes go through this, so the
+ * loop and the actors see the same rows. The counts live in memory: a restart
+ * forgets them, and the cost of that is one early visit per row.
+ */
+export function withWaitBackoff(
+  deps: ReviewerDeps,
+  now: () => number = Date.now,
+): ReviewerDeps {
+  const waits = new Map<number, { n: number; at: number }>()
+  return {
+    ...deps,
+    waiting: async () => {
+      const at = now()
+      return (await deps.waiting()).filter((issue) => {
+        const w = waits.get(issue)
+        return !w || dueAgain(w.n, at - w.at)
+      })
+    },
+    reviewOne: async (issue, reservedKeys, onLane) => {
+      const round = await deps.reviewOne(issue, reservedKeys, onLane)
+      if (round.acted.includes(`#${issue}:wait`))
+        waits.set(issue, { n: (waits.get(issue)?.n ?? 0) + 1, at: now() })
+      else waits.delete(issue)
+      if (waits.size > 10_000) waits.clear()
+      return round
+    },
+  }
+}
+
+/**
+ * Only the git commands that change the shared checkout's worktree list run
+ * one at a time. A measurement cuts its own worktree in its own temporary
+ * directory, and its criterion commands run there, side by side with every
+ * other review's. Before this, the whole measurement waited in one queue,
+ * commands included, with a budget of up to 5 minutes each.
+ */
+const worktreeLock = serialized(<T>(fn: () => Promise<T>) => fn())
+const worktreeSerialExec: Exec = (request) =>
+  request.argv[0] === 'git' && request.argv.includes('worktree')
+    ? (worktreeLock(() => defaultExec(request)) as ReturnType<Exec>)
+    : defaultExec(request)
+
 export function reviewerDeps(
   pool: Pool,
   leaseName: string,
   review: ReviewFn,
   waiting: (pool: Pool) => Promise<number[]>,
 ): ReviewerDeps {
-  const defaults = defaultReviewDeps()
   const overrides: Partial<ReviewDeps> = {
     reviewsPerRound: () => 1,
     measurementsPerRound: () => 1,
-    measureCriteria: serialized(defaults.measureCriteria),
+    measureCriteria: async (issue, headSha, criteria, baseSha) => {
+      const t0 = Date.now()
+      const measured = await measureCriteria(issue, headSha, criteria, {
+        baseSha,
+        exec: worktreeSerialExec,
+      })
+      logger.info('Queen reviewer measured', {
+        issue,
+        ms: Date.now() - t0,
+        ok: measured.ok,
+      })
+      return measured
+    },
     importRunnerBranch: serialized((issue: number) =>
       importRunnerBranch(pool, issue),
     ),
   }
-  return {
+  return withWaitBackoff({
     holdsLease: async () => {
       const r = await pool.query(
         `SELECT 1 FROM queen_lease
@@ -192,14 +250,23 @@ export function reviewerDeps(
       return (r.rowCount ?? r.rows.length) > 0
     },
     waiting: () => waiting(pool),
-    reviewOne: (issue, reservedKeys, onLane) =>
-      review(pool, overrides, {
+    reviewOne: async (issue, reservedKeys, onLane) => {
+      const t0 = Date.now()
+      const round = await review(pool, overrides, {
         issues: [issue],
         reservedKeys,
         onLane: (lane) => onLane(lane.keyIndex),
         deadlineMs: REVIEW_ROW_SECONDS * 1000,
-      }),
-  }
+      })
+      // one line per row, for the throughput arithmetic of t27#7851
+      logger.info('Queen reviewer row', {
+        issue,
+        ms: Date.now() - t0,
+        verdicts: round.acted,
+      })
+      return round
+    },
+  })
 }
 
 /** The actor reviewer reports here, so the round's report reads the same. */
