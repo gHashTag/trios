@@ -1636,6 +1636,15 @@ export async function runRound(
   dispatch?: unknown
 }> {
   const grant = { fence }
+  // Where a round's time goes, phase by phase (trios#1705: rounds 6 min apart
+  // during a deploy, with nothing in the log to say which step held them).
+  const phases: Record<string, number> = {}
+  let lapAt = Date.now()
+  const lap = (name: string) => {
+    const now = Date.now()
+    phases[name] = now - lapAt
+    lapAt = now
+  }
 
   const registry = await pool.query(
     'SELECT tasks FROM queen_registry WHERE variant = $1',
@@ -1994,12 +2003,14 @@ export async function runRound(
   // the same idea.
   const openingBoard = [...registry.rows[0].tasks, ...containerTasks]
 
+  lap('prepare')
   const choice = await askQueend({
     kind: 'choose',
     candidates,
     candidateBodies,
     tasks: openingBoard,
   })
+  lap('choose')
 
   await recordTick(pool, holder, grant.fence, choice)
   logger.info('Queen tick decided', {
@@ -2169,6 +2180,7 @@ export async function runRound(
   // their files, no longer counted against canStartAnother. Every other rule -
   // boundaries, the spend cap, what is already claimed - applies unchanged, and
   // only a runner may take the answer (`runnerOnly`).
+  lap('dispatch')
   for (
     let pass = 0;
     pass < RUNNER_PASS_LIMIT &&
@@ -2220,6 +2232,7 @@ export async function runRound(
     })
   }
 
+  lap('runners')
   // An assignment is served once a bee started on it; the rest keep waiting.
   const served = started
     .filter((d) => d.started && assigned.includes(d.issue))
@@ -2243,6 +2256,7 @@ export async function runRound(
   // The t27-bees app (specs/queen/app.t27): list installations, poll served
   // repositories, write the queued reviews and replies. Dormant without the
   // app's key; a failure is logged and the round goes on.
+  lap('jobs')
   await advanceApp(pool)
     .then((app) => {
       if (app.reviewed + app.replied > 0)
@@ -2254,7 +2268,10 @@ export async function runRound(
       })
     })
 
+  lap('app')
   await report(pool, reviewed, started, choice, candidates.length)
+  lap('report')
+  logger.info('Queen round phases', phases)
   // A round every one of whose dispatches was refused started nothing, so it
   // reports no dispatch - the tick response agrees with the report, and a
   // caller cannot mistake a refusal for a bee in flight.
@@ -4802,8 +4819,10 @@ export function createRoundGate(runOneRound: () => Promise<void>): RoundGate {
     inFlight += 1
     peak = Math.max(peak, inFlight)
     logger.info('Queen round starting', { why, round: started })
+    const t0 = Date.now()
     try {
       await runOneRound()
+      logger.info('Queen round ended', { round: started, ms: Date.now() - t0 })
     } catch (error) {
       // The production runner catches its own failures; this is the belt
       // under that, because a gate whose turn rejects would drop every
