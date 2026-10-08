@@ -166,6 +166,25 @@ CREATE TABLE IF NOT EXISTS queen_manual_assign (
 );
 `
 
+// The actor runtime's nodes (gHashTag/t27 specs/queen/actors.t27 section 9):
+// each node's lease, renewed every NODE_HEARTBEAT_SECONDS, and the mail one
+// node leaves for another. A row is deleted when its node reads it.
+export const QUEEN_ACTORS_SQL = `
+CREATE TABLE IF NOT EXISTS queen_actor_node (
+  node int PRIMARY KEY,
+  host text NOT NULL,
+  heartbeat_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS queen_actor_mail (
+  id bigserial PRIMARY KEY,
+  node int NOT NULL,
+  body text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS queen_actor_mail_node
+  ON queen_actor_mail (node, id);
+`
+
 // Exported so a test can read the exact string the container executes at boot,
 // rather than a transcription of it. This block runs once per deploy and its
 // only reader is a database: a missing comma or a bad type here is a broken
@@ -317,6 +336,7 @@ CREATE TABLE IF NOT EXISTS queen_tick (
 ${QUEEN_CONTROL_SQL}
 ${QUEEN_JOBS_SQL}
 ${QUEEN_APP_SQL}
+${QUEEN_ACTORS_SQL}
 ALTER TABLE queen_dispatch
   ADD COLUMN IF NOT EXISTS owned_paths jsonb NOT NULL DEFAULT '[]'::jsonb;
 
