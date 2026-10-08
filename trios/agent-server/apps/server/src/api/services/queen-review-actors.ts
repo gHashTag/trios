@@ -12,7 +12,9 @@
  *     intake: knows which rows wait and which workers are idle, and hands one
  *       row to one idle worker (review_slots, visit_first)
  *     worker x REVIEWER_CONCURRENCY: one review per turn, and a turn is
- *       killed at REVIEW_ROW_SECONDS (turn_signal)
+ *       killed at REVIEW_ROW_SECONDS (turn_signal). The kill frees the worker.
+ *       The review itself runs on until it ends, holding its row and its key
+ *       lane.
  *
  * Why rest_for_one and not the card's one_for_one for agent domains: workers
  * report to the intake by pid. An intake that comes back has to find them
@@ -78,18 +80,24 @@ export interface ReviewerActorDeps {
 type IntakeMsg =
   | { kind: 'wake' }
   | { kind: 'up'; worker: Pid }
-  | { kind: 'done'; worker: Pid; issue: number; round: Judged }
+  | { kind: 'done'; worker: Pid; issue: number }
   | Down
 
 /** The reviewer domain as one child, for a root supervisor or a test. */
 export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
   const clock = sys.clock
   let intake: Pid | undefined
+  // The rows under review right now, each with the key lane it holds. This
+  // belongs to the review itself, not to the worker. A killed turn's review
+  // keeps running until it ends on its own. Until then its row is not handed
+  // out again and its lane stays reserved, so no row is ever reviewed twice at
+  // once and no lane is double-booked. This is the loop's inFlight guarantee,
+  // kept.
+  const reviewing = new Map<number, number | undefined>()
 
   const intakeSpec = () => {
     let queue: number[] = []
     const busy = new Map<Pid, number>()
-    const lanes = new Map<Pid, number>()
     const lastVisited = new Map<number, number>()
     let idle: Pid[] = []
     let wakeQueued = false
@@ -98,6 +106,7 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
       const free = Math.min(idle.length, reviewSlots(busy.size, queue.length))
       for (let k = 0; k < free; k++) {
         const issue = queue.shift()
+        if (issue !== undefined && reviewing.has(issue)) continue
         const worker = idle.shift()
         if (issue === undefined || worker === undefined) return
         busy.set(worker, issue)
@@ -133,20 +142,20 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
           busy.delete(msg.worker)
           idle.push(msg.worker)
           queue = queue.filter((n) => n !== msg.issue)
-          deps.onJudged?.(msg.round)
         } else if (msg.kind === 'DOWN') {
           const issue = busy.get(msg.pid)
           busy.delete(msg.pid)
-          lanes.delete(msg.pid)
           idle = idle.filter((p) => p !== msg.pid)
-          if (issue !== undefined) queue.unshift(issue)
+          // a crashed review has ended: its row goes back at once. A killed one
+          // may still be running; its row waits for it to end (`reviewing`)
+          if (issue !== undefined && !reviewing.has(issue)) queue.unshift(issue)
         } else {
           wakeQueued = false
           if (!(await deps.holdsLease())) return
           const inFlight = new Set(busy.values())
           const at = clock.now()
           queue = (await deps.waiting())
-            .filter((n) => !inFlight.has(n))
+            .filter((n) => !inFlight.has(n) && !reviewing.has(n))
             .sort((a, b) => {
               if (visitFirst(lastVisited.get(a), lastVisited.get(b), at))
                 return -1
@@ -157,19 +166,15 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
         }
         dispatch()
       },
-      lanesOf: () => [...lanes.values()],
-      setLane: (worker: Pid, keyIndex: number) => lanes.set(worker, keyIndex),
     }
   }
 
-  let current: ReturnType<typeof intakeSpec> | undefined
   const intakeChild: Child = {
     name: 'reviewer-intake',
-    start: (onExit, slot) => {
-      current = intakeSpec()
-      return actorChild(sys, current).start(onExit, slot)
-    },
+    start: (onExit, slot) => actorChild(sys, intakeSpec()).start(onExit, slot),
   }
+  const reservedKeys = () =>
+    [...reviewing.values()].filter((k): k is number => typeof k === 'number')
   const worker = (i: number): Child =>
     actorChild(sys, {
       name: `reviewer-worker-${i}`,
@@ -178,17 +183,22 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
         if (intake !== undefined) sys.send(intake, { kind: 'up', worker: self })
       },
       receive: async (msg: { issue: number }, self: Pid) => {
-        const round = await deps.reviewOne(
-          msg.issue,
-          () => current?.lanesOf() ?? [],
-          (keyIndex) => {
-            if (typeof keyIndex === 'number') current?.setLane(self, keyIndex)
-          },
-        )
+        reviewing.set(msg.issue, undefined)
+        let round: Judged
+        try {
+          round = await deps.reviewOne(msg.issue, reservedKeys, (keyIndex) => {
+            if (typeof keyIndex === 'number' && reviewing.has(msg.issue))
+              reviewing.set(msg.issue, keyIndex)
+          })
+        } finally {
+          reviewing.delete(msg.issue)
+        }
+        // what a review did happened even if its turn was killed: report it
+        deps.onJudged?.(round)
         if (intake !== undefined)
           sys.send(
             intake,
-            { kind: 'done', worker: self, issue: msg.issue, round },
+            { kind: 'done', worker: self, issue: msg.issue },
             self,
           )
       },
