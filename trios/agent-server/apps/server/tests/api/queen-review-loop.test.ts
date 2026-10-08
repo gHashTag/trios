@@ -16,10 +16,12 @@ import type { Pool } from 'pg'
 import {
   createReviewer,
   drainReviewerRound,
+  dueAgain,
   reviewSlots,
   roundReviews,
   serialized,
   visitFirst,
+  withWaitBackoff,
 } from '../../src/api/services/queen-review-loop'
 import { REVIEWER_CONCURRENCY } from '../../src/api/services/queen-reviewer-card.gen'
 import {
@@ -215,5 +217,66 @@ describe('the sweep, scoped to one issue', () => {
     )
     expect(list?.text).toContain("d.review_state = 'wait'")
     expect(list?.text).toContain("NOT LIKE 'reaped%'")
+  })
+})
+
+describe('a row that keeps answering wait is visited less and less (reviewer.t27 due_again)', () => {
+  it('the card: 30 s after one wait, doubling to 900 s', () => {
+    expect(dueAgain(0, 0)).toBe(true)
+    expect(dueAgain(1, 29_000)).toBe(false)
+    expect(dueAgain(1, 30_000)).toBe(true)
+    expect(dueAgain(3, 119_000)).toBe(false)
+    expect(dueAgain(3, 120_000)).toBe(true)
+    expect(dueAgain(40, 899_000)).toBe(false)
+    expect(dueAgain(40, 900_000)).toBe(true)
+  })
+
+  it('withWaitBackoff holds a waiting row back, and an answer that is not wait lets it go', async () => {
+    let t = 1_000_000
+    const answers = new Map<number, string>([
+      [1, 'wait'],
+      [2, 'sendBack'],
+    ])
+    const deps = withWaitBackoff(
+      {
+        holdsLease: async () => true,
+        waiting: async () => [1, 2],
+        reviewOne: async (issue) => ({
+          acted: [`#${issue}:${answers.get(issue)}`],
+          strays: [],
+          tally: [],
+        }),
+      },
+      () => t,
+    )
+    await deps.reviewOne(
+      1,
+      () => [],
+      () => {},
+    )
+    await deps.reviewOne(
+      2,
+      () => [],
+      () => {},
+    )
+    expect(await deps.waiting()).toEqual([2])
+    t += 30_000
+    expect(await deps.waiting()).toEqual([1, 2])
+    await deps.reviewOne(
+      1,
+      () => [],
+      () => {},
+    )
+    t += 59_000
+    expect(await deps.waiting()).toEqual([2])
+    t += 1_000
+    expect(await deps.waiting()).toEqual([1, 2])
+    answers.set(1, 'accept')
+    await deps.reviewOne(
+      1,
+      () => [],
+      () => {},
+    )
+    expect(await deps.waiting()).toEqual([1, 2])
   })
 })
