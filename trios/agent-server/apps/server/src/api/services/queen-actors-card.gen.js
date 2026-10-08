@@ -148,10 +148,36 @@ export const TURN_MAX_SECONDS = 3600;
 // t27c gen-js: fn hung_turn_signal was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-js: fn turn_signal was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-js: fn reclaim_wait_seconds was not emitted -- this backend lowers declarations, not bodies.
+export const SLICE_TURNS = 64;
+export const SLICE_MICROS = 5000;
+// t27c gen-js: fn slice_spent was not emitted -- this backend lowers declarations, not bodies.
+export const ISO_LOOP = 0;
+export const ISO_THREAD = 1;
+export const ISO_PROCESS = 2;
+// t27c gen-js: fn turn_isolation was not emitted -- this backend lowers declarations, not bodies.
+export const KILL_ABANDONS = 0;
+export const KILL_STOPS = 1;
+// t27c gen-js: fn kill_effect was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn holds_after_kill was not emitted -- this backend lowers declarations, not bodies.
+export const NODE_BITS = 12;
+export const LOCAL_SLOT_BITS = 20;
+export const LOCAL_SLOT_MASK = 1048575;
+export const MAX_NODE = 4095;
+// t27c gen-js: fn node_pid was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn node_of was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn local_of was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn is_remote was not emitted -- this backend lowers declarations, not bodies.
+export const NODE_HEARTBEAT_SECONDS = 5;
+export const NODE_TTL_SECONDS = 20;
+// t27c gen-js: fn node_up was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn send_remote was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn remote_down was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn place_before was not emitted -- this backend lowers declarations, not bodies.
 export const MAILBOX_BOUNDED = true;
 export const HOT_CODE_SWAP = false;
-export const TRANSPARENT_DISTRIBUTION = false;
+export const TRANSPARENT_DISTRIBUTION = true;
 export const PREEMPTIVE_REDUCTIONS = false;
+export const PREEMPTIVE_SLICES = true;
 export const GLOBAL_NAME_REGISTRY = false;
 // t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -194,10 +220,18 @@ export const GLOBAL_NAME_REGISTRY = false;
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [];
-export const __DECL_ORDER__ = ["NO_PID", "GEN_MASK", "D_QUEUED", "D_DROPPED_DEAD", "D_DROPPED_FULL", "SEND_BLOCKS", "SEND_ACKNOWLEDGED", "MAILBOX_CAP", "MBOX_SLOTS", "SLOT_BITS", "TAG_MASK", "NO_MATCH", "RCV_MATCH", "RCV_WAIT", "RCV_TIMEOUT", "AFTER_INFINITY", "LANE_DATA", "LANE_CONTROL", "LANE_NONE", "D_COALESCED", "CTL_TAGS", "CTL_BIT", "CALL_PENDING", "CALL_REPLY", "CALL_DOWN", "CALL_TIMEOUT", "CALL_CYCLE", "CALL_TOO_DEEP", "CHAIN_SLOTS", "CALL_MAX_DEPTH", "X_NORMAL", "X_SHUTDOWN", "X_KILL", "X_KILLED", "X_CRASH", "X_NOPROC", "X_NOCONNECTION", "X_NONE", "ACT_IGNORE", "ACT_DIE", "ACT_MESSAGE", "MONITOR_KILLS_WATCHER", "RESTART_PERMANENT", "RESTART_TRANSIENT", "RESTART_TEMPORARY", "STRAT_ONE_FOR_ONE", "STRAT_ONE_FOR_ALL", "STRAT_REST_FOR_ONE", "SUP_NOTHING", "SUP_RESTART", "SUP_GIVE_UP", "GIVE_UP_REASON", "BACKOFF_BASE_SECONDS", "BACKOFF_CAP_SECONDS", "STABLE_SECONDS", "UNSTABLE_GIVE_UP", "JITTER_PERCENT", "PHI_HASH", "SHUTDOWN_BRUTAL", "SHUTDOWN_INFINITY", "AUTO_NEVER", "AUTO_ANY_SIGNIFICANT", "AUTO_ALL_SIGNIFICANT", "AUTO_SHUTDOWN_REASON", "START_OK", "START_MAX_CHILDREN", "QK_INTAKE", "QK_RECONCILER", "QK_DOMAIN_SUP", "QK_AGENT", "QK_NONE", "QUEEN_ROOT_STRATEGY", "QUEEN_DOMAIN_STRATEGY", "QUEEN_AUTO_SHUTDOWN", "DOMAIN_MAX_RESTARTS", "DOMAIN_PERIOD_SECONDS", "ROOT_MAX_RESTARTS", "ROOT_PERIOD_SECONDS", "WORKER_SHUTDOWN_MS", "AGENT_SHUTDOWN_MS", "M_TASK_OFFER", "M_CANCEL", "M_HEARTBEAT_DUE", "TURN_MAX_SECONDS", "MAILBOX_BOUNDED", "HOT_CODE_SWAP", "TRANSPARENT_DISTRIBUTION", "PREEMPTIVE_REDUCTIONS", "GLOBAL_NAME_REGISTRY"];
+export const __DECL_ORDER__ = ["NO_PID", "GEN_MASK", "D_QUEUED", "D_DROPPED_DEAD", "D_DROPPED_FULL", "SEND_BLOCKS", "SEND_ACKNOWLEDGED", "MAILBOX_CAP", "MBOX_SLOTS", "SLOT_BITS", "TAG_MASK", "NO_MATCH", "RCV_MATCH", "RCV_WAIT", "RCV_TIMEOUT", "AFTER_INFINITY", "LANE_DATA", "LANE_CONTROL", "LANE_NONE", "D_COALESCED", "CTL_TAGS", "CTL_BIT", "CALL_PENDING", "CALL_REPLY", "CALL_DOWN", "CALL_TIMEOUT", "CALL_CYCLE", "CALL_TOO_DEEP", "CHAIN_SLOTS", "CALL_MAX_DEPTH", "X_NORMAL", "X_SHUTDOWN", "X_KILL", "X_KILLED", "X_CRASH", "X_NOPROC", "X_NOCONNECTION", "X_NONE", "ACT_IGNORE", "ACT_DIE", "ACT_MESSAGE", "MONITOR_KILLS_WATCHER", "RESTART_PERMANENT", "RESTART_TRANSIENT", "RESTART_TEMPORARY", "STRAT_ONE_FOR_ONE", "STRAT_ONE_FOR_ALL", "STRAT_REST_FOR_ONE", "SUP_NOTHING", "SUP_RESTART", "SUP_GIVE_UP", "GIVE_UP_REASON", "BACKOFF_BASE_SECONDS", "BACKOFF_CAP_SECONDS", "STABLE_SECONDS", "UNSTABLE_GIVE_UP", "JITTER_PERCENT", "PHI_HASH", "SHUTDOWN_BRUTAL", "SHUTDOWN_INFINITY", "AUTO_NEVER", "AUTO_ANY_SIGNIFICANT", "AUTO_ALL_SIGNIFICANT", "AUTO_SHUTDOWN_REASON", "START_OK", "START_MAX_CHILDREN", "QK_INTAKE", "QK_RECONCILER", "QK_DOMAIN_SUP", "QK_AGENT", "QK_NONE", "QUEEN_ROOT_STRATEGY", "QUEEN_DOMAIN_STRATEGY", "QUEEN_AUTO_SHUTDOWN", "DOMAIN_MAX_RESTARTS", "DOMAIN_PERIOD_SECONDS", "ROOT_MAX_RESTARTS", "ROOT_PERIOD_SECONDS", "WORKER_SHUTDOWN_MS", "AGENT_SHUTDOWN_MS", "M_TASK_OFFER", "M_CANCEL", "M_HEARTBEAT_DUE", "TURN_MAX_SECONDS", "SLICE_TURNS", "SLICE_MICROS", "ISO_LOOP", "ISO_THREAD", "ISO_PROCESS", "KILL_ABANDONS", "KILL_STOPS", "NODE_BITS", "LOCAL_SLOT_BITS", "LOCAL_SLOT_MASK", "MAX_NODE", "NODE_HEARTBEAT_SECONDS", "NODE_TTL_SECONDS", "MAILBOX_BOUNDED", "HOT_CODE_SWAP", "TRANSPARENT_DISTRIBUTION", "PREEMPTIVE_REDUCTIONS", "PREEMPTIVE_SLICES", "GLOBAL_NAME_REGISTRY"];
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not
