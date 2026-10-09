@@ -14,7 +14,8 @@
  *   - whether a dead child comes back, and after how long (on_child_exit,
  *     unstable_streak, with_backoff, backoff_seconds, jittered_seconds);
  *   - when a turn has run too long (turn_signal), and what killing it does
- *     (turn_isolation, kill_effect);
+ *     (turn_isolation, kill_effect, stop_signal, holds_after_kill, and
+ *     turn_stop.t27's escalation);
  *   - when a scheduler must yield (slice_spent);
  *   - what a monitor across nodes hears (node_up, remote_down).
  * This file holds the state, runs the turns, and keeps the clock it is given.
@@ -27,6 +28,18 @@
  * thread kept spinning (measured). A kill of any other turn abandons it. Its
  * pid is dead, so what it sends with `from` is dropped, and its late result
  * is ignored and fenced by control.t27's lease.
+ *
+ * STOP (turn_stop.t27, trios#1712). With `turnStop`, a turn whose pid dies is
+ * stopped, not only abandoned. Each data turn has its pid's AbortSignal,
+ * handed to `receive` and to its isolated work, and held for everything the
+ * turn starts (queen-turn-stop.ts turnRunner). When the pid dies - its timer
+ * or any `exit` - stop_signal says X_SHUTDOWN and the signal is aborted: a
+ * model call's fetch rejects, a command's process group is killed. At
+ * TURN_STOP_GRACE_MS stop_signal says X_KILL, and the card's `escalation` says
+ * what that does to work still running: SIGKILL to the turn's process group,
+ * or, for a turn on the loop or in a thread that ignored its abort, an
+ * abandon. A stopped turn holds its row and lane until holds_after_kill says
+ * it does not. Without `turnStop` a kill abandons the turn, as before.
  *
  * NODES (section 9). A pid names its node. A send to another node goes over
  * the `link`, a NodeLink. A node that stops renewing its lease is down, and
@@ -54,6 +67,12 @@ import {
   X_SHUTDOWN,
 } from './queen-actors-card.gen'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
+import { escalation, turnRunner } from './queen-turn-stop'
+import {
+  ESC_ABANDON,
+  ESC_KILL_GROUP,
+  TURN_STOP_GRACE_MS,
+} from './queen-turn-stop-card.gen'
 
 export const ACTORS_CARD = 'queen/actors.wasm'
 
@@ -91,7 +110,11 @@ export const realClock: Clock = {
   },
 }
 
-/** A turn's work, started off the host's thread: its result, and a stop. */
+/**
+ * A turn's work, started off the host's thread: its result, and a stop.
+ * `stop` is the escalation's kill. The abort signal handed to `start` is the
+ * request that comes before it.
+ */
 export interface IsolatedWork {
   result: Promise<unknown>
   stop: () => void
@@ -107,7 +130,7 @@ export interface Isolated<M> {
    * thread can keep running (measured, actors.t27 section 8).
    */
   mustStop?: boolean
-  start: (msg: M) => IsolatedWork
+  start: (msg: M, signal: AbortSignal) => IsolatedWork
 }
 
 export interface ActorSpec<M> {
@@ -116,9 +139,16 @@ export interface ActorSpec<M> {
   init?: (self: Pid) => void
   /**
    * One turn per message. A throw or a rejection is a crash. With `isolated`,
-   * the isolated work runs first and its result is the third argument.
+   * the isolated work runs first and its result is the third argument. The
+   * fourth is the turn's abort signal: with `turnStop` it is aborted when the
+   * pid dies, so whatever the turn waits on can stop with it.
    */
-  receive: (msg: M, self: Pid, result?: unknown) => Promise<void> | void
+  receive: (
+    msg: M,
+    self: Pid,
+    result: unknown,
+    signal: AbortSignal,
+  ) => Promise<void> | void
   /** A control message (tags 1..63), taken before any queued data message. */
   control?: (tag: number, self: Pid) => void
   /** The domain's bound on one turn, in seconds. 0 is the card's default. */
@@ -159,6 +189,20 @@ export interface NodeLink {
   onNodeDown(handler: (node: number) => void): void
 }
 
+/** The signal of a turn that is never stopped: without `turnStop`. */
+const NEVER_ABORTED = new AbortController().signal
+
+/** One data turn, from its message to the end of its work. */
+interface Turn {
+  stopWork?: () => void
+  ended: boolean
+  /** When its stop began: its pid died while the work ran. */
+  stoppedAt?: number
+  /** Stopped, and still holding its row and lane (holds_after_kill). */
+  held: boolean
+  cancelGrace?: () => void
+}
+
 interface Proc {
   pid: Pid
   spec: ActorSpec<unknown>
@@ -168,7 +212,15 @@ interface Proc {
   turnAt: number
   isolation: number
   cancelKill?: () => void
-  stopWork?: () => void
+  turn?: Turn
+  /**
+   * With `turnStop`: one controller for the pid's life. Its turns run one at
+   * a time and it is aborted only when the pid dies, so every turn can share
+   * it: a new AbortController per turn cost about 1.1 us of a 13 us message
+   * (measured). A turn that adds a listener to it removes it when done.
+   */
+  abort?: AbortController
+  inTurn?: <T>(fn: () => T) => T
   onExit: (reason: number) => void
 }
 
@@ -177,8 +229,18 @@ export interface ActorStats {
   deadLetters: number
   crashed: number
   killed: number
-  /** Kills that stopped the work, not only the turn (kill_effect). */
+  /**
+   * Kills that stopped the work, not only the turn. Without `turnStop`, a
+   * process turn killed (kill_effect). With it, a stopped turn whose work then
+   * ended, by its abort or by the escalation.
+   */
   stopped: number
+  /** Stopped turns past their grace whose process group was killed. */
+  escalated: number
+  /** Stopped turns past their grace that nothing could stop: loop or thread. */
+  abandoned: number
+  /** Stopped turns that still hold their row and lane, now. */
+  held: number
   /** Times a scheduler spent its slice and yielded to the host. */
   yields: number
   remoteSent: number
@@ -190,6 +252,12 @@ export interface ActorSystemOptions {
   link?: NodeLink
   /** False turns the slice off: every turn chained as a microtask, as before. */
   slices?: boolean
+  /**
+   * True stops a turn whose pid dies (turn_stop.t27): its abort, the grace,
+   * the escalation. False, the default, abandons it as before. A flag until
+   * the benchmark posted on t27#7851 is accepted.
+   */
+  turnStop?: boolean
 }
 
 export function createActorSystem(
@@ -199,6 +267,7 @@ export function createActorSystem(
   const node = options.node ?? options.link?.node ?? 0
   const link = options.link
   const slicesOn = options.slices ?? true
+  const turnStop = options.turnStop ?? false
   const gens = new Map<bigint, bigint>()
   let nextLocal = 1
   const live = new Map<bigint, Proc>()
@@ -214,6 +283,9 @@ export function createActorSystem(
     crashed: 0,
     killed: 0,
     stopped: 0,
+    escalated: 0,
+    abandoned: 0,
+    held: 0,
     yields: 0,
     remoteSent: 0,
   }
@@ -323,6 +395,10 @@ export function createActorSystem(
       isolation,
       onExit,
     }
+    if (turnStop) {
+      p.abort = new AbortController()
+      p.inTurn = turnRunner(p.abort.signal)
+    }
     live.set(s, p)
     spec.init?.(pid)
     return pid
@@ -409,11 +485,64 @@ export function createActorSystem(
     if (!p) return
     live.delete(slotOf(p.pid))
     p.cancelKill?.()
+    if (turnStop && p.turn && !p.turn.ended) stopTurn(p, p.turn, reason)
     stats.deadLetters += p.box.length
     for (const w of watchers.get(p.pid) ?? [])
       send(w, { kind: 'DOWN', pid: p.pid, reason } as Down)
     watchers.delete(p.pid)
     if (!quiet) p.onExit(reason)
+  }
+
+  // A stopped turn gives back its row and lane when holds_after_kill says so:
+  // once its work ended or, in an OS process, once the kill landed.
+  const release = (p: Proc, t: Turn) => {
+    if (!t.held || holdsAfterKill(p.isolation, t.ended)) return
+    t.held = false
+    stats.held--
+  }
+
+  /**
+   * The stop of a turn whose pid just died (turn_stop.t27). stop_signal at
+   * 0 ms is X_SHUTDOWN: the abort. At TURN_STOP_GRACE_MS it is X_KILL, and
+   * the card's `escalation` says what that does to work still running.
+   */
+  function stopTurn(p: Proc, t: Turn, reason: number): void {
+    const at = clock.now()
+    t.stoppedAt = at
+    t.held = true
+    stats.held++
+    if (c('stop_signal', 0, TURN_STOP_GRACE_MS) === X_SHUTDOWN)
+      p.abort?.abort(
+        new DOMException(
+          `aborted: the turn was stopped (exit ${reason})`,
+          'AbortError',
+        ),
+      )
+    t.cancelGrace = clock.after(TURN_STOP_GRACE_MS, () => {
+      const waited = u32(clock.now() - at)
+      if (c('stop_signal', waited, TURN_STOP_GRACE_MS) !== X_KILL) return
+      const esc = escalation(
+        c('kill_effect', p.isolation) === KILL_STOPS,
+        t.ended,
+      )
+      if (esc === ESC_KILL_GROUP && t.stopWork) {
+        stats.escalated++
+        t.stopWork()
+        release(p, t)
+      } else if (esc === ESC_ABANDON) {
+        stats.abandoned++
+      }
+    })
+  }
+
+  /** The end of a turn's work, whatever ended it. */
+  const turnEnded = (p: Proc, t: Turn) => {
+    if (t.ended) return
+    t.ended = true
+    if (t.stoppedAt === undefined) return
+    t.cancelGrace?.()
+    stats.stopped++
+    release(p, t)
   }
 
   function step(p: Proc): void {
@@ -436,39 +565,56 @@ export function createActorSystem(
     if (lane !== LANE_DATA) return
     const msg = p.box.shift()
     const bound = p.spec.turnMaxSeconds ?? 0
+    const t: Turn = { ended: false, held: false }
+    const signal = p.abort?.signal ?? NEVER_ABORTED
+    p.turn = t
     p.busy = true
     p.turnAt = clock.now()
     p.cancelKill = clock.after((bound || TURN_MAX_SECONDS) * 1000, () => {
       const age = Math.ceil((clock.now() - p.turnAt) / 1000)
       if (current(p) && c('turn_signal', u32(age), u32(bound)) === X_KILL) {
         stats.killed++
-        // an isolated turn's work is stopped for real; a loop turn's is not
-        if (c('kill_effect', p.isolation) === KILL_STOPS && p.stopWork) {
-          p.stopWork()
+        // Without turnStop: an isolated turn's work is stopped for real, a
+        // loop turn's is not. With it, `exit` starts the turn's stop.
+        if (
+          !turnStop &&
+          c('kill_effect', p.isolation) === KILL_STOPS &&
+          t.stopWork
+        ) {
+          t.stopWork()
           stats.stopped++
         }
         exit(p.pid, c('death_reason', X_KILL))
       }
     })
-    const turn =
+    const run = () =>
       p.isolation !== ISO_LOOP && p.spec.isolated
         ? (() => {
-            const work = p.spec.isolated.start(msg)
-            p.stopWork = work.stop
-            return work.result.then((r) => p.spec.receive(msg, p.pid, r))
+            const work = p.spec.isolated.start(msg, signal)
+            t.stopWork = work.stop
+            return work.result.then((r) =>
+              p.spec.receive(msg, p.pid, r, signal),
+            )
           })()
-        : Promise.resolve().then(() => p.spec.receive(msg, p.pid))
+        : Promise.resolve().then(() =>
+            p.spec.receive(msg, p.pid, undefined, signal),
+          )
+    // with turnStop, everything the turn starts, down to a git command, sees
+    // its signal; without it a turn costs what it did
+    const turn = p.inTurn ? p.inTurn(run) : run()
     turn.then(
       () => {
+        turnEnded(p, t)
         if (!current(p)) return
         p.cancelKill?.()
-        p.stopWork = undefined
+        p.turn = undefined
         p.busy = false
         schedule(p)
       },
       () => {
+        turnEnded(p, t)
         if (!current(p)) return
-        p.stopWork = undefined
+        p.turn = undefined
         stats.crashed++
         exit(p.pid, X_CRASH)
       },
@@ -554,6 +700,8 @@ export function createActorSystem(
     up: (n: number) => n === node || (!!link && link.up(n)),
     stats,
     clock,
+    /** Whether a dying pid's turn is stopped (turn_stop.t27) or abandoned. */
+    turnStop,
   }
 }
 
