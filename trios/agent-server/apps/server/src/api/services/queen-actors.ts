@@ -45,6 +45,15 @@
  * the `link`, a NodeLink. A node that stops renewing its lease is down, and
  * every monitor across it hears X_NOCONNECTION. No code moves between nodes:
  * a remote start names a kind registered on that node.
+ *
+ * INCARNATIONS AND THE FENCE (specs/queen/netlink.t27, trios#1712). A linked
+ * node takes a new incarnation at every start, and every pid it hands out
+ * carries it (inc_next_gen), so a restarted node never reuses a pid of its
+ * last life. A node-down names the incarnation that went down, and ends only
+ * what waited on it (lost_with). A node the link says must fence (must_fence)
+ * stops every actor at once, quietly, and from then on sends nothing and
+ * starts nothing: its peers are about to see it down and start its children
+ * elsewhere.
  */
 
 import {
@@ -75,8 +84,10 @@ import {
 } from './queen-turn-stop-card.gen'
 
 export const ACTORS_CARD = 'queen/actors.wasm'
+export const NETLINK_CARD = 'queen/netlink.wasm'
 
 const card = () => loadCardWasm(ACTORS_CARD)
+const netlink = () => loadCardWasm(NETLINK_CARD)
 const big = (v: number | bigint) => BigInt.asUintN(64, BigInt(v))
 /** A card function over u64s; its u64 answer comes back unsigned. */
 const c64 = (name: string, ...a: Array<number | bigint>) =>
@@ -86,6 +97,23 @@ const c = (name: string, ...a: number[]) => card().call(name, ...a)
 export type Pid = bigint
 export const slotOf = (pid: Pid): bigint => c64('slot_of', pid)
 export const nodeOf = (pid: Pid): number => Number(c64('node_of', pid))
+/** The incarnation a pid was born in (netlink.t27 inc_of); 0 with no store. */
+export const incOf = (pid: Pid): number =>
+  Number(big(netlink().call64('inc_of', pid)))
+/** Whether a node-down of (downNode, downInc) ends what waits on (node, inc). */
+const lostWith = (
+  node: number,
+  inc: number,
+  downNode: number,
+  downInc: number,
+) =>
+  netlink().call64(
+    'lost_with',
+    BigInt(node),
+    BigInt(inc),
+    BigInt(downNode),
+    BigInt(downInc),
+  ) !== 0
 export const turnIsolation = (
   cpuBound: boolean,
   foreignCode: boolean,
@@ -184,20 +212,33 @@ export type Mail =
       arg: unknown
       ref: number
       from: number
+      /** The asker's incarnation: the answer is written for it alone. */
+      fromInc: number
     }
   | { kind: 'spawned'; ref: number; pid: Pid | null }
 
 /**
  * One node's view of the others. `up` reads the node's lease through the card
  * (node_up). `carry` delivers one mail to a node, or loses it if that node is
- * gone, as a socket to a dead host does.
+ * gone, as a socket to a dead host does. `toInc` is the receiver's incarnation
+ * the mail is written for (netlink.t27 section 1): mail for any other one is
+ * expired, never delivered.
  */
 export interface NodeLink {
   node: number
+  /** This node's incarnation, taken from the store at start; 0 with none. */
+  incarnation: number
   up(node: number): boolean
-  carry(toNode: number, mail: Mail): void
+  /** The incarnation of `node` as this node last read it; 0 if unknown. */
+  incarnationOf(node: number): number
+  carry(toNode: number, mail: Mail, toInc: number): void
   onMail(handler: (mail: Mail) => void): void
-  onNodeDown(handler: (node: number) => void): void
+  /** A node-down names the incarnation that went down. */
+  onNodeDown(handler: (node: number, inc: number) => void): void
+  /** Whether this node must stop now (netlink.t27 must_fence). */
+  fenced(): boolean
+  /** Told once, when the link fences this node. */
+  onFenced(handler: () => void): void
 }
 
 /** The signal of a turn that is never stopped: without `turnStop`. */
@@ -255,6 +296,8 @@ export interface ActorStats {
   /** Times a scheduler spent its slice and yielded to the host. */
   yields: number
   remoteSent: number
+  /** Actors stopped because their node fenced itself (netlink.t27). */
+  fencedStops: number
 }
 
 export interface ActorSystemOptions {
@@ -279,6 +322,11 @@ export function createActorSystem(
   const link = options.link
   const slicesOn = options.slices ?? true
   const turnStop = options.turnStop ?? false
+  const inc = link?.incarnation ?? 0
+  // a linked node's pids carry its incarnation; a lone one keeps section 1's
+  const nextGen = link
+    ? (gen: bigint) => big(netlink().call64('inc_next_gen', BigInt(inc), gen))
+    : (gen: bigint) => c64('next_gen', gen)
   const gens = new Map<bigint, bigint>()
   let nextLocal = 1
   const live = new Map<bigint, Proc>()
@@ -291,8 +339,13 @@ export function createActorSystem(
   // monitors this node holds on pids elsewhere, by the node they live on
   const remoteWatches = new Map<number, Array<{ watcher: Pid; target: Pid }>>()
   const kinds = new Map<string, (arg: unknown) => ActorSpec<unknown>>()
-  const spawnWaits = new Map<number, (pid: Pid | null) => void>()
+  // a remote start waits on one incarnation of one node
+  const spawnWaits = new Map<
+    number,
+    { on: number; onInc: number; resolve: (pid: Pid | null) => void }
+  >()
   let nextRef = 1
+  let fenced = false
   const stats: ActorStats = {
     delivered: 0,
     deadLetters: 0,
@@ -304,6 +357,7 @@ export function createActorSystem(
     held: 0,
     yields: 0,
     remoteSent: 0,
+    fencedStops: 0,
   }
 
   const procOf = (pid: Pid): Proc | undefined => {
@@ -313,6 +367,41 @@ export function createActorSystem(
   const current = (p: Proc) => live.get(slotOf(p.pid)) === p
   const remote = (pid: Pid) =>
     card().call64('is_remote', pid, BigInt(node)) !== 0
+
+  // THE FENCE (netlink.t27 section 3). The link says when: a renewal or a
+  // write the store refused, or no renewal confirmed for SELF_FENCE_SECONDS.
+  // Every actor stops where it is, quietly: a supervisor here must not bring
+  // back what a peer is about to start elsewhere. A running turn is stopped
+  // as a kill stops it: with turnStop, its abort, grace and escalation;
+  // without, isolated work a kill stops (kill_effect). A remote start still
+  // waiting resolves to no pid.
+  const fence = () => {
+    if (fenced) return
+    fenced = true
+    for (const p of live.values()) {
+      p.cancelKill?.()
+      const t = p.turn
+      if (t && !t.ended) {
+        if (turnStop) stopTurn(p, t, X_NOCONNECTION)
+        else if (c('kill_effect', p.isolation) === KILL_STOPS && t.stopWork) {
+          t.stopWork()
+          stats.stopped++
+        }
+      }
+      stats.deadLetters += p.box.length
+      stats.fencedStops++
+    }
+    live.clear()
+    watchers.clear()
+    remoteWatches.clear()
+    for (const w of spawnWaits.values()) w.resolve(null)
+    spawnWaits.clear()
+  }
+  const isFenced = () => {
+    if (!fenced && link?.fenced()) fence()
+    return fenced
+  }
+  link?.onFenced(fence)
 
   // THE SLICE (section 8). Ready processes wait in one queue. A slice lasts
   // until the event loop turns: it counts turns across every drain the
@@ -387,11 +476,13 @@ export function createActorSystem(
     onExit: (reason: number) => void = () => {},
     slot?: bigint,
   ): Pid {
+    // a fenced node starts nothing: NO_PID reaches no one
+    if (isFenced()) return 0n
     let s = slot
     if (s === undefined) {
       s = slotOf(c64('node_pid', BigInt(node), BigInt(nextLocal++), 0n))
     }
-    const gen = c64('next_gen', gens.get(s) ?? 0n)
+    const gen = nextGen(gens.get(s) ?? 0n)
     gens.set(s, gen)
     const pid = c64('pid_of', s, gen)
     const isolation = spec.isolated
@@ -433,13 +524,14 @@ export function createActorSystem(
     }
     if (remote(pid)) {
       const to = nodeOf(pid)
-      const d = c('send_remote', flag(!!link && link.up(to)))
+      // a fenced node reaches no other node
+      const d = c('send_remote', flag(!!link && !isFenced() && link.up(to)))
       if (d !== D_QUEUED || !link) {
         stats.deadLetters++
         return d
       }
       stats.remoteSent++
-      link.carry(to, { kind: 'send', to: pid, msg, from })
+      link.carry(to, { kind: 'send', to: pid, msg, from }, incOf(pid))
       return d
     }
     const p = procOf(pid)
@@ -488,7 +580,7 @@ export function createActorSystem(
   function monitor(watcher: Pid, target: Pid): number {
     if (remote(target)) {
       const on = nodeOf(target)
-      if (!link || !link.up(on)) {
+      if (!link || isFenced() || !link.up(on)) {
         send(watcher, {
           kind: 'DOWN',
           pid: target,
@@ -499,7 +591,7 @@ export function createActorSystem(
       const list = remoteWatches.get(on) ?? []
       list.push({ watcher, target })
       remoteWatches.set(on, list)
-      link.carry(on, { kind: 'monitor', target, watcher })
+      link.carry(on, { kind: 'monitor', target, watcher }, incOf(target))
       return 0
     }
     if (!procOf(target)) {
@@ -523,7 +615,12 @@ export function createActorSystem(
   /** The end of a process. `quiet` is a stop its supervisor asked for. */
   function exit(pid: Pid, reason: number, quiet = false): void {
     if (remote(pid)) {
-      link?.carry(nodeOf(pid), { kind: 'exit', target: pid, reason })
+      if (!isFenced())
+        link?.carry(
+          nodeOf(pid),
+          { kind: 'exit', target: pid, reason },
+          incOf(pid),
+        )
       return
     }
     const p = procOf(pid)
@@ -592,6 +689,8 @@ export function createActorSystem(
   }
 
   function step(p: Proc): void {
+    // a node that must fence runs no further turn (netlink.t27 section 3)
+    if (link && isFenced()) return
     if (p.busy || !current(p)) return
     const lane = c('next_lane', flag(p.lane !== 0n), flag(p.box.length > 0))
     if (slicesOn && (lane === LANE_CONTROL || lane === LANE_DATA)) turnStarted()
@@ -682,27 +781,42 @@ export function createActorSystem(
     } else if (mail.kind === 'exit') {
       exit(mail.target, mail.reason)
     } else if (mail.kind === 'spawn') {
+      if (isFenced()) return
       const make = kinds.get(mail.spawnKind)
       const pid = make ? spawn(make(mail.arg)) : null
-      link.carry(mail.from, { kind: 'spawned', ref: mail.ref, pid })
+      link.carry(
+        mail.from,
+        { kind: 'spawned', ref: mail.ref, pid },
+        mail.fromInc,
+      )
     } else if (mail.kind === 'spawned') {
-      spawnWaits.get(mail.ref)?.(mail.pid)
+      spawnWaits.get(mail.ref)?.resolve(mail.pid)
       spawnWaits.delete(mail.ref)
     }
   })
-  // a node whose lease lapsed: every monitor across it hears noconnection
-  link?.onNodeDown((down) => {
-    for (const { watcher, target } of remoteWatches.get(down) ?? [])
-      send(watcher, {
+  // an incarnation that went down: what waited on it, and only that, ends
+  // (netlink.t27 lost_with). Every monitor of a pid born in it hears
+  // noconnection; every remote start sent to it resolves to no pid.
+  link?.onNodeDown((down, downInc) => {
+    const kept: Array<{ watcher: Pid; target: Pid }> = []
+    for (const w of remoteWatches.get(down) ?? []) {
+      if (!lostWith(nodeOf(w.target), incOf(w.target), down, downInc)) {
+        kept.push(w)
+        continue
+      }
+      send(w.watcher, {
         kind: 'DOWN',
-        pid: target,
+        pid: w.target,
         reason: c('remote_down', 0, 0, X_NOPROC),
       } as Down)
-    remoteWatches.delete(down)
-    for (const [ref, resolve] of spawnWaits) {
-      resolve(null)
-      spawnWaits.delete(ref)
     }
+    if (kept.length > 0) remoteWatches.set(down, kept)
+    else remoteWatches.delete(down)
+    for (const [ref, w] of spawnWaits)
+      if (lostWith(w.on, w.onInc, down, downInc)) {
+        w.resolve(null)
+        spawnWaits.delete(ref)
+      }
   })
 
   /** A kind another node may start here by name (no code crosses nodes). */
@@ -718,13 +832,18 @@ export function createActorSystem(
   ): Promise<Pid | null> {
     if (on === node) {
       const make = kinds.get(spawnKind)
-      return Promise.resolve(make ? spawn(make(arg)) : null)
+      return Promise.resolve(make && !isFenced() ? spawn(make(arg)) : null)
     }
-    if (!link || !link.up(on)) return Promise.resolve(null)
+    if (!link || isFenced() || !link.up(on)) return Promise.resolve(null)
     const ref = nextRef++
+    const onInc = link.incarnationOf(on)
     return new Promise((resolve) => {
-      spawnWaits.set(ref, resolve)
-      link.carry(on, { kind: 'spawn', spawnKind, arg, ref, from: node })
+      spawnWaits.set(ref, { on, onInc, resolve })
+      link.carry(
+        on,
+        { kind: 'spawn', spawnKind, arg, ref, from: node, fromInc: inc },
+        onInc,
+      )
     })
   }
 
@@ -738,7 +857,7 @@ export function createActorSystem(
     monitor,
     unwatch,
     exit,
-    alive: (pid: Pid) => !!procOf(pid),
+    alive: (pid: Pid) => !isFenced() && !!procOf(pid),
     /** A live process's mailbox, oldest first, or undefined. */
     mailbox: (pid: Pid): unknown[] | undefined => procOf(pid)?.box,
     /** Whether a live process is in a data turn. */
@@ -748,8 +867,13 @@ export function createActorSystem(
       exitListeners.add(told)
       return () => exitListeners.delete(told)
     },
-    /** Whether a node is up as this node sees it; this node always is. */
-    up: (n: number) => n === node || (!!link && link.up(n)),
+    /** Whether a node is up as this node sees it; this node is, unless fenced. */
+    up: (n: number) =>
+      n === node ? !isFenced() : !isFenced() && !!link && link.up(n),
+    /** This node's incarnation (netlink.t27 section 1); 0 with no link. */
+    incarnation: inc,
+    /** Whether this node fenced itself; it never comes back (FENCE_REJOINS). */
+    fenced: isFenced,
     stats,
     clock,
     /** Whether a dying pid's turn is stopped (turn_stop.t27) or abandoned. */
