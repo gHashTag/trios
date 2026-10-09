@@ -85,7 +85,12 @@ import {
 } from './queen-dispatch'
 import { pruneEvents, wakesHere } from './queen-events'
 import { heldPaths } from './queen-holds'
-import { advanceJobs, ensureJobTables, startJobsFromIssues } from './queen-jobs'
+import {
+  advanceJobs,
+  defaultJobIo,
+  ensureJobTables,
+  startJobsFromIssues,
+} from './queen-jobs'
 import {
   acquireQueenLease,
   logLeaseOutcome,
@@ -150,6 +155,11 @@ import { idleRunner, reapSilentRunners } from './queen-runner-work'
 import { isRunnerLane } from './queen-runners'
 import { startShaping } from './queen-shaper'
 import { recordEarnings } from './queen-tri-earnings'
+import {
+  githubRunResolver,
+  startWaitsActors,
+  waitsEnabled,
+} from './queen-waits'
 
 /**
  * The last non-secret allocator cursor already written durably. It survives a
@@ -5060,6 +5070,15 @@ export function startQueenTick(): void {
           reviewFinishedDispatches,
           waitingReviewIssues,
         )
+  // Long waits as rows (waits.t27, TRIOS_QUEEN_WAITS=rows): a job parked on a
+  // row is not visited by the round; the scheduler checks the run and, when
+  // the row ends, asks for a round here so the job moves at once.
+  const stopWaits = waitsEnabled()
+    ? startWaitsActors(pool, {
+        resolvers: { 'gh-run': githubRunResolver(defaultJobIo.get) },
+        onWake: (row) => gate.request(`wait #${row.id} ended (${row.owner})`),
+      })
+    : null
   // The bus (events.t27 section 4): this process reads every row of the log,
   // a runner's included, so a runner's task.ended wakes her within a second.
   followControlEvents(pool).catch((error) =>
@@ -5087,6 +5106,8 @@ export function startQueenTick(): void {
     if (timer) clearInterval(timer)
     stopFollowing()
     stopReviewer?.()
+    // writes nothing to any wait: the next process takes them up
+    await stopWaits?.().catch(() => {})
     // The gate with it, for the same reason as the timer: no round may start
     // after the process has handed the hive back.
     gate.stop()

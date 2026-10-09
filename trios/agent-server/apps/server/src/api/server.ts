@@ -84,6 +84,7 @@ import {
 } from './routes/queen-runners'
 import { createQueenTasksRoute } from './routes/queen-tasks'
 import { createQueenTreeRoute } from './routes/queen-tree'
+import { createQueenWaitsRoute } from './routes/queen-waits'
 import { createRefinePromptRoutes } from './routes/refine-prompt'
 import { createShutdownRoute } from './routes/shutdown'
 import { createSkillsRoutes } from './routes/skills'
@@ -320,6 +321,13 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenJobsRoute())
 
+  // What waits for what, and a key resolved from outside (specs/queen/waits.t27).
+  // It WRITES - a resolve wakes a job - so it is guarded inside its own
+  // sub-app like every route that writes.
+  const queenWaitsRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenWaitsRoute())
+
   const queenRegistryRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenRegistryRoute())
@@ -502,6 +510,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/export', queenExportRoutes)
     .route('/queen/tasks', queenTasksRoutes)
     .route('/queen/jobs', queenJobsRoutes)
+    .route('/queen/waits', queenWaitsRoutes)
     .route('/queen/rehearsal', queenRehearsalRoutes)
     .use('/shutdown/*', requireTrustedAppOrigin())
     .route(
