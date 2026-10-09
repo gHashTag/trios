@@ -16,9 +16,19 @@
  *       The review itself runs on until it ends, holding its row and its key
  *       lane.
  *
+ * With TRIOS_QUEEN_TURN_STOP=on (turn_stop.t27, trios#1713) the kill also
+ * stops the review: its abort signal reaches the model call and the git and
+ * criterion commands, so it ends at once and gives back its row and lane. A
+ * review that ignores its abort still holds them, and is counted against the
+ * bound (in_flight) until it ends: no more than the bound's reviews run at
+ * once, stalled ones included. Without the flag a killed review is abandoned,
+ * as before, and its worker's replacement takes a new row beside it.
+ *
  * Why rest_for_one and not the card's one_for_one for agent domains: workers
  * report to the intake by pid. An intake that comes back has to find them
- * again, and rest_for_one restarts every worker started after it.
+ * again, and rest_for_one restarts every worker started after it. With
+ * TRIOS_QUEEN_TURN_STOP=on the fixed workers sit under their own one_for_one
+ * supervisor below the intake (see `workers`).
  *
  * The intake wakes in two ways: on a bus event (`wake`, a bee finished) and on
  * a heartbeat every REVIEWER_EVERY_SECONDS, posted to its control lane. When a
@@ -60,6 +70,7 @@ import {
   createActorSystem,
   type Down,
   type Pid,
+  realClock,
   supervisor,
 } from './queen-actors'
 import {
@@ -94,6 +105,7 @@ import {
   REVIEWER_CONCURRENCY,
   REVIEWER_EVERY_SECONDS,
 } from './queen-reviewer-card.gen'
+import { inFlight as turnsInFlight } from './queen-turn-stop'
 
 export const REVIEWER_SIZING_CARD = 'queen/reviewer_sizing.wasm'
 
@@ -217,10 +229,12 @@ export type ReviewCapacityFn = (
 export interface ReviewerActorDeps {
   holdsLease: () => Promise<boolean>
   waiting: () => Promise<number[]>
+  /** `signal` is the worker's turn: aborted when the turn is stopped. */
   reviewOne: (
     issue: number,
     reservedKeys: () => number[],
     onLane: (keyIndex: number | undefined) => void,
+    signal?: AbortSignal,
   ) => Promise<Judged>
   onJudged?: (round: Judged) => void
   workers?: number
@@ -238,6 +252,7 @@ type IntakeMsg =
   | { kind: 'wake' }
   | { kind: 'up'; worker: Pid }
   | { kind: 'done'; worker: Pid; issue: number }
+  | { kind: 'released'; issue: number }
   | Down
 
 /** The reviewer domain as one child, for a root supervisor or a test. */
@@ -312,11 +327,22 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
       size = next
       return target
     }
+    // Reviews still running whose worker was killed. With turnStop they count
+    // against the bound like running ones (turn_stop.t27 in_flight); without
+    // it they are left out, as before.
+    const heldAfterKill = () => {
+      if (!sys.turnStop) return 0
+      const assigned = new Set(busy.values())
+      let held = 0
+      for (const issue of reviewing.keys()) if (!assigned.has(issue)) held++
+      return held
+    }
     const dispatch = (target: number | undefined) => {
+      const running = turnsInFlight(busy.size, heldAfterKill())
       const slots =
         target === undefined
-          ? reviewSlots(busy.size, queue.length)
-          : reviewSlotsWithin(target, busy.size, queue.length)
+          ? reviewSlots(running, queue.length)
+          : reviewSlotsWithin(target, running, queue.length)
       const free = Math.min(idle.length, slots)
       for (let k = 0; k < free; k++) {
         const issue = queue.shift()
@@ -384,6 +410,9 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
           // a crashed review has ended: its row goes back at once. A killed one
           // may still be running; its row waits for it to end (`reviewing`)
           if (issue !== undefined && !reviewing.has(issue)) queue.unshift(issue)
+        } else if (msg.kind === 'released') {
+          // a stopped review ended and gave back its slot: fill it now, not at
+          // the next heartbeat
         } else {
           wakeQueued = false
           if (!(await deps.holdsLease())) return
@@ -421,7 +450,12 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
           if (intake !== undefined)
             sys.send(intake, { kind: 'up', worker: self })
         },
-        receive: async (msg: { issue: number }, self: Pid) => {
+        receive: async (
+          msg: { issue: number },
+          self: Pid,
+          _result: unknown,
+          signal: AbortSignal,
+        ) => {
           reviewing.set(msg.issue, undefined)
           let round: Judged
           try {
@@ -432,9 +466,15 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
                 if (typeof keyIndex === 'number' && reviewing.has(msg.issue))
                   reviewing.set(msg.issue, keyIndex)
               },
+              // without turnStop the review runs exactly as before: no signal
+              sys.turnStop ? signal : undefined,
             )
           } finally {
             reviewing.delete(msg.issue)
+            // a stopped review's worker is dead, so its `done` would be
+            // dropped: tell the intake its slot is free, from no one
+            if (signal.aborted && intake !== undefined)
+              sys.send(intake, { kind: 'released', issue: msg.issue })
           }
           // what a review did happened even if its turn was killed: report it
           deps.onJudged?.(round)
@@ -449,6 +489,20 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
       restart,
     )
 
+  const fixed = () =>
+    Array.from({ length: deps.workers ?? REVIEWER_CONCURRENCY }, (_, i) =>
+      worker(i, RESTART_PERMANENT),
+    )
+  // WHY THE FIXED WORKERS GET THEIR OWN SUPERVISOR WHEN TURNS STOP. Under one
+  // rest_for_one, a killed worker also restarts every worker started after
+  // it. While a stop only abandoned a turn, those siblings' reviews ran on and
+  // finished. Once a stop really stops, the same restart throws their work
+  // away. Measured on the turn-stop benchmark's probe: 39 reviews aborted by
+  // a sibling's kill against 24 killed at their own bound. So, as in OTP: the
+  // intake, then a one_for_one supervisor of the workers, under rest_for_one.
+  // An intake that comes back still restarts every worker; a worker's death
+  // restarts that worker alone. The adaptive pool is one_for_one already.
+  //
   // A worker the pool stops is transient: it stays down. One that crashes or
   // is killed comes back in its slot, after the card's backoff.
   const workers: Child[] = deps.capacity
@@ -466,9 +520,20 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
           },
         ),
       ]
-    : Array.from({ length: deps.workers ?? REVIEWER_CONCURRENCY }, (_, i) =>
-        worker(i, RESTART_PERMANENT),
-      )
+    : sys.turnStop
+      ? [
+          supervisor(
+            sys,
+            {
+              name: 'reviewer-workers',
+              strategy: STRAT_ONE_FOR_ONE,
+              maxRestarts: DOMAIN_MAX_RESTARTS,
+              periodSeconds: DOMAIN_PERIOD_SECONDS,
+            },
+            fixed(),
+          ),
+        ]
+      : fixed()
   const tree = supervisor(
     sys,
     {
@@ -506,7 +571,10 @@ export function startReviewerActors(
 ): () => void {
   const adaptive =
     capacity !== undefined && process.env.TRIOS_QUEEN_REVIEWER_ADAPTIVE === '1'
-  const sys = createActorSystem()
+  // turn_stop.t27 behind a flag until its benchmark is accepted (t27#7851)
+  const turnStop =
+    (process.env.TRIOS_QUEEN_TURN_STOP ?? 'off').toLowerCase() === 'on'
+  const sys = createActorSystem(realClock, { turnStop })
   const r = reviewerTree(sys, {
     ...reviewerDeps(pool, leaseName, review, waiting),
     onJudged: recordJudged,
@@ -543,6 +611,7 @@ export function startReviewerActors(
   logger.info('Queen reviewer starting as actors', {
     workers: adaptive ? 'adaptive' : REVIEWER_CONCURRENCY,
     turnMaxSeconds: REVIEW_ROW_SECONDS,
+    turnStop,
   })
   return () => {
     unread()
