@@ -102,7 +102,14 @@ import {
   reportHeadline,
   startedLine,
 } from './queen-report-lines'
-import { startReviewerActors } from './queen-review-actors'
+import {
+  freeMemoryMb,
+  isZaiLane,
+  keyFreeLanes,
+  measuredReviewMb,
+  type ReviewCapacity,
+  startReviewerActors,
+} from './queen-review-actors'
 import {
   drainReviewerRound,
   reviewerRunning,
@@ -4451,6 +4458,37 @@ export async function runningKeys(pool: Pool): Promise<number[]> {
     .filter((i): i is number => typeof i === 'number' && !isRunnerLane(i))
 }
 
+/**
+ * What the adaptive reviewer's pool is sized from (reviewer_sizing.t27).
+ *
+ * The lanes are counted by the arithmetic the review sweep itself picks a
+ * lane by: the keys running bees hold and the keys reviews hold (`reserved`)
+ * are taken, a lane that just failed is left out, and each key counts what
+ * key_free_lanes leaves it - never more than its provider is measured to carry
+ * (z.ai: two requests a key, 2026-09-15). So the pool never sizes itself for a
+ * lane the sweep would not be offered.
+ */
+export async function reviewCapacity(
+  pool: Pool,
+  reserved: number[],
+): Promise<ReviewCapacity> {
+  const taken = [...(await runningKeys(pool)), ...reserved]
+  const lanes = reviewLaneCandidates(
+    taken,
+    await contributorRuntime(pool, environmentContributorKeys()),
+  ).filter((lane) => !reviewerLaneBackedOff(lane))
+  return {
+    freeLanes: lanes.reduce(
+      (n, lane) =>
+        n +
+        keyFreeLanes(lane.laneCount ?? 1, lane.laneIndex ?? 0, isZaiLane(lane)),
+      0,
+    ),
+    freeMb: freeMemoryMb(),
+    mbPerReview: measuredReviewMb(),
+  }
+}
+
 /** One VERDICT line with its three-state answer kept. */
 export interface VerdictLine {
   criterion: string
@@ -5005,11 +5043,23 @@ export function startQueenTick(): void {
   // off the round's critical path. TRIOS_QUEEN_REVIEWER=off hands reviewing
   // back to the round.
   // TRIOS_QUEEN_REVIEWER=actors runs the same reviewer as actors (t27#7851).
-  const stopReviewer = (
+  // TRIOS_QUEEN_REVIEWER_ADAPTIVE=1 sizes its pool from reviewCapacity
+  // (reviewer_sizing.t27) instead of a fixed REVIEWER_CONCURRENCY.
+  const stopReviewer =
     (process.env.TRIOS_QUEEN_REVIEWER ?? 'on').toLowerCase() === 'actors'
-      ? startReviewerActors
-      : startReviewer
-  )(pool, LEASE_NAME, reviewFinishedDispatches, waitingReviewIssues)
+      ? startReviewerActors(
+          pool,
+          LEASE_NAME,
+          reviewFinishedDispatches,
+          waitingReviewIssues,
+          reviewCapacity,
+        )
+      : startReviewer(
+          pool,
+          LEASE_NAME,
+          reviewFinishedDispatches,
+          waitingReviewIssues,
+        )
   // The bus (events.t27 section 4): this process reads every row of the log,
   // a runner's included, so a runner's task.ended wakes her within a second.
   followControlEvents(pool).catch((error) =>
