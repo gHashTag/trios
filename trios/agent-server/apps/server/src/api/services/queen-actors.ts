@@ -297,13 +297,26 @@ interface Proc {
   longAt: number
 }
 
-/** A sampled letter carries its arrival time; only step() ever sees one. */
+/**
+ * A sampled letter carries its arrival time. step() unwraps it, and so must
+ * anything else that reads a mailbox (`mailbox`) before its owner does.
+ */
 class Stamped {
   constructor(
     readonly msg: unknown,
     readonly at: number,
   ) {}
 }
+
+/**
+ * The message a letter in a mailbox holds. WHY: with telemetry on, a sampled
+ * letter waits wrapped in its arrival time, and a reader that matched the
+ * wrapper by `kind` missed it: demonitor's flush left a sampled DOWN queued,
+ * and a call's timeout won over a sampled reply already queued
+ * (tests/api/queen-actors-queued-letters.test.ts, gHashTag/trios#1731).
+ */
+export const letterOf = (m: unknown): unknown =>
+  m instanceof Stamped ? m.msg : m
 
 export interface ActorStats {
   delivered: number
