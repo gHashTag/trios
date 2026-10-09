@@ -19,7 +19,8 @@
 
 import { describe, expect, it } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createQueenActorsRoute } from '../../src/api/routes/queen-actors-metrics'
 import {
@@ -67,6 +68,7 @@ import {
   TEL_EVENT_NAMES,
 } from '../../src/api/services/queen-telemetry-card.gen'
 import { DEFAULT_SPECS_ROOT } from '../../src/inngest/spec-catalog'
+import { writeDecisionSpecs } from './queen-decision-spec'
 import { VirtualClock } from './queen-virtual-clock'
 
 const sha = (file: string) =>
@@ -554,7 +556,67 @@ describe('the decision log replays against the pinned cards', () => {
     expect(w[MT_KILLS] as number).toBeLessThanOrEqual(run.injected.stall)
     // the ring keeps the newest; the stream saw them all
     expect(tel.records().length).toBeLessThanOrEqual(all.length)
+    // QUEEN_DECISION_SPEC_OUT=<t27 checkout>: this log becomes the three-way
+    // conformance spec, specs/queen/replay/<card>_decisions.t27 there
+    const out = process.env.QUEEN_DECISION_SPEC_OUT
+    if (out) {
+      const spec = writeDecisionSpecs(
+        all,
+        out,
+        process.env.QUEEN_DECISION_SPEC_FROM ?? 'unrecorded',
+        'the seeded reviewer run (seed 7852: 45 arrivals an hour for 6 h, 180 s median review, 5% crashes, 2% stalls; slices off)',
+        process.env.QUEEN_DECISION_LOG_OUT,
+      )
+      console.log(
+        `\n## decision log as t27 asserts\n${spec.logged} records, ${spec.unique} distinct (card, fn, args); conflicts ${spec.conflicts.length}, unwritable ${spec.unwritable.length}\n| card | fn | logged | distinct |\n|---|---|---|---|\n${spec.perFn.map((f) => `| ${f.card} | ${f.fn} | ${f.logged} | ${f.unique} |`).join('\n')}`,
+      )
+      expect(spec.conflicts).toEqual([])
+      expect(spec.unwritable).toEqual([])
+    }
   }, 120_000)
+
+  it('the log becomes t27 asserts typed by the card, and a call answered two ways or a value its type cannot hold is refused', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'queen-decision-spec-'))
+    const spec = join(dir, 'specs/queen/replay/reviewer_decisions.t27')
+    const call: DecisionRecord = {
+      card: REVIEWER_CARD,
+      fn: 'review_slots',
+      args: [1, 4],
+      result: 3,
+      kind: 'reviewer-intake',
+      at: 0,
+      n: 0,
+    }
+    const write = (rs: DecisionRecord[]) =>
+      writeDecisionSpecs(rs, dir, 'x', 'a test')
+    const once = write([call, call])
+    expect([
+      once.unique,
+      once.conflicts.length,
+      once.unwritable.length,
+    ]).toEqual([1, 0, 0])
+    expect(readFileSync(spec, 'utf8')).toContain(
+      'assert review_slots(1, 4) == 3;',
+    )
+    // a u32 read back signed from the wasm is written unsigned, a bool as a bool
+    write([
+      { ...call, result: -1 },
+      { ...call, fn: 'visit_first', args: [1, 0, 0, 24], result: 1 },
+    ])
+    expect(readFileSync(spec, 'utf8')).toContain(
+      'assert review_slots(1, 4) == 4294967295;',
+    )
+    expect(readFileSync(spec, 'utf8')).toContain(
+      'assert visit_first(true, 0, false, 24) == true;',
+    )
+    expect(write([call, { ...call, result: 4 }]).conflicts.length).toBe(1)
+    expect(write([{ ...call, args: [-1, 4] }]).unwritable.length).toBe(1)
+    expect(
+      write([{ ...call, fn: 'visit_first', args: [2, 0, 0, 24] }]).unwritable
+        .length,
+    ).toBe(1)
+    rmSync(dir, { recursive: true })
+  })
 
   it('a corrupted, empty, foreign or unsampled log does not pass', async () => {
     const all: DecisionRecord[] = []
