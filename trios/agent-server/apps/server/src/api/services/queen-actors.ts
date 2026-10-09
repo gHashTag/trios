@@ -160,6 +160,17 @@ export interface Down {
   kind: 'DOWN'
   pid: Pid
   reason: number
+  /**
+   * The monitor's reference, not enumerable: a demonitor with flush finds its
+   * own DOWN by it, and a DOWN still reads as { kind, pid, reason }.
+   */
+  readonly ref?: number
+}
+
+const downOf = (pid: Pid, reason: number, ref: number): Down => {
+  const down = { kind: 'DOWN', pid, reason } as Down
+  Object.defineProperty(down, 'ref', { value: ref })
+  return down
 }
 
 /** What crosses between nodes. Everything in it must survive structuredClone. */
@@ -271,7 +282,12 @@ export function createActorSystem(
   const gens = new Map<bigint, bigint>()
   let nextLocal = 1
   const live = new Map<bigint, Proc>()
-  const watchers = new Map<Pid, Set<Pid>>()
+  // One entry per monitor call, never merged: two monitors on one target are
+  // two DOWNs (monitors_after_monitor). A Set here gave one.
+  const watchers = new Map<Pid, Array<{ watcher: Pid; ref: number }>>()
+  let nextMonitorRef = 1
+  // Told of every local exit, after the DOWNs: links (queen-actors-links.ts)
+  const exitListeners = new Set<(pid: Pid, reason: number) => void>()
   // monitors this node holds on pids elsewhere, by the node they live on
   const remoteWatches = new Map<number, Array<{ watcher: Pid; target: Pid }>>()
   const kinds = new Map<string, (arg: unknown) => ActorSpec<unknown>>()
@@ -449,7 +465,27 @@ export function createActorSystem(
     return d
   }
 
-  function monitor(watcher: Pid, target: Pid): void {
+  /**
+   * A new monitor reference on a local target. The card's count after a
+   * monitor is the count before plus one (monitors_after_monitor), whoever
+   * watches: a second monitor by the same watcher is a second entry.
+   */
+  const watch = (target: Pid, watcher: Pid): number => {
+    const list = watchers.get(target) ?? []
+    const ref = nextMonitorRef++
+    const count = c('monitors_after_monitor', u32(list.length))
+    list.push({ watcher, ref })
+    if (list.length !== count)
+      throw new Error(`monitor count ${list.length}, the card says ${count}`)
+    watchers.set(target, list)
+    return ref
+  }
+
+  /**
+   * Monitor `target` from `watcher`. Returns the monitor's reference for
+   * `unwatch` (0 when the DOWN was sent at once, or the target is remote).
+   */
+  function monitor(watcher: Pid, target: Pid): number {
     if (remote(target)) {
       const on = nodeOf(target)
       if (!link || !link.up(on)) {
@@ -458,21 +494,30 @@ export function createActorSystem(
           pid: target,
           reason: c('remote_down', 0, 0, X_NOPROC),
         } as Down)
-        return
+        return 0
       }
       const list = remoteWatches.get(on) ?? []
       list.push({ watcher, target })
       remoteWatches.set(on, list)
       link.carry(on, { kind: 'monitor', target, watcher })
-      return
+      return 0
     }
     if (!procOf(target)) {
       send(watcher, { kind: 'DOWN', pid: target, reason: X_NOPROC } as Down)
+      return 0
+    }
+    return watch(target, watcher)
+  }
+
+  /** Drop one monitor by its reference. The flush is queen-actors-links.ts. */
+  function unwatch(ref: number): void {
+    for (const [target, list] of watchers) {
+      const i = list.findIndex((w) => w.ref === ref)
+      if (i < 0) continue
+      list.splice(i, 1)
+      if (list.length === 0) watchers.delete(target)
       return
     }
-    const set = watchers.get(target) ?? new Set<Pid>()
-    set.add(watcher)
-    watchers.set(target, set)
   }
 
   /** The end of a process. `quiet` is a stop its supervisor asked for. */
@@ -487,9 +532,10 @@ export function createActorSystem(
     p.cancelKill?.()
     if (turnStop && p.turn && !p.turn.ended) stopTurn(p, p.turn, reason)
     stats.deadLetters += p.box.length
-    for (const w of watchers.get(p.pid) ?? [])
-      send(w, { kind: 'DOWN', pid: p.pid, reason } as Down)
+    const downs = watchers.get(p.pid) ?? []
     watchers.delete(p.pid)
+    for (const w of downs) send(w.watcher, downOf(p.pid, reason, w.ref))
+    for (const told of exitListeners) told(p.pid, reason)
     if (!quiet) p.onExit(reason)
   }
 
@@ -632,11 +678,7 @@ export function createActorSystem(
           pid: mail.target,
           reason: X_NOPROC,
         } as Down)
-      else {
-        const set = watchers.get(mail.target) ?? new Set<Pid>()
-        set.add(mail.watcher)
-        watchers.set(mail.target, set)
-      }
+      else watch(mail.target, mail.watcher)
     } else if (mail.kind === 'exit') {
       exit(mail.target, mail.reason)
     } else if (mail.kind === 'spawn') {
@@ -694,8 +736,18 @@ export function createActorSystem(
     send,
     post,
     monitor,
+    unwatch,
     exit,
     alive: (pid: Pid) => !!procOf(pid),
+    /** A live process's mailbox, oldest first, or undefined. */
+    mailbox: (pid: Pid): unknown[] | undefined => procOf(pid)?.box,
+    /** Whether a live process is in a data turn. */
+    busy: (pid: Pid): boolean => !!procOf(pid)?.busy,
+    /** Be told of every local exit, after its DOWNs. Returns the unsubscribe. */
+    onExit: (told: (pid: Pid, reason: number) => void): (() => void) => {
+      exitListeners.add(told)
+      return () => exitListeners.delete(told)
+    },
     /** Whether a node is up as this node sees it; this node always is. */
     up: (n: number) => n === node || (!!link && link.up(n)),
     stats,
