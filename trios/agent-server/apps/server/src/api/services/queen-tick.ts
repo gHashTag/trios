@@ -44,6 +44,10 @@ import { startModelProbes, workerModelRanking } from '../../lib/model-ranking'
 import { importRunnerBranch } from '../routes/queen-export'
 import { outstandingEscalations } from '../routes/queen-needs-you'
 import { advanceApp } from './queen-app'
+import {
+  dispatchByActors,
+  handRoundToBeeActors,
+} from './queen-bee-actors-round'
 import { githubCiDeps, takeBackRefusedAcceptances } from './queen-ci-verdict'
 import { contributorRuntime } from './queen-contributor-keys'
 import {
@@ -2132,6 +2136,49 @@ export async function runRound(
       criteriaSource,
       ...(runnerOnly ? [{ runnerOnly: true }] : []),
     )
+  }
+
+  // TRIOS_QUEEN_DISPATCH=actors (trios#1712 item 7, MVP, off by default): the
+  // issue actors start the bees (queen-bee-actors-round.ts), and the loop below
+  // and the runner-only pass have nothing left to do.
+  if (watch.held && dispatchByActors()) {
+    handRoundToBeeActors(pool, {
+      candidates,
+      board,
+      choose: async (issue, tasks) => {
+        const pick = await askQueend({
+          kind: 'choose',
+          candidates: [issue],
+          candidateBodies,
+          tasks,
+        })
+        return pick.allowed && pick.chosen === issue
+          ? (pick.chosenPaths ?? [])
+          : null
+      },
+      boardTask: (issue, paths, out) =>
+        boardTask(owner, repoName, {
+          conversationId: out.conversationId ?? null,
+          issue,
+          ownedPaths: paths,
+          branch: out.branch,
+          at: new Date().toISOString(),
+          title: 'just dispatched by the bee actors',
+          state:
+            typeof out.keyIndex === 'number' && isRunnerLane(out.keyIndex)
+              ? 'queued'
+              : 'running',
+        }),
+      dispatch: async (issue, paths) => {
+        const out = await dispatchChosen(issue, paths)
+        if (typeof out.keyIndex === 'number' && !isRunnerLane(out.keyIndex)) {
+          takenKeys = [...takenKeys, out.keyIndex]
+          keyCursor = out.keyIndex
+        }
+        return out
+      },
+    })
+    current = null
   }
 
   while (watch.held && current?.allowed && typeof current.chosen === 'number') {
