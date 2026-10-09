@@ -21,6 +21,13 @@
  * What is written here is I/O: reading GitHub and the registry, and the one
  * effect, a GitHub release, through the journal.
  *
+ * LONG WAITS (TRIOS_QUEEN_WAITS=rows, gHashTag/t27 specs/queen/waits.t27). The
+ * release-workflow step finds its run once, then parks on a queen_wait row
+ * keyed by the run's id. The round does not visit a parked job
+ * (round_visits_job); the waits scheduler checks the run on the card's
+ * schedule and wakes the job when the row ends. Off, or with no scheduler
+ * running here, the step is asked by every round, as before.
+ *
  * CREDENTIALS. Reads use the Queen's read token, as every other GitHub read
  * here does. The publish step needs TRIOS_QUEEN_RELEASE_TOKEN (contents:
  * write on the repository); without it the step answers BLOCKED and the job
@@ -70,6 +77,25 @@ import {
   stepAction,
   stepAfter,
 } from './queen-jobs-rules'
+import {
+  cancelWaitsOf,
+  checkAfterSeconds,
+  createWait,
+  ensureWaitTables,
+  ghRunKey,
+  jobOwner,
+  jobWaitSeconds,
+  ownerWaiting,
+  roundVisitsJob,
+  stepOutcome,
+  stepParks,
+  W_CANCELLED,
+  W_EXPIRED,
+  W_WAITING,
+  waitOf,
+  waitsEnabled,
+  waitsRunning,
+} from './queen-waits'
 
 /** A job card, as its constants say. */
 export interface JobCard {
@@ -341,6 +367,8 @@ export async function cancelJob(
   pool: Pool,
   id: number,
   by: string,
+  waits: boolean = waitsActive(),
+  now: () => number = Date.now,
 ): Promise<'cancelled' | 'not-running' | 'none'> {
   const job = await getJob(pool, id)
   if (!job) return 'none'
@@ -350,8 +378,17 @@ export async function cancelJob(
       WHERE id = $1 AND state = $4`,
     [id, J_CANCELLED, `cancelled by ${by}`, J_RUNNING],
   )
-  return (r.rowCount ?? 0) > 0 ? 'cancelled' : 'not-running'
+  const cancelled = (r.rowCount ?? 0) > 0
+  // a cancelled job's waits are cancelled too (waits.t27 EV_CANCEL)
+  if (cancelled && waits) {
+    await ensureWaitTables(pool)
+    await cancelWaitsOf(pool, jobOwner(id), now())
+  }
+  return cancelled ? 'cancelled' : 'not-running'
 }
+
+/** Waits are rows here: the flag is on and this process runs the scheduler. */
+export const waitsActive = (): boolean => waitsEnabled() && waitsRunning()
 
 /** What one executor answered. */
 export interface StepAnswer {
@@ -465,6 +502,10 @@ export type Executor = (ctx: {
   card: JobCard
   io: JobIo
   pool: Pool
+  /** The round's clock, in ms. */
+  now?: number
+  /** Long waits are rows (waits.t27): a WAIT step may park on one. */
+  waits?: boolean
 }) => Promise<StepAnswer>
 
 const tagOf = (job: JobRow, card: JobCard): string =>
@@ -617,12 +658,39 @@ export const EXECUTORS: Record<string, Executor> = {
     }
   },
 
-  async 'release-workflow'({ job, card, io }) {
+  async 'release-workflow'({ job, card, io, pool, now, waits }) {
     if (job.rehearsal)
       return {
         outcome: O_PASS,
         detail: 'rehearsal: no release, so no pipeline to wait for',
       }
+    const owner = jobOwner(job.id)
+    if (waits) {
+      // the row this step parked on, if it did: its end is the step's answer
+      const parked = await waitOf(pool, owner, job.step)
+      if (parked) {
+        const res = (parked.resolution ?? {}) as Record<string, unknown>
+        const outcome = stepOutcome(parked.state, res.conclusion === 'success')
+        const run = String(parked.detail.run ?? '?')
+        if (parked.state === W_WAITING)
+          return {
+            outcome,
+            detail: `parked on wait #${parked.id}: run ${run} has not completed`,
+          }
+        if (parked.state === W_EXPIRED || parked.state === W_CANCELLED)
+          return {
+            outcome,
+            detail: `wait #${parked.id} for run ${run} ${parked.state === W_EXPIRED ? 'expired' : 'was cancelled'}`,
+          }
+        return {
+          outcome,
+          detail:
+            outcome === O_PASS
+              ? `the release pipeline succeeded (${String(res.html_url)}) (wait #${parked.id})`
+              : `the release pipeline ended ${String(res.conclusion)} (${String(res.html_url)}) (wait #${parked.id})`,
+        }
+      }
+    }
     const runs = await io.get(
       gh(
         card,
@@ -637,6 +705,28 @@ export const EXECUTORS: Record<string, Executor> = {
         detail: `could not read the pipeline (${runs.status})`,
       }
     const run = list[0] as Record<string, unknown> | undefined
+    // step_parks: only a run that exists (its id known) and has not completed
+    const found = typeof run?.id === 'number'
+    if (waits && stepParks(found, run?.status === 'completed') && run) {
+      // the step keeps its first deadline: what is left of WAIT_LIMIT_MINUTES
+      const at = now ?? Date.now()
+      const waited = Math.floor((at - Date.parse(job.step_started_at)) / 1000)
+      const row = await createWait(
+        pool,
+        {
+          owner,
+          key: ghRunKey(card.repo, String(run.id)),
+          wakeInSeconds: checkAfterSeconds(0),
+          expirySeconds: jobWaitSeconds(waited),
+          detail: { step: job.step, run: run.id, url: run.html_url ?? null },
+        },
+        at,
+      )
+      return {
+        outcome: O_NOT_YET,
+        detail: `parked on wait #${row.id}: run ${run.id} is ${String(run.status)}`,
+      }
+    }
     if (!run)
       return {
         outcome: O_NOT_YET,
@@ -728,23 +818,30 @@ export async function advanceJobs(
   pool: Pool,
   io: JobIo = defaultJobIo,
   now: () => number = Date.now,
+  waits: boolean = waitsActive(),
 ): Promise<number> {
   await ensureJobTables(pool)
+  if (waits) await ensureWaitTables(pool)
   const running = await pool.query(
     'SELECT * FROM queen_job WHERE state = $1 ORDER BY id',
     [J_RUNNING],
   )
   let moved = 0
   for (const row of running.rows as JobRow[]) {
+    // a job parked on a waiting row is the scheduler's until the row ends
+    if (waits && !roundVisitsJob(await ownerWaiting(pool, jobOwner(row.id))))
+      continue
     let job = row
     for (let i = 0; i < STEPS_PER_ROUND && job.state === J_RUNNING; i += 1) {
-      const next = await advanceOne(pool, job, io, now).catch((error) => {
-        logger.warn('Queen job step crashed', {
-          id: job.id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        return null
-      })
+      const next = await advanceOne(pool, job, io, now, waits).catch(
+        (error) => {
+          logger.warn('Queen job step crashed', {
+            id: job.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          return null
+        },
+      )
       if (!next) break
       moved += 1
       const stayed = next.step === job.step && next.state === J_RUNNING
@@ -760,6 +857,7 @@ async function advanceOne(
   job: JobRow,
   io: JobIo,
   now: () => number,
+  waits: boolean,
 ): Promise<JobRow | null> {
   const card = await loadJobCard(job.card)
   const kind = card.stepKind[job.step]
@@ -768,7 +866,7 @@ async function advanceOne(
   const runs = job.step_runs + 1
   const waited = Math.floor((now() - Date.parse(job.step_started_at)) / 60_000)
   const answer: StepAnswer = exec
-    ? await exec({ job, card, io, pool })
+    ? await exec({ job, card, io, pool, now: now(), waits })
     : { outcome: O_FAIL, detail: `no executor named ${what}` }
   const action = stepAction(kind, answer.outcome, runs, waited)
   const state = jobStateAfter(action, job.step, card.stepKind.length)
