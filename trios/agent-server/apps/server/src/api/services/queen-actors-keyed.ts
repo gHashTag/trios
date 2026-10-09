@@ -227,6 +227,7 @@ export function keyedActors<K extends string | number, M>(
   })
 
   /** Send to a key. Returns the delivery code (actors.t27 D_*). */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one branch per keyed.t27 key_action answer; each decision is the card's, the branches only carry it out
   function send(key: K, msg: M): number {
     const e = entries.get(key)
     const stopping = !!e?.stopping

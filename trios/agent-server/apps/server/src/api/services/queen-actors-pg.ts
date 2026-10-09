@@ -416,6 +416,7 @@ export async function createPgLink(
       draining = false
     }
   }
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one pass over a batch of mail rows, one branch per netlink.t27 mail_action answer; the decisions are the card's
   const drainOnce = async () => {
     try {
       for (;;) {
