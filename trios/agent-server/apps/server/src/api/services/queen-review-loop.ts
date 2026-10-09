@@ -38,6 +38,13 @@ export const REVIEWER_CARD = 'queen/reviewer.wasm'
 const card = () => loadCardWasm(REVIEWER_CARD)
 export const reviewSlots = (inFlight: number, waiting: number): number =>
   card().call('review_slots', u32(inFlight), u32(waiting))
+/** The same rule against a bound the host computed (reviewer_concurrency). */
+export const reviewSlotsWithin = (
+  bound: number,
+  inFlight: number,
+  waiting: number,
+): number =>
+  card().call('review_slots_within', u32(bound), u32(inFlight), u32(waiting))
 export const visitFirst = (
   a: number | undefined,
   b: number | undefined,

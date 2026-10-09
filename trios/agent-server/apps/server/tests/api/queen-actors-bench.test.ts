@@ -29,6 +29,17 @@
  * The table is printed. Set QUEEN_BENCH_OUT to write it as JSON as well. The
  * asserts check only that every run accounts for its input. Which runtime
  * wins is the output, not a gate.
+ *
+ * FIXED 4 AGAINST THE ADAPTIVE POOL (trios#1712, reviewer_sizing.t27). The
+ * second table runs the same draws through the actor reviewer twice: with the
+ * fixed REVIEWER_CONCURRENCY workers, and with the pool the card sizes
+ * (TRIOS_QUEEN_REVIEWER_ADAPTIVE=1). Both see the same lanes. A review spends
+ * its first LANE_AT_PERCENT of its length on no lane (the witness and the
+ * criteria), then asks for a lane for its model call. With none free it ends
+ * there, answering `wait` as "no reviewer lane is free" does, and
+ * withWaitBackoff spaces its next visit, as in production. A stall hangs in
+ * the model call, so it holds its lane to the end: a killed review keeps its
+ * lane until it ends. Set QUEEN_BENCH_ADAPTIVE_OUT for JSON.
  */
 
 import { describe, expect, it } from 'bun:test'
@@ -42,19 +53,27 @@ import {
   ROOT_PERIOD_SECONDS,
   STRAT_ONE_FOR_ONE,
 } from '../../src/api/services/queen-actors-card.gen'
-import { reviewerTree } from '../../src/api/services/queen-review-actors'
+import {
+  type PoolSize,
+  reviewerTree,
+} from '../../src/api/services/queen-review-actors'
 import {
   createReviewer,
   drainReviewerRound,
+  type Judged,
+  withWaitBackoff,
 } from '../../src/api/services/queen-review-loop'
 import {
   REVIEW_ROW_SECONDS,
+  REVIEWER_CONCURRENCY,
   REVIEWER_EVERY_SECONDS,
 } from '../../src/api/services/queen-reviewer-card.gen'
 import { VirtualClock } from './queen-virtual-clock'
 
 const STALL_SECONDS = 1800
 const HOUR = 3_600_000
+/** Where a review asks for its lane: where a crash happens, 30 % in. */
+const LANE_AT_PERCENT = 30
 
 type Fate = 'ok' | 'crash' | 'stall'
 interface Attempt {
@@ -66,6 +85,8 @@ interface Workload {
   arrivals: Array<{ issue: number; at: number }>
   attempts: Map<number, Attempt[]>
   horizonMs: number
+  /** Rows of the opening burst: the first `burst` issues. */
+  burst: number
 }
 
 const mulberry32 = (seed: number) => {
@@ -121,10 +142,23 @@ function workload(
     }
     attempts.set(a.issue, list)
   }
-  return { name, arrivals, attempts, horizonMs: (o.hours + 1) * HOUR }
+  return {
+    name,
+    arrivals,
+    attempts,
+    horizonMs: (o.hours + 1) * HOUR,
+    burst: o.burst ?? 0,
+  }
 }
 
-type Runtime = 'loop' | 'actors' | 'actors-hb-only'
+type Runtime = 'loop' | 'actors' | 'actors-hb-only' | 'actors-adaptive'
+
+/** What the second table varies: the lanes and the memory both pools see. */
+interface Host {
+  lanes: number
+  freeMb: number
+  mbPerReview: number
+}
 
 interface Result {
   scenario: string
@@ -143,6 +177,16 @@ interface Result {
   killed: number
   deadLetters: number
   gaveUp: number
+  /** The second table only: provider calls at once, at most. */
+  maxCalls?: number
+  /** Visits that found no lane and answered `wait`. */
+  laneless?: number
+  maxWorkers?: number
+  avgWorkers?: number
+  /** Seconds from the last arrival until no row is open; null: never. */
+  drainS?: number | null
+  /** Seconds from the start until every burst row is done; null: never. */
+  burstDoneS?: number | null
 }
 
 const pct = (xs: number[], p: number) => {
@@ -151,9 +195,13 @@ const pct = (xs: number[], p: number) => {
   return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))]
 }
 const sec = (ms: number) => Math.round(ms / 1000)
-const judged = () => ({ acted: [], strays: [], tally: [] })
+const judged = (): Judged => ({ acted: [], strays: [], tally: [] })
 
-async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
+async function simulate(
+  w: Workload,
+  runtime: Runtime,
+  host?: Host,
+): Promise<Result> {
   const clock = new VirtualClock()
   const arrived = new Map<number, number>()
   const completed = new Map<number, number>()
@@ -166,7 +214,50 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
 
   const waiting = async () =>
     [...arrived.keys()].filter((n) => !completed.has(n))
-  const reviewOne = (issue: number) => {
+  // THE LANES (second table only): free lane ids, and who is calling now
+  const laneFree = Array.from({ length: host?.lanes ?? 0 }, (_, i) => i)
+  let calls = 0
+  let maxCalls = 0
+  let laneless = 0
+  const laned = (
+    issue: number,
+    token: number,
+    a: Attempt,
+    onLane: (lane: number | undefined) => void,
+  ) => {
+    const pre = a.seconds * 10 * LANE_AT_PERCENT
+    return new Promise<Judged>((resolve, reject) =>
+      clock.after(pre, () => {
+        if (a.fate === 'crash') {
+          if (fence.get(issue) === token && !completed.has(issue))
+            crashes.push({ issue, at: clock.now() })
+          reject(new Error('review crashed'))
+          return
+        }
+        const lane = laneFree.shift()
+        if (lane === undefined) {
+          laneless++
+          resolve({ acted: [`#${issue}:wait`], strays: [], tally: [] })
+          return
+        }
+        onLane(lane)
+        calls++
+        maxCalls = Math.max(maxCalls, calls)
+        const end = a.fate === 'stall' ? STALL_SECONDS * 1000 : a.seconds * 1000
+        clock.after(end - pre, () => {
+          laneFree.push(lane)
+          calls--
+          if (fence.get(issue) === token && !completed.has(issue))
+            completed.set(issue, clock.now())
+          resolve(judged())
+        })
+      }),
+    )
+  }
+  const reviewOne = (
+    issue: number,
+    onLane: (lane: number | undefined) => void = () => {},
+  ) => {
     const now = clock.now()
     if (!firstStart.has(issue)) firstStart.set(issue, now)
     starts.push({ issue, at: now })
@@ -183,7 +274,8 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
         : a.fate === 'crash'
           ? a.seconds * 300
           : a.seconds * 1000
-    return new Promise<ReturnType<typeof judged>>((resolve, reject) =>
+    if (host) return laned(issue, token, a, onLane)
+    return new Promise<Judged>((resolve, reject) =>
       clock.after(ms, () => {
         if (a.fate === 'crash') {
           // a crash counts when the attempt still holds its row: an abandoned one is fenced
@@ -203,6 +295,7 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
   let deadLetters = 0
   let gaveUp = 0
   let wake = () => {}
+  let size: () => PoolSize | undefined = () => undefined
   if (runtime === 'loop') {
     const reviewer = createReviewer({
       holdsLease: async () => true,
@@ -217,11 +310,29 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
     clock.after(REVIEWER_EVERY_SECONDS * 1000, tick)
   } else {
     const sys = createActorSystem(clock)
-    const r = reviewerTree(sys, {
+    const base = {
       holdsLease: async () => true,
       waiting,
-      reviewOne: (issue) => reviewOne(issue),
+      reviewOne: (
+        issue: number,
+        _reserved: () => number[],
+        onLane: (lane: number | undefined) => void,
+      ) => reviewOne(issue, onLane),
+    }
+    // the second table runs as production does: a `wait` is visited less
+    const r = reviewerTree(sys, {
+      ...(host ? withWaitBackoff(base, clock.now) : base),
+      ...(runtime === 'actors-adaptive' && host
+        ? {
+            capacity: async (reserved: number[]) => ({
+              freeLanes: host.lanes - reserved.length,
+              freeMb: host.freeMb,
+              mbPerReview: host.mbPerReview,
+            }),
+          }
+        : {}),
     })
+    if (runtime === 'actors-adaptive') size = r.size
     supervisor(
       sys,
       {
@@ -234,7 +345,7 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
     ).start(() => {
       gaveUp++
     })
-    if (runtime === 'actors') wake = r.wake
+    if (runtime !== 'actors-hb-only') wake = r.wake
     const stats = sys.stats
     const read = () => {
       killed = stats.killed
@@ -247,6 +358,16 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
       arrived.set(a.issue, a.at)
       wake()
     })
+
+  // workers alive, sampled every heartbeat (second table only)
+  const workers: number[] = []
+  if (host) {
+    const sample = () => {
+      workers.push(size()?.live ?? REVIEWER_CONCURRENCY)
+      clock.after(REVIEWER_EVERY_SECONDS * 1000, sample)
+    }
+    clock.after(0, sample)
+  }
 
   await clock.runUntil(w.horizonMs)
   drainReviewerRound()
@@ -274,6 +395,30 @@ async function simulate(w: Workload, runtime: Runtime): Promise<Result> {
     killed,
     deadLetters,
     gaveUp,
+    ...(host ? lanedResult() : {}),
+  }
+
+  function lanedResult() {
+    const lastArrival = Math.max(...w.arrivals.map((a) => a.at))
+    const lastDone = Math.max(0, ...completed.values())
+    const burstRows = w.arrivals.slice(0).sort((a, b) => a.issue - b.issue)
+    const burst = burstRows.slice(0, w.burst).map((a) => a.issue)
+    return {
+      maxCalls,
+      laneless,
+      maxWorkers: Math.max(...workers),
+      avgWorkers:
+        Math.round(
+          (workers.reduce((n, x) => n + x, 0) / Math.max(1, workers.length)) *
+            10,
+        ) / 10,
+      drainS:
+        completed.size === arrived.size ? sec(lastDone - lastArrival) : null,
+      burstDoneS:
+        w.burst > 0 && burst.every((n) => completed.has(n))
+          ? sec(Math.max(...burst.map((n) => completed.get(n) as number)))
+          : null,
+    }
   }
 }
 
@@ -353,6 +498,150 @@ describe('the reviewer: loop against actors, same input', () => {
     }
     console.log(lines.join('\n'))
     const out = process.env.QUEEN_BENCH_OUT
+    if (out) writeFileSync(out, JSON.stringify(results, null, 2))
+  }, 600_000)
+})
+
+/**
+ * The hosts the second table runs on. LANES_FREE is what /queen/status showed
+ * on 2026-10-09T06:38Z: 70 lanes, 23 running, 47 idle. 8 GB at 512 MB a review
+ * is the example reviewer.t27 itself argues from; memory then never binds
+ * before the ceiling of 16. The other two hosts are the cases where the pool
+ * must hold back: three free lanes, and a small container whose review size
+ * nobody measured (REVIEW_MB_UNTIL_MEASURED, 512).
+ */
+const LANES_FREE = 47
+const AMPLE: Host = { lanes: LANES_FREE, freeMb: 8192, mbPerReview: 512 }
+const SCARCE: Host = { lanes: 3, freeMb: 8192, mbPerReview: 512 }
+const SMALL: Host = { lanes: LANES_FREE, freeMb: 1536, mbPerReview: 0 }
+
+const SIZING: Array<{ w: Workload; host: Host; label: string }> = [
+  {
+    label: '47 lanes',
+    host: AMPLE,
+    w: workload('quiet 10/h, 180 s reviews, faults', 7856, {
+      perHour: 10,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+    }),
+  },
+  {
+    label: '47 lanes',
+    host: AMPLE,
+    w: workload('steady 45/h, 180 s reviews, faults', 7852, {
+      perHour: 45,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+    }),
+  },
+  {
+    label: '47 lanes',
+    host: AMPLE,
+    w: workload('overload 120/h, 180 s reviews, faults', 7854, {
+      perHour: 120,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+    }),
+  },
+  {
+    label: '47 lanes',
+    host: AMPLE,
+    w: workload('burst 120 in 10 min + 45/h, 180 s, faults', 7855, {
+      perHour: 45,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+      burst: 120,
+    }),
+  },
+  {
+    label: '3 lanes',
+    host: SCARCE,
+    w: workload('overload 120/h, 180 s reviews, faults', 7854, {
+      perHour: 120,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+    }),
+  },
+  {
+    label: '3 lanes',
+    host: SCARCE,
+    w: workload('burst 120 in 10 min + 45/h, 180 s, faults', 7855, {
+      perHour: 45,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+      burst: 120,
+    }),
+  },
+  {
+    label: '47 lanes, 1.5 GB free, review size not measured',
+    host: SMALL,
+    w: workload('overload 120/h, 180 s reviews, faults', 7854, {
+      perHour: 120,
+      hours: 6,
+      medianSeconds: 180,
+      crash: 0.05,
+      stall: 0.02,
+    }),
+  },
+]
+
+describe('the reviewer: fixed 4 against the adaptive pool, same input', () => {
+  it('runs every scenario both ways, accounts for every row, and never calls past the lanes', async () => {
+    const results: Array<Result & { host: string }> = []
+    for (const { w, host, label } of SIZING)
+      for (const runtime of ['actors', 'actors-adaptive'] as Runtime[]) {
+        const r = await simulate(w, runtime, host)
+        expect(r.arrived).toBe(w.arrivals.length)
+        expect(r.done + r.open).toBe(r.arrived)
+        // the lanes are the provider's: no runtime calls past them
+        expect(r.maxCalls ?? 0).toBeLessThanOrEqual(host.lanes)
+        results.push({ ...r, host: label })
+      }
+    const cols: Array<keyof Result> = [
+      'runtime',
+      'done',
+      'open',
+      'perHour',
+      'waitP50',
+      'waitP95',
+      'doneP95',
+      'maxCalls',
+      'laneless',
+      'maxWorkers',
+      'avgWorkers',
+      'drainS',
+      'burstDoneS',
+      'killed',
+      'gaveUp',
+    ]
+    const lines: string[] = []
+    for (const { w, label } of SIZING) {
+      lines.push(
+        `\n## ${w.name}, ${label} (${w.arrivals.length} rows, horizon ${w.horizonMs / HOUR} h)`,
+      )
+      lines.push(`| ${cols.join(' | ')} |`)
+      lines.push(`|${cols.map(() => '---').join('|')}|`)
+      for (const r of results.filter(
+        (x) => x.scenario === w.name && x.host === label,
+      ))
+        lines.push(
+          `| ${cols.map((c) => (r[c] === null ? '-' : String(r[c]))).join(' | ')} |`,
+        )
+    }
+    console.log(lines.join('\n'))
+    const out = process.env.QUEEN_BENCH_ADAPTIVE_OUT
     if (out) writeFileSync(out, JSON.stringify(results, null, 2))
   }, 600_000)
 })
