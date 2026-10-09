@@ -7,15 +7,18 @@
  * item 5).
  *
  * Each of the card's SEEDS_PER_RUN seeds plays STEPS_PER_RUN steps of the
- * real actor runtime - the reviewer actors and a pool on two more nodes - with
- * the card's fault mix, and runs RUNS_PER_SEED times. The gate fails when:
+ * real actor runtime - the reviewer actors and a pool on two more nodes over
+ * the memory net - with the card's fault mix, and every second seed with turns
+ * that really stop (seed_features). The first STORE_SEEDS_PER_RUN seeds play
+ * again with the nodes on the real createPgLink over the simulated store.
+ * Every case runs RUNS_PER_SEED times. The gate fails when:
  *   - any invariant breaks in any run (the seed, the step and the minimal log
  *     tail are printed, with the command that replays it);
- *   - two runs of one seed log differently (the first step they part at is
- *     printed, both sides);
- *   - the seeds together never reach one of the card's rare states.
+ *   - two runs of one case log differently (where they part is printed);
+ *   - the cases together never reach one of the card's rare states.
  *
- * Replay one seed:  SIM_SEED=<seed> bun test tests/sim/queen-actors-sim.test.ts
+ * Replay one case:  SIM_SEED=<seed> [SIM_TURN_STOP=1] [SIM_WORLD=store]
+ *                   bun test tests/sim/queen-actors-sim.test.ts
  * A soak:           SIM_SEEDS=<count> SIM_BASE=<base> bun test tests/sim/...
  * Timings as JSON:  SIM_OUT=<file>
  */
@@ -31,6 +34,7 @@ import { DEFAULT_SPECS_ROOT } from '../../src/inngest/spec-catalog'
 import { VirtualClock } from '../api/queen-virtual-clock'
 import { pgStore } from './queen-sim-pg-store'
 import {
+  hasFeature,
   INVARIANT_NAMES,
   mustReach,
   RARE_NAMES,
@@ -38,6 +42,8 @@ import {
   report,
   runSeed,
   SimWorld,
+  seedFeatures,
+  type WorldOptions,
 } from './queen-sim-world'
 
 const FILE = 'tests/sim/queen-actors-sim.test.ts'
@@ -59,8 +65,47 @@ describe('the vendored simulation card is the one PIN names', () => {
   })
 })
 
-/** Where two runs of one seed part, both sides of that step. */
-async function divergence(seed: number, a: RunResult, b: RunResult) {
+/** One case of the gate: a seed, its world and its features. */
+interface Case {
+  seed: number
+  store: boolean
+  turnStop: boolean
+}
+
+const optionsOf = (c: Case): WorldOptions => ({
+  turnStop: c.turnStop,
+  transport: c.store ? pgStore : undefined,
+})
+const nameOf = (c: Case) =>
+  `seed ${c.seed}${c.store ? ' on the store' : ''}${c.turnStop ? ' with turn stop' : ''}`
+const replayOf = (c: Case) =>
+  `SIM_SEED=${c.seed}${c.turnStop ? ' SIM_TURN_STOP=1' : ''}${c.store ? ' SIM_WORLD=store' : ''} bun test ${FILE}`
+
+function casesOfThisRun(): Case[] {
+  if (process.env.SIM_SEED)
+    return [
+      {
+        seed: Number(process.env.SIM_SEED) >>> 0,
+        store: process.env.SIM_WORLD === 'store',
+        turnStop: process.env.SIM_TURN_STOP === '1',
+      },
+    ]
+  const count = Number(process.env.SIM_SEEDS || S.SEEDS_PER_RUN)
+  const stores = Math.min(count, S.STORE_SEEDS_PER_RUN)
+  const base = Number(process.env.SIM_BASE || S.GATE_BASE_SEED) >>> 0
+  const at = (i: number, store: boolean): Case => ({
+    seed: runSeed(base, i),
+    store,
+    turnStop: hasFeature(seedFeatures(i), S.FEATURE_TURN_STOP),
+  })
+  return [
+    ...Array.from({ length: count }, (_, i) => at(i, false)),
+    ...Array.from({ length: stores }, (_, i) => at(i, true)),
+  ]
+}
+
+/** Where two runs of one case part, both sides. */
+async function divergence(c: Case, a: RunResult, b: RunResult) {
   let k = 0
   while (k < a.stepHashes.length && a.stepHashes[k] === b.stepHashes[k]) k++
   // the hashes past STEPS_PER_RUN are the quiet tail's, one a virtual minute
@@ -75,8 +120,14 @@ async function divergence(seed: number, a: RunResult, b: RunResult) {
   let own = a.lines.findIndex((l) => bAt.has(num(l)) && bAt.get(num(l)) !== l)
   if (own < 0) own = a.lines.length
   const bOwn = b.lines.findIndex((l) => num(l) === num(a.lines[own] ?? ''))
-  const one = await new SimWorld(seed, { captureStep: at }).run()
-  const two = await new SimWorld(seed, { captureStep: at }).run()
+  const one = await new SimWorld(c.seed, {
+    ...optionsOf(c),
+    captureStep: at,
+  }).run()
+  const two = await new SimWorld(c.seed, {
+    ...optionsOf(c),
+    captureStep: at,
+  }).run()
   let line = 0
   while (
     line < Math.max(one.captured.length, two.captured.length) &&
@@ -87,12 +138,12 @@ async function divergence(seed: number, a: RunResult, b: RunResult) {
     r.captured.slice(Math.max(0, line - 3), line + 3).map((l) => `    ${l}`)
   return [
     `SIMULATION FAILED: ${INVARIANT_NAMES[S.INV_RUNS_DIFFER]} (invariant ${S.INV_RUNS_DIFFER})`,
-    `  seed ${seed}: the runs part at ${where} (hashes: ${a.stepHashes.length} and ${b.stepHashes.length}; violations: ${a.violation?.inv ?? 'none'} and ${b.violation?.inv ?? 'none'})`,
-    ...(b.violation ? [report(b, FILE)] : []),
+    `  ${nameOf(c)}: the runs part at ${where} (hashes: ${a.stepHashes.length} and ${b.stepHashes.length})`,
+    ...(b.violation ? [report(b, replayOf(c))] : []),
     line < Math.max(one.captured.length, two.captured.length)
       ? `  replayed twice, they part again at line ${line} of it:`
       : '  replayed twice, that step logged the same: the difference came from outside the seed',
-    `  replay: SIM_SEED=${seed} bun test ${FILE}`,
+    `  replay: ${replayOf(c)}`,
     '  first replay:',
     ...side(one),
     '  second replay:',
@@ -109,17 +160,7 @@ async function divergence(seed: number, a: RunResult, b: RunResult) {
       .map((l) => `    second: ${l}`),
     `  counts, first run:  ${JSON.stringify(a.counts)}`,
     `  counts, second run: ${JSON.stringify(b.counts)}`,
-    `  after the steps, quiescing: first run ${a.afterTail.length} card calls (${a.counts.quiesceRounds} rounds), second ${b.afterTail.length} (${b.counts.quiesceRounds} rounds)`,
-    ...a.afterTail.slice(0, 12).map((l) => `    first:  ${l}`),
-    ...b.afterTail.slice(0, 12).map((l) => `    second: ${l}`),
   ].join('\n')
-}
-
-function seedsOfThisRun(): number[] {
-  if (process.env.SIM_SEED) return [Number(process.env.SIM_SEED) >>> 0]
-  const count = Number(process.env.SIM_SEEDS || S.SEEDS_PER_RUN)
-  const base = Number(process.env.SIM_BASE || S.GATE_BASE_SEED) >>> 0
-  return Array.from({ length: count }, (_, i) => runSeed(base, i))
 }
 
 function summary(lines: string[]) {
@@ -140,27 +181,27 @@ function summary(lines: string[]) {
   )
 }
 
-interface SeedOutcome {
+interface CaseOutcome {
   failures: string[]
   rare: Set<number>
   runs: number[]
   steps: number
 }
 
-/** One seed, RUNS_PER_SEED times: its violation, and whether its runs agree. */
-async function checkSeed(seed: number): Promise<SeedOutcome> {
+/** One case, RUNS_PER_SEED times: its violation, and whether its runs agree. */
+async function checkCase(c: Case): Promise<CaseOutcome> {
   const runs: RunResult[] = []
   for (let k = 0; k < S.RUNS_PER_SEED; k++)
-    runs.push(await new SimWorld(seed).run())
+    runs.push(await new SimWorld(c.seed, optionsOf(c)).run())
   const [a] = runs
   const failures: string[] = []
-  if (a.violation) failures.push(report(a, FILE))
+  if (a.violation) failures.push(report(a, replayOf(c)))
   for (const b of runs.slice(1))
     if (
       b.stepHashes.length !== a.stepHashes.length ||
       b.stepHashes.some((h, i) => h !== a.stepHashes[i])
     )
-      failures.push(await divergence(seed, a, b))
+      failures.push(await divergence(c, a, b))
   return {
     failures,
     rare: a.rare,
@@ -169,45 +210,57 @@ async function checkSeed(seed: number): Promise<SeedOutcome> {
   }
 }
 
-/** The rare states no seed reached, over the whole gate run. */
-function missed(reached: Set<number>, seeds: number): string[] {
+/** The rare states no case reached, over the whole gate run. */
+function missed(reached: Set<number>, cases: number): string[] {
   const out: string[] = []
   for (let state = 0; state < S.RARE_KINDS; state++)
     if (mustReach(state) && !reached.has(state))
       out.push(
-        `SIMULATION FAILED: ${INVARIANT_NAMES[S.INV_RARE_STATE_MISSED]} (invariant ${S.INV_RARE_STATE_MISSED})\n  no seed of ${seeds} reached: ${RARE_NAMES[state]}`,
+        `SIMULATION FAILED: ${INVARIANT_NAMES[S.INV_RARE_STATE_MISSED]} (invariant ${S.INV_RARE_STATE_MISSED})\n  no case of ${cases} reached: ${RARE_NAMES[state]}`,
       )
   return out
 }
 
+const p50 = (xs: number[]) => xs[Math.floor(xs.length / 2)]
+
 describe('the simulation gate (simulation.t27)', () => {
-  it('every seed runs twice and logs the same, no invariant breaks, and together the seeds reach every rare state', async () => {
-    const seeds = seedsOfThisRun()
+  it('every case runs twice and logs the same, no invariant breaks, and together the cases reach every rare state', async () => {
+    const cases = casesOfThisRun()
     const failures: string[] = []
     const reached = new Set<number>()
-    const timing: Array<{ seed: number; runs: number[]; steps: number }> = []
+    const timing: Array<Case & { runs: number[]; steps: number }> = []
     const t0 = performance.now()
-    for (const seed of seeds) {
-      const o = await checkSeed(seed)
+    for (const c of cases) {
+      const o = await checkCase(c)
       failures.push(...o.failures)
       for (const r of o.rare) reached.add(r)
-      timing.push({ seed, runs: o.runs, steps: o.steps })
+      timing.push({ ...c, runs: o.runs, steps: o.steps })
     }
     const totalMs = Math.round(performance.now() - t0)
-    // a replay of one seed is not asked to reach every rare state
-    if (!process.env.SIM_SEED) failures.push(...missed(reached, seeds.length))
-    const runMs = timing.flatMap((t) => t.runs).sort((x, y) => x - y)
+    // a replay of one case is not asked to reach every rare state
+    if (!process.env.SIM_SEED) failures.push(...missed(reached, cases.length))
+    const memoryMs = timing
+      .filter((t) => !t.store)
+      .flatMap((t) => t.runs)
+      .sort((x, y) => x - y)
+    const storeMs = timing
+      .filter((t) => t.store)
+      .flatMap((t) => t.runs)
+      .sort((x, y) => x - y)
     console.log(
       [
-        `\n## actor simulation: ${seeds.length} seeds x ${S.RUNS_PER_SEED} runs x ${S.STEPS_PER_RUN} steps`,
-        `total ${totalMs} ms; per run min ${runMs[0]} ms, p50 ${runMs[Math.floor(runMs.length / 2)]} ms, max ${runMs[runMs.length - 1]} ms`,
+        `\n## actor simulation: ${cases.length} cases x ${S.RUNS_PER_SEED} runs x ${S.STEPS_PER_RUN} steps`,
+        `total ${totalMs} ms; memory-net run min ${memoryMs[0]} ms, p50 ${p50(memoryMs)} ms, max ${memoryMs[memoryMs.length - 1]} ms` +
+          (storeMs.length > 0
+            ? `; store run min ${storeMs[0]} ms, p50 ${p50(storeMs)} ms, max ${storeMs[storeMs.length - 1]} ms`
+            : ''),
         `rare states reached: ${[...reached]
           .sort()
           .map((s) => RARE_NAMES[s])
           .join('; ')}`,
         ...timing.map(
           (t) =>
-            `seed ${t.seed}: ${t.steps} steps, runs ${t.runs.join(' / ')} ms`,
+            `${nameOf(t)}: ${t.steps} steps, runs ${t.runs.join(' / ')} ms`,
         ),
       ].join('\n'),
     )
@@ -228,7 +281,9 @@ describe('the gate has teeth', () => {
   it('re-creates the go-live hot loop (no wait backoff) and fails it from the first gate seed', async () => {
     const seed = runSeed(S.GATE_BASE_SEED, 0)
     const r = await new SimWorld(seed, { noWaitBackoff: true }).run()
-    console.log(`\n## the go-live defect, re-created\n${report(r, FILE)}`)
+    console.log(
+      `\n## the go-live defect, re-created\n${report(r, `SIM_SEED=${seed} bun test ${FILE}`)}`,
+    )
     expect(r.violation?.inv).toBe(S.INV_HOT_LOOP)
   }, 120_000)
 
@@ -247,40 +302,4 @@ describe('the gate has teeth', () => {
     expect(sys.alive(pid)).toBe(false)
     expect(ran).toBe(0)
   })
-})
-
-/**
- * KNOWN DEFECTS of the store link (trios#1712 item 6, read out of the code by
- * the competitor study and not tested until now). Both reproduce from a seed
- * on the real createPgLink over the simulated store. Each test asserts that
- * its defect STILL reproduces: when item 6 lands, it fails, and that is the
- * signal to turn it into a gate (expect no violation) - the PgLink world then
- * joins the gate's seeds.
- */
-describe('known defects of the PgLink, reproduced from a seed (trios#1712 item 6)', () => {
-  it('a node that comes back reissues its pids while the store still holds mail for the old ones', async () => {
-    // the other defect is looked past, so this run reaches this one
-    const seed = runSeed(S.GATE_BASE_SEED, 0)
-    const r = await new SimWorld(seed, {
-      transport: pgStore,
-      known: [S.INV_TAKEN_NOT_HANDLED],
-    }).run()
-    console.log(
-      `\n## PgLink defect: pids reissued after a restart\n${report(r, FILE)}`,
-    )
-    expect(r.violation?.inv).toBe(S.INV_PID_REUSED)
-  }, 300_000)
-
-  it('mail is deleted before it is handled, so a lost answer to the DELETE loses it, counted nowhere', async () => {
-    // pid reuse, and the second incarnation of a child it causes, are looked past
-    const seed = runSeed(S.GATE_BASE_SEED, 1)
-    const r = await new SimWorld(seed, {
-      transport: pgStore,
-      known: [S.INV_PID_REUSED, S.INV_RESTART_WITHOUT_EXIT],
-    }).run()
-    console.log(
-      `\n## PgLink defect: mail deleted before it is handled\n${report(r, FILE)}`,
-    )
-    expect(r.violation?.inv).toBe(S.INV_TAKEN_NOT_HANDLED)
-  }, 300_000)
 })

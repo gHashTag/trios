@@ -14,27 +14,32 @@
  * seed by the gate so that a run which logs differently is caught too.
  *
  * WHAT RUNS IS THE REAL RUNTIME: createActorSystem, supervisor, remoteChild,
- * createMemoryNet and the reviewer actors (reviewerTree, withWaitBackoff), on
- * the virtual clock. What is simulated is only what the runtime talks to: the
- * store (which rows wait, the lease), the review itself (its length and
- * fate), the bus, and the nodes of the pool.
+ * createMemoryNet (or the real createPgLink over the simulated store, see
+ * queen-sim-pg-store.ts) and the reviewer actors (reviewerTree,
+ * withWaitBackoff), on the virtual clock, with turns that really stop on the
+ * seeds the card names. What is simulated is only what the runtime talks to:
+ * the store (which rows wait, the lease), the review itself (its length, its
+ * fate, its abort), the bus, and the nodes of the pool.
  *
  * WHAT DECIDES. The simulation card (queen/simulation.wasm): every random
  * number is its sim_roll(seed, stream, index); each step's event is its
- * step_event, the time that passes its step_ms; which invariant fails the
- * gate, the hot-loop bound, the cap and the intensity checks are its
- * functions. performance.now, the one wall clock the runtime reads (the
- * slice), is replaced for the run by a counter the card drives. This file
- * holds the world's state, applies events and watches.
+ * step_event, the time that passes its step_ms, which seeds stop turns its
+ * seed_features, which jobs go to a remembered pid its stale_job; which
+ * invariant fails the gate, the hot-loop bound, the cap and the intensity
+ * checks are its functions. performance.now, the wall clock the runtime reads
+ * (the slice; the store link's lease age), reads the virtual clock plus work
+ * the card draws. This file holds the world's state, applies events and
+ * watches.
  *
  * HOW IT WATCHES. The reviewer and the pool are handed an observed system: a
  * copy of the runtime's whose spawn, send, exit and monitor log and check
  * before they delegate. Every spec spawned through it, and every kind started
  * on a node, gets a receive that checks its process is alive. Every mail that
  * crosses nodes carries a wire id, so mail still on the wire is known when a
- * pid is given out. The actors and reviewer cards are tapped, so their
- * decisions go into the run's log, and the supervisors' restart decisions are
- * counted on the harness's own clock.
+ * pid is given out, and a job names the incarnation its sender meant. The
+ * actors and reviewer cards are tapped, so their decisions go into the run's
+ * log, and each supervisor's restart decisions are counted on the harness's
+ * own clock, the supervisor told by the exit that caused the decision.
  */
 
 import {
@@ -99,6 +104,11 @@ const overCap = (atOnce: number, cap: number) =>
   sim().call('over_cap', atOnce, cap) !== 0
 const intensityKept = (inPeriod: number, max: number) =>
   sim().call('intensity_kept', inPeriod, max) !== 0
+export const seedFeatures = (i: number) =>
+  u32(sim().call('seed_features', u32(i)))
+export const hasFeature = (features: number, feature: number) =>
+  sim().call('has_feature', u32(features), u32(feature)) !== 0
+const stale = (roll: number) => sim().call('stale_job', u32(roll)) !== 0
 export const answerLost = (roll: number) =>
   sim().call('answer_lost', u32(roll)) !== 0
 export const failsGate = (inv: number) => sim().call('fails_gate', inv) !== 0
@@ -126,6 +136,7 @@ export const RARE_NAMES: Record<number, string> = {
   [S.RARE_WAIT_BACKED_OFF]: 'a row held back by the wait backoff',
   [S.RARE_SLICE_YIELDED]: 'a scheduler yielded its slice',
   [S.RARE_MOVED_NODE]: 'a child restarted on another node',
+  [S.RARE_REVIEW_STOPPED]: "a review stopped by its turn's abort",
 }
 
 /** A node link the world can crash and bring back, over some wire. */
@@ -151,6 +162,8 @@ export interface WorldOptions {
    * defect, so a run can look past it for another. Never set by the gate.
    */
   known?: number[]
+  /** Turns that really stop (turn_stop.t27), the flag TRIOS_QUEEN_TURN_STOP sets. */
+  turnStop?: boolean
 }
 
 export interface Violation {
@@ -266,16 +279,25 @@ export class SimWorld {
   private readonly keysHeld = new Map<number, number>()
   private readonly visits = new Map<number, number[]>()
   private wake: () => void = () => {}
+  /**
+   * The reviewer's process, as the world models it. A reviewer whose root gave
+   * up comes back with the next deploy, a new process: the reviews the old
+   * one abandoned die with it and hold no row or lane any more.
+   */
+  private reviewerProcess = 0
 
   // the pool's world
   private registrar: Pid = 0n
   private readonly known = new Map<string, Pid>()
   private readonly svc = new Map<number, Pid>()
+  private readonly remembered: Array<{ pid: Pid; inc: number }> = []
   private nextJob = 1
 
   // restart decisions per supervisor, by its maximum
-  private readonly decisions = new Map<number, number[]>()
+  private readonly decisions = new Map<string, number[]>()
   private lastExitMax = -1
+  /** The exit being handled now, and how many decisions it has caused. */
+  private exitCtx: { name: string; depth: number } | undefined
   private readonly periods = new Map<number, number>([
     [DOMAIN_MAX_RESTARTS, DOMAIN_PERIOD_SECONDS],
     [ROOT_MAX_RESTARTS, ROOT_PERIOD_SECONDS],
@@ -409,18 +431,59 @@ export class SimWorld {
     if (name === 'due_again' && r === 0) this.rare.add(S.RARE_WAIT_BACKED_OFF)
   }
 
+  /**
+   * The supervisors above a child, nearest first, as this world builds its
+   * trees: the reviewer's (queen-review-actors.ts; with turnStop the workers
+   * get a supervisor of their own) and the pool's.
+   */
+  private supervisorsOf(child: string): string[] {
+    if (child === 'reviewer-intake') return ['reviewer-domain', 'queen-root']
+    if (child.startsWith('reviewer-worker-'))
+      return this.options.turnStop
+        ? ['reviewer-workers', 'reviewer-domain', 'queen-root']
+        : ['reviewer-domain', 'queen-root']
+    if (child.endsWith('-watch')) return ['pool']
+    return []
+  }
+
+  /**
+   * Which supervisor decided. Every decision runs inside the exit that caused
+   * it, synchronously: the child's own supervisor first, and when it gives
+   * up, its parent, and so on. Two supervisors with the same maximum and
+   * period are told apart this way; with no exit in view, by the maximum.
+   */
+  private decider(): { key: string; max: number; period: number } | undefined {
+    const ctx = this.exitCtx
+    const sup = ctx ? this.supervisorsOf(ctx.name)[ctx.depth] : undefined
+    if (ctx) ctx.depth++
+    if (sup) {
+      const top = sup === 'queen-root'
+      const max = top
+        ? ROOT_MAX_RESTARTS
+        : sup === 'pool'
+          ? S.POOL_MAX_RESTARTS
+          : DOMAIN_MAX_RESTARTS
+      if (max !== this.lastExitMax) this.count('deciderMismatch')
+      const period = this.periods.get(max)
+      return period === undefined ? undefined : { key: sup, max, period }
+    }
+    const period = this.periods.get(this.lastExitMax)
+    if (period === undefined) return undefined
+    return { key: `max ${this.lastExitMax}`, max: this.lastExitMax, period }
+  }
+
   /** A supervisor decided; count its restarts in its period on our clock. */
   private decided(decision: number) {
-    const max = this.lastExitMax
-    const period = this.periods.get(max)
-    if (period === undefined) return
+    const who = this.decider()
+    if (!who) return
+    const { key, max, period } = who
     const now = this.clock.now()
-    const list = this.decisions.get(max) ?? []
+    const list = this.decisions.get(key) ?? []
     if (decision === SUP_GIVE_UP) {
       this.rare.add(S.RARE_INTENSITY_SPENT)
-      this.log(`supervisor (max ${max}) gave up`)
+      this.log(`supervisor ${key} gave up`)
       // that supervisor is gone; the one that replaces it counts afresh
-      this.decisions.set(max, [])
+      this.decisions.set(key, [])
       return
     }
     if (decision !== SUP_RESTART) return
@@ -434,12 +497,12 @@ export class SimWorld {
         ) !== 0,
     )
     this.tapping = false
-    this.decisions.set(max, kept)
-    this.log(`supervisor (max ${max}) restarts: ${kept.length} in ${period} s`)
+    this.decisions.set(key, kept)
+    this.log(`supervisor ${key} restarts: ${kept.length} in ${period} s`)
     if (!intensityKept(kept.length, max))
       this.fail(
         S.INV_INTENSITY,
-        `supervisor with max ${max} in ${period} s decided ${kept.length} restarts in its period`,
+        `supervisor ${key} (at most ${max} in ${period} s) decided ${kept.length} restarts in its period`,
       )
   }
 
@@ -491,7 +554,7 @@ export class SimWorld {
         this.born(inc)
         spec.init?.(self)
       },
-      receive: async (msg, self, result) => {
+      receive: async (msg, self, result, signal) => {
         turnCheck(self, 'a turn')
         const m = msg as { intended?: number; kind?: string }
         if (
@@ -506,9 +569,17 @@ export class SimWorld {
             String(self),
           )
         inc.inTurn++
+        // a remote child's watcher tells its supervisor of the exit in this
+        // turn, synchronously: that exit is the context of the decision
+        const outer = this.exitCtx
+        if (inc.name.endsWith('-watch'))
+          this.exitCtx = { name: inc.name, depth: 0 }
         try {
-          return await spec.receive(msg, self, result)
+          const turn = spec.receive(msg, self, result, signal)
+          this.exitCtx = outer
+          return await turn
         } finally {
+          this.exitCtx = outer
           inc.inTurn--
         }
       },
@@ -583,7 +654,13 @@ export class SimWorld {
           (reason) => {
             if (reason === X_KILLED) this.rare.add(S.RARE_TURN_KILLED)
             this.exited(inc, `reason ${reason}`)
-            onExit(reason)
+            const outer = this.exitCtx
+            this.exitCtx = { name: inc.name, depth: 0 }
+            try {
+              onExit(reason)
+            } finally {
+              this.exitCtx = outer
+            }
           },
           slot,
         )
@@ -610,7 +687,7 @@ export class SimWorld {
           `monitor ${fmtPid(watcher)} -> ${fmtPid(target)}`,
           String(target),
         )
-        raw.monitor(watcher, target)
+        return raw.monitor(watcher, target)
       },
       spawnOn: (on: number, kind: string, arg: unknown) => {
         this.log(`spawnOn node ${on} ${kind}`)
@@ -625,7 +702,7 @@ export class SimWorld {
       ...link,
       node: link.node,
       up: (n) => link.up(n),
-      carry: (to, mail) => {
+      carry: (to, mail, toInc) => {
         const id = this.nextWire++
         const pid =
           mail.kind === 'send'
@@ -646,7 +723,7 @@ export class SimWorld {
           ...(pid === undefined ? [] : [String(pid)]),
         )
         // the wire id rides along; the runtime reads only the fields it knows
-        link.carry(to, { ...mail, simWire: id } as unknown as Mail)
+        link.carry(to, { ...mail, simWire: id } as unknown as Mail, toInc)
         // the memory net lands or loses a mail after its latency; a store
         // model settles its own wire
         if (settleMs !== null)
@@ -691,7 +768,11 @@ export class SimWorld {
       await this.transport.link(n),
       this.options.transport ? null : S.NET_LATENCY_MS,
     )
-    const raw = createActorSystem(this.clock, { node: n, link })
+    const raw = createActorSystem(this.clock, {
+      node: n,
+      link,
+      turnStop: this.options.turnStop,
+    })
     this.rawSystems.push(raw)
     const sys = this.observe(raw)
     this.systems.set(n, sys)
@@ -726,11 +807,21 @@ export class SimWorld {
       return spec as ActorSpec<unknown>
     })
     // every node starts its own service at boot: the first local slot
-    this.svc.set(
-      n,
-      sys.spawn<{ kind: string }>({ name: `svc-${n}`, receive: () => {} }),
-    )
+    const svc = sys.spawn<{ kind: string }>({
+      name: `svc-${n}`,
+      receive: () => {},
+    })
+    this.svc.set(n, svc)
+    this.remember(svc)
     return sys
+  }
+
+  /** A pid learned now, kept with the incarnation it named then. */
+  private remember(pid: Pid) {
+    const inc = this.incOf(pid)?.id
+    if (inc === undefined) return
+    this.remembered.push({ pid, inc })
+    if (this.remembered.length > S.STALE_PIDS_KEPT) this.remembered.shift()
   }
 
   private crashNode(n: number) {
@@ -778,8 +869,8 @@ export class SimWorld {
           .filter((r) => !r.decided)
           .map((r) => r.issue)
       },
-      reviewOne: (issue, reservedKeys, onLane) =>
-        this.reviewOne(issue, reservedKeys, onLane),
+      reviewOne: (issue, reservedKeys, onLane, signal) =>
+        this.reviewOne(issue, reservedKeys, onLane, signal),
     }
     return this.options.noWaitBackoff
       ? base
@@ -898,6 +989,7 @@ export class SimWorld {
     issue: number,
     reservedKeys: () => number[],
     onLane: (keyIndex: number | undefined) => void,
+    signal?: AbortSignal,
   ): Promise<Judged> {
     const now = this.clock.now()
     const row = this.rows.get(issue)
@@ -910,19 +1002,40 @@ export class SimWorld {
       fate === 'wait' ? undefined : this.bookLane(issue, reservedKeys, onLane)
     if (fate !== 'wait' && key === undefined) fate = 'refused'
     const ms = this.lengthOf(fate, a)
+    const process = this.reviewerProcess
     this.log(
       `review #${issue} attempt ${a}: ${fate}, ${ms} ms, lane ${key ?? '-'}`,
       `#${issue}`,
     )
+    // a stopped turn aborts its review (turn_stop.t27): the model call ends at
+    // once, as a transient refusal does, and the row is not judged
+    let stopped = false
     try {
-      await new Promise<void>((r) => this.clock.after(ms, r))
+      await new Promise<void>((r) => {
+        const cancel = this.clock.after(ms, r)
+        const stop = () => {
+          stopped = true
+          cancel()
+          r()
+        }
+        if (signal?.aborted) stop()
+        else signal?.addEventListener('abort', stop, { once: true })
+      })
     } finally {
-      this.endReview(issue, key)
+      if (process === this.reviewerProcess) this.endReview(issue, key)
+    }
+    if (stopped) {
+      this.rare.add(S.RARE_REVIEW_STOPPED)
+      this.count('reviewsStopped')
+      this.log(`review #${issue} attempt ${a} stopped by its turn`, `#${issue}`)
+      fate = 'wait'
     }
     if (fate === 'crash') {
       this.log(`review #${issue} attempt ${a} threw`, `#${issue}`)
       throw new Error('review crashed (simulated)')
     }
+    // a review of a process that was replaced died with it: it decides nothing
+    if (process !== this.reviewerProcess) fate = 'wait'
     if (fate === 'ok' && row) row.decided = true
     const verdict = fate === 'ok' ? 'accept' : 'wait'
     this.log(`review #${issue} attempt ${a} ended: ${verdict}`, `#${issue}`)
@@ -946,9 +1059,14 @@ export class SimWorld {
       this.wake = () => {}
       this.count('reviewerGaveUp')
       this.log('reviewer root gave up')
-      this.clock.after(S.GIVE_UP_REARM_SECONDS * 1000, () =>
-        this.startReviewer(sys0),
-      )
+      this.clock.after(S.GIVE_UP_REARM_SECONDS * 1000, () => {
+        // the next deploy: a new process, so the old one's reviews are gone
+        this.reviewerProcess++
+        this.reviewsOf.clear()
+        this.keysHeld.clear()
+        this.log('reviewer starts again in a new process')
+        this.startReviewer(sys0)
+      })
     })
     r.wake()
   }
@@ -965,6 +1083,7 @@ export class SimWorld {
           if (m.kind === 'up') {
             const up = m as { pid: Pid; child: string }
             this.known.set(up.child, up.pid)
+            this.remember(up.pid)
             sys0.monitor(self, up.pid)
           } else if (m.kind === 'DOWN') {
             for (const [c, p] of this.known)
@@ -1033,10 +1152,18 @@ export class SimWorld {
         return
       }
       case S.E_JOB: {
+        const id = this.nextJob++
+        // a remembered pid, as a reference kept in a row is: it names the
+        // incarnation it was learned from, whatever became of it since
+        if (stale(r()) && this.remembered.length > 0) {
+          const old = this.remembered[(r() >>> 2) % this.remembered.length]
+          this.count('staleJobs')
+          sys0.send(old.pid, { kind: 'job', id, intended: old.inc })
+          return
+        }
         const targets = [...this.known.values(), ...this.svc.values()]
         if (targets.length === 0) return
         const to = targets[r() % targets.length]
-        const id = this.nextJob++
         sys0.send(to, { kind: 'job', id, intended: this.incOf(to)?.id })
         return
       }
@@ -1122,7 +1249,9 @@ export class SimWorld {
         0,
         S.CLOCK_TICK_MAX_MICROS,
       )
-      return micros / 1000
+      // the virtual clock, plus the work done since: the slice and the store
+      // link read it as wall time, and both are driven by the seed
+      return this.clock.now() + micros / 1000
     }
     const untapActors = this.tap(ACTORS_CARD, (n, a, r) =>
       this.onActorsCall(n, a, r),
@@ -1220,14 +1349,14 @@ export class SimWorld {
 }
 
 /** The report of a failed run: the seed, how to replay it, the minimal tail. */
-export function report(r: RunResult, file: string): string {
+export function report(r: RunResult, replay: string): string {
   const v = r.violation
   if (!v) return `seed ${r.seed}: ok`
   return [
     `SIMULATION FAILED: ${INVARIANT_NAMES[v.inv]} (invariant ${v.inv})`,
     `  seed ${r.seed}, step ${v.step}, t=${(v.t / 1000).toFixed(3)} s`,
     `  ${v.text}`,
-    `  replay: SIM_SEED=${r.seed} bun test ${file}`,
+    `  replay: ${replay}`,
     `  log tail (the last lines that name ${v.subjects.join(', ') || 'anything'}):`,
     ...r.tail,
   ].join('\n')
