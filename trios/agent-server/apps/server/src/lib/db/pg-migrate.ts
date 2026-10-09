@@ -183,6 +183,18 @@ CREATE TABLE IF NOT EXISTS queen_actor_mail (
 );
 CREATE INDEX IF NOT EXISTS queen_actor_mail_node
   ON queen_actor_mail (node, id);
+-- netlink.t27 (trios#1712): the incarnation that holds a node's lease, and on
+-- every mail row the receiver's incarnation it was written for and the
+-- writer's. A row from before these columns reads as incarnation 0, which no
+-- start ever takes, so it is expired, never delivered.
+ALTER TABLE queen_actor_node
+  ADD COLUMN IF NOT EXISTS incarnation bigint NOT NULL DEFAULT 0;
+ALTER TABLE queen_actor_mail
+  ADD COLUMN IF NOT EXISTS to_inc bigint NOT NULL DEFAULT 0;
+ALTER TABLE queen_actor_mail
+  ADD COLUMN IF NOT EXISTS from_node int NOT NULL DEFAULT 0;
+ALTER TABLE queen_actor_mail
+  ADD COLUMN IF NOT EXISTS from_inc bigint NOT NULL DEFAULT 0;
 `
 
 // Long waits as rows (gHashTag/t27 specs/queen/waits.t27, trios#1712 item 4):
