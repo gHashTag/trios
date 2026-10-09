@@ -807,17 +807,24 @@ export function createActorSystem(
         exit(p.pid, c('death_reason', X_KILL))
       }
     })
+    // A TURN RUNS ONLY FOR A LIVE PROCESS. The message is taken here and the
+    // turn runs a microtask later, or once isolated work returns. A stop in
+    // between - a supervisor that gives up stops every child at once - left
+    // the process dead and its receive still ran. Found by the simulation gate
+    // (tests/sim, seed 3600507402, trios#1712 item 5).
     const run = () =>
       p.isolation !== ISO_LOOP && p.spec.isolated
         ? (() => {
             const work = p.spec.isolated.start(msg, signal)
             t.stopWork = work.stop
             return work.result.then((r) =>
-              p.spec.receive(msg, p.pid, r, signal),
+              current(p) ? p.spec.receive(msg, p.pid, r, signal) : undefined,
             )
           })()
         : Promise.resolve().then(() =>
-            p.spec.receive(msg, p.pid, undefined, signal),
+            current(p)
+              ? p.spec.receive(msg, p.pid, undefined, signal)
+              : undefined,
           )
     // with turnStop, everything the turn starts, down to a git command, sees
     // its signal; without it a turn costs what it did

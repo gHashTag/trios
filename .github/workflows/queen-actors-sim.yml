@@ -1,0 +1,87 @@
+# THE ACTOR SIMULATION GATE (gHashTag/t27 specs/queen/simulation.t27,
+# trios#1712 item 5).
+#
+# Every seed of the card plays 10 000 steps of the real actor runtime - the
+# reviewer actors, a pool on two more nodes, the card's fault mix - and runs
+# twice. The job fails when an invariant breaks, when two runs of one seed log
+# differently, or when the seeds together never reach one of the card's rare
+# states. A failure prints the seed, the step, the minimal log tail and the
+# command that replays it, and writes the same to the job summary with the
+# commit.
+#
+# WHY A WORKFLOW OF ITS OWN. Tests (test.yml) runs the same group, server-sim,
+# on PRs into queen and queen-runners, beside every other suite. The actor work
+# lands on actors-next first, where no workflow ran; this one runs there, and
+# only when the runtime, the cards it calls or the simulation change. A soak
+# (more seeds, another base) runs where the code is checked out:
+#   SIM_SEEDS=200 SIM_BASE=7 bun test tests/sim/queen-actors-sim.test.ts
+name: Actor simulation
+
+on:
+  pull_request:
+    branches: [actors-next]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - .github/workflows/queen-actors-sim.yml
+      - trios/agent-server/apps/server/src/api/services/queen-actor*.ts
+      - trios/agent-server/apps/server/src/api/services/queen-review-actors.ts
+      - trios/agent-server/apps/server/src/api/services/queen-review-loop.ts
+      - trios/agent-server/apps/server/src/api/services/queen-card-wasm.ts
+      - trios/agent-server/apps/server/src/api/services/queen-actors-card.gen.js
+      - trios/agent-server/apps/server/src/api/services/queen-reviewer-card.gen.js
+      - trios/agent-server/apps/server/src/api/services/queen-simulation-card.gen.js
+      - trios/agent-server/specs/queen/actors.*
+      - trios/agent-server/specs/queen/reviewer.*
+      - trios/agent-server/specs/queen/simulation.*
+      - trios/agent-server/specs/PIN
+      - trios/agent-server/apps/server/tests/sim/**
+      - trios/agent-server/apps/server/tests/api/queen-virtual-clock.ts
+  push:
+    branches: [actors-next]
+    paths:
+      - .github/workflows/queen-actors-sim.yml
+      - trios/agent-server/apps/server/src/api/services/queen-actor*.ts
+      - trios/agent-server/apps/server/src/api/services/queen-review-actors.ts
+      - trios/agent-server/apps/server/src/api/services/queen-review-loop.ts
+      - trios/agent-server/apps/server/src/api/services/queen-card-wasm.ts
+      - trios/agent-server/apps/server/src/api/services/queen-actors-card.gen.js
+      - trios/agent-server/apps/server/src/api/services/queen-reviewer-card.gen.js
+      - trios/agent-server/apps/server/src/api/services/queen-simulation-card.gen.js
+      - trios/agent-server/specs/queen/actors.*
+      - trios/agent-server/specs/queen/reviewer.*
+      - trios/agent-server/specs/queen/simulation.*
+      - trios/agent-server/specs/PIN
+      - trios/agent-server/apps/server/tests/sim/**
+      - trios/agent-server/apps/server/tests/api/queen-virtual-clock.ts
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    name: Actor simulation / seeded runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: trios/agent-server
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # the workspace pins Bun (packageManager); see test.yml for why
+          bun-version-file: trios/agent-server/package.json
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Create server env file
+        working-directory: trios/agent-server/apps/server
+        run: cp .env.example .env.development
+
+      - name: Simulate
+        working-directory: trios/agent-server/apps/server
+        run: bun run test:sim
