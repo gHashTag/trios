@@ -12,8 +12,9 @@
  * Set QUEEN_BENCH_OUT to write the results as JSON as well.
  */
 
-import { describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { writeFileSync } from 'node:fs'
+import { logger } from '../../src/lib/logger'
 import {
   HOUR,
   type Result,
@@ -22,6 +23,15 @@ import {
   type Workload,
   workload,
 } from './queen-bee-sim'
+
+// The round gate logs every round it starts and ends: tens of thousands of
+// lines over these simulated hours, and nothing a reader of the table needs.
+let level: Parameters<typeof logger.setLevel>[0] = 'info'
+beforeAll(() => {
+  level = (logger as unknown as { level: typeof level }).level ?? 'info'
+  logger.setLevel('warn')
+})
+afterAll(() => logger.setLevel(level))
 
 const FAULTS = { fail: 0.08, crash: 0.04, hang: 0.03 }
 const SCENARIOS: Workload[] = [
