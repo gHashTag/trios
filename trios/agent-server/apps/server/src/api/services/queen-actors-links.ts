@@ -36,6 +36,7 @@ import {
   ACTORS_CARD,
   type ActorSystem,
   type Down,
+  letterOf,
   type Pid,
   slotOf,
 } from './queen-actors'
@@ -186,10 +187,10 @@ function makeLinks(sys: ActorSystem) {
     sys.unwatch(ref)
     const box = sys.mailbox(watcher)
     if (!box) return
-    const at = box.findIndex(
-      (m) =>
-        (m as Down | undefined)?.kind === 'DOWN' && (m as Down).ref === ref,
-    )
+    const at = box.findIndex((m) => {
+      const d = letterOf(m) as Down | undefined
+      return d?.kind === 'DOWN' && d.ref === ref
+    })
     const left = c('down_left_after_demonitor', flag(flush), flag(at >= 0))
     if (left === 0 && at >= 0) box.splice(at, 1)
   }
@@ -268,9 +269,9 @@ function makeLinks(sys: ActorSystem) {
       let ended = false
       let cancelTimer = () => {}
       const queued = (kind: string) =>
-        (sys.mailbox(alias) ?? []).find(
-          (m) => (m as { kind?: string })?.kind === kind,
-        )
+        (sys.mailbox(alias) ?? [])
+          .map(letterOf)
+          .find((m) => (m as { kind?: string })?.kind === kind)
       const end = (outcome: number, value?: unknown, reason?: number) => {
         ended = true
         cancelTimer()
