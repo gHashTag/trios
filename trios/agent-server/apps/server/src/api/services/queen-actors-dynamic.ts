@@ -86,6 +86,21 @@ export function dynamicSupervisor(
       let restarts: number[] = []
       let down = false
       const pending = new Set<() => void>()
+      // telemetry (telemetry.t27), as the fixed supervisor reports it
+      const tel = sys.telemetry
+      const sup = tel?.supervisor(
+        opts.name,
+        opts.maxRestarts,
+        () =>
+          restarts.filter(
+            (t) =>
+              c(
+                'in_period',
+                u32((clock.now() - t) / 1000),
+                u32(opts.periodSeconds),
+              ) !== 0,
+          ).length,
+      )
 
       const run = (id: number, k: Kid) => {
         k.startedAt = clock.now()
@@ -98,6 +113,10 @@ export function dynamicSupervisor(
         for (const k of [...kids.values()].reverse()) k.running?.stop()
       }
       const exited = (id: number, reason: number) => {
+        if (tel === undefined) exitedOn(id, reason)
+        else tel.als.run(opts.name, exitedOn, id, reason)
+      }
+      const exitedOn = (id: number, reason: number) => {
         const k = kids.get(id)
         if (down || !k) return
         k.running = undefined
@@ -124,6 +143,7 @@ export function dynamicSupervisor(
           u32(k.streak),
         )
         if (decision === SUP_GIVE_UP) {
+          if (sup) tel?.gaveUp(sup)
           down = true
           stopAll()
           onExit(GIVE_UP_REASON)
@@ -136,6 +156,7 @@ export function dynamicSupervisor(
           return
         }
         restarts.push(now)
+        if (sup) tel?.restarted(sup, k.child.kind ?? k.child.name)
         const wait = Number(
           card().call64(
             'jittered_seconds',
