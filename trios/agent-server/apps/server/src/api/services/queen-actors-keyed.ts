@@ -189,10 +189,10 @@ export function keyedActors<K extends string | number, M>(
         entries.set(key, e)
         spec.init?.(self)
       },
-      receive: async (msg, self, result) => {
+      receive: async (msg, self, result, signal) => {
         touched()
         try {
-          await spec.receive(msg, self, result)
+          await spec.receive(msg, self, result, signal)
         } finally {
           touched()
           if (entries.get(key) === e && !e.stopping) arm(key, e)
