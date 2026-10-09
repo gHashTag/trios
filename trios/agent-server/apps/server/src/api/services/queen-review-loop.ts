@@ -32,6 +32,7 @@ import {
   REVIEW_ROW_SECONDS,
   REVIEWER_EVERY_SECONDS,
 } from './queen-reviewer-card.gen'
+import { asStep } from './queen-turn-stop'
 
 export const REVIEWER_CARD = 'queen/reviewer.wasm'
 
@@ -104,11 +105,15 @@ export interface ReviewerDeps {
   holdsLease: () => Promise<boolean>
   /** The issues waiting for a review, in the sweep's own order. */
   waiting: () => Promise<number[]>
-  /** One sweep over one issue; lanes held by siblings are passed in. */
+  /**
+   * One sweep over one issue; lanes held by siblings are passed in. `signal`
+   * stops it (turn_stop.t27): the actor reviewer passes its turn's.
+   */
   reviewOne: (
     issue: number,
     reservedKeys: () => number[],
     onLane: (keyIndex: number | undefined) => void,
+    signal?: AbortSignal,
   ) => Promise<Judged>
   now?: () => number
 }
@@ -174,6 +179,8 @@ export type ReviewFn = (
     reservedKeys: () => number[]
     onLane: (lane: { keyIndex?: number }) => void
     deadlineMs: number
+    /** Stops the sweep at its next await, before it writes anything. */
+    signal?: AbortSignal
   },
 ) => Promise<Judged>
 
@@ -197,8 +204,8 @@ export function withWaitBackoff(
         return !w || dueAgain(w.n, at - w.at)
       })
     },
-    reviewOne: async (issue, reservedKeys, onLane) => {
-      const round = await deps.reviewOne(issue, reservedKeys, onLane)
+    reviewOne: async (issue, reservedKeys, onLane, signal) => {
+      const round = await deps.reviewOne(issue, reservedKeys, onLane, signal)
       if (round.acted.includes(`#${issue}:wait`))
         waits.set(issue, { n: (waits.get(issue)?.n ?? 0) + 1, at: now() })
       else waits.delete(issue)
@@ -216,9 +223,13 @@ export function withWaitBackoff(
  * commands included, with a budget of up to 5 minutes each.
  */
 const worktreeLock = serialized(<T>(fn: () => Promise<T>) => fn())
+// A worktree command writes the checkout's shared worktree list: a stopped
+// review lets one under way finish (turn_stop.t27 step_on_abort).
 const worktreeSerialExec: Exec = (request) =>
   request.argv[0] === 'git' && request.argv.includes('worktree')
-    ? (worktreeLock(() => defaultExec(request)) as ReturnType<Exec>)
+    ? (asStep({ writesShared: true }, () =>
+        worktreeLock(() => defaultExec(request)),
+      ) as ReturnType<Exec>)
     : defaultExec(request)
 
 export function reviewerDeps(
@@ -243,8 +254,9 @@ export function reviewerDeps(
       })
       return measured
     },
+    // brings a branch into the shared checkout: a write other reviews share
     importRunnerBranch: serialized((issue: number) =>
-      importRunnerBranch(pool, issue),
+      asStep({ writesShared: true }, () => importRunnerBranch(pool, issue)),
     ),
   }
   return withWaitBackoff({
@@ -257,13 +269,14 @@ export function reviewerDeps(
       return (r.rowCount ?? r.rows.length) > 0
     },
     waiting: () => waiting(pool),
-    reviewOne: async (issue, reservedKeys, onLane) => {
+    reviewOne: async (issue, reservedKeys, onLane, signal) => {
       const t0 = Date.now()
       const round = await review(pool, overrides, {
         issues: [issue],
         reservedKeys,
         onLane: (lane) => onLane(lane.keyIndex),
         deadlineMs: REVIEW_ROW_SECONDS * 1000,
+        signal,
       })
       // one line per row, for the throughput arithmetic of t27#7851
       logger.info('Queen reviewer row', {

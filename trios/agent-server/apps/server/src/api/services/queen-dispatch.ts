@@ -65,6 +65,7 @@ import {
 import { offerToRunner } from './queen-runner-work'
 import { RUNNER_KEY_BASE } from './queen-runners'
 import { workerSystemPrompt } from './queen-tick'
+import { stepMayStart, stepSignal } from './queen-turn-stop'
 
 /**
  * #1360. Every value the `outcome` column of `queen_dispatch` may carry,
@@ -1448,6 +1449,11 @@ function run(
     .join(' ')
   const argv = shellArgv(quoted)
   return new Promise((resolve) => {
+    // A stopped turn starts no command the card cuts (turn_stop.t27).
+    if (!stepMayStart()) {
+      resolve({ code: -1, out: 'aborted: the turn was stopped' })
+      return
+    }
     // `detached` is what makes a process GROUP exist to kill. Without it the
     // timeout below can only reach `su`, and `su` is never the process that
     // hangs.
@@ -1456,6 +1462,18 @@ function run(
     let settled = false
     let killTimer: ReturnType<typeof setTimeout> | undefined
     let hardTimer: ReturnType<typeof setTimeout> | undefined
+    // The turn's abort kills the group at once, as the timeout below does
+    // later, unless the card lets this kind of step finish.
+    const cut = stepSignal()
+    const onCut = () => {
+      try {
+        if (child.pid) process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        child.kill('SIGKILL')
+      }
+    }
+    cut?.addEventListener('abort', onCut, { once: true })
+    if (cut?.aborted) onCut()
 
     let capped = false
     const finish = (code: number, extra = '') => {
@@ -1463,6 +1481,7 @@ function run(
       settled = true
       if (killTimer) clearTimeout(killTimer)
       if (hardTimer) clearTimeout(hardTimer)
+      cut?.removeEventListener('abort', onCut)
       resolve(
         capped
           ? { code: 0, out: out.slice(0, maxOutChars), capped: true }
