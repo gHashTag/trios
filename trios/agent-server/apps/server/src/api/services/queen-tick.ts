@@ -155,6 +155,8 @@ import { idleRunner, reapSilentRunners } from './queen-runner-work'
 import { isRunnerLane } from './queen-runners'
 import { startShaping } from './queen-shaper'
 import { recordEarnings } from './queen-tri-earnings'
+import { abortError, stepOnAbort } from './queen-turn-stop'
+import { STEP_CUT } from './queen-turn-stop-card.gen'
 import {
   githubRunResolver,
   startWaitsActors,
@@ -3129,6 +3131,55 @@ export interface ReviewScope {
   onLane?: (lane: WorkerProvider) => void
   /** This sweep's wall clock, instead of the round's share of a tick. */
   deadlineMs?: number
+  /**
+   * The review's turn (turn_stop.t27). Once aborted, the sweep stops at its
+   * next await and writes nothing: no verdict, no cache. A killed command or
+   * an aborted model call is not evidence about the work.
+   */
+  signal?: AbortSignal
+}
+
+/**
+ * The sweep's git, model and measurement calls, each one an await a stopped
+ * review ends at (Effect's interruption): one not yet begun does not begin
+ * (step_on_abort with started = false), and one that returns after the abort
+ * is not believed.
+ */
+const INTERRUPTIBLE_DEPS = [
+  'committedFilesResult',
+  'branchHeadSha',
+  'mergeBaseSha',
+  'branchPatch',
+  'worktreeDirtCount',
+  'witness',
+  'measureCriteria',
+  'laneCandidates',
+  'llm',
+  'importRunnerBranch',
+] as const
+
+function interruptible(
+  signal: AbortSignal | undefined,
+  deps: ReviewDeps,
+): ReviewDeps {
+  if (!signal) return deps
+  const out: Record<string, unknown> = { ...deps }
+  const writesShared = new Set<string>(['importRunnerBranch'])
+  for (const name of INTERRUPTIBLE_DEPS) {
+    const fn = deps[name] as ((...a: unknown[]) => unknown) | undefined
+    if (typeof fn !== 'function') continue
+    out[name] = async (...args: unknown[]) => {
+      if (
+        signal.aborted &&
+        stepOnAbort(false, writesShared.has(name), false) === STEP_CUT
+      )
+        throw abortError(signal)
+      const answer = await fn(...args)
+      if (signal.aborted) throw abortError(signal)
+      return answer
+    }
+  }
+  return out as unknown as ReviewDeps
 }
 
 export async function reviewFinishedDispatches(
@@ -3136,7 +3187,7 @@ export async function reviewFinishedDispatches(
   overrides: Partial<ReviewDeps> = {},
   scope: ReviewScope = {},
 ): Promise<ReviewRound> {
-  const deps: ReviewDeps = {
+  const deps: ReviewDeps = interruptible(scope.signal, {
     ...defaultReviewDeps(),
     laneCandidates: async (taken) =>
       reviewLaneCandidates(
@@ -3145,6 +3196,10 @@ export async function reviewFinishedDispatches(
       ),
     importRunnerBranch: (issue) => importRunnerBranch(pool, issue),
     ...overrides,
+  })
+  // a stopped review writes nothing from here on
+  const live = () => {
+    if (scope.signal?.aborted) throw abortError(scope.signal)
   }
   // TWO THINGS ABOUT THIS QUERY, BOTH MEASURED ON 2026-09-03.
   //
@@ -3234,6 +3289,7 @@ export async function reviewFinishedDispatches(
   const repo = process.env.TRIOS_GITHUB_REPO || 'gHashTag/trios'
 
   for (const row of done.rows) {
+    live()
     const issue = row.issue as number
     const said = String(row.said ?? '')
     const beeLines = parseVerdictBlockDetailed(said)
@@ -3302,6 +3358,7 @@ export async function reviewFinishedDispatches(
         issue,
         error: diff.error,
       })
+      live()
       await recordVerdict(pool, issue, {
         state: 'wait',
         note:
@@ -3437,6 +3494,7 @@ export async function reviewFinishedDispatches(
         criteriaUnrunnable: 0,
         criteriaCached: false,
       })
+      live()
       await recordVerdict(pool, issue, {
         state,
         note,
@@ -3785,6 +3843,7 @@ export async function reviewFinishedDispatches(
                 lane,
                 REVIEWER_SYSTEM_PROMPT,
                 message,
+                scope.signal,
               )
               if (!answer.ok) {
                 // Nothing spent: a 1302 or a timeout is the provider saying
@@ -4284,6 +4343,7 @@ export async function reviewFinishedDispatches(
             judgedNote
         : judgedNote,
     )
+    live()
     await recordVerdict(pool, issue, {
       state,
       note,

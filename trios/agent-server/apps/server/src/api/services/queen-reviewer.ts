@@ -50,6 +50,7 @@ import {
   worktreeDirtCount,
 } from './queen-dispatch'
 import { parseVerdictBlocks } from './queen-tick'
+import { stepMayStart, stepSignal } from './queen-turn-stop'
 
 /**
  * A token in every adversarial brief, the same literal the Swift side uses.
@@ -717,13 +718,29 @@ export function isTransientReviewerError(text: string): boolean {
  * `maxRetries: 0` because a retry is a second concurrent-looking request on a
  * lane that was counted once. Imported lazily so a suite that injects its own
  * model never loads every provider SDK.
+ *
+ * `signal` is the review's turn (turn_stop.t27): a stopped review's call is
+ * aborted at once, so its key lane is free now and not at the timeout. A
+ * call in a turn with no signal passed reads the turn's own (stepSignal).
  */
 export async function defaultReviewerLlm(
   lane: WorkerProvider,
   system: string,
   message: string,
   timeoutMs: number = REVIEW_TIMEOUT_MS,
+  signal: AbortSignal | undefined = stepSignal(),
 ): Promise<ReviewerCallResult> {
+  if (signal?.aborted || !stepMayStart())
+    return {
+      ok: false,
+      error: 'aborted: the turn was stopped',
+      transient: true,
+    }
+  // The turn's signal lives as long as its pid, so it gets one listener,
+  // removed after the call, and never an AbortSignal.any dependent per call.
+  const call = signal ? new AbortController() : undefined
+  const onStop = () => call?.abort(signal?.reason)
+  signal?.addEventListener('abort', onStop, { once: true })
   try {
     const [{ generateText }, { createLanguageModel }] = await Promise.all([
       import('ai'),
@@ -742,7 +759,9 @@ export async function defaultReviewerLlm(
       system,
       messages: [{ role: 'user', content: message }],
       maxRetries: 0,
-      abortSignal: AbortSignal.timeout(timeoutMs),
+      abortSignal: call
+        ? AbortSignal.any([AbortSignal.timeout(timeoutMs), call.signal])
+        : AbortSignal.timeout(timeoutMs),
     })
     return { ok: true, text: result.text }
   } catch (error) {
@@ -750,8 +769,11 @@ export async function defaultReviewerLlm(
     return {
       ok: false,
       error: text.slice(0, 300),
-      transient: isTransientReviewerError(text),
+      // a stopped turn is "not now", never a broken lane
+      transient: isTransientReviewerError(text) || !!signal?.aborted,
     }
+  } finally {
+    signal?.removeEventListener('abort', onStop)
   }
 }
 
@@ -781,10 +803,12 @@ export interface ReviewDeps {
   laneCandidates: (
     takenKeyIndices: number[],
   ) => WorkerProvider[] | Promise<WorkerProvider[]>
+  /** `signal`: the review's turn; aborting it aborts the call. */
   llm: (
     lane: WorkerProvider,
     system: string,
     message: string,
+    signal?: AbortSignal,
   ) => Promise<ReviewerCallResult>
   reviewsPerRound: () => number
   /** Criteria measurements one sweep may buy. Optional for injected fakes. */
@@ -809,7 +833,14 @@ export function defaultReviewDeps(): ReviewDeps {
     measureCriteria: (issue, headSha, criteria, baseSha) =>
       measureCriteria(issue, headSha, criteria, { baseSha }),
     laneCandidates: reviewLaneCandidates,
-    llm: (lane, system, message) => defaultReviewerLlm(lane, system, message),
+    llm: (lane, system, message, signal) =>
+      defaultReviewerLlm(
+        lane,
+        system,
+        message,
+        REVIEW_TIMEOUT_MS,
+        signal ?? stepSignal(),
+      ),
     reviewsPerRound: () => reviewsPerRound(),
     measurementsPerRound: () => measurementsPerRound(),
   }

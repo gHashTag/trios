@@ -37,6 +37,7 @@ import { tmpdir } from 'node:os'
 import { logger } from '../../lib/logger'
 import { spawnEnv } from '../../tools/filesystem/bash'
 import { workspaceRoot } from './queen-dispatch'
+import { asStep, stepMayStart, stepSignal } from './queen-turn-stop'
 
 export type CheckOp = 'equals' | 'atLeast' | 'notContains'
 
@@ -590,6 +591,18 @@ export const defaultExec: Exec = (request) =>
     let timedOut = false
     let capped = false
     let child: ReturnType<typeof spawn>
+    // A stopped turn starts no command the card cuts (turn_stop.t27).
+    if (!stepMayStart()) {
+      resolve({
+        code: null,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+        capped: false,
+        error: 'aborted: the turn was stopped',
+      })
+      return
+    }
     try {
       child = spawn(argv[0], argv.slice(1), {
         cwd: request.cwd,
@@ -615,12 +628,30 @@ export const defaultExec: Exec = (request) =>
         child.kill('SIGKILL')
       }
     }
+    // The turn's abort kills the group at once, unless the card lets this kind
+    // of step finish (a worktree write under way, a finalizer).
+    const cut = stepSignal()
+    let aborted = false
+    const onCut = () => {
+      aborted = true
+      killGroup()
+    }
+    cut?.addEventListener('abort', onCut, { once: true })
+    if (cut?.aborted) onCut()
     const finish = (code: number | null, error?: string) => {
       if (settled) return
       settled = true
       clearTimeout(killTimer)
       clearTimeout(hardTimer)
-      resolve({ code, stdout, stderr, timedOut, capped, error })
+      cut?.removeEventListener('abort', onCut)
+      resolve({
+        code,
+        stdout,
+        stderr,
+        timedOut,
+        capped,
+        error: error ?? (aborted ? 'aborted: the turn was stopped' : undefined),
+      })
     }
     const killTimer = setTimeout(() => {
       timedOut = true
@@ -1062,29 +1093,64 @@ export async function measureCriteria(
   const baseCheckout = `${dir}/queen-${issue}-base`
   const scratch = `${dir}/scratch`
   const added: string[] = []
+  // A worktree add writes the checkout's shared worktree list: once started
+  // it finishes, even in a stopped turn (turn_stop.t27 step_on_abort).
   const cutWorktree = async (at: string, sha: string): Promise<string> => {
-    const add = await exec({
-      argv: [
-        'git',
-        '-C',
-        root,
-        '-c',
-        'core.hooksPath=/dev/null',
-        'worktree',
-        'add',
-        '--detach',
-        at,
-        sha,
-      ],
-      cwd: root,
-      timeoutMs: 120_000,
-      maxBytes: 16_384,
-    })
+    const add = await asStep({ writesShared: true }, () =>
+      exec({
+        argv: [
+          'git',
+          '-C',
+          root,
+          '-c',
+          'core.hooksPath=/dev/null',
+          'worktree',
+          'add',
+          '--detach',
+          at,
+          sha,
+        ],
+        cwd: root,
+        timeoutMs: 120_000,
+        maxBytes: 16_384,
+      }),
+    )
     if (add.code !== 0) {
       return `git worktree add at ${sha.slice(0, 12)} failed: ${(add.error ?? add.stderr).trim().slice(0, 200)}`
     }
     added.push(at)
     return ''
+  }
+  const removeCheckouts = async (): Promise<void> => {
+    for (const at of added) {
+      const removed = await exec({
+        argv: ['git', '-C', root, 'worktree', 'remove', '--force', at],
+        cwd: root,
+        timeoutMs: 60_000,
+        maxBytes: 16_384,
+      })
+      if (removed.code !== 0) {
+        logger.warn('Queen could not remove a criteria worktree; pruning', {
+          issue,
+          checkout: at,
+          error: (removed.error ?? removed.stderr).trim().slice(0, 200),
+        })
+      }
+    }
+    await exec({
+      argv: ['rm', '-rf', dir],
+      cwd: root,
+      timeoutMs: 60_000,
+      maxBytes: 4_096,
+    })
+    if (added.length > 0) {
+      await exec({
+        argv: ['git', '-C', root, 'worktree', 'prune'],
+        cwd: root,
+        timeoutMs: 60_000,
+        maxBytes: 4_096,
+      })
+    }
   }
   try {
     // THE PRIVATE DIRECTORY A REDIRECT IS POINTED AT. Its result is read: an
@@ -1148,35 +1214,9 @@ export async function measureCriteria(
     })
     return { ok: true, criteria: runs }
   } finally {
-    for (const at of added) {
-      const removed = await exec({
-        argv: ['git', '-C', root, 'worktree', 'remove', '--force', at],
-        cwd: root,
-        timeoutMs: 60_000,
-        maxBytes: 16_384,
-      })
-      if (removed.code !== 0) {
-        logger.warn('Queen could not remove a criteria worktree; pruning', {
-          issue,
-          checkout: at,
-          error: (removed.error ?? removed.stderr).trim().slice(0, 200),
-        })
-      }
-    }
-    await exec({
-      argv: ['rm', '-rf', dir],
-      cwd: root,
-      timeoutMs: 60_000,
-      maxBytes: 4_096,
-    })
-    if (added.length > 0) {
-      await exec({
-        argv: ['git', '-C', root, 'worktree', 'prune'],
-        cwd: root,
-        timeoutMs: 60_000,
-        maxBytes: 4_096,
-      })
-    }
+    // A finalizer: it runs to its end even in a stopped turn, or the worktree
+    // and the directory stay behind (turn_stop.t27 step_on_abort).
+    await asStep({ finalizer: true }, removeCheckouts)
   }
 }
 
