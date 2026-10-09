@@ -7,6 +7,11 @@ export const SEEDS_PER_RUN = 16;
 export const STEPS_PER_RUN = 10000;
 export const RUNS_PER_SEED = 2;
 export const GATE_BASE_SEED = 1712;
+export const FEATURE_TURN_STOP = 1;
+export const TURN_STOP_EVERY = 2;
+// t27c gen-js: fn seed_features was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-js: fn has_feature was not emitted -- this backend lowers declarations, not bodies.
+export const STORE_SEEDS_PER_RUN = 2;
 export const TAIL_SECONDS = 3600;
 export const LOG_TAIL_LINES = 30;
 export const MASK32 = 4294967295;
@@ -48,7 +53,7 @@ export const W_CRASH = 40;
 // t27c gen-js: fn is_fault was not emitted -- this backend lowers declarations, not bodies.
 export const STEP_MAX_MS = 4000;
 // t27c gen-js: fn step_ms was not emitted -- this backend lowers declarations, not bodies.
-export const NODE_RESTART_MIN_SECONDS = 25;
+export const NODE_RESTART_MIN_SECONDS = 2;
 export const NODE_RESTART_MAX_SECONDS = 180;
 export const STALL_SECONDS = 1800;
 export const PROVIDER_429_MIN_SECONDS = 30;
@@ -66,6 +71,9 @@ export const BURST_OVER_CAP = 64;
 export const DB_MAX_MS = 50;
 export const NET_LATENCY_MS = 5;
 export const JOB_MAX_MS = 2000;
+export const STALE_JOB_EVERY = 4;
+export const STALE_PIDS_KEPT = 64;
+// t27c gen-js: fn stale_job was not emitted -- this backend lowers declarations, not bodies.
 export const REVIEW_KEYS = 6;
 export const POOL_WORKERS = 6;
 export const POOL_NODES = 2;
@@ -100,7 +108,8 @@ export const RARE_MAIL_TO_LOST_NODE = 3;
 export const RARE_WAIT_BACKED_OFF = 4;
 export const RARE_SLICE_YIELDED = 5;
 export const RARE_MOVED_NODE = 6;
-export const RARE_KINDS = 7;
+export const RARE_REVIEW_STOPPED = 7;
+export const RARE_KINDS = 8;
 // t27c gen-js: fn must_reach was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -112,6 +121,10 @@ export const RARE_KINDS = 7;
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-js: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -123,7 +136,7 @@ export const RARE_KINDS = 7;
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [];
-export const __DECL_ORDER__ = ["SEEDS_PER_RUN", "STEPS_PER_RUN", "RUNS_PER_SEED", "GATE_BASE_SEED", "TAIL_SECONDS", "LOG_TAIL_LINES", "MASK32", "STREAM_SEED", "STREAM_STEP", "STREAM_DELAY", "STREAM_TARGET", "STREAM_DURATION", "STREAM_ATTEMPT", "STREAM_LATENCY", "STREAM_CLOCK", "STREAM_STORE", "ROLL_SPAN", "E_TICK", "E_ARRIVAL", "E_JOB", "F_NODE_LOSS", "F_HUNG_TURN", "F_MAILBOX_OVERFLOW", "F_UNREADABLE_ROW", "F_PROVIDER_429", "F_STALE_LEASE", "F_CRASH", "EVENT_KINDS", "W_ARRIVAL", "W_JOB", "W_NODE_LOSS", "W_HUNG_TURN", "W_MAILBOX_OVERFLOW", "W_UNREADABLE_ROW", "W_PROVIDER_429", "W_STALE_LEASE", "W_CRASH", "STEP_MAX_MS", "NODE_RESTART_MIN_SECONDS", "NODE_RESTART_MAX_SECONDS", "STALL_SECONDS", "PROVIDER_429_MIN_SECONDS", "PROVIDER_429_MAX_SECONDS", "REFUSED_REVIEW_MS", "STALE_LEASE_MIN_SECONDS", "STALE_LEASE_MAX_SECONDS", "UNREADABLE_MIN_SECONDS", "UNREADABLE_MAX_SECONDS", "WAIT_ANSWER_MS", "REVIEW_MIN_SECONDS", "REVIEW_MAX_SECONDS", "BURST_OVER_CAP", "DB_MAX_MS", "NET_LATENCY_MS", "JOB_MAX_MS", "REVIEW_KEYS", "POOL_WORKERS", "POOL_NODES", "POOL_MAX_RESTARTS", "POOL_PERIOD_SECONDS", "W_ANSWER_LOST", "GIVE_UP_REARM_SECONDS", "CLOCK_TICK_MAX_MICROS", "INV_NONE", "INV_PID_REUSED", "INV_DELIVERED_AFTER_EXIT", "INV_INTENSITY", "INV_OVER_CAP", "INV_RESTART_WITHOUT_EXIT", "INV_HOT_LOOP", "INV_RUNS_DIFFER", "INV_RARE_STATE_MISSED", "INV_TAKEN_NOT_HANDLED", "INV_KINDS", "SECONDS_PER_MINUTE", "HOT_ROW_SLACK", "RARE_MAILBOX_FULL", "RARE_INTENSITY_SPENT", "RARE_TURN_KILLED", "RARE_MAIL_TO_LOST_NODE", "RARE_WAIT_BACKED_OFF", "RARE_SLICE_YIELDED", "RARE_MOVED_NODE", "RARE_KINDS"];
+export const __DECL_ORDER__ = ["SEEDS_PER_RUN", "STEPS_PER_RUN", "RUNS_PER_SEED", "GATE_BASE_SEED", "FEATURE_TURN_STOP", "TURN_STOP_EVERY", "STORE_SEEDS_PER_RUN", "TAIL_SECONDS", "LOG_TAIL_LINES", "MASK32", "STREAM_SEED", "STREAM_STEP", "STREAM_DELAY", "STREAM_TARGET", "STREAM_DURATION", "STREAM_ATTEMPT", "STREAM_LATENCY", "STREAM_CLOCK", "STREAM_STORE", "ROLL_SPAN", "E_TICK", "E_ARRIVAL", "E_JOB", "F_NODE_LOSS", "F_HUNG_TURN", "F_MAILBOX_OVERFLOW", "F_UNREADABLE_ROW", "F_PROVIDER_429", "F_STALE_LEASE", "F_CRASH", "EVENT_KINDS", "W_ARRIVAL", "W_JOB", "W_NODE_LOSS", "W_HUNG_TURN", "W_MAILBOX_OVERFLOW", "W_UNREADABLE_ROW", "W_PROVIDER_429", "W_STALE_LEASE", "W_CRASH", "STEP_MAX_MS", "NODE_RESTART_MIN_SECONDS", "NODE_RESTART_MAX_SECONDS", "STALL_SECONDS", "PROVIDER_429_MIN_SECONDS", "PROVIDER_429_MAX_SECONDS", "REFUSED_REVIEW_MS", "STALE_LEASE_MIN_SECONDS", "STALE_LEASE_MAX_SECONDS", "UNREADABLE_MIN_SECONDS", "UNREADABLE_MAX_SECONDS", "WAIT_ANSWER_MS", "REVIEW_MIN_SECONDS", "REVIEW_MAX_SECONDS", "BURST_OVER_CAP", "DB_MAX_MS", "NET_LATENCY_MS", "JOB_MAX_MS", "STALE_JOB_EVERY", "STALE_PIDS_KEPT", "REVIEW_KEYS", "POOL_WORKERS", "POOL_NODES", "POOL_MAX_RESTARTS", "POOL_PERIOD_SECONDS", "W_ANSWER_LOST", "GIVE_UP_REARM_SECONDS", "CLOCK_TICK_MAX_MICROS", "INV_NONE", "INV_PID_REUSED", "INV_DELIVERED_AFTER_EXIT", "INV_INTENSITY", "INV_OVER_CAP", "INV_RESTART_WITHOUT_EXIT", "INV_HOT_LOOP", "INV_RUNS_DIFFER", "INV_RARE_STATE_MISSED", "INV_TAKEN_NOT_HANDLED", "INV_KINDS", "SECONDS_PER_MINUTE", "HOT_ROW_SLACK", "RARE_MAILBOX_FULL", "RARE_INTENSITY_SPENT", "RARE_TURN_KILLED", "RARE_MAIL_TO_LOST_NODE", "RARE_WAIT_BACKED_OFF", "RARE_SLICE_YIELDED", "RARE_MOVED_NODE", "RARE_REVIEW_STOPPED", "RARE_KINDS"];
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

@@ -5,22 +5,29 @@
  *
  * THE STORE AS THE WIRE, SIMULATED (trios#1712 items 5 and 6).
  *
- * The memory net loses mail to a dead node at once and fires its node-down at
- * the TTL whatever happens after; it has no store, so the two PgLink defects
- * read out of the code (the competitor study, item 6) cannot happen on it:
- *   - rows are deleted (DELETE ... RETURNING) before their handlers run, so a
- *     process that dies in between loses them, counted nowhere;
- *   - a restarted node starts its pids from zero, so mail still in the table
- *     for its last incarnation reaches whoever holds those pids now.
- * This drives the REAL createPgLink against an in-memory store that answers
- * exactly the statements it sends, on the virtual clock: each statement takes
- * effect when it is sent and its answer arrives a seeded latency later, as a
- * server's does. A node that dies receives no answer, and its timers stop.
+ * The memory net stands in for the store; this drives the REAL createPgLink
+ * (netlink.t27: incarnations, fenced writes, read - handle - acknowledge)
+ * against an in-memory store that answers exactly the statements it sends,
+ * on the virtual clock. Each statement takes effect when it is sent and its
+ * answer arrives a seeded latency later, as a server's does; the card's
+ * answer_lost drops one answer after its statement took effect, as a
+ * connection that resets after the commit does. A node that dies receives no
+ * answer, and its timers stop. The fences are the ones the SQL carries: a
+ * write is admitted only while the writer's row holds its incarnation and its
+ * lease is younger than the TTL.
+ *
+ * Before trios#1714 this model reproduced both defects of item 6 from a
+ * seed: a row deleted before it was handled (seed 1188652385, step 463) and a
+ * restarted node reissuing its pids while the store held mail for them (seed
+ * 3600507402, step 7015). Now it holds the fixed link to the same
+ * invariants: mail a node acknowledges must have reached its runtime, or be
+ * mail the card expired.
  *
  * createPgLink keeps its heartbeat and its poll on setInterval. For the run,
  * setInterval and clearInterval are the virtual clock's; the node an interval
  * belongs to is the node whose query answered last, because createPgLink
- * starts both right after its first heartbeat's answer.
+ * starts both right after its first read of the leases. With no database url
+ * there is no beat thread: the lease is renewed on the loop, on the clock.
  */
 
 import type { Pool } from 'pg'
@@ -42,22 +49,28 @@ import {
 interface MailRow {
   id: number
   node: number
+  toInc: number
   body: string
 }
 
+interface NodeRow {
+  incarnation: number
+  heartbeatAt: number
+  host: string
+}
+
+type Answer = { rows: unknown[]; rowCount: number }
+
 export function pgStore(world: SimWorld): Transport {
   const clock = world.clock
-  const beats = new Map<number, number>()
+  const nodes = new Map<number, NodeRow>()
   let mail: MailRow[] = []
   let nextId = 1
   let answers = 0
-  const listeners = new Map<string, Set<() => void>>()
-  // which incarnation of a node a pool belongs to; a dead one hears nothing
+  const listeners = new Map<number, Set<() => void>>()
+  // which process of a node a pool belongs to; a dead one hears nothing
   const alive = new Map<number, number>()
-  let incarnations = 0
-  // rows a node took off the table, by wire id, and those whose answer came
-  const taken = new Map<number, number>()
-  const answered = new Set<number>()
+  let processes = 0
   const links: PgLink[] = []
 
   // the virtual clock's setInterval, owned by the node whose answer came last
@@ -95,16 +108,52 @@ export function pgStore(world: SimWorld): Transport {
     const m = /"simWire":(\d+)/.exec(body)
     return m ? Number(m[1]) : undefined
   }
+  /** write_admitted, as the SQL fence reads it: this incarnation, lease up. */
+  const admitted = (node: number, inc: number, ttlSeconds: number) => {
+    const row = nodes.get(node)
+    return (
+      !!row &&
+      row.incarnation === inc &&
+      row.heartbeatAt > clock.now() - ttlSeconds * 1000
+    )
+  }
+  /** Rows leave the store: each must have reached a runtime, or be expired. */
+  const removed = (rows: MailRow[], by: number, why: 'ack' | 'expire') => {
+    for (const r of rows) {
+      const w = wireOf(r.body)
+      if (w === undefined || !world.onWire(w)) continue
+      // mail for an incarnation that is over is expired by the card, counted
+      const over =
+        why === 'expire' || nodes.get(r.node)?.incarnation !== r.toInc
+      if (over) {
+        world.count('mailExpired')
+        world.log(
+          `store: wire ${w} expired (for incarnation ${r.toInc})`,
+          `wire ${w}`,
+        )
+        world.landed(w, false)
+        continue
+      }
+      // the answer to the acknowledgement arrives within DB_MAX_MS and its
+      // continuation runs at once; a row not handled by then never will be
+      clock.after(S.DB_MAX_MS + 1, () => {
+        if (!world.onWire(w)) return
+        world.fail(
+          S.INV_TAKEN_NOT_HANDLED,
+          `node ${by} acknowledged mail ${w} (row ${r.id}) and it never reached its runtime`,
+          `wire ${w}`,
+        )
+        world.landed(w, false)
+      })
+    }
+  }
 
   const pool = (node: number): Pool => {
-    const me = ++incarnations
+    const me = ++processes
     alive.set(node, me)
     // the statement has taken effect; its answer arrives a latency later,
     // or is lost with the connection (answer_lost), or never, to a dead node
-    const answer = <T>(
-      value: T,
-      took: number[] = [],
-    ): Promise<{ rows: T; rowCount: number }> =>
+    const answer = (rows: unknown[], rowCount = rows.length): Promise<Answer> =>
       new Promise((resolve, reject) => {
         const index = answers++
         const ms = pickBetween(
@@ -116,121 +165,209 @@ export function pgStore(world: SimWorld): Transport {
         clock.after(ms, () => {
           if (alive.get(node) !== me) return
           answering = node
-          for (const w of took) answered.add(w)
           if (lost) {
             world.count('answersLost')
             world.log(
-              `store: the answer to node ${node} was lost after its statement took effect${took.length ? ` (it had taken ${took.map((w) => `wire ${w}`).join(', ')})` : ''}`,
-              ...took.map((w) => `wire ${w}`),
+              `store: an answer to node ${node} was lost after its statement took effect`,
             )
             reject(new Error('connection reset after commit (simulated)'))
-          } else
-            resolve({
-              rows: value,
-              rowCount: Array.isArray(value) ? value.length : 0,
-            })
+          } else resolve({ rows, rowCount })
         })
       })
-    // the statements createPgLink sends, each answered as Postgres would
-    const statements: Array<[RegExp, (params: unknown[]) => Promise<unknown>]> =
+    // the statements createPgLink sends, each answered as Postgres would;
+    // the first pattern that matches wins
+    const statements: Array<[RegExp, (p: unknown[]) => Promise<Answer>]> = [
+      [/CREATE TABLE/i, () => answer([])],
       [
-        [/CREATE TABLE/i, () => answer([])],
-        [
-          /INSERT INTO queen_actor_node/,
-          (params) => {
-            beats.set(Number(params[0]), clock.now())
-            return answer([])
-          },
-        ],
-        [
-          /FROM queen_actor_node/,
-          () =>
-            answer(
-              [...beats].map(([n, at]) => ({
-                node: n,
-                age: (clock.now() - at) / 1000,
+        /INSERT INTO queen_actor_node/,
+        (p) => {
+          const n = Number(p[0])
+          if (!nodes.has(n))
+            nodes.set(n, {
+              incarnation: 0,
+              heartbeatAt: clock.now(),
+              host: String(p[1]),
+            })
+          return answer([])
+        },
+      ],
+      [
+        /SELECT incarnation FROM queen_actor_node/,
+        (p) =>
+          answer([
+            { incarnation: String(nodes.get(Number(p[0]))?.incarnation ?? 0) },
+          ]),
+      ],
+      [
+        // the renewal: fenced on the incarnation and the lease
+        /SET heartbeat_at = clock_timestamp\(\), host = \$3\s+WHERE node = \$1 AND incarnation = \$2/,
+        (p) => {
+          const n = Number(p[0])
+          if (!admitted(n, Number(p[1]), Number(p[3]))) return answer([], 0)
+          const row = nodes.get(n) as NodeRow
+          row.heartbeatAt = clock.now()
+          return answer([], 1)
+        },
+      ],
+      [
+        /FROM queen_actor_mail m LEFT JOIN queen_actor_node/,
+        () => {
+          const groups = new Map<
+            string,
+            { node: number; toInc: number; rows: number }
+          >()
+          for (const r of mail) {
+            const k = `${r.node}:${r.toInc}`
+            const g = groups.get(k) ?? { node: r.node, toInc: r.toInc, rows: 0 }
+            g.rows++
+            groups.set(k, g)
+          }
+          return answer(
+            [...groups.values()].map((g) => {
+              const n = nodes.get(g.node)
+              return {
+                node: g.node,
+                to_inc: String(g.toInc),
+                rows: g.rows,
+                node_inc: n ? String(n.incarnation) : null,
+                age: n ? (clock.now() - n.heartbeatAt) / 1000 : null,
+              }
+            }),
+          )
+        },
+      ],
+      [
+        // the leases: every node's incarnation and age (the fenced writes
+        // read queen_actor_node too, so this pattern is the exact select)
+        /SELECT node, incarnation,\s+EXTRACT/,
+        () =>
+          answer(
+            [...nodes].map(([n, r]) => ({
+              node: n,
+              incarnation: String(r.incarnation),
+              age: (clock.now() - r.heartbeatAt) / 1000,
+            })),
+          ),
+      ],
+      [
+        // the expiry of mail for an incarnation that is over, fenced
+        /DELETE FROM queen_actor_mail\s+WHERE node = \$1 AND to_inc = \$2/,
+        (p) => {
+          if (!admitted(Number(p[2]), Number(p[3]), Number(p[4])))
+            return answer([{ fence: 0, deleted: 0 }])
+          const gone = mail.filter(
+            (r) => r.node === Number(p[0]) && r.toInc === Number(p[1]),
+          )
+          mail = mail.filter((r) => !gone.includes(r))
+          removed(gone, Number(p[2]), 'expire')
+          return answer([{ fence: 1, deleted: gone.length }])
+        },
+      ],
+      [
+        // the acknowledgement of rows read and handled, fenced
+        /DELETE FROM queen_actor_mail\s+WHERE node = \$1 AND id = ANY/,
+        (p) => {
+          const n = Number(p[0])
+          if (!admitted(n, Number(p[2]), Number(p[3])))
+            return answer([{ fence: 0, ids: [] }])
+          const ids = new Set((p[1] as unknown[]).map((id) => Number(id)))
+          const gone = mail.filter((r) => r.node === n && ids.has(r.id))
+          mail = mail.filter((r) => !gone.includes(r))
+          removed(gone, n, 'ack')
+          return answer([{ fence: 1, ids: gone.map((r) => String(r.id)) }])
+        },
+      ],
+      [
+        /SELECT id, to_inc, body FROM queen_actor_mail/,
+        (p) =>
+          answer(
+            mail
+              .filter((r) => r.node === Number(p[0]))
+              .slice(0, Number(p[1]))
+              .map((r) => ({
+                id: String(r.id),
+                to_inc: String(r.toInc),
+                body: r.body,
               })),
-            ),
-        ],
-        [
-          /INSERT INTO queen_actor_mail/,
-          (params) => {
-            const to = Number(params[0])
-            mail.push({ id: nextId++, node: to, body: String(params[1]) })
-            for (const h of listeners.get(`queen_actor_mail_${to}`) ?? [])
-              clock.after(1, () => h())
-            return answer([])
-          },
-        ],
-        [/DELETE FROM queen_actor_mail/, (params) => take(Number(params[0]))],
-      ]
-    // DELETE ... RETURNING: the rows leave the table now, the answer comes later
-    const take = (at: number) => {
-      const mine = mail.filter((r) => r.node === at).slice(0, 500)
-      const ids = new Set(mine.map((r) => r.id))
-      mail = mail.filter((r) => !ids.has(r.id))
-      const took: number[] = []
-      for (const r of mine) {
-        const w = wireOf(r.body)
-        if (w === undefined) continue
-        taken.set(w, at)
-        took.push(w)
-        world.log(
-          `store: node ${at} deleted wire ${w} (row ${r.id})`,
-          `wire ${w}`,
-        )
-      }
-      return answer(
-        mine.map((r) => ({ id: String(r.id), body: r.body })),
-        took,
-      )
-    }
-    const run = (sql: string, params: unknown[] = []) => {
+          ),
+      ],
+      [
+        // a send: one row and a notification, fenced on the writer
+        /INSERT INTO queen_actor_mail/,
+        (p) => {
+          if (!admitted(Number(p[2]), Number(p[3]), Number(p[5])))
+            return answer([{ sent: 0, n: null }])
+          const to = Number(p[0])
+          mail.push({
+            id: nextId++,
+            node: to,
+            toInc: Number(p[1]),
+            body: String(p[4]),
+          })
+          for (const h of listeners.get(to) ?? []) clock.after(1, () => h())
+          return answer([{ sent: 1, n: '' }])
+        },
+      ],
+    ]
+    const run = (sql: string, params: unknown[] = []): Promise<Answer> => {
       // a dead process sends nothing and hears nothing
       if (alive.get(node) !== me) return new Promise(() => {})
       const found = statements.find(([re]) => re.test(sql))
       if (!found)
         throw new Error(
-          `the simulated store does not know: ${sql.slice(0, 60)}`,
+          `the simulated store does not know: ${sql.slice(0, 80)}`,
         )
       return found[1](params)
     }
-    return {
-      query: run,
-      connect: async () => ({
+    // a client: the claim's transaction (its incarnation write applies at
+    // COMMIT, and is dropped by ROLLBACK), and LISTEN for notifications
+    const client = () => {
+      let staged: Array<() => void> = []
+      return {
         on: (event: string, h: () => void) => {
           if (event !== 'notification') return
-          const set = listeners.get(`queen_actor_mail_${node}`) ?? new Set()
+          const set = listeners.get(node) ?? new Set()
           set.add(() => {
             if (alive.get(node) === me) h()
           })
-          listeners.set(`queen_actor_mail_${node}`, set)
+          listeners.set(node, set)
         },
-        query: async () => ({ rows: [] }),
+        query: (sql: string, params: unknown[] = []) => {
+          if (alive.get(node) !== me) return new Promise(() => {})
+          if (/^(BEGIN|LISTEN|UNLISTEN)/.test(sql.trim())) return answer([])
+          if (sql.trim() === 'ROLLBACK') {
+            staged = []
+            return answer([])
+          }
+          if (sql.trim() === 'COMMIT') {
+            for (const write of staged) write()
+            staged = []
+            return answer([])
+          }
+          if (/SET incarnation = \$2/.test(sql)) {
+            staged.push(() => {
+              const row = nodes.get(Number(params[0])) as NodeRow
+              row.incarnation = Number(params[1])
+              row.host = String(params[2])
+              row.heartbeatAt = clock.now()
+            })
+            return answer([], 1)
+          }
+          return run(sql, params)
+        },
         release: () => {},
-      }),
-    } as unknown as Pool
-  }
-
-  /** Rows a node took and never handed to its runtime. */
-  const takenNotHandled = (node?: number) => {
-    for (const [w, n] of taken) {
-      if (node !== undefined && n !== node) continue
-      if (world.onWire(w)) {
-        world.fail(
-          S.INV_TAKEN_NOT_HANDLED,
-          `node ${n} deleted mail ${w} from the store and never handed it to its runtime`,
-          `wire ${w}`,
-        )
-        world.landed(w, false)
       }
-      taken.delete(w)
     }
+    return {
+      query: run,
+      connect: async () => client(),
+      options: {},
+    } as unknown as Pool
   }
 
   return {
     link: async (n: number): Promise<NodeLink> => {
-      // a boot whose store answer is lost fails, and the host starts the
+      // a start whose store answer is lost fails, and the host starts the
       // process again, as Railway restarts a crashed container
       for (;;) {
         try {
@@ -250,29 +387,8 @@ export function pgStore(world: SimWorld): Transport {
           t.cancel()
           intervals.delete(id)
         }
-      takenNotHandled(n)
-    },
-    settle: async () => {
-      // a row is handled in the turn its answer arrives; one whose answer came
-      // and that is still on the wire at the end of the step never will be
-      for (const [w, n] of taken) {
-        if (!world.onWire(w)) {
-          taken.delete(w)
-          answered.delete(w)
-        } else if (answered.has(w)) {
-          world.fail(
-            S.INV_TAKEN_NOT_HANDLED,
-            `node ${n} deleted mail ${w} from the store, its answer was lost, and the mail was never handled`,
-            `wire ${w}`,
-          )
-          world.landed(w, false)
-          taken.delete(w)
-          answered.delete(w)
-        }
-      }
     },
     stop: async () => {
-      takenNotHandled()
       for (const l of links) l.stop().catch(() => undefined)
       for (const [, t] of intervals) t.cancel()
       intervals.clear()
