@@ -64,6 +64,7 @@ import { freemem } from 'node:os'
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
 import {
+  ACTORS_CARD,
   type ActorSystem,
   actorChild,
   type Child,
@@ -86,11 +87,13 @@ import {
   STRAT_REST_FOR_ONE,
 } from './queen-actors-card.gen'
 import { type DynamicChildren, dynamicSupervisor } from './queen-actors-dynamic'
+import { setLiveActorTelemetry } from './queen-actors-telemetry'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
 import { addControlEventReader } from './queen-control'
 import { EV_TASK_ENDED } from './queen-control.gen'
 import {
   type Judged,
+  REVIEWER_CARD,
   type ReviewFn,
   recordJudged,
   reviewerDeps,
@@ -105,7 +108,7 @@ import {
   REVIEWER_CONCURRENCY,
   REVIEWER_EVERY_SECONDS,
 } from './queen-reviewer-card.gen'
-import { inFlight as turnsInFlight } from './queen-turn-stop'
+import { TURN_STOP_CARD, inFlight as turnsInFlight } from './queen-turn-stop'
 
 export const REVIEWER_SIZING_CARD = 'queen/reviewer_sizing.wasm'
 
@@ -445,6 +448,7 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
       sys,
       {
         name: `reviewer-worker-${i}`,
+        kind: 'reviewer-worker',
         turnMaxSeconds: REVIEW_ROW_SECONDS,
         init: (self: Pid) => {
           if (intake !== undefined)
@@ -561,6 +565,10 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
  * domain, woken by the bus on every queen/task.ended (EV_TASK_ENDED). With
  * TRIOS_QUEEN_REVIEWER_ADAPTIVE=1 and a `capacity`, the pool follows the
  * backlog (reviewer_sizing.t27).
+ *
+ * With TRIOS_QUEEN_ACTORS_TELEMETRY=on the system counts (telemetry.t27):
+ * GET /queen/actors/metrics and /queen/actors/decisions read it, and a
+ * "Queen actors measured" line lands in the log every SUMMARY_EVERY_SECONDS.
  */
 export function startReviewerActors(
   pool: Pool,
@@ -574,7 +582,20 @@ export function startReviewerActors(
   // turn_stop.t27 behind a flag until its benchmark is accepted (t27#7851)
   const turnStop =
     (process.env.TRIOS_QUEEN_TURN_STOP ?? 'off').toLowerCase() === 'on'
-  const sys = createActorSystem(realClock, { turnStop })
+  // telemetry.t27 behind a flag as well: it only reads, but it is new
+  const telemetry =
+    process.env.TRIOS_QUEEN_ACTORS_TELEMETRY === 'on'
+      ? {
+          cards: [
+            ACTORS_CARD,
+            REVIEWER_CARD,
+            REVIEWER_SIZING_CARD,
+            TURN_STOP_CARD,
+          ],
+        }
+      : undefined
+  const sys = createActorSystem(realClock, { turnStop, telemetry })
+  setLiveActorTelemetry(sys.telemetry)
   const r = reviewerTree(sys, {
     ...reviewerDeps(pool, leaseName, review, waiting),
     onJudged: recordJudged,
@@ -612,10 +633,12 @@ export function startReviewerActors(
     workers: adaptive ? 'adaptive' : REVIEWER_CONCURRENCY,
     turnMaxSeconds: REVIEW_ROW_SECONDS,
     turnStop,
+    telemetry: !!sys.telemetry,
   })
   return () => {
     unread()
     root.stop()
     setReviewerRunning(false)
+    sys.telemetry?.close()
   }
 }

@@ -54,10 +54,15 @@
  * stops every actor at once, quietly, and from then on sends nothing and
  * starts nothing: its peers are about to see it down and start its children
  * elsewhere.
+ *
+ * TELEMETRY (specs/queen/telemetry.t27), with `options.telemetry` only: every
+ * hook below is guarded by `tel !== undefined`, reads the clock it is given,
+ * and never schedules. queen-actors-telemetry.ts says what is counted.
  */
 
 import {
   D_DROPPED_DEAD,
+  D_DROPPED_FULL,
   D_QUEUED,
   GIVE_UP_REASON,
   ISO_LOOP,
@@ -75,7 +80,14 @@ import {
   X_NOPROC,
   X_SHUTDOWN,
 } from './queen-actors-card.gen'
+import {
+  type ActorTelemetry,
+  createActorTelemetry,
+  type KindStats,
+  type TelemetryOptions,
+} from './queen-actors-telemetry'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
+import { END_CRASH, END_KILL, END_OK } from './queen-telemetry-card.gen'
 import { escalation, turnRunner } from './queen-turn-stop'
 import {
   ESC_ABANDON,
@@ -163,6 +175,8 @@ export interface Isolated<M> {
 
 export interface ActorSpec<M> {
   name: string
+  /** What its telemetry counts it under; its name when unset. */
+  kind?: string
   /** Called once, after the pid exists and before any message. */
   init?: (self: Pid) => void
   /**
@@ -274,6 +288,21 @@ interface Proc {
   abort?: AbortController
   inTurn?: <T>(fn: () => T) => T
   onExit: (reason: number) => void
+  // telemetry's: its kind, its depth alarm, its kill bound, its letter's
+  // wait, and the ms from which its turn is long
+  k?: KindStats
+  alarm: boolean
+  bound: number
+  waitMs: number
+  longAt: number
+}
+
+/** A sampled letter carries its arrival time; only step() ever sees one. */
+class Stamped {
+  constructor(
+    readonly msg: unknown,
+    readonly at: number,
+  ) {}
 }
 
 export interface ActorStats {
@@ -312,6 +341,8 @@ export interface ActorSystemOptions {
    * the benchmark posted on t27#7851 is accepted.
    */
   turnStop?: boolean
+  /** Counts, histograms and the decision log (telemetry.t27). Off when unset. */
+  telemetry?: TelemetryOptions
 }
 
 export function createActorSystem(
@@ -359,6 +390,14 @@ export function createActorSystem(
     remoteSent: 0,
     fencedStops: 0,
   }
+  const tel: ActorTelemetry | undefined = options.telemetry
+    ? createActorTelemetry(clock, options.telemetry)
+    : undefined
+  tel?.watch({
+    procs: () => live.values(),
+    slot: (pid) => Number(slotOf(pid)),
+    yields: () => stats.yields,
+  })
 
   const procOf = (pid: Pid): Proc | undefined => {
     const p = live.get(slotOf(pid))
@@ -389,6 +428,7 @@ export function createActorSystem(
         }
       }
       stats.deadLetters += p.box.length
+      tel?.exited(p)
       stats.fencedStops++
     }
     live.clear()
@@ -501,6 +541,14 @@ export function createActorSystem(
       turnAt: 0,
       isolation,
       onExit,
+      alarm: false,
+      bound: spec.turnMaxSeconds || TURN_MAX_SECONDS,
+      waitMs: -1,
+      longAt: 0,
+    }
+    if (tel !== undefined) {
+      p.k = tel.kind(spec.kind ?? spec.name)
+      tel.spawned(p)
     }
     if (turnStop) {
       p.abort = new AbortController()
@@ -520,6 +568,7 @@ export function createActorSystem(
   function send(pid: Pid, msg: unknown, from?: Pid): number {
     if (from !== undefined && !procOf(from)) {
       stats.deadLetters++
+      tel?.dropped(undefined, false)
       return D_DROPPED_DEAD
     }
     if (remote(pid)) {
@@ -528,6 +577,7 @@ export function createActorSystem(
       const d = c('send_remote', flag(!!link && !isFenced() && link.up(to)))
       if (d !== D_QUEUED || !link) {
         stats.deadLetters++
+        tel?.dropped(undefined, false)
         return d
       }
       stats.remoteSent++
@@ -538,9 +588,14 @@ export function createActorSystem(
     const d = c('deliver', flag(!!p), u32(p?.box.length ?? 0), MAILBOX_CAP)
     if (d !== D_QUEUED || !p) {
       stats.deadLetters++
+      tel?.dropped(p?.k, d === D_DROPPED_FULL)
       return d
     }
-    p.box.push(msg)
+    if (tel !== undefined) {
+      const k = p.k as KindStats
+      p.box.push(tel.sample(k) ? new Stamped(msg, clock.now()) : msg)
+      tel.queued(p)
+    } else p.box.push(msg)
     stats.delivered++
     schedule(p)
     return d
@@ -629,6 +684,7 @@ export function createActorSystem(
     p.cancelKill?.()
     if (turnStop && p.turn && !p.turn.ended) stopTurn(p, p.turn, reason)
     stats.deadLetters += p.box.length
+    tel?.exited(p)
     const downs = watchers.get(p.pid) ?? []
     watchers.delete(p.pid)
     for (const w of downs) send(w.watcher, downOf(p.pid, reason, w.ref))
@@ -688,7 +744,15 @@ export function createActorSystem(
     release(p, t)
   }
 
+  // with telemetry, a step that has a turn to start runs as its actor's kind,
+  // and so does every await of that turn: the decision log names the kind
+  // behind each call. A step with nothing queued starts no turn.
   function step(p: Proc): void {
+    if (tel === undefined || (p.box.length === 0 && p.lane === 0n)) stepOn(p)
+    else tel.als.run((p.k as KindStats).kind, stepOn, p)
+  }
+
+  function stepOn(p: Proc): void {
     // a node that must fence runs no further turn (netlink.t27 section 3)
     if (link && isFenced()) return
     if (p.busy || !current(p)) return
@@ -701,26 +765,35 @@ export function createActorSystem(
         p.spec.control?.(tag, p.pid)
       } catch {
         stats.crashed++
+        tel?.controlTurn(p, true)
         exit(p.pid, X_CRASH)
         return
       }
+      tel?.controlTurn(p, false)
       schedule(p)
       return
     }
     if (lane !== LANE_DATA) return
-    const msg = p.box.shift()
+    let msg = p.box.shift()
+    let stampedAt = -1
+    if (msg instanceof Stamped) {
+      stampedAt = msg.at
+      msg = msg.msg
+    }
     const bound = p.spec.turnMaxSeconds ?? 0
     const t: Turn = { ended: false, held: false }
     const signal = p.abort?.signal ?? NEVER_ABORTED
     p.turn = t
     p.busy = true
     p.turnAt = clock.now()
+    tel?.turnStart(p, stampedAt)
     p.cancelKill = clock.after((bound || TURN_MAX_SECONDS) * 1000, () => {
       const age = Math.ceil((clock.now() - p.turnAt) / 1000)
       if (current(p) && c('turn_signal', u32(age), u32(bound)) === X_KILL) {
         stats.killed++
         // Without turnStop: an isolated turn's work is stopped for real, a
         // loop turn's is not. With it, `exit` starts the turn's stop.
+        let stopped = false
         if (
           !turnStop &&
           c('kill_effect', p.isolation) === KILL_STOPS &&
@@ -728,7 +801,9 @@ export function createActorSystem(
         ) {
           t.stopWork()
           stats.stopped++
+          stopped = true
         }
+        tel?.turnEnd(p, END_KILL, clock.now(), stopped)
         exit(p.pid, c('death_reason', X_KILL))
       }
     })
@@ -751,6 +826,7 @@ export function createActorSystem(
       () => {
         turnEnded(p, t)
         if (!current(p)) return
+        tel?.turnEnd(p, END_OK, clock.now())
         p.cancelKill?.()
         p.turn = undefined
         p.busy = false
@@ -759,6 +835,7 @@ export function createActorSystem(
       () => {
         turnEnded(p, t)
         if (!current(p)) return
+        tel?.turnEnd(p, END_CRASH, clock.now())
         p.turn = undefined
         stats.crashed++
         exit(p.pid, X_CRASH)
@@ -878,6 +955,8 @@ export function createActorSystem(
     clock,
     /** Whether a dying pid's turn is stopped (turn_stop.t27) or abandoned. */
     turnStop,
+    /** Set with options.telemetry; GET /queen/actors/metrics reads it. */
+    telemetry: tel,
   }
 }
 
@@ -886,6 +965,8 @@ export type ActorSystem = ReturnType<typeof createActorSystem>
 /** What a supervisor starts: an actor, or a supervisor below it. */
 export interface Child {
   name: string
+  /** What telemetry counts its restarts under; its name when unset. */
+  kind?: string
   restart?: number
   start: (
     onExit: (reason: number) => void,
@@ -902,6 +983,7 @@ export const actorChild = <M>(
   restart: number = RESTART_PERMANENT,
 ): Child => ({
   name: spec.name,
+  kind: spec.kind ?? spec.name,
   restart,
   start: (onExit, slot) => {
     const pid = sys.spawn(spec, onExit, slot)
@@ -939,6 +1021,16 @@ export function supervisor(
       let restarts: number[] = []
       let down = false
       const pending = new Set<() => void>()
+      const inPeriod = () => {
+        const now = clock.now()
+        return restarts.filter(
+          (t) =>
+            c('in_period', u32((now - t) / 1000), u32(opts.periodSeconds)) !==
+            0,
+        ).length
+      }
+      const tel = sys.telemetry
+      const sup = tel?.supervisor(opts.name, opts.maxRestarts, inPeriod)
 
       const start = (i: number) => {
         startedAt[i] = clock.now()
@@ -951,7 +1043,12 @@ export function supervisor(
         pending.clear()
         for (let j = running.length - 1; j >= 0; j--) running[j]?.stop()
       }
+      // with telemetry, the supervisor's decisions are logged under its name
       const exited = (i: number, reason: number) => {
+        if (tel === undefined) exitedOn(i, reason)
+        else tel.als.run(opts.name, exitedOn, i, reason)
+      }
+      const exitedOn = (i: number, reason: number) => {
         if (down) return
         running[i] = undefined
         const now = clock.now()
@@ -978,6 +1075,7 @@ export function supervisor(
           u32(streak[i]),
         )
         if (decision === SUP_GIVE_UP) {
+          if (sup) tel?.gaveUp(sup)
           down = true
           stopAll()
           onExit(GIVE_UP_REASON)
@@ -985,6 +1083,7 @@ export function supervisor(
         }
         if (decision !== SUP_RESTART) return
         restarts.push(now)
+        if (sup) tel?.restarted(sup, children[i].kind ?? children[i].name)
         for (let j = children.length - 1; j >= 0; j--)
           if (
             c('stopped_by_restart', opts.strategy, i, j, 1) !== 0 &&

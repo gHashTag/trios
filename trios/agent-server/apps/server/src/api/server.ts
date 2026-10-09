@@ -40,6 +40,7 @@ import { createMonitoringRoutes } from './routes/monitoring'
 import { createOAuthRoutes } from './routes/oauth'
 import { createOpenClawRoutes } from './routes/openclaw'
 import { createProviderRoutes } from './routes/provider'
+import { createQueenActorsRoute } from './routes/queen-actors-metrics'
 import { createQueenAppWebhookRoute } from './routes/queen-app-webhook'
 import { createQueenContributorKeysRoute } from './routes/queen-contributor-keys'
 import { createQueenDashboardRoute } from './routes/queen-dashboard'
@@ -500,6 +501,9 @@ export async function createHttpServer(config: HttpServerConfig) {
     // than being served to any origin. The five escalations it exists to
     // surface are for the operator, not for a public page.
     .route('/queen/needs-you', queenNeedsYouRoutes)
+    // What the actor runtime counted (specs/queen/telemetry.t27): numbers,
+    // kinds and card names, operator information like needs-you above.
+    .route('/queen/actors', createQueenActorsRoute())
     .route('/queen/report', queenReportRoutes)
     .route('/queen/board', queenBoardRoutes)
     .route('/queen/roadmap', createQueenRoadmapRoute())
