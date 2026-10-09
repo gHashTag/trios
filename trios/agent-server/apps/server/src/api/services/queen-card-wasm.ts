@@ -18,8 +18,6 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_SPECS_ROOT } from '../../inngest/spec-catalog'
 
-type Fn = (...args: number[]) => number
-
 export interface CardWasm {
   /** Call an exported function with numbers (bools as 0/1). */
   call(name: string, ...args: number[]): number
@@ -34,6 +32,71 @@ export interface CardWasm {
 }
 
 const cache = new Map<string, CardWasm>()
+
+/**
+ * THE DECISION LOG'S TAP (specs/queen/telemetry.t27 section 9). With a tap
+ * set, a call into one of its cards may be recorded. Per function and window
+ * the tap is asked while the card's `kept` still says yes, and not again
+ * until the window turns: `kept` never says yes again once it said no in a
+ * window (a test in the spec). Calls the tap makes itself are not recorded.
+ * With no tap, a call costs one check more than before.
+ */
+export interface CardTap {
+  /** The card files whose calls are recorded. */
+  files: ReadonlySet<string>
+  /** Call number `n` of one function in this window: record it or not. */
+  keep(n: number): boolean
+  record(
+    file: string,
+    name: string,
+    args: Array<number | bigint>,
+    result: number | bigint,
+    n: number,
+  ): void
+}
+
+interface Entry {
+  file: string
+  fn: (...a: Array<number | bigint>) => number | bigint
+  /** Calls asked about in this window; the next one's number. */
+  n: number
+  open: boolean
+}
+
+let tap: CardTap | undefined
+let tapping = false
+const entries: Entry[] = []
+
+/** Set the tap, or clear it with undefined. Every gate opens for its cards. */
+export function setCardTap(next: CardTap | undefined): void {
+  tap = next
+  reopenCardGates()
+}
+
+/** A new window: every tapped function is asked about again from n = 0. */
+export function reopenCardGates(): void {
+  for (const e of entries) {
+    e.n = 0
+    e.open = tap?.files.has(e.file) === true
+  }
+}
+
+function noted(
+  e: Entry,
+  name: string,
+  args: Array<number | bigint>,
+  r: number | bigint,
+) {
+  const t = tap as CardTap
+  tapping = true
+  try {
+    if (t.keep(e.n)) t.record(e.file, name, args, r, e.n)
+    else e.open = false
+    e.n++
+  } finally {
+    tapping = false
+  }
+}
 
 export function loadCardWasm(
   file: string,
@@ -62,20 +125,35 @@ export function loadCardWasm(
     if (end > have) memory.grow(Math.ceil((end - have) / 65_536))
   }
 
+  const table: Record<string, Entry> = Object.create(null)
+  const entry = (name: string): Entry => {
+    const hit = table[name]
+    if (hit !== undefined) return hit
+    const fn = x[name] as Entry['fn'] | undefined
+    if (typeof fn !== 'function') throw new Error(`${file} exports no ${name}`)
+    const e: Entry = {
+      file,
+      fn,
+      n: 0,
+      open: tap?.files.has(file) === true,
+    }
+    table[name] = e
+    entries.push(e)
+    return e
+  }
+
   const card: CardWasm = {
     call(name, ...args) {
-      const fn = x[name] as Fn | undefined
-      if (typeof fn !== 'function')
-        throw new Error(`${file} exports no ${name}`)
-      return fn(...args)
+      const e = entry(name)
+      const r = e.fn(...args) as number
+      if (e.open && !tapping && tap !== undefined) noted(e, name, args, r)
+      return r
     },
     call64(name, ...args) {
-      const fn = x[name] as
-        | ((...a: Array<number | bigint>) => number | bigint)
-        | undefined
-      if (typeof fn !== 'function')
-        throw new Error(`${file} exports no ${name}`)
-      return fn(...args)
+      const e = entry(name)
+      const r = e.fn(...args)
+      if (e.open && !tapping && tap !== undefined) noted(e, name, args, r)
+      return r
     },
     put(...texts) {
       cursor = base
