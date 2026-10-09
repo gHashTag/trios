@@ -105,6 +105,13 @@ jobs:
             command: (cd apps/server && bun run test:root)
             junit_path: test-results/server-root.xml
             needs_browser: false
+          # The actor runtime under a seeded deterministic simulation
+          # (simulation.t27, trios#1712 item 5): every seed runs twice and must
+          # log the same. On actors-next it runs as Actor simulation instead.
+          - suite: server-sim
+            command: (cd apps/server && bun run test:sim)
+            junit_path: test-results/server-sim.xml
+            needs_browser: false
           # ITS OWN GROUP BECAUSE A GROUP IS ITS OWN PROCESS.
           #
           # `pg-migrate-live.test.ts` lived in tests/api and could not work
