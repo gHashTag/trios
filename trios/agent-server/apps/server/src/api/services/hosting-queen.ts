@@ -18,6 +18,12 @@
  * WHY A CLOCK IS PASSED IN: the demo runs the whole protocol, lapses
  * included, on a VirtualClock; production passes Date.now.
  *
+ * THE LAB'S ROW (trios#1761): a shard job is one half of a lab row, the
+ * reference or t27b (row.t27). A host takes a half only when may_take_half
+ * says so: its instruction set runs the half, and its measured isolation meets
+ * the job's. GET /hosting/verdicts serves the rows whose two halves are both
+ * agreed (row_complete), assembled the lab's way (hosting-wire assembleRow).
+ *
  * SLICE 1B (trios#1761). Behind `economics.sybil` (TRIOS_HOSTING_SYBIL=on):
  * sybil.t27's anchored quorum, canaries, probation, the per-key cap and the
  * slash. Always on: every credit row is named by statement.t27's kind and
@@ -44,13 +50,13 @@ import {
   epochsClose,
   epochTo,
   exhausted,
+  halfVote,
   hostWriteAdmitted,
-  isVote,
   jobClosed,
   jobFirst,
   jobVerdict,
   leafKindKnown,
-  mayTake,
+  mayTakeHalf,
   nextIncarnation,
   nextToClose,
   onProbation,
@@ -63,6 +69,7 @@ import {
   replicasWanted,
   requestFresh,
   rowAdmitted,
+  rowComplete,
   rowEpochOpen,
   settlementDue,
   settlementGateOpen,
@@ -99,7 +106,9 @@ import type {
   JobRow,
   LeaseRow,
 } from './hosting-store'
+import { archOf } from './hosting-toolchain'
 import {
+  assembleRow,
   keyIdOf,
   messageOf,
   publicHexOf,
@@ -141,6 +150,13 @@ import {
   VERDICT_WORDS,
 } from './queen-hosting-proof-card.gen'
 import {
+  HALF_REFERENCE,
+  HALF_T27B,
+  HALF_WORDS,
+  HALVES,
+  T27B_WORDS,
+} from './queen-hosting-row-card.gen'
+import {
   CHAIN_OF_RECORD,
   CHAIN_WORD,
   CLOSES_PER_CALL_MAX,
@@ -160,6 +176,15 @@ import {
 } from './queen-hosting-sybil-card.gen'
 
 export const TIER_WORDS = ['owner', 'trusted', 'public'] as const
+export const ISOLATION_WORDS = [
+  'none',
+  'no-network',
+  'job-dir-only',
+  'vm',
+] as const
+/** A half's verdict words, by row.t27 HALF_*. */
+const halfWords = (half: number): readonly string[] =>
+  half === HALF_T27B ? T27B_WORDS : VERDICT_WORDS
 export const LEDGER_KIND_WORDS = ['credit', 'strike', 'slash'] as const
 /** statement.t27 LK_OK, LK_MISSING, LK_MALFORMED. */
 export const LEDGER_KEY_WORDS = ['set', 'missing', 'malformed'] as const
@@ -319,12 +344,14 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     const tierClaim = int(b.tier_claim, 255)
     const slots = int(b.slots, 1_000_000)
     const platform = text(b.platform, /^[a-z0-9-]{1,32}$/)
+    const isolation = int(b.isolation, 255)
     const utc = int(b.utc_unix, Number.MAX_SAFE_INTEGER)
     if (
       publicKey === null ||
       tierClaim === null ||
       slots === null ||
       platform === null ||
+      isolation === null ||
       utc === null
     )
       throw new HostingError('bad_registration', 400)
@@ -334,6 +361,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       tier_claim: tierClaim,
       slots,
       platform,
+      isolation,
       utc_unix: utc,
     })
     if (!verifyHex(publicKey, message, b.signature))
@@ -351,6 +379,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         tierClaim,
         slots: slotsAdmitted(tier, slots),
         platform,
+        isolation,
         origin,
         incarnation: nextIncarnation(prev?.incarnation ?? 0),
         beatAt: nowMs(),
@@ -367,6 +396,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         incarnation: row.incarnation,
         tier: TIER_WORDS[tier],
         slots: row.slots,
+        isolation: ISOLATION_WORDS[isolation] ?? String(isolation),
         beat_seconds: NODE_HEARTBEAT_SECONDS,
         ttl_seconds: NODE_TTL_SECONDS,
       }
@@ -455,7 +485,10 @@ export function createHostingQueen(deps: HostingQueenDeps) {
             originBlocks(host.tier, other.tier, 1)
           )
         }).length
-        const take = mayTake({
+        const take = mayTakeHalf({
+          half: job.half ?? HALF_REFERENCE,
+          arch: archOf(host.platform),
+          isolation: host.isolation ?? 0,
           tier: host.tier,
           workloadClass: job.workloadClass,
           holdsSecret: job.holdsSecret,
@@ -593,6 +626,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     const stated = readNormalized(String(top.output ?? ''))
     job.result = {
       outputHash: String(top.output_hash),
+      output: String(top.output ?? ''),
       word: String(top.verdict),
       tests: stated?.tests ?? 0,
       ops: Number(top.ops),
@@ -893,8 +927,9 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       const job = lease ? await s.job(lease.jobId) : null
       const facts = receiptFacts(r, message, host, lease, job)
       const code = receiptCode(facts)
-      const verdictCode = VERDICT_WORDS.indexOf(r.verdict as never)
-      const vote = isVote(code, verdictCode < 0 ? 255 : verdictCode)
+      const half = job?.half ?? HALF_REFERENCE
+      const verdictCode = halfWords(half).indexOf(r.verdict as never)
+      const vote = halfVote(code, half, verdictCode < 0 ? 255 : verdictCode)
       if (
         lease &&
         facts.leased &&
@@ -991,6 +1026,9 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     // slice 1 runs shards only; a service needs slice 2's tunnel
     if (b.workload_class !== undefined && b.workload_class !== WC_SHARD)
       throw new HostingError('shards_only', 400)
+    // row.t27: the reference half unless the job names another
+    const half = b.half === undefined ? HALF_REFERENCE : int(b.half, HALVES - 1)
+    if (half === null) throw new HostingError('bad_job', 400)
     const sorted = [...files].sort((x, y) => (x.path < y.path ? -1 : 1))
     const id = `j_${sha256Hex(
       JSON.stringify([
@@ -1001,6 +1039,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         modelHash,
         b.holds_secret,
         b.holds_personal,
+        half,
       ]),
     ).slice(0, 16)}`
     return deps.store.tx(async (s) => {
@@ -1017,6 +1056,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       const row: JobRow = {
         id,
         kind: 'shard',
+        half,
         commit,
         spec,
         inputHash,
@@ -1106,23 +1146,46 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     })
   }
 
-  /** Agreed shards in the lab's row shape (file, reference, tests, asserts). */
+  /**
+   * The lab's rows (row.t27): for each spec at a commit, its two halves, and a
+   * row once both are agreed (row_complete), in run.json's row shape, keys in
+   * the lab's order, with each half's output digest and agreeing hosts.
+   */
   async function verdicts(commit?: string) {
-    return deps.store.tx(async (s) =>
-      (await s.jobs())
-        .filter((j) => j.state === 'agreed' && j.result)
-        .filter((j) => !commit || j.commit === commit)
-        .map((j) => ({
-          commit: j.commit,
-          file: j.spec,
-          reference: j.result?.word,
-          tests: j.result?.tests,
-          asserts: j.result?.ops,
-          input_sha256: j.inputHash,
-          output_sha256: j.result?.outputHash,
-          hosts: j.result?.hosts,
-        })),
-    )
+    return deps.store.tx(async (s) => {
+      const halves = new Map<string, Array<JobRow | undefined>>()
+      for (const j of await s.jobs()) {
+        if (commit && j.commit !== commit) continue
+        const key = `${j.commit} ${j.spec}`
+        const pair = halves.get(key) ?? [undefined, undefined]
+        pair[j.half ?? HALF_REFERENCE] = j
+        halves.set(key, pair)
+      }
+      const rows: Array<Record<string, unknown>> = []
+      for (const [ref, t27b] of halves.values()) {
+        if (!ref?.result || !t27b?.result) continue
+        if (!rowComplete(ref.verdict, t27b.verdict)) continue
+        const a = readNormalized(ref.result.output ?? '')
+        const b = readNormalized(t27b.result.output ?? '')
+        if (!a || !b) continue
+        rows.push({
+          commit: ref.commit,
+          ...assembleRow(ref.spec, a, b),
+          input_sha256: ref.inputHash,
+          halves: Object.fromEntries(
+            [ref, t27b].map((j) => [
+              HALF_WORDS[j.half ?? HALF_REFERENCE],
+              {
+                job: j.id,
+                output_sha256: j.result?.outputHash,
+                hosts: j.result?.hosts,
+              },
+            ]),
+          ),
+        })
+      }
+      return rows
+    })
   }
 
   async function job(id: string) {
@@ -1203,6 +1266,7 @@ function receiptFacts(
     modelMatches: !job?.modelHash || r.model_hash === job.modelHash,
     outputRehashes:
       sha256Hex(String(r.output)) === r.output_hash &&
+      stated?.half === (job?.half ?? HALF_REFERENCE) &&
       stated?.word === r.verdict &&
       stated?.ops === r.ops &&
       stated?.spec === r.spec,
@@ -1227,6 +1291,7 @@ function jobPayload(j: JobRow) {
   return {
     id: j.id,
     kind: j.kind,
+    half: j.half ?? HALF_REFERENCE,
     commit: j.commit,
     spec: j.spec,
     input_hash: j.inputHash,

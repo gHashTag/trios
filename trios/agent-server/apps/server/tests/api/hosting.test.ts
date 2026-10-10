@@ -58,6 +58,7 @@ import {
   signHex,
 } from '../../src/api/services/hosting-wire'
 import {
+  ISO_JOBDIR,
   NODE_HEARTBEAT_SECONDS,
   NODE_TTL_SECONDS,
   TIER_OWNER,
@@ -81,7 +82,7 @@ import { DEFAULT_SPECS_ROOT } from '../../src/inngest/spec-catalog'
 import { VirtualClock } from './queen-virtual-clock'
 
 const QUEEN = 'http://queen.test'
-const CARDS = ['host', 'proof', 'placement', 'credit'] as const
+const CARDS = ['host', 'proof', 'placement', 'credit', 'row'] as const
 const sha = (file: string) =>
   createHash('sha256')
     .update(readFileSync(join(DEFAULT_SPECS_ROOT, file)))
@@ -219,7 +220,7 @@ describe('the shard output, normalized', () => {
     expect(a.output).not.toContain('rate')
     expect(a.output).toBe(
       [
-        't27-hosting-shard-v1',
+        't27-hosting-shard-v2',
         `spec=${spec}`,
         'verdict=pass',
         'tests=2',
@@ -237,20 +238,42 @@ describe('the shard output, normalized', () => {
     expect(f.outputHash).not.toBe(a.outputHash)
   })
 
-  it('keeps nothing of a blocked report but its verdict', () => {
+  it("keeps a blocked report's verdict and the lab's reason, and withholds a reason that names the job's directory", () => {
+    // the lab's reason, kept (proof.t27 v2): the row's reference_detail
+    const lab = normalizeShard(
+      spec,
+      ran(
+        "  BLOCKED  does not compile: spec.zig:23:16: error: use of undeclared identifier 'Ok'\n",
+        { jobDir: '/Users/alice/.trios-host/work/job-1' },
+      ),
+    )
+    expect(lab.verdict).toBe(VW_BLOCKED)
+    expect(lab.output).toBe(
+      `t27-hosting-shard-v2\nspec=${spec}\nverdict=blocked\nreason=does not compile: spec.zig:23:16: error: use of undeclared identifier 'Ok'\n`,
+    )
+    // a reason that names the host's own job directory is withheld, so two
+    // honest hosts still write one text
     const a = normalizeShard(
       spec,
-      ran('BLOCKED zig failed in /tmp/abc/specs/x.zig\n'),
+      ran('BLOCKED zig failed in /tmp/abc/specs/x.zig\n', {
+        jobDir: '/tmp/abc',
+      }),
     )
     const b = normalizeShard(
       spec,
-      ran('BLOCKED zig failed in /var/folders/zz/specs/x.zig\n'),
+      ran('BLOCKED zig failed in /var/folders/zz/specs/x.zig\n', {
+        jobDir: '/var/folders/zz',
+      }),
     )
-    expect(a.verdict).toBe(VW_BLOCKED)
     expect(a.outputHash).toBe(b.outputHash)
     expect(a.output).toBe(
-      `t27-hosting-shard-v1\nspec=${spec}\nverdict=blocked\n`,
+      `t27-hosting-shard-v2\nspec=${spec}\nverdict=blocked\nreason=withheld: it names the host's job directory\n`,
     )
+    // a run that did not exit zero is blocked for its exit, as lab.py says it
+    expect(
+      normalizeShard(spec, ran('', { exitCode: 101, stderr: 'boom\nmore' }))
+        .output,
+    ).toContain('reason=t27c test-report exited 101: boom\n')
     // a run cut short says something about the host, not the spec
     const t = normalizeShard(spec, ran('', { timedOut: true }))
     expect(t.word).toBe('timeout')
@@ -354,6 +377,7 @@ function world(allow: Record<string, number> = {}) {
       tierClaim,
       slots: 1,
       platform: 'darwin-arm64',
+      isolation: ISO_JOBDIR,
       runShard,
       clock,
     })
@@ -434,18 +458,13 @@ describe('the demo: two honest hosts and one that tampers', () => {
     })
     for (const h of ledger.hosts) expect(h.settlement_due).toBe(false)
 
-    // the verdict, in the lab's row shape
-    const [verdict] = await w.get(`/hosting/verdicts?commit=${COMMIT}`)
-    expect(verdict).toMatchObject({
-      file: SPEC,
-      reference: 'fail',
-      tests: 2,
-      asserts: 5,
-      input_sha256: INPUT,
-    })
-    expect([...verdict.hosts].sort()).toEqual(
+    // the agreed half; a row of the lab needs its t27b half too (hosting-row.test.ts)
+    const agreed = (await w.get(`/hosting/jobs/${id}`)).result
+    expect(agreed).toMatchObject({ word: 'fail', tests: 2, ops: 5 })
+    expect([...agreed.hosts].sort()).toEqual(
       [keyIdOf(owner.publicHex), keyIdOf(stranger.publicHex)].sort(),
     )
+    expect(await w.get(`/hosting/verdicts?commit=${COMMIT}`)).toEqual([])
 
     // nothing personal or secret is public: no address, no origin, no key
     const text =
@@ -664,6 +683,7 @@ describe('registration and the lease', () => {
       tierClaim: TIER_OWNER,
       slots: 99,
       platform: 'linux-x64',
+      isolation: ISO_JOBDIR,
       runShard: honest,
       clock: w.clock,
     })
@@ -684,6 +704,7 @@ describe('registration and the lease', () => {
       tier_claim: TIER_PUBLIC,
       slots: 1,
       platform: 'linux-x64',
+      isolation: ISO_JOBDIR,
       utc_unix: 0,
     }
     const post = (body: unknown) =>
@@ -855,13 +876,13 @@ describe('two hosts run the real t27c test-report', () => {
           },
           new AbortController().signal,
         )
-        const [row] = await w.get('/hosting/verdicts')
-        expect(row).toMatchObject({
-          file: spec,
-          reference: once.result.word,
+        const id = (b.job as { id: string }).id
+        const { result } = await w.get(`/hosting/jobs/${id}`)
+        expect(result).toMatchObject({
+          word: once.result.word,
           tests: once.result.tests,
-          asserts: once.result.ops,
-          output_sha256: once.result.outputHash,
+          ops: once.result.ops,
+          outputHash: once.result.outputHash,
         })
       } finally {
         rmSync(work, { recursive: true, force: true })

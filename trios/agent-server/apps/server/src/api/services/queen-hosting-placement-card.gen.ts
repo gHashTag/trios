@@ -16,6 +16,10 @@ export const LEASES_MAX_PER_JOB = 6 satisfies number;
 export const JOB_RUN_BOUND_SECONDS = 300 satisfies number;
 export const RECEIPT_GRACE_SECONDS = 30 satisfies number;
 // t27c gen-ts: fn replica_lapsed was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn half_fits was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn may_take_half was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -26,6 +30,9 @@ export const RECEIPT_GRACE_SECONDS = 30 satisfies number;
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 export const CLASSES = 3 satisfies number;
+export const ISO_JOBDIR = 2 satisfies number;
+export const ISO_LEVELS = 4 satisfies number;
+export const ISO_NONE = 0 satisfies number;
 export const STRIKES_MAX = 3 satisfies number;
 export const TIERS = 3 satisfies number;
 export const TIER_OWNER = 0 satisfies number;
@@ -37,16 +44,22 @@ export const WC_STATEFUL = 2 satisfies number;
 // t27c gen-ts: fn eligible was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn has_room was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn host_up was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn isolation_meets was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn isolation_required was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn suspended was not emitted -- this backend lowers declarations, not bodies.
 export const RC_LATE = 6 satisfies number;
 export const REPLICAS_K = 2 satisfies number;
 export const REPLICAS_MAX = 3 satisfies number;
+export const HALF_REFERENCE = 0 satisfies number;
+export const HALF_T27B = 1 satisfies number;
+export const ARCH_ARM64 = 0 satisfies number;
+export const ARCH_X64 = 1 satisfies number;
 export const NODE_TTL_SECONDS = 20 satisfies number;
 // t27c gen-ts: fn lease_up was not emitted -- this backend lowers declarations, not bodies.
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [] as const;
-export const __DECL_ORDER__ = ["ORIGIN_V4_PREFIX_BITS", "ORIGIN_V6_PREFIX_BITS", "LEASES_MAX_PER_JOB", "JOB_RUN_BOUND_SECONDS", "RECEIPT_GRACE_SECONDS", "CLASSES", "STRIKES_MAX", "TIERS", "TIER_OWNER", "TIER_PUBLIC", "TIER_TRUSTED", "WC_SERVICE", "WC_SHARD", "WC_STATEFUL", "RC_LATE", "REPLICAS_K", "REPLICAS_MAX", "NODE_TTL_SECONDS"] as const;
+export const __DECL_ORDER__ = ["ORIGIN_V4_PREFIX_BITS", "ORIGIN_V6_PREFIX_BITS", "LEASES_MAX_PER_JOB", "JOB_RUN_BOUND_SECONDS", "RECEIPT_GRACE_SECONDS", "CLASSES", "ISO_JOBDIR", "ISO_LEVELS", "ISO_NONE", "STRIKES_MAX", "TIERS", "TIER_OWNER", "TIER_PUBLIC", "TIER_TRUSTED", "WC_SERVICE", "WC_SHARD", "WC_STATEFUL", "RC_LATE", "REPLICAS_K", "REPLICAS_MAX", "HALF_REFERENCE", "HALF_T27B", "ARCH_ARM64", "ARCH_X64", "NODE_TTL_SECONDS"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

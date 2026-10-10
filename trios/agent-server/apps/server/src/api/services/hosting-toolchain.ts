@@ -4,10 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * The host agent's own files (gHashTag/trios#1756): its key, its toolchain,
- * and the inputs of a shard. Plumbing. The pins, the directory and the file
+ * and the inputs of a shard. Plumbing. The pins, the directories and the file
  * modes are data in specs/hosting/toolchain.t27 (queen-hosting-toolchain.gen);
  * whether a tool is downloaded, used as given or refused, and whether a
  * download is kept, are host.t27 card calls.
+ *
+ * WHY A KEPT FILE IS CHECKED AGAIN ON EVERY START (trios#1761): a tool on disk
+ * is a file anyone with the user's rights could have changed since it was
+ * fetched. Its digest and size are compared with the pin before each `join`;
+ * a file that no longer matches is deleted and fetched again, and a fetch
+ * that does not match is refused by name and nothing is kept.
+ *
+ * THE LAYOUT: the key in AGENT_DIR, the tools in TOOLS_DIR, the jobs in
+ * WORK_DIR, zig's cache in CACHE_DIR. A sandboxed job is given the tools, its
+ * own job directory and the cache; never the directory that holds the key.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -21,20 +31,27 @@ import {
 } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { downloadKept, toolchainAction } from './hosting-cards'
 import { generateHostKey, sha256Hex } from './hosting-wire'
 import { TA_DOWNLOAD, TA_USE_LOCAL } from './queen-hosting-host-card.gen'
 import {
   AGENT_DIR,
   AGENT_DIR_MODE,
+  CACHE_DIR,
   KEY_FILE,
   KEY_FILE_MODE,
+  PLATFORM_ARCH,
   PLATFORMS,
   SPEC_SOURCE_BASE,
+  T27B_BYTES,
+  T27B_SHA256,
+  T27B_URLS,
   T27C_BYTES,
   T27C_SHA256,
   T27C_URLS,
+  TOOLS_DIR,
+  WORK_DIR,
   ZIG_BYTES,
   ZIG_DIRS,
   ZIG_SHA256,
@@ -43,6 +60,19 @@ import {
 
 export const agentHome = (env = process.env): string =>
   env.TRIOS_HOST_HOME || join(homedir(), AGENT_DIR)
+
+/** The three directories beside the key (toolchain.t27 section 5). */
+export const agentDirs = (home: string) => ({
+  tools: join(home, TOOLS_DIR),
+  work: join(home, WORK_DIR),
+  cache: join(home, CACHE_DIR, 'zig'),
+})
+
+/** A platform's instruction set (toolchain.t27 PLATFORM_ARCH), or 255 for one it does not list. */
+export const archOf = (platform: string): number =>
+  (PLATFORM_ARCH as readonly number[])[
+    (PLATFORMS as readonly string[]).indexOf(platform)
+  ] ?? 255
 
 /** This machine's entry in toolchain.t27 PLATFORMS, or -1. */
 export function platformIndex(
@@ -97,14 +127,23 @@ export async function fetchPinned(
   const res = await fetcher(url)
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
   const body = new Uint8Array(await res.arrayBuffer())
-  if (!downloadKept(sha256Hex(body) === pin, body.length === bytes)) {
+  const digest = sha256Hex(body)
+  if (!downloadKept(digest === pin, body.length === bytes)) {
     await rm(dest, { force: true })
-    throw new Error(`${url} is not the pinned file; nothing was kept`)
+    throw new Error(
+      `${basename(url)} refused: sha256 ${digest} (${body.length} bytes), pinned ${pin} (${bytes} bytes); nothing was kept`,
+    )
   }
   await writeFile(dest, body)
 }
 
 const digestOf = (path: string) => sha256Hex(readFileSync(path))
+
+/** Whether a kept file still has its pinned digest and size (host.t27 download_kept). */
+function stillPinned(path: string, pin: string, bytes: number): boolean {
+  const body = readFileSync(path)
+  return downloadKept(sha256Hex(body) === pin, body.length === bytes)
+}
 
 /** zig: the operator's binary as given, or the pinned archive, unpacked once. */
 export async function resolveZig(
@@ -118,10 +157,12 @@ export async function resolveZig(
   let path: string
   if (action === TA_USE_LOCAL) path = local as string
   else if (action === TA_DOWNLOAD) {
-    const dir = join(home, ZIG_DIRS[index] as string)
+    const tools = agentDirs(home).tools
+    mkdirSync(tools, { recursive: true })
+    const dir = join(tools, ZIG_DIRS[index] as string)
     path = join(dir, 'zig')
     if (!existsSync(path)) {
-      const archive = join(home, `${ZIG_DIRS[index]}.tar.xz`)
+      const archive = join(tools, `${ZIG_DIRS[index]}.tar.xz`)
       await fetchPinned(
         url,
         ZIG_SHA256[index] as string,
@@ -129,7 +170,7 @@ export async function resolveZig(
         archive,
         fetcher,
       )
-      const tar = spawnSync('tar', ['-xJf', archive, '-C', home], {
+      const tar = spawnSync('tar', ['-xJf', archive, '-C', tools], {
         stdio: 'inherit',
       })
       await rm(archive, { force: true })
@@ -142,6 +183,43 @@ export async function resolveZig(
   return { path, sha256: digestOf(path), version }
 }
 
+/**
+ * A release binary (t27c or t27b): the operator's as given, or the pinned
+ * asset in TOOLS_DIR, checked again on every start. `null` when nothing is
+ * pinned for this platform and none is given (t27b on x64): that half is
+ * never placed here (placement.t27 half_fits).
+ */
+async function resolveBinary(
+  name: string,
+  pins: {
+    urls: readonly string[]
+    sha: readonly string[]
+    bytes: readonly number[]
+  },
+  home: string,
+  local: string | undefined,
+  index: number,
+  fetcher: typeof fetch,
+): Promise<Tool | null> {
+  const url: string = pins.urls[index] ?? ''
+  const action = toolchainAction(url !== '', local !== undefined)
+  if (action === TA_USE_LOCAL)
+    return { path: local as string, sha256: digestOf(local as string) }
+  if (action !== TA_DOWNLOAD) return null
+  const tools = agentDirs(home).tools
+  mkdirSync(tools, { recursive: true })
+  const path = join(tools, name)
+  const pin = pins.sha[index] as string
+  const bytes = pins.bytes[index] as number
+  if (existsSync(path) && !stillPinned(path, pin, bytes))
+    await rm(path, { force: true })
+  if (!existsSync(path)) {
+    await fetchPinned(url, pin, bytes, path, fetcher)
+    chmodSync(path, 0o755)
+  }
+  return { path, sha256: digestOf(path) }
+}
+
 /** t27c: the operator's binary as given, or the pinned release asset. */
 export async function resolveT27c(
   home: string,
@@ -149,27 +227,36 @@ export async function resolveT27c(
   index: number,
   fetcher: typeof fetch = fetch,
 ): Promise<Tool> {
-  const url: string = T27C_URLS[index] ?? ''
-  const action = toolchainAction(url !== '', local !== undefined)
-  if (action === TA_USE_LOCAL)
-    return { path: local as string, sha256: digestOf(local as string) }
-  if (action !== TA_DOWNLOAD)
+  const tool = await resolveBinary(
+    't27c',
+    { urls: T27C_URLS, sha: T27C_SHA256, bytes: T27C_BYTES },
+    home,
+    local,
+    index,
+    fetcher,
+  )
+  if (!tool)
     throw new Error(
-      'no t27c release is pinned for this platform yet (specs/hosting/toolchain.t27): pass --t27c <path>',
+      'no t27c is pinned for this platform (specs/hosting/toolchain.t27): pass --t27c <path>',
     )
-  const path = join(home, 't27c')
-  if (!existsSync(path)) {
-    await fetchPinned(
-      url,
-      T27C_SHA256[index] as string,
-      T27C_BYTES[index] as number,
-      path,
-      fetcher,
-    )
-    chmodSync(path, 0o755)
-  }
-  return { path, sha256: digestOf(path) }
+  return tool
 }
+
+/** t27b: as t27c, where the platform is arm64; null elsewhere. */
+export const resolveT27b = (
+  home: string,
+  local: string | undefined,
+  index: number,
+  fetcher: typeof fetch = fetch,
+): Promise<Tool | null> =>
+  resolveBinary(
+    't27b',
+    { urls: T27B_URLS, sha: T27B_SHA256, bytes: T27B_BYTES },
+    home,
+    local,
+    index,
+    fetcher,
+  )
 
 // --- a shard's inputs ---------------------------------------------------------
 
@@ -251,6 +338,7 @@ export function shardJobOf(
   commit: string,
   spec: string,
   declarations: { holdsSecret: boolean; holdsPersonal: boolean },
+  half = 0,
 ) {
   const files = new Set(
     spawnSync(
@@ -282,6 +370,7 @@ export function shardJobOf(
     input_hash: (pinned.find((f) => f.path === spec) as { sha256: string })
       .sha256,
     files: pinned,
+    half,
     holds_secret: declarations.holdsSecret,
     holds_personal: declarations.holdsPersonal,
   }

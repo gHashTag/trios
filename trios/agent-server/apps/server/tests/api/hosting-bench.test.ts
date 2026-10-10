@@ -54,6 +54,7 @@ import {
   sha256Hex,
 } from '../../src/api/services/hosting-wire'
 import {
+  ISO_JOBDIR,
   NODE_HEARTBEAT_SECONDS,
   TIER_OWNER,
 } from '../../src/api/services/queen-hosting-host-card.gen'
@@ -131,6 +132,7 @@ function world(clock: Clock, allow: Record<string, number>) {
       tierClaim: tier,
       slots: 1,
       platform: 'darwin-arm64',
+      isolation: ISO_JOBDIR,
       runShard,
       clock,
     })
@@ -180,7 +182,7 @@ describe('messages per job (virtual clock)', () => {
     const b = w.agent(other.privatePem, '198.51.100.20', slow)
     await a.register()
     await b.register()
-    await a.submitJob(job())
+    const id = ((await a.submitJob(job())).json.job as { id: string }).id
     const setup = new Map(w.tally.messages)
     w.tally.messages.clear()
     a.start()
@@ -188,8 +190,11 @@ describe('messages per job (virtual clock)', () => {
     // count until the Queen has the verdict, one virtual second at a time
     let seconds = 0
     const agreed = async () =>
-      ((await (await w.app.request('/hosting/verdicts')).json()) as unknown[])
-        .length === 1
+      (
+        (await (await w.app.request(`/hosting/jobs/${id}`)).json()) as {
+          verdict: string
+        }
+      ).verdict === 'agreed'
     while (!(await agreed()) && seconds < runSeconds * 10) {
       await clock.runUntil(clock.now() + 1000)
       seconds += 1
