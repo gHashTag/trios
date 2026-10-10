@@ -298,7 +298,7 @@ describe('a call', () => {
     const deep = await links.call(
       {
         self: b,
-        serving: { kind: 'call', body: 0, alias: 0n, chain: 0n, depth: 8 },
+        serving: { kind: 'call', body: 0, alias: 0n, callers: [], depth: 8 },
       },
       a,
       'x',

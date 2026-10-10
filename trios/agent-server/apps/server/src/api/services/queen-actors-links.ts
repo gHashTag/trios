@@ -20,7 +20,11 @@
  *     `after`. The first of reply, DOWN or timeout ends it (call_outcome).
  *     The alias then dies (live_alias), so a late reply is a dead letter, as
  *     OTP's process alias drops it. A call into its own chain is refused at
- *     once (call_admit, chain_add).
+ *     once. The chain is its callers' pids, and keyed_guard.t27
+ *     call_admit_chain refuses a call to any of them, at any slot. actors.t27
+ *     chain_has saw slots 0..63 only, and this runtime never reuses a slot,
+ *     so it passed every call once 63 processes had started (trios#1729
+ *     item 7).
  *   - orderly stop: shutdown first, kill after the timeout (stop_signal),
  *     one child after another in reverse start order (stop_rank).
  *
@@ -38,7 +42,6 @@ import {
   type Down,
   letterOf,
   type Pid,
-  slotOf,
 } from './queen-actors'
 import {
   ACT_DIE,
@@ -52,8 +55,11 @@ import {
   X_NORMAL,
 } from './queen-actors-card.gen'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
+import { CHAIN_CALLERS } from './queen-keyed-guard-card.gen'
 
+export const KEYED_GUARD_CARD = 'queen/keyed_guard.wasm'
 const card = () => loadCardWasm(ACTORS_CARD)
+const guard = () => loadCardWasm(KEYED_GUARD_CARD)
 const c = (name: string, ...a: number[]) => card().call(name, ...a)
 const c64 = (name: string, ...a: Array<number | bigint>) =>
   BigInt.asUintN(64, BigInt(card().call64(name, ...a)))
@@ -72,8 +78,8 @@ export interface CallRequest<M = unknown> {
   body: M
   /** The address a reply reaches while the call is pending, and then nobody. */
   alias: Pid
-  /** The slots blocked on this request, one bit each (chain_add). */
-  chain: bigint
+  /** The pids blocked on this request, oldest first, its caller last. */
+  callers: Pid[]
   depth: number
 }
 
@@ -89,6 +95,14 @@ interface Reply {
   kind: 'reply'
   value: unknown
 }
+
+/**
+ * The chain as the card takes it: CHAIN_CALLERS pids, NO_PID past the last.
+ * No admitted call carries more (keyed_guard.t27 invariant
+ * the_chain_holds_every_caller_an_admitted_call_can_have).
+ */
+const chainArgs = (callers: Pid[]): bigint[] =>
+  Array.from({ length: CHAIN_CALLERS }, (_, i) => callers[i] ?? BigInt(NO_PID))
 
 const systems = new WeakMap<ActorSystem, ReturnType<typeof makeLinks>>()
 
@@ -252,13 +266,16 @@ function makeLinks(sys: ActorSystem) {
     body: unknown,
     afterMs: number,
   ): Promise<CallResult<R>> {
-    const chain = c64(
-      'chain_add',
-      from.serving ? from.serving.chain : 0n,
-      slotOf(from.self),
-    )
+    // the chain carries on: whoever is blocked on the request being served,
+    // then this caller (keyed_guard.t27 section 3)
+    const callers = [...(from.serving?.callers ?? []), from.self]
     const depth = (from.serving?.depth ?? 0) + 1
-    const admitted = card().call64('call_admit', chain, u32(depth), slotOf(to))
+    const admitted = guard().call64(
+      'call_admit_chain',
+      u32(depth),
+      to,
+      ...chainArgs(callers),
+    )
     if (Number(admitted) !== CALL_PENDING) {
       stats.callsRefused++
       return Promise.resolve({ outcome: Number(admitted) })
@@ -317,7 +334,7 @@ function makeLinks(sys: ActorSystem) {
       })
       sys.send(
         to,
-        { kind: 'call', body, alias, chain, depth } as CallRequest,
+        { kind: 'call', body, alias, callers, depth } as CallRequest,
         from.self,
       )
     })

@@ -36,6 +36,7 @@
  *      goodwill.
  */
 
+import { randomBytes } from 'node:crypto'
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
 
@@ -168,6 +169,23 @@ export function queenHolderName(): string {
     process.env.HOSTNAME ||
     'local'
   return `${platform}:${process.pid}`
+}
+
+// Drawn once per process start: the number netlink.t27 takes from the store
+// for a linked node (its incarnation). The bee actors run without a node
+// lease, and a container's pid is 1 at every start, so the name alone does
+// not tell two boots apart.
+const BOOT = randomBytes(4).toString('hex')
+
+/**
+ * What every claim a keyed actor of this process makes starts with
+ * (keyed_guard.t27 section 1): the process's name and its boot, then a colon
+ * and the actor's pid. The round renews and releases leases held by this
+ * prefix as its own (round_renews, end_releases); a claim lands again only for
+ * the very holder (claim_lands_for), which the store's string equality is.
+ */
+export function queenActorHolderPrefix(): string {
+  return `${queenHolderName()}/${BOOT}`
 }
 
 export function logLeaseOutcome(grant: LeaseGrant, self: string): void {
