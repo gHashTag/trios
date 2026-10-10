@@ -79,8 +79,10 @@ import {
 } from './queen-jobs-rules'
 import {
   defaultNetworkIo,
+  NETWORK_JOB_CARD,
   type NetworkIo,
   networkExecutors,
+  networkJobsOn,
   stepEvent,
 } from './queen-network-job'
 import {
@@ -242,6 +244,13 @@ export async function startJob(
   /** The issue that asked for the job, kept in its params (one job per issue). */
   fromIssue?: number,
 ): Promise<StartResult> {
+  // both start paths (POST /queen/jobs and startJobsFromIssues) come here
+  if (cardName === NETWORK_JOB_CARD && !networkJobsOn())
+    return {
+      ok: false,
+      status: 409,
+      error: `the ${NETWORK_JOB_CARD} card is off in this deployment (TRIOS_QUEEN_NETWORK_JOBS is not on)`,
+    }
   let card: JobCard
   try {
     card = await loadJobCard(cardName)

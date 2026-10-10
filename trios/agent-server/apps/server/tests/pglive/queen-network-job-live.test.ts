@@ -205,8 +205,10 @@ describe('a network job the Queen runs, with no session open', () => {
   let scratch: { url: string; drop: () => Promise<void> } | null = null
   let pool: Pool | null = null
   const previousUrl = process.env.DATABASE_URL
+  const previousFlag = process.env.TRIOS_QUEEN_NETWORK_JOBS
 
   beforeEach(async () => {
+    process.env.TRIOS_QUEEN_NETWORK_JOBS = 'on'
     scratch = await scratchDatabase()
     if (!scratch) return
     process.env.DATABASE_URL = scratch.url
@@ -221,6 +223,8 @@ describe('a network job the Queen runs, with no session open', () => {
     scratch = null
     if (previousUrl === undefined) delete process.env.DATABASE_URL
     else process.env.DATABASE_URL = previousUrl
+    if (previousFlag === undefined) delete process.env.TRIOS_QUEEN_NETWORK_JOBS
+    else process.env.TRIOS_QUEEN_NETWORK_JOBS = previousFlag
   })
 
   it('challenges the lab once, journaled, and waits for a receipt that answers it', async () => {
