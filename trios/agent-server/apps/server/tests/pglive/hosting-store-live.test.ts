@@ -57,6 +57,7 @@ import {
   normalizeShard,
 } from '../../src/api/services/hosting-wire'
 import {
+  ISO_JOBDIR,
   NODE_TTL_SECONDS,
   TIER_OWNER,
   TIER_PUBLIC,
@@ -250,6 +251,7 @@ async function twoQueens(url: string, econ: Partial<HostingEconomics>) {
       tierClaim: tier,
       slots: 2,
       platform: 'darwin-arm64',
+      isolation: ISO_JOBDIR,
       runShard: honest,
       clock,
     })
@@ -520,6 +522,7 @@ describe.skipIf(!adminUrl)('the hosting store on a live PostgreSQL', () => {
         tierClaim: TIER_PUBLIC,
         slots: 1,
         platform: 'darwin-arm64',
+        isolation: ISO_JOBDIR,
         runShard: wrong,
         clock: w.clock,
       })

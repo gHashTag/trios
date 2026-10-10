@@ -52,6 +52,7 @@ import {
   verifyHex,
 } from '../../src/api/services/hosting-wire'
 import {
+  ISO_JOBDIR,
   TIER_OWNER,
   TIER_PUBLIC,
   TIER_TRUSTED,
@@ -309,6 +310,9 @@ async function world(
       tierClaim,
       slots: 4,
       platform: 'darwin-arm64',
+      // lane A (trios#1762): a shard is a public job and needs a measured
+      // job-dir-only sandbox; these hosts have one
+      isolation: ISO_JOBDIR,
       runShard,
       clock,
     })
@@ -388,11 +392,12 @@ describe('the anchored quorum (sybil.t27), against two colluding public keys', (
     // the tiebreak is an anchor's too
     expect(await a.s2.leaseOnce()).toBeNull()
     const t = await a.trusted.leaseOnce()
-    expect(await a.trusted.work(t as NonNullable<typeof t>)).toMatchObject({
-      job: { verdict: 'agreed' },
-    })
-    const [verdict] = (await w.get('/hosting/verdicts')).json
-    expect(verdict).toMatchObject({ reference: 'fail' })
+    const done = await a.trusted.work(t as NonNullable<typeof t>)
+    expect(done).toMatchObject({ job: { verdict: 'agreed' } })
+    // the agreed half; a lab row needs its t27b half too (lane A, hosting-row.test.ts)
+    expect(
+      (await w.get(`/hosting/jobs/${done.job?.id}`)).json.result,
+    ).toMatchObject({ word: 'fail' })
     const ledger = (await w.get('/hosting/ledger')).json
     expect(row(ledger, a.s1)).toMatchObject({
       balance_mtri: 0,
@@ -414,11 +419,11 @@ describe('the anchored quorum (sybil.t27), against two colluding public keys', (
     expect(l1?.job.commit).toBe(commitOf(1))
     expect(l2?.job.commit).toBe(commitOf(1))
     await a.s1.work(l1 as NonNullable<typeof l1>)
-    expect(await a.s2.work(l2 as NonNullable<typeof l2>)).toMatchObject({
-      job: { verdict: 'agreed' },
-    })
-    const [verdict] = (await w.get('/hosting/verdicts')).json
-    expect(verdict).toMatchObject({ reference: 'pass' })
+    const done = await a.s2.work(l2 as NonNullable<typeof l2>)
+    expect(done).toMatchObject({ job: { verdict: 'agreed' } })
+    expect(
+      (await w.get(`/hosting/jobs/${done.job?.id}`)).json.result,
+    ).toMatchObject({ word: 'pass' })
     const ledger = (await w.get('/hosting/ledger')).json
     expect(row(ledger, a.s1)).toMatchObject({ balance_mtri: 1, strikes: 0 })
     expect(row(ledger, a.s2)).toMatchObject({ balance_mtri: 1, strikes: 0 })

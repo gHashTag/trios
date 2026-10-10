@@ -32,6 +32,20 @@ export const TA_USE_LOCAL = 1 satisfies number;
 export const TA_REFUSE = 2 satisfies number;
 // t27c gen-ts: fn toolchain_action was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn download_kept was not emitted -- this backend lowers declarations, not bodies.
+export const ISO_NONE = 0 satisfies number;
+export const ISO_NO_NETWORK = 1 satisfies number;
+export const ISO_JOBDIR = 2 satisfies number;
+export const ISO_VM = 3 satisfies number;
+export const ISO_LEVELS = 4 satisfies number;
+// t27c gen-ts: fn isolation_required was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn isolation_meets was not emitted -- this backend lowers declarations, not bodies.
+export const SANDBOX_NONE = 0 satisfies number;
+export const SANDBOX_EXEC = 1 satisfies number;
+export const SANDBOX_BWRAP = 2 satisfies number;
+export const SANDBOX_UNSHARE = 3 satisfies number;
+export const SANDBOXES = 4 satisfies number;
+// t27c gen-ts: fn sandbox_choice was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn isolation_of was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -41,6 +55,10 @@ export const TA_REFUSE = 2 satisfies number;
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -56,7 +74,7 @@ export const SELF_FENCE_SECONDS = 15 satisfies number;
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [] as const;
-export const __DECL_ORDER__ = ["TIER_OWNER", "TIER_TRUSTED", "TIER_PUBLIC", "TIERS", "ALLOW_NONE", "WC_SHARD", "WC_SERVICE", "WC_STATEFUL", "CLASSES", "SLOTS_MAX_OWNER", "SLOTS_MAX_TRUSTED", "SLOTS_MAX_PUBLIC", "REQUEST_SKEW_SECONDS", "STRIKES_MAX", "TA_DOWNLOAD", "TA_USE_LOCAL", "TA_REFUSE", "MAX_INCARNATION", "NODE_HEARTBEAT_SECONDS", "NODE_TTL_SECONDS", "NO_INCARNATION", "SELF_FENCE_SECONDS"] as const;
+export const __DECL_ORDER__ = ["TIER_OWNER", "TIER_TRUSTED", "TIER_PUBLIC", "TIERS", "ALLOW_NONE", "WC_SHARD", "WC_SERVICE", "WC_STATEFUL", "CLASSES", "SLOTS_MAX_OWNER", "SLOTS_MAX_TRUSTED", "SLOTS_MAX_PUBLIC", "REQUEST_SKEW_SECONDS", "STRIKES_MAX", "TA_DOWNLOAD", "TA_USE_LOCAL", "TA_REFUSE", "ISO_NONE", "ISO_NO_NETWORK", "ISO_JOBDIR", "ISO_VM", "ISO_LEVELS", "SANDBOX_NONE", "SANDBOX_EXEC", "SANDBOX_BWRAP", "SANDBOX_UNSHARE", "SANDBOXES", "MAX_INCARNATION", "NODE_HEARTBEAT_SECONDS", "NODE_TTL_SECONDS", "NO_INCARNATION", "SELF_FENCE_SECONDS"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

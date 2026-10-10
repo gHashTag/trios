@@ -25,6 +25,8 @@ export interface HostRow {
   tierClaim: number
   slots: number
   platform: string
+  /** host.t27 ISO_*: the isolation the host measured and signed into its registration. */
+  isolation: number
   /** A hash of the network prefix the host registered from, never the address. */
   origin: string
   incarnation: number
@@ -42,6 +44,8 @@ export interface JobFile {
 
 export interface JobResult {
   outputHash: string
+  /** The agreed normalized output: what a lab row is assembled from (hosting-wire assembleRow). */
+  output?: string
   word: string
   tests: number
   ops: number
@@ -51,6 +55,8 @@ export interface JobResult {
 export interface JobRow {
   id: string
   kind: 'shard'
+  /** row.t27 HALF_*: which half of the lab's row this job is. */
+  half: number
   commit: string
   spec: string
   inputHash: string
@@ -251,6 +257,7 @@ export const HOSTING_SQL = [
   '  strikes integer NOT NULL DEFAULT 0,',
   '  registered_at bigint NOT NULL',
   ');',
+  'ALTER TABLE hosting_hosts ADD COLUMN IF NOT EXISTS isolation smallint NOT NULL DEFAULT 0;',
   'ALTER TABLE hosting_hosts ADD COLUMN IF NOT EXISTS agreed integer NOT NULL DEFAULT 0;',
   'CREATE TABLE IF NOT EXISTS hosting_jobs (',
   '  id text PRIMARY KEY,',
@@ -306,6 +313,7 @@ type HostSqlRow = {
   tier_claim: number
   slots: number
   platform: string
+  isolation: number | null
   origin: string
   incarnation: string
   beat_at: string
@@ -321,6 +329,7 @@ const hostOf = (r: HostSqlRow): HostRow => ({
   tierClaim: Number(r.tier_claim),
   slots: Number(r.slots),
   platform: r.platform,
+  isolation: Number(r.isolation ?? 0),
   origin: r.origin,
   incarnation: Number(r.incarnation),
   beatAt: Number(r.beat_at),
@@ -346,10 +355,10 @@ function pgTx(c: PoolClient): HostingTx {
       ).rows.map(hostOf),
     putHost: async (h) => {
       await c.query(
-        'INSERT INTO hosting_hosts (id, public_key, tier, tier_claim, slots, platform, origin, incarnation, beat_at, strikes, registered_at, agreed) ' +
-          'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ' +
+        'INSERT INTO hosting_hosts (id, public_key, tier, tier_claim, slots, platform, origin, incarnation, beat_at, strikes, registered_at, isolation, agreed) ' +
+          'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ' +
           'ON CONFLICT (id) DO UPDATE SET public_key = $2, tier = $3, tier_claim = $4, slots = $5, platform = $6, ' +
-          'origin = $7, incarnation = $8, beat_at = $9, strikes = $10, registered_at = $11, agreed = $12',
+          'origin = $7, incarnation = $8, beat_at = $9, strikes = $10, registered_at = $11, isolation = $12, agreed = $13',
         [
           h.id,
           h.publicKey,
@@ -362,6 +371,7 @@ function pgTx(c: PoolClient): HostingTx {
           h.beatAt,
           h.strikes,
           h.registeredAt,
+          h.isolation,
           h.agreed ?? 0,
         ],
       )
