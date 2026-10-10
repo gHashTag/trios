@@ -149,6 +149,13 @@ export const DISPATCH_OUTCOME_LABELS = {
    * prefix, so the issue is released exactly as a silent runner's is.
    */
   reapedLeaseExpired: 'reaped: task lease expired',
+  /**
+   * A draining runner held the bee to its cap and handed it back
+   * (specs/queen/drain.t27 DV_HAND_BACK): what it wrote is salvaged, and the
+   * row ends now instead of when its lease lapses. Keeps the `reaped` prefix,
+   * so the issue is released exactly as a lapsed lease's is.
+   */
+  reapedDrained: 'reaped: drained at deploy',
 } as const
 
 /** One label from the set, as a type. */

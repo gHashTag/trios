@@ -47,7 +47,13 @@ import {
   renewTaskLeases,
 } from './queen-control'
 import { P_REUSE, placement } from './queen-control-rules'
-import { abortBeeHere, runClaimedBee, salvageDispatch } from './queen-dispatch'
+import {
+  abortBeeHere,
+  DISPATCH_OUTCOME_LABELS,
+  finishDispatch,
+  runClaimedBee,
+  salvageDispatch,
+} from './queen-dispatch'
 import { runnerClaimsNow } from './queen-events'
 import { queenLeaseDatabaseUrl } from './queen-lease'
 
@@ -397,6 +403,65 @@ export async function drainBeeRunner(
     })
   }
   return { waited: Math.round((now() - started) / 1000), saved }
+}
+
+/** The runner this process started, for a drain that asks the card (queen-drain-host.ts). */
+export function activeRunner(): {
+  pool: Pool
+  runner: string
+  stop: () => void
+} | null {
+  return active
+}
+
+/** The bees this process still runs. A bee that ended has left the list. */
+export function beesInFlight(): BeeOrder[] {
+  return [...inFlight.values()]
+}
+
+export interface HandBackDeps {
+  salvage?: typeof salvageDispatch
+  store?: typeof storeBundle
+  finish?: typeof finishDispatch
+  abort?: typeof abortBeeHere
+}
+
+/**
+ * HAND A BEE BACK (drain.t27 DV_HAND_BACK): a bee still running when the
+ * drain's cap passes. What it wrote is salvaged into its branch and stored,
+ * as drainBeeRunner always did at its deadline. Then its row is ended now,
+ * with the reaped prefix a lapsed lease gets, so the review leaves it alone
+ * and its issue is free at once (bee_free_after_seconds) instead of after its
+ * task lease runs out. Only then is its stream aborted: an abort first would
+ * let the turn's own close end the row as an attempt to be judged. Returns
+ * whether the row was still this bee's to end.
+ */
+export async function handBackBee(
+  pool: Pool,
+  runner: string,
+  order: BeeOrder,
+  deps: HandBackDeps = {},
+): Promise<boolean> {
+  try {
+    await (deps.salvage ?? salvageDispatch)(pool, order.issue, 'reaped', {
+      conversationId: order.conversationId,
+    })
+    await (deps.store ?? storeBundle)(pool, order.issue, runner)
+  } catch (error) {
+    logger.warn('Runner could not save the branch of a bee it handed back', {
+      issue: order.issue,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  const ended = await (deps.finish ?? finishDispatch)(
+    pool,
+    order.issue,
+    DISPATCH_OUTCOME_LABELS.reapedDrained,
+    undefined,
+    order.conversationId,
+  ).catch(() => 0)
+  ;(deps.abort ?? abortBeeHere)(order.issue, order.conversationId)
+  return ended > 0
 }
 
 /** For the server's shutdown: drain the runner this process started, if any. */
