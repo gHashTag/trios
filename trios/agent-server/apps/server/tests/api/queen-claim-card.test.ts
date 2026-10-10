@@ -25,7 +25,7 @@
  * word the boundary forgets) must disagree with the card somewhere in it.
  */
 
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it, spyOn } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -44,6 +44,7 @@ import {
   stateOfDispatch,
 } from '../../src/api/services/queen-tick'
 import { DEFAULT_SPECS_ROOT } from '../../src/inngest/spec-catalog'
+import { logger } from '../../src/lib/logger'
 
 // --- The reference: the hand-written rule, as it stood -----------------------
 //
@@ -680,11 +681,28 @@ describe('the boundary', () => {
       expect(verdictCode(other)).toBe(card.V_OTHER)
   })
 
-  it('names every claim the card can answer and refuses any other', () => {
+  it('names every claim the card can answer', () => {
+    const words = new Set<string>()
     for (let code = 0; code < card.CLAIM_STATES; code++)
-      expect(typeof claimWord(code)).toBe('string')
-    expect(() => claimWord(card.CLAIM_STATES)).toThrow('is no claim')
-    expect(() => claimWord(-1)).toThrow('is no claim')
+      words.add(claimWord(code))
+    expect(words.size).toBe(card.CLAIM_STATES)
+  })
+
+  it('holds a code that is no claim, and says so once per code', () => {
+    const error = spyOn(logger, 'error').mockImplementation(() => {})
+    try {
+      expect(claimWord(card.CLAIM_STATES)).toBe('awaitingReview')
+      expect(claimWord(card.CLAIM_STATES)).toBe('awaitingReview')
+      expect(claimWord(255)).toBe('awaitingReview')
+      expect(error).toHaveBeenCalledTimes(2)
+      expect(error.mock.calls[0][1]).toEqual({
+        card: CLAIM_CARD,
+        code: card.CLAIM_STATES,
+        held: 'awaitingReview',
+      })
+    } finally {
+      error.mockRestore()
+    }
   })
 
   it('reads the clock in whole minutes, an unreadable one as 0', () => {

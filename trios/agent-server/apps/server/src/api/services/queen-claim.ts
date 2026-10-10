@@ -18,6 +18,7 @@
  * is proven to answer it word for word over every input the round can pass.
  */
 
+import { logger } from '../../lib/logger'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
 import {
   CL_ACCEPTED,
@@ -98,12 +99,30 @@ const CLAIMS: ReadonlyMap<number, DispatchClaim> = new Map([
   [CL_CANCELLED, 'cancelled'],
 ])
 
-/** The word for a claim code. A code the card does not define is a broken card, said loudly. */
+/** Codes already reported, so a drifted card logs once, not once per row per round. */
+const reported = new Set<number>()
+
+/**
+ * The word for a claim code. claim.t27 answers only CL_ codes, so any other
+ * code means the vendored card drifted from its constants. That is logged as
+ * an error and the row is held as awaitingReview, the claim the card gives a
+ * verdict it does not know: the issue and its files stay held, so nothing is
+ * dispatched twice, and one row cannot fail every round and the board (the
+ * round maps every in-flight row through this, with no try per row). A card
+ * that cannot load still throws, from loadCardWasm.
+ */
 export function claimWord(code: number): DispatchClaim {
   const word = CLAIMS.get(code)
-  if (word === undefined)
-    throw new Error(`${CLAIM_CARD} answered ${code}, which is no claim`)
-  return word
+  if (word !== undefined) return word
+  if (!reported.has(code)) {
+    reported.add(code)
+    logger.error('The claim card answered a code that is no claim', {
+      card: CLAIM_CARD,
+      code,
+      held: 'awaitingReview',
+    })
+  }
+  return 'awaitingReview'
 }
 
 /**
