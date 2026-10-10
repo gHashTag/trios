@@ -59,6 +59,7 @@ import {
 import { createQueenLeaseRoute } from './routes/queen-lease'
 import { createQueenNeedsYouRoute } from './routes/queen-needs-you'
 import { createQueenPublicActivityRoute } from './routes/queen-public-activity'
+import { createQueenPublicActorsRoute } from './routes/queen-public-actors'
 import { createQueenPublicAgentsRoute } from './routes/queen-public-agents'
 import { createQueenPublicAppRoute } from './routes/queen-public-app'
 import { createQueenPublicCreditsRoute } from './routes/queen-public-credits'
@@ -286,6 +287,15 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenNeedsYouRoute())
 
+  // What the actor runtime counted, and the card decisions it logged
+  // (specs/queen/telemetry.t27): pids, kinds, card names and arguments -
+  // operator information like needs-you, so it sits behind the same
+  // trusted-origin guard in its own sub-app. It was first mounted bare, and
+  // the route-guard audit caught it (trios#1730).
+  const queenActorsRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenActorsRoute())
+
   // Outside watchers write into her report here (a relay probe in the bot's
   // repository is the first). It WRITES, so it is guarded inside its own
   // sub-app exactly like needs-you above - never a bare factory mount.
@@ -429,6 +439,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/queen/public-shaping', publicReadCorsMiddleware())
     .use('/queen/public-tasks', publicReadCorsMiddleware())
     .use('/queen/public-events', publicReadCorsMiddleware())
+    .use('/queen/public-actors', publicReadCorsMiddleware())
     .use('/queen/public-task', publicReadCorsMiddleware())
     .use('/queen/public-earnings', publicReadCorsMiddleware())
     .use('/queen/scheduler', publicReadCorsMiddleware())
@@ -470,6 +481,10 @@ export async function createHttpServer(config: HttpServerConfig) {
     // specs/queen/tasks.t27. No provider, key, path or person's runner.
     .route('/queen/public-tasks', createQueenPublicTasksRoute())
     .route('/queen/public-events', createQueenPublicEventsRoute())
+    // The actors' stream of the same log (specs/queen/actor_events.t27):
+    // pids, kinds, counts, mailbox depths, times and task references, never a
+    // message or a card's arguments. Empty with TRIOS_QUEEN_ACTOR_EVENTS off.
+    .route('/queen/public-actors', createQueenPublicActorsRoute())
     .route('/queen/public-task', createQueenPublicTaskRoute())
     // GitHub delivers the app's webhooks here, from its own server: there is
     // no Origin to trust. The guard is the HMAC of the body under
@@ -501,9 +516,9 @@ export async function createHttpServer(config: HttpServerConfig) {
     // than being served to any origin. The five escalations it exists to
     // surface are for the operator, not for a public page.
     .route('/queen/needs-you', queenNeedsYouRoutes)
-    // What the actor runtime counted (specs/queen/telemetry.t27): numbers,
-    // kinds and card names, operator information like needs-you above.
-    .route('/queen/actors', createQueenActorsRoute())
+    // What the actor runtime counted (specs/queen/telemetry.t27): guarded in
+    // its own sub-app, like needs-you above.
+    .route('/queen/actors', queenActorsRoutes)
     .route('/queen/report', queenReportRoutes)
     .route('/queen/board', queenBoardRoutes)
     .route('/queen/roadmap', createQueenRoadmapRoute())

@@ -33,8 +33,10 @@ import {
   GIVE_UP_REASON,
   RESTART_PERMANENT,
   START_MAX_CHILDREN,
+  STRAT_ONE_FOR_ONE,
   SUP_GIVE_UP,
   SUP_RESTART,
+  X_SHUTDOWN,
 } from './queen-actors-card.gen'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
 
@@ -71,8 +73,22 @@ export function dynamicSupervisor(
   return {
     name: opts.name,
     restart: RESTART_PERMANENT,
-    start: (onExit) => {
+    start: (onExit, slot) => {
       const clock = sys.clock
+      // with events on, its own pid, the parent its children name
+      const ev = sys.events
+      const self = ev !== undefined ? sys.reservePid(slot) : undefined
+      if (ev !== undefined && self !== undefined)
+        ev.spawned(self, opts.name, {
+          strategy: STRAT_ONE_FOR_ONE,
+          maxRestarts: opts.maxRestarts,
+          periodSeconds: opts.periodSeconds,
+        })
+      // the supervisor's own end, on the feed: a give-up or a stop
+      const ended = (reason: number) => {
+        if (ev !== undefined && self !== undefined)
+          ev.exited(self, reason, undefined, false)
+      }
       interface Kid {
         child: Child
         running?: { pid?: Pid; stop: () => void }
@@ -102,9 +118,14 @@ export function dynamicSupervisor(
           ).length,
       )
 
-      const run = (id: number, k: Kid) => {
+      // `restartCount` > 0: a start the restart decision asked for
+      const run = (id: number, k: Kid, restartCount = 0) => {
         k.startedAt = clock.now()
-        k.running = k.child.start((reason) => exited(id, reason), k.slot)
+        const go = () => k.child.start((reason) => exited(id, reason), k.slot)
+        k.running =
+          ev !== undefined && self !== undefined
+            ? ev.under(self, restartCount, restartCount > 0, go)
+            : go()
         if (k.running.pid !== undefined) k.slot = slotOf(k.running.pid)
       }
       const stopAll = () => {
@@ -146,6 +167,7 @@ export function dynamicSupervisor(
           if (sup) tel?.gaveUp(sup)
           down = true
           stopAll()
+          ended(GIVE_UP_REASON)
           onExit(GIVE_UP_REASON)
           return
         }
@@ -166,7 +188,8 @@ export function dynamicSupervisor(
         )
         const cancel = clock.after(wait * 1000, () => {
           pending.delete(cancel)
-          if (!down && kids.get(id) === k) run(id, k)
+          if (!down && kids.get(id) === k)
+            run(id, k, Math.max(1, restarts.length))
         })
         pending.add(cancel)
       }
@@ -199,9 +222,11 @@ export function dynamicSupervisor(
         live: () => count,
       })
       return {
+        pid: self,
         stop: () => {
           down = true
           stopAll()
+          ended(X_SHUTDOWN)
         },
       }
     },

@@ -350,32 +350,20 @@ export async function reclaimableTaskLeases(
 }
 
 /**
- * Append one event to the log. `name` must be one of the card's EVENT_NAMES -
- * kinds are indices into that array, so a name this card does not know is a
- * caller the card has not agreed to, and it is refused before any SQL runs.
- *
- * What is written is events.t27's log_due: every kind but the heartbeat, and
- * task.evidence once a minute per issue. The number comes from the stream's
- * counter row (events.t27 section 1), so it is gapless and in commit order.
- * GREATEST with the log's own maximum covers a writer from before the bus
- * still draining during a deploy; a key collision with one is retried.
- * Returns the number, or 0 when the card says the event is not written.
+ * Write one row on a stream of the log and return its number. The number
+ * comes from the stream's counter row (events.t27 section 1), so it is
+ * gapless and in commit order. GREATEST with the log's own maximum covers a
+ * writer from before the bus still draining during a deploy; a key collision
+ * with one is retried. The one writer of every stream: publishEvent for the
+ * Queen's kinds, queen-actor-events.ts for the actors' (events.t27 section 6).
  */
-export async function publishEvent(
+export async function appendEvent(
   pool: Pool,
-  name: string,
+  stream: string,
+  kind: number,
   payload: Record<string, unknown>,
-  stream = 'queen',
 ): Promise<number> {
-  const spec = await loadControlSpec()
-  const kind = spec.eventNames.indexOf(name)
-  if (kind < 0)
-    throw new Error(
-      `queen event ${JSON.stringify(name)} is not in EVENT_NAMES of the control card`,
-    )
-  if (!logDueNow(kind, payload)) return 0
   const origin = queenHolderName()
-  let seq = 0
   for (let attempt = 1; ; attempt++) {
     try {
       const result = await pool.query(
@@ -394,13 +382,37 @@ export async function publishEvent(
          RETURNING seq`,
         [stream, kind, JSON.stringify(payload), origin],
       )
-      seq = Number(result.rows[0]?.seq ?? 0)
-      break
+      return Number(result.rows[0]?.seq ?? 0)
     } catch (error) {
       const code = (error as { code?: string }).code
       if (code !== '23505' || attempt >= 3) throw error
     }
   }
+}
+
+/**
+ * Append one event to the log. `name` must be one of the card's EVENT_NAMES -
+ * kinds are indices into that array, so a name this card does not know is a
+ * caller the card has not agreed to, and it is refused before any SQL runs.
+ *
+ * What is written is events.t27's log_due: every kind but the heartbeat, and
+ * task.evidence once a minute per issue, through appendEvent. Returns the
+ * number, or 0 when the card says the event is not written.
+ */
+export async function publishEvent(
+  pool: Pool,
+  name: string,
+  payload: Record<string, unknown>,
+  stream = 'queen',
+): Promise<number> {
+  const spec = await loadControlSpec()
+  const kind = spec.eventNames.indexOf(name)
+  if (kind < 0)
+    throw new Error(
+      `queen event ${JSON.stringify(name)} is not in EVENT_NAMES of the control card`,
+    )
+  if (!logDueNow(kind, payload)) return 0
+  const seq = await appendEvent(pool, stream, kind, payload)
   logger.info('Queen control event', { stream, name, kind, seq })
   // After the row exists, never before: a reaction that ran ahead of the log
   // would be a reaction to an event nobody can replay. With a follower in

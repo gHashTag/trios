@@ -58,8 +58,19 @@
  * TELEMETRY (specs/queen/telemetry.t27), with `options.telemetry` only: every
  * hook below is guarded by `tel !== undefined`, reads the clock it is given,
  * and never schedules. queen-actors-telemetry.ts says what is counted.
+ *
+ * EVENTS ON THE BUS (specs/queen/actor_events.t27, trios#1744), with
+ * `options.events` only: every spawn, exit, DOWN and restart, and every
+ * deliver, is handed to queen-actor-events.ts, which decides through its card
+ * what is written. Every hook is guarded by `ev !== undefined`, and a hook
+ * neither sends nor starts a turn, so the runtime takes the same turns either
+ * way. With events on, a supervisor takes a pid of its own (`reservePid`), as
+ * an OTP supervisor is a process, so the feed can name every parent. A fence
+ * stops every actor quietly and writes nothing: the store it would write to
+ * is the one that just refused this node.
  */
 
+import type { ActorEvents, TaskRef } from './queen-actor-events'
 import {
   D_DROPPED_DEAD,
   D_DROPPED_FULL,
@@ -116,6 +127,9 @@ const c = (name: string, ...a: number[]) => card().call(name, ...a)
 export type Pid = bigint
 export const slotOf = (pid: Pid): bigint => c64('slot_of', pid)
 export const nodeOf = (pid: Pid): number => Number(c64('node_of', pid))
+/** The pid of a slot and a generation (pid_of). */
+export const pidOf = (slot: number | bigint, gen: number | bigint): Pid =>
+  c64('pid_of', BigInt(slot), BigInt(gen))
 /** The incarnation a pid was born in (netlink.t27 inc_of); 0 with no store. */
 export const incOf = (pid: Pid): number =>
   Number(big(netlink().call64('inc_of', pid)))
@@ -308,6 +322,10 @@ interface Proc {
   bound: number
   waitMs: number
   longAt: number
+  // events': the task of the data turn it is in, and whether a turn is in
+  // progress (still true when that turn's crash ends the pid)
+  evTask?: TaskRef
+  evInTurn?: boolean
 }
 
 /**
@@ -378,6 +396,8 @@ export interface ActorSystemOptions {
    * reads it.
    */
   micros?: () => number
+  /** Transitions on the event bus (actor_events.t27). Off when unset. */
+  events?: ActorEvents
 }
 
 const hostMicros = () => performance.now() * 1000
@@ -431,6 +451,9 @@ export function createActorSystem(
   const tel: ActorTelemetry | undefined = options.telemetry
     ? createActorTelemetry(clock, options.telemetry)
     : undefined
+  const ev: ActorEvents | undefined = options.events
+  // the sender of mail that came from another node, while it is delivered
+  let arriving: Pid | undefined
   tel?.watch({
     procs: () => live.values(),
     slot: (pid) => Number(slotOf(pid)),
@@ -590,8 +613,23 @@ export function createActorSystem(
       p.inTurn = turnRunner(p.abort.signal)
     }
     live.set(s, p)
+    // before init: what init sends comes after the pid exists
+    if (ev !== undefined) ev.spawned(pid, spec.kind ?? spec.name)
     spec.init?.(pid)
     return pid
+  }
+
+  /**
+   * A pid that no process holds: a supervisor's own, with events on, so the
+   * feed can name it as a parent. Given its last slot, it keeps it and takes
+   * the next generation, as a restarted child does.
+   */
+  function reservePid(slot?: bigint): Pid {
+    const s =
+      slot ?? slotOf(c64('node_pid', BigInt(node), BigInt(nextLocal++), 0n))
+    const gen = nextGen(gens.get(s) ?? 0n)
+    gens.set(s, gen)
+    return c64('pid_of', s, gen)
   }
 
   /**
@@ -604,6 +642,7 @@ export function createActorSystem(
     if (from !== undefined && !procOf(from)) {
       stats.deadLetters++
       tel?.dropped(undefined, false)
+      if (ev !== undefined) ev.delivered(from, pid, D_DROPPED_DEAD, 0, msg)
       return D_DROPPED_DEAD
     }
     if (remote(pid)) {
@@ -624,6 +663,8 @@ export function createActorSystem(
     if (d !== D_QUEUED || !p) {
       stats.deadLetters++
       tel?.dropped(p?.k, d === D_DROPPED_FULL)
+      if (ev !== undefined)
+        ev.delivered(from ?? arriving, pid, d, p?.box.length ?? 0, msg)
       return d
     }
     if (tel !== undefined) {
@@ -631,6 +672,8 @@ export function createActorSystem(
       p.box.push(tel.sample(k) ? new Stamped(msg, clock.now()) : msg)
       tel.queued(p)
     } else p.box.push(msg)
+    if (ev !== undefined)
+      ev.delivered(from ?? arriving, pid, d, p.box.length, msg)
     stats.delivered++
     schedule(p)
     return d
@@ -645,6 +688,16 @@ export function createActorSystem(
     p.lane = c64('ctl_post', p.lane, BigInt(tag))
     schedule(p)
     return d
+  }
+
+  /**
+   * Send a DOWN. With events on it is written first as its own event, naming
+   * the task its pid's turn ended (actor_events.t27 exit_task); the deliver
+   * of the DOWN itself is not counted again.
+   */
+  const sendDown = (watcher: Pid, down: Down, task?: TaskRef): number => {
+    if (ev !== undefined) ev.down(down.pid, watcher, down.reason, task)
+    return send(watcher, down)
   }
 
   /**
@@ -671,7 +724,7 @@ export function createActorSystem(
     if (remote(target)) {
       const on = nodeOf(target)
       if (!link || isFenced() || !link.up(on)) {
-        send(watcher, {
+        sendDown(watcher, {
           kind: 'DOWN',
           pid: target,
           reason: c('remote_down', 0, 0, X_NOPROC),
@@ -685,7 +738,7 @@ export function createActorSystem(
       return 0
     }
     if (!procOf(target)) {
-      send(watcher, { kind: 'DOWN', pid: target, reason: X_NOPROC } as Down)
+      sendDown(watcher, { kind: 'DOWN', pid: target, reason: X_NOPROC } as Down)
       return 0
     }
     return watch(target, watcher)
@@ -720,9 +773,15 @@ export function createActorSystem(
     if (turnStop && p.turn && !p.turn.ended) stopTurn(p, p.turn, reason)
     stats.deadLetters += p.box.length
     tel?.exited(p)
+    // the task of the turn this exit cut, when the card says it names one
+    const task =
+      ev !== undefined
+        ? ev.exited(p.pid, reason, p.evTask, p.evInTurn === true)
+        : undefined
     const downs = watchers.get(p.pid) ?? []
     watchers.delete(p.pid)
-    for (const w of downs) send(w.watcher, downOf(p.pid, reason, w.ref))
+    for (const w of downs)
+      sendDown(w.watcher, downOf(p.pid, reason, w.ref), task)
     for (const told of exitListeners) told(p.pid, reason)
     if (!quiet) p.onExit(reason)
   }
@@ -815,6 +874,10 @@ export function createActorSystem(
       stampedAt = msg.at
       msg = msg.msg
     }
+    if (ev !== undefined) {
+      p.evTask = ev.taskOf(msg)
+      p.evInTurn = true
+    }
     const bound = p.spec.turnMaxSeconds ?? 0
     const t: Turn = { ended: false, held: false }
     const signal = p.abort?.signal ?? NEVER_ABORTED
@@ -869,6 +932,7 @@ export function createActorSystem(
         turnEnded(p, t)
         if (!current(p)) return
         tel?.turnEnd(p, END_OK, clock.now())
+        if (ev !== undefined) p.evInTurn = false
         p.cancelKill?.()
         p.turn = undefined
         p.busy = false
@@ -888,10 +952,16 @@ export function createActorSystem(
   // what arrives from other nodes
   link?.onMail((mail) => {
     if (mail.kind === 'send') {
-      send(mail.to, mail.msg)
+      // the receiving node writes the deliver, naming the remote sender
+      arriving = mail.from
+      try {
+        send(mail.to, mail.msg)
+      } finally {
+        arriving = undefined
+      }
     } else if (mail.kind === 'monitor') {
       if (!procOf(mail.target))
-        send(mail.watcher, {
+        sendDown(mail.watcher, {
           kind: 'DOWN',
           pid: mail.target,
           reason: X_NOPROC,
@@ -923,7 +993,7 @@ export function createActorSystem(
         kept.push(w)
         continue
       }
-      send(w.watcher, {
+      sendDown(w.watcher, {
         kind: 'DOWN',
         pid: w.target,
         reason: c('remote_down', 0, 0, X_NOPROC),
@@ -999,6 +1069,9 @@ export function createActorSystem(
     turnStop,
     /** Set with options.telemetry; GET /queen/actors/metrics reads it. */
     telemetry: tel,
+    /** Set with options.events; supervisors report through it. */
+    events: ev,
+    reservePid,
   }
 }
 
@@ -1054,8 +1127,22 @@ export function supervisor(
   return {
     name: opts.name,
     restart: RESTART_PERMANENT,
-    start: (onExit) => {
+    start: (onExit, slot) => {
       const clock = sys.clock
+      // with events on, the supervisor's own pid: the parent its children name
+      const ev = sys.events
+      const self = ev !== undefined ? sys.reservePid(slot) : undefined
+      if (ev !== undefined && self !== undefined)
+        ev.spawned(self, opts.name, {
+          strategy: opts.strategy,
+          maxRestarts: opts.maxRestarts,
+          periodSeconds: opts.periodSeconds,
+        })
+      // the supervisor's own end, on the feed: a give-up or a stop
+      const ended = (reason: number) => {
+        if (ev !== undefined && self !== undefined)
+          ev.exited(self, reason, undefined, false)
+      }
       const running: Array<{ pid?: Pid; stop: () => void } | undefined> = []
       const slots: Array<bigint | undefined> = []
       const startedAt: number[] = []
@@ -1074,9 +1161,15 @@ export function supervisor(
       const tel = sys.telemetry
       const sup = tel?.supervisor(opts.name, opts.maxRestarts, inPeriod)
 
-      const start = (i: number) => {
+      // `restarts` > 0: a start the restart decision asked for
+      const start = (i: number, restartCount = 0) => {
         startedAt[i] = clock.now()
-        const h = children[i].start((reason) => exited(i, reason), slots[i])
+        const go = () =>
+          children[i].start((reason) => exited(i, reason), slots[i])
+        const h =
+          ev !== undefined && self !== undefined
+            ? ev.under(self, restartCount, restartCount > 0, go)
+            : go()
         running[i] = h
         if (h.pid !== undefined) slots[i] = slotOf(h.pid)
       }
@@ -1120,6 +1213,7 @@ export function supervisor(
           if (sup) tel?.gaveUp(sup)
           down = true
           stopAll()
+          ended(GIVE_UP_REASON)
           onExit(GIVE_UP_REASON)
           return
         }
@@ -1144,6 +1238,8 @@ export function supervisor(
         const cancel = clock.after(wait * 1000, () => {
           pending.delete(cancel)
           if (down) return
+          // the restarts this supervisor has used in its period, with this one
+          const used = restarts.length
           for (let j = 0; j < children.length; j++)
             if (
               c(
@@ -1156,16 +1252,18 @@ export function supervisor(
               ) !== 0 &&
               !running[j]
             )
-              start(j)
+              start(j, Math.max(1, used))
         })
         pending.add(cancel)
       }
 
       for (let i = 0; i < children.length; i++) start(i)
       return {
+        pid: self,
         stop: () => {
           down = true
           stopAll()
+          ended(X_SHUTDOWN)
         },
       }
     },

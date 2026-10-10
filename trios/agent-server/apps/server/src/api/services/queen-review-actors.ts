@@ -81,6 +81,13 @@ import { freemem } from 'node:os'
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
 import {
+  actorEventsOn,
+  actorEventWriter,
+  createActorEvents,
+  setLiveActorEventWriter,
+  type TaskRef,
+} from './queen-actor-events'
+import {
   ACTORS_CARD,
   type ActorSystem,
   actorChild,
@@ -106,8 +113,9 @@ import {
 import { type DynamicChildren, dynamicSupervisor } from './queen-actors-dynamic'
 import { setLiveActorTelemetry } from './queen-actors-telemetry'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
-import { addControlEventReader } from './queen-control'
+import { addControlEventReader, appendEvent } from './queen-control'
 import { EV_TASK_ENDED } from './queen-control.gen'
+import { ACTOR_STREAM } from './queen-events.gen'
 import {
   type LaneGate,
   poolTargetQueued,
@@ -133,6 +141,7 @@ import {
   REVIEWER_CONCURRENCY,
   REVIEWER_EVERY_SECONDS,
 } from './queen-reviewer-card.gen'
+import { TK_ISSUE } from './queen-tasks.gen'
 import { TURN_STOP_CARD, inFlight as turnsInFlight } from './queen-turn-stop'
 
 export const REVIEWER_SIZING_CARD = 'queen/reviewer_sizing.wasm'
@@ -293,6 +302,21 @@ type IntakeMsg =
   | { kind: 'done'; worker: Pid; issue: number }
   | { kind: 'released'; issue: number }
   | Down
+
+/**
+ * The task a reviewer message names, for the actors' feed (actor_events.t27):
+ * a row offered to a worker (`{ issue }`), its `done` and its `released` name
+ * the issue under review. A wake, an "I am up" and a DOWN name none. Glue: it
+ * reads the field; the card decides what a message that names a task does.
+ */
+export const reviewTaskOf =
+  (repo: string) =>
+  (msg: unknown): TaskRef | undefined => {
+    const issue = (msg as { issue?: unknown } | null)?.issue
+    return typeof issue === 'number' && Number.isInteger(issue)
+      ? { kind: TK_ISSUE, repo, number: issue }
+      : undefined
+  }
 
 /** The reviewer domain as one child, for a root supervisor or a test. */
 export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
@@ -627,6 +651,10 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
  * With TRIOS_QUEEN_ACTORS_TELEMETRY=on the system counts (telemetry.t27):
  * GET /queen/actors/metrics and /queen/actors/decisions read it, and a
  * "Queen actors measured" line lands in the log every SUMMARY_EVERY_SECONDS.
+ *
+ * With TRIOS_QUEEN_ACTOR_EVENTS=on every spawn, exit, DOWN and restart, and
+ * the delivers as actor_events.t27 says, go on the event log's actors stream
+ * (events.t27 section 6), which GET /queen/public-actors reads.
  */
 export function startReviewerActors(
   pool: Pool,
@@ -655,7 +683,20 @@ export function startReviewerActors(
           ],
         }
       : undefined
-  const sys = createActorSystem(realClock, { turnStop, telemetry })
+  // actor_events.t27 behind a flag: it writes to the store, and it is new
+  const writer = actorEventsOn()
+    ? actorEventWriter((kind, payload) =>
+        appendEvent(pool, ACTOR_STREAM, kind, payload),
+      )
+    : undefined
+  const events = writer
+    ? createActorEvents(realClock, {
+        sink: writer.sink,
+        taskOf: reviewTaskOf(process.env.TRIOS_GITHUB_REPO || 'gHashTag/t27'),
+      })
+    : undefined
+  setLiveActorEventWriter(writer)
+  const sys = createActorSystem(realClock, { turnStop, telemetry, events })
   setLiveActorTelemetry(sys.telemetry)
   const r = reviewerTree(sys, {
     ...reviewerDeps(pool, leaseName, review, waiting),
@@ -697,11 +738,13 @@ export function startReviewerActors(
     turnStop,
     laneQueue,
     telemetry: !!sys.telemetry,
+    actorEvents: !!events,
   })
   return () => {
     unread()
     root.stop()
     setReviewerRunning(false)
     sys.telemetry?.close()
+    events?.stop()
   }
 }
