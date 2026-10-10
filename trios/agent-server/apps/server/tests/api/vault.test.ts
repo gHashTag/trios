@@ -1277,6 +1277,11 @@ describe('trios-vault, as the owner types it', () => {
       p.exited,
     ])
     SAID.push(out, err)
+    // A command that fails says why on its stderr, which carries names and
+    // reasons only (THE LEAK SCAN reads it too). Printed, a red run names the
+    // refusal instead of only its exit code.
+    if (code !== 0)
+      console.error(`trios-vault ${args[0]} exited ${code}: ${err.trim()}`)
     return { out, err, code }
   }
 
