@@ -94,6 +94,7 @@ import { createSoulRoutes } from './routes/soul'
 import { createStatusRoute } from './routes/status'
 import { createTaskQueueRoutes } from './routes/tasks'
 import { createTerminalRoutes } from './routes/terminal'
+import { createVaultRoute } from './routes/vault'
 import { A2aRegistryService } from './services/a2a/a2a-registry-service'
 import { GlobalAclPolicyService } from './services/acl/global-acl-policy'
 import {
@@ -495,6 +496,10 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/public-earnings', createQueenPublicEarningsRoute())
     // Separate server-to-server capability; never a public-read or operator-token route.
     .route('/queen/contributor-keys', createQueenContributorKeysRoute())
+    // The vault (gHashTag/trios#1759): every request is Ed25519-signed and
+    // judged by specs/vault/policy.t27 request_code; no browser Origin, so no
+    // trusted-origin guard. 404 for everything unless TRIOS_VAULT=on.
+    .route('/vault', createVaultRoute())
     .route('/queen/registry', queenRegistryRoutes)
     // The shell only. It holds no state and no token; every byte of data it
     // shows comes from /queen/lease, which stays guarded. See the route header
