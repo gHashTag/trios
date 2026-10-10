@@ -27,6 +27,7 @@ import { importRunnerBranch } from '../routes/queen-export'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
 import { defaultExec, type Exec, measureCriteria } from './queen-criteria-run'
 import { queenHolderName } from './queen-lease'
+import type { LaneGate } from './queen-review-lanes'
 import type { ReviewDeps } from './queen-reviewer'
 import {
   REVIEW_ROW_SECONDS,
@@ -107,13 +108,15 @@ export interface ReviewerDeps {
   waiting: () => Promise<number[]>
   /**
    * One sweep over one issue; lanes held by siblings are passed in. `signal`
-   * stops it (turn_stop.t27): the actor reviewer passes its turn's.
+   * stops it (turn_stop.t27): the actor reviewer passes its turn's. `lanes`
+   * is its gate into the lane queue (review_lanes.t27), actors only.
    */
   reviewOne: (
     issue: number,
     reservedKeys: () => number[],
     onLane: (keyIndex: number | undefined) => void,
     signal?: AbortSignal,
+    lanes?: LaneGate,
   ) => Promise<Judged>
   now?: () => number
 }
@@ -181,6 +184,8 @@ export type ReviewFn = (
     deadlineMs: number
     /** Stops the sweep at its next await, before it writes anything. */
     signal?: AbortSignal
+    /** With no lane free at the model call, wait here (review_lanes.t27). */
+    lanes?: LaneGate
   },
 ) => Promise<Judged>
 
@@ -204,8 +209,14 @@ export function withWaitBackoff(
         return !w || dueAgain(w.n, at - w.at)
       })
     },
-    reviewOne: async (issue, reservedKeys, onLane, signal) => {
-      const round = await deps.reviewOne(issue, reservedKeys, onLane, signal)
+    reviewOne: async (issue, reservedKeys, onLane, signal, lanes) => {
+      const round = await deps.reviewOne(
+        issue,
+        reservedKeys,
+        onLane,
+        signal,
+        lanes,
+      )
       if (round.acted.includes(`#${issue}:wait`))
         waits.set(issue, { n: (waits.get(issue)?.n ?? 0) + 1, at: now() })
       else waits.delete(issue)
@@ -269,7 +280,7 @@ export function reviewerDeps(
       return (r.rowCount ?? r.rows.length) > 0
     },
     waiting: () => waiting(pool),
-    reviewOne: async (issue, reservedKeys, onLane, signal) => {
+    reviewOne: async (issue, reservedKeys, onLane, signal, lanes) => {
       const t0 = Date.now()
       const round = await review(pool, overrides, {
         issues: [issue],
@@ -277,6 +288,7 @@ export function reviewerDeps(
         onLane: (lane) => onLane(lane.keyIndex),
         deadlineMs: REVIEW_ROW_SECONDS * 1000,
         signal,
+        lanes,
       })
       // one line per row, for the throughput arithmetic of t27#7851
       logger.info('Queen reviewer row', {

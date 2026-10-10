@@ -57,6 +57,23 @@
  *   - hands out review_slots_within(size, busy, queued) rows.
  * Off by default: the fixed REVIEWER_CONCURRENCY stays until the benchmark and
  * production telemetry are accepted (t27#7851).
+ *
+ * A REVIEW WITH NO LANE WAITS FOR ONE (TRIOS_QUEEN_REVIEW_LANES=semaphore,
+ * trios#1729 item 4; gHashTag/t27 specs/queen/review_lanes.t27). The domain
+ * gets one more child, first, so the workers that call it come back when it
+ * does:
+ *
+ *   reviewer domain supervisor: rest_for_one
+ *     review-lanes: owns the queue of reviews waiting for a model lane
+ *     intake
+ *     workers, or the reviewer pool
+ *
+ * Each review gets a gate (queen-review-lanes.ts). At its model call with no
+ * lane free it waits there instead of answering `wait`. With the adaptive
+ * pool, the pool is sized by pool_target_queued: past its lanes by the share
+ * of a review measured on no lane. Works with the fixed workers too, and with
+ * TRIOS_QUEEN_TURN_STOP=on a stopped review leaves the queue or gives back its
+ * lane.
  */
 
 import { readFileSync } from 'node:fs'
@@ -91,6 +108,14 @@ import { setLiveActorTelemetry } from './queen-actors-telemetry'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
 import { addControlEventReader } from './queen-control'
 import { EV_TASK_ENDED } from './queen-control.gen'
+import {
+  type LaneGate,
+  poolTargetQueued,
+  REVIEW_LANES_CARD,
+  type ReviewLanes,
+  reviewLanes,
+  reviewLanesOn,
+} from './queen-review-lanes'
 import {
   type Judged,
   REVIEWER_CARD,
@@ -171,6 +196,8 @@ export interface PoolSize {
   idle: number
   queued: number
   lanes: number
+  /** With the lane queue: the measured share of a review on its lane. */
+  holdPercent?: number
 }
 
 /**
@@ -232,12 +259,16 @@ export type ReviewCapacityFn = (
 export interface ReviewerActorDeps {
   holdsLease: () => Promise<boolean>
   waiting: () => Promise<number[]>
-  /** `signal` is the worker's turn: aborted when the turn is stopped. */
+  /**
+   * `signal` is the worker's turn: aborted when the turn is stopped. `lanes`
+   * is the review's gate into the lane queue, with laneQueue only.
+   */
   reviewOne: (
     issue: number,
     reservedKeys: () => number[],
     onLane: (keyIndex: number | undefined) => void,
     signal?: AbortSignal,
+    lanes?: LaneGate,
   ) => Promise<Judged>
   onJudged?: (round: Judged) => void
   workers?: number
@@ -249,6 +280,11 @@ export interface ReviewerActorDeps {
   capacity?: ReviewCapacityFn
   /** Told when the pool's size or its target changes. */
   onResize?: (size: PoolSize) => void
+  /**
+   * TRIOS_QUEEN_REVIEW_LANES=semaphore: a review with no lane free waits for
+   * one (review_lanes.t27) instead of answering `wait`.
+   */
+  laneQueue?: boolean
 }
 
 type IntakeMsg =
@@ -262,6 +298,10 @@ type IntakeMsg =
 export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
   const clock = sys.clock
   let intake: Pid | undefined
+  // the lane queue's owner and the gates, with laneQueue only
+  const laneQueue: ReviewLanes | undefined = deps.laneQueue
+    ? reviewLanes(sys)
+    : undefined
   // The rows under review right now, each with the key lane it holds. This
   // belongs to the review itself, not to the worker. A killed turn's review
   // keeps running until it ends on its own. Until then its row is not handed
@@ -299,13 +339,18 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
     // adaptive only: the card sizes the pool; returns the size
     const resize = (): number | undefined => {
       if (!deps.capacity || pool === undefined) return undefined
-      const target = poolTarget(
-        lanes,
-        freeMb,
-        mbPerReview,
-        busy.size,
-        queue.length,
-      )
+      const hold = laneQueue?.holdPercent()
+      const target =
+        hold === undefined
+          ? poolTarget(lanes, freeMb, mbPerReview, busy.size, queue.length)
+          : poolTargetQueued(
+              lanes,
+              hold,
+              freeMb,
+              mbPerReview,
+              busy.size,
+              queue.length,
+            )
       let started = 0
       while (started < REVIEWER_CEILING && pool.startChild(target) === START_OK)
         started++
@@ -324,6 +369,7 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
         idle: idle.length,
         queued: queue.length,
         lanes,
+        ...(hold === undefined ? {} : { holdPercent: hold }),
       }
       if (next.target !== size.target || next.live !== size.live)
         deps.onResize?.(next)
@@ -461,6 +507,9 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
           signal: AbortSignal,
         ) => {
           reviewing.set(msg.issue, undefined)
+          // without turnStop the review runs exactly as before: no signal
+          const stop = sys.turnStop ? signal : undefined
+          const gate = laneQueue?.gate(self, stop)
           let round: Judged
           try {
             round = await deps.reviewOne(
@@ -470,10 +519,13 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
                 if (typeof keyIndex === 'number' && reviewing.has(msg.issue))
                   reviewing.set(msg.issue, keyIndex)
               },
-              // without turnStop the review runs exactly as before: no signal
-              sys.turnStop ? signal : undefined,
+              stop,
+              gate,
             )
           } finally {
+            // a review that ended with its lane still marked held gives it
+            // back: the queue must not count a holder that is gone
+            gate?.released()
             reviewing.delete(msg.issue)
             // a stopped review's worker is dead, so its `done` would be
             // dropped: tell the intake its slot is free, from no one
@@ -546,7 +598,7 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
       maxRestarts: DOMAIN_MAX_RESTARTS,
       periodSeconds: DOMAIN_PERIOD_SECONDS,
     },
-    [intakeChild, ...workers],
+    [...(laneQueue ? [laneQueue.child] : []), intakeChild, ...workers],
   )
   return {
     tree,
@@ -556,6 +608,8 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
     },
     /** The adaptive pool as the intake last sized it. */
     size: (): PoolSize => size,
+    /** The lane queue, with laneQueue only. */
+    lanes: laneQueue,
   }
 }
 
@@ -565,6 +619,10 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
  * domain, woken by the bus on every queen/task.ended (EV_TASK_ENDED). With
  * TRIOS_QUEEN_REVIEWER_ADAPTIVE=1 and a `capacity`, the pool follows the
  * backlog (reviewer_sizing.t27).
+ *
+ * With TRIOS_QUEEN_REVIEW_LANES=semaphore a review that finds no lane free at
+ * its model call waits for one (review_lanes.t27), with or without the
+ * adaptive pool and turn stop.
  *
  * With TRIOS_QUEEN_ACTORS_TELEMETRY=on the system counts (telemetry.t27):
  * GET /queen/actors/metrics and /queen/actors/decisions read it, and a
@@ -582,6 +640,8 @@ export function startReviewerActors(
   // turn_stop.t27 behind a flag until its benchmark is accepted (t27#7851)
   const turnStop =
     (process.env.TRIOS_QUEEN_TURN_STOP ?? 'off').toLowerCase() === 'on'
+  // review_lanes.t27 behind a flag until its benchmark is accepted (t27#7851)
+  const laneQueue = reviewLanesOn()
   // telemetry.t27 behind a flag as well: it only reads, but it is new
   const telemetry =
     process.env.TRIOS_QUEEN_ACTORS_TELEMETRY === 'on'
@@ -591,6 +651,7 @@ export function startReviewerActors(
             REVIEWER_CARD,
             REVIEWER_SIZING_CARD,
             TURN_STOP_CARD,
+            ...(laneQueue ? [REVIEW_LANES_CARD] : []),
           ],
         }
       : undefined
@@ -599,6 +660,7 @@ export function startReviewerActors(
   const r = reviewerTree(sys, {
     ...reviewerDeps(pool, leaseName, review, waiting),
     onJudged: recordJudged,
+    laneQueue,
     ...(adaptive
       ? {
           capacity: (reserved: number[]) => capacity(pool, reserved),
@@ -633,6 +695,7 @@ export function startReviewerActors(
     workers: adaptive ? 'adaptive' : REVIEWER_CONCURRENCY,
     turnMaxSeconds: REVIEW_ROW_SECONDS,
     turnStop,
+    laneQueue,
     telemetry: !!sys.telemetry,
   })
   return () => {
