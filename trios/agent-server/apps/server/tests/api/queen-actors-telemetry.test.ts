@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { loadavg, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createQueenActorsRoute } from '../../src/api/routes/queen-actors-metrics'
 import {
@@ -660,7 +660,9 @@ describe('the cost per message, telemetry off and on', () => {
   // load on the host falls on both, and the medians are the result. Wall time
   // is what the bench has always printed; CPU time (process.cpuUsage) is the
   // same run read by the time this process ran, which other processes on a
-  // busy host disturb less.
+  // busy host disturb less. The host's 1-minute load is read at the start of
+  // each round and printed with the table: a ratio from a loaded host is not
+  // a ratio from a quiet one (t27#7851, "Telemetry overhead on a quiet host").
   const ringOnce = async (slices: boolean, telemetry: boolean) => {
     const sys = createActorSystem(undefined, {
       slices,
@@ -709,15 +711,18 @@ describe('the cost per message, telemetry off and on', () => {
     const lines = [
       '',
       `## telemetry cost per message, us (${ROUNDS} rounds, each off then on)`,
-      '| slices | wall off | wall on | cpu off | cpu on | cpu on/off per round: median [p25, p75] | cpu min off / on |',
-      '|---|---|---|---|---|---|---|',
+      '| slices | wall off | wall on | cpu off | cpu on | cpu on/off per round: median [p25, p75] | cpu min off / on | load at round start |',
+      '|---|---|---|---|---|---|---|---|',
     ]
+    const rounds: string[] = []
     for (const slices of [false, true]) {
       await ringOnce(slices, false)
       await ringOnce(slices, true)
       const off: Array<{ wall: number; cpu: number }> = []
       const on: Array<{ wall: number; cpu: number }> = []
+      const loads: number[] = []
       for (let k = 0; k < ROUNDS; k++) {
+        loads.push(loadavg()[0])
         off.push(await ringOnce(slices, false))
         on.push(await ringOnce(slices, true))
       }
@@ -729,9 +734,12 @@ describe('the cost per message, telemetry off and on', () => {
       const minOff = Math.min(...off.map((r) => r.cpu))
       const minOn = Math.min(...on.map((r) => r.cpu))
       lines.push(
-        `| ${slices ? 'on' : 'off'} | ${f(off.map((r) => r.wall))} | ${f(on.map((r) => r.wall))} | ${f(off.map((r) => r.cpu))} | ${f(on.map((r) => r.cpu))} | ${plus(q(0.5))} [${plus(q(0.25))}, ${plus(q(0.75))}] | ${minOff.toFixed(2)} / ${minOn.toFixed(2)} (${plus(minOn / minOff)}) |`,
+        `| ${slices ? 'on' : 'off'} | ${f(off.map((r) => r.wall))} | ${f(on.map((r) => r.wall))} | ${f(off.map((r) => r.cpu))} | ${f(on.map((r) => r.cpu))} | ${plus(q(0.5))} [${plus(q(0.25))}, ${plus(q(0.75))}] | ${minOff.toFixed(2)} / ${minOn.toFixed(2)} (${plus(minOn / minOff)}) | ${Math.min(...loads).toFixed(1)}-${Math.max(...loads).toFixed(1)} |`,
+      )
+      rounds.push(
+        `slices ${slices ? 'on' : 'off'}, per round (load: cpu off / on us): ${loads.map((l, k) => `${l.toFixed(1)}: ${off[k].cpu.toFixed(2)} / ${on[k].cpu.toFixed(2)}`).join('; ')}`,
       )
     }
-    console.log(lines.join('\n'))
+    console.log([...lines, '', ...rounds].join('\n'))
   }, 600_000)
 })
