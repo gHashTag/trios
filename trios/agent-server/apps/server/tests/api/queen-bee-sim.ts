@@ -30,6 +30,12 @@
  * world counts it from the bees themselves, not from either dispatcher's
  * books.
  *
+ * A claim lands again only for the holder keyed_guard.t27 claim_lands_for
+ * names (trios#1729 item 7): a process, and the pid after its last colon. The
+ * options run the same input with two dispatchers under one process name
+ * (with and without the process's boot in the holder), and with the
+ * admission crashing at given times, its lanes kept or forgotten.
+ *
  * Round costs are assumptions, the same for every runtime: a tick every
  * 60 s, 2 s to read the issues, 25 s from the round's start to its dispatch
  * step, 0.5 s per queend call, 1 s per dispatch (claim, row, offer).
@@ -186,6 +192,10 @@ export interface Result {
   gaveUp: number
   standDowns: number
   rounds: number
+  /** The most bees that ran at once, counted from the bees. */
+  maxRunning: number
+  /** Times the admission crashed (Options.admissionCrashesAt). */
+  admissionCrashes: number
 }
 
 type How = 'ok' | 'fail' | 'stopped'
@@ -212,6 +222,31 @@ const keyed = () => loadCardWasm('queen/keyed.wasm')
 const laneFree = (running: number, lanes: number) =>
   keyed().call('lane_free', u32(running), u32(lanes)) !== 0
 
+/**
+ * A holder as keyed_guard.t27 section 1 reads it: a process, and the pid
+ * after its last colon (none: HOLDER_PROCESS, the process itself).
+ */
+const holderParts = (holder: string) => {
+  const at = holder.lastIndexOf(':')
+  return at < 0
+    ? { process: holder, pid: 0n }
+    : { process: holder.slice(0, at), pid: BigInt(holder.slice(at + 1)) }
+}
+/** keyed_guard.t27 claim_lands_for on a live lease. */
+const landsAgain = (held: string, claimer: string) => {
+  const a = holderParts(held)
+  const b = holderParts(claimer)
+  return (
+    loadCardWasm('queen/keyed_guard.wasm').call64(
+      'claim_lands_for',
+      1,
+      a.process === b.process ? 1 : 0,
+      a.pid,
+      b.pid,
+    ) !== 0
+  )
+}
+
 const pct = (xs: number[], p: number) => {
   if (xs.length === 0) return 0
   const s = [...xs].sort((a, b) => a - b)
@@ -224,6 +259,21 @@ export interface Options {
   processHolder?: boolean
   /** Negative control: two dispatcher nodes over one lease table. */
   nodes?: number
+  /**
+   * Every dispatcher is node 0 under one process name, as two replicas of one
+   * deployment are: their pids are drawn alike. With `boots`, each holder
+   * names its process's boot as well (keyed_guard.t27 section 1); without,
+   * the pid alone tells the processes apart, and it does not.
+   */
+  oneName?: boolean
+  boots?: boolean
+  /**
+   * The admission crashes at these times: reading the lane count throws once,
+   * inside its turn. A runtime with no supervisor never answers again.
+   */
+  admissionCrashesAt?: number[]
+  /** Negative control: the crash takes the lane board with it. */
+  forgetful?: boolean
 }
 
 export async function simulate(
@@ -250,11 +300,17 @@ export async function simulate(
   let stops = 0
   let occupiedSum = 0
   let samples = 0
+  let admissionCrashes = 0
+  // bees running at once, counted from the bees: past the lanes is an
+  // admission that forgot what it had let in
+  let runningNow = 0
+  let maxRunning = 0
 
   // ---- the bees, as their runners see them
   const end = (b: Bee, how: How | 'crash') => {
     if (b.endAt !== undefined) return
     b.endAt = now()
+    runningNow--
     lastStop.set(b.issue, now())
     live.get(b.issue)?.delete(b)
     if (how === 'ok' && !completed.has(b.issue)) completed.set(b.issue, now())
@@ -271,6 +327,8 @@ export async function simulate(
     const a = list[k % list.length]
     const set = live.get(issue) ?? new Set<Bee>()
     if (set.size > 0) duplicates++
+    runningNow++
+    maxRunning = Math.max(maxRunning, runningNow)
     const t = now()
     const len = a.seconds * 1000
     const b: Bee = {
@@ -335,7 +393,7 @@ export async function simulate(
   }
   const claim = (issue: number, holder: string): boolean => {
     const l = leases.get(issue)
-    if (l && !expired(issue) && l.holder !== holder) return false
+    if (l && !expired(issue) && !landsAgain(l.holder, holder)) return false
     leases.set(issue, {
       holder,
       fence: (l?.fence ?? 0) + 1,
@@ -414,10 +472,29 @@ export async function simulate(
     const nodes = opt.nodes ?? 1
     const givenUp = new Set<number>()
     let wakeRound = () => {}
-    const dispatchers = Array.from({ length: nodes }, (_, node) => {
-      const sys = createActorSystem(clock, { slices: false, node })
-      return beeDispatcher(sys, {
-        lanes: () => Math.ceil(w.lanes / nodes),
+    const crashes = [...(opt.admissionCrashesAt ?? [])].sort((a, b) => a - b)
+    const dispatchers: Array<ReturnType<typeof beeDispatcher>> = []
+    const holderPrefix = (node: number) =>
+      opt.oneName ? (opt.boots ? `queen/boot${node}` : 'queen') : `node${node}`
+    for (let node = 0; node < nodes; node++) {
+      const sys = createActorSystem(clock, {
+        slices: false,
+        node: opt.oneName ? 0 : node,
+      })
+      const d = beeDispatcher(sys, {
+        lanes: () => {
+          if (crashes.length > 0 && now() >= crashes[0]) {
+            crashes.shift()
+            admissionCrashes++
+            // the negative control: an admission that kept its lanes in its
+            // own memory restarts with none
+            const board = (d as { board?: { lanes: Map<number, number> } })
+              .board
+            if (opt.forgetful) board?.lanes.clear()
+            throw new Error('the lane count could not be read')
+          }
+          return Math.ceil(w.lanes / nodes)
+        },
         // the store remembers what an incarnation forgets: done and given up
         admit: async (issue) => {
           await sleep(QUEEND_MS)
@@ -432,7 +509,7 @@ export async function simulate(
           [...waiting].sort(
             (a, b) => (arrived.get(a) as number) - (arrived.get(b) as number),
           ),
-        holderPrefix: `node${node}`,
+        holderPrefix: holderPrefix(node),
         start: async (issue, holder): Promise<BeeStart> => {
           await sleep(DISPATCH_MS)
           const who = opt.processHolder ? 'queen' : holder
@@ -487,7 +564,8 @@ export async function simulate(
           return { claim: true, work: { ended, cancel: () => stop(bee) } }
         },
       })
-    })
+      dispatchers.push(d)
+    }
     occupied = () => dispatchers.reduce((n, d) => n + d.lanesInUse(), 0)
     gaveUp = () => givenUp.size
     standDowns = () => dispatchers.reduce((n, d) => n + d.stats.standDowns, 0)
@@ -585,5 +663,7 @@ export async function simulate(
     gaveUp: gaveUp(),
     standDowns: standDowns(),
     rounds,
+    maxRunning,
+    admissionCrashes,
   }
 }

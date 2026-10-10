@@ -99,6 +99,7 @@ import {
 import {
   acquireQueenLease,
   logLeaseOutcome,
+  queenActorHolderPrefix,
   queenHolderName,
   queenLeaseDatabaseUrl,
   releaseQueenLease,
@@ -1720,10 +1721,13 @@ export async function runRound(
   try {
     const control = await loadControlSpec()
     await ensureControlTables(pool)
+    // and its keyed actors' leases (keyed_guard.t27 round_renews): their bees
+    // outlive them
     const renewed = await renewRunningLeases(
       pool,
       holder,
       control.taskLeaseTtlSeconds,
+      queenActorHolderPrefix(),
     )
     // R_RECLAIM: a runner that stopped beating for a whole TTL loses its
     // task now, not after the runner reapers' 10 or 15 minutes. Each one is
@@ -2110,6 +2114,7 @@ export async function runRound(
     issue: number,
     paths: string[],
     runnerOnly = false,
+    holder?: string,
   ) => {
     const spec = specVerdicts[String(issue)]
     const criteria = spec?.criteria ?? []
@@ -2137,7 +2142,7 @@ export async function runRound(
       keyCursor,
       criteria,
       criteriaSource,
-      ...(runnerOnly ? [{ runnerOnly: true }] : []),
+      ...(runnerOnly ? [{ runnerOnly: true }] : holder ? [{ holder }] : []),
     )
   }
 
@@ -2172,8 +2177,9 @@ export async function runRound(
               ? 'queued'
               : 'running',
         }),
-      dispatch: async (issue, paths) => {
-        const out = await dispatchChosen(issue, paths)
+      // the issue actor's own holder (keyed_guard.t27 claim_lands_for)
+      dispatch: async (issue, paths, holder) => {
+        const out = await dispatchChosen(issue, paths, false, holder)
         if (typeof out.keyIndex === 'number' && !isRunnerLane(out.keyIndex)) {
           takenKeys = [...takenKeys, out.keyIndex]
           keyCursor = out.keyIndex

@@ -191,18 +191,34 @@ export async function claimTaskLease(
  *
  * Expires rather than deletes, for the same reason queen_lease does: the fence
  * survives, or term 1 comes back and outranks the future.
+ *
+ * With `actors` (queenActorHolderPrefix), a lease any keyed actor of this
+ * process holds goes back too: keyed_guard.t27 end_releases, for the end of a
+ * task's row, which does not record which of the process's actors claimed it.
+ * The statement mirrors the card's same_process: the holder is the process's
+ * name, or the actor prefix and a colon.
  */
 export async function releaseTaskLease(
   pool: Pool,
   issue: number,
   holder: string,
+  actors?: string,
 ): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE queen_task_lease
-        SET expires_at = now() - make_interval(secs => 1)
-      WHERE issue = $1 AND holder = $2`,
-    [issue, holder],
-  )
+  const result =
+    actors === undefined
+      ? await pool.query(
+          `UPDATE queen_task_lease
+              SET expires_at = now() - make_interval(secs => 1)
+            WHERE issue = $1 AND holder = $2`,
+          [issue, holder],
+        )
+      : await pool.query(
+          `UPDATE queen_task_lease
+              SET expires_at = now() - make_interval(secs => 1)
+            WHERE issue = $1
+              AND (holder = $2 OR left(holder, length($3) + 1) = $3 || ':')`,
+          [issue, holder, actors],
+        )
   return (result.rowCount ?? 0) > 0
 }
 
@@ -215,17 +231,25 @@ export async function releaseTaskLease(
  * rounds loses them within the TTL without anyone sweeping. Renewal does not
  * bump the fence - the term continues, so `write_lands(fence, my_fence)` stays
  * true for the holder that never lost it.
+ *
+ * With `actors` (queenActorHolderPrefix), the leases this process's keyed
+ * actors hold are renewed with its own (keyed_guard.t27 round_renews): a bee
+ * outlives the actor that started it, and its lease must not lapse under it.
+ * The holder test mirrors the card's same_process, as in releaseTaskLease.
  */
 export async function renewRunningLeases(
   pool: Pool,
   holder: string,
   ttlSeconds: number,
+  actors?: string,
 ): Promise<number> {
   const result = await pool.query(
     `UPDATE queen_task_lease t
         SET renewed_at = now(),
             expires_at = now() + make_interval(secs => $2)
-       WHERE t.holder = $1
+       WHERE (t.holder = $1
+              OR ($3::text IS NOT NULL
+                  AND left(t.holder, length($3::text) + 1) = $3::text || ':'))
          AND t.expires_at >= now()
          AND EXISTS (
            SELECT 1 FROM queen_dispatch d
@@ -238,7 +262,7 @@ export async function renewRunningLeases(
               AND d.claimed_by IS NULL
               AND d.runner_claimed_at IS NULL
          )`,
-    [holder, ttlSeconds],
+    [holder, ttlSeconds, actors ?? null],
   )
   return result.rowCount ?? 0
 }

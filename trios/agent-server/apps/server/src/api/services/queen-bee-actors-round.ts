@@ -19,11 +19,12 @@
  *   - a cancel is cancelTask (control.t27 section 3), which ends the row and
  *     bumps the fence, so the old bee writes nothing more.
  *
- * WHAT IS NOT YET AS keyed.t27 SAYS. dispatchBee claims for the Queen's
- * holder name, not for the actor's pid (claim_is_mine), because the round
- * renews leases by that holder. One process runs one Queen (her lease) and its
- * directory runs one actor per issue, so this cannot start a second bee for an
- * issue. A second dispatcher process would need the pid holder first.
+ * THE HOLDER IS THE ACTOR (keyed_guard.t27 section 1, trios#1729 item 7).
+ * dispatchBee claims for the issue actor: this process's name and boot, then
+ * its pid. A claim lands again only for that very holder, so a second
+ * incarnation of an issue's actor, or a second dispatcher under one name, no
+ * longer "renews" a claim whose bee still runs. The round renews and releases
+ * the actors' leases with its own (renewRunningLeases, releaseTaskLease).
  */
 
 import type { Pool } from 'pg'
@@ -43,6 +44,7 @@ import {
   HB_NEVER,
 } from './queen-dispatch-exit-card.gen'
 import { LANES_MEASURED } from './queen-keyed-card.gen'
+import { queenActorHolderPrefix } from './queen-lease'
 
 /** TRIOS_QUEEN_DISPATCH=actors: the bee actors start the bees. */
 export function dispatchByActors(
@@ -60,8 +62,12 @@ export interface RoundHandoff {
   board: unknown[]
   /** The board task for a bee started since the round read it. */
   boardTask: (issue: number, paths: string[], out: DispatchOutcome) => unknown
-  /** dispatchBee, as the round calls it. */
-  dispatch: (issue: number, paths: string[]) => Promise<DispatchOutcome>
+  /** dispatchBee, as the round calls it, claiming for `holder`. */
+  dispatch: (
+    issue: number,
+    paths: string[],
+    holder?: string,
+  ) => Promise<DispatchOutcome>
 }
 
 /**
@@ -131,11 +137,12 @@ function start(pool: Pool): Production {
         paths.set(issue, got)
         return true
       },
-      start: async (issue) => {
+      holderPrefix: queenActorHolderPrefix(),
+      start: async (issue, holder) => {
         const round = p.round
         if (!round) return { claim: true, work: null }
         const owned = paths.get(issue) ?? []
-        const out = await round.dispatch(issue, owned)
+        const out = await round.dispatch(issue, owned, holder)
         if (!out.started)
           return {
             claim: !out.detail.startsWith('task lease held'),
