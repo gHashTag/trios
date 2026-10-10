@@ -32,6 +32,14 @@ export interface CardWasm {
 }
 
 const cache = new Map<string, CardWasm>()
+/**
+ * The cards under DEFAULT_SPECS_ROOT, by file name alone. WHY: callers ask
+ * for a card on every call, and the cache key above is the specs root plus
+ * the file: a new string of a hundred characters or more, built and hashed
+ * each time. On the actor ring benchmark that lookup was the largest single
+ * cost of a message (gHashTag/trios#1729 item 8).
+ */
+const byFile = new Map<string, CardWasm>()
 
 /**
  * THE DECISION LOG'S TAP (specs/queen/telemetry.t27 section 9). With a tap
@@ -102,6 +110,10 @@ export function loadCardWasm(
   file: string,
   root: string = DEFAULT_SPECS_ROOT,
 ): CardWasm {
+  if (root === DEFAULT_SPECS_ROOT) {
+    const known = byFile.get(file)
+    if (known !== undefined) return known
+  }
   const key = `${root}:${file}`
   const hit = cache.get(key)
   if (hit) return hit
@@ -177,6 +189,7 @@ export function loadCardWasm(
     },
   }
   cache.set(key, card)
+  if (root === DEFAULT_SPECS_ROOT) byFile.set(file, card)
   return card
 }
 

@@ -86,7 +86,7 @@ import {
   type KindStats,
   type TelemetryOptions,
 } from './queen-actors-telemetry'
-import { flag, loadCardWasm, u32 } from './queen-card-wasm'
+import { type CardWasm, flag, loadCardWasm, u32 } from './queen-card-wasm'
 import { END_CRASH, END_KILL, END_OK } from './queen-telemetry-card.gen'
 import { escalation, turnRunner } from './queen-turn-stop'
 import {
@@ -98,8 +98,15 @@ import {
 export const ACTORS_CARD = 'queen/actors.wasm'
 export const NETLINK_CARD = 'queen/netlink.wasm'
 
-const card = () => loadCardWasm(ACTORS_CARD)
-const netlink = () => loadCardWasm(NETLINK_CARD)
+// ONE LOOKUP PER PROCESS, NOT PER CALL. A message makes about ten card calls,
+// and finding the card each time was the largest single cost of a message on
+// the ring benchmark (gHashTag/trios#1729 item 8; queen-card-wasm.ts byFile).
+// loadCardWasm keeps each card for the life of the process, so this is the
+// same object either way.
+let actorsCard: CardWasm | undefined
+let netlinkCard: CardWasm | undefined
+const card = (): CardWasm => (actorsCard ??= loadCardWasm(ACTORS_CARD))
+const netlink = (): CardWasm => (netlinkCard ??= loadCardWasm(NETLINK_CARD))
 const big = (v: number | bigint) => BigInt.asUintN(64, BigInt(v))
 /** A card function over u64s; its u64 answer comes back unsigned. */
 const c64 = (name: string, ...a: Array<number | bigint>) =>
@@ -271,6 +278,12 @@ interface Turn {
 
 interface Proc {
   pid: Pid
+  /**
+   * slot_of(pid), asked of the card once, at spawn. WHY: whether a process is
+   * still the one in its slot is asked three times a message, and asking the
+   * card each time was a wasm call and two BigInt conversions per ask.
+   */
+  slot: bigint
   spec: ActorSpec<unknown>
   box: unknown[]
   lane: bigint
@@ -356,7 +369,18 @@ export interface ActorSystemOptions {
   turnStop?: boolean
   /** Counts, histograms and the decision log (telemetry.t27). Off when unset. */
   telemetry?: TelemetryOptions
+  /**
+   * The slice's clock in microseconds (slice_spent): performance.now when
+   * unset. WHY A SYSTEM OF ITS OWN: the simulation gate drew the slice's time
+   * by replacing performance.now for the whole process, so any other reader
+   * in it moved the seeded clock, and two runs of one seed yielded 637 and
+   * 634 times (gHashTag/trios#1729 item 8). Handed in, only this system
+   * reads it.
+   */
+  micros?: () => number
 }
+
+const hostMicros = () => performance.now() * 1000
 
 export function createActorSystem(
   clock: Clock = realClock,
@@ -366,6 +390,7 @@ export function createActorSystem(
   const link = options.link
   const slicesOn = options.slices ?? true
   const turnStop = options.turnStop ?? false
+  const micros = options.micros ?? hostMicros
   const inc = link?.incarnation ?? 0
   // a linked node's pids carry its incarnation; a lone one keeps section 1's
   const nextGen = link
@@ -416,7 +441,7 @@ export function createActorSystem(
     const p = live.get(slotOf(pid))
     return p && card().call64('reaches', pid, p.pid) !== 0 ? p : undefined
   }
-  const current = (p: Proc) => live.get(slotOf(p.pid)) === p
+  const current = (p: Proc) => live.get(p.slot) === p
   const remote = (pid: Pid) =>
     card().call64('is_remote', pid, BigInt(node)) !== 0
 
@@ -473,7 +498,7 @@ export function createActorSystem(
     if (!sliceOpen) {
       sliceOpen = true
       sliceTurns = 0
-      sliceT0 = performance.now()
+      sliceT0 = micros()
       // the loop turned: the next turn opens a new slice
       setImmediate(() => {
         sliceOpen = false
@@ -483,11 +508,7 @@ export function createActorSystem(
   }
   const spent = () =>
     sliceOpen &&
-    c(
-      'slice_spent',
-      u32(sliceTurns),
-      u32((performance.now() - sliceT0) * 1000),
-    ) !== 0
+    c('slice_spent', u32(sliceTurns), u32(micros() - sliceT0)) !== 0
   const compact = () => {
     if (head > 0) {
       ready.splice(0, head)
@@ -547,6 +568,7 @@ export function createActorSystem(
       : ISO_LOOP
     const p: Proc = {
       pid,
+      slot: slotOf(pid),
       spec: spec as ActorSpec<unknown>,
       box: [],
       lane: 0n,
@@ -693,7 +715,7 @@ export function createActorSystem(
     }
     const p = procOf(pid)
     if (!p) return
-    live.delete(slotOf(p.pid))
+    live.delete(p.slot)
     p.cancelKill?.()
     if (turnStop && p.turn && !p.turn.ended) stopTurn(p, p.turn, reason)
     stats.deadLetters += p.box.length
