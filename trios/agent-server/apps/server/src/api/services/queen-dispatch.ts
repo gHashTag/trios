@@ -3101,7 +3101,7 @@ export function witnessVerdicts(
 
 export function workspaceRoot(): string {
   // The directory name is DERIVED from the repo URL, exactly as the entrypoint
-  // derives it — `REPO_NAME="$(basename "$TRIOS_REPO_URL" .git)"`. Hardcoding
+  // derives it - `REPO_NAME="$(basename "$TRIOS_REPO_URL" .git)"`. Hardcoding
   // "BrowserOS" here made the two agree only by coincidence of that one URL:
   // point TRIOS_REPO_URL at any other repository and the entrypoint clones to
   // /workspace/<that name> while this function keeps looking in
