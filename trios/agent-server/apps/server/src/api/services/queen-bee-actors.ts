@@ -48,8 +48,10 @@ import {
   type ActorSpec,
   type ActorSystem,
   actorChild,
+  type Clock,
   createActorSystem,
   type Pid,
+  realClock,
   supervisor,
 } from './queen-actors'
 import {
@@ -592,7 +594,14 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
 
 export type BeeDispatcher = ReturnType<typeof beeDispatcher>
 
-/** A dispatcher on its own actor system, for production. */
-export function startBeeDispatcher(deps: BeeDispatchDeps): BeeDispatcher {
-  return beeDispatcher(createActorSystem(), deps)
+/**
+ * A dispatcher on its own actor system, for production. `clock` is the real
+ * one there; a test hands in a virtual one instead of faking the process's
+ * timers, which Bun does not fake alike on every platform.
+ */
+export function startBeeDispatcher(
+  deps: BeeDispatchDeps,
+  clock: Clock = realClock,
+): BeeDispatcher {
+  return beeDispatcher(createActorSystem(clock), deps)
 }

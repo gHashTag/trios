@@ -9,11 +9,19 @@
  * store answers the dispatch rows a bee's end is read from, and the cancel
  * control.t27 writes. The dispatcher is the process's one (a module
  * singleton on the real clock), so these tests run in order and each uses
- * its own issues. The tests that wait out a turn bound or a lease run on
- * fake timers.
+ * its own issues.
+ *
+ * WHY A VIRTUAL CLOCK AND NOT FAKE TIMERS. The tests that wait out a turn
+ * bound or a lease start a fresh dispatcher on a VirtualClock
+ * (restartBeeActorsOn) and walk it. They ran on jest.useFakeTimers() before,
+ * and on Linux CI (Bun 1.3.6) their setImmediate settling did not finish in
+ * 5 s: each timed out, its `finally { useRealTimers() }` never ran, and the
+ * fake clock leaked into every file after it (trios#1730). Passing on macOS
+ * proved nothing about Linux; a clock the runtime is handed is the same on
+ * both.
  */
 
-import { afterAll, describe, expect, it, jest, spyOn } from 'bun:test'
+import { afterAll, describe, expect, it, spyOn } from 'bun:test'
 import type { Pool } from 'pg'
 import { TURN_MAX_SECONDS } from '../../src/api/services/queen-actors-card.gen'
 import {
@@ -21,6 +29,7 @@ import {
   dispatchByActors,
   handRoundToBeeActors,
   type RoundHandoff,
+  restartBeeActorsOn,
 } from '../../src/api/services/queen-bee-actors-round'
 import { publishEvent } from '../../src/api/services/queen-control'
 import {
@@ -35,6 +44,7 @@ import {
   LEASE_TTL_SECONDS,
 } from '../../src/api/services/queen-dispatch-exit-card.gen'
 import { logger } from '../../src/lib/logger'
+import { VirtualClock } from './queen-virtual-clock'
 
 interface Row {
   issue: number
@@ -128,9 +138,14 @@ async function until(cond: () => boolean, ms = 3000): Promise<void> {
   while (!cond() && Date.now() < end) await sleep(10)
   expect(cond()).toBe(true)
 }
-/** Under fake timers: let every promise and setImmediate settle. */
+/** Let every promise and setImmediate settle. */
 async function settled(): Promise<void> {
   for (let i = 0; i < 50; i++) await tick()
+}
+/** Walk `clock` forward `ms`, its timers in order, then settle. */
+async function walk(clock: VirtualClock, ms: number): Promise<void> {
+  await clock.runUntil(clock.now() + ms)
+  await settled()
 }
 const ended = (issue: number, outcome: string) => {
   const r = rows.get(issue) as Row
@@ -142,6 +157,8 @@ const savedLanes = process.env.TRIOS_QUEEN_ACTOR_LANES
 afterAll(() => {
   if (savedLanes === undefined) delete process.env.TRIOS_QUEEN_ACTOR_LANES
   else process.env.TRIOS_QUEEN_ACTOR_LANES = savedLanes
+  // the next file that hands a round over gets a dispatcher on the real clock
+  restartBeeActorsOn()
 })
 
 describe('the switch and the reading of a row', () => {
@@ -259,66 +276,60 @@ describe('a round handed to the bee actors', () => {
   })
 
   it('a refusal because the task lease is held stands down and is tried again after the lease TTL; any other refusal is not', async () => {
-    jest.useFakeTimers()
-    try {
-      const { r, dispatched } = round([205, 206], (issue) => ({
-        paths: ['specs/d.t27'],
-        out: {
-          started: false,
-          detail: issue === 205 ? 'task lease held by queen-2' : 'no key free',
-        },
-      }))
-      handRoundToBeeActors(pool, r)
-      await settled()
-      expect(dispatched.map((d) => d.issue).sort()).toEqual([205, 206])
-      jest.advanceTimersByTime((LEASE_TTL_SECONDS - 1) * 1000)
-      await settled()
-      expect(dispatched.length).toBe(2)
-      jest.advanceTimersByTime(2000)
-      await settled()
-      expect(dispatched.map((d) => d.issue).sort()).toEqual([205, 205, 206])
-    } finally {
-      jest.useRealTimers()
-    }
+    const clock = new VirtualClock()
+    restartBeeActorsOn(clock)
+    const { r, dispatched } = round([205, 206], (issue) => ({
+      paths: ['specs/d.t27'],
+      out: {
+        started: false,
+        detail: issue === 205 ? 'task lease held by queen-2' : 'no key free',
+      },
+    }))
+    handRoundToBeeActors(pool, r)
+    await settled()
+    expect(dispatched.map((d) => d.issue).sort()).toEqual([205, 206])
+    await walk(clock, (LEASE_TTL_SECONDS - 1) * 1000)
+    expect(dispatched.length).toBe(2)
+    await walk(clock, 2000)
+    expect(dispatched.map((d) => d.issue).sort()).toEqual([205, 205, 206])
   })
 
   it('a bee past its turn bound is cancelled through control.t27, and the cancelled row settles it', async () => {
-    jest.useFakeTimers()
-    try {
-      const { r, dispatched } = round([207], () => ({ paths: ['specs/e.t27'] }))
-      handRoundToBeeActors(pool, r)
-      await settled()
-      expect(dispatched.length).toBe(1)
-      expect(cancels.filter((c) => c.issue === 207)).toEqual([])
-      jest.advanceTimersByTime(TURN_MAX_SECONDS * 1000 + 1000)
-      await settled()
-      const asked = cancels.filter((c) => c.issue === 207)
-      expect(asked.length).toBe(1)
-      expect(asked[0].note).toContain(
-        'Cancelled by bee actors: its turn passed the bound',
-      )
-      // the cancel ended the row; the settle after it ended the bee, and a
-      // killed bee restarts at once (dispatch_exit: RD_NOW)
-      expect(dispatched.length).toBe(2)
-      ended(207, DISPATCH_OUTCOME_LABELS.finished)
-      handRoundToBeeActors(pool, round([], () => ({ paths: null })).r)
-      await settled()
-    } finally {
-      jest.useRealTimers()
-    }
+    const clock = new VirtualClock()
+    restartBeeActorsOn(clock)
+    const { r, dispatched } = round([207], () => ({ paths: ['specs/e.t27'] }))
+    handRoundToBeeActors(pool, r)
+    await settled()
+    expect(dispatched.length).toBe(1)
+    expect(cancels.filter((c) => c.issue === 207)).toEqual([])
+    // one second short of the bound: nothing is cancelled yet
+    await walk(clock, TURN_MAX_SECONDS * 1000 - 1000)
+    expect(cancels.filter((c) => c.issue === 207)).toEqual([])
+    await walk(clock, 2000)
+    const asked = cancels.filter((c) => c.issue === 207)
+    expect(asked.length).toBe(1)
+    expect(asked[0].note).toContain(
+      'Cancelled by bee actors: its turn passed the bound',
+    )
+    // the cancel ended the row; the settle after it ended the bee, and a
+    // killed bee restarts at once (dispatch_exit: RD_NOW)
+    expect(dispatched.length).toBe(2)
+    ended(207, DISPATCH_OUTCOME_LABELS.finished)
+    handRoundToBeeActors(pool, round([], () => ({ paths: null })).r)
+    await settled()
   })
 
   it('a cancel the store refuses is logged with its issue, and the bee keeps its row', async () => {
     const warn = spyOn(logger, 'warn').mockImplementation(() => {})
-    jest.useFakeTimers()
+    const clock = new VirtualClock()
+    restartBeeActorsOn(clock)
     try {
       refuseCancel = true
       const { r, dispatched } = round([208], () => ({ paths: ['specs/f.t27'] }))
       handRoundToBeeActors(pool, r)
       await settled()
       expect(dispatched.length).toBe(1)
-      jest.advanceTimersByTime(TURN_MAX_SECONDS * 1000 + 1000)
-      await settled()
+      await walk(clock, TURN_MAX_SECONDS * 1000 + 1000)
       const said = warn.mock.calls.filter(
         (c) => c[0] === 'Bee actors could not cancel a bee',
       )
@@ -332,7 +343,6 @@ describe('a round handed to the bee actors', () => {
       expect(dispatched.length).toBe(1)
     } finally {
       refuseCancel = false
-      jest.useRealTimers()
       warn.mockRestore()
     }
   })

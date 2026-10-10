@@ -29,6 +29,7 @@
 
 import type { Pool } from 'pg'
 import { logger } from '../../lib/logger'
+import { type Clock, realClock } from './queen-actors'
 import {
   type BeeDispatcher,
   type BeeEnd,
@@ -98,10 +99,25 @@ interface Production {
   round: RoundHandoff | null
   since: unknown[]
   settle: () => Promise<void>
+  /** Stop the issue actors and stop reading the bus. */
+  stop: () => void
 }
 let production: Production | null = null
+// the clock the next dispatcher runs on: the real one, unless a test said so
+let clockOfNext: Clock = realClock
 
-function start(pool: Pool): Production {
+/**
+ * FOR TESTS ONLY. Stop the process's dispatcher, so the next round starts a
+ * fresh one on `clock`. Production never calls this: its one dispatcher runs
+ * on the real clock for the life of the process.
+ */
+export function restartBeeActorsOn(clock: Clock = realClock): void {
+  production?.stop()
+  production = null
+  clockOfNext = clock
+}
+
+function start(pool: Pool, clock: Clock): Production {
   const pending = new Map<
     number,
     { conversationId: string; resolve: (e: BeeEnd) => void }
@@ -126,60 +142,67 @@ function start(pool: Pool): Production {
         wait.resolve(beeEndOfRow(mine ? (row.outcome ?? '') : null))
       }
     },
-    dispatcher: startBeeDispatcher({
-      lanes: () =>
-        Number(process.env.TRIOS_QUEEN_ACTOR_LANES) || LANES_MEASURED,
-      admit: async (issue) => {
-        const round = p.round
-        if (!round) return false
-        const got = await round.choose(issue, [...round.board, ...p.since])
-        if (!got) return false
-        paths.set(issue, got)
-        return true
-      },
-      holderPrefix: queenActorHolderPrefix(),
-      start: async (issue, holder) => {
-        const round = p.round
-        if (!round) return { claim: true, work: null }
-        const owned = paths.get(issue) ?? []
-        const out = await round.dispatch(issue, owned, holder)
-        if (!out.started)
+    dispatcher: startBeeDispatcher(
+      {
+        lanes: () =>
+          Number(process.env.TRIOS_QUEEN_ACTOR_LANES) || LANES_MEASURED,
+        admit: async (issue) => {
+          const round = p.round
+          if (!round) return false
+          const got = await round.choose(issue, [...round.board, ...p.since])
+          if (!got) return false
+          paths.set(issue, got)
+          return true
+        },
+        holderPrefix: queenActorHolderPrefix(),
+        start: async (issue, holder) => {
+          const round = p.round
+          if (!round) return { claim: true, work: null }
+          const owned = paths.get(issue) ?? []
+          const out = await round.dispatch(issue, owned, holder)
+          if (!out.started)
+            return {
+              claim: !out.detail.startsWith('task lease held'),
+              work: null,
+            }
+          p.since.push(round.boardTask(issue, owned, out))
+          const ended = new Promise<BeeEnd>((resolve) =>
+            pending.set(issue, {
+              conversationId: out.conversationId ?? '',
+              resolve,
+            }),
+          )
           return {
-            claim: !out.detail.startsWith('task lease held'),
-            work: null,
+            claim: true,
+            work: {
+              ended,
+              cancel: () =>
+                void cancelTask(
+                  pool,
+                  issue,
+                  'bee actors',
+                  'its turn passed the bound',
+                )
+                  .then(() => p.settle())
+                  .catch((error) =>
+                    logger.warn('Bee actors could not cancel a bee', {
+                      issue,
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                    }),
+                  ),
+            },
           }
-        p.since.push(round.boardTask(issue, owned, out))
-        const ended = new Promise<BeeEnd>((resolve) =>
-          pending.set(issue, {
-            conversationId: out.conversationId ?? '',
-            resolve,
-          }),
-        )
-        return {
-          claim: true,
-          work: {
-            ended,
-            cancel: () =>
-              void cancelTask(
-                pool,
-                issue,
-                'bee actors',
-                'its turn passed the bound',
-              )
-                .then(() => p.settle())
-                .catch((error) =>
-                  logger.warn('Bee actors could not cancel a bee', {
-                    issue,
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                  }),
-                ),
-          },
-        }
+        },
       },
-    }),
+      clock,
+    ),
+    stop: () => {
+      unread()
+      p.dispatcher.stop()
+    },
   }
-  addControlEventReader((event) => {
+  const unread = addControlEventReader((event) => {
     if (event.kind === EV_TASK_ENDED || event.kind === EV_LEASE_EXPIRED)
       void p.settle().catch(() => {})
   })
@@ -191,7 +214,7 @@ function start(pool: Pool): Production {
 
 /** The round's dispatch step, when the actors dispatch. */
 export function handRoundToBeeActors(pool: Pool, round: RoundHandoff): void {
-  if (!production) production = start(pool)
+  if (!production) production = start(pool, clockOfNext)
   production.round = round
   // the round's board already holds every bee started before it read
   production.since = []

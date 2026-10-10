@@ -92,6 +92,7 @@ import {
   type ActorSystem,
   actorChild,
   type Child,
+  type Clock,
   createActorSystem,
   type Down,
   type Pid,
@@ -655,6 +656,9 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
  * With TRIOS_QUEEN_ACTOR_EVENTS=on every spawn, exit, DOWN and restart, and
  * the delivers as actor_events.t27 says, go on the event log's actors stream
  * (events.t27 section 6), which GET /queen/public-actors reads.
+ *
+ * `clock` is the real one in production; a test hands in a virtual one
+ * instead of faking the process's timers.
  */
 export function startReviewerActors(
   pool: Pool,
@@ -662,6 +666,7 @@ export function startReviewerActors(
   review: ReviewFn,
   waiting: (pool: Pool) => Promise<number[]>,
   capacity?: (pool: Pool, reservedKeys: number[]) => Promise<ReviewCapacity>,
+  clock: Clock = realClock,
 ): () => void {
   const adaptive =
     capacity !== undefined && process.env.TRIOS_QUEEN_REVIEWER_ADAPTIVE === '1'
@@ -690,13 +695,13 @@ export function startReviewerActors(
       )
     : undefined
   const events = writer
-    ? createActorEvents(realClock, {
+    ? createActorEvents(clock, {
         sink: writer.sink,
         taskOf: reviewTaskOf(process.env.TRIOS_GITHUB_REPO || 'gHashTag/t27'),
       })
     : undefined
   setLiveActorEventWriter(writer)
-  const sys = createActorSystem(realClock, { turnStop, telemetry, events })
+  const sys = createActorSystem(clock, { turnStop, telemetry, events })
   setLiveActorTelemetry(sys.telemetry)
   const r = reviewerTree(sys, {
     ...reviewerDeps(pool, leaseName, review, waiting),

@@ -8,13 +8,20 @@
  *
  * WHY NOT IN ITS THREAD. In production queen-actors-pg-beat.ts is the entry
  * of a worker thread, and Bun's coverage does not see worker threads. Here
- * its message handler runs on the test's thread with the port stubbed: the
- * same code, fed the message createPgLink posts, its interval on fake timers
- * so each beat is one step the test takes. What it shares is the same
- * SharedArrayBuffer of three slots.
+ * its beat (nodeBeat) runs on the test's thread: the same code, fed the
+ * message createPgLink posts, and called by the test where the thread's
+ * interval would fire, so each beat is one step the test takes. What it
+ * shares is the same SharedArrayBuffer of three slots.
+ *
+ * WHY THE TEST HOLDS THE CLOCK. The beat reads `now` for the stall and for
+ * the time a renewal was sent; the test hands it `at` and moves it one
+ * heartbeat per beat. The interval used to fire on jest fake timers, and on
+ * Linux CI (Bun 1.3.6) the send time read under them came out 56 s before
+ * the start the test read on the real clock (trios#1730). One clock for both
+ * sides of a comparison holds on every platform.
  */
 
-import { afterAll, beforeAll, describe, expect, it, jest } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import type { Pool } from 'pg'
 import {
   BEAT_REFUSED,
@@ -22,6 +29,7 @@ import {
   BEAT_TICK,
   monoNow,
 } from '../../src/api/services/queen-actors-pg'
+import type { BeatStart } from '../../src/api/services/queen-actors-pg-beat'
 import { NODE_HEARTBEAT_SECONDS } from '../../src/api/services/queen-netlink-card.gen'
 import { QUEEN_ACTORS_SQL } from '../../src/lib/db/pg-migrate'
 import { createQueenPool } from '../../src/lib/db/queen-pool'
@@ -42,9 +50,17 @@ const until = async (cond: () => boolean, ms: number) => {
 describe('the beat thread, its handler run here', () => {
   let scratch: { url: string; drop: () => Promise<void> } | null = null
   let pool: Pool | null = null
-  let handler: (event: MessageEvent) => void = () => {}
+  let nodeBeat: (
+    start: BeatStart,
+    post: (message: unknown) => void,
+    now: () => number,
+  ) => () => Promise<void> = () => async () => {}
   let posted: unknown[] = []
   const saved = { onmessage: port.onmessage, postMessage: port.postMessage }
+  // the test's clock: the beat reads it, and each beat moves it one heartbeat
+  let at = Math.floor(monoNow())
+  const now = () => at
+  const HEARTBEAT_MS = NODE_HEARTBEAT_SECONDS * 1000
 
   beforeAll(async () => {
     scratch = await scratchDatabase('queen_pg_beat')
@@ -55,10 +71,10 @@ describe('the beat thread, its handler run here', () => {
       `INSERT INTO queen_actor_node (node, host, heartbeat_at, incarnation)
        VALUES (1, 'h', clock_timestamp(), 1), (2, 'h', clock_timestamp(), 2)`,
     )
-    await import('../../src/api/services/queen-actors-pg-beat')
-    handler = port.onmessage as (event: MessageEvent) => void
+    // importing it sets this thread's onmessage, as it does in its own thread
+    nodeBeat = (await import('../../src/api/services/queen-actors-pg-beat'))
+      .nodeBeat
     port.onmessage = saved.onmessage
-    port.postMessage = (value) => void posted.push(value)
   })
 
   afterAll(async () => {
@@ -71,8 +87,8 @@ describe('the beat thread, its handler run here', () => {
     await scratch?.drop()
   }, 60_000)
 
-  /** Start one beat handler and fire its interval once. */
-  const beatOnce = (
+  /** Start one node's beat, the loop's last turn `tickAgoMs` before now. */
+  const beatFor = (
     url: string,
     node: number,
     inc: number,
@@ -80,16 +96,28 @@ describe('the beat thread, its handler run here', () => {
   ) => {
     const slots = new BigInt64Array(new SharedArrayBuffer(8 * 3))
     posted = []
-    jest.useFakeTimers()
-    try {
-      Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(monoNow() - tickAgoMs)))
-      handler({
-        data: { url, node, inc, host: 'beat-test', shared: slots.buffer },
-      } as MessageEvent)
-      jest.advanceTimersByTime(NODE_HEARTBEAT_SECONDS * 1000)
-    } finally {
-      jest.useRealTimers()
-    }
+    Atomics.store(slots, BEAT_TICK, BigInt(at - tickAgoMs))
+    const beat = nodeBeat(
+      { url, node, inc, host: 'beat-test', shared: slots.buffer },
+      (message) => void posted.push(message),
+      now,
+    )
+    return { slots, beat }
+  }
+  /** One heartbeat passes, and the interval fires. */
+  const fire = (beat: () => Promise<void>) => {
+    at += HEARTBEAT_MS
+    void beat()
+  }
+  /** Start one node's beat and fire its interval once. */
+  const beatOnce = (
+    url: string,
+    node: number,
+    inc: number,
+    tickAgoMs: number,
+  ) => {
+    const { slots, beat } = beatFor(url, node, inc, tickAgoMs)
+    fire(beat)
     return slots
   }
 
@@ -98,12 +126,11 @@ describe('the beat thread, its handler run here', () => {
     const before = await (pool as Pool).query(
       'SELECT heartbeat_at FROM queen_actor_node WHERE node = 1',
     )
-    const start = Math.floor(monoNow())
+    const start = at
     const slots = beatOnce(scratch.url, 1, 1, 0)
     await until(() => Atomics.load(slots, BEAT_RENEWED) !== 0n, 10_000)
-    expect(Number(Atomics.load(slots, BEAT_RENEWED))).toBeGreaterThanOrEqual(
-      start,
-    )
+    // sent when the interval fired, one heartbeat after the start
+    expect(Number(Atomics.load(slots, BEAT_RENEWED))).toBe(start + HEARTBEAT_MS)
     expect(Atomics.load(slots, BEAT_REFUSED)).toBe(0n)
     expect(posted).toEqual([])
     const after = await (pool as Pool).query(
@@ -153,29 +180,12 @@ describe('the beat thread, its handler run here', () => {
     await holder.query(
       'SELECT 1 FROM queen_actor_node WHERE node = 1 FOR UPDATE',
     )
-    const slots = new BigInt64Array(new SharedArrayBuffer(8 * 3))
-    posted = []
-    let firstSent = 0
-    jest.useFakeTimers()
-    try {
-      Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(monoNow())))
-      handler({
-        data: {
-          url: (scratch as { url: string }).url,
-          node: 1,
-          inc: 1,
-          host: 'beat-test',
-          shared: slots.buffer,
-        },
-      } as MessageEvent)
-      jest.advanceTimersByTime(NODE_HEARTBEAT_SECONDS * 1000)
-      firstSent = Math.floor(monoNow())
-      // a second beat, five seconds later on the fake clock, finds it busy
-      Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(monoNow())))
-      jest.advanceTimersByTime(NODE_HEARTBEAT_SECONDS * 1000)
-    } finally {
-      jest.useRealTimers()
-    }
+    const { slots, beat } = beatFor(scratch.url, 1, 1, 0)
+    fire(beat)
+    const firstSent = at
+    // a second beat, one heartbeat later on the test's clock, finds it busy
+    Atomics.store(slots, BEAT_TICK, BigInt(at))
+    fire(beat)
     await sleep(300)
     expect(Atomics.load(slots, BEAT_RENEWED)).toBe(0n)
     await holder.query('COMMIT')
@@ -186,7 +196,7 @@ describe('the beat thread, its handler run here', () => {
       firstSent,
     )
     expect(Number(Atomics.load(slots, BEAT_RENEWED))).toBeLessThan(
-      firstSent + NODE_HEARTBEAT_SECONDS * 1000 - 1000,
+      firstSent + HEARTBEAT_MS - 1000,
     )
     expect(posted).toEqual([])
   }, 30_000)
