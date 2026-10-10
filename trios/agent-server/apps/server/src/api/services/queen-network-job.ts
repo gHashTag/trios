@@ -796,7 +796,8 @@ export function networkExecutors(io: NetworkIo) {
       }
       return {
         outcome: O_PASS,
-        detail: `challenge ${challenge.slice(0, 8)}...; ${notes.join('; ')}`,
+        // never the challenge itself: /queen/public-jobs publishes step details
+        detail: `challenge drawn (in the journal); ${notes.join('; ')}`,
       }
     },
 
