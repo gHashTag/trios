@@ -25,8 +25,8 @@ import {
 const source = readServerSource()
 const report = auditServer(source, DEFAULT_ALLOWLIST)
 
-// Regression pin for the --no-allowlist run: exactly these twelve mounts carry
-// no guard today, each for a reason the comments beside the mount give.
+// Regression pin for the --no-allowlist run: exactly these fourteen mounts
+// carry no guard today, each for a reason the comments beside the mount give.
 // RE-MEASURED 2026-09-13: /api/inngest joined. It is not a shell - it is the
 // Queen's scheduler endpoint - and it is unguarded on purpose: Inngest signs
 // every request with the signing key and inngest/hono refuses the rest, so the
@@ -45,11 +45,18 @@ const report = auditServer(source, DEFAULT_ALLOWLIST)
 // t27-bees app's events from its own server, so there is no Origin to trust;
 // the HMAC of the body under TRIOS_BEES_WEBHOOK_SECRET is the guard, and the
 // route refuses everything while that secret is unset.
+// RE-MEASURED 2026-10-11: /vault joined (gHashTag/trios#1759). Workloads and
+// the owner's CLI call it, never a browser; every request carries an Ed25519
+// signature over method, path, time, nonce and body that specs/vault/policy.t27
+// request_code judges first, and it answers 503 unless TRIOS_VAULT=on.
 // RE-MEASURED 2026-10-11: /hosting joined (self-hosting slice 1, trios#1756).
 // Host agents on users' computers call it with no Origin to trust; the guard
 // is the Ed25519 signature of the host's own key on every write, inside the
 // freshness window and from the incarnation the Queen holds, and jobs come
 // only from an owner-tier key. 503 on every path unless TRIOS_HOSTING=on.
+// RE-MEASURED 2026-10-11, queen merged into vault-mvp (trios#1759): both
+// joined, so the list is fourteen, recomputed with --no-allowlist on the
+// merged server.ts.
 const EXPECTED_UNGUARDED_WITHOUT_ALLOWLIST = [
   '/api/inngest',
   '/hosting',
@@ -64,6 +71,7 @@ const EXPECTED_UNGUARDED_WITHOUT_ALLOWLIST = [
   '/queen/roadmap',
   '/queen/runner',
   '/queen/tree',
+  '/vault',
 ]
 
 describe('route-guard audit over src/api/server.ts', () => {
@@ -167,10 +175,16 @@ describe('route-guard audit over src/api/server.ts', () => {
     // recomputed from the merged server.ts, not copied from either side. The
     // same 63, 18, 20 and 17: queen's guard on /queen/actors (trios#1735) was
     // already here, cherry-picked, and queen adds no other mount.
+    // RE-MEASURED 2026-10-11, the vault (trios#1759): 63 became 64 with
+    // /vault, allowlisted with its signed-request reason. No other count moved.
     // RE-MEASURED 2026-10-11, self-hosting (trios#1756): 63 became 64 with
     // /hosting, an allowlisted mount guarded by its hosts' own signatures (the
     // reason is in tools/route-guard-audit.mjs). No guard count moved.
-    expect(report.totalMounts).toBe(64)
+    // RE-MEASURED 2026-10-11, queen merged into vault-mvp: recomputed from the
+    // merged server.ts with tools/route-guard-audit.mjs, not copied from either
+    // side. 65: both /vault and /hosting, each allowlisted with its reason. The
+    // same 18, 20 and 17; neither is under /queen, so the forty below hold.
+    expect(report.totalMounts).toBe(65)
     expect(report.prefixGuardCount).toBe(18)
     expect(report.guardedSubAppCount).toBe(20)
     expect(report.publicReadCount).toBe(17)
@@ -183,7 +197,7 @@ describe('route-guard audit over src/api/server.ts', () => {
     expect(report.entriesMissingReason).toEqual([])
   })
 
-  it('reports exactly the thirteen reasoned exceptions when the allowlist is dropped', () => {
+  it('reports exactly the fourteen reasoned exceptions when the allowlist is dropped', () => {
     // The classifier reports mounts in file order; the assertion is on the
     // exact set, so both sides are sorted before comparing.
     expect([...unguardedMounts(source, [])].sort()).toEqual(

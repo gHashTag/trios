@@ -217,10 +217,19 @@ WORKDIR /app
 # difflib and subprocess, and Debian's minimal package carries a subset of the
 # standard library chosen for dpkg's maintainer scripts. Nothing here needs a
 # module from outside the standard library, so there is no pip and no venv.
+#
+# age is the vault's encryption (gHashTag/trios#1759, vault-age.ts): the
+# reference implementation of age (X25519, ChaCha20-Poly1305), started as a
+# process, so no cryptography is written here. Debian packages it (the bun
+# image is Debian trixie: age 1.2.1; bookworm has 1.1.1).
+# The vault is off unless TRIOS_VAULT=on, and then refuses to start without
+# its variables; without this binary every row check would fail, so it is
+# declared and its version printed, not assumed.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates openssh-client tini perl-base python3 \
+ && apt-get install -y --no-install-recommends git ca-certificates openssh-client tini perl-base python3 age \
  && rm -rf /var/lib/apt/lists/* \
- && python3 --version
+ && python3 --version \
+ && age --version
 
 # An unprivileged account for the agents' shell commands.
 #
