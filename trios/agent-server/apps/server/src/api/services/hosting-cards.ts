@@ -9,10 +9,14 @@
  * vendored byte-identical under specs/hosting with their wasm (specs/PIN).
  *
  *   host.t27       tiers, eligibility, capacity, the netlink lease, freshness,
- *                  strikes, the toolchain action
- *   placement.t27  fit, spread, k replicas, the lease that lapses
- *   proof.t27      the shard's verdict, the receipt's checks, k-of-n agreement
+ *                  strikes, the toolchain action, isolation
+ *   placement.t27  fit, spread, k replicas, the lease that lapses, which
+ *                  host runs which half of a lab row
+ *   proof.t27      the shard's verdict and reason, the receipt's checks,
+ *                  k-of-n agreement
  *   credit.t27     credit, strikes, the ledger, settlement (off)
+ *   row.t27        the lab row's two halves, the t27b half's verdict, and
+ *                  how a row is assembled from both
  *
  * WHY A LOCATOR: the Queen reads the cards from specs/ on disk; the compiled
  * host agent carries them inside its binary (`bun build --compile`) and points
@@ -27,6 +31,7 @@ export const HOSTING_CARDS = {
   proof: 'hosting/proof.wasm',
   placement: 'hosting/placement.wasm',
   credit: 'hosting/credit.wasm',
+  row: 'hosting/row.wasm',
 } as const
 
 export type HostingCardName = keyof typeof HOSTING_CARDS
@@ -45,6 +50,7 @@ const host = () => locate('host')
 const proof = () => locate('proof')
 const placement = () => locate('placement')
 const credit = () => locate('credit')
+const row = () => locate('row')
 const yes = (n: number | bigint) => Number(n) !== 0
 
 // --- host.t27 ---------------------------------------------------------------
@@ -114,6 +120,51 @@ export const suspended = (strikes: number): boolean =>
 
 export const toolchainAction = (pinned: boolean, localGiven: boolean): number =>
   host().call('toolchain_action', flag(pinned), flag(localGiven)) >>> 0
+
+export const isolationRequired = (
+  workloadClass: number,
+  holdsSecret: boolean,
+  holdsPersonal: boolean,
+): number =>
+  host().call(
+    'isolation_required',
+    workloadClass & 0xff,
+    flag(holdsSecret),
+    flag(holdsPersonal),
+  ) >>> 0
+
+export const isolationMeets = (have: number, need: number): boolean =>
+  yes(host().call('isolation_meets', have & 0xff, need & 0xff))
+
+export interface SandboxFacts {
+  macos: boolean
+  hasSandboxExec: boolean
+  hasBwrap: boolean
+  hasUnshare: boolean
+  turnedOff: boolean
+}
+
+export const sandboxChoice = (f: SandboxFacts): number =>
+  host().call(
+    'sandbox_choice',
+    flag(f.macos),
+    flag(f.hasSandboxExec),
+    flag(f.hasBwrap),
+    flag(f.hasUnshare),
+    flag(f.turnedOff),
+  ) >>> 0
+
+export const isolationOf = (
+  sandbox: number,
+  connectFailed: boolean,
+  writeFailed: boolean,
+): number =>
+  host().call(
+    'isolation_of',
+    sandbox & 0xff,
+    flag(connectFailed),
+    flag(writeFailed),
+  ) >>> 0
 
 export const downloadKept = (
   digestMatches: boolean,
@@ -224,6 +275,33 @@ export const jobFirst = (
     ),
   )
 
+export const halfFits = (half: number, arch: number): boolean =>
+  yes(placement().call('half_fits', half & 0xff, arch & 0xff))
+
+export interface HalfTakeFacts extends TakeFacts {
+  half: number
+  arch: number
+  isolation: number
+}
+
+export const mayTakeHalf = (f: HalfTakeFacts): boolean =>
+  yes(
+    placement().call(
+      'may_take_half',
+      f.half & 0xff,
+      f.arch & 0xff,
+      f.isolation & 0xff,
+      f.tier & 0xff,
+      f.workloadClass & 0xff,
+      flag(f.holdsSecret),
+      flag(f.holdsPersonal),
+      u32(f.beatAgeSeconds),
+      u32(f.strikes),
+      u32(f.slots),
+      u32(f.running),
+    ),
+  )
+
 export const replicaLapsed = (
   beatAgeSeconds: number,
   runAgeSeconds: number,
@@ -266,6 +344,21 @@ export const runVerdict = (f: RunFacts): number =>
 
 export const listsTests = (verdict: number): boolean =>
   yes(proof().call('lists_tests', verdict & 0xff))
+
+export const reasonOf = (
+  verdict: number,
+  exitedZero: boolean,
+  blockedLine: boolean,
+): number =>
+  proof().call(
+    'reason_of',
+    verdict & 0xff,
+    flag(exitedZero),
+    flag(blockedLine),
+  ) >>> 0
+
+export const reasonKept = (namesJobDir: boolean): boolean =>
+  yes(proof().call('reason_kept', flag(namesJobDir)))
 
 export interface ReceiptFacts {
   hostKnown: boolean
@@ -378,3 +471,63 @@ export const settlementDue = (
       flag(deviceBound),
     ),
   )
+
+// --- row.t27 ----------------------------------------------------------------
+
+export const t27bRunVerdict = (
+  started: boolean,
+  wroteRow: boolean,
+  word: number,
+): number =>
+  row().call('t27b_run_verdict', flag(started), flag(wroteRow), word & 0xff) >>>
+  0
+
+export const t27bVotes = (verdict: number): boolean =>
+  yes(row().call('t27b_votes', verdict & 0xff))
+
+export const halfVote = (
+  code: number,
+  half: number,
+  verdict: number,
+): boolean =>
+  yes(row().call('half_vote', code & 0xff, half & 0xff, verdict & 0xff))
+
+export const rowComplete = (reference: number, t27b: number): boolean =>
+  yes(row().call('row_complete', reference & 0xff, t27b & 0xff))
+
+export const detailKind = (referenceVerdict: number): number =>
+  row().call('detail_kind', referenceVerdict & 0xff) >>> 0
+
+export const referenceTestsListed = (
+  referenceVerdict: number,
+  listed: number,
+  tests: number,
+): boolean =>
+  yes(
+    row().call(
+      'reference_tests_listed',
+      referenceVerdict & 0xff,
+      u32(listed),
+      u32(tests),
+    ),
+  )
+
+export const disagreeListed = (
+  t27bListed: boolean,
+  referenceListed: boolean,
+): boolean =>
+  yes(row().call('disagree_listed', flag(t27bListed), flag(referenceListed)))
+
+export const disagreement = (
+  t27bHas: boolean,
+  t27bPassed: boolean,
+  referenceHas: boolean,
+  referencePassed: boolean,
+): number =>
+  row().call(
+    'disagreement',
+    flag(t27bHas),
+    flag(t27bPassed),
+    flag(referenceHas),
+    flag(referencePassed),
+  ) >>> 0

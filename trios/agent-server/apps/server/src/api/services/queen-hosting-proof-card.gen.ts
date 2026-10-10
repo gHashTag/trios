@@ -3,7 +3,7 @@
 // Every name, value and type here comes from that spec. Change the spec and
 // regenerate; an edit made here is lost the next time anyone builds.
 
-export const SHARD_DOMAIN = "t27-hosting-shard-v1" satisfies string;
+export const SHARD_DOMAIN = "t27-hosting-shard-v2" satisfies string;
 export const SHARD_COUNT_KEYS = ["tests", "fail", "invariants", "asserts", "vacuous"] as const satisfies readonly [string, string, string, string, string];
 export const SHARD_SPEC_KEY = "spec" satisfies string;
 export const SHARD_VERDICT_KEY = "verdict" satisfies string;
@@ -19,6 +19,17 @@ export const VERDICTS = 5 satisfies number;
 // t27c gen-ts: fn run_verdict was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn verdict_votes was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn lists_tests was not emitted -- this backend lowers declarations, not bodies.
+export const SHARD_REASON_KEY = "reason" satisfies string;
+export const REASON_MAX_BYTES = 300 satisfies number;
+export const REASON_EXIT_WORDS = ["t27c test-report exited ", ": "] as const satisfies readonly [string, string];
+export const REASON_UNREADABLE = "unreadable test-report output" satisfies string;
+export const REASON_WITHHELD = "withheld: it names the host's job directory" satisfies string;
+export const RS_NONE = 0 satisfies number;
+export const RS_EXIT = 1 satisfies number;
+export const RS_BLOCKED_LINE = 2 satisfies number;
+export const RS_UNREADABLE = 3 satisfies number;
+// t27c gen-ts: fn reason_of was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn reason_kept was not emitted -- this backend lowers declarations, not bodies.
 export const RECEIPT_DOMAIN = "t27-hosting-receipt-v1" satisfies string;
 export const RECEIPT_SIGNED_FIELDS = ["job", "lease", "host", "incarnation", "commit", "spec", "model_hash", "zig", "input_hash", "output_hash", "ops", "verdict", "nonce", "utc_unix"] as const satisfies readonly [string, string, string, string, string, string, string, string, string, string, string, string, string, string];
 export const RECEIPT_SIGNED_FIELD_COUNT = 14 satisfies number;
@@ -26,7 +37,7 @@ export const LEASE_NONCE_BYTES = 16 satisfies number;
 export const REQUEST_DOMAIN = "t27-hosting-request-v1" satisfies string;
 export const REQUEST_SIGNED_FIELDS = ["method", "path", "host", "incarnation", "utc_unix", "body_sha256"] as const satisfies readonly [string, string, string, string, string, string];
 export const REGISTER_DOMAIN = "t27-hosting-register-v1" satisfies string;
-export const REGISTER_SIGNED_FIELDS = ["public_key", "tier_claim", "slots", "platform", "utc_unix"] as const satisfies readonly [string, string, string, string, string];
+export const REGISTER_SIGNED_FIELDS = ["public_key", "tier_claim", "slots", "platform", "isolation", "utc_unix"] as const satisfies readonly [string, string, string, string, string, string];
 export const RC_OK = 0 satisfies number;
 export const RC_UNKNOWN_HOST = 1 satisfies number;
 export const RC_BAD_SIGNATURE = 2 satisfies number;
@@ -66,6 +77,7 @@ export const TOP_GROUP = 0 satisfies number;
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
+// t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a InvariantBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -75,7 +87,7 @@ export const FAIL = 1 satisfies number;
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [] as const;
-export const __DECL_ORDER__ = ["SHARD_DOMAIN", "SHARD_COUNT_KEYS", "SHARD_SPEC_KEY", "SHARD_VERDICT_KEY", "SHARD_TEST_KEY", "VERDICT_WORDS", "VW_PASS", "VW_FAIL", "VW_BLOCKED", "VW_TIMEOUT", "VW_HOST_ERROR", "VERDICTS", "RECEIPT_DOMAIN", "RECEIPT_SIGNED_FIELDS", "RECEIPT_SIGNED_FIELD_COUNT", "LEASE_NONCE_BYTES", "REQUEST_DOMAIN", "REQUEST_SIGNED_FIELDS", "REGISTER_DOMAIN", "REGISTER_SIGNED_FIELDS", "RC_OK", "RC_UNKNOWN_HOST", "RC_BAD_SIGNATURE", "RC_NOT_LEASED", "RC_DUPLICATE", "RC_EQUIVOCATION", "RC_LATE", "RC_INPUT_MISMATCH", "RC_MODEL_MISMATCH", "RC_OUTPUT_MISMATCH", "REPLICAS_K", "REPLICAS_MAX", "JV_PENDING", "JV_AGREED", "JV_TIEBREAK", "JV_UNRESOLVED", "FAULTS_ASSUMED", "SIDE_AGREED", "SIDE_DISSENT", "SIDE_NONE", "TOP_GROUP", "KEY_ID_HEX_LEN", "NONCE_MIN_BYTES", "FAIL"] as const;
+export const __DECL_ORDER__ = ["SHARD_DOMAIN", "SHARD_COUNT_KEYS", "SHARD_SPEC_KEY", "SHARD_VERDICT_KEY", "SHARD_TEST_KEY", "VERDICT_WORDS", "VW_PASS", "VW_FAIL", "VW_BLOCKED", "VW_TIMEOUT", "VW_HOST_ERROR", "VERDICTS", "SHARD_REASON_KEY", "REASON_MAX_BYTES", "REASON_EXIT_WORDS", "REASON_UNREADABLE", "REASON_WITHHELD", "RS_NONE", "RS_EXIT", "RS_BLOCKED_LINE", "RS_UNREADABLE", "RECEIPT_DOMAIN", "RECEIPT_SIGNED_FIELDS", "RECEIPT_SIGNED_FIELD_COUNT", "LEASE_NONCE_BYTES", "REQUEST_DOMAIN", "REQUEST_SIGNED_FIELDS", "REGISTER_DOMAIN", "REGISTER_SIGNED_FIELDS", "RC_OK", "RC_UNKNOWN_HOST", "RC_BAD_SIGNATURE", "RC_NOT_LEASED", "RC_DUPLICATE", "RC_EQUIVOCATION", "RC_LATE", "RC_INPUT_MISMATCH", "RC_MODEL_MISMATCH", "RC_OUTPUT_MISMATCH", "REPLICAS_K", "REPLICAS_MAX", "JV_PENDING", "JV_AGREED", "JV_TIEBREAK", "JV_UNRESOLVED", "FAULTS_ASSUMED", "SIDE_AGREED", "SIDE_DISSENT", "SIDE_NONE", "TOP_GROUP", "KEY_ID_HEX_LEN", "NONCE_MIN_BYTES", "FAIL"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

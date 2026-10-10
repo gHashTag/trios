@@ -17,18 +17,26 @@
  * before it is written; an environment built from nothing (PATH to zig and
  * the system tools, a scratch HOME and TMPDIR, zig's caches, and
  * T27C_TEST_REPORT_EXIT_ZERO). Not one variable of the agent's own
- * environment reaches it, so no secret the user's shell holds can. It is not
- * an OS sandbox: t27c and zig run as the user, and the tests a spec declares
- * run as code on this machine. A spec is only ever one from the t27
+ * environment reaches it, so no secret the user's shell holds can. And since
+ * trios#1761 it runs inside the OS sandbox the host measured
+ * (hosting-sandbox.ts): no network, no write outside its job directory and
+ * zig's cache, no read of the key. A spec is only ever one from the t27
  * repository at the job's commit.
+ *
+ * TWO HALVES (trios#1761): a job is the reference half (`t27c test-report`)
+ * or the t27b half (`t27b corpus` over the job's files) of one lab row; the
+ * runner is chosen by the job's half, and the Queen sends a t27b half only to
+ * a host that can run t27b (placement.t27 may_take_half).
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { hasRoom, mustRegisterAgain } from './hosting-cards'
+import { type SandboxPaths, sandboxed } from './hosting-sandbox'
 import {
   messageOf,
   normalizeShard,
+  normalizeT27b,
   publicHexOf,
   type ShardResult,
   sha256Hex,
@@ -44,9 +52,12 @@ import {
   REQUEST_DOMAIN,
   REQUEST_SIGNED_FIELDS,
 } from './queen-hosting-proof-card.gen'
+import { HALF_T27B, T27B_TIMEOUT_MS } from './queen-hosting-row-card.gen'
 
 export interface LeasedJob {
   id: string
+  /** row.t27 HALF_*; a job from before the halves is the reference half. */
+  half?: number
   commit: string
   spec: string
   input_hash: string
@@ -90,6 +101,8 @@ export interface HostAgentDeps {
   tierClaim: number
   slots: number
   platform: string
+  /** host.t27 ISO_*: the level the planted job measured on this machine. */
+  isolation?: number
   runShard: RunShard
   clock: Clock
   log?: (line: string) => void
@@ -154,6 +167,7 @@ export function createHostAgent(deps: HostAgentDeps) {
       tier_claim: deps.tierClaim,
       slots: deps.slots,
       platform: deps.platform,
+      isolation: deps.isolation ?? 0,
       utc_unix: utc(),
     }
     const signature = signHex(
@@ -173,7 +187,7 @@ export function createHostAgent(deps: HostAgentDeps) {
     // a new incarnation: what the last one runs is late already
     for (const c of inFlight) c.abort()
     log(
-      `registered ${host} incarnation ${incarnation} tier ${json.tier} slots ${json.slots}`,
+      `registered ${host} incarnation ${incarnation} tier ${json.tier} slots ${json.slots} isolation ${json.isolation}`,
     )
     return json
   }
@@ -256,13 +270,16 @@ export function createHostAgent(deps: HostAgentDeps) {
         // host_error, which is no vote, so the replica is placed again
         log(`run failed: ${err instanceof Error ? err.message : String(err)}`)
         run = {
-          result: normalizeShard(lease.job.spec, {
-            started: false,
-            timedOut: false,
-            exitCode: null,
-            stdout: '',
-            stderr: '',
-          }),
+          result:
+            lease.job.half === HALF_T27B
+              ? normalizeT27b(lease.job.spec, { started: false, json: null })
+              : normalizeShard(lease.job.spec, {
+                  started: false,
+                  timedOut: false,
+                  exitCode: null,
+                  stdout: '',
+                  stderr: '',
+                }),
           modelHash: '',
           zig: '',
         }
@@ -328,11 +345,13 @@ export function createHostAgent(deps: HostAgentDeps) {
 
 export type HostAgent = ReturnType<typeof createHostAgent>
 
-// --- running a shard with t27c ---------------------------------------------------
+// --- running a shard: the reference half with t27c, the t27b half with t27b ------
 
 export interface T27cRunnerDeps {
   t27c: string
   zig: string
+  /** t27b, on a host that runs the t27b half (arm64 only). */
+  t27b?: string
   /** Where each job's scratch directory is made; it is removed after the run. */
   workRoot: string
   /** zig's global cache, kept between jobs. */
@@ -340,73 +359,155 @@ export interface T27cRunnerDeps {
   /** The bytes of `path` at `commit` in the t27 repository. */
   fetchFile: (commit: string, path: string) => Promise<Uint8Array>
   modelHash: string
+  /** SHA-256 of the t27b binary: the t27b half's model_hash. */
+  t27bHash?: string
   zigVersion: string
+  /** host.t27 SANDBOX_*: the sandbox every run goes through; none when absent. */
+  sandbox?: number
 }
 
-/** The t27c test-report runner: pinned inputs in, a normalized result out. */
+/** The job's directory: every pinned file, checked, written under `specs/`. */
+async function prepareJob(d: T27cRunnerDeps, job: LeasedJob): Promise<string> {
+  await mkdir(d.workRoot, { recursive: true })
+  const dir = await mkdtemp(join(d.workRoot, 'job-'))
+  for (const f of job.files) {
+    const bytes = await d.fetchFile(job.commit, f.path)
+    if (sha256Hex(bytes) !== f.sha256)
+      throw new Error(`${f.path} at ${job.commit} is not the pinned bytes`)
+    if (f.path === job.spec && f.sha256 !== job.input_hash)
+      throw new Error('the spec is not the input the job names')
+    const at = join(dir, f.path)
+    await mkdir(dirname(at), { recursive: true })
+    await writeFile(at, bytes)
+  }
+  await mkdir(join(dir, 'tmp'), { recursive: true })
+  await mkdir(d.cacheDir, { recursive: true })
+  return dir
+}
+
+interface Bounded {
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  timedOut: boolean
+  cpuMicros?: number
+  wallMs: number
+}
+
+/** One command in the job's sandbox; its process group is killed past the run bound or on abort. */
+async function runBounded(
+  d: T27cRunnerDeps,
+  dir: string,
+  argv: string[],
+  signal: AbortSignal,
+): Promise<Bounded> {
+  const paths: SandboxPaths = {
+    T27C: d.t27c,
+    T27B: d.t27b ?? d.t27c,
+    ZIG: dirname(d.zig),
+    JOB: dir,
+    CACHE: d.cacheDir,
+  }
+  const env = {
+    PATH: `${dirname(d.zig)}:/usr/bin:/bin`,
+    HOME: dir,
+    TMPDIR: join(dir, 'tmp'),
+    ZIG_GLOBAL_CACHE_DIR: d.cacheDir,
+    ZIG_LOCAL_CACHE_DIR: join(dir, 'zig-local'),
+    T27C_TEST_REPORT_EXIT_ZERO: '1',
+  }
+  const started = Date.now()
+  const proc = Bun.spawn(sandboxed(d.sandbox ?? 0, paths, argv), {
+    cwd: dir,
+    env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    detached: true,
+  })
+  let timedOut = false
+  const killGroup = () => {
+    try {
+      process.kill(-proc.pid, 'SIGKILL')
+    } catch {
+      proc.kill('SIGKILL')
+    }
+  }
+  const timer = setTimeout(() => {
+    timedOut = true
+    killGroup()
+  }, JOB_RUN_BOUND_SECONDS * 1000)
+  const onAbort = () => killGroup()
+  signal.addEventListener('abort', onAbort)
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  clearTimeout(timer)
+  signal.removeEventListener('abort', onAbort)
+  const usage = proc.resourceUsage()
+  return {
+    stdout,
+    stderr,
+    exitCode,
+    timedOut,
+    cpuMicros: usage ? Number(usage.cpuTime.total) : undefined,
+    wallMs: Date.now() - started,
+  }
+}
+
+/** The runner of both halves: pinned inputs in, a normalized result out. */
 export function createT27cRunner(d: T27cRunnerDeps): RunShard {
   return async (job, signal) => {
-    await mkdir(d.workRoot, { recursive: true })
-    const dir = await mkdtemp(join(d.workRoot, 'job-'))
+    const dir = await prepareJob(d, job)
     try {
-      for (const f of job.files) {
-        const bytes = await d.fetchFile(job.commit, f.path)
-        if (sha256Hex(bytes) !== f.sha256)
-          throw new Error(`${f.path} at ${job.commit} is not the pinned bytes`)
-        if (f.path === job.spec && f.sha256 !== job.input_hash)
-          throw new Error('the spec is not the input the job names')
-        const at = join(dir, f.path)
-        await mkdir(dirname(at), { recursive: true })
-        await writeFile(at, bytes)
-      }
-      await mkdir(join(dir, 'tmp'), { recursive: true })
-      const env = {
-        PATH: `${dirname(d.zig)}:/usr/bin:/bin`,
-        HOME: dir,
-        TMPDIR: join(dir, 'tmp'),
-        ZIG_GLOBAL_CACHE_DIR: d.cacheDir,
-        ZIG_LOCAL_CACHE_DIR: join(dir, 'zig-local'),
-        T27C_TEST_REPORT_EXIT_ZERO: '1',
-      }
-      const started = Date.now()
-      const proc = Bun.spawn(
-        [d.t27c, 'test-report', job.spec, '--specs-dir', 'specs', '--verbose'],
-        { cwd: dir, env, stdout: 'pipe', stderr: 'pipe', detached: true },
-      )
-      let timedOut = false
-      const killGroup = () => {
-        try {
-          process.kill(-proc.pid, 'SIGKILL')
-        } catch {
-          proc.kill('SIGKILL')
+      if (job.half === HALF_T27B) {
+        if (!d.t27b) throw new Error('this host has no t27b')
+        const out = join(dir, 't27b.json')
+        const r = await runBounded(
+          d,
+          dir,
+          [
+            d.t27b,
+            'corpus',
+            'specs',
+            '--json',
+            out,
+            '--timeout-ms',
+            String(T27B_TIMEOUT_MS),
+            '--jobs',
+            '1',
+          ],
+          signal,
+        )
+        const json = await readFile(out, 'utf8').catch(() => null)
+        return {
+          result: normalizeT27b(job.spec, { started: true, json }),
+          modelHash: d.t27bHash ?? '',
+          zig: '',
+          cpuMicros: r.cpuMicros,
+          wallMs: r.wallMs,
         }
       }
-      const timer = setTimeout(() => {
-        timedOut = true
-        killGroup()
-      }, JOB_RUN_BOUND_SECONDS * 1000)
-      const onAbort = () => killGroup()
-      signal.addEventListener('abort', onAbort)
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ])
-      clearTimeout(timer)
-      signal.removeEventListener('abort', onAbort)
-      const usage = proc.resourceUsage()
+      const r = await runBounded(
+        d,
+        dir,
+        [d.t27c, 'test-report', job.spec, '--specs-dir', 'specs', '--verbose'],
+        signal,
+      )
       return {
         result: normalizeShard(job.spec, {
           started: true,
-          timedOut,
-          exitCode,
-          stdout,
-          stderr,
+          timedOut: r.timedOut,
+          exitCode: r.exitCode,
+          stdout: r.stdout,
+          stderr: r.stderr,
+          jobDir: dir,
         }),
         modelHash: d.modelHash,
         zig: d.zigVersion,
-        cpuMicros: usage ? Number(usage.cpuTime.total) : undefined,
-        wallMs: Date.now() - started,
+        cpuMicros: r.cpuMicros,
+        wallMs: r.wallMs,
       }
     } finally {
       await rm(dir, { recursive: true, force: true })
