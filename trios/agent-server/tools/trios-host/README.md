@@ -36,6 +36,7 @@ digest of the t27c you name goes into every receipt as `model_hash`.
 | `trios-host join --queen <url> [--tier public\|trusted\|owner] [--slots <n>] [--t27c <path>] [--zig <path>] [--t27-repo <dir>] [--once]` | run as a host. `--tier` is a claim: the Queen grants at most what the owner's allowlist names for this key, and public otherwise. `--t27-repo` reads a shard's files from a local t27 clone instead of raw.githubusercontent.com. `--once` runs one shard and exits |
 | `trios-host job --queen <url> --t27-repo <dir> --commit <sha> --spec <path> [--secret] [--personal]` | owner key only: ask the Queen to run one spec at one commit; every file of its `use` closure is pinned by SHA-256 |
 | `trios-host status --queen <url>` | this host's row of the public ledger |
+| `trios-host statement --queen <url> --epoch <n> [--queen-key <64 hex>]` | check that this host's credit for epoch `n` is inside that epoch's signed root: the Queen's signature, the leaf names this host, the path's shape, the root (`statement.t27`). Pin the Queen's ledger key with `--queen-key`. It exits 0 only when every leaf of this host checks. |
 
 `TRIOS_HOST_HOME` moves `~/.trios-host`.
 
@@ -54,20 +55,47 @@ the job's commit.
 ## What a host earns
 
 Credit is 1 mTRI per job that two hosts agree on, recorded in the Queen's
-public ledger (`GET /hosting/ledger`). It is off-chain:
+public ledger (`GET /hosting/ledger`). Each credit is named by its kind
+(`statement.t27`): the first agreeing receipt of a job earns `executor_fee`,
+and every later one `verifier_fee`. On a job with a known answer, every
+receipt earns `verifier_fee`. The credit is off-chain:
 - it is not a token;
-- it is not transferable;
+- it is not transferable: nothing moves it from one key to another;
 - it claims no value;
-- settlement is switched off in `credit.t27`, and any value flow needs a
-  device-bound identity that no host has.
+- settlement is shut. `statement.t27` opens it only after counsel. Any value
+  flow also needs a device-bound identity that no host has, and TON
+  (`tri-bridge.t27`) is the only chain of record.
 
 A host whose receipt is tampered, or whose result dissents from an agreed
 one, gets a strike. Three strikes, and it is placed nothing more.
 
+With `TRIOS_HOSTING_SYBIL=on` the Queen also applies `sybil.t27`:
+- **Anchored quorum:** a public job is believed only through an owner or
+  trusted host, or a known answer.
+- **Canaries:** one public lease in ten carries a known answer; a wrong
+  answer is slashed and struck at once.
+- **Probation:** a new key earns nothing for its first 10 agreeing jobs.
+- **Cap:** a public key earns at most 24 mTRI per epoch, or 96 when the owner
+  marks it attested.
+- **Slash:** it takes the epoch's credit and moves it nowhere.
+
+Each epoch (a day, from 2026-10-10T00:00Z) closes into one signed statement:
+`GET /hosting/ledger/epochs`, and `GET /hosting/ledger/epochs/<n>/proof?key=<host id>`
+for one key's leaves and their paths. `trios-host statement` checks your own leaf.
+
 ## For the owner
 
 - **Server:** the Queen serves `/hosting/*` only with `TRIOS_HOSTING=on` (503
-  otherwise).
+  otherwise). Off, the boot migration builds no hosting table. On, it
+  migrates them idempotently at boot (`pg-migrate.ts`, under an advisory
+  lock), and over slice 1's tables it keeps their rows.
+- **Ledger key:** `TRIOS_HOSTING_LEDGER_KEY` (`statement.t27`
+  `LEDGER_KEY_VARIABLE`) is the Queen's Ed25519 seed, 64 lowercase hex
+  characters. Without it every epoch stays open and unsigned, and one log
+  line says so; its value is never logged.
+- **Sybil rules:** `TRIOS_HOSTING_SYBIL=on` turns them on.
+  `TRIOS_HOSTING_ATTESTED=<host id>,...` lists the keys you attest (the
+  higher cap).
 - **Allowlist:** `TRIOS_HOSTING_ALLOWLIST=<host id>=owner,<host id>=trusted`
   names your own machines and the people you trust. Every other key is public,
   and a public host only ever receives shards that declare no secret and no

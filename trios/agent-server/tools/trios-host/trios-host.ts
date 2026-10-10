@@ -11,7 +11,7 @@
  *   bun build --compile --target=bun-darwin-arm64 tools/trios-host/trios-host.ts --outfile trios-host
  *   bun build --compile --target=bun-linux-x64    tools/trios-host/trios-host.ts --outfile trios-host
  *
- * The four cards travel inside it (the `with { type: 'file' }` imports below);
+ * The cards travel inside it (the `with { type: 'file' }` imports below);
  * every decision it makes is one of their calls. Its key and its toolchain
  * live in ~/.trios-host (TRIOS_HOST_HOME), the key with mode 0600.
  */
@@ -22,6 +22,10 @@ import {
   createT27cRunner,
 } from '../../apps/server/src/api/services/hosting-agent'
 import { useHostingCardFiles } from '../../apps/server/src/api/services/hosting-cards'
+import {
+  checkOwnLeaves,
+  type EpochProof,
+} from '../../apps/server/src/api/services/hosting-statement'
 import {
   agentHome,
   fileSource,
@@ -42,12 +46,18 @@ import placementWasm from '../../specs/hosting/placement.wasm' with {
   type: 'file',
 }
 import proofWasm from '../../specs/hosting/proof.wasm' with { type: 'file' }
+import statementWasm from '../../specs/hosting/statement.wasm' with {
+  type: 'file',
+}
+import sybilWasm from '../../specs/hosting/sybil.wasm' with { type: 'file' }
 
 useHostingCardFiles({
   host: hostWasm,
   proof: proofWasm,
   placement: placementWasm,
   credit: creditWasm,
+  sybil: sybilWasm,
+  statement: statementWasm,
 })
 
 const USAGE = `trios-host -- lend this computer to the Queen (gHashTag/trios#1756)
@@ -64,6 +74,11 @@ const USAGE = `trios-host -- lend this computer to the Queen (gHashTag/trios#175
       (owner key only) ask the Queen to run one spec at one commit
   trios-host status --queen <url>
       this host's row of the public ledger
+  trios-host statement --queen <url> --epoch <n> [--queen-key <64 hex>]
+      check that this host's credit is inside epoch n's signed root
+      (statement.t27): the Queen's signature, the leaf, the path, the root.
+      Pin the Queen's key with --queen-key; without it, the key the Queen
+      publishes is used. Exits 0 only when every leaf of this host checks.
 `
 
 const TIERS = ['owner', 'trusted', 'public']
@@ -121,6 +136,26 @@ async function main() {
       JSON.stringify(ledger.hosts?.find((h) => h.host === id) ?? null, null, 2),
     )
     return
+  }
+  if (command === 'statement') {
+    const { privatePem } = loadOrCreateKey(home)
+    const id = keyIdOf(publicHexOf(privatePem))
+    const res = await fetch(
+      `${need(f, 'queen')}/hosting/ledger/epochs/${need(f, 'epoch')}/proof?key=${id}`,
+    )
+    const proof = (await res.json()) as EpochProof & {
+      queen_key?: string
+      error?: string
+    }
+    if (res.status !== 200) {
+      console.log(res.status, proof.error ?? '')
+      process.exit(1)
+    }
+    const key =
+      typeof f['queen-key'] === 'string' ? f['queen-key'] : proof.queen_key
+    const checks = checkOwnLeaves(proof, String(key ?? ''), id)
+    console.log(JSON.stringify({ host: id, queen_key: key, checks }, null, 2))
+    process.exit(checks.length > 0 && checks.every((c) => c.code === 0) ? 0 : 1)
   }
   if (command === 'job') {
     const { privatePem } = loadOrCreateKey(home)
