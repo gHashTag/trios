@@ -40,6 +40,14 @@
  * withWaitBackoff spaces its next visit, as in production. A stall hangs in
  * the model call, so it holds its lane to the end: a killed review keeps its
  * lane until it ends. Set QUEEN_BENCH_ADAPTIVE_OUT for JSON.
+ *
+ * THE LANE QUEUE (trios#1729 item 4, review_lanes.t27). The same table runs
+ * the same draws twice more with TRIOS_QUEEN_REVIEW_LANES=semaphore: the fixed
+ * 4, and the adaptive pool. A review that finds no lane free at its model call
+ * waits for one in the queue the `review-lanes` actor owns, and the adaptive
+ * pool may exceed its lanes by the share of a review measured on no lane. A
+ * review given back for want of a lane still answers `wait` and counts as
+ * lane-less. `laneWaitP95` is the seconds a review waited in the queue.
  */
 
 import { describe, expect, it } from 'bun:test'
@@ -57,6 +65,11 @@ import {
   type PoolSize,
   reviewerTree,
 } from '../../src/api/services/queen-review-actors'
+import {
+  givesRowBack,
+  type LaneGate,
+} from '../../src/api/services/queen-review-lanes'
+import { LANE_GO } from '../../src/api/services/queen-review-lanes-card.gen'
 import {
   createReviewer,
   drainReviewerRound,
@@ -151,7 +164,13 @@ function workload(
   }
 }
 
-type Runtime = 'loop' | 'actors' | 'actors-hb-only' | 'actors-adaptive'
+type Runtime =
+  | 'loop'
+  | 'actors'
+  | 'actors-hb-only'
+  | 'actors-adaptive'
+  | 'actors-lanes'
+  | 'actors-adaptive-lanes'
 
 /** What the second table varies: the lanes and the memory both pools see. */
 interface Host {
@@ -181,6 +200,10 @@ interface Result {
   maxCalls?: number
   /** Visits that found no lane and answered `wait`. */
   laneless?: number
+  /** Visits that waited in the lane queue (laneQueue runtimes only). */
+  queuedVisits?: number
+  /** Seconds a review waited in the lane queue, 95th percentile. */
+  laneWaitP95?: number
   maxWorkers?: number
   avgWorkers?: number
   /** Seconds from the last arrival until no row is open; null: never. */
@@ -219,34 +242,59 @@ async function simulate(
   let calls = 0
   let maxCalls = 0
   let laneless = 0
+  let queuedVisits = 0
+  const laneWaits: number[] = []
+  // A free lane, or with the lane queue the one the review waited for.
+  // Undefined: none, and the review answers `wait`.
+  const takeLane = async (gate?: LaneGate) => {
+    let lane = laneFree.shift()
+    let answer = LANE_GO
+    if (lane === undefined && gate) {
+      const asked = clock.now()
+      queuedVisits++
+      while (lane === undefined) {
+        answer = await gate.wait()
+        if (answer !== LANE_GO) break
+        lane = laneFree.shift()
+      }
+      laneWaits.push(clock.now() - asked)
+    }
+    if (lane === undefined && (!gate || givesRowBack(answer))) laneless++
+    return lane
+  }
   const laned = (
     issue: number,
     token: number,
     a: Attempt,
     onLane: (lane: number | undefined) => void,
+    gate?: LaneGate,
   ) => {
     const pre = a.seconds * 10 * LANE_AT_PERCENT
     return new Promise<Judged>((resolve, reject) =>
-      clock.after(pre, () => {
+      clock.after(pre, async () => {
         if (a.fate === 'crash') {
           if (fence.get(issue) === token && !completed.has(issue))
             crashes.push({ issue, at: clock.now() })
           reject(new Error('review crashed'))
           return
         }
-        const lane = laneFree.shift()
+        // with the lane queue, a review with no lane free waits for one, and
+        // reads the lanes again when the queue lets it through
+        const lane = await takeLane(gate)
         if (lane === undefined) {
-          laneless++
           resolve({ acted: [`#${issue}:wait`], strays: [], tally: [] })
           return
         }
-        onLane(lane)
+        const held = lane
+        gate?.held()
+        onLane(held)
         calls++
         maxCalls = Math.max(maxCalls, calls)
         const end = a.fate === 'stall' ? STALL_SECONDS * 1000 : a.seconds * 1000
         clock.after(end - pre, () => {
-          laneFree.push(lane)
+          laneFree.push(held)
           calls--
+          gate?.released()
           if (fence.get(issue) === token && !completed.has(issue))
             completed.set(issue, clock.now())
           resolve(judged())
@@ -257,6 +305,7 @@ async function simulate(
   const reviewOne = (
     issue: number,
     onLane: (lane: number | undefined) => void = () => {},
+    gate?: LaneGate,
   ) => {
     const now = clock.now()
     if (!firstStart.has(issue)) firstStart.set(issue, now)
@@ -274,7 +323,7 @@ async function simulate(
         : a.fate === 'crash'
           ? a.seconds * 300
           : a.seconds * 1000
-    if (host) return laned(issue, token, a, onLane)
+    if (host) return laned(issue, token, a, onLane, gate)
     return new Promise<Judged>((resolve, reject) =>
       clock.after(ms, () => {
         if (a.fate === 'crash') {
@@ -310,6 +359,10 @@ async function simulate(
     clock.after(REVIEWER_EVERY_SECONDS * 1000, tick)
   } else {
     const sys = createActorSystem(clock)
+    const laneQueue =
+      runtime === 'actors-lanes' || runtime === 'actors-adaptive-lanes'
+    const adaptive =
+      runtime === 'actors-adaptive' || runtime === 'actors-adaptive-lanes'
     const base = {
       holdsLease: async () => true,
       waiting,
@@ -317,12 +370,15 @@ async function simulate(
         issue: number,
         _reserved: () => number[],
         onLane: (lane: number | undefined) => void,
-      ) => reviewOne(issue, onLane),
+        _signal?: AbortSignal,
+        gate?: LaneGate,
+      ) => reviewOne(issue, onLane, gate),
     }
     // the second table runs as production does: a `wait` is visited less
     const r = reviewerTree(sys, {
       ...(host ? withWaitBackoff(base, clock.now) : base),
-      ...(runtime === 'actors-adaptive' && host
+      laneQueue,
+      ...(adaptive && host
         ? {
             capacity: async (reserved: number[]) => ({
               freeLanes: host.lanes - reserved.length,
@@ -332,7 +388,7 @@ async function simulate(
           }
         : {}),
     })
-    if (runtime === 'actors-adaptive') size = r.size
+    if (adaptive) size = r.size
     supervisor(
       sys,
       {
@@ -406,6 +462,8 @@ async function simulate(
     return {
       maxCalls,
       laneless,
+      queuedVisits,
+      laneWaitP95: sec(pct(laneWaits, 95)),
       maxWorkers: Math.max(...workers),
       avgWorkers:
         Math.round(
@@ -598,10 +656,15 @@ const SIZING: Array<{ w: Workload; host: Host; label: string }> = [
 ]
 
 describe('the reviewer: fixed 4 against the adaptive pool, same input', () => {
-  it('runs every scenario both ways, accounts for every row, and never calls past the lanes', async () => {
+  it('runs every scenario four ways, accounts for every row, and never calls past the lanes', async () => {
     const results: Array<Result & { host: string }> = []
     for (const { w, host, label } of SIZING)
-      for (const runtime of ['actors', 'actors-adaptive'] as Runtime[]) {
+      for (const runtime of [
+        'actors',
+        'actors-adaptive',
+        'actors-lanes',
+        'actors-adaptive-lanes',
+      ] as Runtime[]) {
         const r = await simulate(w, runtime, host)
         expect(r.arrived).toBe(w.arrivals.length)
         expect(r.done + r.open).toBe(r.arrived)
@@ -619,6 +682,8 @@ describe('the reviewer: fixed 4 against the adaptive pool, same input', () => {
       'doneP95',
       'maxCalls',
       'laneless',
+      'queuedVisits',
+      'laneWaitP95',
       'maxWorkers',
       'avgWorkers',
       'drainS',

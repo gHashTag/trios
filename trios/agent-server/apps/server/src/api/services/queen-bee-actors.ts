@@ -6,13 +6,13 @@
  * THE BEE DISPATCHER AS KEYED ACTORS (MVP, epic gHashTag/trios#1712 item 7,
  * gHashTag/t27#7851). It does the round's dispatch work, arranged as actors:
  *
- *   admission, one actor: the lanes in use and the issues waiting for one.
- *     It answers one call per ready issue: a lane, wait, or refused
- *     (lane_free, and the policy's word through `deps.admit`, which is
- *     queend in production). When a bee's work ends, its lane goes to the
- *     waiting issues in the policy's order, unless its own issue restarts at
- *     once (keeps_lane_after_end): the wait ends on that event, not on the
- *     next round.
+ *   admission, one actor under its own supervisor: it answers one call per
+ *     ready issue with a lane, wait, or refused (keyed_guard.t27
+ *     admit_answer, and the policy's word through `deps.admit`, which is
+ *     queend in production). When a lane frees, it wakes the waiting issues
+ *     in the policy's order (wake_count), unless the lane's own issue
+ *     restarts at once (keeps_lane_after_end): the wait ends on that event,
+ *     not on the next round.
  *   one actor per issue (keyedActors, keyed.t27): the issue's state
  *     (bee_key_next, so a repeated ready starts no second bee), the claim
  *     (claim_step, with this incarnation's pid as the holder), the bee it
@@ -26,16 +26,33 @@
  *     keeps its issue and its lane until the bee's work has ended
  *     (holds_after_kill): a second bee never starts beside it.
  *
+ * THE LANE BOARD (keyed_guard.t27 section 2, trios#1729 item 7). The
+ * admission ran unsupervised, with the lanes in use in its own memory: one
+ * crash ended every later admission, since each call met a dead pid. It is a
+ * permanent child of a one_for_one supervisor now, and what it knows is on
+ * the board, which outlives it as an ETS table with an heir outlives its
+ * owner: the lane each issue holds, by its token, and the issues waiting.
+ * Every write keeps the board true without the admission. A grant is written
+ * in the turn that answers, and taken back in that turn when the answer
+ * reaches nobody (grant_lands). A holder takes its own entry off before it
+ * tells the admission. An issue's actor that ends holding a lane gives it
+ * back unless its bee runs (lane_outlives_holder). An issue whose call finds
+ * no admission waits on the board (after_admission). A restarted admission
+ * wakes the waiting issues at once.
+ *
  * Behind TRIOS_QUEEN_DISPATCH=actors, off by default. The round's loop stays
  * the default until the benchmark's numbers are accepted (t27#7851).
  */
 
 import {
+  type ActorSpec,
   type ActorSystem,
+  actorChild,
   type Clock,
   createActorSystem,
   type Pid,
   realClock,
+  supervisor,
 } from './queen-actors'
 import {
   CALL_REPLY,
@@ -45,7 +62,12 @@ import {
   X_NORMAL,
 } from './queen-actors-card.gen'
 import { keyedActors } from './queen-actors-keyed'
-import { type Exit, linksOf } from './queen-actors-links'
+import {
+  type CallRequest,
+  type Exit,
+  KEYED_GUARD_CARD,
+  linksOf,
+} from './queen-actors-links'
 import { flag, loadCardWasm, u32 } from './queen-card-wasm'
 import {
   DX_NORMAL,
@@ -71,13 +93,28 @@ import {
   BK_IDLE,
   CL_START,
 } from './queen-keyed-card.gen'
+import {
+  AD_ASK,
+  AD_GIVE_BACK,
+  AD_GRANT,
+  AD_KEEP,
+  AD_REFUSED,
+  ADMISSION_MAX_RESTARTS,
+  ADMISSION_PERIOD_SECONDS,
+  ADMISSION_RESTART,
+  ADMISSION_STRATEGY,
+  IA_START,
+  IA_WAIT,
+} from './queen-keyed-guard-card.gen'
 
 export const DISPATCH_EXIT_CARD = 'queen/dispatch_exit.wasm'
 const keyed = () => loadCardWasm('queen/keyed.wasm')
 const exitCard = () => loadCardWasm(DISPATCH_EXIT_CARD)
 const actors = () => loadCardWasm('queen/actors.wasm')
+const guard = () => loadCardWasm(KEYED_GUARD_CARD)
 const kc = (name: string, ...a: number[]) => keyed().call(name, ...a)
 const dx = (name: string, ...a: number[]) => exitCard().call(name, ...a)
+const gc = (name: string, ...a: number[]) => guard().call(name, ...a)
 
 /** What the host saw when a bee's work ended (dispatch_exit.t27 section 2). */
 export interface BeeEnd {
@@ -125,7 +162,10 @@ export interface BeeDispatchDeps {
   admitAfterMs?: number
   /** Told of every start, end and stand-down. */
   observe?: (e: BeeEvent) => void
-  /** Prefix of the claim's holder; the pid follows it. */
+  /**
+   * The claim's holder is this, a colon, and the issue actor's pid
+   * (keyed_guard.t27 section 1). In production it names the process's boot.
+   */
   holderPrefix?: string
 }
 
@@ -134,6 +174,7 @@ export type BeeEvent =
   | { kind: 'ended'; issue: number; reason: number; decision: number }
   | { kind: 'stood-down'; issue: number }
   | { kind: 'killed'; issue: number }
+  | { kind: 'admission-gave-up' }
 
 type IssueMsg =
   | { kind: 'ready' }
@@ -142,19 +183,32 @@ type IssueMsg =
   | { kind: 'work-ended'; work: BeeWork; end: BeeEnd; lane: number }
   | Exit
 
-type AdmissionMsg =
-  | {
-      kind: 'call'
-      /** `lane`: the token of a lane this issue still holds (a restart). */
-      body: { issue: number; lane?: number }
-      alias: Pid
-      chain: bigint
-      depth: number
-    }
-  | { kind: 'free'; issue: number; lane: number }
+/** What the admission is asked; `lane`: the token of a lane the issue kept. */
+type AdmissionAsk = { issue: number; lane?: number }
 
-/** The admission's answer: a lane and its token, wait for one, or refused. */
-type Admitted = { lane: number } | 'wait' | 'refused'
+type AdmissionMsg =
+  | CallRequest<AdmissionAsk>
+  /** A holder gave its lane back; its entry is off the board already. */
+  | { kind: 'freed' }
+  /** A new incarnation's first message: lanes may have freed while it was down. */
+  | { kind: 'wake' }
+
+/** The admission's reply: keyed_guard.t27 AD_*, and the lane's token for a lane. */
+interface Admitted {
+  answer: number
+  lane?: number
+}
+
+/**
+ * The lane board: what the admission knows, kept where its crash cannot take
+ * it (keyed_guard.t27 section 2).
+ */
+export interface LaneBoard {
+  /** The lane each issue holds, by its token. */
+  lanes: Map<number, number>
+  /** The issues waiting for a lane, in the order they were told to wait. */
+  waiting: number[]
+}
 
 const UNKNOWN_END: BeeEnd = {
   completion: false,
@@ -169,61 +223,121 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
   const clock = sys.clock
   const links = linksOf(sys)
   const admitAfterMs = deps.admitAfterMs ?? 30_000
-  const stats = { started: 0, standDowns: 0, killed: 0, refusedLanes: 0 }
+  const stats = {
+    started: 0,
+    standDowns: 0,
+    killed: 0,
+    refusedLanes: 0,
+    /** Admission incarnations started, the first one included. */
+    admissionStarts: 0,
+    /** Grants whose answer reached nobody, taken back (grant_lands). */
+    grantsTakenBack: 0,
+    /** Lanes given back because their issue's actor ended with no bee running. */
+    lanesFreedOnExit: 0,
+    /** Calls that met no admission, or none in time: those issues waited. */
+    admissionMissed: 0,
+  }
 
-  // ---- admission: lanes in use, by issue, each with a token; who waits
-  const inUse = new Map<number, number>()
-  let nextLane = 1
-  const waiting: number[] = []
-  const laneFree = (taken: number) =>
-    kc('lane_free', u32(inUse.size + taken), u32(deps.lanes())) !== 0
+  // ---- the lane board, and the admission that answers from it
+  const board: LaneBoard = { lanes: new Map(), waiting: [] }
+  // tokens are the dispatcher's, so they stay unique across admissions
+  let nextToken = 1
+  let admission: Pid = BigInt(NO_PID)
+  const laneFree = () =>
+    kc('lane_free', u32(board.lanes.size), u32(deps.lanes())) !== 0
+  const waitOnBoard = (issue: number) => {
+    if (!board.waiting.includes(issue)) board.waiting.push(issue)
+  }
   const wake = () => {
-    const ordered = (deps.order ?? ((w) => w))([...waiting])
-    let free = 0
-    while (laneFree(free)) free++
-    for (const issue of ordered.slice(0, free)) {
-      waiting.splice(waiting.indexOf(issue), 1)
+    const n = gc(
+      'wake_count',
+      u32(board.lanes.size),
+      u32(deps.lanes()),
+      u32(board.waiting.length),
+    )
+    if (n === 0) return
+    const ordered = (deps.order ?? ((w) => w))([...board.waiting])
+    for (const issue of ordered.slice(0, n)) {
+      board.waiting.splice(board.waiting.indexOf(issue), 1)
       issues.send(issue, { kind: 'ready' })
     }
   }
-  const release = (issue: number, lane: number) => {
-    if (inUse.get(issue) !== lane) return
-    inUse.delete(issue)
-    wake()
+  /** Take a lane off the board if it still names that token, and wake. */
+  const giveBack = (issue: number, token: number) => {
+    if (board.lanes.get(issue) === token) board.lanes.delete(issue)
+    sys.send(admission, { kind: 'freed' } as AdmissionMsg)
   }
-  const admission: Pid = sys.spawn<AdmissionMsg>({
+
+  /** The admission's answer, from the board as it is now. */
+  const answerFor = (ask: AdmissionAsk, asked: boolean, ok: boolean) => {
+    const held = board.lanes.get(ask.issue)
+    const kept = ask.lane !== undefined && held === ask.lane
+    return gc(
+      'admit_answer',
+      flag(kept),
+      flag(held !== undefined),
+      flag(laneFree()),
+      flag(asked),
+      flag(ok),
+    )
+  }
+
+  const admissionSpec: ActorSpec<AdmissionMsg> = {
     name: 'bee-admission',
-    receive: async (msg, self) => {
-      if (msg.kind === 'free') return release(msg.issue, msg.lane)
-      const { issue, lane } = msg.body
-      const ok = () => deps.admit(issue).catch(() => false)
-      let answer: Admitted = 'wait'
-      if (lane !== undefined && inUse.get(issue) === lane) {
-        // a restart at once, on the lane the issue kept (keeps_lane_after_end)
-        if (await ok()) answer = { lane }
-        else {
-          release(issue, lane)
-          answer = 'refused'
-        }
-      } else if (inUse.has(issue)) {
-        answer = 'refused'
-      } else if (laneFree(0)) {
-        answer = (await ok()) ? { lane: nextLane++ } : 'refused'
-        // one turn at a time: nobody took a lane meanwhile, but lanes() may move
-        if (answer !== 'refused' && !laneFree(0)) answer = 'wait'
-        if (typeof answer === 'object') inUse.set(issue, answer.lane)
-      }
-      if (answer === 'wait') {
-        stats.refusedLanes++
-        if (!waiting.includes(issue)) waiting.push(issue)
-      }
-      links.reply(msg, answer, self)
+    init: (self) => {
+      admission = self
+      stats.admissionStarts++
+      sys.send(self, { kind: 'wake' } as AdmissionMsg)
     },
-  })
-  const freeLane = (issue: number, lane: number) =>
-    sys.send(admission, { kind: 'free', issue, lane } as AdmissionMsg)
+    receive: async (msg, self) => {
+      if (msg.kind !== 'call') return wake()
+      const ask = msg.body
+      let answer = answerFor(ask, false, false)
+      if (answer === AD_ASK) {
+        const ok = await deps.admit(ask.issue).catch(() => false)
+        // a turn whose pid died meanwhile writes nothing, as its sends reach
+        // nobody
+        if (!sys.alive(self)) return
+        answer = answerFor(ask, true, ok)
+      }
+      let lane: number | undefined
+      if (answer === AD_GRANT) {
+        lane = nextToken++
+        board.lanes.set(ask.issue, lane)
+      } else if (answer === AD_KEEP) {
+        lane = ask.lane
+      } else if (answer === AD_GIVE_BACK && ask.lane !== undefined) {
+        if (board.lanes.get(ask.issue) === ask.lane)
+          board.lanes.delete(ask.issue)
+      }
+      if (gc('answer_waits', answer) !== 0) {
+        stats.refusedLanes++
+        waitOnBoard(ask.issue)
+      }
+      const d = links.reply(msg, { answer, lane } as Admitted, self)
+      if (lane !== undefined && gc('grant_lands', flag(d === 0)) === 0) {
+        // the call ended first: nobody holds this lane
+        stats.grantsTakenBack++
+        if (board.lanes.get(ask.issue) === lane) board.lanes.delete(ask.issue)
+      }
+      if (answer === AD_GIVE_BACK || lane !== undefined) wake()
+    },
+  }
+  const admissionSup = supervisor(
+    sys,
+    {
+      name: 'bee-admission-sup',
+      strategy: ADMISSION_STRATEGY,
+      maxRestarts: ADMISSION_MAX_RESTARTS,
+      periodSeconds: ADMISSION_PERIOD_SECONDS,
+    },
+    [actorChild(sys, admissionSpec, ADMISSION_RESTART)],
+  ).start(() => deps.observe?.({ kind: 'admission-gave-up' }))
 
   // ---- one actor per issue
+  const issueOf = new Map<Pid, number>()
+  // bees whose work has not ended, by issue, whatever became of their actor
+  const beeRunning = new Map<number, number>()
   const issueActor = (issue: number) => {
     let state = BK_IDLE
     let bee: Pid | undefined
@@ -237,7 +351,7 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
     // the lane this issue holds, by its token: from admission to its bee's end
     let lane: number | undefined
     const giveLaneBack = () => {
-      if (lane !== undefined) freeLane(issue, lane)
+      if (lane !== undefined) giveBack(issue, lane)
       lane = undefined
     }
 
@@ -251,26 +365,37 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
       const got = await links.call<Admitted>(
         { self },
         admission,
-        { issue, lane },
+        { issue, lane } as AdmissionAsk,
         admitAfterMs,
       )
-      if (got.outcome !== CALL_REPLY || typeof got.value !== 'object') {
-        // a kept lane the policy refused was released by the admission
-        lane = undefined
+      const replied = got.outcome === CALL_REPLY && got.value !== undefined
+      const step = gc(
+        'after_admission',
+        got.outcome,
+        replied ? (got.value as Admitted).answer : AD_REFUSED,
+      )
+      if (step !== IA_START) {
+        // a kept lane not kept now goes back: the admission gave it back
+        // already, or never answered
+        giveLaneBack()
+        if (step === IA_WAIT) {
+          if (!replied) stats.admissionMissed++
+          waitOnBoard(issue)
+        }
         move(BE_REFUSED)
         return
       }
-      lane = got.value.lane
+      lane = (got.value as Admitted).lane
       const holder = `${deps.holderPrefix ?? 'queen-actor'}:${self}`
       const s = await deps
         .start(issue, holder)
         .catch((): BeeStart => ({ claim: false, work: null }))
-      const step = kc('claim_step', 1, flag(s.claim))
-      if (kc('keeps_lane', step) === 0 || !s.work) {
+      const step2 = kc('claim_step', 1, flag(s.claim))
+      if (kc('keeps_lane', step2) === 0 || !s.work) {
         // a lost claim, or nothing started: the lane goes back at once
         giveLaneBack()
         move(BE_REFUSED)
-        if (step !== CL_START) {
+        if (step2 !== CL_START) {
           stats.standDowns++
           deps.observe?.({ kind: 'stood-down', issue })
           const wait = kc(
@@ -293,10 +418,14 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
       // When the work ends, this incarnation decides what its lane does
       // (keeps_lane_after_end). If it has died meanwhile, nobody here restarts
       // the issue, and the lane goes back at once.
-      const held = got.value.lane
+      const held = lane as number
+      beeRunning.set(issue, (beeRunning.get(issue) ?? 0) + 1)
       void w.ended
         .catch(() => UNKNOWN_END)
         .then((e) => {
+          const left = (beeRunning.get(issue) ?? 1) - 1
+          if (left > 0) beeRunning.set(issue, left)
+          else beeRunning.delete(issue)
           if (sys.alive(self))
             issues.send(issue, {
               kind: 'work-ended',
@@ -304,7 +433,7 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
               end: e,
               lane: held,
             })
-          else freeLane(issue, held)
+          else giveBack(issue, held)
         })
       bee = sys.spawn<{ go: true }>({
         name: `bee-${issue}`,
@@ -404,7 +533,10 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
 
     return {
       name: `issue-${issue}`,
-      init: (self: Pid) => links.trapExit(self),
+      init: (self: Pid) => {
+        issueOf.set(self, issue)
+        links.trapExit(self)
+      },
       holdsWork: () => kc('key_holds_work', state) !== 0 || work !== undefined,
       receive: async (msg: IssueMsg, self: Pid) => {
         if (msg.kind === 'EXIT') return onExit(msg, self)
@@ -414,7 +546,7 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
           return
         }
         // another incarnation's bee: nobody here restarts it; its lane goes back
-        if (msg.work !== work) return void freeLane(issue, msg.lane)
+        if (msg.work !== work) return void giveBack(issue, msg.lane)
         end = msg.end
         if (bee === undefined) await decide(self)
       },
@@ -426,17 +558,37 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
     make: issueActor,
   })
 
+  // An issue's actor that ends while the board names a lane for its issue:
+  // the lane stays only with a bee that still runs, whose end gives it back
+  // (keyed_guard.t27 lane_outlives_holder).
+  sys.onExit((pid) => {
+    const issue = issueOf.get(pid)
+    if (issue === undefined) return
+    issueOf.delete(pid)
+    const token = board.lanes.get(issue)
+    if (token === undefined) return
+    if (gc('lane_outlives_holder', flag(beeRunning.has(issue))) !== 0) return
+    stats.lanesFreedOnExit++
+    giveBack(issue, token)
+  })
+
   return {
     /** An issue is ready (the round read it, or an event names it). */
     ready: (issue: number) => issues.send(issue, { kind: 'ready' }),
     /** The review sent the work back: a new attempt. */
     sentBack: (issue: number) => issues.send(issue, { kind: 'sent-back' }),
-    lanesInUse: () => inUse.size,
-    waiting: () => [...waiting],
+    lanesInUse: () => board.lanes.size,
+    waiting: () => [...board.waiting],
+    /** The admission's pid now; a restart gives it a new one. */
+    admission: () => admission,
+    board,
     issues,
     stats,
     /** Stop every issue actor, the last started first; bees on runners run on. */
-    stop: () => issues.stopAll(),
+    stop: () => {
+      admissionSup.stop()
+      return issues.stopAll()
+    },
   }
 }
 

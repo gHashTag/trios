@@ -314,12 +314,27 @@ describe('PgLink over PostgreSQL: the defects, reproduced', () => {
     // a deploy: the new build starts on the same node id while the old drains
     const b2 = await node(2)
     expect(b2.link.incarnation).toBe(b1.link.incarnation + 1)
-    // the old one's next write is refused by the store, and it fences at once
+    // The old one's next write is refused by the store, and it fences at once.
+    // WHICH WRITE COMES FIRST IS A RACE, so neither is asserted: its beat
+    // thread renews on its own clock, and when that renewal lands between the
+    // new start and this send, the node has fenced before it sends and the
+    // send is a dead letter here, not a lost send (3 of 6 full runs in
+    // gHashTag/trios#1734; #1729 item 8). What holds either way is asserted:
+    // the store admits no write of the old incarnation, the send went
+    // nowhere, and the node fenced.
+    const dropped = () => b1.link.stats.lostSends + b1.sys.stats.deadLetters
+    const droppedBefore = dropped()
     b1.sys.send(sink, 1)
     await until(() => b1.sys.fenced(), 7000)
     expect(b1.sys.fenced()).toBe(true)
     expect(b1.sys.alive(worker)).toBe(false)
-    expect(b1.link.stats.lostSends).toBeGreaterThan(0)
+    expect(dropped()).toBeGreaterThan(droppedBefore)
+    const admitted = await b1.pool.query(FENCE_SQL, [
+      2,
+      b1.link.incarnation,
+      NODE_TTL_SECONDS,
+    ])
+    expect((admitted.rows[0] as { admitted: number }).admitted).toBe(0)
     await sleep(1500)
     expect(got).toEqual([])
     // the new one is the node now

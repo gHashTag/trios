@@ -48,7 +48,7 @@ import {
   TIP_SENT_BACK,
 } from './queen-control-rules'
 import { domainOfTask } from './queen-domains'
-import { queenHolderName } from './queen-lease'
+import { queenActorHolderPrefix, queenHolderName } from './queen-lease'
 import {
   describeReading,
   diskLineUsedPercent,
@@ -149,6 +149,13 @@ export const DISPATCH_OUTCOME_LABELS = {
    * prefix, so the issue is released exactly as a silent runner's is.
    */
   reapedLeaseExpired: 'reaped: task lease expired',
+  /**
+   * A draining runner held the bee to its cap and handed it back
+   * (specs/queen/drain.t27 DV_HAND_BACK): what it wrote is salvaged, and the
+   * row ends now instead of when its lease lapses. Keeps the `reaped` prefix,
+   * so the issue is released exactly as a lapsed lease's is.
+   */
+  reapedDrained: 'reaped: drained at deploy',
 } as const
 
 /** One label from the set, as a type. */
@@ -4500,8 +4507,15 @@ export async function finishDispatch(
     // this process's holder name: after a takeover the fence is the new
     // holder's, and a guarded UPDATE is what keeps this one from giving away
     // a lease it no longer owns. The reapers land here as well, which is how
-    // a reaped task's lease is released without waiting out its TTL.
-    await releaseTaskLease(pool, issue, queenHolderName()).catch(() => false)
+    // a reaped task's lease is released without waiting out its TTL. A claim
+    // a keyed actor of this process made goes back too (keyed_guard.t27
+    // end_releases): the row does not say which actor claimed it.
+    await releaseTaskLease(
+      pool,
+      issue,
+      queenHolderName(),
+      queenActorHolderPrefix(),
+    ).catch(() => false)
     void publishEvent(pool, 'queen/task.ended', { issue, outcome }).catch(
       (error) =>
         logger.warn('Queen event log write failed', {
@@ -4773,7 +4787,9 @@ export async function dispatchBee(
   // row written here would land on top of the live holder's dispatch - the
   // defect the lease exists to prevent, committed by the lease's own loser.
   const control = await loadControlSpec()
-  const holder = queenHolderName()
+  // a keyed actor claims as itself, the process's boot and its pid
+  // (keyed_guard.t27 claim_lands_for); the round claims as the process
+  const holder = deps.holder ?? queenHolderName()
   const claimFn = deps.claimTaskLease ?? claimTaskLease
   const releaseFn =
     deps.releaseTaskLease === null
@@ -5257,6 +5273,11 @@ export interface BeeRoomDeps {
   offer?: typeof offerToRunner | null
   /** Only a runner may take it: the container is already at its limit. */
   runnerOnly?: boolean
+  /**
+   * Who claims the task lease: a keyed actor's holder (queen-bee-actors.ts),
+   * or, unset, this process (queenHolderName).
+   */
+  holder?: string
   memory?: () => MemoryReading
   volume?: (dir: string) => VolumeSpace | null
   reap?: typeof reapWorktrees

@@ -43,6 +43,7 @@ import { logger } from '../../lib/logger'
 import { startModelProbes, workerModelRanking } from '../../lib/model-ranking'
 import { importRunnerBranch } from '../routes/queen-export'
 import { outstandingEscalations } from '../routes/queen-needs-you'
+import { actorEventsOn } from './queen-actor-events'
 import { advanceApp } from './queen-app'
 import {
   dispatchByActors,
@@ -87,7 +88,9 @@ import {
   workerProbeEndpoint,
   workspaceRoot,
 } from './queen-dispatch'
+import { drainBoundedEnabled } from './queen-drain'
 import { pruneEvents, wakesHere } from './queen-events'
+import { ACTOR_STREAM } from './queen-events.gen'
 import { heldPaths } from './queen-holds'
 import {
   advanceJobs,
@@ -98,6 +101,7 @@ import {
 import {
   acquireQueenLease,
   logLeaseOutcome,
+  queenActorHolderPrefix,
   queenHolderName,
   queenLeaseDatabaseUrl,
   releaseQueenLease,
@@ -119,6 +123,8 @@ import {
   type ReviewCapacity,
   startReviewerActors,
 } from './queen-review-actors'
+import type { LaneGate } from './queen-review-lanes'
+import { LANE_GO, LANE_STOPPED } from './queen-review-lanes-card.gen'
 import {
   drainReviewerRound,
   reviewerRunning,
@@ -1717,10 +1723,13 @@ export async function runRound(
   try {
     const control = await loadControlSpec()
     await ensureControlTables(pool)
+    // and its keyed actors' leases (keyed_guard.t27 round_renews): their bees
+    // outlive them
     const renewed = await renewRunningLeases(
       pool,
       holder,
       control.taskLeaseTtlSeconds,
+      queenActorHolderPrefix(),
     )
     // R_RECLAIM: a runner that stopped beating for a whole TTL loses its
     // task now, not after the runner reapers' 10 or 15 minutes. Each one is
@@ -2107,6 +2116,7 @@ export async function runRound(
     issue: number,
     paths: string[],
     runnerOnly = false,
+    holder?: string,
   ) => {
     const spec = specVerdicts[String(issue)]
     const criteria = spec?.criteria ?? []
@@ -2134,7 +2144,7 @@ export async function runRound(
       keyCursor,
       criteria,
       criteriaSource,
-      ...(runnerOnly ? [{ runnerOnly: true }] : []),
+      ...(runnerOnly ? [{ runnerOnly: true }] : holder ? [{ holder }] : []),
     )
   }
 
@@ -2169,8 +2179,9 @@ export async function runRound(
               ? 'queued'
               : 'running',
         }),
-      dispatch: async (issue, paths) => {
-        const out = await dispatchChosen(issue, paths)
+      // the issue actor's own holder (keyed_guard.t27 claim_lands_for)
+      dispatch: async (issue, paths, holder) => {
+        const out = await dispatchChosen(issue, paths, false, holder)
         if (typeof out.keyIndex === 'number' && !isRunnerLane(out.keyIndex)) {
           takenKeys = [...takenKeys, out.keyIndex]
           keyCursor = out.keyIndex
@@ -3184,6 +3195,12 @@ export interface ReviewScope {
    * an aborted model call is not evidence about the work.
    */
   signal?: AbortSignal
+  /**
+   * The review's gate into the lane queue (review_lanes.t27,
+   * TRIOS_QUEEN_REVIEW_LANES=semaphore). With no lane free at the model call
+   * the sweep waits there; each model call holds a lane in it.
+   */
+  lanes?: LaneGate
 }
 
 /**
@@ -3825,7 +3842,7 @@ export async function reviewFinishedDispatches(
         // `runRound` counts them before it hands out a key.
         takenKeys ??= await runningKeys(pool)
         // and the lanes reviews running beside this one hold (reviewer.t27)
-        const taken = [...takenKeys, ...(scope.reservedKeys?.() ?? [])]
+        let taken = [...takenKeys, ...(scope.reservedKeys?.() ?? [])]
         // A LANE THAT ALREADY REFUSED THIS REVIEW IS NOT OFFERED AGAIN.
         //
         // `chooseReviewerLane` is deterministic, so without this the same lane
@@ -3842,6 +3859,21 @@ export async function reviewFinishedDispatches(
             bee,
           )
         let choice = await pick()
+        // A REVIEW WITH NO LANE WAITS FOR ONE (review_lanes.t27). Without the
+        // queue it ends here and answers `wait`: its witness and its
+        // measurement thrown away, its row pushed back by due_again. In the
+        // queue it waits for a lane a sibling gives back, and then reads the
+        // keys again, because a bee may have taken or freed one meanwhile.
+        let laneAnswer = LANE_GO
+        while (!choice && scope.lanes) {
+          laneAnswer = await scope.lanes.wait()
+          if (laneAnswer !== LANE_GO) break
+          takenKeys = await runningKeys(pool)
+          taken = [...takenKeys, ...(scope.reservedKeys?.() ?? [])]
+          choice = await pick()
+        }
+        // a stopped review writes nothing (turn_stop.t27)
+        if (laneAnswer === LANE_STOPPED) live()
         if (!choice) {
           reviewerSkipped = 'no reviewer lane is free'
         } else {
@@ -3886,12 +3918,19 @@ export async function reviewFinishedDispatches(
               const lane: WorkerProvider = choice.lane
               scope.onLane?.(lane)
               triedLanes.add(reviewerLaneKey(lane))
-              const answer = await deps.llm(
-                lane,
-                REVIEWER_SYSTEM_PROMPT,
-                message,
-                scope.signal,
-              )
+              // the lane is held for the model call and no longer
+              scope.lanes?.held()
+              let answer: Awaited<ReturnType<ReviewDeps['llm']>>
+              try {
+                answer = await deps.llm(
+                  lane,
+                  REVIEWER_SYSTEM_PROMPT,
+                  message,
+                  scope.signal,
+                )
+              } finally {
+                scope.lanes?.released()
+              }
               if (!answer.ok) {
                 // Nothing spent: a 1302 or a timeout is the provider saying
                 // "not now", and it must not read as a finding about the work.
@@ -5167,16 +5206,11 @@ export function startQueenTick(): void {
       ? startReviewerActors(
           pool,
           LEASE_NAME,
-          reviewFinishedDispatches,
+          countedReview,
           waitingReviewIssues,
           reviewCapacity,
         )
-      : startReviewer(
-          pool,
-          LEASE_NAME,
-          reviewFinishedDispatches,
-          waitingReviewIssues,
-        )
+      : startReviewer(pool, LEASE_NAME, countedReview, waitingReviewIssues)
   // Long waits as rows (waits.t27, TRIOS_QUEEN_WAITS=rows): a job parked on a
   // row is not visited by the round; the scheduler checks the run and, when
   // the row ends, asks for a round here so the job moves at once.
@@ -5205,8 +5239,11 @@ export function startQueenTick(): void {
     // the round writes it, so the board reads when the last one ran.
     void publishEvent(pool, 'queen/tick', {}).catch(() => {})
     // Once an hour, what events.t27 no longer keeps.
-    if (++ticks % Math.max(1, Math.round(3600 / interval)) === 0)
+    if (++ticks % Math.max(1, Math.round(3600 / interval)) === 0) {
       void pruneEvents(pool, 'queen').catch(() => {})
+      // the actors' stream keeps by the same rule (events.t27 section 6)
+      if (actorEventsOn()) void pruneEvents(pool, ACTOR_STREAM).catch(() => {})
+    }
   }, interval * 1000)
 
   const handover = async (): Promise<void> => {
@@ -5236,6 +5273,9 @@ export function startQueenTick(): void {
   // (stopQueenTickNow), after the drain.
   stopAtExit = handover
   process.once('SIGTERM', () => {
+    // drain.t27 (TRIOS_QUEEN_DRAIN=bounded): the drain decides when the
+    // rounds stop (takes_new_work) and calls stopQueenTickNow then.
+    if (drainBoundedEnabled()) return
     if (roundsThroughDrain()) {
       logger.info(
         'Queen keeps her rounds through the drain; orders go to the other runners',
@@ -5248,6 +5288,25 @@ export function startQueenTick(): void {
 }
 
 let stopAtExit: (() => Promise<void>) | null = null
+
+/**
+ * Review sweeps this process is running now: what a bounded drain stops, and
+ * waits for, at its exit (drain.t27 DV_STOP, exit_step). Counted around the
+ * one function both reviewers call, so neither runtime changes.
+ */
+let reviewing = 0
+export const reviewsInFlight = (): number => reviewing
+
+async function countedReview(
+  ...args: Parameters<typeof reviewFinishedDispatches>
+): ReturnType<typeof reviewFinishedDispatches> {
+  reviewing++
+  try {
+    return await reviewFinishedDispatches(...args)
+  } finally {
+    reviewing--
+  }
+}
 
 /**
  * Whether a stopping container keeps running rounds until it ends. Two
