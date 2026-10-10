@@ -22,7 +22,7 @@
  */
 
 import type { Pool } from 'pg'
-import { QUEEN_VAULT_SQL, vaultFlagOn } from '../../lib/db/pg-migrate'
+import { migrateVaultStore, vaultFlagOn } from '../../lib/db/pg-migrate'
 import { createQueenPool } from '../../lib/db/queen-pool'
 import { logger } from '../../lib/logger'
 import { EV_GRANT } from './queen-vault-audit-card.gen'
@@ -45,7 +45,13 @@ import { ageAvailable, isRecipient, recipientOfText } from './vault-age'
 import { type AuditSink, busAuditSink } from './vault-audit'
 import { serves, startCode } from './vault-cards'
 import { Vault } from './vault-service'
-import { createPgStore, emptyState, type VaultStore } from './vault-store'
+import {
+  createPgStore,
+  emptyState,
+  StoreConflict,
+  type VaultState,
+  type VaultStore,
+} from './vault-store'
 import { isPublicHex, keyIdOf } from './vault-wire'
 
 export interface VaultStart {
@@ -97,6 +103,57 @@ function refuse(code: number): VaultStart {
 }
 
 /**
+ * The store as this start finds it, made to agree with the variables: a
+ * first row when there is none, and an owner grant for each owner key (each
+ * with its event). Two Queens booting on an empty store both try to write
+ * the first row; the one that loses reads the winner's row and goes on from
+ * there. A store sealed under another identity or recovery recipient is
+ * start_code's refusal, returned as its code.
+ */
+async function settle(
+  store: VaultStore,
+  audit: AuditSink,
+  now: () => number,
+  want: { recipient: string; recovery: string; owners: string[] },
+): Promise<VaultState | number> {
+  for (let attempt = 1; ; attempt++) {
+    const loaded = await store.load()
+    const code = startCode({
+      flagOn: true,
+      database: true,
+      tool: true,
+      identitySet: true,
+      identityOk: true,
+      recoveryOk: true,
+      ownersOk: true,
+      sameIdentity: loaded === null || loaded.vaultRecipient === want.recipient,
+      sameRecovery:
+        loaded === null || loaded.recoveryRecipient === want.recovery,
+    })
+    if (code !== START_ON) return code
+    const state = loaded ?? emptyState(want.recipient, want.recovery)
+    let changed = loaded === null
+    for (const key of want.owners) {
+      if (state.grants[key]?.tier === TIER_OWNER) continue
+      const id = keyIdOf(key)
+      await audit.append(EV_GRANT, { key: id, tier: TIER_OWNER, subject: id })
+      state.grants[key] = {
+        tier: TIER_OWNER,
+        scopes: state.grants[key]?.scopes ?? [],
+        grantedAt: now(),
+      }
+      changed = true
+    }
+    try {
+      if (changed) await store.save(state)
+      return state
+    } catch (error) {
+      if (!(error instanceof StoreConflict) || attempt >= 3) throw error
+    }
+  }
+}
+
+/**
  * Start the vault, or decide it stays off. Never throws: a database that
  * cannot be read is START_NO_DATABASE. Safe to call again (a test, a restart).
  */
@@ -138,37 +195,16 @@ export async function startVault(deps: StartDeps = {}): Promise<VaultStart> {
       deps.store && deps.audit
         ? null
         : (deps.pool ?? createQueenPool(url as string))
-    if (pool) await pool.query(QUEEN_VAULT_SQL)
+    if (pool) await migrateVaultStore(pool)
     const store = deps.store ?? createPgStore(pool as Pool)
     const audit = deps.audit ?? busAuditSink(pool as Pool)
     const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
-    let state = await store.load()
-    const after = startCode({
-      flagOn,
-      database: true,
-      tool: true,
-      identitySet: true,
-      identityOk: true,
-      recoveryOk: true,
-      ownersOk: true,
-      sameIdentity: state === null || state.vaultRecipient === recipient,
-      sameRecovery: state === null || state.recoveryRecipient === recovery,
+    const state = await settle(store, audit, now, {
+      recipient: recipient as string,
+      recovery,
+      owners,
     })
-    if (after !== START_ON) return refuse(after)
-    let changed = state === null
-    state ??= emptyState(recipient as string, recovery)
-    for (const key of owners) {
-      if (state.grants[key]?.tier === TIER_OWNER) continue
-      const id = keyIdOf(key)
-      await audit.append(EV_GRANT, { key: id, tier: TIER_OWNER, subject: id })
-      state.grants[key] = {
-        tier: TIER_OWNER,
-        scopes: state.grants[key]?.scopes ?? [],
-        grantedAt: now(),
-      }
-      changed = true
-    }
-    if (changed) await store.save(state)
+    if (typeof state === 'number') return refuse(state)
     const vault = new Vault({
       identity: { text: identity },
       store,

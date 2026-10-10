@@ -275,6 +275,9 @@ export class Vault {
   }
 
   private async handleNow(req: VaultRequest): Promise<VaultResponse> {
+    // Read the store anew for every request: a second Queen may have written
+    // it, and a lease must never be answered from a stale copy.
+    this.state = null
     try {
       return await this.dispatch(req)
     } catch (error) {

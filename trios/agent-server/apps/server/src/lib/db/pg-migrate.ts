@@ -254,6 +254,29 @@ CREATE TABLE IF NOT EXISTS queen_vault_store (
 );
 `
 
+/** The advisory lock the vault's DDL runs under: "vlt" + 1, apart from hosting's 0x686f7374 and 0x68646466. */
+export const VAULT_DDL_LOCK = 0x766c7401
+
+/**
+ * QUEEN_VAULT_SQL in one transaction, under VAULT_DDL_LOCK, so two Queens
+ * booting at once do not race on CREATE TABLE (two concurrent CREATE TABLE IF
+ * NOT EXISTS of one name can fail on the catalog's unique index).
+ */
+export async function migrateVaultStore(pool: Pool): Promise<void> {
+  const c = await pool.connect()
+  try {
+    await c.query('BEGIN')
+    await c.query('SELECT pg_advisory_xact_lock($1)', [VAULT_DDL_LOCK])
+    await c.query(QUEEN_VAULT_SQL)
+    await c.query('COMMIT')
+  } catch (error) {
+    await c.query('ROLLBACK').catch(() => undefined)
+    throw error
+  } finally {
+    c.release()
+  }
+}
+
 /** Whether the vault is on: policy.t27 FLAG_VAR is FLAG_ON. */
 export const vaultFlagOn = (
   env: Record<string, string | undefined> = process.env,
@@ -666,7 +689,8 @@ export async function runPgMigrations(): Promise<void> {
     // identifier before it is interpolated.
     await pool.query(`CREATE SCHEMA IF NOT EXISTS ${queenSchema()}`)
     await pool.query(MIGRATION_SQL)
-    if (vaultFlagOn()) await pool.query(QUEEN_VAULT_SQL)
+    // The vault (trios#1759): its table exists only where TRIOS_VAULT=on.
+    if (vaultFlagOn()) await migrateVaultStore(pool)
     logger.info('PostgreSQL migrations completed successfully')
   } catch (error) {
     logger.error('PostgreSQL migrations failed', {

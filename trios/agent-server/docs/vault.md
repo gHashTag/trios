@@ -167,5 +167,6 @@ directory, or to the bus when `TRIOS_VAULT_DATABASE_URL` is set.
   key, so that rests on the CLI, which seals to the recovery recipient the
   vault reports. The restore test and the export test show the recovery key
   opens what the CLI wrote.
-- A deny for an unsigned request is written to the audit stream, so a flood
-  of junk requests grows that stream.
+- A request from a key the vault has not granted is refused without an audit
+  row (policy.t27 `deny_recorded`), so junk traffic cannot grow the database;
+  every refusal of a known key is recorded.

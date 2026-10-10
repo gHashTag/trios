@@ -16,10 +16,13 @@
  *   4. the audit on the events bus: its own gapless stream beside the
  *      Queen's, and an event audit.t27 refuses never reaches the table.
  *
- * SKIPPED without TRIOS_PG_TEST_URL. Unlike the other live tests this one does
- * not fall back to a local server, because the vault lane installs none (the
- * throwaway Postgres is trios#1761 lane B's). Same harness otherwise: a scratch
- * database per test, migrated by the boot migration.
+ * SKIPPED without TRIOS_PG_TEST_URL, and the skip is printed. The URL names
+ * ONE database the lane created for itself (on the throwaway cluster of
+ * trios#1761 lane B: createdb vault_test). Nothing here creates or drops a
+ * database: each test gets a fresh schema in that one (QUEEN_DB_SCHEMA, which
+ * every Queen pool pins as its search_path) and drops it after. Lane B's
+ * traps are minded: stored JSON is compared as values, never as bytes
+ * (jsonb reorders keys), and the audit is read in seq order.
  */
 
 import {
@@ -38,7 +41,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { Pool } from 'pg'
-import { createVaultRoute } from '../../src/api/routes/vault'
+import { createVaultRoute, vaultRoutes } from '../../src/api/routes/vault'
 import { publishEvent } from '../../src/api/services/queen-control'
 import {
   AUDIT_STREAM,
@@ -59,6 +62,7 @@ import {
   sealValue,
   VaultClient,
 } from '../../src/api/services/vault-client'
+import { Vault } from '../../src/api/services/vault-service'
 import { startVault, stopVault } from '../../src/api/services/vault-start'
 import {
   createPgStore,
@@ -66,8 +70,8 @@ import {
   StoreConflict,
 } from '../../src/api/services/vault-store'
 import { generateKey, keyIdOf } from '../../src/api/services/vault-wire'
-import { runPgMigrations } from '../../src/lib/db/pg-migrate'
-import { createQueenPool, queenSchema } from '../../src/lib/db/queen-pool'
+import { migrateVaultStore, runPgMigrations } from '../../src/lib/db/pg-migrate'
+import { createQueenPool } from '../../src/lib/db/queen-pool'
 
 setDefaultTimeout(60_000)
 
@@ -75,79 +79,80 @@ const adminUrl = process.env.TRIOS_PG_TEST_URL
 /** A key id as the vault writes one: 16 hex characters of a public key's SHA-256. */
 const KEY_ID = keyIdOf(generateKey().publicHex)
 
-async function scratchDatabase(
-  admin: string,
-): Promise<{ url: string; drop: () => Promise<void> }> {
-  const name = `vault_live_${randomBytes(6).toString('hex')}`
-  const pool = new Pool({ connectionString: admin, max: 1 })
-  await pool.query(`CREATE DATABASE ${name}`)
-  const url = new URL(admin)
-  url.pathname = `/${name}`
-  const fresh = new Pool({ connectionString: url.toString(), max: 1 })
-  try {
-    await fresh.query(`CREATE SCHEMA IF NOT EXISTS ${queenSchema()}`)
-  } finally {
-    await fresh.end().catch(() => undefined)
-  }
-  return {
-    url: url.toString(),
-    drop: async () => {
-      await pool
-        .query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)
-        .catch(() => undefined)
-      await pool.end().catch(() => undefined)
-    },
-  }
-}
+if (!adminUrl)
+  console.log(
+    'vault-live: SKIPPED, TRIOS_PG_TEST_URL is unset (no live PostgreSQL named)',
+  )
 
 describe.skipIf(!adminUrl)('the vault on PostgreSQL', () => {
-  let scratch: { url: string; drop: () => Promise<void> } | null = null
+  let admin: Pool | null = null
   let pool: Pool | null = null
+  let schema = ''
   let root = ''
+  const url = adminUrl as string
   const saved = {
     DATABASE_URL: process.env.DATABASE_URL,
     TRIOS_VAULT: process.env.TRIOS_VAULT,
+    QUEEN_DB_SCHEMA: process.env.QUEEN_DB_SCHEMA,
   }
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'vault-live-'))
+    admin = new Pool({ connectionString: url, max: 1 })
   })
   afterAll(async () => {
+    await admin?.end().catch(() => undefined)
     await rm(root, { recursive: true, force: true })
   })
 
   beforeEach(async () => {
-    scratch = await scratchDatabase(adminUrl as string)
-    process.env.DATABASE_URL = scratch.url
+    schema = `vault_live_${randomBytes(6).toString('hex')}`
+    process.env.QUEEN_DB_SCHEMA = schema
+    process.env.DATABASE_URL = url
     delete process.env.TRIOS_VAULT
     await runPgMigrations()
-    pool = createQueenPool(scratch.url)
+    pool = createQueenPool(url)
   })
 
   afterEach(async () => {
     stopVault()
     await pool?.end().catch(() => undefined)
     pool = null
-    await scratch?.drop()
-    scratch = null
+    await (admin as Pool).query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete process.env[k]
       else process.env[k] = v
     }
   })
 
+  /** A Queen of its own: a pool as a second process would have. */
+  const secondPool = () => createQueenPool(url)
+
+  const identityAndRecovery = async () => {
+    const tag = randomBytes(3).toString('hex')
+    await keygenToFile(join(root, `id-${tag}.txt`))
+    const identity = await readFile(join(root, `id-${tag}.txt`), 'utf8')
+    const recovery = await keygenToFile(join(root, `recovery-${tag}.txt`))
+    return {
+      identity,
+      recovery,
+      recoveryFile: join(root, `recovery-${tag}.txt`),
+    }
+  }
+
   const tableExists = async () =>
     Number(
       (
         await (pool as Pool).query(
-          "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_name = 'queen_vault_store'",
+          "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_name = 'queen_vault_store' AND table_schema = $1",
+          [schema],
         )
       ).rows[0].n,
     ) === 1
 
   it('creates no vault table while TRIOS_VAULT is unset, and creates it once when on', async () => {
     expect(await tableExists()).toBe(false)
-    const off = await startVault({ env: { DATABASE_URL: scratch?.url } })
+    const off = await startVault({ env: { DATABASE_URL: url } })
     expect(off.code).not.toBe(START_ON)
     expect(await tableExists()).toBe(false)
     process.env.TRIOS_VAULT = 'on'
@@ -164,7 +169,7 @@ describe.skipIf(!adminUrl)('the vault on PostgreSQL', () => {
     const recovery = await keygenToFile(join(root, 'recovery.txt'))
     const env = () => ({
       TRIOS_VAULT: 'on',
-      DATABASE_URL: scratch?.url,
+      DATABASE_URL: url,
       [IDENTITY_VAR]: identity,
       [RECOVERY_VAR]: recovery,
       [OWNER_KEYS_VAR]: owner.publicHex,
@@ -228,6 +233,117 @@ describe.skipIf(!adminUrl)('the vault on PostgreSQL', () => {
     expect(new TextDecoder().decode(plain)).toContain(
       Buffer.from(value).toString('base64'),
     )
+  })
+
+  it('migrates under a lock: twice in a row, and by two Queens at once', async () => {
+    const other = secondPool()
+    try {
+      const a = pool as Pool
+      await Promise.all([
+        migrateVaultStore(a),
+        migrateVaultStore(other),
+        migrateVaultStore(a),
+        migrateVaultStore(other),
+      ])
+      await migrateVaultStore(a)
+      expect(await tableExists()).toBe(true)
+    } finally {
+      await other.end().catch(() => undefined)
+    }
+  })
+
+  it('starts two Queens at once on an empty store: one row, both on', async () => {
+    const { identity, recovery } = await identityAndRecovery()
+    const owner = generateKey()
+    const env = () => ({
+      TRIOS_VAULT: 'on',
+      DATABASE_URL: url,
+      [IDENTITY_VAR]: identity,
+      [RECOVERY_VAR]: recovery,
+      [OWNER_KEYS_VAR]: owner.publicHex,
+    })
+    const other = secondPool()
+    try {
+      const [a, b] = await Promise.all([
+        startVault({ env: env(), pool: pool as Pool }),
+        startVault({ env: env(), pool: other }),
+      ])
+      expect([a.code, b.code]).toEqual([START_ON, START_ON])
+      const rows = await (pool as Pool).query(
+        'SELECT state FROM queen_vault_store',
+      )
+      expect(rows.rows.length).toBe(1)
+      expect(rows.rows[0].state.grants[owner.publicHex].tier).toBe(TIER_OWNER)
+    } finally {
+      await other.end().catch(() => undefined)
+    }
+  })
+
+  it('never answers from a stale copy: a second Queen leases what the first rotated', async () => {
+    const { identity, recovery } = await identityAndRecovery()
+    const owner = generateKey()
+    const started = await startVault({
+      env: {
+        TRIOS_VAULT: 'on',
+        DATABASE_URL: url,
+        [IDENTITY_VAR]: identity,
+        [RECOVERY_VAR]: recovery,
+        [OWNER_KEYS_VAR]: owner.publicHex,
+      },
+      pool: pool as Pool,
+    })
+    expect(started.code).toBe(START_ON)
+    const other = secondPool()
+    try {
+      const second = new Vault({
+        identity: { text: identity },
+        store: createPgStore(other),
+        audit: busAuditSink(other),
+      })
+      const a = new VaultClient(
+        appTransport(new Hono().route('/vault', createVaultRoute())),
+        '/vault',
+        owner.privatePem,
+      )
+      const b = new VaultClient(
+        appTransport(
+          new Hono().route(
+            '/vault',
+            vaultRoutes(() => second),
+          ),
+        ),
+        '/vault',
+        owner.privatePem,
+      )
+      const one = `vault-test-live-one-${randomBytes(12).toString('hex')}`
+      const two = `vault-test-live-two-${randomBytes(12).toString('hex')}`
+      const r = await a.recipients()
+      await a.call('put', {
+        id: 'SHARED_KEY',
+        class: 'provider-api-key',
+        scopes: ['both'],
+        ct: await sealValue(new TextEncoder().encode(one), r),
+        input: 'stdin',
+      })
+      await a.call('grant', {
+        subject: owner.publicHex,
+        tier: TIER_OWNER,
+        scopes: ['both'],
+      })
+      expect((await b.open('lease', { scope: 'both' })).env.SHARED_KEY).toBe(
+        one,
+      )
+      await a.call('rotate', {
+        id: 'SHARED_KEY',
+        ct: await sealValue(new TextEncoder().encode(two), r),
+        input: 'stdin',
+      })
+      expect((await b.open('lease', { scope: 'both' })).env.SHARED_KEY).toBe(
+        two,
+      )
+    } finally {
+      await other.end().catch(() => undefined)
+    }
   })
 
   it('refuses the second of two writers over one row', async () => {
