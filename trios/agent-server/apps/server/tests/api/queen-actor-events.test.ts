@@ -868,6 +868,47 @@ describe('the cost per message, events off and on', () => {
     return { cpu: (used.user + used.system) / HOPS, written }
   }
 
+  it('in one window the ring writes its 1000 spawns and one count per pair, not one event per message', async () => {
+    const clock = new VirtualClock()
+    let written = 0
+    const kinds = new Map<number, number>()
+    const events = createActorEvents(clock, {
+      sink: (kind) => {
+        written++
+        kinds.set(kind, (kinds.get(kind) ?? 0) + 1)
+      },
+      taskOf,
+    })
+    const sys = createActorSystem(clock, { slices: false, events })
+    const N = 1000
+    const HOPS = 100_000
+    const ring: Pid[] = []
+    let left = HOPS
+    let finish: () => void = () => {}
+    const done = new Promise<void>((r) => {
+      finish = r
+    })
+    for (let i = 0; i < N; i++)
+      ring.push(
+        sys.spawn<number>({
+          name: `r${i}`,
+          receive: (hop, self) => {
+            left--
+            if (left === 0) finish()
+            else sys.send(ring[(i + 1) % N], hop + 1, self)
+          },
+        }),
+      )
+    sys.send(ring[0], 0)
+    await done
+    // the ring's N pairs, and the first send from no one
+    expect(events.openPairs()).toBe(N + 1)
+    events.stop()
+    expect(kinds.get(EV_ACTOR_SPAWN)).toBe(N)
+    expect(kinds.get(EV_ACTOR_DELIVERS)).toBe(N + 1)
+    expect(written).toBe(2 * N + 1)
+  }, 600_000)
+
   it('a ring of 1000 actors passes 100 000 messages, off and on', async () => {
     const ROUNDS = Number(process.env.QUEEN_ACTOR_EVENTS_BENCH_ROUNDS ?? 3)
     await ringOnce(false)
@@ -883,9 +924,9 @@ describe('the cost per message, events off and on', () => {
     }
     const median = (xs: number[]) =>
       [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
-    // 1000 spawns and one count per pair per window, not one per message
+    // the count per window is real time here, so a loaded host writes more
+    // windows; the exact volume is asked of a virtual clock below
     expect(written).toBeGreaterThan(1000)
-    expect(written).toBeLessThan(10_000)
     console.log(
       `\n## actor events cost per message, cpu us (${ROUNDS} rounds): off ${median(off).toFixed(2)}, on ${median(on).toFixed(2)}; events written per run with it on: ${written}`,
     )
