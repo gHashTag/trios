@@ -30,7 +30,13 @@
  * the default until the benchmark's numbers are accepted (t27#7851).
  */
 
-import { type ActorSystem, createActorSystem, type Pid } from './queen-actors'
+import {
+  type ActorSystem,
+  type Clock,
+  createActorSystem,
+  type Pid,
+  realClock,
+} from './queen-actors'
 import {
   CALL_REPLY,
   ISO_LOOP,
@@ -436,7 +442,14 @@ export function beeDispatcher(sys: ActorSystem, deps: BeeDispatchDeps) {
 
 export type BeeDispatcher = ReturnType<typeof beeDispatcher>
 
-/** A dispatcher on its own actor system, for production. */
-export function startBeeDispatcher(deps: BeeDispatchDeps): BeeDispatcher {
-  return beeDispatcher(createActorSystem(), deps)
+/**
+ * A dispatcher on its own actor system, for production. `clock` is the real
+ * one there; a test hands in a virtual one instead of faking the process's
+ * timers, which Bun does not fake alike on every platform.
+ */
+export function startBeeDispatcher(
+  deps: BeeDispatchDeps,
+  clock: Clock = realClock,
+): BeeDispatcher {
+  return beeDispatcher(createActorSystem(clock), deps)
 }

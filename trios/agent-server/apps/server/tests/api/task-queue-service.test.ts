@@ -63,8 +63,14 @@ interface QueryResponse {
 const DATABASE_URL = 'postgres://queue:none@db.internal:5432/agent'
 
 // Captured before anything is mocked so the real modules can be put back for
-// the sibling files that run after this one in the same bun process.
-const realPg = await import('pg')
+// the sibling files that run after this one in the same bun process. COPIED,
+// not kept as the namespace: mock.module rewrites a namespace that is already
+// loaded in place, so a kept namespace "restored" the mock itself. The logger
+// was captured inside afterAll, after the mock, and the file left a logger
+// without setLevel to every file after it (trios#1730: queen-bee-actors-bench
+// failed its beforeAll and afterAll as two unnamed errors).
+const realPg = { ...(await import('pg')) }
+const realLogger = { ...(await import('../../src/lib/logger')) }
 
 /**
  * A stand-in for pg.Pool that records how the service uses it.
@@ -159,7 +165,6 @@ describe('taskQueueServiceContract', () => {
   afterAll(async () => {
     // Put the real modules back before sibling files import them.
     mock.module('pg', () => realPg)
-    const realLogger = await import('../../src/lib/logger')
     mock.module('../../src/lib/logger', () => realLogger)
     mock.restore()
   })

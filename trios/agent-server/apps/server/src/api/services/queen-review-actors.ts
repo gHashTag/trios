@@ -68,6 +68,7 @@ import {
   type ActorSystem,
   actorChild,
   type Child,
+  type Clock,
   createActorSystem,
   type Down,
   type Pid,
@@ -569,6 +570,9 @@ export function reviewerTree(sys: ActorSystem, deps: ReviewerActorDeps) {
  * With TRIOS_QUEEN_ACTORS_TELEMETRY=on the system counts (telemetry.t27):
  * GET /queen/actors/metrics and /queen/actors/decisions read it, and a
  * "Queen actors measured" line lands in the log every SUMMARY_EVERY_SECONDS.
+ *
+ * `clock` is the real one in production; a test hands in a virtual one
+ * instead of faking the process's timers.
  */
 export function startReviewerActors(
   pool: Pool,
@@ -576,6 +580,7 @@ export function startReviewerActors(
   review: ReviewFn,
   waiting: (pool: Pool) => Promise<number[]>,
   capacity?: (pool: Pool, reservedKeys: number[]) => Promise<ReviewCapacity>,
+  clock: Clock = realClock,
 ): () => void {
   const adaptive =
     capacity !== undefined && process.env.TRIOS_QUEEN_REVIEWER_ADAPTIVE === '1'
@@ -594,7 +599,7 @@ export function startReviewerActors(
           ],
         }
       : undefined
-  const sys = createActorSystem(realClock, { turnStop, telemetry })
+  const sys = createActorSystem(clock, { turnStop, telemetry })
   setLiveActorTelemetry(sys.telemetry)
   const r = reviewerTree(sys, {
     ...reviewerDeps(pool, leaseName, review, waiting),
