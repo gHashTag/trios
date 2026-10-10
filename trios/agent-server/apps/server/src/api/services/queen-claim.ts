@@ -27,6 +27,7 @@ import {
   CL_REJECTED,
   CL_RUNNING,
   DEFAULT_SEND_BACK_CEILING,
+  OBSOLETE_STATE,
   V_ACCEPT,
   V_CANCELLED,
   V_EMPTY,
@@ -39,7 +40,6 @@ import {
   V_STALE_CONTRACT,
   V_WAIT,
 } from './queen-claim-card.gen'
-import { OBSOLETE_STATE } from './queen-review-valve.gen'
 
 export const CLAIM_CARD = 'queen/claim.wasm'
 
