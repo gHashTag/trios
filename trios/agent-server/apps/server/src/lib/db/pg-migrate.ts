@@ -8,6 +8,10 @@
  */
 
 import type { Pool } from 'pg'
+import {
+  FLAG_ON,
+  FLAG_VAR,
+} from '../../api/services/queen-vault-policy-card.gen'
 import { logger } from '../logger'
 import { createQueenPool, queenSchema } from './queen-pool'
 
@@ -232,6 +236,29 @@ CREATE INDEX IF NOT EXISTS queen_wait_owner ON queen_wait (owner, state);
 // rather than a transcription of it. This block runs once per deploy and its
 // only reader is a database: a missing comma or a bad type here is a broken
 // deployment that no gate above this line can see.
+// The vault's store (gHashTag/trios#1759, specs/vault/policy.t27): one row,
+// the whole state as JSON -- ciphertext rows, bindings, aliases, grants and
+// leases, never a value -- replaced whole under an optimistic version, so a
+// second writer is refused instead of overwriting (vault-store.ts
+// createPgStore). NOT part of MIGRATION_SQL: off means off (policy.t27
+// section 13), so this runs only with TRIOS_VAULT=on, at boot below and again
+// by the vault's own start (vault-start.ts), from this one const. Additive and
+// idempotent: rolling the code back leaves an unused table, never a broken one.
+// No backticks in this string: it is a JS template literal.
+export const QUEEN_VAULT_SQL = `
+CREATE TABLE IF NOT EXISTS queen_vault_store (
+  id smallint PRIMARY KEY CHECK (id = 1),
+  state jsonb NOT NULL,
+  version bigint NOT NULL DEFAULT 1,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+`
+
+/** Whether the vault is on: policy.t27 FLAG_VAR is FLAG_ON. */
+export const vaultFlagOn = (
+  env: Record<string, string | undefined> = process.env,
+): boolean => env[FLAG_VAR] === FLAG_ON
+
 export const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS agent_tasks (
   id uuid PRIMARY KEY,
@@ -639,6 +666,7 @@ export async function runPgMigrations(): Promise<void> {
     // identifier before it is interpolated.
     await pool.query(`CREATE SCHEMA IF NOT EXISTS ${queenSchema()}`)
     await pool.query(MIGRATION_SQL)
+    if (vaultFlagOn()) await pool.query(QUEEN_VAULT_SQL)
     logger.info('PostgreSQL migrations completed successfully')
   } catch (error) {
     logger.error('PostgreSQL migrations failed', {
