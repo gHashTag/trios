@@ -170,10 +170,20 @@ describe('route-guard audit over src/api/server.ts', () => {
     // RE-MEASURED 2026-10-11, self-hosting (trios#1756): 63 became 64 with
     // /hosting, an allowlisted mount guarded by its hosts' own signatures (the
     // reason is in tools/route-guard-audit.mjs). No guard count moved.
-    expect(report.totalMounts).toBe(64)
+    // RE-MEASURED 2026-10-10, the network job (mvp-live-dispatch): 63 became 64
+    // with /queen/public-net-credits, an explicit publicReadCorsMiddleware() on
+    // the network job's test credits (network_job.t27): a commit, a key id, a
+    // kind word, an amount, the labs' public receipt URLs and the quorum. No
+    // secret and nothing a lab does not already publish. Public-read went 17
+    // to 18; recomputed with tools/route-guard-audit.mjs, not copied.
+    // RE-MEASURED 2026-10-10, hosting-mvp merged into mvp-live-dispatch: both
+    // mounts together make 65, recomputed from the merged server.ts; 18, 20
+    // and 18 unchanged (/hosting is allowlisted, /queen/public-net-credits is
+    // public-read).
+    expect(report.totalMounts).toBe(65)
     expect(report.prefixGuardCount).toBe(18)
     expect(report.guardedSubAppCount).toBe(20)
-    expect(report.publicReadCount).toBe(17)
+    expect(report.publicReadCount).toBe(18)
   })
 
   it('reports zero unguarded mounts once the reasoned allowlist is applied', () => {
@@ -258,7 +268,9 @@ describe('route-guard audit over src/api/server.ts', () => {
     // RE-MEASURED 2026-10-10, the actors on the bus: thirty-nine became forty.
     // The seventeenth public-read is /queen/public-actors.
     // RE-MEASURED 2026-10-10, queen merged in: still forty, recomputed.
-    expect(queenMounts.length).toBe(40)
+    // RE-MEASURED 2026-10-10, the network job: forty became forty-one. The
+    // eighteenth public-read is /queen/public-net-credits.
+    expect(queenMounts.length).toBe(41)
 
     const counts: Record<string, number> = {
       'public-read': 0,
@@ -272,7 +284,7 @@ describe('route-guard audit over src/api/server.ts', () => {
     // The four buckets must account for every mount with the exact expected
     // split; anything unaccounted for breaks one of these numbers.
     expect(counts).toEqual({
-      'public-read': 17,
+      'public-read': 18,
       'prefix-guard': 0,
       wrapper: 13,
       unguarded: 10,
