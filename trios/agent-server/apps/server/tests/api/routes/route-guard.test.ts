@@ -48,7 +48,7 @@ const report = auditServer(source, DEFAULT_ALLOWLIST)
 // RE-MEASURED 2026-10-11: /vault joined (gHashTag/trios#1759). Workloads and
 // the owner's CLI call it, never a browser; every request carries an Ed25519
 // signature over method, path, time, nonce and body that specs/vault/policy.t27
-// request_code judges first, and it answers 404 unless TRIOS_VAULT=on.
+// request_code judges first, and it answers 503 unless TRIOS_VAULT=on.
 // RE-MEASURED 2026-10-11: /hosting joined (self-hosting slice 1, trios#1756).
 // Host agents on users' computers call it with no Origin to trust; the guard
 // is the Ed25519 signature of the host's own key on every write, inside the

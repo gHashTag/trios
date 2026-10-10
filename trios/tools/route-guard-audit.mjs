@@ -123,7 +123,7 @@ export const DEFAULT_ALLOWLIST = [
   {
     path: '/vault',
     reason:
-      'signed requests - the vault (gHashTag/trios#1759) is called by workloads and the owner\'s CLI, never a browser; every request is refused unless it carries an Ed25519 signature over its method, path, time, nonce and body hash by a key the owner granted, fresh within host.t27 REQUEST_SKEW_SECONDS and with a nonce not seen before (specs/vault/policy.t27 request_code, checked before the body is parsed), and the route answers 404 to everything unless TRIOS_VAULT=on (src/api/routes/vault.ts, tests/api/vault.test.ts)',
+      'signed requests - the vault (gHashTag/trios#1759) is called by workloads and the owner\'s CLI, never a browser; every request is refused unless it carries an Ed25519 signature over its method, path, time, nonce and body hash by a key the owner granted, fresh within host.t27 REQUEST_SKEW_SECONDS and with a nonce not seen before (specs/vault/policy.t27 request_code, checked before the body is parsed), and the route answers 503 to everything unless TRIOS_VAULT=on (src/api/routes/vault.ts, tests/api/vault.test.ts)',
   },
   {
     path: '/queen/app/webhook',

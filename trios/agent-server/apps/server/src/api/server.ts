@@ -499,7 +499,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/contributor-keys', createQueenContributorKeysRoute())
     // The vault (gHashTag/trios#1759): every request is Ed25519-signed and
     // judged by specs/vault/policy.t27 request_code; no browser Origin, so no
-    // trusted-origin guard. 404 for everything unless TRIOS_VAULT=on.
+    // trusted-origin guard. 503 for everything unless TRIOS_VAULT=on.
     .route('/vault', createVaultRoute())
     // Self-hosting (trios#1756): host agents on users' computers, with no
     // browser Origin. Every write verifies under the Ed25519 key its host
