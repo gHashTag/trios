@@ -151,10 +151,16 @@ describe('route-guard audit over src/api/server.ts', () => {
     // /queen/waits (a resolve wakes a job). Both are guarded in their own
     // sub-app with requireTrustedAppOrigin(), so guarded sub-apps went 18 to
     // 20. /queen/actors was first mounted bare; this audit caught it.
-    expect(report.totalMounts).toBe(62)
+    // RE-MEASURED 2026-10-10, the actors on the bus (trios#1744): 62 became 63
+    // with /queen/public-actors, an explicit publicReadCorsMiddleware() on the
+    // actors' stream of the event log (actor_events.t27): pids, kinds, counts,
+    // mailbox depths, times and task references, never a message or a card's
+    // arguments. Public-read went 16 to 17. The operator's /queen/actors stays
+    // a guarded sub-app; no other count moved.
+    expect(report.totalMounts).toBe(63)
     expect(report.prefixGuardCount).toBe(18)
     expect(report.guardedSubAppCount).toBe(20)
-    expect(report.publicReadCount).toBe(16)
+    expect(report.publicReadCount).toBe(17)
   })
 
   it('reports zero unguarded mounts once the reasoned allowlist is applied', () => {
@@ -236,7 +242,9 @@ describe('route-guard audit over src/api/server.ts', () => {
     // RE-MEASURED 2026-10-10, the actor runtime ships: thirty-seven became
     // thirty-nine, and both new mounts (/queen/actors, /queen/waits) are
     // wrapper-guarded; wrappers went 11 to 13.
-    expect(queenMounts.length).toBe(39)
+    // RE-MEASURED 2026-10-10, the actors on the bus: thirty-nine became forty.
+    // The seventeenth public-read is /queen/public-actors.
+    expect(queenMounts.length).toBe(40)
 
     const counts: Record<string, number> = {
       'public-read': 0,
@@ -250,7 +258,7 @@ describe('route-guard audit over src/api/server.ts', () => {
     // The four buckets must account for every mount with the exact expected
     // split; anything unaccounted for breaks one of these numbers.
     expect(counts).toEqual({
-      'public-read': 16,
+      'public-read': 17,
       'prefix-guard': 0,
       wrapper: 13,
       unguarded: 10,

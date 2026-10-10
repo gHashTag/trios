@@ -43,6 +43,7 @@ import { logger } from '../../lib/logger'
 import { startModelProbes, workerModelRanking } from '../../lib/model-ranking'
 import { importRunnerBranch } from '../routes/queen-export'
 import { outstandingEscalations } from '../routes/queen-needs-you'
+import { actorEventsOn } from './queen-actor-events'
 import { advanceApp } from './queen-app'
 import {
   dispatchByActors,
@@ -89,6 +90,7 @@ import {
 } from './queen-dispatch'
 import { drainBoundedEnabled } from './queen-drain'
 import { pruneEvents, wakesHere } from './queen-events'
+import { ACTOR_STREAM } from './queen-events.gen'
 import { heldPaths } from './queen-holds'
 import {
   advanceJobs,
@@ -5237,8 +5239,11 @@ export function startQueenTick(): void {
     // the round writes it, so the board reads when the last one ran.
     void publishEvent(pool, 'queen/tick', {}).catch(() => {})
     // Once an hour, what events.t27 no longer keeps.
-    if (++ticks % Math.max(1, Math.round(3600 / interval)) === 0)
+    if (++ticks % Math.max(1, Math.round(3600 / interval)) === 0) {
       void pruneEvents(pool, 'queen').catch(() => {})
+      // the actors' stream keeps by the same rule (events.t27 section 6)
+      if (actorEventsOn()) void pruneEvents(pool, ACTOR_STREAM).catch(() => {})
+    }
   }, interval * 1000)
 
   const handover = async (): Promise<void> => {
