@@ -90,6 +90,16 @@ import {
 } from './queen-network-rules.gen'
 
 export const NETWORK_RULES_CARD = 'network/job_rules.wasm'
+export const NETWORK_JOB_CARD = 'network-job'
+
+/**
+ * TRIOS_QUEEN_NETWORK_JOBS=on lets a network job start; anything else, the
+ * default, refuses the card on every start path, rehearsals included. Off
+ * means off: today no deployment has a lab request path (gHashTag/t27#8791),
+ * and a published job would hold the card's one slot at a BLOCKED step.
+ */
+export const networkJobsOn = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  (env.TRIOS_QUEEN_NETWORK_JOBS ?? 'off').trim().toLowerCase() === 'on'
 export const NETWORK_KEYS_DIR = 'keys'
 
 /** The card's constants this file reads, as the compiler wasm read them. */
