@@ -8,6 +8,10 @@
  */
 
 import type { Pool } from 'pg'
+import {
+  hostingOn,
+  migrateHostingStore,
+} from '../../api/services/hosting-store'
 import { logger } from '../logger'
 import { createQueenPool, queenSchema } from './queen-pool'
 
@@ -639,6 +643,12 @@ export async function runPgMigrations(): Promise<void> {
     // identifier before it is interpolated.
     await pool.query(`CREATE SCHEMA IF NOT EXISTS ${queenSchema()}`)
     await pool.query(MIGRATION_SQL)
+    // Self-hosting (trios#1756): its tables exist only where TRIOS_HOSTING=on.
+    // Off means off: a Queen with hosting off builds none of them.
+    if (hostingOn()) {
+      await migrateHostingStore(pool)
+      logger.info('PostgreSQL hosting tables migrated (TRIOS_HOSTING=on)')
+    }
     logger.info('PostgreSQL migrations completed successfully')
   } catch (error) {
     logger.error('PostgreSQL migrations failed', {
