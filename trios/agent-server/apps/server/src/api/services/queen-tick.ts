@@ -119,6 +119,8 @@ import {
   type ReviewCapacity,
   startReviewerActors,
 } from './queen-review-actors'
+import type { LaneGate } from './queen-review-lanes'
+import { LANE_GO, LANE_STOPPED } from './queen-review-lanes-card.gen'
 import {
   drainReviewerRound,
   reviewerRunning,
@@ -3184,6 +3186,12 @@ export interface ReviewScope {
    * an aborted model call is not evidence about the work.
    */
   signal?: AbortSignal
+  /**
+   * The review's gate into the lane queue (review_lanes.t27,
+   * TRIOS_QUEEN_REVIEW_LANES=semaphore). With no lane free at the model call
+   * the sweep waits there; each model call holds a lane in it.
+   */
+  lanes?: LaneGate
 }
 
 /**
@@ -3825,7 +3833,7 @@ export async function reviewFinishedDispatches(
         // `runRound` counts them before it hands out a key.
         takenKeys ??= await runningKeys(pool)
         // and the lanes reviews running beside this one hold (reviewer.t27)
-        const taken = [...takenKeys, ...(scope.reservedKeys?.() ?? [])]
+        let taken = [...takenKeys, ...(scope.reservedKeys?.() ?? [])]
         // A LANE THAT ALREADY REFUSED THIS REVIEW IS NOT OFFERED AGAIN.
         //
         // `chooseReviewerLane` is deterministic, so without this the same lane
@@ -3842,6 +3850,21 @@ export async function reviewFinishedDispatches(
             bee,
           )
         let choice = await pick()
+        // A REVIEW WITH NO LANE WAITS FOR ONE (review_lanes.t27). Without the
+        // queue it ends here and answers `wait`: its witness and its
+        // measurement thrown away, its row pushed back by due_again. In the
+        // queue it waits for a lane a sibling gives back, and then reads the
+        // keys again, because a bee may have taken or freed one meanwhile.
+        let laneAnswer = LANE_GO
+        while (!choice && scope.lanes) {
+          laneAnswer = await scope.lanes.wait()
+          if (laneAnswer !== LANE_GO) break
+          takenKeys = await runningKeys(pool)
+          taken = [...takenKeys, ...(scope.reservedKeys?.() ?? [])]
+          choice = await pick()
+        }
+        // a stopped review writes nothing (turn_stop.t27)
+        if (laneAnswer === LANE_STOPPED) live()
         if (!choice) {
           reviewerSkipped = 'no reviewer lane is free'
         } else {
@@ -3886,12 +3909,19 @@ export async function reviewFinishedDispatches(
               const lane: WorkerProvider = choice.lane
               scope.onLane?.(lane)
               triedLanes.add(reviewerLaneKey(lane))
-              const answer = await deps.llm(
-                lane,
-                REVIEWER_SYSTEM_PROMPT,
-                message,
-                scope.signal,
-              )
+              // the lane is held for the model call and no longer
+              scope.lanes?.held()
+              let answer: Awaited<ReturnType<ReviewDeps['llm']>>
+              try {
+                answer = await deps.llm(
+                  lane,
+                  REVIEWER_SYSTEM_PROMPT,
+                  message,
+                  scope.signal,
+                )
+              } finally {
+                scope.lanes?.released()
+              }
               if (!answer.ok) {
                 // Nothing spent: a 1302 or a timeout is the provider saying
                 // "not now", and it must not read as a finding about the work.
