@@ -840,10 +840,12 @@ export function createActorSystem(
 
   // with telemetry, a step that has a turn to start runs as its actor's kind,
   // and so does every await of that turn: the decision log names the kind
-  // behind each call. A step with nothing queued starts no turn.
+  // behind each call. A step with nothing queued starts no turn. The kind's
+  // context is entered only when it is not the one the step runs in already
+  // (queen-actors-telemetry.ts asKind).
   function step(p: Proc): void {
     if (tel === undefined || (p.box.length === 0 && p.lane === 0n)) stepOn(p)
-    else tel.als.run((p.k as KindStats).kind, stepOn, p)
+    else tel.asKind((p.k as KindStats).kind, stepOn, p)
   }
 
   function stepOn(p: Proc): void {

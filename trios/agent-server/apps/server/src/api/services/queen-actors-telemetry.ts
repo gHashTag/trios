@@ -101,11 +101,27 @@ const c = (name: string, ...a: number[]) => card().call(name, ...a)
 // A time in ms below this has its bucket remembered: bucket_of is pure, so
 // the card's answer for one ms is its answer for good.
 const BUCKET_MEMO_MS = 4096
-const bucketMemo: number[] = []
+// WHY A TYPED ARRAY, AND READ AT THE CALL SITE. The memo was a plain array
+// behind a function, and reading it was the dearest step of a turn's end:
+// about 200 of the 420 instructions turnEnd took (gHashTag/trios#1729 item
+// 19). -1 is a bucket the card has not been asked for yet; buckets are 0-23.
+// A ms with a fraction, or below 0 (a wall clock set back during a wait),
+// keeps its own answer in `oddMemo`, as the plain array kept it under its
+// own key, so the card is asked exactly when it was asked before.
+const bucketMemo = new Int8Array(BUCKET_MEMO_MS).fill(-1)
+const oddMemo = new Map<number, number>()
 const bucketOf = (ms: number): number => {
   if (ms >= BUCKET_MEMO_MS) return c('bucket_of', u32(ms))
+  if (ms < 0 || (ms | 0) !== ms) {
+    let odd = oddMemo.get(ms)
+    if (odd === undefined) {
+      odd = c('bucket_of', ms)
+      oddMemo.set(ms, odd)
+    }
+    return odd
+  }
   let b = bucketMemo[ms]
-  if (b === undefined) {
+  if (b < 0) {
     b = c('bucket_of', ms)
     bucketMemo[ms] = b
   }
@@ -157,9 +173,14 @@ export interface KindStats extends Counts {
   depthWin: number
   /** Actors of this kind whose depth alarm is on. */
   depthAlarms: number
-  turnMs: number[]
-  turnWin: number[]
-  waitMs: number[]
+  /**
+   * Turns per bucket since start. The summary's window is this less
+   * `turnAtSummary`, folded when the line is written: a turn writes one
+   * count, not one per histogram.
+   */
+  turnMs: Float64Array
+  turnAtSummary: Float64Array
+  waitMs: Float64Array
   turnMaxMs: number
   events: number[]
   /** This window's sampled messages, and whether `kept` still says yes. */
@@ -264,9 +285,9 @@ export function createActorTelemetry(
         depthMax: 0,
         depthWin: 0,
         depthAlarms: 0,
-        turnMs: new Array(HIST_BUCKETS).fill(0),
-        turnWin: new Array(HIST_BUCKETS).fill(0),
-        waitMs: new Array(HIST_BUCKETS).fill(0),
+        turnMs: new Float64Array(HIST_BUCKETS),
+        turnAtSummary: new Float64Array(HIST_BUCKETS),
+        waitMs: new Float64Array(HIST_BUCKETS),
         turnMaxMs: 0,
         events: new Array(EVENT_KINDS).fill(0),
         samples: 0,
@@ -337,8 +358,9 @@ export function createActorTelemetry(
   })
 
   /** p50 and p95 of a histogram, each as its bucket's [floor, next floor). */
-  const quantiles = (hist: number[]) => {
-    const count = hist.reduce((a, b) => a + b, 0)
+  const quantiles = (hist: ArrayLike<number>) => {
+    let count = 0
+    for (let b = 0; b < hist.length; b++) count += hist[b]
     const at = (percent: number) => {
       const rank = c('rank_of', u32(count), percent)
       if (rank === 0) return null
@@ -354,9 +376,9 @@ export function createActorTelemetry(
     }
     return { count, p50: at(50), p95: at(95) }
   }
-  const histogram = (hist: number[]) => ({
+  const histogram = (hist: Float64Array) => ({
     ...quantiles(hist),
-    buckets: hist.flatMap((n, b) =>
+    buckets: Array.from(hist).flatMap((n, b) =>
       n > 0 ? [[c('bucket_floor_ms', b), n] as const] : [],
     ),
   })
@@ -380,7 +402,10 @@ export function createActorTelemetry(
       const events = k.events.reduce((a, n, e) => a + n - k.last.events[e], 0)
       const quiet = turns + sent + dead + restarts + events === 0
       if (quiet && k.live === 0) continue
-      const q = quantiles(k.turnWin)
+      // the window's turns: every turn since start less those the last
+      // line had already counted
+      const win = k.turnMs.map((n, b) => n - k.turnAtSummary[b])
+      const q = quantiles(win)
       out[k.kind] = {
         live: k.live,
         turns,
@@ -401,7 +426,7 @@ export function createActorTelemetry(
         restarts,
         events,
       }
-      k.turnWin.fill(0)
+      k.turnAtSummary.set(k.turnMs)
       k.depthWin = 0
       k.last = { ...countsOf(k), events: [...k.events] }
     }
@@ -436,6 +461,23 @@ export function createActorTelemetry(
   const self = {
     als,
     kind,
+    /**
+     * Run `fn(arg)` as `kindName`: every card call it makes, and every one
+     * after its awaits, is logged under that kind.
+     *
+     * ONE CONTEXT PER CHANGE OF KIND, NOT PER MESSAGE. A step runs where its
+     * mailbox was scheduled from, and a message sent from a turn is scheduled
+     * from that turn's context. When that context already names this kind,
+     * entering it again changes nothing any reader sees: every
+     * AsyncLocalStorage reads the same store either way. So it is entered only
+     * when the kind changes. On the ring benchmark (one kind) that was one
+     * `als.run` a message, about 290 of the 2000 instructions telemetry added
+     * (gHashTag/trios#1729 item 19).
+     */
+    asKind<A>(kindName: string, fn: (arg: A) => void, arg: A): void {
+      if (als.getStore() === kindName) fn(arg)
+      else als.run(kindName, fn, arg)
+    },
     /**
      * The system's live processes, a pid's slot (actors.t27 slot_of) and its
      * yield count, read when asked.
@@ -512,9 +554,10 @@ export function createActorTelemetry(
       const ms = Math.max(0, now - p.turnAt)
       k.turns++
       k.busyMs += ms
-      const b = bucketOf(ms)
-      k.turnMs[b]++
-      k.turnWin[b]++
+      // the memo's answer read here, the card asked through bucketOf only
+      // for a ms it has not answered yet
+      const b = ms < BUCKET_MEMO_MS && (ms | 0) === ms ? bucketMemo[ms] : -1
+      k.turnMs[b >= 0 ? b : bucketOf(ms)]++
       if (ms > k.turnMaxMs) k.turnMaxMs = ms
       if (end === END_CRASH) k.crashes++
       if (end === END_KILL) {
