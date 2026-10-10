@@ -8,9 +8,6 @@ export const AUTH_WRONG_COMMIT = 17 satisfies number;
 export const AGREE_FIELDS = ["commit", "input_root", "verdict_root", "output_root", "totals"] as const satisfies readonly [string, string, string, string, string];
 export const AGREE_FIELD_COUNT = 5 satisfies number;
 export const NO_LINE = 4294967295 satisfies number;
-export const TRUSTED_N = 4 satisfies number;
-export const TRUSTED_F = 1 satisfies number;
-export const TRUSTED_M = 3 satisfies number;
 export const TEST_CREDIT_MIN_VOTES = 1 satisfies number;
 export const QV_QUORUM = 0 satisfies number;
 export const QV_BELOW_QUORUM = 1 satisfies number;
@@ -41,7 +38,6 @@ export const CH_QUOTE = 34 satisfies number;
 // t27c gen-ts: fn challenge_ok was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn independent_votes was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn distinct_keys was not emitted -- this backend lowers declarations, not bodies.
-// t27c gen-ts: fn trusted_quorum was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn quorum_verdict was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn job_nonce was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn settle_verdict was not emitted -- this backend lowers declarations, not bodies.
@@ -71,6 +67,30 @@ export const CHALLENGE_WINDOW_MINUTES = 15 satisfies number;
 export const KEY_COUNT = 5 satisfies number;
 export const KEY_IDS = ["3d7ba020ec48adc6", "4d2ffce012238bd4", "71c5670c1011b42c", "a05db80f53c317f6", "fed03daa6459a7fa"] as const satisfies readonly [string, string, string, string, string];
 export const KEY_OPERATOR = [1, 1, 1, 1, 1] as const satisfies readonly [number, number, number, number, number];
+export const NO_KEY = 0 satisfies number;
+export const NO_OPERATOR = 0 satisfies number;
+export const QUORUM_ROWS = 8 satisfies number;
+export interface QuorumConfig {
+  readonly keys: number;
+  readonly key_id: readonly [number, number, number, number, number, number, number, number];
+  readonly operator: readonly [number, number, number, number, number, number, number, number];
+  readonly n: number;
+  readonly f: number;
+  readonly m: number;
+}
+export const QuorumConfig = Object.freeze({ __struct__: "QuorumConfig", fields: [["keys", "u32"], ["key_id", "[8]u64"], ["operator", "[8]u32"], ["n", "u32"], ["f", "u32"], ["m", "u32"]] } as const);
+export const TRUSTED_F = 1 satisfies number;
+export const TRUSTED_KEYS = 5 satisfies number;
+export const TRUSTED_KEY_ID = [11555594594871875574, 18361243482826844154, 15776013309385153006, 13358137152186148066, 4983814946434347896, 0, 0, 0] as const satisfies readonly [number, number, number, number, number, number, number, number];
+export const TRUSTED_M = 3 satisfies number;
+export const TRUSTED_N = 4 satisfies number;
+export const TRUSTED_OPERATOR = [1, 1, 2, 3, 4, 0, 0, 0] as const satisfies readonly [number, number, number, number, number, number, number, number];
+// t27c gen-ts: fn config_safe was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn config_well_formed was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn operators_in was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn quorum_admits was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn safe_m was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn trusted_config was not emitted -- this backend lowers declarations, not bodies.
 export const ED_BX = [0xd51a, 0x8f25, 0x2d60, 0xc956, 0xa7b2, 0x9525, 0xc760, 0x692c, 0xdc5c, 0xfdd6, 0xe231, 0xc0a4, 0x53fe, 0xcd6e, 0x36d3, 0x2169] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 export const ED_BY = [0x6658, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666, 0x6666] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 export const ED_D = [0x78a3, 0x1359, 0x4dca, 0x75eb, 0xd8ab, 0x4141, 0x0a4d, 0x0070, 0xe898, 0x7779, 0x4079, 0x8cc7, 0xfe73, 0x2b6f, 0x6cee, 0x5203] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
@@ -244,6 +264,7 @@ export const WHY_VERIFIED = 1 satisfies number;
 // t27c gen-ts: fn status_after_rejection was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn verdict_accepted was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn verdict_indicts was not emitted -- this backend lowers declarations, not bodies.
+// t27c gen-ts: fn quorum_safe was not emitted -- this backend lowers declarations, not bodies.
 export const CORPUS_DOMAIN = "t27-corpus-receipt-v1" satisfies string;
 export const CORPUS_SIGNED_FIELDS = ["commit", "t27b_sha256", "t27c_sha256", "input_root", "verdict_root", "output_root", "totals", "nonce"] as const satisfies readonly [string, string, string, string, string, string, string, string];
 export const CORPUS_SIGNED_FIELD_COUNT = 8 satisfies number;
@@ -275,8 +296,8 @@ export const NONCE_MIN_BYTES = 16 satisfies number;
 // t27c gen-ts: fn receipt_level was not emitted -- this backend lowers declarations, not bodies.
 
 // Declaration order, which the spec's own laws depend on.
-export const __STRUCT_ORDER__ = ["EdDecoded", "EdPoint", "SHA512", "Ledger", "Policy"] as const;
-export const __DECL_ORDER__ = ["AUTH_MALFORMED", "AUTH_WRONG_COMMIT", "AGREE_FIELDS", "AGREE_FIELD_COUNT", "NO_LINE", "TRUSTED_N", "TRUSTED_F", "TRUSTED_M", "TEST_CREDIT_MIN_VOTES", "QV_QUORUM", "QV_BELOW_QUORUM", "QV_NO_VOTE", "QV_SPLIT", "QV_NAMES", "CS_PENDING", "CS_FINAL", "CS_VOID", "CS_NAMES", "CH_QUOTE", "REAL_JOB", "REAL_MSG_1", "REAL_SIG_1", "REAL_KEY_1", "REAL_MSG_2", "REAL_SIG_2", "REAL_KEY_2", "TAMPERED_MSG_1", "CHALLENGE_A", "CHALLENGE_WINDOW_MINUTES", "KEY_COUNT", "KEY_IDS", "KEY_OPERATOR", "ED_BX", "ED_BY", "ED_D", "ED_D2", "ED_L", "EdDecoded", "EdPoint", "FE0", "FE1", "SQRTM1", "ALL", "H0", "K", "SHA512", "AUDIT_RATE_PERCENT", "CORRUPTION_TOLERANCE", "ERR_DUPLICATE_NODE", "ERR_INSUFFICIENT_STAKE", "ERR_NONE", "ERR_OUT_OF_MEMORY", "ERR_UNKNOWN_NODE", "ERR_UNSOUND_POLICY", "Ledger", "MAX_NODES", "MAX_SPENT", "MIN_STAKE_MTRI", "OUT_ALREADY_SETTLED_NOT_CHARGED", "OUT_CORRUPT_NOT_CHARGED", "OUT_CREDITED", "OUT_IDENTITY_MISMATCH", "OUT_NONE", "OUT_NOT_ELIGIBLE", "OUT_REJECTED_AND_SLASHED", "OUT_UNVERIFIABLE_NOT_CHARGED", "Policy", "REJECTION_TOLERANCE", "REWARD_PER_JOB_MTRI", "SLASH_PER_BAD_RECEIPT_MTRI", "ST_ACTIVE", "ST_PROBATION", "ST_SUSPENDED", "ST_UNRELIABLE", "V_BAD_STATUS", "V_CORRUPT", "V_NONCE_MISMATCH", "V_OK", "V_UNVERIFIABLE", "V_WRONG_RESULT", "WHY_ALREADY_SETTLED", "WHY_IDENTITY", "WHY_NONE", "WHY_SUSPENDED", "WHY_UNRELIABLE", "WHY_VERDICT", "WHY_VERIFIED", "CORPUS_DOMAIN", "CORPUS_SIGNED_FIELDS", "CORPUS_SIGNED_FIELD_COUNT", "REQUEST_SHA_LEN", "AUTH_BAD_SIGNATURE", "AUTH_KEY_NOT_REGISTERED", "AUTH_MISSING_NONE", "AUTH_NONCE_NOT_CHALLENGE", "AUTH_NO_NONCE", "AUTH_UNSIGNED", "CH_EQUALS", "CH_NEWLINE", "HEX_NOT_A_DIGIT", "KEY_DIR", "LEVEL_AUTHOR", "LEVEL_FRESH", "LEVEL_NONE", "LINE_END", "NONCE_MIN_BYTES"] as const;
+export const __STRUCT_ORDER__ = ["QuorumConfig", "EdDecoded", "EdPoint", "SHA512", "Ledger", "Policy"] as const;
+export const __DECL_ORDER__ = ["AUTH_MALFORMED", "AUTH_WRONG_COMMIT", "AGREE_FIELDS", "AGREE_FIELD_COUNT", "NO_LINE", "TEST_CREDIT_MIN_VOTES", "QV_QUORUM", "QV_BELOW_QUORUM", "QV_NO_VOTE", "QV_SPLIT", "QV_NAMES", "CS_PENDING", "CS_FINAL", "CS_VOID", "CS_NAMES", "CH_QUOTE", "REAL_JOB", "REAL_MSG_1", "REAL_SIG_1", "REAL_KEY_1", "REAL_MSG_2", "REAL_SIG_2", "REAL_KEY_2", "TAMPERED_MSG_1", "CHALLENGE_A", "CHALLENGE_WINDOW_MINUTES", "KEY_COUNT", "KEY_IDS", "KEY_OPERATOR", "NO_KEY", "NO_OPERATOR", "QUORUM_ROWS", "QuorumConfig", "TRUSTED_F", "TRUSTED_KEYS", "TRUSTED_KEY_ID", "TRUSTED_M", "TRUSTED_N", "TRUSTED_OPERATOR", "ED_BX", "ED_BY", "ED_D", "ED_D2", "ED_L", "EdDecoded", "EdPoint", "FE0", "FE1", "SQRTM1", "ALL", "H0", "K", "SHA512", "AUDIT_RATE_PERCENT", "CORRUPTION_TOLERANCE", "ERR_DUPLICATE_NODE", "ERR_INSUFFICIENT_STAKE", "ERR_NONE", "ERR_OUT_OF_MEMORY", "ERR_UNKNOWN_NODE", "ERR_UNSOUND_POLICY", "Ledger", "MAX_NODES", "MAX_SPENT", "MIN_STAKE_MTRI", "OUT_ALREADY_SETTLED_NOT_CHARGED", "OUT_CORRUPT_NOT_CHARGED", "OUT_CREDITED", "OUT_IDENTITY_MISMATCH", "OUT_NONE", "OUT_NOT_ELIGIBLE", "OUT_REJECTED_AND_SLASHED", "OUT_UNVERIFIABLE_NOT_CHARGED", "Policy", "REJECTION_TOLERANCE", "REWARD_PER_JOB_MTRI", "SLASH_PER_BAD_RECEIPT_MTRI", "ST_ACTIVE", "ST_PROBATION", "ST_SUSPENDED", "ST_UNRELIABLE", "V_BAD_STATUS", "V_CORRUPT", "V_NONCE_MISMATCH", "V_OK", "V_UNVERIFIABLE", "V_WRONG_RESULT", "WHY_ALREADY_SETTLED", "WHY_IDENTITY", "WHY_NONE", "WHY_SUSPENDED", "WHY_UNRELIABLE", "WHY_VERDICT", "WHY_VERIFIED", "CORPUS_DOMAIN", "CORPUS_SIGNED_FIELDS", "CORPUS_SIGNED_FIELD_COUNT", "REQUEST_SHA_LEN", "AUTH_BAD_SIGNATURE", "AUTH_KEY_NOT_REGISTERED", "AUTH_MISSING_NONE", "AUTH_NONCE_NOT_CHALLENGE", "AUTH_NO_NONCE", "AUTH_UNSIGNED", "CH_EQUALS", "CH_NEWLINE", "HEX_NOT_A_DIGIT", "KEY_DIR", "LEVEL_AUTHOR", "LEVEL_FRESH", "LEVEL_NONE", "LINE_END", "NONCE_MIN_BYTES"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not
