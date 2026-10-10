@@ -123,12 +123,17 @@ export const DEFAULT_ALLOWLIST = [
   {
     path: '/vault',
     reason:
-      'signed requests - the vault (gHashTag/trios#1759) is called by workloads and the owner\'s CLI, never a browser; every request is refused unless it carries an Ed25519 signature over its method, path, time, nonce and body hash by a key the owner granted, fresh within host.t27 REQUEST_SKEW_SECONDS and with a nonce not seen before (specs/vault/policy.t27 request_code, checked before the body is parsed), and the route answers 404 to everything unless TRIOS_VAULT=on (src/api/routes/vault.ts, tests/api/vault.test.ts)',
+      'signed requests - the vault (gHashTag/trios#1759) is called by workloads and the owner\'s CLI, never a browser; every request is refused unless it carries an Ed25519 signature over its method, path, time, nonce and body hash by a key the owner granted, fresh within host.t27 REQUEST_SKEW_SECONDS and with a nonce not seen before (specs/vault/policy.t27 request_code, checked before the body is parsed), and the route answers 503 to everything unless TRIOS_VAULT=on (src/api/routes/vault.ts, tests/api/vault.test.ts)',
   },
   {
     path: '/queen/app/webhook',
     reason:
       'signed webhook - GitHub delivers the t27-bees app events here from its own server, with no browser Origin; every request is refused unless X-Hub-Signature-256 is the HMAC-SHA256 of the exact body under TRIOS_BEES_WEBHOOK_SECRET (compared with timingSafeEqual, checked before the body is parsed), and the route refuses everything while that secret is unset or shorter than 16 characters (src/api/routes/queen-app-webhook.ts, tests/api/queen-app.test.ts)',
+  },
+  {
+    path: '/hosting',
+    reason:
+      'own signature - host agents on users computers call it, with no browser Origin; every write is refused unless it verifies under the Ed25519 key the host registered (a registration under the key it registers, a receipt under its own signature), inside REQUEST_SKEW_SECONDS, from the incarnation the Queen holds (specs/hosting/host.t27); a job is accepted only from an owner-tier key in TRIOS_HOSTING_ALLOWLIST; the reads (ledger, verdicts, a job) hold key ids, tiers and hashes, never an address or a secret; every path answers 503 unless TRIOS_HOSTING=on (src/api/routes/hosting.ts, tests/api/hosting.test.ts)',
   },
   {
     path: '/api/inngest',
