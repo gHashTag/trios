@@ -86,7 +86,7 @@ import {
   type KindStats,
   type TelemetryOptions,
 } from './queen-actors-telemetry'
-import { flag, loadCardWasm, u32 } from './queen-card-wasm'
+import { type CardWasm, flag, loadCardWasm, u32 } from './queen-card-wasm'
 import { END_CRASH, END_KILL, END_OK } from './queen-telemetry-card.gen'
 import { escalation, turnRunner } from './queen-turn-stop'
 import {
@@ -98,8 +98,15 @@ import {
 export const ACTORS_CARD = 'queen/actors.wasm'
 export const NETLINK_CARD = 'queen/netlink.wasm'
 
-const card = () => loadCardWasm(ACTORS_CARD)
-const netlink = () => loadCardWasm(NETLINK_CARD)
+// ONE LOOKUP PER PROCESS, NOT PER CALL. A message makes about ten card calls,
+// and finding the card each time was the largest single cost of a message on
+// the ring benchmark (gHashTag/trios#1729 item 8; queen-card-wasm.ts byFile).
+// loadCardWasm keeps each card for the life of the process, so this is the
+// same object either way.
+let actorsCard: CardWasm | undefined
+let netlinkCard: CardWasm | undefined
+const card = (): CardWasm => (actorsCard ??= loadCardWasm(ACTORS_CARD))
+const netlink = (): CardWasm => (netlinkCard ??= loadCardWasm(NETLINK_CARD))
 const big = (v: number | bigint) => BigInt.asUintN(64, BigInt(v))
 /** A card function over u64s; its u64 answer comes back unsigned. */
 const c64 = (name: string, ...a: Array<number | bigint>) =>
@@ -271,6 +278,12 @@ interface Turn {
 
 interface Proc {
   pid: Pid
+  /**
+   * slot_of(pid), asked of the card once, at spawn. WHY: whether a process is
+   * still the one in its slot is asked three times a message, and asking the
+   * card each time was a wasm call and two BigInt conversions per ask.
+   */
+  slot: bigint
   spec: ActorSpec<unknown>
   box: unknown[]
   lane: bigint
@@ -416,7 +429,7 @@ export function createActorSystem(
     const p = live.get(slotOf(pid))
     return p && card().call64('reaches', pid, p.pid) !== 0 ? p : undefined
   }
-  const current = (p: Proc) => live.get(slotOf(p.pid)) === p
+  const current = (p: Proc) => live.get(p.slot) === p
   const remote = (pid: Pid) =>
     card().call64('is_remote', pid, BigInt(node)) !== 0
 
@@ -547,6 +560,7 @@ export function createActorSystem(
       : ISO_LOOP
     const p: Proc = {
       pid,
+      slot: slotOf(pid),
       spec: spec as ActorSpec<unknown>,
       box: [],
       lane: 0n,
@@ -693,7 +707,7 @@ export function createActorSystem(
     }
     const p = procOf(pid)
     if (!p) return
-    live.delete(slotOf(p.pid))
+    live.delete(p.slot)
     p.cancelKill?.()
     if (turnStop && p.turn && !p.turn.ended) stopTurn(p, p.turn, reason)
     stats.deadLetters += p.box.length
