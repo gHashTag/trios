@@ -12,6 +12,10 @@ import {
   hostingOn,
   migrateHostingStore,
 } from '../../api/services/hosting-store'
+import {
+  FLAG_ON,
+  FLAG_VAR,
+} from '../../api/services/queen-vault-policy-card.gen'
 import { logger } from '../logger'
 import { createQueenPool, queenSchema } from './queen-pool'
 
@@ -236,6 +240,52 @@ CREATE INDEX IF NOT EXISTS queen_wait_owner ON queen_wait (owner, state);
 // rather than a transcription of it. This block runs once per deploy and its
 // only reader is a database: a missing comma or a bad type here is a broken
 // deployment that no gate above this line can see.
+// The vault's store (gHashTag/trios#1759, specs/vault/policy.t27): one row,
+// the whole state as JSON -- ciphertext rows, bindings, aliases, grants and
+// leases, never a value -- replaced whole under an optimistic version, so a
+// second writer is refused instead of overwriting (vault-store.ts
+// createPgStore). NOT part of MIGRATION_SQL: off means off (policy.t27
+// section 13), so this runs only with TRIOS_VAULT=on, at boot below and again
+// by the vault's own start (vault-start.ts), from this one const. Additive and
+// idempotent: rolling the code back leaves an unused table, never a broken one.
+// No backticks in this string: it is a JS template literal.
+export const QUEEN_VAULT_SQL = `
+CREATE TABLE IF NOT EXISTS queen_vault_store (
+  id smallint PRIMARY KEY CHECK (id = 1),
+  state jsonb NOT NULL,
+  version bigint NOT NULL DEFAULT 1,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+`
+
+/** The advisory lock the vault's DDL runs under: "vlt" + 1, apart from hosting's 0x686f7374 and 0x68646466. */
+export const VAULT_DDL_LOCK = 0x766c7401
+
+/**
+ * QUEEN_VAULT_SQL in one transaction, under VAULT_DDL_LOCK, so two Queens
+ * booting at once do not race on CREATE TABLE (two concurrent CREATE TABLE IF
+ * NOT EXISTS of one name can fail on the catalog's unique index).
+ */
+export async function migrateVaultStore(pool: Pool): Promise<void> {
+  const c = await pool.connect()
+  try {
+    await c.query('BEGIN')
+    await c.query('SELECT pg_advisory_xact_lock($1)', [VAULT_DDL_LOCK])
+    await c.query(QUEEN_VAULT_SQL)
+    await c.query('COMMIT')
+  } catch (error) {
+    await c.query('ROLLBACK').catch(() => undefined)
+    throw error
+  } finally {
+    c.release()
+  }
+}
+
+/** Whether the vault is on: policy.t27 FLAG_VAR is FLAG_ON. */
+export const vaultFlagOn = (
+  env: Record<string, string | undefined> = process.env,
+): boolean => env[FLAG_VAR] === FLAG_ON
+
 export const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS agent_tasks (
   id uuid PRIMARY KEY,
@@ -643,6 +693,8 @@ export async function runPgMigrations(): Promise<void> {
     // identifier before it is interpolated.
     await pool.query(`CREATE SCHEMA IF NOT EXISTS ${queenSchema()}`)
     await pool.query(MIGRATION_SQL)
+    // The vault (trios#1759): its table exists only where TRIOS_VAULT=on.
+    if (vaultFlagOn()) await migrateVaultStore(pool)
     // Self-hosting (trios#1756): its tables exist only where TRIOS_HOSTING=on.
     // Off means off: a Queen with hosting off builds none of them.
     if (hostingOn()) {
