@@ -45,8 +45,14 @@ const report = auditServer(source, DEFAULT_ALLOWLIST)
 // t27-bees app's events from its own server, so there is no Origin to trust;
 // the HMAC of the body under TRIOS_BEES_WEBHOOK_SECRET is the guard, and the
 // route refuses everything while that secret is unset.
+// RE-MEASURED 2026-10-11: /hosting joined (self-hosting slice 1, trios#1756).
+// Host agents on users' computers call it with no Origin to trust; the guard
+// is the Ed25519 signature of the host's own key on every write, inside the
+// freshness window and from the incarnation the Queen holds, and jobs come
+// only from an owner-tier key. 503 on every path unless TRIOS_HOSTING=on.
 const EXPECTED_UNGUARDED_WITHOUT_ALLOWLIST = [
   '/api/inngest',
+  '/hosting',
   '/queen/app/webhook',
   '/health',
   '/queen/contributor-keys',
@@ -161,7 +167,10 @@ describe('route-guard audit over src/api/server.ts', () => {
     // recomputed from the merged server.ts, not copied from either side. The
     // same 63, 18, 20 and 17: queen's guard on /queen/actors (trios#1735) was
     // already here, cherry-picked, and queen adds no other mount.
-    expect(report.totalMounts).toBe(63)
+    // RE-MEASURED 2026-10-11, self-hosting (trios#1756): 63 became 64 with
+    // /hosting, an allowlisted mount guarded by its hosts' own signatures (the
+    // reason is in tools/route-guard-audit.mjs). No guard count moved.
+    expect(report.totalMounts).toBe(64)
     expect(report.prefixGuardCount).toBe(18)
     expect(report.guardedSubAppCount).toBe(20)
     expect(report.publicReadCount).toBe(17)
@@ -174,7 +183,7 @@ describe('route-guard audit over src/api/server.ts', () => {
     expect(report.entriesMissingReason).toEqual([])
   })
 
-  it('reports exactly the twelve reasoned exceptions when the allowlist is dropped', () => {
+  it('reports exactly the thirteen reasoned exceptions when the allowlist is dropped', () => {
     // The classifier reports mounts in file order; the assertion is on the
     // exact set, so both sides are sorted before comparing.
     expect([...unguardedMounts(source, [])].sort()).toEqual(
