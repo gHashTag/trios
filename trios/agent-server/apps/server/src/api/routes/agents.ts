@@ -100,7 +100,7 @@ type AgentRouteService = {
   }): Promise<boolean>
   listQueuedMessages(agentId: string): Promise<QueuedMessage[]>
 
-  // Files API — Phase 3 of TKT-762.
+  // Files API - Phase 3 of TKT-762.
   listAgentFiles(
     agentId: string,
     options?: { limit?: number },
@@ -336,7 +336,7 @@ export function createAgentRoutes(deps: AgentRouteDeps = {}) {
           })
         } catch (err) {
           if (err instanceof TurnAlreadyActiveError) {
-            // Caller can attach via GET /chat/stream?turnId=… instead.
+            // Caller can attach via GET /chat/stream?turnId=... instead.
             return c.json(
               {
                 error: 'Turn already active',
@@ -428,7 +428,7 @@ export function createAgentRoutes(deps: AgentRouteDeps = {}) {
         }
       })
 
-      // ── Files (TKT-762) ────────────────────────────────────────────
+      // -- Files (TKT-762) --------------------------------------------
       //
       // V1 surfaces files OpenClaw agents produce inside their workspace
       // dir (`~/.browseros/vm/openclaw/.openclaw/workspace[-<name>]/`)
@@ -503,7 +503,7 @@ export function createAgentRoutes(deps: AgentRouteDeps = {}) {
   )
 }
 
-/** Hard cap on `?limit=` for /agents/:id/files — guards against
+/** Hard cap on `?limit=` for /agents/:id/files - guards against
  *  a caller-supplied huge value forcing a per-agent table scan. */
 const MAX_FILES_LIMIT = 500
 
@@ -524,7 +524,7 @@ function parseAgentFilesLimit(
 /**
  * RFC 6266 / RFC 5987 filename attributes for `Content-Disposition`.
  * Returns the `filename="..."` attribute (always) plus a
- * percent-encoded `filename*=UTF-8''…` attribute when the name
+ * percent-encoded `filename*=UTF-8''...` attribute when the name
  * contains non-ASCII characters, so browsers download with the
  * original name even on stricter HTTP clients.
  */
@@ -624,7 +624,7 @@ function streamTurnFrames(
       if (completed) {
         reader.releaseLock()
       } else {
-        // Caller went away mid-stream. Cancel only this subscription —
+        // Caller went away mid-stream. Cancel only this subscription -
         // the registry's underlying turn keeps running.
         await reader.cancel('client disconnected').catch(() => {})
       }
@@ -679,8 +679,8 @@ async function parseCreateAgentBody(c: Context<Env>): Promise<
 
   // OpenClaw and Hermes resolve their model from per-agent provider
   // config (gateway / config.yaml) rather than from the harness catalog.
-  // Skip catalog model validation for those adapters — both have an
-  // empty `models: []` in the catalog by design — everything else still
+  // Skip catalog model validation for those adapters - both have an
+  // empty `models: []` in the catalog by design - everything else still
   // uses the catalog for validation.
   if (
     record.adapter !== 'openclaw' &&
@@ -728,7 +728,7 @@ const MAX_CHAT_ATTACHMENTS = 10
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB raw, post-decode
 // data: URLs encode bytes as base64 (~4/3 inflation) plus the
 // `data:<mime>;base64,` prefix; cap the encoded string against that
-// rather than 2× the raw budget.
+// rather than 2x the raw budget.
 const MAX_IMAGE_DATA_URL_LENGTH = Math.ceil(MAX_IMAGE_BYTES * (4 / 3)) + 100
 const ALLOWED_IMAGE_MEDIA_TYPES = new Set([
   'image/png',
@@ -800,7 +800,7 @@ async function parseChatBody(
     if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
       return { error: `image exceeds ${MAX_IMAGE_BYTES} bytes` }
     }
-    // Strip the `data:<mime>;base64,` prefix — ACP image blocks carry
+    // Strip the `data:<mime>;base64,` prefix - ACP image blocks carry
     // raw base64 plus the mime type as separate fields.
     const commaIdx = dataUrl.indexOf(',')
     const data = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
