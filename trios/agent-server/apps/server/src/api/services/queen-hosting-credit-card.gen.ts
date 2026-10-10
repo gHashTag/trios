@@ -9,7 +9,8 @@ export const CREDIT_KIND = 2 satisfies number;
 // t27c gen-ts: fn strike_due was not emitted -- this backend lowers declarations, not bodies.
 export const LE_CREDIT = 0 satisfies number;
 export const LE_STRIKE = 1 satisfies number;
-export const LEDGER_KINDS = 2 satisfies number;
+export const LE_SLASH = 2 satisfies number;
+export const LEDGER_KINDS = 3 satisfies number;
 export const BALANCE_MAX = 18446744073709551615 satisfies number;
 // t27c gen-ts: fn row_admitted was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: fn balance_after was not emitted -- this backend lowers declarations, not bodies.
@@ -66,7 +67,7 @@ export const DEVICE_ROOTED_LEVELS = 0 satisfies number;
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [] as const;
-export const __DECL_ORDER__ = ["CREDIT_KIND", "LE_CREDIT", "LE_STRIKE", "LEDGER_KINDS", "BALANCE_MAX", "SETTLEMENT_ENABLED", "SETTLE_THRESHOLD_MTRI", "TOKEN_VALUE_CLAIMED", "RC_BAD_SIGNATURE", "RC_EQUIVOCATION", "RC_INPUT_MISMATCH", "RC_NOT_LEASED", "RC_OUTPUT_MISMATCH", "SIDE_AGREED", "SIDE_DISSENT", "SIDE_NONE", "REWARD_PER_JOB_MTRI", "EVIDENCE_OTHER_RUN", "EVIDENCE_UNBOUND", "LINKED", "NO_CHANGE", "NO_LOGS", "NO_OUTPUTS", "NO_TESTS", "RUN_OTHER_CHANGE", "RUN_UNBOUND", "SEAL_MATCH", "SEAL_NOT_VERIFIED", "ATT_DEVICE_BOUND", "ATT_NONE", "ATT_REPRODUCED", "ATT_SOFTWARE_SIGNED", "CREDIT_TRANSFERABLE", "EXECUTOR_FEE", "OUT_CREDITED", "OUT_REJECTED_AND_SLASHED", "PAY_NONE", "PAY_NORMAL", "PAY_SLASH_ONLY", "DEVICE_ROOTED_LEVELS"] as const;
+export const __DECL_ORDER__ = ["CREDIT_KIND", "LE_CREDIT", "LE_STRIKE", "LE_SLASH", "LEDGER_KINDS", "BALANCE_MAX", "SETTLEMENT_ENABLED", "SETTLE_THRESHOLD_MTRI", "TOKEN_VALUE_CLAIMED", "RC_BAD_SIGNATURE", "RC_EQUIVOCATION", "RC_INPUT_MISMATCH", "RC_NOT_LEASED", "RC_OUTPUT_MISMATCH", "SIDE_AGREED", "SIDE_DISSENT", "SIDE_NONE", "REWARD_PER_JOB_MTRI", "EVIDENCE_OTHER_RUN", "EVIDENCE_UNBOUND", "LINKED", "NO_CHANGE", "NO_LOGS", "NO_OUTPUTS", "NO_TESTS", "RUN_OTHER_CHANGE", "RUN_UNBOUND", "SEAL_MATCH", "SEAL_NOT_VERIFIED", "ATT_DEVICE_BOUND", "ATT_NONE", "ATT_REPRODUCED", "ATT_SOFTWARE_SIGNED", "CREDIT_TRANSFERABLE", "EXECUTOR_FEE", "OUT_CREDITED", "OUT_REJECTED_AND_SLASHED", "PAY_NONE", "PAY_NORMAL", "PAY_SLASH_ONLY", "DEVICE_ROOTED_LEVELS"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

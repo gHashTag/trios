@@ -72,6 +72,20 @@ export function generateHostKey(): { privatePem: string; publicHex: string } {
   return { privatePem, publicHex: publicHexOf(privatePem) }
 }
 
+/** DER prefix of an Ed25519 PKCS#8 private key; the 32-byte seed follows it. */
+const PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex')
+
+/** A PKCS#8 PEM from a 32-byte Ed25519 seed given as hex (statement.t27 section 6). */
+export function privatePemOfSeed(seedHex: string): string {
+  return createPrivateKey({
+    key: Buffer.concat([PKCS8_PREFIX, Buffer.from(seedHex, 'hex')]),
+    format: 'der',
+    type: 'pkcs8',
+  })
+    .export({ format: 'pem', type: 'pkcs8' })
+    .toString()
+}
+
 export function publicHexOf(privatePem: string): string {
   const der = createPublicKey(createPrivateKey(privatePem)).export({
     format: 'der',

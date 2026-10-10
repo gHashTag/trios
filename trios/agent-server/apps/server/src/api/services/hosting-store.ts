@@ -3,8 +3,9 @@
  * Copyright 2025 BrowserOS
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * Where the self-hosting rows live (gHashTag/trios#1756): hosts, jobs, leases
- * and the off-chain ledger. State only; it decides nothing.
+ * Where the self-hosting rows live (gHashTag/trios#1756): hosts, jobs, leases,
+ * the off-chain ledger and, since slice 1b (trios#1761), the signed epoch
+ * statements. State only; it decides nothing.
  *
  * Two stores, one interface. The Queen runs on Postgres (the `pg` pool every
  * Queen route uses, tables created in code on first use, like the waits and
@@ -30,6 +31,8 @@ export interface HostRow {
   beatAt: number
   strikes: number
   registeredAt: number
+  /** Votes on the agreeing side so far: sybil.t27's probation counter. */
+  agreed: number
 }
 
 export interface JobFile {
@@ -58,6 +61,12 @@ export interface JobRow {
   holdsPersonal: boolean
   wanted: number
   leasesIssued: number
+  /**
+   * A known answer (sybil.t27): the output hash a lab row or an anchored
+   * quorum already agreed. Never shown to a host: it is not in the job's id
+   * nor in its payload.
+   */
+  knownHash?: string | null
   state: 'open' | 'agreed' | 'unresolved'
   verdict: number
   createdAt: number
@@ -80,15 +89,49 @@ export interface LeaseRow {
   /** The first receipt for this lease, exactly as it came. */
   receipt: Record<string, unknown> | null
   receivedAt: number | null
+  /** 1 for the job's first receipt, 2 for its second, ... (slice 1b). */
+  arrival?: number
 }
 
 export interface LedgerRow {
   seq: number
   hostId: string
   jobId: string
+  /** credit.t27 LE_CREDIT, LE_STRIKE or LE_SLASH. */
   kind: number
   mtri: number
   at: number
+  /** statement.t27: the payment kind of a credit, ENTRY_SLASH for a slash, 0 for a strike. */
+  feeKind: number
+  /** statement.t27 epoch_of(at). */
+  epoch: number
+  /** The receipt (lease) behind the row, when there is one. */
+  receipt: string | null
+  /**
+   * Who judged the work: 'hosting' for a shard's lease, or the source a
+   * recordWork call names (a t27b lab receipt is 'lab'). The statement's leaf
+   * does not carry it: a leaf is (key, kind, amount, receipt ids) whatever
+   * the source, so every source folds into one root.
+   */
+  source?: string
+}
+
+/** One closed epoch (statement.t27): the signed text, and the leaves under its root. */
+export interface StatementRow {
+  epoch: number
+  /** The signed text, exactly: STATEMENT_DOMAIN, then name=value per STATEMENT_FIELDS. */
+  message: string
+  signature: string
+  root: string
+  /** The leaves' fields in leaf order, so a proof can be served without recomputing them. */
+  leaves: Array<{
+    epoch: number
+    host: string
+    kind: string
+    mtri: number
+    receipts: string[]
+  }>
+  closedAt: number
 }
 
 export interface HostingTx {
@@ -106,6 +149,14 @@ export interface HostingTx {
   ledgerHas(hostId: string, jobId: string, kind: number): Promise<boolean>
   addLedger(row: Omit<LedgerRow, 'seq'>): Promise<void>
   ledger(): Promise<LedgerRow[]>
+  ledgerOfEpoch(epoch: number): Promise<LedgerRow[]>
+  /** The epoch of the first ledger row, or null when there is none. */
+  firstLedgerEpoch(): Promise<number | null>
+  statement(epoch: number): Promise<StatementRow | null>
+  lastStatement(): Promise<StatementRow | null>
+  statements(): Promise<StatementRow[]>
+  /** Write a statement once; false when that epoch already has one. */
+  putStatement(row: StatementRow): Promise<boolean>
 }
 
 export interface HostingStore {
@@ -120,6 +171,7 @@ export function createMemoryHostingStore(): HostingStore {
   const jobs = new Map<string, JobRow>()
   const leases = new Map<string, LeaseRow>()
   const ledger: LedgerRow[] = []
+  const statements = new Map<number, StatementRow>()
   let tail: Promise<unknown> = Promise.resolve()
   const s: HostingTx = {
     host: async (id) =>
@@ -151,9 +203,28 @@ export function createMemoryHostingStore(): HostingStore {
         (r) => r.hostId === hostId && r.jobId === jobId && r.kind === kind,
       ),
     addLedger: async (row) => {
-      ledger.push({ ...row, seq: ledger.length + 1 })
+      ledger.push({ source: 'hosting', ...row, seq: ledger.length + 1 })
     },
     ledger: async () => ledger.map(clone),
+    ledgerOfEpoch: async (epoch) =>
+      ledger.filter((r) => r.epoch === epoch).map(clone),
+    firstLedgerEpoch: async () =>
+      ledger.length === 0 ? null : Math.min(...ledger.map((r) => r.epoch)),
+    statement: async (epoch) =>
+      statements.has(epoch)
+        ? clone(statements.get(epoch) as StatementRow)
+        : null,
+    lastStatement: async () => {
+      const last = Math.max(-1, ...statements.keys())
+      return last < 0 ? null : clone(statements.get(last) as StatementRow)
+    },
+    statements: async () =>
+      [...statements.values()].sort((a, b) => a.epoch - b.epoch).map(clone),
+    putStatement: async (row) => {
+      if (statements.has(row.epoch)) return false
+      statements.set(row.epoch, clone(row))
+      return true
+    },
   }
   return {
     tx<T>(fn: (s: HostingTx) => Promise<T>): Promise<T> {
@@ -180,6 +251,7 @@ export const HOSTING_SQL = [
   '  strikes integer NOT NULL DEFAULT 0,',
   '  registered_at bigint NOT NULL',
   ');',
+  'ALTER TABLE hosting_hosts ADD COLUMN IF NOT EXISTS agreed integer NOT NULL DEFAULT 0;',
   'CREATE TABLE IF NOT EXISTS hosting_jobs (',
   '  id text PRIMARY KEY,',
   '  state text NOT NULL,',
@@ -205,10 +277,27 @@ export const HOSTING_SQL = [
   '  at bigint NOT NULL,',
   '  UNIQUE (host_id, job_id, kind)',
   ');',
+  'ALTER TABLE hosting_ledger ADD COLUMN IF NOT EXISTS fee_kind smallint NOT NULL DEFAULT 0;',
+  'ALTER TABLE hosting_ledger ADD COLUMN IF NOT EXISTS epoch bigint NOT NULL DEFAULT 0;',
+  'ALTER TABLE hosting_ledger ADD COLUMN IF NOT EXISTS receipt text;',
+  "ALTER TABLE hosting_ledger ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'hosting';",
+  'CREATE INDEX IF NOT EXISTS hosting_ledger_epoch ON hosting_ledger (epoch);',
+  'CREATE TABLE IF NOT EXISTS hosting_statements (',
+  '  epoch bigint PRIMARY KEY,',
+  '  root text NOT NULL,',
+  '  closed_at bigint NOT NULL,',
+  '  body jsonb NOT NULL',
+  ');',
 ].join('\n')
 
 /** pg_advisory_xact_lock key: 'host' as four ASCII bytes. */
 const HOSTING_LOCK = 0x686f7374
+/**
+ * WHY A SECOND LOCK FOR THE SCHEMA: two Queen processes starting together
+ * both run CREATE TABLE IF NOT EXISTS, and Postgres can refuse the loser with
+ * a unique violation on pg_type. The DDL runs under its own advisory lock.
+ */
+const HOSTING_DDL_LOCK = 0x68646466
 
 type HostSqlRow = {
   id: string
@@ -222,6 +311,7 @@ type HostSqlRow = {
   beat_at: string
   strikes: number
   registered_at: string
+  agreed: number
 }
 
 const hostOf = (r: HostSqlRow): HostRow => ({
@@ -236,6 +326,7 @@ const hostOf = (r: HostSqlRow): HostRow => ({
   beatAt: Number(r.beat_at),
   strikes: Number(r.strikes),
   registeredAt: Number(r.registered_at),
+  agreed: Number(r.agreed ?? 0),
 })
 
 function pgTx(c: PoolClient): HostingTx {
@@ -255,10 +346,10 @@ function pgTx(c: PoolClient): HostingTx {
       ).rows.map(hostOf),
     putHost: async (h) => {
       await c.query(
-        'INSERT INTO hosting_hosts (id, public_key, tier, tier_claim, slots, platform, origin, incarnation, beat_at, strikes, registered_at) ' +
-          'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ' +
+        'INSERT INTO hosting_hosts (id, public_key, tier, tier_claim, slots, platform, origin, incarnation, beat_at, strikes, registered_at, agreed) ' +
+          'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ' +
           'ON CONFLICT (id) DO UPDATE SET public_key = $2, tier = $3, tier_claim = $4, slots = $5, platform = $6, ' +
-          'origin = $7, incarnation = $8, beat_at = $9, strikes = $10, registered_at = $11',
+          'origin = $7, incarnation = $8, beat_at = $9, strikes = $10, registered_at = $11, agreed = $12',
         [
           h.id,
           h.publicKey,
@@ -271,6 +362,7 @@ function pgTx(c: PoolClient): HostingTx {
           h.beatAt,
           h.strikes,
           h.registeredAt,
+          h.agreed ?? 0,
         ],
       )
     },
@@ -330,28 +422,120 @@ function pgTx(c: PoolClient): HostingTx {
       ).rows.length > 0,
     addLedger: async (r) => {
       await c.query(
-        'INSERT INTO hosting_ledger (host_id, job_id, kind, mtri, at) VALUES ($1, $2, $3, $4, $5)',
-        [r.hostId, r.jobId, r.kind, r.mtri, r.at],
+        'INSERT INTO hosting_ledger (host_id, job_id, kind, mtri, at, fee_kind, epoch, receipt, source) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+        [
+          r.hostId,
+          r.jobId,
+          r.kind,
+          r.mtri,
+          r.at,
+          r.feeKind,
+          r.epoch,
+          r.receipt,
+          r.source ?? 'hosting',
+        ],
       )
     },
     ledger: async () =>
       (
-        await c.query<{
-          seq: string
-          host_id: string
-          job_id: string
-          kind: number
-          mtri: string
-          at: string
-        }>('SELECT * FROM hosting_ledger ORDER BY seq')
-      ).rows.map((r) => ({
-        seq: Number(r.seq),
-        hostId: r.host_id,
-        jobId: r.job_id,
-        kind: Number(r.kind),
-        mtri: Number(r.mtri),
-        at: Number(r.at),
-      })),
+        await c.query<LedgerSqlRow>('SELECT * FROM hosting_ledger ORDER BY seq')
+      ).rows.map(ledgerOf),
+    ledgerOfEpoch: async (epoch) =>
+      (
+        await c.query<LedgerSqlRow>(
+          'SELECT * FROM hosting_ledger WHERE epoch = $1 ORDER BY seq',
+          [epoch],
+        )
+      ).rows.map(ledgerOf),
+    firstLedgerEpoch: async () => {
+      const r = await c.query<{ first: string | null }>(
+        'SELECT min(epoch) AS first FROM hosting_ledger',
+      )
+      const first = r.rows[0]?.first
+      return first === null || first === undefined ? null : Number(first)
+    },
+    statement: async (epoch) =>
+      (
+        await bodies<StatementRow>(
+          'SELECT body FROM hosting_statements WHERE epoch = $1',
+          [epoch],
+        )
+      )[0] ?? null,
+    lastStatement: async () =>
+      (
+        await bodies<StatementRow>(
+          'SELECT body FROM hosting_statements ORDER BY epoch DESC LIMIT 1',
+          [],
+        )
+      )[0] ?? null,
+    statements: () =>
+      bodies<StatementRow>(
+        'SELECT body FROM hosting_statements ORDER BY epoch',
+        [],
+      ),
+    putStatement: async (row) =>
+      ((
+        await c.query(
+          'INSERT INTO hosting_statements (epoch, root, closed_at, body) VALUES ($1, $2, $3, $4) ON CONFLICT (epoch) DO NOTHING',
+          [row.epoch, row.root, row.closedAt, JSON.stringify(row)],
+        )
+      ).rowCount ?? 0) > 0,
+  }
+}
+
+type LedgerSqlRow = {
+  seq: string
+  host_id: string
+  job_id: string
+  kind: number
+  mtri: string
+  at: string
+  fee_kind: number
+  epoch: string
+  receipt: string | null
+  source: string | null
+}
+
+const ledgerOf = (r: LedgerSqlRow): LedgerRow => ({
+  seq: Number(r.seq),
+  hostId: r.host_id,
+  jobId: r.job_id,
+  kind: Number(r.kind),
+  mtri: Number(r.mtri),
+  at: Number(r.at),
+  feeKind: Number(r.fee_kind ?? 0),
+  epoch: Number(r.epoch ?? 0),
+  receipt: r.receipt ?? null,
+  source: r.source ?? 'hosting',
+})
+
+/** TRIOS_HOSTING=on. Off, the Queen builds no hosting table and serves 503. */
+export function hostingOn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.TRIOS_HOSTING ?? 'off').trim().toLowerCase() === 'on'
+}
+
+/**
+ * The hosting tables, idempotent: every statement is IF NOT EXISTS, under an
+ * advisory lock, so a boot and a second Queen against one database agree.
+ * The boot migration (pg-migrate.ts) and the store's first use both run this
+ * one function, so the two cannot come to disagree.
+ */
+export async function migrateHostingStore(pool: Pool): Promise<void> {
+  await ensureSchema(pool)
+}
+
+async function ensureSchema(pool: Pool): Promise<void> {
+  const c = await pool.connect()
+  try {
+    await c.query('BEGIN')
+    await c.query('SELECT pg_advisory_xact_lock($1)', [HOSTING_DDL_LOCK])
+    await c.query(HOSTING_SQL)
+    await c.query('COMMIT')
+  } catch (err) {
+    await c.query('ROLLBACK').catch(() => undefined)
+    throw err
+  } finally {
+    c.release()
   }
 }
 
@@ -359,7 +543,7 @@ export function createPgHostingStore(pool: Pool): HostingStore {
   let ensured: Promise<unknown> | null = null
   return {
     async tx<T>(fn: (s: HostingTx) => Promise<T>): Promise<T> {
-      ensured ??= pool.query(HOSTING_SQL).catch((err) => {
+      ensured ??= ensureSchema(pool).catch((err) => {
         ensured = null
         throw err
       })

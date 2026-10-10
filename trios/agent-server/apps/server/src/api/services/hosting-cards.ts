@@ -13,6 +13,10 @@
  *   placement.t27  fit, spread, k replicas, the lease that lapses
  *   proof.t27      the shard's verdict, the receipt's checks, k-of-n agreement
  *   credit.t27     credit, strikes, the ledger, settlement (off)
+ *   sybil.t27      slice 1b: the anchored quorum, canaries, probation, the
+ *                  per-key cap, attestation, the slash; and the simulation
+ *   statement.t27  slice 1b: the kind each credit is paid as, epochs, the
+ *                  leaf, the inclusion proof's shape, the settlement gate
  *
  * WHY A LOCATOR: the Queen reads the cards from specs/ on disk; the compiled
  * host agent carries them inside its binary (`bun build --compile`) and points
@@ -27,6 +31,8 @@ export const HOSTING_CARDS = {
   proof: 'hosting/proof.wasm',
   placement: 'hosting/placement.wasm',
   credit: 'hosting/credit.wasm',
+  sybil: 'hosting/sybil.wasm',
+  statement: 'hosting/statement.wasm',
 } as const
 
 export type HostingCardName = keyof typeof HOSTING_CARDS
@@ -45,6 +51,8 @@ const host = () => locate('host')
 const proof = () => locate('proof')
 const placement = () => locate('placement')
 const credit = () => locate('credit')
+const sybil = () => locate('sybil')
+const statement = () => locate('statement')
 const yes = (n: number | bigint) => Number(n) !== 0
 
 // --- host.t27 ---------------------------------------------------------------
@@ -378,3 +386,296 @@ export const settlementDue = (
       flag(deviceBound),
     ),
   )
+
+// --- sybil.t27 (slice 1b) ---------------------------------------------------
+// WHY A CAP IS A BIGINT: the owner's cap is u64 max; a Number cannot carry it
+// back into the card exactly, and BigInt(2 ** 64) wraps to 0 there.
+
+export const anchors = (tier: number): boolean =>
+  yes(sybil().call('anchors', tier & 0xff))
+
+export const replicasWanted = (knownAnswer: boolean): number =>
+  sybil().call('replicas_wanted', flag(knownAnswer)) >>> 0
+
+export const publicMayTake = (
+  anchorOn: boolean,
+  knownAnswer: boolean,
+  publicIn: number,
+): boolean =>
+  yes(
+    sybil().call(
+      'public_may_take',
+      flag(anchorOn),
+      flag(knownAnswer),
+      u32(publicIn),
+    ),
+  )
+
+export const anchoredVerdict = (
+  anchorPresent: boolean,
+  anchorGroup: number,
+  replicas: number,
+  wanted: number,
+  isExhausted: boolean,
+): number =>
+  sybil().call(
+    'anchored_verdict',
+    flag(anchorPresent),
+    u32(anchorGroup),
+    u32(replicas),
+    u32(wanted),
+    flag(isExhausted),
+  ) >>> 0
+
+export const canaryDue = (draw: number, ratePermille: number): boolean =>
+  yes(sybil().call('canary_due', u32(draw), u32(ratePermille)))
+
+export const canaryWrong = (knownAnswer: boolean, matches: boolean): boolean =>
+  yes(sybil().call('canary_wrong', flag(knownAnswer), flag(matches)))
+
+export const onProbation = (agreedBefore: number): boolean =>
+  yes(sybil().call('on_probation', u32(agreedBefore)))
+
+export const epochCap = (tier: number, attestedKey: boolean): bigint =>
+  BigInt.asUintN(
+    64,
+    BigInt(sybil().call64('epoch_cap', tier & 0xff, flag(attestedKey))),
+  )
+
+export const attested = (
+  ownerMarked: boolean,
+  kind: number,
+  signatureOk: boolean,
+  githubAgeDays: number,
+): boolean =>
+  yes(
+    sybil().call(
+      'attested',
+      flag(ownerMarked),
+      kind & 0xff,
+      flag(signatureOk),
+      u32(githubAgeDays),
+    ),
+  )
+
+export const voteCredit = (
+  side: number,
+  alreadyCredited: boolean,
+  agreedBefore: number,
+  earnedThisEpoch: number,
+  cap: bigint,
+): number =>
+  Number(
+    sybil().call64(
+      'vote_credit',
+      side & 0xff,
+      flag(alreadyCredited),
+      u32(agreedBefore),
+      u64(earnedThisEpoch),
+      BigInt.asIntN(64, cap),
+    ),
+  )
+
+export const slashDue = (
+  wrongCanary: boolean,
+  side: number,
+  alreadySlashed: boolean,
+): boolean =>
+  yes(
+    sybil().call(
+      'slash_due',
+      flag(wrongCanary),
+      side & 0xff,
+      flag(alreadySlashed),
+    ),
+  )
+
+export const struck = (
+  wrongCanary: boolean,
+  side: number,
+  alreadyStruck: boolean,
+): boolean =>
+  yes(
+    sybil().call('struck', flag(wrongCanary), side & 0xff, flag(alreadyStruck)),
+  )
+
+export const slashMtri = (earnedThisEpoch: number, cap: bigint): number =>
+  Number(
+    sybil().call64('slash_mtri', u64(earnedThisEpoch), BigInt.asIntN(64, cap)),
+  )
+
+/** The simulation's expectation over its seeds, in thousandths (sybil_mean_milli). */
+export const sybilMeanMilli = (
+  attackers: number,
+  defenses: number,
+  what: number,
+): number =>
+  Number(
+    sybil().call64(
+      'sybil_mean_milli',
+      u32(attackers),
+      u32(defenses),
+      what & 0xff,
+    ),
+  )
+
+/** The simulation's sum over its seeds (sybil_total). */
+export const sybilTotal = (
+  attackers: number,
+  defenses: number,
+  what: number,
+): number =>
+  Number(
+    sybil().call64('sybil_total', u32(attackers), u32(defenses), what & 0xff),
+  )
+
+// --- statement.t27 (slice 1b) -----------------------------------------------
+
+export const shardKind = (knownAnswer: boolean, index: number): number =>
+  statement().call('shard_kind', flag(knownAnswer), u32(index)) >>> 0
+
+export const leafKindKnown = (kind: number): boolean =>
+  yes(statement().call('leaf_kind_known', kind & 0xff))
+
+export const balanceAfterEntry = (
+  balance: number,
+  kind: number,
+  mtri: number,
+): number =>
+  Number(
+    statement().call64(
+      'balance_after_entry',
+      u64(balance),
+      kind & 0xff,
+      u64(mtri),
+    ),
+  )
+
+export const epochOf = (unixSeconds: number): number =>
+  Number(statement().call64('epoch_of', u64(unixSeconds)))
+
+export const epochFrom = (epoch: number): number =>
+  Number(statement().call64('epoch_from', u64(epoch)))
+
+export const epochTo = (epoch: number): number =>
+  Number(statement().call64('epoch_to', u64(epoch)))
+
+export const nextToClose = (
+  anyClosed: boolean,
+  lastClosed: number,
+  firstRowEpoch: number,
+): number =>
+  Number(
+    statement().call64(
+      'next_to_close',
+      flag(anyClosed),
+      u64(lastClosed),
+      u64(firstRowEpoch),
+    ),
+  )
+
+export const epochCloses = (
+  epoch: number,
+  next: number,
+  nowEpoch: number,
+  hasRows: boolean,
+  anyClosed: boolean,
+): boolean =>
+  yes(
+    statement().call64(
+      'epoch_closes',
+      u64(epoch),
+      u64(next),
+      u64(nowEpoch),
+      flag(hasRows),
+      flag(anyClosed),
+    ),
+  )
+
+export const rowEpochOpen = (
+  epoch: number,
+  next: number,
+  anyClosed: boolean,
+): boolean =>
+  yes(
+    statement().call64(
+      'row_epoch_open',
+      u64(epoch),
+      u64(next),
+      flag(anyClosed),
+    ),
+  )
+
+/** host_order: the byte order of the two host ids, as -1, 0 or 1. */
+export const leafBefore = (
+  hostOrder: number,
+  kindA: number,
+  kindB: number,
+): boolean =>
+  yes(
+    statement().call(
+      'leaf_before',
+      Math.sign(hostOrder) | 0,
+      kindA & 0xff,
+      kindB & 0xff,
+    ),
+  )
+
+export const auditPathLen = (index: number, size: number): number =>
+  statement().call('audit_path_len', u32(index), u32(size)) >>> 0
+
+export const siblingLeft = (index: number, size: number, i: number): boolean =>
+  yes(statement().call('sibling_left', u32(index), u32(size), u32(i)))
+
+export const proofShapeOk = (
+  index: number,
+  size: number,
+  pathLen: number,
+): boolean =>
+  yes(statement().call('proof_shape_ok', u32(index), u32(size), u32(pathLen)))
+
+export const verifyCode = (
+  signatureOk: boolean,
+  leafIsMine: boolean,
+  shapeOk: boolean,
+  rootMatches: boolean,
+): number =>
+  statement().call(
+    'verify_code',
+    flag(signatureOk),
+    flag(leafIsMine),
+    flag(shapeOk),
+    flag(rootMatches),
+  ) >>> 0
+
+export const settlementGateOpen = (
+  counselCleared: boolean,
+  chain: number,
+): boolean =>
+  yes(
+    statement().call(
+      'settlement_gate_open',
+      flag(counselCleared),
+      chain & 0xff,
+    ),
+  )
+
+/** corpus_receipt.t27's split, compiled into the statement card. */
+export const splitPoint = (n: number): number =>
+  statement().call('split_point', u32(n)) >>> 0
+
+/** statement.t27 section 6: the state of the ledger key variable's value. */
+export const ledgerKeyState = (
+  set: boolean,
+  length: number,
+  allLowerHex: boolean,
+): number =>
+  statement().call(
+    'ledger_key_state',
+    flag(set),
+    u32(length),
+    flag(allLowerHex),
+  ) >>> 0
+
+export const epochsClose = (keyState: number): boolean =>
+  yes(statement().call('epochs_close', keyState & 0xff))

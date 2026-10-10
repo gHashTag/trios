@@ -14,6 +14,10 @@
  *   POST /hosting/receipts          a signed receipt (the receipt is its own signature)
  *   POST /hosting/jobs              a signed request from an owner-tier host: a new shard
  *   GET  /hosting/ledger            the public ledger: key ids, tiers, mTRI, strikes
+ *   GET  /hosting/ledger/epochs     slice 1b: every closed epoch's signed statement
+ *   GET  /hosting/ledger/epochs/:n/proof?key=<host key id>
+ *                                   slice 1b: that statement, and the key's leaves
+ *                                   with their RFC 6962 paths (statement.t27)
  *   GET  /hosting/verdicts          agreed shards in the t27b lab's row shape
  *   GET  /hosting/jobs/:id          one job, its leases and its verdict
  *
@@ -24,23 +28,33 @@
  * holds; the reads hold no secret. Reasons in tools/route-guard-audit.mjs.
  *
  * Off unless TRIOS_HOSTING=on: every path answers 503 and touches nothing.
+ * Slice 1b (trios#1761): TRIOS_HOSTING_SYBIL=on turns on sybil.t27's rules;
+ * TRIOS_HOSTING_ATTESTED lists the key ids the owner marks attested; and
+ * statement.t27 LEDGER_KEY_VARIABLE (TRIOS_HOSTING_LEDGER_KEY) holds the
+ * Queen's Ed25519 ledger seed, 64 hex characters. Without it every epoch stays
+ * open and unsigned, and one log line says so. Its value is never printed.
  */
 
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { createQueenPool } from '../../lib/db/queen-pool'
+import { logger } from '../../lib/logger'
+import { epochsClose, ledgerKeyState } from '../services/hosting-cards'
 import {
   createHostingQueen,
+  type HostingEconomics,
   HostingError,
   type HostingQueen,
+  LEDGER_KEY_WORDS,
   parseAllowlist,
 } from '../services/hosting-queen'
-import { createPgHostingStore } from '../services/hosting-store'
-import { sha256Hex } from '../services/hosting-wire'
+import { createPgHostingStore, hostingOn } from '../services/hosting-store'
+import { privatePemOfSeed, sha256Hex } from '../services/hosting-wire'
 import {
   ORIGIN_V4_PREFIX_BITS,
   ORIGIN_V6_PREFIX_BITS,
 } from '../services/queen-hosting-placement-card.gen'
+import { LEDGER_KEY_VARIABLE } from '../services/queen-hosting-statement-card.gen'
 import { queenLeaseDatabaseUrl } from '../services/queen-lease'
 
 export interface HostingRouteDeps {
@@ -49,7 +63,40 @@ export interface HostingRouteDeps {
 }
 
 export function hostingEnabled(env = process.env): boolean {
-  return (env.TRIOS_HOSTING ?? 'off').trim().toLowerCase() === 'on'
+  return hostingOn(env)
+}
+
+/**
+ * Slice 1b's switches, from the environment (see the header). The ledger key
+ * is judged by statement.t27 ledger_key_state; a key that is missing or
+ * malformed is logged by its variable's name and state, never its value.
+ */
+export function hostingEconomicsOf(
+  env = process.env,
+  log: (line: string) => void = (line) => logger.warn(line),
+): Partial<HostingEconomics> {
+  const raw = env[LEDGER_KEY_VARIABLE]
+  const seed = (raw ?? '').trim()
+  const state = ledgerKeyState(
+    raw !== undefined,
+    seed.length,
+    /^[0-9a-f]*$/.test(seed),
+  )
+  if (!epochsClose(state))
+    log(
+      `hosting: ${LEDGER_KEY_VARIABLE} is ${LEDGER_KEY_WORDS[state] ?? 'missing'}; every epoch stays open and unsigned`,
+    )
+  return {
+    sybil: (env.TRIOS_HOSTING_SYBIL ?? 'off').trim().toLowerCase() === 'on',
+    attested: new Set(
+      (env.TRIOS_HOSTING_ATTESTED ?? '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter((k) => /^[0-9a-f]{16}$/.test(k)),
+    ),
+    ledgerKeyPem: epochsClose(state) ? privatePemOfSeed(seed) : null,
+    ledgerKeyState: state,
+  }
 }
 
 let sharedPool: Pool | null = null
@@ -64,6 +111,7 @@ function defaultQueen(): HostingQueen | null {
     store: createPgHostingStore(sharedPool),
     now: Date.now,
     allowlist: parseAllowlist(process.env.TRIOS_HOSTING_ALLOWLIST),
+    economics: hostingEconomicsOf(),
   })
   return sharedQueen
 }
@@ -166,6 +214,10 @@ export function createHostingRoute(deps: HostingRouteDeps = {}) {
       )
     })
     .get('/ledger', (c) => run(c, (q) => q.ledger()))
+    .get('/ledger/epochs', (c) => run(c, (q) => q.epochs()))
+    .get('/ledger/epochs/:n/proof', (c) =>
+      run(c, (q) => q.epochProof(c.req.param('n'), c.req.query('key'))),
+    )
     .get('/verdicts', (c) =>
       run(c, (q) => q.verdicts(c.req.query('commit') || undefined)),
     )

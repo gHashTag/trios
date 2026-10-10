@@ -17,38 +17,80 @@
  *
  * WHY A CLOCK IS PASSED IN: the demo runs the whole protocol, lapses
  * included, on a VirtualClock; production passes Date.now.
+ *
+ * SLICE 1B (trios#1761). Behind `economics.sybil` (TRIOS_HOSTING_SYBIL=on):
+ * sybil.t27's anchored quorum, canaries, probation, the per-key cap and the
+ * slash. Always on: every credit row is named by statement.t27's kind and
+ * carries its epoch and receipt, and, once the Queen holds its ledger key
+ * (statement.t27 LEDGER_KEY_VARIABLE), each epoch past its end closes into
+ * one signed statement (/hosting/ledger/epochs). Without the key every epoch
+ * stays open and unsigned. No path here moves value or calls a chain.
  */
 
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomInt } from 'node:crypto'
 import {
+  anchoredVerdict,
+  anchors,
+  attested,
   attributable,
-  balanceAfter,
+  balanceAfterEntry,
+  canaryDue,
+  canaryWrong,
   creditMtri,
+  epochCap,
+  epochCloses,
+  epochFrom,
+  epochOf,
+  epochsClose,
+  epochTo,
   exhausted,
   hostWriteAdmitted,
   isVote,
   jobClosed,
   jobFirst,
   jobVerdict,
+  leafKindKnown,
   mayTake,
   nextIncarnation,
+  nextToClose,
+  onProbation,
   openReplicas,
   originBlocks,
   places,
+  publicMayTake,
   receiptCode,
   replicaLapsed,
+  replicasWanted,
   requestFresh,
   rowAdmitted,
+  rowEpochOpen,
   settlementDue,
+  settlementGateOpen,
+  shardKind,
   sideOf,
+  slashDue,
+  slashMtri,
   slotsAdmitted,
   spreadOk,
   strikeDue,
+  struck,
   suspended,
   tampered,
   tierOf,
+  voteCredit,
   wantedAfter,
 } from './hosting-cards'
+import {
+  leafHashOf,
+  leafText,
+  leavesOf,
+  proofOf,
+  rootOf,
+  signStatement,
+  statementFields,
+  statementHash,
+  statementText,
+} from './hosting-statement'
 import type {
   HostingStore,
   HostingTx,
@@ -60,6 +102,7 @@ import type {
 import {
   keyIdOf,
   messageOf,
+  publicHexOf,
   readNormalized,
   sha256Hex,
   verifyHex,
@@ -67,9 +110,11 @@ import {
 import {
   CREDIT_TRANSFERABLE,
   LE_CREDIT,
+  LE_SLASH,
   LE_STRIKE,
   SETTLE_THRESHOLD_MTRI,
   SETTLEMENT_ENABLED,
+  SIDE_AGREED,
   SIDE_NONE,
   TOKEN_VALUE_CLAIMED,
 } from './queen-hosting-credit-card.gen'
@@ -78,6 +123,7 @@ import {
   NODE_HEARTBEAT_SECONDS,
   NODE_TTL_SECONDS,
   TIER_OWNER,
+  TIER_PUBLIC,
   WC_SHARD,
 } from './queen-hosting-host-card.gen'
 import { JOB_RUN_BOUND_SECONDS } from './queen-hosting-placement-card.gen'
@@ -94,8 +140,29 @@ import {
   REQUEST_SIGNED_FIELDS,
   VERDICT_WORDS,
 } from './queen-hosting-proof-card.gen'
+import {
+  CHAIN_OF_RECORD,
+  CHAIN_WORD,
+  CLOSES_PER_CALL_MAX,
+  ENTRY_SLASH,
+  EPOCH_SECONDS,
+  GENESIS_PREV,
+  KIND_WORDS,
+  LK_MISSING,
+  LK_OK,
+  SETTLEMENT_SHUT_WORD,
+} from './queen-hosting-statement-card.gen'
+import {
+  ATTEST_NONE,
+  CANARY_PERMILLE,
+  PERMILLE,
+  PROBATION_JOBS,
+} from './queen-hosting-sybil-card.gen'
 
 export const TIER_WORDS = ['owner', 'trusted', 'public'] as const
+export const LEDGER_KIND_WORDS = ['credit', 'strike', 'slash'] as const
+/** statement.t27 LK_OK, LK_MISSING, LK_MALFORMED. */
+export const LEDGER_KEY_WORDS = ['set', 'missing', 'malformed'] as const
 export const JOB_VERDICT_WORDS = [
   'pending',
   'agreed',
@@ -139,6 +206,20 @@ export interface HostRequest {
   body: string
 }
 
+/** Slice 1b (trios#1761). */
+export interface HostingEconomics {
+  /** sybil.t27's five rules. Off unless TRIOS_HOSTING_SYBIL=on. */
+  sybil: boolean
+  /** Key ids the owner's allowlist marks attested (TRIOS_HOSTING_ATTESTED). */
+  attested: ReadonlySet<string>
+  /** The Queen's Ed25519 ledger key (PKCS#8 PEM), from statement.t27 LEDGER_KEY_VARIABLE. */
+  ledgerKeyPem: string | null
+  /** statement.t27 ledger_key_state of that variable; anything but LK_OK closes nothing. */
+  ledgerKeyState: number
+  /** A draw in [0, PERMILLE) the host cannot see: the canary's source. */
+  canaryDraw: () => number
+}
+
 export interface HostingQueenDeps {
   store: HostingStore
   /** Milliseconds. */
@@ -146,6 +227,18 @@ export interface HostingQueenDeps {
   /** The owner's allowlist: key id to tier. A key it does not name is public. */
   allowlist: ReadonlyMap<string, number>
   random?: (bytes: number) => string
+  economics?: Partial<HostingEconomics>
+}
+
+/** One vote (or one receipt) to account: credit.t27, sybil.t27 and statement.t27. */
+interface Vote {
+  hostId: string
+  lease: string | null
+  side: number
+  tamper: boolean
+  wrongCanary: boolean
+  /** Its place among the job's agreeing receipts, by arrival (statement.t27 shard_kind). */
+  index: number
 }
 
 const int = (v: unknown, max: number): number | null =>
@@ -163,6 +256,23 @@ export function createHostingQueen(deps: HostingQueenDeps) {
   const random =
     deps.random ?? ((bytes: number) => randomBytes(bytes).toString('hex'))
   const nowMs = deps.now
+  const econ: HostingEconomics = {
+    sybil: deps.economics?.sybil ?? false,
+    attested: deps.economics?.attested ?? new Set(),
+    ledgerKeyPem: deps.economics?.ledgerKeyPem ?? null,
+    ledgerKeyState: deps.economics?.ledgerKeyPem
+      ? LK_OK
+      : (deps.economics?.ledgerKeyState ?? LK_MISSING),
+    canaryDraw: deps.economics?.canaryDraw ?? (() => randomInt(PERMILLE)),
+  }
+  const signing = epochsClose(econ.ledgerKeyState) && !!econ.ledgerKeyPem
+  const statementPublicHex =
+    signing && econ.ledgerKeyPem ? publicHexOf(econ.ledgerKeyPem) : null
+  const nowEpoch = () => epochOf(Math.floor(nowMs() / 1000))
+  const tierOfHost = (h: HostRow | undefined | null) => h?.tier ?? TIER_PUBLIC
+  const knownOf = (job: JobRow) => (econ.sybil ? (job.knownHash ?? null) : null)
+  const capOf = (h: HostRow) =>
+    epochCap(h.tier, attested(econ.attested.has(h.id), ATTEST_NONE, false, 0))
   const secondsSince = (ms: number) =>
     Math.max(0, Math.floor((nowMs() - ms) / 1000))
   const skew = (utc: number) => Math.abs(Math.floor(nowMs() / 1000) - utc)
@@ -246,6 +356,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         beatAt: nowMs(),
         strikes: prev?.strikes ?? 0,
         registeredAt: nowMs(),
+        agreed: prev?.agreed ?? 0,
       }
       // host.t27 section 4: the last incarnation is down for good. Its leases
       // carry its number, so the next sweep reads them as a host that beats
@@ -293,6 +404,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
   async function lease(req: HostRequest) {
     return deps.store.tx(async (s) => {
       const host = await admit(s, req)
+      await closeEpochs(s)
       await sweep(s)
       const hosts = new Map((await s.hosts()).map((h) => [h.id, h]))
       const running = (await s.outLeasesOfHost(host.id)).length
@@ -310,7 +422,25 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         if (ab && ba) return a.job.id < b.job.id ? -1 : 1
         return ab ? -1 : 1
       })
+      // sybil.t27 canaries: a public host's lease is a known-answer job on a
+      // draw it cannot see; an anchor host takes the jobs that need an anchor
+      const isPublic = !anchors(host.tier)
+      if (econ.sybil) {
+        const knownFirst =
+          isPublic && canaryDue(econ.canaryDraw(), CANARY_PERMILLE)
+        const rank = (job: JobRow) => (!!knownOf(job) === knownFirst ? 0 : 1)
+        candidates.sort((a, b) => rank(a.job) - rank(b.job))
+      }
       for (const { job, leases, votes } of candidates) {
+        if (econ.sybil && isPublic) {
+          // the anchor's slot is never a public host's (sybil.t27)
+          const publicIn = leases.filter(
+            (l) =>
+              (l.state === 'out' || l.vote) &&
+              !anchors(tierOfHost(hosts.get(l.hostId))),
+          ).length
+          if (!publicMayTake(true, !!knownOf(job), publicIn)) continue
+        }
         const outstanding = leases.filter((l) => l.state === 'out').length
         const open = openReplicas(job.wanted, outstanding, votes)
         const leasedBefore = leases.some((l) => l.hostId === host.id)
@@ -373,22 +503,57 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     const leases = await s.leasesOf(job.id)
     const votes = leases
       .filter((l) => l.vote)
-      .sort((a, b) => (a.receivedAt ?? 0) - (b.receivedAt ?? 0))
+      .sort(
+        (a, b) =>
+          (a.receivedAt ?? 0) - (b.receivedAt ?? 0) ||
+          (a.arrival ?? 0) - (b.arrival ?? 0),
+      )
     const groups = new Map<string, LeaseRow[]>()
     for (const v of votes) {
       const key = v.outputHash ?? ''
       groups.set(key, [...(groups.get(key) ?? []), v])
     }
     // largest first; a tie keeps first arrival (Map order), which no verdict reads
-    const ranked = [...groups.values()].sort((a, b) => b.length - a.length)
+    let ranked = [...groups.values()].sort((a, b) => b.length - a.length)
     const outstanding = leases.filter((l) => l.state === 'out').length
-    const verdict = jobVerdict(
-      votes.length,
-      ranked[0]?.length ?? 0,
-      ranked[1]?.length ?? 0,
-      job.wanted,
-      exhausted(job.leasesIssued, outstanding),
-    )
+    const isExhausted = exhausted(job.leasesIssued, outstanding)
+    let verdict: number
+    if (econ.sybil) {
+      // sybil.t27: only the group holding the anchor (a known answer, or an
+      // owner or trusted host's vote) can agree; it is ranked first
+      const hosts = new Map((await s.hosts()).map((h) => [h.id, h]))
+      const known = knownOf(job)
+      const anchorVote = (l: LeaseRow) =>
+        anchors(tierOfHost(hosts.get(l.hostId)))
+      const sizeOf = (hash: string, members: LeaseRow[]) =>
+        members.length + (hash === known ? 1 : 0)
+      const anchored = [...groups.entries()].filter(
+        ([hash, members]) => hash === known || members.some(anchorVote),
+      )
+      if (known && !groups.has(known)) anchored.push([known, []])
+      anchored.sort((a, b) => sizeOf(b[0], b[1]) - sizeOf(a[0], a[1]))
+      const best = anchored[0]
+      verdict = anchoredVerdict(
+        known !== null || votes.some(anchorVote),
+        best ? sizeOf(best[0], best[1]) : 0,
+        votes.length,
+        job.wanted,
+        isExhausted,
+      )
+      if (best)
+        ranked = [
+          best[1],
+          ...ranked.filter((g) => g[0]?.outputHash !== best[0]),
+        ]
+    } else {
+      verdict = jobVerdict(
+        votes.length,
+        ranked[0]?.length ?? 0,
+        ranked[1]?.length ?? 0,
+        job.wanted,
+        isExhausted,
+      )
+    }
     job.verdict = verdict
     job.wanted = wantedAfter(verdict, job.wanted)
     if (jobClosed(verdict)) await close(s, job, verdict, leases, ranked)
@@ -411,9 +576,18 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       l.state = 'closed'
       await s.putLease(l)
     }
+    const known = knownOf(job)
     for (const [group, members] of ranked.entries())
-      for (const l of members)
-        await account(s, job, l.hostId, sideOf(verdict, group), false)
+      for (const [index, l] of members.entries())
+        await account(s, job, {
+          hostId: l.hostId,
+          lease: l.id,
+          side: sideOf(verdict, group),
+          tamper: false,
+          wrongCanary:
+            econ.sybil && canaryWrong(known !== null, l.outputHash === known),
+          index,
+        })
     const top = ranked[0]?.[0]?.receipt
     if (verdict !== JV_AGREED || !top) return
     const stated = readNormalized(String(top.output ?? ''))
@@ -426,39 +600,279 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     }
   }
 
-  /** credit.t27: one credit, one strike, per (host, job), never more. */
-  async function account(
+  /** What a key earned in an epoch: its credits less its slashes (statement.t27). */
+  async function earnedIn(s: HostingTx, hostId: string, epoch: number) {
+    let earned = 0
+    for (const r of await s.ledgerOfEpoch(epoch))
+      if (r.hostId === hostId && (r.kind === LE_CREDIT || r.kind === LE_SLASH))
+        earned = balanceAfterEntry(earned, r.feeKind, r.mtri)
+    return earned
+  }
+
+  /**
+   * credit.t27: one credit, one strike, one slash per (host, job), never more.
+   * With the sybil rules: probation, the epoch cap, and the slash (sybil.t27).
+   * Every row is named by statement.t27's kind, in the epoch of its time.
+   */
+  async function account(s: HostingTx, job: JobRow, v: Vote) {
+    const host = await s.host(v.hostId)
+    const epoch = nowEpoch()
+    const last = await s.lastStatement()
+    if (last && !rowEpochOpen(epoch, nextToClose(true, last.epoch, 0), true))
+      throw new HostingError('epoch_closed', 409)
+    const credited = await s.ledgerHas(v.hostId, job.id, LE_CREDIT)
+    const cap = host ? capOf(host) : 0n
+    let earned = econ.sybil && host ? await earnedIn(s, v.hostId, epoch) : 0
+    const mtri =
+      econ.sybil && host
+        ? voteCredit(v.side, credited, host.agreed ?? 0, earned, cap)
+        : creditMtri(v.side, false, credited)
+    const row = { hostId: v.hostId, jobId: job.id, epoch, receipt: v.lease }
+    if (mtri > 0 && rowAdmitted(LE_CREDIT, credited)) {
+      const feeKind = shardKind(knownOf(job) !== null, v.index)
+      await s.addLedger({ ...row, kind: LE_CREDIT, mtri, at: nowMs(), feeKind })
+      earned = balanceAfterEntry(earned, feeKind, mtri)
+    }
+    const agreed = !!host && v.side === SIDE_AGREED
+    if (host && agreed) host.agreed = (host.agreed ?? 0) + 1
+    const struckNow = await penalize(s, host, v, row, earned, cap)
+    if (host && (agreed || struckNow)) await s.putHost(host)
+  }
+
+  /** The strike and, with the sybil rules, the slash one vote is due. */
+  async function penalize(
     s: HostingTx,
-    job: JobRow,
-    hostId: string,
-    side: number,
-    tamper: boolean,
-  ) {
-    const credited = await s.ledgerHas(hostId, job.id, LE_CREDIT)
-    const mtri = creditMtri(side, false, credited)
-    if (mtri > 0 && rowAdmitted(LE_CREDIT, credited))
+    host: HostRow | null,
+    v: Vote,
+    row: {
+      hostId: string
+      jobId: string
+      epoch: number
+      receipt: string | null
+    },
+    earned: number,
+    cap: bigint,
+  ): Promise<boolean> {
+    let changed = false
+    const struckBefore = await s.ledgerHas(v.hostId, row.jobId, LE_STRIKE)
+    const strike =
+      strikeDue(v.tamper, v.side, struckBefore) ||
+      (econ.sybil && struck(v.wrongCanary, v.side, struckBefore))
+    if (strike && rowAdmitted(LE_STRIKE, struckBefore)) {
       await s.addLedger({
-        hostId,
-        jobId: job.id,
-        kind: LE_CREDIT,
-        mtri,
-        at: nowMs(),
-      })
-    const struck = await s.ledgerHas(hostId, job.id, LE_STRIKE)
-    if (strikeDue(tamper, side, struck) && rowAdmitted(LE_STRIKE, struck)) {
-      await s.addLedger({
-        hostId,
-        jobId: job.id,
+        ...row,
         kind: LE_STRIKE,
         mtri: 0,
         at: nowMs(),
+        feeKind: 0,
       })
-      const host = await s.host(hostId)
       if (host) {
         host.strikes += 1
-        await s.putHost(host)
+        changed = true
       }
     }
+    if (econ.sybil && host) {
+      const slashedBefore = await s.ledgerHas(v.hostId, row.jobId, LE_SLASH)
+      if (
+        slashDue(v.wrongCanary, v.side, slashedBefore) &&
+        rowAdmitted(LE_SLASH, slashedBefore)
+      )
+        await s.addLedger({
+          ...row,
+          kind: LE_SLASH,
+          mtri: slashMtri(earned, cap),
+          at: nowMs(),
+          feeKind: ENTRY_SLASH,
+        })
+    }
+    return changed
+  }
+
+  // --- epoch statements (statement.t27) ----------------------------------------
+
+  /** Close every epoch past its end, in order, once each, and sign it. */
+  async function closeEpochs(s: HostingTx) {
+    const key = econ.ledgerKeyPem
+    if (!signing || !key) return
+    if (settlementGateOpen(false, CHAIN_OF_RECORD))
+      throw new Error('statement.t27 opened settlement; this Queen has none')
+    for (let i = 0; i < CLOSES_PER_CALL_MAX; i++) {
+      const last = await s.lastStatement()
+      const first = await s.firstLedgerEpoch()
+      const next = nextToClose(last !== null, last?.epoch ?? 0, first ?? 0)
+      if (!epochCloses(next, next, nowEpoch(), first !== null, last !== null))
+        return
+      const rows = await s.ledgerOfEpoch(next)
+      const leaves = leavesOf(next, rows)
+      const root = rootOf(leaves.map((l) => leafHashOf(leafText(l)))).toString(
+        'hex',
+      )
+      let credit = 0
+      let slash = 0
+      for (const r of rows) {
+        if (!leafKindKnown(r.feeKind)) continue
+        if (r.feeKind === ENTRY_SLASH) slash += r.mtri
+        else credit += r.mtri
+      }
+      const message = statementText({
+        epoch: next,
+        from_unix: epochFrom(next),
+        to_unix: epochTo(next),
+        leaves: leaves.length,
+        root,
+        prev: last ? statementHash(last.message) : GENESIS_PREV,
+        credit_mtri: credit,
+        slash_mtri: slash,
+        chain: CHAIN_WORD,
+        settlement: SETTLEMENT_SHUT_WORD,
+        transferable: CREDIT_TRANSFERABLE,
+      })
+      await s.putStatement({
+        epoch: next,
+        message,
+        signature: signStatement(key, message),
+        root,
+        leaves,
+        closedAt: nowMs(),
+      })
+    }
+  }
+
+  /**
+   * THE LEDGER'S WRITE PATH FOR WORK THAT IS NOT A SHARD (trios#1761). A
+   * source in this process that judged a run itself, such as the network
+   * MVP's job card over two t27b lab receipts (specs/network/mvp.t27),
+   * records its credit here instead of keeping a second ledger:
+   *   source   who judged it, lowercase ('lab'); 'hosting' is the shards'
+   *   key      the credited key id: KEY_ID_HEX_LEN hex of SHA-256 of an
+   *            Ed25519 public key, e.g. a lab signer's id from .trinity/keys.
+   *            It need not be a joined host.
+   *   job      the job or run the credit is for: one row per (key, job, kind)
+   *   kind     a statement.t27 leaf kind: EXECUTOR_FEE, PROVIDER_FEE or
+   *            VERIFIER_FEE, or ENTRY_SLASH for a slash
+   *   mtri     the amount, as the source's own spec priced it
+   *   receipt  the id of the signed receipt behind it
+   * The row lands in the current epoch, and in that epoch's statement leaf
+   * (key, kind, amount, receipt ids) exactly as a shard's does. Nothing here
+   * moves value; a slash only records a forfeit.
+   */
+  async function recordWork(w: {
+    source: string
+    key: string
+    job: string
+    kind: number
+    mtri: number
+    receipt: string
+  }) {
+    const printable = /^[\x21-\x7e]{1,128}$/
+    if (
+      !/^[a-z][a-z0-9-]{1,31}$/.test(w.source) ||
+      w.source === 'hosting' ||
+      !/^[0-9a-f]{16}$/.test(w.key) ||
+      !printable.test(w.job) ||
+      !printable.test(w.receipt) ||
+      !Number.isSafeInteger(w.mtri) ||
+      w.mtri < 0 ||
+      !leafKindKnown(w.kind)
+    )
+      throw new HostingError('bad_work', 400)
+    const ledgerKind = w.kind === ENTRY_SLASH ? LE_SLASH : LE_CREDIT
+    return deps.store.tx(async (s) => {
+      await closeEpochs(s)
+      const epoch = nowEpoch()
+      const last = await s.lastStatement()
+      if (last && !rowEpochOpen(epoch, nextToClose(true, last.epoch, 0), true))
+        throw new HostingError('epoch_closed', 409)
+      const exists = await s.ledgerHas(w.key, w.job, ledgerKind)
+      if (!rowAdmitted(ledgerKind, exists)) return { recorded: false, epoch }
+      await s.addLedger({
+        hostId: w.key,
+        jobId: w.job,
+        kind: ledgerKind,
+        mtri: w.mtri,
+        at: nowMs(),
+        feeKind: w.kind,
+        epoch,
+        receipt: w.receipt,
+        source: w.source,
+      })
+      return { recorded: true, epoch }
+    })
+  }
+
+  async function epochs() {
+    return deps.store.tx(async (s) => {
+      await closeEpochs(s)
+      return {
+        unit: 'mTRI',
+        // without the ledger key every epoch stays open and unsigned
+        signed: signing,
+        ledger_key: LEDGER_KEY_WORDS[econ.ledgerKeyState] ?? 'missing',
+        chain_of_record: CHAIN_WORD,
+        settlement: SETTLEMENT_SHUT_WORD,
+        transferable: CREDIT_TRANSFERABLE,
+        epoch_seconds: EPOCH_SECONDS,
+        queen_key: statementPublicHex,
+        epochs: (await s.statements()).map((r) => ({
+          ...statementFields(r.message),
+          signature: r.signature,
+        })),
+      }
+    })
+  }
+
+  /** One epoch's statement, and this key's leaves in it with their paths. */
+  async function epochProof(epochParam: string, key: string | undefined) {
+    if (!signing) throw new HostingError('ledger_key_missing', 503)
+    const epoch = Number(epochParam)
+    if (
+      !Number.isSafeInteger(epoch) ||
+      epoch < 0 ||
+      !/^[0-9a-f]{16}$/.test(key ?? '')
+    )
+      throw new HostingError('bad_proof_request', 400)
+    return deps.store.tx(async (s) => {
+      await closeEpochs(s)
+      const row = await s.statement(epoch)
+      if (!row) throw new HostingError('no_such_epoch', 404)
+      return {
+        epoch,
+        queen_key: statementPublicHex,
+        ...proofOf(row, key as string),
+      }
+    })
+  }
+
+  /**
+   * What one receipt costs its signer before any quorum: a strike for a
+   * tampered one (proof.t27), and with the sybil rules a slash and a strike
+   * for a wrong answer to a known answer (sybil.t27).
+   */
+  async function accountReceipt(
+    s: HostingTx,
+    job: JobRow,
+    hostId: string,
+    lease: string | null,
+    f: { tamper: boolean; wrongCanary: boolean },
+  ) {
+    if (f.tamper)
+      await account(s, job, {
+        hostId,
+        lease,
+        side: SIDE_NONE,
+        tamper: true,
+        wrongCanary: false,
+        index: 0,
+      })
+    if (f.wrongCanary)
+      await account(s, job, {
+        hostId,
+        lease,
+        side: SIDE_NONE,
+        tamper: false,
+        wrongCanary: true,
+        index: 0,
+      })
   }
 
   async function receipt(body: unknown) {
@@ -472,6 +886,7 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       throw new HostingError('bad_receipt', 400)
     }
     return deps.store.tx(async (s) => {
+      await closeEpochs(s)
       await sweep(s)
       const host = await s.host(String(r.host))
       const lease = await s.lease(String(r.lease))
@@ -492,10 +907,21 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         lease.outputHash = String(r.output_hash)
         lease.receipt = r
         lease.receivedAt = nowMs()
+        // the order receipts arrived in, under the store's lock: two receipts
+        // in one millisecond still have one first (statement.t27 shard_kind)
+        lease.arrival =
+          (await s.leasesOf(lease.jobId)).filter((l) => l.receipt !== null)
+            .length + 1
         await s.putLease(lease)
       }
-      if (host && job && attributable(code))
-        await account(s, job, host.id, SIDE_NONE, true)
+      if (host && job)
+        await accountReceipt(s, job, host.id, lease?.id ?? null, {
+          tamper: attributable(code),
+          wrongCanary:
+            vote &&
+            knownOf(job) !== null &&
+            canaryWrong(true, String(r.output_hash) === knownOf(job)),
+        })
       const verdict =
         job && job.state === 'open'
           ? await settle(s, job)
@@ -531,6 +957,11 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       b.model_hash === undefined || b.model_hash === null
         ? null
         : text(b.model_hash, HEX64)
+    // sybil.t27: a known answer (a lab row). Not in the id, never in a payload.
+    const knownHash =
+      b.known_output_hash === undefined || b.known_output_hash === null
+        ? null
+        : text(b.known_output_hash, HEX64)
     const files: JobFile[] = Array.isArray(b.files)
       ? b.files.map((f) => ({
           path: specPath((f as JobFile)?.path) ?? '',
@@ -548,6 +979,9 @@ export function createHostingQueen(deps: HostingQueenDeps) {
       !spec ||
       !inputHash ||
       (b.model_hash !== undefined && b.model_hash !== null && !modelHash) ||
+      (b.known_output_hash !== undefined &&
+        b.known_output_hash !== null &&
+        !knownHash) ||
       files.length === 0 ||
       files.length > 512 ||
       files.some((f) => !f.path || !f.sha256) ||
@@ -572,8 +1006,14 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     return deps.store.tx(async (s) => {
       const owner = await admit(s, req)
       if (owner.tier !== TIER_OWNER) throw new HostingError('owner_only', 403)
-      const known = await s.job(id)
-      if (known) return { job: jobPayload(known), created: false }
+      const existing = await s.job(id)
+      if (existing) {
+        if (knownHash && !existing.knownHash && existing.state === 'open') {
+          existing.knownHash = knownHash
+          await s.putJob(existing)
+        }
+        return { job: jobPayload(existing), created: false }
+      }
       const row: JobRow = {
         id,
         kind: 'shard',
@@ -585,8 +1025,9 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         workloadClass: WC_SHARD,
         holdsSecret: b.holds_secret as boolean,
         holdsPersonal: b.holds_personal as boolean,
-        wanted: REPLICAS_K,
+        wanted: econ.sybil ? replicasWanted(knownHash !== null) : REPLICAS_K,
         leasesIssued: 0,
+        knownHash,
         state: 'open',
         verdict: JV_PENDING,
         createdAt: nowMs(),
@@ -603,18 +1044,27 @@ export function createHostingQueen(deps: HostingQueenDeps) {
   /** The public ledger: key ids, tiers, balances, strikes. No address, origin or key. */
   async function ledger() {
     return deps.store.tx(async (s) => {
+      await closeEpochs(s)
       const rows = await s.ledger()
       const hosts = (await s.hosts()).map((h) => {
         const mine = rows.filter((r) => r.hostId === h.id)
         let balance = 0
         for (const r of mine)
-          if (r.kind === LE_CREDIT) balance = balanceAfter(balance, r.mtri)
+          if (r.kind === LE_CREDIT || r.kind === LE_SLASH)
+            balance = balanceAfterEntry(balance, r.feeKind, r.mtri)
+        const cap = capOf(h)
         return {
           host: h.id,
           tier: TIER_WORDS[h.tier] ?? 'public',
           balance_mtri: balance,
           credited_jobs: mine.filter((r) => r.kind === LE_CREDIT).length,
           strikes: h.strikes,
+          slashes: mine.filter((r) => r.kind === LE_SLASH).length,
+          agreed: h.agreed ?? 0,
+          probation: econ.sybil && onProbation(h.agreed ?? 0),
+          attested: econ.attested.has(h.id),
+          // the owner's cap is u64 max: shown as null, not as a rounded number
+          epoch_cap_mtri: !econ.sybil || cap >= 2n ** 63n ? null : Number(cap),
           suspended: suspended(h.strikes),
           settlement_due: settlementDue(
             balance,
@@ -632,14 +1082,24 @@ export function createHostingQueen(deps: HostingQueenDeps) {
         settlement: {
           enabled: SETTLEMENT_ENABLED,
           threshold_mtri: SETTLE_THRESHOLD_MTRI,
+          chain_of_record: CHAIN_WORD,
+        },
+        sybil: {
+          on: econ.sybil,
+          canary_permille: CANARY_PERMILLE,
+          probation_jobs: PROBATION_JOBS,
         },
         hosts,
         rows: rows.map((r) => ({
           seq: r.seq,
           host: r.hostId,
           job: r.jobId,
-          kind: r.kind === LE_CREDIT ? 'credit' : 'strike',
+          kind: LEDGER_KIND_WORDS[r.kind] ?? String(r.kind),
+          fee_kind: KIND_WORDS[r.feeKind] || null,
           mtri: r.mtri,
+          epoch: r.epoch,
+          receipt: r.receipt,
+          source: r.source ?? 'hosting',
           at: new Date(r.at).toISOString(),
         })),
       }
@@ -689,7 +1149,19 @@ export function createHostingQueen(deps: HostingQueenDeps) {
     })
   }
 
-  return { register, beat, lease, receipt, createJob, ledger, verdicts, job }
+  return {
+    register,
+    beat,
+    lease,
+    receipt,
+    createJob,
+    ledger,
+    verdicts,
+    job,
+    epochs,
+    epochProof,
+    recordWork,
+  }
 }
 
 export type HostingQueen = ReturnType<typeof createHostingQueen>
@@ -716,8 +1188,12 @@ function receiptFacts(
     signatureOk: !!host && verifyHex(host.publicKey, message, r.signature),
     leased,
     reportedBefore,
+    // WHY CANONICAL: Postgres keeps the receipt as jsonb, which reorders its
+    // keys; a byte-for-byte retry read back from it is not the same string,
+    // and was judged equivocation (tampered, and struck) on the live store
+    // while the memory twin, which keeps key order, said duplicate (#1761).
     sameAsBefore:
-      reportedBefore && JSON.stringify(lease.receipt) === JSON.stringify(r),
+      reportedBefore && canonicalJson(lease.receipt) === canonicalJson(r),
     lapsed: leased && lease.state !== 'out',
     inputMatches:
       !!job &&
@@ -731,6 +1207,20 @@ function receiptFacts(
       stated?.ops === r.ops &&
       stated?.spec === r.spec,
   }
+}
+
+/** JSON with every object's keys sorted, so two encodings of one value compare equal. */
+function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`
+  if (v && typeof v === 'object')
+    return `{${Object.keys(v)
+      .sort()
+      .map(
+        (k) =>
+          `${JSON.stringify(k)}:${canonicalJson((v as Record<string, unknown>)[k])}`,
+      )
+      .join(',')}}`
+  return JSON.stringify(v) ?? 'null'
 }
 
 function jobPayload(j: JobRow) {
