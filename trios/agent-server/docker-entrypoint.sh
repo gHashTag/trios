@@ -478,7 +478,7 @@ if [ -d "$REPO_DIR/.git" ]; then
       # TRACKED FILES ONLY. `--include-untracked` made git try to stash
       # `.worktrees/`, the directory every bee's worktree lives in, and it
       # answered "Aborting" - so the stash saved nothing and the retry refused
-      # with the same paths. Untracked files never block `checkout -B` anyway.
+      # with the same paths. Untracked files are handled below, by name.
       $AS_USER "git -C '$REPO_DIR' stash push \
         --message 'entrypoint stashed a dirty root checkout'" >/dev/null 2>&1 || true
       left=$($AS_USER "git -C '$REPO_DIR' status --porcelain --untracked-files=no" | wc -l | tr -d ' ')
@@ -486,8 +486,23 @@ if [ -d "$REPO_DIR/.git" ]; then
         echo "[entrypoint] $left tracked path(s) still dirty after the stash:"
         $AS_USER "git -C '$REPO_DIR' status --porcelain --untracked-files=no" | head -10
       fi
-      $AS_USER "git -C '$REPO_DIR' checkout -B '$TRIOS_REPO_REF' FETCH_HEAD" \
-        || echo "[entrypoint] checkout still failed; continuing on the existing tree"
+      if ! $AS_USER "git -C '$REPO_DIR' checkout -B '$TRIOS_REPO_REF' FETCH_HEAD"; then
+        # UNTRACKED FILES DO BLOCK, where the target tracks the same path: git
+        # answers "untracked working tree files would be overwritten". Sixty-odd
+        # specs/port/*.t27 left in the root held the tree on a local commit
+        # through every deploy until 2026-10-10 (trios#1747), while this comment
+        # said they never block. Exactly those paths move into
+        # .git/entrypoint-set-aside/<time>/ - kept, never deleted - and the
+        # checkout is tried once more. .worktrees/ is not tracked, so it stays.
+        aside=".git/entrypoint-set-aside/$(date -u +%Y%m%dT%H%M%SZ)"
+        moved=$($AS_USER "cd '$REPO_DIR' && git ls-tree -r --name-only FETCH_HEAD > .git/entrypoint-target.lst \
+          && git ls-files --others --exclude-standard | grep -Fx -f .git/entrypoint-target.lst \
+          | while IFS= read -r p; do mkdir -p \"$aside/\$(dirname \"\$p\")\" && mv \"\$p\" \"$aside/\$p\" && echo \"\$p\"; done \
+          | wc -l" | tr -d ' ')
+        echo "[entrypoint] moved $moved untracked path(s) the target tracks into $REPO_DIR/$aside"
+        $AS_USER "git -C '$REPO_DIR' checkout -B '$TRIOS_REPO_REF' FETCH_HEAD" \
+          || echo "[entrypoint] checkout still failed; continuing on the existing tree"
+      fi
     fi
   else
     echo "[entrypoint] fetch FAILED; continuing on the existing checkout"
