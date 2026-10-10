@@ -19,7 +19,6 @@
  */
 
 import { describe, expect, it } from 'bun:test'
-import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
@@ -734,15 +733,14 @@ describe('with TRIOS_HOSTING unset', () => {
 
 // --- the sandbox, measured ----------------------------------------------------
 
-const ZIG =
-  process.env.ZIG ??
-  spawnSync('which', ['zig'], { encoding: 'utf8' }).stdout.trim()
-const T27C =
-  process.env.T27C ??
-  spawnSync('which', ['t27c'], { encoding: 'utf8' }).stdout.trim()
-const T27B =
-  process.env.T27B ??
-  spawnSync('which', ['t27b'], { encoding: 'utf8' }).stdout.trim()
+// Named explicitly, never found on PATH: the sandbox lets a job read only the
+// tools' own directories, so the zig must be a self-contained one (ziglang.org's
+// tarball, as `join` installs it). Homebrew's zig loads LLVM from another
+// directory, and inside the sandbox it cannot start -- which the planted job
+// would rightly report as isolation none.
+const ZIG = process.env.ZIG ?? ''
+const T27C = process.env.T27C ?? ''
+const T27B = process.env.T27B ?? ''
 const haveZig = !!ZIG && existsSync(ZIG)
 const sandbox = detectSandbox()
 
