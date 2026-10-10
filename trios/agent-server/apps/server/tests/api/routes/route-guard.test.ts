@@ -157,6 +157,10 @@ describe('route-guard audit over src/api/server.ts', () => {
     // mailbox depths, times and task references, never a message or a card's
     // arguments. Public-read went 16 to 17. The operator's /queen/actors stays
     // a guarded sub-app; no other count moved.
+    // RE-MEASURED 2026-10-10, queen merged into actors-next-2 (trios#1729):
+    // recomputed from the merged server.ts, not copied from either side. The
+    // same 63, 18, 20 and 17: queen's guard on /queen/actors (trios#1735) was
+    // already here, cherry-picked, and queen adds no other mount.
     expect(report.totalMounts).toBe(63)
     expect(report.prefixGuardCount).toBe(18)
     expect(report.guardedSubAppCount).toBe(20)
@@ -244,6 +248,7 @@ describe('route-guard audit over src/api/server.ts', () => {
     // wrapper-guarded; wrappers went 11 to 13.
     // RE-MEASURED 2026-10-10, the actors on the bus: thirty-nine became forty.
     // The seventeenth public-read is /queen/public-actors.
+    // RE-MEASURED 2026-10-10, queen merged in: still forty, recomputed.
     expect(queenMounts.length).toBe(40)
 
     const counts: Record<string, number> = {

@@ -7,10 +7,14 @@
  * gHashTag/trios#1731): the switch to the round, the bus that wakes it, its
  * telemetry and adaptive flags, a capacity read that fails, and a root that
  * gives up. The store answers only the lease read; the review is a stand-in.
- * The reviewer runs on the real clock, so the give-up runs on fake timers.
+ * The reviewer runs on the real clock; the give-up runs on a VirtualClock
+ * handed to startReviewerActors. It ran on jest.useFakeTimers() before, and
+ * on Linux CI (Bun 1.3.6) its 36 000 setImmediate turns did not finish in
+ * 5 s, so it timed out and left the fake clock to every file after it
+ * (trios#1730).
  */
 
-import { afterEach, describe, expect, it, jest, spyOn } from 'bun:test'
+import { afterEach, describe, expect, it, spyOn } from 'bun:test'
 import type { Pool } from 'pg'
 import { liveActorTelemetry } from '../../src/api/services/queen-actors-telemetry'
 import { publishEvent } from '../../src/api/services/queen-control'
@@ -21,6 +25,7 @@ import {
   reviewerRunning,
 } from '../../src/api/services/queen-review-loop'
 import { logger } from '../../src/lib/logger'
+import { VirtualClock } from './queen-virtual-clock'
 
 const LEASE = 'FROM queen_lease'
 
@@ -176,27 +181,28 @@ describe('the reviewer started as actors', () => {
 
   it('whose lease read always fails: the intake crashes until the domain and then the root give up, and the round reviews again', async () => {
     const warn = logged('warn')
-    jest.useFakeTimers()
-    try {
-      const s = store('fails')
-      const stop = startReviewerActors(s.pool, 'queen', review, async () => [])
-      stops.push(stop)
-      expect(reviewerRunning()).toBe(true)
-      // walk 30 minutes, a second at a time, letting each turn settle
-      for (let t = 0; t < 1800 && reviewerRunning(); t++) {
-        jest.advanceTimersByTime(1000)
-        for (let i = 0; i < 20; i++)
-          await new Promise<void>((r) => setImmediate(r))
-      }
-      expect(reviewerRunning()).toBe(false)
-      const said = warn(
-        'Queen reviewer actors gave up; the round reviews again',
-      )
-      expect(said.length).toBe(1)
-      // every wake read the lease and crashed on it
-      expect(s.leaseReads()).toBeGreaterThan(8)
-    } finally {
-      jest.useRealTimers()
+    const clock = new VirtualClock()
+    const s = store('fails')
+    const stop = startReviewerActors(
+      s.pool,
+      'queen',
+      review,
+      async () => [],
+      undefined,
+      clock,
+    )
+    stops.push(stop)
+    expect(reviewerRunning()).toBe(true)
+    // walk 30 minutes, a second at a time, letting each turn settle
+    for (let t = 0; t < 1800 && reviewerRunning(); t++) {
+      await clock.runUntil(clock.now() + 1000)
+      for (let i = 0; i < 20; i++)
+        await new Promise<void>((r) => setImmediate(r))
     }
+    expect(reviewerRunning()).toBe(false)
+    const said = warn('Queen reviewer actors gave up; the round reviews again')
+    expect(said.length).toBe(1)
+    // every wake read the lease and crashed on it
+    expect(s.leaseReads()).toBeGreaterThan(8)
   })
 })
