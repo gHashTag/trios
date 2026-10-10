@@ -87,6 +87,7 @@ import {
   workerProbeEndpoint,
   workspaceRoot,
 } from './queen-dispatch'
+import { drainBoundedEnabled } from './queen-drain'
 import { pruneEvents, wakesHere } from './queen-events'
 import { heldPaths } from './queen-holds'
 import {
@@ -5197,16 +5198,11 @@ export function startQueenTick(): void {
       ? startReviewerActors(
           pool,
           LEASE_NAME,
-          reviewFinishedDispatches,
+          countedReview,
           waitingReviewIssues,
           reviewCapacity,
         )
-      : startReviewer(
-          pool,
-          LEASE_NAME,
-          reviewFinishedDispatches,
-          waitingReviewIssues,
-        )
+      : startReviewer(pool, LEASE_NAME, countedReview, waitingReviewIssues)
   // Long waits as rows (waits.t27, TRIOS_QUEEN_WAITS=rows): a job parked on a
   // row is not visited by the round; the scheduler checks the run and, when
   // the row ends, asks for a round here so the job moves at once.
@@ -5266,6 +5262,9 @@ export function startQueenTick(): void {
   // (stopQueenTickNow), after the drain.
   stopAtExit = handover
   process.once('SIGTERM', () => {
+    // drain.t27 (TRIOS_QUEEN_DRAIN=bounded): the drain decides when the
+    // rounds stop (takes_new_work) and calls stopQueenTickNow then.
+    if (drainBoundedEnabled()) return
     if (roundsThroughDrain()) {
       logger.info(
         'Queen keeps her rounds through the drain; orders go to the other runners',
@@ -5278,6 +5277,25 @@ export function startQueenTick(): void {
 }
 
 let stopAtExit: (() => Promise<void>) | null = null
+
+/**
+ * Review sweeps this process is running now: what a bounded drain stops, and
+ * waits for, at its exit (drain.t27 DV_STOP, exit_step). Counted around the
+ * one function both reviewers call, so neither runtime changes.
+ */
+let reviewing = 0
+export const reviewsInFlight = (): number => reviewing
+
+async function countedReview(
+  ...args: Parameters<typeof reviewFinishedDispatches>
+): ReturnType<typeof reviewFinishedDispatches> {
+  reviewing++
+  try {
+    return await reviewFinishedDispatches(...args)
+  } finally {
+    reviewing--
+  }
+}
 
 /**
  * Whether a stopping container keeps running rounds until it ends. Two

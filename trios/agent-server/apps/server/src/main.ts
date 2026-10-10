@@ -17,6 +17,8 @@ import {
   configureVmRuntime,
   peekOpenClawService,
 } from './api/services/openclaw/openclaw-service'
+import { drainBoundedEnabled } from './api/services/queen-drain'
+import { drainForDeploy } from './api/services/queen-drain-host'
 import { drainActiveRunner, startBeeRunner } from './api/services/queen-runner'
 import { startQueenTick, stopQueenTickNow } from './api/services/queen-tick'
 import { CdpBackend } from './browser/backends/cdp'
@@ -251,7 +253,13 @@ export class Application {
     logger.info('Shutting down server...', { reason })
     // Bees first, while the database and the HTTP server are still up: a
     // runner given a drain window lets its bees end before anything closes.
-    if (reason === 'SIGTERM') await drainActiveRunner().catch(() => {})
+    // TRIOS_QUEEN_DRAIN=bounded: the drain asks drain.t27 what to wait for,
+    // hands back a bee still running at the cap, and stops the rest itself.
+    if (reason === 'SIGTERM')
+      await (drainBoundedEnabled()
+        ? drainForDeploy()
+        : drainActiveRunner()
+      ).catch(() => {})
     // The Queen ran her rounds through that drain (queen-tick.ts,
     // roundsThroughDrain); she hands the hive back only now, just before exit.
     await stopQueenTickNow().catch(() => {})
