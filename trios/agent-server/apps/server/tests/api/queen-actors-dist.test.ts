@@ -40,7 +40,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 describe('section 8: a slice between turns', () => {
   // one actor that sends itself the next message: the chain the ring benchmark
-  // measured, where every turn is a microtask and nothing else gets to run
+  // measured, where every turn is a microtask and nothing else gets to run.
+  // THE FLOOD ENDS WHEN THE TIMER HAS RUN, OR AFTER N TURNS. A timer that ran
+  // during the flood is seen at once, so the run with slices costs one slice,
+  // not 200 000 turns; a timer held off for the whole flood still lets all N
+  // turns run first. Each run asserts the same as before, and none depends on
+  // how fast the host is: under load and under coverage the two full floods
+  // took more than the 5 s a test gets (gHashTag/trios#1729 item 8).
   const flood = async (slices: boolean) => {
     const sys = createActorSystem(undefined, { slices })
     const N = 200_000
@@ -54,7 +60,7 @@ describe('section 8: a slice between turns', () => {
       name: 'flood',
       receive: (n, self) => {
         processed++
-        if (n + 1 >= N) finish()
+        if (n + 1 >= N || firedAt >= 0) finish()
         else sys.send(pid, n + 1, self)
       },
     })
@@ -76,7 +82,9 @@ describe('section 8: a slice between turns', () => {
     expect(on.firedAt).toBeLessThan(on.N)
     expect(on.yields).toBeGreaterThan(0)
     expect(off.firedAt).toBe(off.N)
-  })
+    // the bound is for a hang, not for the host's speed: the run without
+    // slices is 200 000 turns whatever the load
+  }, 60_000)
 })
 
 describe('section 8: a turn the OS preempts and a kill stops', () => {

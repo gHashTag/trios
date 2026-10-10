@@ -26,10 +26,10 @@
  * step_event, the time that passes its step_ms, which seeds stop turns its
  * seed_features, which jobs go to a remembered pid its stale_job; which
  * invariant fails the gate, the hot-loop bound, the cap and the intensity
- * checks are its functions. performance.now, the wall clock the runtime reads
- * (the slice; the store link's lease age), reads the virtual clock plus work
- * the card draws. This file holds the world's state, applies events and
- * watches.
+ * checks are its functions. The wall clock the runtime reads (the slice; the
+ * store link's lease age) is the virtual clock plus work the card draws,
+ * handed to each system and link (`micros`). This file holds the world's
+ * state, applies events and watches.
  *
  * HOW IT WATCHES. The reviewer and the pool are handed an observed system: a
  * copy of the runtime's whose spawn, send, exit and monitor log and check
@@ -312,6 +312,28 @@ export class SimWorld {
   roll(stream: number, index: number): number {
     return simRoll(this.seed, stream, index)
   }
+
+  // THE WALL CLOCK THE RUNTIME READS (the slice; the store link's lease
+  // age): the virtual clock plus the work the card draws for each read. It is
+  // handed to every system and link this world starts (`micros`, `now`) and
+  // never set on performance.now. WHY: set there, every reader in the process
+  // moved it. Under coverage, beside other test files, two runs of one seed
+  // read it 16 525 and 16 518 times and yielded 637 and 634 times; one 1 ms
+  // timer reading performance.now beside the gate parts 3 runs of 3
+  // (gHashTag/trios#1729 item 8).
+  private wallMicros = 0
+  private wallReads = 0
+  /** The runtime's wall clock, in microseconds. */
+  readonly micros = (): number => {
+    this.wallMicros += pickBetween(
+      this.roll(S.STREAM_CLOCK, this.wallReads++),
+      0,
+      S.CLOCK_TICK_MAX_MICROS,
+    )
+    return this.clock.now() * 1000 + this.wallMicros
+  }
+  /** The same clock in milliseconds, for the store link. */
+  readonly wallMs = (): number => this.micros() / 1000
 
   // --- the log ------------------------------------------------------------
 
@@ -772,6 +794,7 @@ export class SimWorld {
       node: n,
       link,
       turnStop: this.options.turnStop,
+      micros: this.micros,
     })
     this.rawSystems.push(raw)
     const sys = this.observe(raw)
@@ -1239,20 +1262,6 @@ export class SimWorld {
 
   async run(steps: number = S.STEPS_PER_RUN): Promise<RunResult> {
     const t0 = performance.now()
-    const perf = globalThis.performance
-    const realNow = perf.now
-    let micros = 0
-    let reads = 0
-    perf.now = () => {
-      micros += pickBetween(
-        this.roll(S.STREAM_CLOCK, reads++),
-        0,
-        S.CLOCK_TICK_MAX_MICROS,
-      )
-      // the virtual clock, plus the work done since: the slice and the store
-      // link read it as wall time, and both are driven by the seed
-      return this.clock.now() + micros / 1000
-    }
     const untapActors = this.tap(ACTORS_CARD, (n, a, r) =>
       this.onActorsCall(n, a, r),
     )
@@ -1317,7 +1326,7 @@ export class SimWorld {
         (r) => r.decided,
       ).length
       this.counts.virtualSeconds = Math.round(this.clock.now() / 1000)
-      this.counts.clockReads = reads
+      this.counts.clockReads = this.wallReads
     } finally {
       // a run that stopped at a violation still lets its own work finish here
       await this.quiesce()
@@ -1325,7 +1334,6 @@ export class SimWorld {
       this.closed = true
       untapActors()
       untapReviewer()
-      perf.now = realNow
       await this.transport?.stop?.()
       this.finalHash = hash
     }

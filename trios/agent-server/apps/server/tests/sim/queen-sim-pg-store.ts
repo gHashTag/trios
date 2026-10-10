@@ -371,7 +371,10 @@ export function pgStore(world: SimWorld): Transport {
       // process again, as Railway restarts a crashed container
       for (;;) {
         try {
-          const link = await createPgLink(pool(n), n, { host: 'sim' })
+          const link = await createPgLink(pool(n), n, {
+            host: 'sim',
+            now: world.wallMs,
+          })
           links.push(link)
           return link
         } catch {

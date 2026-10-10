@@ -369,7 +369,18 @@ export interface ActorSystemOptions {
   turnStop?: boolean
   /** Counts, histograms and the decision log (telemetry.t27). Off when unset. */
   telemetry?: TelemetryOptions
+  /**
+   * The slice's clock in microseconds (slice_spent): performance.now when
+   * unset. WHY A SYSTEM OF ITS OWN: the simulation gate drew the slice's time
+   * by replacing performance.now for the whole process, so any other reader
+   * in it moved the seeded clock, and two runs of one seed yielded 637 and
+   * 634 times (gHashTag/trios#1729 item 8). Handed in, only this system
+   * reads it.
+   */
+  micros?: () => number
 }
+
+const hostMicros = () => performance.now() * 1000
 
 export function createActorSystem(
   clock: Clock = realClock,
@@ -379,6 +390,7 @@ export function createActorSystem(
   const link = options.link
   const slicesOn = options.slices ?? true
   const turnStop = options.turnStop ?? false
+  const micros = options.micros ?? hostMicros
   const inc = link?.incarnation ?? 0
   // a linked node's pids carry its incarnation; a lone one keeps section 1's
   const nextGen = link
@@ -486,7 +498,7 @@ export function createActorSystem(
     if (!sliceOpen) {
       sliceOpen = true
       sliceTurns = 0
-      sliceT0 = performance.now()
+      sliceT0 = micros()
       // the loop turned: the next turn opens a new slice
       setImmediate(() => {
         sliceOpen = false
@@ -496,11 +508,7 @@ export function createActorSystem(
   }
   const spent = () =>
     sliceOpen &&
-    c(
-      'slice_spent',
-      u32(sliceTurns),
-      u32((performance.now() - sliceT0) * 1000),
-    ) !== 0
+    c('slice_spent', u32(sliceTurns), u32(micros() - sliceT0)) !== 0
   const compact = () => {
     if (head > 0) {
       ready.splice(0, head)

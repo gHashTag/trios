@@ -215,7 +215,12 @@ function judgeRow(
  * the transaction that reads it. The row is made first if it is missing, so
  * two starts racing for a new node id are serialised on it too.
  */
-async function claim(pool: Pool, node: number, host: string) {
+async function claim(
+  pool: Pool,
+  node: number,
+  host: string,
+  now: () => number,
+) {
   const c = await pool.connect()
   try {
     await c.query('BEGIN')
@@ -235,7 +240,7 @@ async function claim(pool: Pool, node: number, host: string) {
         big((row.rows[0] as { incarnation: string }).incarnation),
       ),
     )
-    const sentAt = monoNow()
+    const sentAt = now()
     await c.query(
       `UPDATE queen_actor_node
           SET incarnation = $2, host = $3, heartbeat_at = clock_timestamp()
@@ -260,11 +265,19 @@ export async function createPgLink(
     host?: string
     /** The beat thread's database; the pool's own when not given. */
     url?: string
+    /**
+     * The monotonic clock, in ms, that the lease's age is read by on this
+     * loop: monoNow when unset. A simulation hands in its own, so no other
+     * reader of performance.now in the process moves it (queen-actors.ts
+     * `micros`). A beat thread keeps the host's.
+     */
+    now?: () => number
   } = {},
 ): Promise<PgLink> {
   await pool.query(QUEEN_ACTORS_SQL)
   const host = options.host ?? hostname()
-  const { inc, sentAt } = await claim(pool, node, host)
+  const now = options.now ?? monoNow
+  const { inc, sentAt } = await claim(pool, node, host, now)
   const channel = `queen_actor_mail_${node}`
   const mailHandlers: Array<(m: Mail) => void> = []
   const downHandlers: Array<(n: number, inc: number) => void> = []
@@ -284,7 +297,7 @@ export async function createPgLink(
   let fenced = false
 
   const slots = new BigInt64Array(new SharedArrayBuffer(8 * 3))
-  Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(monoNow())))
+  Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(now())))
   Atomics.store(slots, BEAT_RENEWED, BigInt(Math.floor(sentAt)))
 
   let heartbeat: ReturnType<typeof setInterval> | undefined
@@ -316,7 +329,7 @@ export async function createPgLink(
   const fencedNow = (): boolean => {
     if (fenced) return true
     const refused = Atomics.load(slots, BEAT_REFUSED) !== 0n
-    const age = (monoNow() - Number(Atomics.load(slots, BEAT_RENEWED))) / 1000
+    const age = (now() - Number(Atomics.load(slots, BEAT_RENEWED))) / 1000
     if (netlink().call('must_fence', flag(refused), u32(age)) !== 0)
       fence(refused ? 'the store refused a renewal' : `no renewal for ${age} s`)
     return fenced
@@ -531,7 +544,7 @@ export async function createPgLink(
   // with the same fenced renewal, which a held loop can starve.
   const url = options.url ?? pool.options.connectionString
   const renewHere = async () => {
-    const sent = monoNow()
+    const sent = now()
     const r = await pool.query(RENEW_SQL, [node, inc, host, NODE_TTL_SECONDS])
     if (r.rowCount === 1)
       Atomics.store(slots, BEAT_RENEWED, BigInt(Math.floor(sent)))
@@ -574,7 +587,7 @@ export async function createPgLink(
   }, NODE_HEARTBEAT_SECONDS * 1000)
   // the poll is also the loop's mark that it still turns (beat_renews)
   poll = setInterval(() => {
-    Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(monoNow())))
+    Atomics.store(slots, BEAT_TICK, BigInt(Math.floor(now())))
     void drain()
   }, options.pollMs ?? MAIL_POLL_MS)
   void drain()
