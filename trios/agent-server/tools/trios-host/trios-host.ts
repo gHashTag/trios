@@ -13,7 +13,7 @@
  *   bun build --compile --target=bun-linux-x64    tools/trios-host/trios-host.ts --outfile trios-host
  *   bun build --compile --target=bun-linux-arm64  tools/trios-host/trios-host.ts --outfile trios-host
  *
- * The five cards travel inside it (the `with { type: 'file' }` imports below);
+ * The cards travel inside it (the `with { type: 'file' }` imports below);
  * every decision it makes is one of their calls. Its key, its toolchain, its
  * jobs and zig's cache live in ~/.trios-host (TRIOS_HOST_HOME), the key with
  * mode 0600. It fetches t27c, t27b and zig itself and keeps each only when it
@@ -32,6 +32,10 @@ import {
   probeIsolation,
   SANDBOX_WORDS,
 } from '../../apps/server/src/api/services/hosting-sandbox'
+import {
+  checkOwnLeaves,
+  type EpochProof,
+} from '../../apps/server/src/api/services/hosting-statement'
 import {
   agentDirs,
   agentHome,
@@ -60,6 +64,10 @@ import placementWasm from '../../specs/hosting/placement.wasm' with {
 }
 import proofWasm from '../../specs/hosting/proof.wasm' with { type: 'file' }
 import rowWasm from '../../specs/hosting/row.wasm' with { type: 'file' }
+import statementWasm from '../../specs/hosting/statement.wasm' with {
+  type: 'file',
+}
+import sybilWasm from '../../specs/hosting/sybil.wasm' with { type: 'file' }
 
 useHostingCardFiles({
   host: hostWasm,
@@ -67,6 +75,8 @@ useHostingCardFiles({
   placement: placementWasm,
   credit: creditWasm,
   row: rowWasm,
+  sybil: sybilWasm,
+  statement: statementWasm,
 })
 
 const USAGE = `trios-host -- lend this computer to the Queen (gHashTag/trios#1756)
@@ -95,6 +105,11 @@ const USAGE = `trios-host -- lend this computer to the Queen (gHashTag/trios#175
       the same commit: every key that differs, and the rows that are equal
   trios-host status --queen <url>
       this host's row of the public ledger
+  trios-host statement --queen <url> --epoch <n> [--queen-key <64 hex>]
+      check that this host's credit is inside epoch n's signed root
+      (statement.t27): the Queen's signature, the leaf, the path, the root.
+      Pin the Queen's key with --queen-key; without it, the key the Queen
+      publishes is used. Exits 0 only when every leaf of this host checks.
 `
 
 const TIERS = ['owner', 'trusted', 'public']
@@ -216,6 +231,26 @@ async function main() {
     }
     console.log(`${equal} of ${ours.length} rows equal the lab's (${commit})`)
     process.exit(equal === ours.length && ours.length > 0 ? 0 : 1)
+  }
+  if (command === 'statement') {
+    const { privatePem } = loadOrCreateKey(home)
+    const id = keyIdOf(publicHexOf(privatePem))
+    const res = await fetch(
+      `${need(f, 'queen')}/hosting/ledger/epochs/${need(f, 'epoch')}/proof?key=${id}`,
+    )
+    const proof = (await res.json()) as EpochProof & {
+      queen_key?: string
+      error?: string
+    }
+    if (res.status !== 200) {
+      console.log(res.status, proof.error ?? '')
+      process.exit(1)
+    }
+    const key =
+      typeof f['queen-key'] === 'string' ? f['queen-key'] : proof.queen_key
+    const checks = checkOwnLeaves(proof, String(key ?? ''), id)
+    console.log(JSON.stringify({ host: id, queen_key: key, checks }, null, 2))
+    process.exit(checks.length > 0 && checks.every((c) => c.code === 0) ? 0 : 1)
   }
   if (command === 'job') {
     const { privatePem } = loadOrCreateKey(home)
