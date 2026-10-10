@@ -343,11 +343,15 @@ async function cmdImport(a: Args) {
   const isTty = process.stdin.isTTY === true
   if (inputCode(isTty, a.flags.has('stdin')) !== CODE_OK)
     throw new Usage('stdin is not a terminal: pipe a stream only with --stdin')
-  const c = await client(a)
-  const r = await c.recipients()
+  // READ THE STREAM BEFORE THE FIRST CALL TO THE VAULT. On CI (Bun 1.3.6,
+  // Linux) a stream read after the local vault's first request came back
+  // empty, and the import was refused as empty-scope; on macOS (Bun 1.3.11)
+  // it did not. Read first, nothing stands between the pipe and its reader.
   const raw = await readAll()
   const text = new TextDecoder().decode(raw)
   raw.fill(0)
+  const c = await client(a)
+  const r = await c.recipients()
   const { body, bad } = await importBody(
     text,
     FORMAT_NAMES[format] as string,
