@@ -32,6 +32,7 @@ import { createChatRoutes } from './routes/chat'
 import { createChatHistoryRoutes } from './routes/chat-history'
 import { createCreditsRoutes } from './routes/credits'
 import { createHealthRoute } from './routes/health'
+import { createHostingRoute } from './routes/hosting'
 import { createKlavisRoutes } from './routes/klavis'
 import { createLocalAuthRoutes } from './routes/local-auth'
 import { createMcpRoutes } from './routes/mcp'
@@ -500,6 +501,12 @@ export async function createHttpServer(config: HttpServerConfig) {
     // judged by specs/vault/policy.t27 request_code; no browser Origin, so no
     // trusted-origin guard. 404 for everything unless TRIOS_VAULT=on.
     .route('/vault', createVaultRoute())
+    // Self-hosting (trios#1756): host agents on users' computers, with no
+    // browser Origin. Every write verifies under the Ed25519 key its host
+    // registered (a registration, under the key it registers), inside the
+    // freshness window, from the incarnation the Queen holds; jobs only from
+    // an owner-tier key. The reads hold no secret. 503 unless TRIOS_HOSTING=on.
+    .route('/hosting', createHostingRoute())
     .route('/queen/registry', queenRegistryRoutes)
     // The shell only. It holds no state and no token; every byte of data it
     // shows comes from /queen/lease, which stays guarded. See the route header

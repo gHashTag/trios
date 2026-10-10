@@ -9,6 +9,10 @@
 
 import type { Pool } from 'pg'
 import {
+  hostingOn,
+  migrateHostingStore,
+} from '../../api/services/hosting-store'
+import {
   FLAG_ON,
   FLAG_VAR,
 } from '../../api/services/queen-vault-policy-card.gen'
@@ -691,6 +695,12 @@ export async function runPgMigrations(): Promise<void> {
     await pool.query(MIGRATION_SQL)
     // The vault (trios#1759): its table exists only where TRIOS_VAULT=on.
     if (vaultFlagOn()) await migrateVaultStore(pool)
+    // Self-hosting (trios#1756): its tables exist only where TRIOS_HOSTING=on.
+    // Off means off: a Queen with hosting off builds none of them.
+    if (hostingOn()) {
+      await migrateHostingStore(pool)
+      logger.info('PostgreSQL hosting tables migrated (TRIOS_HOSTING=on)')
+    }
     logger.info('PostgreSQL migrations completed successfully')
   } catch (error) {
     logger.error('PostgreSQL migrations failed', {
