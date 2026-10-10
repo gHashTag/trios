@@ -47,13 +47,13 @@ export const KEEP_AT_LEAST = 5000 satisfies number;
 // t27c gen-ts: fn prune_through was not emitted -- this backend lowers declarations, not bodies.
 export const ACTOR_STREAM = "actors" satisfies string;
 export const EV_ACTOR_SPAWN = 0 satisfies number;
-export const EV_ACTOR_EXIT = 1 satisfies number;
-export const EV_ACTOR_DOWN = 2 satisfies number;
-export const EV_ACTOR_RESTART = 3 satisfies number;
+export const EV_ACTOR_RESTART = 1 satisfies number;
+export const EV_ACTOR_EXIT = 2 satisfies number;
+export const EV_ACTOR_DOWN = 3 satisfies number;
 export const EV_ACTOR_DELIVER = 4 satisfies number;
 export const EV_ACTOR_DELIVERS = 5 satisfies number;
 export const ACTOR_KINDS = 6 satisfies number;
-export const ACTOR_EVENT_NAMES = ["actor.spawn", "actor.exit", "actor.down", "actor.restart", "actor.deliver", "actor.delivers"] as const satisfies readonly [string, string, string, string, string, string];
+export const ACTOR_EVENT_NAMES = ["actor.spawn", "actor.restart", "actor.exit", "actor.down", "actor.deliver", "actor.delivers"] as const satisfies readonly [string, string, string, string, string, string];
 // t27c gen-ts: fn actor_kind_ok was not emitted -- this backend lowers declarations, not bodies.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
 // t27c gen-ts: a TestBlock was not emitted -- it is checked by the compiler, not by the artifact.
@@ -73,7 +73,7 @@ export const ACTOR_EVENT_NAMES = ["actor.spawn", "actor.exit", "actor.down", "ac
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [] as const;
-export const __DECL_ORDER__ = ["BUS_KINDS", "NEVER", "LOG_EVERY_SECONDS", "PUBLIC_KEYS", "TOKEN_MAX", "CR_EMPTY", "CR_PAGE", "CR_RESYNC", "DA_SKIP", "DA_APPLY", "DA_RESYNC", "EVENTS_PAGE_DEFAULT", "EVENTS_PAGE_MAX", "WAIT_MAX_SECONDS", "REFRESH_TASKS_MAX", "RF_NOTHING", "RF_TASKS", "RF_SNAPSHOT", "EA_NOTHING", "EA_REFRESH", "EA_TOUCH", "BOARD_ACTION", "READ_PAUSE_MS", "SNAPSHOT_EVERY_SECONDS", "FOLLOW_MS", "PUBLISHER_REACTS", "KEEP_SECONDS", "KEEP_AT_LEAST", "ACTOR_STREAM", "EV_ACTOR_SPAWN", "EV_ACTOR_EXIT", "EV_ACTOR_DOWN", "EV_ACTOR_RESTART", "EV_ACTOR_DELIVER", "EV_ACTOR_DELIVERS", "ACTOR_KINDS", "ACTOR_EVENT_NAMES"] as const;
+export const __DECL_ORDER__ = ["BUS_KINDS", "NEVER", "LOG_EVERY_SECONDS", "PUBLIC_KEYS", "TOKEN_MAX", "CR_EMPTY", "CR_PAGE", "CR_RESYNC", "DA_SKIP", "DA_APPLY", "DA_RESYNC", "EVENTS_PAGE_DEFAULT", "EVENTS_PAGE_MAX", "WAIT_MAX_SECONDS", "REFRESH_TASKS_MAX", "RF_NOTHING", "RF_TASKS", "RF_SNAPSHOT", "EA_NOTHING", "EA_REFRESH", "EA_TOUCH", "BOARD_ACTION", "READ_PAUSE_MS", "SNAPSHOT_EVERY_SECONDS", "FOLLOW_MS", "PUBLISHER_REACTS", "KEEP_SECONDS", "KEEP_AT_LEAST", "ACTOR_STREAM", "EV_ACTOR_SPAWN", "EV_ACTOR_RESTART", "EV_ACTOR_EXIT", "EV_ACTOR_DOWN", "EV_ACTOR_DELIVER", "EV_ACTOR_DELIVERS", "ACTOR_KINDS", "ACTOR_EVENT_NAMES"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

@@ -51,7 +51,6 @@ import {
   REPLAY_FIRST,
   REPLAY_FROM_GEN,
   REPLAY_FROM_SLOT,
-  REPLAY_JOB_IDS,
   REPLAY_KIND,
   REPLAY_LAST,
   REPLAY_MAX_RESTARTS,
@@ -708,7 +707,7 @@ export function replayRows(
         taskFields({
           kind: REPLAY_TASK_KIND,
           repo: REPLAY_REPO,
-          id: REPLAY_JOB_IDS[REPLAY_TASK[i] - 1],
+          number: REPLAY_TASK[i],
         }),
       )
     if (kind === EV_ACTOR_SPAWN || kind === EV_ACTOR_RESTART) {

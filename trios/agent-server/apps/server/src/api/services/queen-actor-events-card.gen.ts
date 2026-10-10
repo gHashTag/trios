@@ -15,7 +15,7 @@ export const REASON_CLASSES = 3 satisfies number;
 export const RC_NAMES = ["normal", "shutdown", "crash"] as const satisfies readonly [string, string, string];
 // t27c gen-ts: fn reason_class was not emitted -- this backend lowers declarations, not bodies.
 export const ACTOR_WINDOW_MS = 1000 satisfies number;
-export const AGG_PAIRS_MAX = 256 satisfies number;
+export const AGG_PAIRS_MAX = 4096 satisfies number;
 export const OR_NONE = 0 satisfies number;
 export const OR_PAIR = 1 satisfies number;
 export const OR_PID = 2 satisfies number;
@@ -27,20 +27,19 @@ export const FL_ORDER = 2 satisfies number;
 export const FL_FULL = 3 satisfies number;
 export const FL_STOP = 4 satisfies number;
 // t27c gen-ts: fn flush_reason was not emitted -- this backend lowers declarations, not bodies.
-export const PUBLISH_BUFFER_MAX = 4096 satisfies number;
+export const PUBLISH_BUFFER_MAX = 16384 satisfies number;
 // t27c gen-ts: fn buffer_admits was not emitted -- this backend lowers declarations, not bodies.
 export const ACTOR_PUBLIC_KEYS = ["from_pid", "to_pid", "parent_pid", "restart_count", "reason_class", "task_kind", "task_repo", "task_number", "task_id", "count", "dropped", "max_depth", "first_seq", "last_seq", "msg_seq", "depth", "actor", "strategy", "max_restarts", "period_seconds", "at_ms", "supervisor"] as const satisfies readonly [string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string];
 export const REPLAY_EVENTS = 24 satisfies number;
 export const REPLAY_T0_MS = 1791590400000 satisfies number;
 export const REPLAY_REPO = "gHashTag/t27" satisfies string;
 export const REPLAY_TASK_KIND = 2 satisfies number;
-export const REPLAY_JOB_IDS = ["mvp-job-1", "mvp-job-2"] as const satisfies readonly [string, string];
 export const REPLAY_ACTOR_NAMES = ["mvp-root", "dispatcher", "worker-ref", "worker-native", "worker", "verifier", "treasurer"] as const satisfies readonly [string, string, string, string, string, string, string];
 export const REPLAY_SUPERVISOR_SLOT = 1 satisfies number;
 export const REPLAY_STRATEGY = 0 satisfies number;
 export const REPLAY_MAX_RESTARTS = 3 satisfies number;
 export const REPLAY_PERIOD_SECONDS = 300 satisfies number;
-export const REPLAY_KIND = [0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 1, 2, 3, 4, 5, 4, 4, 4, 5, 1] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
+export const REPLAY_KIND = [0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 2, 3, 1, 4, 5, 4, 4, 4, 5, 2] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 export const REPLAY_FROM_SLOT = [0, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4, 6, 2, 2, 5, 5, 1, 2, 2, 5, 3, 6, 2, 4] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 export const REPLAY_FROM_GEN = [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 export const REPLAY_TO_SLOT = [1, 2, 3, 4, 5, 6, 7, 3, 4, 6, 6, 7, 3, 5, 1, 2, 5, 5, 6, 6, 6, 2, 7, 1] as const satisfies readonly [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
@@ -93,9 +92,9 @@ export const EVENTS_PAGE_DEFAULT = 200 satisfies number;
 export const EVENTS_PAGE_MAX = 1000 satisfies number;
 export const EV_ACTOR_DELIVER = 4 satisfies number;
 export const EV_ACTOR_DELIVERS = 5 satisfies number;
-export const EV_ACTOR_DOWN = 2 satisfies number;
-export const EV_ACTOR_EXIT = 1 satisfies number;
-export const EV_ACTOR_RESTART = 3 satisfies number;
+export const EV_ACTOR_DOWN = 3 satisfies number;
+export const EV_ACTOR_EXIT = 2 satisfies number;
+export const EV_ACTOR_RESTART = 1 satisfies number;
 export const EV_ACTOR_SPAWN = 0 satisfies number;
 // t27c gen-ts: "usize" is not declared in this module, so it is emitted as unknown rather than guessed at
 export const TOKEN_MAX = 128;
@@ -110,7 +109,7 @@ export const TK_JOB = 2 satisfies number;
 
 // Declaration order, which the spec's own laws depend on.
 export const __STRUCT_ORDER__ = [] as const;
-export const __DECL_ORDER__ = ["NO_TASK", "RC_NORMAL", "RC_SHUTDOWN", "RC_CRASH", "REASON_CLASSES", "RC_NAMES", "ACTOR_WINDOW_MS", "AGG_PAIRS_MAX", "OR_NONE", "OR_PAIR", "OR_PID", "FL_KEEP", "FL_WINDOW", "FL_ORDER", "FL_FULL", "FL_STOP", "PUBLISH_BUFFER_MAX", "ACTOR_PUBLIC_KEYS", "REPLAY_EVENTS", "REPLAY_T0_MS", "REPLAY_REPO", "REPLAY_TASK_KIND", "REPLAY_JOB_IDS", "REPLAY_ACTOR_NAMES", "REPLAY_SUPERVISOR_SLOT", "REPLAY_STRATEGY", "REPLAY_MAX_RESTARTS", "REPLAY_PERIOD_SECONDS", "REPLAY_KIND", "REPLAY_FROM_SLOT", "REPLAY_FROM_GEN", "REPLAY_TO_SLOT", "REPLAY_TO_GEN", "REPLAY_REASON", "REPLAY_TASK", "REPLAY_RESTARTS", "REPLAY_COUNT", "REPLAY_DROPPED", "REPLAY_DEPTH", "REPLAY_FIRST", "REPLAY_LAST", "REPLAY_AT_MS", "DOMAIN_MAX_RESTARTS", "DOMAIN_PERIOD_SECONDS", "D_DROPPED_DEAD", "D_DROPPED_FULL", "D_QUEUED", "MAILBOX_CAP", "NO_PID", "STRAT_ONE_FOR_ONE", "X_CRASH", "X_KILL", "X_KILLED", "X_NOCONNECTION", "X_NONE", "X_NOPROC", "X_NORMAL", "X_SHUTDOWN", "ACTOR_KINDS", "CR_EMPTY", "CR_PAGE", "CR_RESYNC", "EVENTS_PAGE_DEFAULT", "EVENTS_PAGE_MAX", "EV_ACTOR_DELIVER", "EV_ACTOR_DELIVERS", "EV_ACTOR_DOWN", "EV_ACTOR_EXIT", "EV_ACTOR_RESTART", "EV_ACTOR_SPAWN", "TOKEN_MAX", "TASK_KINDS", "TK_ISSUE", "TK_JOB"] as const;
+export const __DECL_ORDER__ = ["NO_TASK", "RC_NORMAL", "RC_SHUTDOWN", "RC_CRASH", "REASON_CLASSES", "RC_NAMES", "ACTOR_WINDOW_MS", "AGG_PAIRS_MAX", "OR_NONE", "OR_PAIR", "OR_PID", "FL_KEEP", "FL_WINDOW", "FL_ORDER", "FL_FULL", "FL_STOP", "PUBLISH_BUFFER_MAX", "ACTOR_PUBLIC_KEYS", "REPLAY_EVENTS", "REPLAY_T0_MS", "REPLAY_REPO", "REPLAY_TASK_KIND", "REPLAY_ACTOR_NAMES", "REPLAY_SUPERVISOR_SLOT", "REPLAY_STRATEGY", "REPLAY_MAX_RESTARTS", "REPLAY_PERIOD_SECONDS", "REPLAY_KIND", "REPLAY_FROM_SLOT", "REPLAY_FROM_GEN", "REPLAY_TO_SLOT", "REPLAY_TO_GEN", "REPLAY_REASON", "REPLAY_TASK", "REPLAY_RESTARTS", "REPLAY_COUNT", "REPLAY_DROPPED", "REPLAY_DEPTH", "REPLAY_FIRST", "REPLAY_LAST", "REPLAY_AT_MS", "DOMAIN_MAX_RESTARTS", "DOMAIN_PERIOD_SECONDS", "D_DROPPED_DEAD", "D_DROPPED_FULL", "D_QUEUED", "MAILBOX_CAP", "NO_PID", "STRAT_ONE_FOR_ONE", "X_CRASH", "X_KILL", "X_KILLED", "X_NOCONNECTION", "X_NONE", "X_NOPROC", "X_NORMAL", "X_SHUTDOWN", "ACTOR_KINDS", "CR_EMPTY", "CR_PAGE", "CR_RESYNC", "EVENTS_PAGE_DEFAULT", "EVENTS_PAGE_MAX", "EV_ACTOR_DELIVER", "EV_ACTOR_DELIVERS", "EV_ACTOR_DOWN", "EV_ACTOR_EXIT", "EV_ACTOR_RESTART", "EV_ACTOR_SPAWN", "TOKEN_MAX", "TASK_KINDS", "TK_ISSUE", "TK_JOB"] as const;
 
 // What this spec holds and this backend did not print. Empty is the whole
 // story most of the time; an entry here is a promise the artifact does not

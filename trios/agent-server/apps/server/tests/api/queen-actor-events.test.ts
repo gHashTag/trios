@@ -766,7 +766,7 @@ describe('GET /queen/public-actors', () => {
     expect(exit).toMatchObject({
       name: 'actor.exit',
       reason_class: 'crash',
-      task_ref: { kind: 'job', repo: REPO, id: 'mvp-job-2' },
+      task_ref: { kind: 'job', repo: REPO, number: 2 },
     })
     expect(events[15]).toMatchObject({
       name: 'actor.down',
@@ -825,9 +825,10 @@ describe('the cost per message, events off and on', () => {
   // The ring of queen-actors-bench.test.ts: 1000 actors pass 100 000
   // messages, every decision asked of the wasm card. Rounds alternate off and
   // on; the medians are the result. The ring is the hard case for counting:
-  // 1000 pairs against AGG_PAIRS_MAX open at once, so the table fills and
-  // empties as it goes round. The numbers for the PR and t27#7851 come from
-  // the same ring run against the tree before this change as well.
+  // 1000 pairs open at once. With AGG_PAIRS_MAX at 256 the table filled and
+  // emptied as the ring went round, about one event per message (t27#8650);
+  // at 4096 each pair is one count a window. The numbers for the PR and
+  // t27#7851 come from the same ring run against the tree before this change.
   const ringOnce = async (on: boolean) => {
     let written = 0
     const events = on
@@ -882,8 +883,9 @@ describe('the cost per message, events off and on', () => {
     }
     const median = (xs: number[]) =>
       [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
-    // N spawns, then about one count per message once the table cycles
+    // 1000 spawns and one count per pair per window, not one per message
     expect(written).toBeGreaterThan(1000)
+    expect(written).toBeLessThan(10_000)
     console.log(
       `\n## actor events cost per message, cpu us (${ROUNDS} rounds): off ${median(off).toFixed(2)}, on ${median(on).toFixed(2)}; events written per run with it on: ${written}`,
     )
