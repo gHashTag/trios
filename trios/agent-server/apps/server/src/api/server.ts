@@ -40,6 +40,7 @@ import { createMonitoringRoutes } from './routes/monitoring'
 import { createOAuthRoutes } from './routes/oauth'
 import { createOpenClawRoutes } from './routes/openclaw'
 import { createProviderRoutes } from './routes/provider'
+import { createQueenActorsRoute } from './routes/queen-actors-metrics'
 import { createQueenAppWebhookRoute } from './routes/queen-app-webhook'
 import { createQueenContributorKeysRoute } from './routes/queen-contributor-keys'
 import { createQueenDashboardRoute } from './routes/queen-dashboard'
@@ -84,6 +85,7 @@ import {
 } from './routes/queen-runners'
 import { createQueenTasksRoute } from './routes/queen-tasks'
 import { createQueenTreeRoute } from './routes/queen-tree'
+import { createQueenWaitsRoute } from './routes/queen-waits'
 import { createRefinePromptRoutes } from './routes/refine-prompt'
 import { createShutdownRoute } from './routes/shutdown'
 import { createSkillsRoutes } from './routes/skills'
@@ -284,6 +286,15 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenNeedsYouRoute())
 
+  // What the actor runtime counted, and the card decisions it logged
+  // (specs/queen/telemetry.t27): pids, kinds, card names and arguments -
+  // operator information like needs-you, so it sits behind the same
+  // trusted-origin guard in its own sub-app. It was first mounted bare, and
+  // the route-guard audit caught it (trios#1730).
+  const queenActorsRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenActorsRoute())
+
   // Outside watchers write into her report here (a relay probe in the bot's
   // repository is the first). It WRITES, so it is guarded inside its own
   // sub-app exactly like needs-you above - never a bare factory mount.
@@ -319,6 +330,13 @@ export async function createHttpServer(config: HttpServerConfig) {
   const queenJobsRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
     .route('/', createQueenJobsRoute())
+
+  // What waits for what, and a key resolved from outside (specs/queen/waits.t27).
+  // It WRITES - a resolve wakes a job - so it is guarded inside its own
+  // sub-app like every route that writes.
+  const queenWaitsRoutes = new Hono<Env>()
+    .use('/*', requireTrustedAppOrigin())
+    .route('/', createQueenWaitsRoute())
 
   const queenRegistryRoutes = new Hono<Env>()
     .use('/*', requireTrustedAppOrigin())
@@ -492,6 +510,9 @@ export async function createHttpServer(config: HttpServerConfig) {
     // than being served to any origin. The five escalations it exists to
     // surface are for the operator, not for a public page.
     .route('/queen/needs-you', queenNeedsYouRoutes)
+    // What the actor runtime counted (specs/queen/telemetry.t27): guarded in
+    // its own sub-app, like needs-you above.
+    .route('/queen/actors', queenActorsRoutes)
     .route('/queen/report', queenReportRoutes)
     .route('/queen/board', queenBoardRoutes)
     .route('/queen/roadmap', createQueenRoadmapRoute())
@@ -502,6 +523,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/export', queenExportRoutes)
     .route('/queen/tasks', queenTasksRoutes)
     .route('/queen/jobs', queenJobsRoutes)
+    .route('/queen/waits', queenWaitsRoutes)
     .route('/queen/rehearsal', queenRehearsalRoutes)
     .use('/shutdown/*', requireTrustedAppOrigin())
     .route(

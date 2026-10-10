@@ -44,6 +44,10 @@ import { startModelProbes, workerModelRanking } from '../../lib/model-ranking'
 import { importRunnerBranch } from '../routes/queen-export'
 import { outstandingEscalations } from '../routes/queen-needs-you'
 import { advanceApp } from './queen-app'
+import {
+  dispatchByActors,
+  handRoundToBeeActors,
+} from './queen-bee-actors-round'
 import { githubCiDeps, takeBackRefusedAcceptances } from './queen-ci-verdict'
 import { contributorRuntime } from './queen-contributor-keys'
 import {
@@ -85,7 +89,12 @@ import {
 } from './queen-dispatch'
 import { pruneEvents, wakesHere } from './queen-events'
 import { heldPaths } from './queen-holds'
-import { advanceJobs, ensureJobTables, startJobsFromIssues } from './queen-jobs'
+import {
+  advanceJobs,
+  defaultJobIo,
+  ensureJobTables,
+  startJobsFromIssues,
+} from './queen-jobs'
 import {
   acquireQueenLease,
   logLeaseOutcome,
@@ -102,7 +111,14 @@ import {
   reportHeadline,
   startedLine,
 } from './queen-report-lines'
-import { startReviewerActors } from './queen-review-actors'
+import {
+  freeMemoryMb,
+  isZaiLane,
+  keyFreeLanes,
+  measuredReviewMb,
+  type ReviewCapacity,
+  startReviewerActors,
+} from './queen-review-actors'
 import {
   drainReviewerRound,
   reviewerRunning,
@@ -143,6 +159,13 @@ import { idleRunner, reapSilentRunners } from './queen-runner-work'
 import { isRunnerLane } from './queen-runners'
 import { startShaping } from './queen-shaper'
 import { recordEarnings } from './queen-tri-earnings'
+import { abortError, stepOnAbort } from './queen-turn-stop'
+import { STEP_CUT } from './queen-turn-stop-card.gen'
+import {
+  githubRunResolver,
+  startWaitsActors,
+  waitsEnabled,
+} from './queen-waits'
 
 /**
  * The last non-secret allocator cursor already written durably. It survives a
@@ -2115,6 +2138,49 @@ export async function runRound(
     )
   }
 
+  // TRIOS_QUEEN_DISPATCH=actors (trios#1712 item 7, MVP, off by default): the
+  // issue actors start the bees (queen-bee-actors-round.ts), and the loop below
+  // and the runner-only pass have nothing left to do.
+  if (watch.held && dispatchByActors()) {
+    handRoundToBeeActors(pool, {
+      candidates,
+      board,
+      choose: async (issue, tasks) => {
+        const pick = await askQueend({
+          kind: 'choose',
+          candidates: [issue],
+          candidateBodies,
+          tasks,
+        })
+        return pick.allowed && pick.chosen === issue
+          ? (pick.chosenPaths ?? [])
+          : null
+      },
+      boardTask: (issue, paths, out) =>
+        boardTask(owner, repoName, {
+          conversationId: out.conversationId ?? null,
+          issue,
+          ownedPaths: paths,
+          branch: out.branch,
+          at: new Date().toISOString(),
+          title: 'just dispatched by the bee actors',
+          state:
+            typeof out.keyIndex === 'number' && isRunnerLane(out.keyIndex)
+              ? 'queued'
+              : 'running',
+        }),
+      dispatch: async (issue, paths) => {
+        const out = await dispatchChosen(issue, paths)
+        if (typeof out.keyIndex === 'number' && !isRunnerLane(out.keyIndex)) {
+          takenKeys = [...takenKeys, out.keyIndex]
+          keyCursor = out.keyIndex
+        }
+        return out
+      },
+    })
+    current = null
+  }
+
   while (watch.held && current?.allowed && typeof current.chosen === 'number') {
     const issue = current.chosen
     const paths = current.chosenPaths ?? []
@@ -3112,6 +3178,55 @@ export interface ReviewScope {
   onLane?: (lane: WorkerProvider) => void
   /** This sweep's wall clock, instead of the round's share of a tick. */
   deadlineMs?: number
+  /**
+   * The review's turn (turn_stop.t27). Once aborted, the sweep stops at its
+   * next await and writes nothing: no verdict, no cache. A killed command or
+   * an aborted model call is not evidence about the work.
+   */
+  signal?: AbortSignal
+}
+
+/**
+ * The sweep's git, model and measurement calls, each one an await a stopped
+ * review ends at (Effect's interruption): one not yet begun does not begin
+ * (step_on_abort with started = false), and one that returns after the abort
+ * is not believed.
+ */
+const INTERRUPTIBLE_DEPS = [
+  'committedFilesResult',
+  'branchHeadSha',
+  'mergeBaseSha',
+  'branchPatch',
+  'worktreeDirtCount',
+  'witness',
+  'measureCriteria',
+  'laneCandidates',
+  'llm',
+  'importRunnerBranch',
+] as const
+
+function interruptible(
+  signal: AbortSignal | undefined,
+  deps: ReviewDeps,
+): ReviewDeps {
+  if (!signal) return deps
+  const out: Record<string, unknown> = { ...deps }
+  const writesShared = new Set<string>(['importRunnerBranch'])
+  for (const name of INTERRUPTIBLE_DEPS) {
+    const fn = deps[name] as ((...a: unknown[]) => unknown) | undefined
+    if (typeof fn !== 'function') continue
+    out[name] = async (...args: unknown[]) => {
+      if (
+        signal.aborted &&
+        stepOnAbort(false, writesShared.has(name), false) === STEP_CUT
+      )
+        throw abortError(signal)
+      const answer = await fn(...args)
+      if (signal.aborted) throw abortError(signal)
+      return answer
+    }
+  }
+  return out as unknown as ReviewDeps
 }
 
 export async function reviewFinishedDispatches(
@@ -3119,7 +3234,7 @@ export async function reviewFinishedDispatches(
   overrides: Partial<ReviewDeps> = {},
   scope: ReviewScope = {},
 ): Promise<ReviewRound> {
-  const deps: ReviewDeps = {
+  const deps: ReviewDeps = interruptible(scope.signal, {
     ...defaultReviewDeps(),
     laneCandidates: async (taken) =>
       reviewLaneCandidates(
@@ -3128,6 +3243,10 @@ export async function reviewFinishedDispatches(
       ),
     importRunnerBranch: (issue) => importRunnerBranch(pool, issue),
     ...overrides,
+  })
+  // a stopped review writes nothing from here on
+  const live = () => {
+    if (scope.signal?.aborted) throw abortError(scope.signal)
   }
   // TWO THINGS ABOUT THIS QUERY, BOTH MEASURED ON 2026-09-03.
   //
@@ -3217,6 +3336,7 @@ export async function reviewFinishedDispatches(
   const repo = process.env.TRIOS_GITHUB_REPO || 'gHashTag/trios'
 
   for (const row of done.rows) {
+    live()
     const issue = row.issue as number
     const said = String(row.said ?? '')
     const beeLines = parseVerdictBlockDetailed(said)
@@ -3285,6 +3405,7 @@ export async function reviewFinishedDispatches(
         issue,
         error: diff.error,
       })
+      live()
       await recordVerdict(pool, issue, {
         state: 'wait',
         note:
@@ -3420,6 +3541,7 @@ export async function reviewFinishedDispatches(
         criteriaUnrunnable: 0,
         criteriaCached: false,
       })
+      live()
       await recordVerdict(pool, issue, {
         state,
         note,
@@ -3768,6 +3890,7 @@ export async function reviewFinishedDispatches(
                 lane,
                 REVIEWER_SYSTEM_PROMPT,
                 message,
+                scope.signal,
               )
               if (!answer.ok) {
                 // Nothing spent: a 1302 or a timeout is the provider saying
@@ -4267,6 +4390,7 @@ export async function reviewFinishedDispatches(
             judgedNote
         : judgedNote,
     )
+    live()
     await recordVerdict(pool, issue, {
       state,
       note,
@@ -4449,6 +4573,37 @@ export async function runningKeys(pool: Pool): Promise<number[]> {
   return (running?.rows ?? [])
     .map((r) => r.key_index)
     .filter((i): i is number => typeof i === 'number' && !isRunnerLane(i))
+}
+
+/**
+ * What the adaptive reviewer's pool is sized from (reviewer_sizing.t27).
+ *
+ * The lanes are counted by the arithmetic the review sweep itself picks a
+ * lane by: the keys running bees hold and the keys reviews hold (`reserved`)
+ * are taken, a lane that just failed is left out, and each key counts what
+ * key_free_lanes leaves it - never more than its provider is measured to carry
+ * (z.ai: two requests a key, 2026-09-15). So the pool never sizes itself for a
+ * lane the sweep would not be offered.
+ */
+export async function reviewCapacity(
+  pool: Pool,
+  reserved: number[],
+): Promise<ReviewCapacity> {
+  const taken = [...(await runningKeys(pool)), ...reserved]
+  const lanes = reviewLaneCandidates(
+    taken,
+    await contributorRuntime(pool, environmentContributorKeys()),
+  ).filter((lane) => !reviewerLaneBackedOff(lane))
+  return {
+    freeLanes: lanes.reduce(
+      (n, lane) =>
+        n +
+        keyFreeLanes(lane.laneCount ?? 1, lane.laneIndex ?? 0, isZaiLane(lane)),
+      0,
+    ),
+    freeMb: freeMemoryMb(),
+    mbPerReview: measuredReviewMb(),
+  }
 }
 
 /** One VERDICT line with its three-state answer kept. */
@@ -5005,11 +5160,32 @@ export function startQueenTick(): void {
   // off the round's critical path. TRIOS_QUEEN_REVIEWER=off hands reviewing
   // back to the round.
   // TRIOS_QUEEN_REVIEWER=actors runs the same reviewer as actors (t27#7851).
-  const stopReviewer = (
+  // TRIOS_QUEEN_REVIEWER_ADAPTIVE=1 sizes its pool from reviewCapacity
+  // (reviewer_sizing.t27) instead of a fixed REVIEWER_CONCURRENCY.
+  const stopReviewer =
     (process.env.TRIOS_QUEEN_REVIEWER ?? 'on').toLowerCase() === 'actors'
-      ? startReviewerActors
-      : startReviewer
-  )(pool, LEASE_NAME, reviewFinishedDispatches, waitingReviewIssues)
+      ? startReviewerActors(
+          pool,
+          LEASE_NAME,
+          reviewFinishedDispatches,
+          waitingReviewIssues,
+          reviewCapacity,
+        )
+      : startReviewer(
+          pool,
+          LEASE_NAME,
+          reviewFinishedDispatches,
+          waitingReviewIssues,
+        )
+  // Long waits as rows (waits.t27, TRIOS_QUEEN_WAITS=rows): a job parked on a
+  // row is not visited by the round; the scheduler checks the run and, when
+  // the row ends, asks for a round here so the job moves at once.
+  const stopWaits = waitsEnabled()
+    ? startWaitsActors(pool, {
+        resolvers: { 'gh-run': githubRunResolver(defaultJobIo.get) },
+        onWake: (row) => gate.request(`wait #${row.id} ended (${row.owner})`),
+      })
+    : null
   // The bus (events.t27 section 4): this process reads every row of the log,
   // a runner's included, so a runner's task.ended wakes her within a second.
   followControlEvents(pool).catch((error) =>
@@ -5037,6 +5213,8 @@ export function startQueenTick(): void {
     if (timer) clearInterval(timer)
     stopFollowing()
     stopReviewer?.()
+    // writes nothing to any wait: the next process takes them up
+    await stopWaits?.().catch(() => {})
     // The gate with it, for the same reason as the timer: no round may start
     // after the process has handed the hive back.
     gate.stop()

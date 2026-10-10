@@ -183,6 +183,49 @@ CREATE TABLE IF NOT EXISTS queen_actor_mail (
 );
 CREATE INDEX IF NOT EXISTS queen_actor_mail_node
   ON queen_actor_mail (node, id);
+-- netlink.t27 (trios#1712): the incarnation that holds a node's lease, and on
+-- every mail row the receiver's incarnation it was written for and the
+-- writer's. A row from before these columns reads as incarnation 0, which no
+-- start ever takes, so it is expired, never delivered.
+ALTER TABLE queen_actor_node
+  ADD COLUMN IF NOT EXISTS incarnation bigint NOT NULL DEFAULT 0;
+ALTER TABLE queen_actor_mail
+  ADD COLUMN IF NOT EXISTS to_inc bigint NOT NULL DEFAULT 0;
+ALTER TABLE queen_actor_mail
+  ADD COLUMN IF NOT EXISTS from_node int NOT NULL DEFAULT 0;
+ALTER TABLE queen_actor_mail
+  ADD COLUMN IF NOT EXISTS from_inc bigint NOT NULL DEFAULT 0;
+`
+
+// Long waits as rows (gHashTag/t27 specs/queen/waits.t27, trios#1712 item 4):
+// one row per wait, so a 90-minute CI wait holds no process and outlives a
+// deploy. `due_at` is the card's due_in_seconds written beside the row, so one
+// indexed query finds every due row; a claim moves it CLAIM_TTL_SECONDS ahead
+// and bumps `epoch`, and every later write lands only at the epoch it claimed
+// with. An owner has at most one row per key, so a job that asks again after a
+// restart gets the row it made; a key resolves every row that waits on it.
+// No backticks in this string: it is a JS template literal.
+export const QUEEN_WAITS_SQL = `
+CREATE TABLE IF NOT EXISTS queen_wait (
+  id bigserial PRIMARY KEY,
+  owner text NOT NULL,
+  key text,
+  state smallint NOT NULL DEFAULT 0,
+  wake_at timestamptz,
+  expires_at timestamptz NOT NULL,
+  due_at timestamptz,
+  checks int NOT NULL DEFAULT 0,
+  epoch bigint NOT NULL DEFAULT 0,
+  resolution jsonb,
+  detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  ended_at timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS queen_wait_owner_key ON queen_wait (owner, key);
+CREATE INDEX IF NOT EXISTS queen_wait_key ON queen_wait (key);
+CREATE INDEX IF NOT EXISTS queen_wait_due ON queen_wait (due_at) WHERE state = 0;
+CREATE INDEX IF NOT EXISTS queen_wait_owner ON queen_wait (owner, state);
 `
 
 // Exported so a test can read the exact string the container executes at boot,
@@ -337,6 +380,7 @@ ${QUEEN_CONTROL_SQL}
 ${QUEEN_JOBS_SQL}
 ${QUEEN_APP_SQL}
 ${QUEEN_ACTORS_SQL}
+${QUEEN_WAITS_SQL}
 ALTER TABLE queen_dispatch
   ADD COLUMN IF NOT EXISTS owned_paths jsonb NOT NULL DEFAULT '[]'::jsonb;
 
