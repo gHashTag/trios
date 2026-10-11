@@ -22,7 +22,7 @@ export interface CdpBackend extends ProtocolApi {
    * consumers can drop every connection-scoped cache they hold.
    *
    * Returns an unsubscribe function; long-lived consumers MUST call it on
-   * teardown or handlers accumulate — a slower version of this same defect.
+   * teardown or handlers accumulate - a slower version of this same defect.
    */
   onReconnected(handler: () => void): () => void
 }
