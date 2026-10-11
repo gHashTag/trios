@@ -25,7 +25,10 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Pool } from 'pg'
-import { createActorSystem } from '../../src/api/services/queen-actors'
+import {
+  type Clock,
+  createActorSystem,
+} from '../../src/api/services/queen-actors'
 import { X_SHUTDOWN } from '../../src/api/services/queen-actors-card.gen'
 import { processWork } from '../../src/api/services/queen-actors-isolate'
 import {
@@ -424,6 +427,74 @@ describe('a stopped process turn (real processes, real clock)', () => {
     expect(sys.stats.stopped).toBe(1)
     expect(await until(() => !alive(grandchild), 5_000)).toBe(true)
   }, 30_000)
+})
+
+/**
+ * THE GRACE TIMER CAN COME BACK EARLY (trios#1766). A timer keeps a clock of
+ * its own: Bun's setTimeout runs on a coarse or raw monotonic clock, the
+ * runtime's `now` is Date.now. So the grace's timer can fire when `now` says
+ * 2999 of 3000 ms. stop_signal then answers X_NONE, "not yet", and the
+ * runtime used to take that as "never": the escalation was lost and a turn
+ * deaf to SIGTERM kept its whole process group (CI run 38094454978: the deaf
+ * turns of turn-stop-bench B were freed only by the bench's own cleanup, at
+ * 9996 ms). This clock's timers come back 1 ms early, every time but the last
+ * millisecond, so the case is the same on every run.
+ */
+describe('a grace timer that comes back early (virtual clock, trios#1766)', () => {
+  const early = (v: VirtualClock): Clock => ({
+    now: v.now,
+    after: (ms, fn) => v.after(ms > 1 ? ms - 1 : ms, fn),
+  })
+
+  it('still escalates a process turn deaf to its abort, at the grace and not before', async () => {
+    const v = new VirtualClock()
+    const sys = createActorSystem(early(v), { turnStop: true })
+    let killedAt = -1
+    let endedAt = -1
+    let heard = false
+    const pid = sys.spawn<string>(
+      {
+        name: 'deaf-process',
+        turnMaxSeconds: 30,
+        isolated: {
+          cpuBound: false,
+          foreignCode: true,
+          start: (_m, signal) => {
+            signal.addEventListener('abort', () => {
+              heard = true
+            })
+            // deaf: only the escalation's kill ends it
+            let stop = () => {}
+            const result = new Promise<never>((_, reject) => {
+              stop = () => reject(new Error('killed'))
+            })
+            result.catch(() => {
+              endedAt = v.now()
+            })
+            return { result, stop }
+          },
+        },
+        receive: () => {},
+      },
+      () => {
+        killedAt = v.now()
+      },
+    )
+    sys.send(pid, 'go')
+    await v.runUntil(30_000)
+    expect(killedAt).toBeGreaterThan(0)
+    expect(heard).toBe(true)
+    expect(sys.stats.held).toBe(1)
+    await v.runUntil(killedAt + TURN_STOP_GRACE_MS - 1)
+    expect(sys.stats.escalated).toBe(0)
+    expect(endedAt).toBe(-1)
+    await v.runUntil(killedAt + TURN_STOP_GRACE_MS + 1_000)
+    expect(sys.stats.escalated).toBe(1)
+    expect(endedAt - killedAt).toBe(TURN_STOP_GRACE_MS)
+    expect(sys.stats.stopped).toBe(1)
+    expect(sys.stats.held).toBe(0)
+    expect(sys.stats.abandoned).toBe(0)
+  })
 })
 
 describe('commands of a stopped turn', () => {
