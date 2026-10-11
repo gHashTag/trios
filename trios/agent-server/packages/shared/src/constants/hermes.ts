@@ -14,7 +14,7 @@ export const HERMES_CONTAINER_HARNESS_DIR = `${HERMES_CONTAINER_DATA_DIR}/agents
  * BrowserOS LLM provider types Hermes can consume. The frontend filters
  * the global provider list to these; the backend `hermes-provider-map`
  * maps them onto Hermes' own provider keys. Keep both sides in sync via
- * this single list — adding a new entry without updating the backend
+ * this single list - adding a new entry without updating the backend
  * map will cause a 400 at agent-create time.
  *
  * Bedrock is intentionally NOT included yet — it needs multiple env
