@@ -69,6 +69,7 @@ import { createQueenPublicEventsRoute } from './routes/queen-public-events'
 import { createQueenPublicHardwareRoute } from './routes/queen-public-hardware'
 import { createQueenPublicJobsRoute } from './routes/queen-public-jobs'
 import { createQueenPublicLeaderboardRoute } from './routes/queen-public-leaderboard'
+import { createQueenPublicNetCreditsRoute } from './routes/queen-public-net-credits'
 import { createQueenPublicResearchRoute } from './routes/queen-public-research'
 import { createQueenPublicShapingRoute } from './routes/queen-public-shaping'
 import { createQueenPublicStatusRoute } from './routes/queen-public-status'
@@ -95,6 +96,7 @@ import { createSoulRoutes } from './routes/soul'
 import { createStatusRoute } from './routes/status'
 import { createTaskQueueRoutes } from './routes/tasks'
 import { createTerminalRoutes } from './routes/terminal'
+import { createVaultRoute } from './routes/vault'
 import { A2aRegistryService } from './services/a2a/a2a-registry-service'
 import { GlobalAclPolicyService } from './services/acl/global-acl-policy'
 import {
@@ -435,6 +437,7 @@ export async function createHttpServer(config: HttpServerConfig) {
     .use('/queen/public-agents', publicReadCorsMiddleware())
     .use('/queen/public-leaderboard', publicReadCorsMiddleware())
     .use('/queen/public-credits', publicReadCorsMiddleware())
+    .use('/queen/public-net-credits', publicReadCorsMiddleware())
     .use('/queen/public-jobs', publicReadCorsMiddleware())
     .use('/queen/public-app', publicReadCorsMiddleware())
     .use('/queen/public-shaping', publicReadCorsMiddleware())
@@ -468,6 +471,9 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/me/runners', createQueenCabinetRoute())
     .route('/queen/runner', createQueenRunnerRoute())
     .route('/queen/public-credits', createQueenPublicCreditsRoute())
+    // The network job's test credits (network_job.t27): leaf fields and their
+    // judgment; commits, key ids and receipt URLs only.
+    .route('/queen/public-net-credits', createQueenPublicNetCreditsRoute())
     // The swarm's multi-step jobs (a release, step by step): card, version,
     // steps and their sentences. No credential, no secret.
     .route('/queen/public-jobs', createQueenPublicJobsRoute())
@@ -496,6 +502,10 @@ export async function createHttpServer(config: HttpServerConfig) {
     .route('/queen/public-earnings', createQueenPublicEarningsRoute())
     // Separate server-to-server capability; never a public-read or operator-token route.
     .route('/queen/contributor-keys', createQueenContributorKeysRoute())
+    // The vault (gHashTag/trios#1759): every request is Ed25519-signed and
+    // judged by specs/vault/policy.t27 request_code; no browser Origin, so no
+    // trusted-origin guard. 503 for everything unless TRIOS_VAULT=on.
+    .route('/vault', createVaultRoute())
     // Self-hosting (trios#1756): host agents on users' computers, with no
     // browser Origin. Every write verifies under the Ed25519 key its host
     // registered (a registration, under the key it registers), inside the

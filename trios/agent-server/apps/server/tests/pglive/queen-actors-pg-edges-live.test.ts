@@ -19,9 +19,14 @@ import {
 } from '../../src/api/services/queen-actors'
 import {
   createPgLink,
+  FENCE_SQL,
   type PgLink,
 } from '../../src/api/services/queen-actors-pg'
-import { SELF_FENCE_SECONDS } from '../../src/api/services/queen-netlink-card.gen'
+import {
+  NODE_HEARTBEAT_SECONDS,
+  NODE_TTL_SECONDS,
+  SELF_FENCE_SECONDS,
+} from '../../src/api/services/queen-netlink-card.gen'
 import { runPgMigrations } from '../../src/lib/db/pg-migrate'
 import { createQueenPool } from '../../src/lib/db/queen-pool'
 import { logger } from '../../src/lib/logger'
@@ -36,14 +41,19 @@ const until = async (cond: () => boolean, ms: number) => {
 /**
  * The pool as createPgLink sees it, with some of its answers changed:
  * no url for a beat thread, its connections handed out by `connect`, or a
- * hook run once before the first statement `before.sql` matches.
+ * hook run once before the first statement `before.sql` matches, whose
+ * answer `before.saw` is then shown.
  */
 function seen(
   pool: Pool,
   change: {
     noUrl?: boolean
     connect?: (n: number) => Promise<unknown>
-    before?: { sql: RegExp; run: () => Promise<void> }
+    before?: {
+      sql: RegExp
+      run: () => Promise<void>
+      saw?: (answer: { rows: unknown[] }) => void
+    }
   },
 ): Pool {
   let n = 0
@@ -62,6 +72,9 @@ function seen(
           if (!hooked && before.sql.test(sql)) {
             hooked = true
             await before.run()
+            const answer = await target.query(sql, params)
+            before.saw?.(answer)
+            return answer
           }
           return target.query(sql, params)
         }
@@ -254,45 +267,98 @@ describe('PgLink at its edges, against PostgreSQL', () => {
     )
   }, 60_000)
 
-  it('an acknowledgement the store refuses fences the node at once: the claim of another start took its row while the mail was handled', async () => {
-    if (!scratch) return expect(offlineRequested()).toBe(true)
-    const said = warnings()
-    const lc = await link(pool(), 14)
-    // node 13's acknowledgement first lets another start's claim take the
-    // row: the mail was read and handled, its delete is fenced out. Node 13
-    // renews on its own loop, so no beat thread races the acknowledgement.
-    const la = await link(
-      seen(pool(), {
-        noUrl: true,
-        before: {
-          sql: /id = ANY\(\$2::bigint\[\]\)/,
-          run: () => takeRow(13),
-        },
-      }),
-      13,
-    )
-    let heard = 0
-    la.onFenced(() => {
-      heard++
-    })
-    const a = createActorSystem(undefined, { node: 13, link: la })
-    const c = createActorSystem(undefined, { node: 14, link: lc })
-    const got: string[] = []
-    const sink = a.spawn<string>({
-      name: 'sink',
-      receive: (m) => void got.push(m),
-    })
-    await until(() => lc.up(13), 12_000)
-    c.send(sink, 'handled, then fenced')
-    await until(() => la.fenced(), 10_000)
-    expect(got).toEqual(['handled, then fenced'])
-    expect(la.fenced()).toBe(true)
-    expect(heard).toBe(1)
-    expect(said('Queen actor node fenced itself')[0][1]).toMatchObject({
-      node: 13,
-      why: 'the store refused an acknowledgement',
-    })
-  }, 60_000)
+  // Which refused write of node 13 fences it is a race (gHashTag/trios#1778):
+  // its acknowledgement, or a write of the heartbeat its own loop runs every
+  // NODE_HEARTBEAT_SECONDS when that lands between the claim and the
+  // acknowledgement: the renewal, or the expiry of the very mail being
+  // handled, whose incarnation is now over (seen on CI, 56c5df785 and run
+  // 38086264626). None is pinned. What holds either way is asserted: the
+  // mail was handled, the node fenced once on a refused write, its
+  // acknowledgement deleted nothing (the row is still there), and the store
+  // admits no write of its incarnation. The second case makes the heartbeat
+  // win, so both outcomes run on every run.
+  const refusedWrites = [
+    'the store refused an acknowledgement',
+    'the store refused a renewal',
+    'the store refused an expiry',
+  ]
+  for (const heartbeatFirst of [false, true])
+    it(`an acknowledgement the store refuses fences the node at once: the claim of another start took its row while the mail was handled${heartbeatFirst ? ' (its own heartbeat is refused first)' : ''}`, async () => {
+      if (!scratch) return expect(offlineRequested()).toBe(true)
+      const said = warnings()
+      const p = pool()
+      const lc = await link(pool(), 14)
+      let acked: { fence: number; ids: unknown[] } | undefined
+      // node 13's acknowledgement first lets another start's claim take the
+      // row: the mail was read and handled, its delete is fenced out. Node 13
+      // renews on its own loop, with no beat thread: only that loop's
+      // heartbeat can race the acknowledgement.
+      const la: PgLink = await link(
+        seen(p, {
+          noUrl: true,
+          before: {
+            sql: /id = ANY\(\$2::bigint\[\]\)/,
+            run: async () => {
+              await takeRow(13)
+              if (heartbeatFirst)
+                await until(
+                  () => la.fenced(),
+                  (NODE_HEARTBEAT_SECONDS + 5) * 1000,
+                )
+            },
+            saw: (answer) => {
+              acked = answer.rows[0] as { fence: number; ids: unknown[] }
+            },
+          },
+        }),
+        13,
+      )
+      let heard = 0
+      la.onFenced(() => {
+        heard++
+      })
+      const a = createActorSystem(undefined, { node: 13, link: la })
+      const c = createActorSystem(undefined, { node: 14, link: lc })
+      const got: string[] = []
+      const sink = a.spawn<string>({
+        name: 'sink',
+        receive: (m) => void got.push(m),
+      })
+      await until(() => lc.up(13), 12_000)
+      c.send(sink, 'handled, then fenced')
+      // node 14 stops once the mail is in the store: left running, it would
+      // expire the row of an incarnation that is over before a late
+      // acknowledgement could reach it, and hide what that acknowledgement did
+      await until(() => lc.stats.sent === 1, 5000)
+      await lc.stop()
+      await until(() => la.fenced() && acked !== undefined, 20_000)
+      expect(got).toEqual(['handled, then fenced'])
+      expect(la.fenced()).toBe(true)
+      expect(heard).toBe(1)
+      const fencedLines = said('Queen actor node fenced itself')
+      expect(fencedLines.length).toBe(1)
+      expect(fencedLines[0][1]).toMatchObject({
+        node: 13,
+        inc: la.incarnation,
+      })
+      const why = String((fencedLines[0][1] as { why?: unknown }).why)
+      expect(refusedWrites).toContain(why)
+      if (heartbeatFirst)
+        expect(why).not.toBe('the store refused an acknowledgement')
+      // the old incarnation's acknowledgement was refused and deleted nothing:
+      // the mail row it handled is still in the store
+      expect(acked).toEqual({ fence: 0, ids: [] })
+      const left = await p.query(
+        'SELECT count(*)::int AS n FROM queen_actor_mail WHERE node = 13',
+      )
+      expect(left.rows[0].n).toBe(1)
+      const admitted = await p.query(FENCE_SQL, [
+        13,
+        la.incarnation,
+        NODE_TTL_SECONDS,
+      ])
+      expect((admitted.rows[0] as { admitted: number }).admitted).toBe(0)
+    }, 60_000)
 
   it('a send the store refuses is counted lost and fences the node: the claim of another start took its row just before the send', async () => {
     if (!scratch) return expect(offlineRequested()).toBe(true)

@@ -21,6 +21,7 @@ import { drainBoundedEnabled } from './api/services/queen-drain'
 import { drainForDeploy } from './api/services/queen-drain-host'
 import { drainActiveRunner, startBeeRunner } from './api/services/queen-runner'
 import { startQueenTick, stopQueenTickNow } from './api/services/queen-tick'
+import { startVault } from './api/services/vault-start'
 import { CdpBackend } from './browser/backends/cdp'
 import { Browser } from './browser/browser'
 import type { ServerConfig } from './config'
@@ -86,6 +87,10 @@ export class Application {
       })
     }
     await runPgMigrations()
+    // The vault (gHashTag/trios#1759): off unless TRIOS_VAULT=on, and then
+    // only with its variables and its table (specs/vault/policy.t27 section
+    // 13). Off, it reads nothing and creates nothing; it never throws.
+    await startVault()
     // After migrations: the tick's first act is a lease query against a table
     // the migration above creates.
     startQueenTick()
