@@ -22,7 +22,7 @@ export interface BridgeConfig {
   logLevel: string
   /** trios-mcp-rag binary path (default: "trios-mcp-rag") */
   triosRagCliPath: string
-  /** PostgreSQL DSN for trios-mcp-rag (default: null — uses RAG binary fallback or env) */
+  /** PostgreSQL DSN for trios-mcp-rag (default: null - uses RAG binary fallback or env) */
   databaseUrl: string | null
   /** Railway MCP server URL (default: null) */
   railwayMcpUrl: string | null
