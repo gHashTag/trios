@@ -23,7 +23,7 @@ export function orderHomeAgents(agents: HarnessAgent[]): HarnessAgent[] {
 
     // Recency wins outright. Never-used agents (`lastUsedAt == null`)
     // both fall to the same `-Infinity` bucket and the seed/id rules
-    // below decide their order — but a used agent always beats any
+    // below decide their order - but a used agent always beats any
     // never-used agent regardless of id.
     const aValue = a.lastUsedAt ?? Number.NEGATIVE_INFINITY
     const bValue = b.lastUsedAt ?? Number.NEGATIVE_INFINITY
