@@ -268,15 +268,22 @@ describe('PgLink at its edges, against PostgreSQL', () => {
   }, 60_000)
 
   // Which refused write of node 13 fences it is a race (gHashTag/trios#1778):
-  // its acknowledgement, or the renewal its own loop makes every
+  // its acknowledgement, or a write of the heartbeat its own loop runs every
   // NODE_HEARTBEAT_SECONDS when that lands between the claim and the
-  // acknowledgement (seen on CI, 56c5df785 and run 38086264626). Neither is
-  // pinned. What holds either way is asserted: the mail was handled, the node
-  // fenced once, its acknowledgement deleted nothing (the row is still
-  // there), and the store admits no write of its incarnation. The second
-  // case makes the renewal win, so both outcomes run on every run.
-  for (const renewalFirst of [false, true])
-    it(`an acknowledgement the store refuses fences the node at once: the claim of another start took its row while the mail was handled${renewalFirst ? ' (its own renewal is refused first)' : ''}`, async () => {
+  // acknowledgement: the renewal, or the expiry of the very mail being
+  // handled, whose incarnation is now over (seen on CI, 56c5df785 and run
+  // 38086264626). None is pinned. What holds either way is asserted: the
+  // mail was handled, the node fenced once on a refused write, its
+  // acknowledgement deleted nothing (the row is still there), and the store
+  // admits no write of its incarnation. The second case makes the heartbeat
+  // win, so both outcomes run on every run.
+  const refusedWrites = [
+    'the store refused an acknowledgement',
+    'the store refused a renewal',
+    'the store refused an expiry',
+  ]
+  for (const heartbeatFirst of [false, true])
+    it(`an acknowledgement the store refuses fences the node at once: the claim of another start took its row while the mail was handled${heartbeatFirst ? ' (its own heartbeat is refused first)' : ''}`, async () => {
       if (!scratch) return expect(offlineRequested()).toBe(true)
       const said = warnings()
       const p = pool()
@@ -284,8 +291,8 @@ describe('PgLink at its edges, against PostgreSQL', () => {
       let acked: { fence: number; ids: unknown[] } | undefined
       // node 13's acknowledgement first lets another start's claim take the
       // row: the mail was read and handled, its delete is fenced out. Node 13
-      // renews on its own loop, with no beat thread: only that renewal can
-      // race the acknowledgement.
+      // renews on its own loop, with no beat thread: only that loop's
+      // heartbeat can race the acknowledgement.
       const la: PgLink = await link(
         seen(p, {
           noUrl: true,
@@ -293,7 +300,7 @@ describe('PgLink at its edges, against PostgreSQL', () => {
             sql: /id = ANY\(\$2::bigint\[\]\)/,
             run: async () => {
               await takeRow(13)
-              if (renewalFirst)
+              if (heartbeatFirst)
                 await until(
                   () => la.fenced(),
                   (NODE_HEARTBEAT_SECONDS + 5) * 1000,
@@ -335,11 +342,9 @@ describe('PgLink at its edges, against PostgreSQL', () => {
         inc: la.incarnation,
       })
       const why = String((fencedLines[0][1] as { why?: unknown }).why)
-      expect([
-        'the store refused an acknowledgement',
-        'the store refused a renewal',
-      ]).toContain(why)
-      if (renewalFirst) expect(why).toBe('the store refused a renewal')
+      expect(refusedWrites).toContain(why)
+      if (heartbeatFirst)
+        expect(why).not.toBe('the store refused an acknowledgement')
       // the old incarnation's acknowledgement was refused and deleted nothing:
       // the mail row it handled is still in the store
       expect(acked).toEqual({ fence: 0, ids: [] })
