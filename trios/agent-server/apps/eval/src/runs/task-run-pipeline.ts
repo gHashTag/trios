@@ -99,7 +99,7 @@ export class TaskRunPipeline {
       }
     }
 
-    // Resolve page ID once — fresh browser has exactly one page
+    // Resolve page ID once - fresh browser has exactly one page
     const pageId = await this.resolveInitialPageId(mcpUrl)
 
     // For Infinity tasks, start a fresh app server per task
