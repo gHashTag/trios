@@ -3,7 +3,7 @@
  *
  * Production resolves it in `queendPath()` inside `queen-tick.ts`: an
  * environment variable first, then the path the container installs it at.
- * The api suites used to restate a third answer of their own — a path
+ * The api suites used to restate a third answer of their own - a path
  * hard-coded relative to each test file — so on every CI run and on the
  * deployed container every parity case silently skipped, and a test file
  * that copied the hard-coding looked normal. This helper is the only place
