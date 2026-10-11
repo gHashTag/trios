@@ -811,9 +811,21 @@ export function createActorSystem(
           'AbortError',
         ),
       )
-    t.cancelGrace = clock.after(TURN_STOP_GRACE_MS, () => {
+    // A timer keeps a clock of its own (Bun's setTimeout: a coarse or raw
+    // monotonic one; `now` here is Date.now), so it can come back a
+    // millisecond before the grace by `now`. stop_signal then says "not yet"
+    // (X_NONE, or X_SHUTDOWN at 0 ms), and the card is asked again when the
+    // rest has passed. Taken as "never", the escalation was lost and a turn
+    // deaf to SIGTERM kept its process group (trios#1766).
+    const graceAfter = (ms: number) => {
+      t.cancelGrace = clock.after(ms, graceEnds)
+    }
+    const graceEnds = () => {
       const waited = u32(clock.now() - at)
-      if (c('stop_signal', waited, TURN_STOP_GRACE_MS) !== X_KILL) return
+      if (c('stop_signal', waited, TURN_STOP_GRACE_MS) !== X_KILL) {
+        graceAfter(TURN_STOP_GRACE_MS - waited)
+        return
+      }
       const esc = escalation(
         c('kill_effect', p.isolation) === KILL_STOPS,
         t.ended,
@@ -825,7 +837,8 @@ export function createActorSystem(
       } else if (esc === ESC_ABANDON) {
         stats.abandoned++
       }
-    })
+    }
+    graceAfter(TURN_STOP_GRACE_MS)
   }
 
   /** The end of a turn's work, whatever ended it. */
