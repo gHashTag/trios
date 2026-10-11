@@ -2,7 +2,7 @@
  * @license AGPL-3.0-or-later
  * Copyright 2026 TRIOS
  *
- * TRIOS MCP Bridge — Configuration
+ * TRIOS MCP Bridge - Configuration
  */
 
 export interface BridgeConfig {
