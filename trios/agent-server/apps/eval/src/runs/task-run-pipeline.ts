@@ -53,7 +53,7 @@ export class TaskRunPipeline {
 
   /**
    * Resolve the initial page ID via list_pages MCP call.
-   * Called once per task on a fresh browser — there's exactly one page.
+   * Called once per task on a fresh browser - there's exactly one page.
    */
   private async resolveInitialPageId(mcpUrl: string): Promise<number> {
     try {
