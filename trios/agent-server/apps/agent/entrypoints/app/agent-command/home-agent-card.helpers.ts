@@ -3,7 +3,7 @@ import type { HarnessAgent } from '@/entrypoints/app/agents/agent-harness-types'
 /**
  * Order for the /home Recent agents grid.
  *
- * 1. Active turn first — agents mid-turn float to the top so the
+ * 1. Active turn first - agents mid-turn float to the top so the
  *    Resume affordance is the first thing the user sees on /home.
  * 2. The protected gateway-side `main` agent stays pinned-to-top in
  *    the never-used group on a fresh install (mirrors the rail).
