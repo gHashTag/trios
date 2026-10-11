@@ -781,10 +781,15 @@ export const CEILING_RELEASE_MS = CEILING_FLOOR_MINUTES * 60 * 1000
 /**
  * How many times a spent ceiling may be handed back to the swarm.
  *
- * One. The bee gets `maximumSendBacks` attempts, then an hour, then one more
- * set - with the last review's findings in its brief and whatever the salvage
- * committed already on the branch. After that the row stays rejected: a third
- * identical failure is evidence about the issue, not about the attempt.
+ * One. The bee gets `maximumSendBacks` attempts, then an hour, then ONE more
+ * attempt - not one more set - with the last review's findings in its brief
+ * and whatever the salvage committed already on the branch. The redispatch
+ * resets `send_backs` but carries `ceiling_releases` = 1, so its first
+ * send-back goes to the review valve with `releases` at `MAX_RELEASES` and
+ * `next_step` answers STEP_CLOSE: the claim is `cancelled` in the next round
+ * and the row is closed as obsolete, inside the send-back's hour
+ * (gHashTag/trios#1769). A third identical failure is evidence about the
+ * issue, not about the attempt.
  */
 export const MAX_CEILING_RELEASES = MAX_RELEASES
 

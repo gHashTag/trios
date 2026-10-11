@@ -5629,7 +5629,10 @@ export async function recordDispatch(
            -- the salvage committed already on the branch. That hand-back is
            -- counted here and bounded by MAX_CEILING_RELEASES, so the swarm
            -- cannot spend an issue's attempts twice over. send_backs starts
-           -- again with it: the new attempt is judged on its own work.
+           -- again at 0, but the hand-back is ONE attempt, not a new set:
+           -- with ceiling_releases now at MAX_RELEASES, its first send-back
+           -- reaches the review valve, which closes the issue as obsolete
+           -- (stateOfDispatch in queen-tick.ts; gHashTag/trios#1769).
            -- An escalation the review valve released is the same hand-back
            -- and spends the same count (specs/queen/review_valve.t27,
            -- MAX_RELEASES), so the two roads cannot each spend it.
