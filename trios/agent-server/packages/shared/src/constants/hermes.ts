@@ -17,7 +17,7 @@ export const HERMES_CONTAINER_HARNESS_DIR = `${HERMES_CONTAINER_DATA_DIR}/agents
  * this single list - adding a new entry without updating the backend
  * map will cause a 400 at agent-create time.
  *
- * Bedrock is intentionally NOT included yet — it needs multiple env
+ * Bedrock is intentionally NOT included yet - it needs multiple env
  * vars (AWS_ACCESS_KEY_ID + secret + region) and a separate UX path.
  */
 export const HERMES_SUPPORTED_BROWSEROS_PROVIDER_TYPES = [
