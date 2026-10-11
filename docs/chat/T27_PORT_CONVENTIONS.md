@@ -25,6 +25,9 @@ gHashTag/t27 and to every swap under `crates/trios-chat/` in gHashTag/trios.
   disappear when gen-rust lowers `?T`, `Result` and slices itself.
 - D5, verdict: a named verdict struct with a payload-free enum, `Ok` first
   (section 3).
+- D6, quirks of the original: preserve them bit for bit, unless a separate
+  trios PR fixes them first (section 6). Status: pending, no owner answer
+  yet; recommendation: preserve. Until the owner answers, ports preserve.
 
 ## 1. Where the spec lives and what it is called
 
@@ -161,7 +164,7 @@ Not allowed in new ports:
 | fixed bytes (keys, ids, digests) | `[N]u8` | `[]const u8` | a `[]const u8` parameter becomes `&'static str` when the file has no byte slicing |
 | variable bytes | `[]u8` with typed (`var`) test arrays | `[]const u8` | same; `[]u8` becomes `Vec<u8>` |
 | a slice of fixed-size records | `[]const Rec` where `Rec` is a struct holding `[N]u8` | `[]const [N]u8` | Zig BLOCKED and a Rust parse error (`Vec<const>, u8: `) |
-| read-only slice of T | `[]const T` (the adapter passes `.to_vec()`) | - | gen-rust passes it as `Vec<T>` by value |
+| read-only slice of T | `[]const T`; the adapter takes the caller's `&[T]` and passes `.to_vec()` | - | gen-rust lowers it to `Vec<T>` by value: `ids: []const u64` becomes `ids: Vec<u64>` (section 8) |
 | slice of slices | one flat buffer + a lengths (or offsets) array | `[]const []const u8` | Zig BLOCKED, Rust parse error: the parameter splits into `[]const` and a parameter named `u8` |
 | string table | flat bytes + offsets | `[N][]const u8` | Rust gets `Vec<const u8>`: parse error |
 | non-ASCII or control bytes in a test | a byte array | `"\x00"`, `"\u{202E}"`, raw UTF-8 in a string | escapes are escaped again (`\x00` becomes four characters) and UTF-8 is double-encoded, in both backends: `test-report` fails, the Rust compiles with the wrong bytes |
@@ -400,7 +403,7 @@ while Rust `as` truncates.
 - Same rule order; the first failing rule decides the verdict.
 - Unreachable variants keep their codes.
 - Known quirks of the original are preserved bit for bit unless a separate
-  trios PR fixed them first (owner decision D6). The list is tracked under
+  trios PR fixed them first (owner decision D6, pending; section 0). The list is tracked under
   the epic ("behaviour quirks").
 - Bounded arrays must cover the original key range.
 - Re-declare the original constants with their original types in the
@@ -408,35 +411,79 @@ while Rust `as` truncates.
 
 ## 7. Checks before a PR (task type T-PORT, checks 0-14)
 
-Each Bash call of an agent session is a fresh shell: put these exports in a
-file and source it at the start of every call. Use bash, not zsh.
+Each Bash call of an agent session is a fresh shell: put the exports of the
+first block in a file and source it at the start of every call. Use bash,
+not zsh. The blocks can be pasted into bash as they are after the six FILL
+values are set; the expected result of each check is in its `# expected:`
+comment. `grep -c` exits 1 when it prints 0: compare the printed number, not
+the exit code.
 
-```text
-export PATH=$HOME/local/zig-aarch64-macos-0.16.0:$PATH
-cargo build --release -p t27c          # from the PR's own tree
-T27C=target/release/t27c; SPEC=<target>; OUT=<scratch dir>
-0  dedup: no other issue, no spec on master, no foreign PR, no queen-N branch
-1  test -f $SPEC && echo present
-2  grep -cE '^[[:space:]]*(pub )?fn (<names>)[(]' $SPEC   (compare the number)
-3  $T27C gen $SPEC > $OUT/gen.zig; grep -c 'not yet implemented' $OUT/gen.zig  -> 0
-4  $T27C spec-status $SPEC -> IMPLEMENTED (necessary only)
-5  grep -cE '^[[:space:]]*test[[:space:]]+("|[A-Za-z_])' $SPEC >= original #[test] count
-6  $T27C test-report $SPEC; echo $?  -> 0 (1 = FAIL, 2 = BLOCKED)
-7  $T27C parse $SPEC > /dev/null && echo parses
-8  $T27C gen-rust $SPEC > $OUT/<stem>.rs && rustc --edition 2021 --crate-type lib --out-dir $OUT $OUT/<stem>.rs
-   (never -o /dev/null: "couldn't create a temp dir")
-8b grep -c "&'static str" and grep -c 'Vec<const' on the gen-rust output -> 0 and 0
-9  grep -c '^module port::trios::crates::trios-chat::rings::<R>::src::<stem>;' $SPEC -> 1
-10 non-ASCII byte count -> 0
-11 no banned construct (section 4)
-12 from the repo root with the repo-relative $SPEC: t27c seal --save $SPEC && t27c seal --verify $SPEC;
-   git status --short .trinity/seals shows exactly the expected file
-   (<parent dir>_<module>.json); read the tests field: passed == total,
-   failed 0, vacuous 0, no "blocked" (seal --save on a BLOCKED spec exits 0)
-13 fidelity review (section 6), plus one line per Err constructor of the
-   original naming the source of each payload value
-14 $T27C coverage $SPEC | grep -c '^Untested: *0$' -> 1
+```bash
+# Setup. FILL the six values; the examples are for the CR-CHAT-02 epoch
+# rollover guard.
+export PATH="$HOME/local/zig-aarch64-macos-0.16.0:$PATH"
+T27WT="$HOME/Documents/t27-wt-chat-cr02"     # FILL: the PR's own t27 worktree
+R=CR-CHAT-02                                 # FILL: ring
+STEM=epoch_rollover_wraparound_guard         # FILL: file stem of the original
+NAMES='validate_epoch_rollover'              # FILL: the original's non-test fn names; several: 'f_one|f_two'
+N_TEST=10                                    # FILL: number of #[test] in the original
+OUT="$HOME/scratch/port-$STEM"               # FILL: own scratch directory
+SPEC="specs/port/trios/crates/trios-chat/rings/$R/src/$STEM.t27"   # repo-relative
+T27C="$T27WT/target/release/t27c"
+mkdir -p "$OUT"
+cd "$T27WT" && cargo build --release -p t27c # t27c from the PR's own tree
 ```
+
+```bash
+# Checks 0-11 and 14. Run from the t27 worktree root.
+cd "$T27WT"
+# 0  dedup, by hand: no other issue, no spec on master, no foreign PR, no queen-N branch
+# 1  the spec exists
+test -f "$SPEC" && echo present                                    # expected: present
+# 2  every fn of the original is ported
+grep -cE "^[[:space:]]*(pub )?fn (${NAMES})[(]" "$SPEC"            # expected: the number of names in NAMES
+# 3  no unimplemented body
+"$T27C" gen "$SPEC" > "$OUT/gen.zig"; grep -c 'not yet implemented' "$OUT/gen.zig"   # expected: 0
+# 4  status (necessary, not sufficient)
+"$T27C" spec-status "$SPEC"                                        # expected: IMPLEMENTED
+# 5  test count
+grep -cE '^[[:space:]]*test[[:space:]]+("|[A-Za-z_])' "$SPEC"      # expected: >= N_TEST (split and crypto-adjacent files: test-mapping table, section 5)
+echo "N_TEST=$N_TEST"
+# 6  Zig tests
+"$T27C" test-report "$SPEC"; echo "exit=$?"                        # expected: exit=0 (1 = FAIL, 2 = BLOCKED); "vacuous passes  0"
+# 7  parse
+"$T27C" parse "$SPEC" > /dev/null && echo parses                   # expected: parses
+# 8  the Rust compiles (never -o /dev/null: "couldn't create a temp dir")
+"$T27C" gen-rust "$SPEC" > "$OUT/$STEM.rs" && rustc --edition 2021 --crate-type lib --out-dir "$OUT" "$OUT/$STEM.rs"; echo "exit=$?"   # expected: exit=0
+# 8b no &'static str, no Vec<const in the Rust
+grep -c "&'static str" "$OUT/$STEM.rs"                             # expected: 0
+grep -c 'Vec<const' "$OUT/$STEM.rs"                                # expected: 0
+# 9  full module line
+grep -c "^module port::trios::crates::trios-chat::rings::$R::src::$STEM;" "$SPEC"   # expected: 1
+# 10 ASCII only
+LC_ALL=C grep -c $'[\x80-\xff]' "$SPEC"                            # expected: 0
+# 11 banned constructs (section 4): review by hand; this grep is only a screen
+grep -nE '@log2|::MAX|\[_\]|->[[:space:]]*\?|[(,][[:space:]]*self[[:space:]]*:' "$SPEC"   # expected: no output
+# 14 every fn has a direct test
+"$T27C" coverage "$SPEC" | grep -c '^Untested: *0$'                # expected: 1
+```
+
+```bash
+# Check 12, seal. Only from the t27 worktree root, only with the
+# repo-relative $SPEC: t27c seal --save writes ./.trinity/seals of the CURRENT
+# directory (anywhere else it silently creates a stray .trinity/).
+cd "$T27WT"
+"$T27C" seal --save "$SPEC" && "$T27C" seal --verify "$SPEC"; echo "exit=$?"   # expected: exit=0, "all hashes MATCH"
+git status --short --untracked-files=all .trinity/seals            # expected: exactly one line, the file below
+SEAL=".trinity/seals/$(basename "$(dirname "$SPEC")")_$(sed -n 's/^module \(.*\);.*/\1/p' "$SPEC" | head -n 1).json"
+echo "$SEAL"                                                       # expected: .trinity/seals/src_port::trios::crates::trios-chat::rings::<R>::src::<stem>.json
+python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tests"])' "$SEAL"
+# expected: passed == total, failed 0, vacuous 0, no "blocked" key
+# (seal --save on a BLOCKED spec also exits 0, so read this field)
+```
+
+Check 13 is a review: the fidelity rules of section 6, plus one line per
+`Err` constructor of the original naming the source of each payload value.
 
 ## 8. Swap layout in gHashTag/trios
 
@@ -445,9 +492,12 @@ T27C=target/release/t27c; SPEC=<target>; OUT=<scratch dir>
 - `rings/<R>/src/<stem>.rs` keeps the original pub consts, types, docs,
   `#[non_exhaustive]` error enums with their derives and messages, and the
   original `#[cfg(test)]` module byte for byte. The logic becomes an interim
-  adapter (owner decision D4). For the verdict template of section 3 (checked:
-  rustc builds it next to the generated file, and 4 tests over it pass,
-  section 12):
+  adapter (owner decision D4). For the verdict template of section 3,
+  gen-rust emits `pub fn validate_xxx(ids: Vec<u64>) -> XxxVerdict`, so the
+  adapter keeps the original signature (`ids: &[u64]`) and passes
+  `ids.to_vec()`: one copy per call, no other conversion. Checked: rustc
+  builds it next to the generated file, and 4 tests over it pass
+  (section 12):
 
 ```rust
 #[allow(unused_parens, missing_docs, dead_code, unexpected_cfgs)]
@@ -513,14 +563,17 @@ Every fenced `t27` block of this file is extracted to its own file and run
 through three commands (bash, Zig 0.16.0 first on PATH, t27c built from
 gHashTag/t27 master 67cbf82849e4, rustc 1.94.0):
 
-```text
-t27c test-report <snippet>.t27                          # exit 0, 0 FAIL, 0 vacuous
-t27c gen-rust <snippet>.t27 > <snippet>.rs
-rustc --edition 2021 --crate-type lib --out-dir out <snippet>.rs   # exit 0, 0 errors
-t27c coverage <snippet>.t27                             # Untested: 0
+```bash
+S=snippet1_xxx_guard                       # one file per t27 block
+t27c test-report "$S.t27"; echo "exit=$?"  # expected: exit=0, FAIL 0, "vacuous passes  0"
+t27c gen-rust "$S.t27" > "$S.rs" && rustc --edition 2021 --crate-type lib --out-dir out "$S.rs"; echo "exit=$?"   # expected: exit=0
+t27c coverage "$S.t27" | grep -c '^Untested: *0$'   # expected: 1
 ```
 
 The Rust adapter of section 8 is compiled with `rustc --edition 2021
 --crate-type lib` and with `rustc --test` next to the gen-rust output of the
 section 3 template, together with an `XxxError` enum and 4 tests; the 4
-tests pass. Outputs are in the PR that added this file.
+tests pass. The three bash blocks of section 7 were run as written on the
+section 3 template, placed at its repo-relative path in a scratch git tree
+(the cargo build line skipped: same t27c binary). Outputs are in the PR that
+added this file.
